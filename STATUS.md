@@ -1,17 +1,20 @@
 # Status — Pogo Assist+
 
-**25 Sep 2026, phase 0a done.** Game master loader with a name resolver (tier-list and Poke
-Genie naming both handled), CP multipliers and power-up cost tables validated against a real
-311-row export, Poke Genie importer, tier-table builder (317 entries from the eight markdown
-tables), and a box dump script. Tests: 7 passing.
+**25 Sep 2026, phase 0b done (core logic).** `src/advise.js` turns an export into ranked builds,
+a gap list and storage hygiene. Scoring: raid value counts each attacking type covered (up to
+three); PvP areas are scaled by the Pokémon's own rank in that league from the export; Gym and
+Max count less; Mega hits fold into the base Pokémon; Gigantamax entries are never credited to
+an evolution; Dynamax entries are flagged "needs a Dynamax copy"; duplicate copies fold into one
+build with spares. `scripts/advise.mjs` prints the report. Tests: 13 passing.
 
-**Known data gaps found by the dump:** Pokémon that the tier tables only mention in prose
-(Annihilape, Dachsbun, Ampharos, Galarian Stunfisk, regular Moltres) get no hit. Phase 0b adds
-PvPoke's overall rankings (fetched to `data/rankings/`, not yet slimmed or committed) as a
-second signal so PvP-relevant species are found by score, not just by table row.
+Against the hand-written build plan the top of the list agrees (Mewtwo, Zamazenta Crowned,
+Gengar, Tyranitar, Rhyperior, Charizard, Blissey, Tinkaton). Known differences: Snorlax ranks
+higher here because it scores in four areas; Xurkitree ranks lower because it is a single-area
+build. Both are defensible; revisit after the page exists and real use shows what people want.
 
-**Next, phase 0b:** slim and load the rankings; build ranking (tier weight × areas ÷ cost);
-gap list with obtain routes; storage hygiene; compare against the hand-written build plan.
+**Next, phase 0c:** the web page. Drop a CSV, see the builds, gaps and hygiene; GitHub Pages
+deploy. Then the codec spike on an iPhone 16 Pro recording before any extractor code.
 
-**Blocked:** remote `dare33/pogo-assist-plus` does not exist yet; the GitHub App cannot create
-repositories. Greg to create it, then it gets attached and this history pushed.
+**Data notes:** evolution candy costs are a table in `advise.js` (the game master lacks them);
+unknown species default by family position. Dynamax status is not in exports, so Max hits are
+advisory until the extractor captures the badge.

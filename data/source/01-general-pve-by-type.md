@@ -21,7 +21,7 @@ you pick attackers against the boss's weaknesses. Top 4 per type plus a budget l
 | A | Mega Blaziken | Counter / Blast Burn (CD) | Easy. Torchic common, Mega raids rotate | Doubles as a Fighting attacker. |
 | A | Mega Charizard Y | Fire Spin / Blast Burn (CD) | Easy | Use Fire Spin, not Wing Attack, for the Fire role. |
 | A | Primal Groudon | Mud Shot / Fire Punch | Hard. Groudon raids + Primal Energy | Its Fire role is secondary; build it for Ground. |
-| B | Shadow Blaziken, Shadow Chandelure (Fire Spin / Overheat), Shadow Darmanitan, Blacephalon (Incinerate / Mystical Fire, UB raids) | | Easy–Medium | Chandelure is the best non-legendary non-mega Fire. |
+| B | Shadow Blaziken, Shadow Chandelure (Fire Spin / Overheat), Shadow Darmanitan, Moltres (Fire Spin / Overheat), Blacephalon (Incinerate / Mystical Fire, UB raids) | | Easy–Medium | Chandelure is the best non-legendary non-mega Fire. Regular Moltres is a fine stopgap with Fire Spin / Overheat. |
 
 ## Water
 
@@ -102,7 +102,7 @@ you pick attackers against the boss's weaknesses. Top 4 per type plus a budget l
 | A | Shadow Moltres | Wing Attack / Sky Attack (Elite) | Hard | Sky Attack is legacy. |
 | A | Mega Aerodactyl | Wing Attack / Sky Attack | Easy | Also a Rock attacker. |
 | A | Mega Pidgeot | Gust / Brave Bird | Easy | Cheap Mega energy via walking. |
-| B | Tornadus Therian (Gust / Bleakwind Storm), Shadow Staraptor, Shadow Toucannon (Beak Blast, Jun 2026), Shadow Honchkrow, Shadow Swanna, Staraptor, Braviary | | Easy–Medium | |
+| B | Tornadus Therian (Gust / Bleakwind Storm), Moltres (Wing Attack / Sky Attack), Shadow Staraptor, Shadow Toucannon (Beak Blast, Jun 2026), Shadow Honchkrow, Shadow Swanna, Staraptor, Braviary | | Easy–Medium | Regular Moltres needs the legacy Sky Attack via Elite TM. |
 
 ## Psychic
 

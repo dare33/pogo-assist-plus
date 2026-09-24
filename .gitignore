@@ -5,3 +5,4 @@ dist/
 # recordings and frames are large and personal; keep them out of git
 recordings/
 frames/
+data/rankings/
