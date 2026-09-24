@@ -1,0 +1,6346 @@
+{
+ "generated": "2026-09-24T15:44:30.016Z",
+ "gamemaster": "2026-09-23 03:24:34",
+ "entries": [
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Delphox",
+   "speciesId": "delphox_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Fire Spin / Mystical Fire+",
+   "ivs": null,
+   "obtain": "Medium. Fennekin line; Mega Energy from Mega raids (Mega Finale Sep 2026)",
+   "notes": "Mystical Fire+ is a Mega Charged Attack, needs Super Max Level (5,000 Mega Energy). The clear #1 Fire.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "S",
+   "rank": null,
+   "name": "Shadow Reshiram",
+   "speciesId": "reshiram_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Fire Fang / Fusion Flare",
+   "ivs": null,
+   "obtain": "Hard. Shadow raids (Jun 2026 debut), Giovanni now",
+   "notes": "Fusion Flare is raid-day / Elite TM. TM Frustration off during a Takeover before an Elite TM.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Blaziken",
+   "speciesId": "blaziken_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Blast Burn (CD)",
+   "ivs": null,
+   "obtain": "Easy. Torchic common, Mega raids rotate",
+   "notes": "Doubles as a Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Charizard Y",
+   "speciesId": "charizard_mega_y",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Fire Spin / Blast Burn (CD)",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Use Fire Spin, not Wing Attack, for the Fire role.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "A",
+   "rank": null,
+   "name": "Primal Groudon",
+   "speciesId": "groudon_primal",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Fire Punch",
+   "ivs": null,
+   "obtain": "Hard. Groudon raids + Primal Energy",
+   "notes": "Its Fire role is secondary; build it for Ground.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Blaziken",
+   "speciesId": "blaziken_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Chandelure is the best non-legendary non-mega Fire.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Chandelure",
+   "speciesId": "chandelure_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Fire Spin / Overheat",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Chandelure is the best non-legendary non-mega Fire.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Darmanitan",
+   "speciesId": "darmanitan_standard_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Chandelure is the best non-legendary non-mega Fire.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fire",
+   "tier": "B",
+   "rank": null,
+   "name": "Blacephalon",
+   "speciesId": "blacephalon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Incinerate / Mystical Fire, UB raids",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Chandelure is the best non-legendary non-mega Fire.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "S",
+   "rank": null,
+   "name": "Primal Kyogre",
+   "speciesId": "kyogre_primal",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Waterfall / Origin Pulse",
+   "ivs": null,
+   "obtain": "Hard. Kyogre raids + Primal Energy",
+   "notes": "Origin Pulse is Primal-exclusive. Cannot break Super Mega Raid shields.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Greninja",
+   "speciesId": "greninja_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Water Shuriken / Hydro Cannon (CD), Surf+",
+   "ivs": null,
+   "obtain": "Medium. Froakie line; Mega Finale Sep 2026",
+   "notes": "Also a Dark attacker with Brutal Swing.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Starmie",
+   "speciesId": "starmie_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Psywave / Liquidation+",
+   "ivs": null,
+   "obtain": "Medium. Mega raids (Aug–Sep 2026 rotation)",
+   "notes": "Biggest winner from the Mega Charged Attacks.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "A",
+   "rank": null,
+   "name": "Shadow Kyogre",
+   "speciesId": "kyogre_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Waterfall / Origin Pulse or Surf",
+   "ivs": null,
+   "obtain": "Hard / Medium",
+   "notes": "Shadow beats regular; both beaten by Primal.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "A",
+   "rank": null,
+   "name": "Kyogre",
+   "speciesId": "kyogre",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Waterfall / Origin Pulse or Surf",
+   "ivs": null,
+   "obtain": "Hard / Medium",
+   "notes": "Shadow beats regular; both beaten by Primal.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "A",
+   "rank": null,
+   "name": "Origin Palkia",
+   "speciesId": "palkia_origin",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Tail / Spacial Rend",
+   "ivs": null,
+   "obtain": "Hard. Raids Jul 2026",
+   "notes": "Neutral-damage bulky option; also #1 Master League.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "B",
+   "rank": null,
+   "name": "Swampert",
+   "speciesId": "swampert",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Water Gun / Hydro Cannon CD",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Kingler is the best glass-cannon budget Water.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "B",
+   "rank": null,
+   "name": "Gyarados",
+   "speciesId": "gyarados",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Waterfall / Hydro Pump",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Kingler is the best glass-cannon budget Water.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "B",
+   "rank": null,
+   "name": "Kingler",
+   "speciesId": "kingler",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Bubble / Crabhammer",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Kingler is the best glass-cannon budget Water.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Feraligatr",
+   "speciesId": "feraligatr_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Kingler is the best glass-cannon budget Water.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Water",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Blastoise",
+   "speciesId": "blastoise_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Kingler is the best glass-cannon budget Water.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Sceptile",
+   "speciesId": "sceptile_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Bullet Seed / Frenzy Plant (CD)",
+   "ivs": null,
+   "obtain": "Easy. Treecko common; Mega raids rotate",
+   "notes": "Pokebattler #1 Grass.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Chesnaught",
+   "speciesId": "chesnaught_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Vine Whip / Seed Bomb+",
+   "ivs": null,
+   "obtain": "Medium. Chespin line; Mega Finale Sep 2026",
+   "notes": "#1 by bulk-weighted score; needs Super Max Level for Seed Bomb+.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "A",
+   "rank": null,
+   "name": "Kartana",
+   "speciesId": "kartana",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Razor Leaf / Leaf Blade",
+   "ivs": null,
+   "obtain": "Hard. Ultra Beast raids (Northern-hemisphere regional, May 2026 return)",
+   "notes": "Highest non-mega Grass attack; also a Fighting attacker with Sacred Sword.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Venusaur",
+   "speciesId": "venusaur_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Vine Whip / Frenzy Plant (CD)",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Bulky alternative.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "B",
+   "rank": null,
+   "name": "Zarude",
+   "speciesId": "zarude",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Special Research",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Roserade doubles as Poison.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Tangrowth",
+   "speciesId": "tangrowth_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Roserade doubles as Poison.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "B",
+   "rank": null,
+   "name": "Roserade",
+   "speciesId": "roserade",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Razor Leaf / Grass Knot",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Roserade doubles as Poison.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Venusaur",
+   "speciesId": "venusaur_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Roserade doubles as Poison.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Grass",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Torterra",
+   "speciesId": "torterra_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Roserade doubles as Poison.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Raichu Y",
+   "speciesId": "raichu_mega_y",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Thunder Shock / Zap Cannon+",
+   "ivs": null,
+   "obtain": "Medium. Debut Jul 2026; Mega raids",
+   "notes": "Current #1 Electric. Mega Zeraora (datamined, unreleased) will overtake it.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Raichu X",
+   "speciesId": "raichu_mega_x",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Thunder Shock / Volt Tackle+",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Slightly behind Y.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "A",
+   "rank": null,
+   "name": "Zeraora",
+   "speciesId": "zeraora",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Spark / Wild Charge or Plasma Fists",
+   "ivs": null,
+   "obtain": "Locked. Special Research at GO Fest 2026 only",
+   "notes": "Hold it if you have it; Mega Zeraora is coming.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "A",
+   "rank": null,
+   "name": "Xurkitree",
+   "speciesId": "xurkitree",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Thunder Shock / Discharge",
+   "ivs": null,
+   "obtain": "Medium. UB raids late Sep 2026",
+   "notes": "Highest non-mega DPS, very glassy.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "B",
+   "rank": null,
+   "name": "Zekrom",
+   "speciesId": "zekrom",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Charge Beam / Fusion Bolt",
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Electivire is the budget pick.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Raikou",
+   "speciesId": "raikou_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Volt Switch / Wild Charge",
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Electivire is the budget pick.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "B",
+   "rank": null,
+   "name": "Regieleki",
+   "speciesId": "regieleki",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Electivire is the budget pick.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Electivire",
+   "speciesId": "electivire_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Thunder Shock / Wild Charge",
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Electivire is the budget pick.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Electric",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Magnezone",
+   "speciesId": "magnezone_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Electivire is the budget pick.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "S",
+   "rank": null,
+   "name": "White Kyurem",
+   "speciesId": "kyurem_white",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Ice Fang / Ice Burn",
+   "ivs": null,
+   "obtain": "Hard. Fusion: Kyurem (Glaciate) + Reshiram, 1,000 Blaze Fusion Energy + 30/30 candy",
+   "notes": "Beats Mega Rayquaza against double-Ice-weak dragons. Ice Burn cannot be TM'd.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "A",
+   "rank": null,
+   "name": "Black Kyurem",
+   "speciesId": "kyurem_black",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Breath / Freeze Shock",
+   "ivs": null,
+   "obtain": "Hard. Fusion with Zekrom",
+   "notes": "Better as Dragon than Ice.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "A",
+   "rank": null,
+   "name": "Shadow Mamoswine",
+   "speciesId": "mamoswine_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Powder Snow / Avalanche",
+   "ivs": null,
+   "obtain": "Easy. Rocket Swinub + Sinnoh Stone",
+   "notes": "Best budget Ice by a distance; also Ground with High Horsepower.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "A",
+   "rank": null,
+   "name": "Galarian Darmanitan",
+   "speciesId": "darmanitan_galarian_standard",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Ice Fang / Avalanche",
+   "ivs": null,
+   "obtain": "Medium. Eggs / events",
+   "notes": "Highest non-legendary Ice DPS.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Articuno",
+   "speciesId": "articuno_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Frost Breath / Ice Beam",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Glalie",
+   "speciesId": "glalie_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Weavile",
+   "speciesId": "weavile_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "B",
+   "rank": null,
+   "name": "Mamoswine",
+   "speciesId": "mamoswine",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "B",
+   "rank": null,
+   "name": "Glaceon",
+   "speciesId": "glaceon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Frost Breath / Avalanche",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ice",
+   "tier": "B",
+   "rank": null,
+   "name": "Baxcalibur",
+   "speciesId": "baxcalibur",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Frigibax CD Jun 2026, unverified placement",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Lucario",
+   "speciesId": "lucario_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Aura Sphere",
+   "ivs": null,
+   "obtain": "Medium. Riolu eggs; Mega raids",
+   "notes": "#1 Fighting.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Mewtwo X",
+   "speciesId": "mewtwo_mega_x",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Dynamic Punch+",
+   "ivs": null,
+   "obtain": "Hard. Mega Finale Sep 2026",
+   "notes": "Dynamic Punch+ breaks two Super Mega Raid shields.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Blaziken",
+   "speciesId": "blaziken_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Focus Blast",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Dual Fire/Fighting value.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "A",
+   "rank": null,
+   "name": "Crowned Shield Zamazenta",
+   "speciesId": "zamazenta_crowned_shield",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Close Combat",
+   "ivs": null,
+   "obtain": "Medium. T5 raids 16–22 Sep 2026; Crowned form needs 1,000 Crowned Shield Energy",
+   "notes": "Better as Steel; Fighting is a bonus.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Machamp",
+   "speciesId": "machamp_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Dynamic Punch",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Shadow Machamp is still the best free-to-play Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "B",
+   "rank": null,
+   "name": "Terrakion",
+   "speciesId": "terrakion",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Double Kick / Sacred Sword",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Shadow Machamp is still the best free-to-play Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "B",
+   "rank": null,
+   "name": "Kartana",
+   "speciesId": "kartana",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Sacred Sword",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Shadow Machamp is still the best free-to-play Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "B",
+   "rank": null,
+   "name": "Keldeo",
+   "speciesId": "keldeo_ordinary",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Shadow Machamp is still the best free-to-play Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Gallade",
+   "speciesId": "gallade_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Sacred Sword, Sep 2026",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Shadow Machamp is still the best free-to-play Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Conkeldurr",
+   "speciesId": "conkeldurr_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Shadow Machamp is still the best free-to-play Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "B",
+   "rank": null,
+   "name": "Lucario",
+   "speciesId": "lucario",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Shadow Machamp is still the best free-to-play Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fighting",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Hariyama",
+   "speciesId": "hariyama_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Shadow Machamp is still the best free-to-play Fighting attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Victreebel",
+   "speciesId": "victreebel_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Acid / Sludge Bomb+",
+   "ivs": null,
+   "obtain": "Medium. Bellsprout common; Mega raids Aug–Sep 2026",
+   "notes": "#1 Poison since the Mega Charged Attack.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Gengar",
+   "speciesId": "gengar_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Lick (legacy) or Shadow Claw / Sludge Bomb",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Doubles as Ghost.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "A",
+   "rank": null,
+   "name": "Nihilego",
+   "speciesId": "nihilego",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Poison Jab / Sludge Bomb",
+   "ivs": null,
+   "obtain": "Medium. UB raids",
+   "notes": "Best regular Poison; bulky.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "A",
+   "rank": null,
+   "name": "Naganadel",
+   "speciesId": "naganadel",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Poison Jab / Sludge Bomb",
+   "ivs": null,
+   "obtain": "Hard. Evolve Poipole from Special Research",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "B",
+   "rank": null,
+   "name": "Roserade",
+   "speciesId": "roserade",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Poison is only needed against Fairy bosses. Low investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Roserade",
+   "speciesId": "roserade",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Poison is only needed against Fairy bosses. Low investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Muk",
+   "speciesId": "muk_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Poison is only needed against Fairy bosses. Low investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "B",
+   "rank": null,
+   "name": "Toxicroak",
+   "speciesId": "toxicroak",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Poison is only needed against Fairy bosses. Low investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Poison",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Beedrill",
+   "speciesId": "beedrill_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Poison is only needed against Fairy bosses. Low investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "S",
+   "rank": null,
+   "name": "Primal Groudon",
+   "speciesId": "groudon_primal",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Precipice Blades",
+   "ivs": null,
+   "obtain": "Hard. Groudon raids + Primal Energy",
+   "notes": "#1 Ground. Cannot break Super Mega shields.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Garchomp",
+   "speciesId": "garchomp_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Earth Power (CD)",
+   "ivs": null,
+   "obtain": "Easy–Medium. Gible CD Classic 12 Sep 2026; Mega raids",
+   "notes": "Best Ground Mega; also a top Dragon.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "A",
+   "rank": null,
+   "name": "Shadow Groudon",
+   "speciesId": "groudon_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Precipice Blades",
+   "ivs": null,
+   "obtain": "Hard. Shadow raids",
+   "notes": "Nearly matches Primal.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "A",
+   "rank": null,
+   "name": "Shadow Garchomp",
+   "speciesId": "garchomp_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Earth Power",
+   "ivs": null,
+   "obtain": "Medium / Hard",
+   "notes": "Landorus-I from the Apr–May 2026 Takeover; Shadow Landorus in Oct 2026 Shadow raids.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "A",
+   "rank": null,
+   "name": "Shadow Landorus Incarnate",
+   "speciesId": "landorus_incarnate_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Earth Power",
+   "ivs": null,
+   "obtain": "Medium / Hard",
+   "notes": "Landorus-I from the Apr–May 2026 Takeover; Shadow Landorus in Oct 2026 Shadow raids.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "B",
+   "rank": null,
+   "name": "Excadrill",
+   "speciesId": "excadrill",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud-Slap / Scorching Sands",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Excadrill also carries Steel.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "B",
+   "rank": null,
+   "name": "Rhyperior",
+   "speciesId": "rhyperior",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud-Slap / Earthquake",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Excadrill also carries Steel.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "B",
+   "rank": null,
+   "name": "Garchomp",
+   "speciesId": "garchomp",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Excadrill also carries Steel.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Mamoswine",
+   "speciesId": "mamoswine_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "High Horsepower",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Excadrill also carries Steel.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ground",
+   "tier": "B",
+   "rank": null,
+   "name": "Landorus Therian",
+   "speciesId": "landorus_therian",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Excadrill also carries Steel.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Rayquaza",
+   "speciesId": "rayquaza_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Air Slash / Dragon Ascent",
+   "ivs": null,
+   "obtain": "Hard. Rayquaza raids + a Meteorite (Elite raid / research) for Dragon Ascent",
+   "notes": "Far ahead of everything. Best Mega to save energy for.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "A",
+   "rank": null,
+   "name": "Shadow Moltres",
+   "speciesId": "moltres_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Wing Attack / Sky Attack (Elite)",
+   "ivs": null,
+   "obtain": "Hard",
+   "notes": "Sky Attack is legacy.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Aerodactyl",
+   "speciesId": "aerodactyl_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Wing Attack / Sky Attack",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Also a Rock attacker.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Pidgeot",
+   "speciesId": "pidgeot_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Gust / Brave Bird",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Cheap Mega energy via walking.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "B",
+   "rank": null,
+   "name": "Tornadus Therian",
+   "speciesId": "tornadus_therian",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Gust / Bleakwind Storm",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Staraptor",
+   "speciesId": "staraptor_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Toucannon",
+   "speciesId": "toucannon_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Beak Blast, Jun 2026",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Honchkrow",
+   "speciesId": "honchkrow_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Swanna",
+   "speciesId": "swanna_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "B",
+   "rank": null,
+   "name": "Staraptor",
+   "speciesId": "staraptor",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Flying",
+   "tier": "B",
+   "rank": null,
+   "name": "Braviary",
+   "speciesId": "braviary",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Mewtwo Y",
+   "speciesId": "mewtwo_mega_y",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Psycho Cut / Future Sight+ or Psystrike",
+   "ivs": null,
+   "obtain": "Hard. Mega Finale Sep 2026",
+   "notes": "Pokebattler #1 attacker overall.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Mewtwo X",
+   "speciesId": "mewtwo_mega_x",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Psycho Cut / Psystrike",
+   "ivs": null,
+   "obtain": "Hard",
+   "notes": "Same energy pool as Y; pick one to level first.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "A",
+   "rank": null,
+   "name": "Shadow Mewtwo",
+   "speciesId": "mewtwo_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Psycho Cut / Psystrike (Elite)",
+   "ivs": null,
+   "obtain": "Hard. Past Takeovers / Shadow raids",
+   "notes": "Best non-mega Psychic.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "A",
+   "rank": null,
+   "name": "Mewtwo",
+   "speciesId": "mewtwo",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Psycho Cut / Psystrike",
+   "ivs": null,
+   "obtain": "Medium. T5 raids rotate",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "B",
+   "rank": null,
+   "name": "Dawn Wings",
+   "speciesId": "necrozma_dawn_wings",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "B",
+   "rank": null,
+   "name": "Dusk Mane Necrozma",
+   "speciesId": "necrozma_dusk_mane",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "B",
+   "rank": null,
+   "name": "Lunala",
+   "speciesId": "lunala",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Alakazam",
+   "speciesId": "alakazam_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Alakazam",
+   "speciesId": "alakazam_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Confusion / Psychic",
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Metagross",
+   "speciesId": "metagross_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Zen Headbutt / Psychic",
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Psychic",
+   "tier": "B",
+   "rank": null,
+   "name": "Deoxys Attack",
+   "speciesId": "deoxys_attack",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Psycho Boost buff Sep 2026",
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "S",
+   "rank": null,
+   "name": "Shadow Gigalith",
+   "speciesId": "gigalith_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Lock-On / Meteor Beam",
+   "ivs": null,
+   "obtain": "Easy. Rocket Roggenrola",
+   "notes": "Lock-On added Jun 2026; now above Shadow Rhyperior and Mega Tyranitar.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "S",
+   "rank": null,
+   "name": "Shadow Rhyperior",
+   "speciesId": "rhyperior_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Smack Down / Rock Wrecker (CD)",
+   "ivs": null,
+   "obtain": "Easy–Medium. Rocket Rhyhorn + Sinnoh Stone; Giovanni decoy now",
+   "notes": "The bulky option.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Diancie",
+   "speciesId": "diancie_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Rock Throw / Rock Slide",
+   "ivs": null,
+   "obtain": "Hard. Mythical Special Research for energy",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Tyranitar",
+   "speciesId": "tyranitar_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Smack Down / Stone Edge; Rock Throw / Rock Slide",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Tyranitar doubles as Dark.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Aerodactyl",
+   "speciesId": "aerodactyl_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Smack Down / Stone Edge; Rock Throw / Rock Slide",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Tyranitar doubles as Dark.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Rampardos",
+   "speciesId": "rampardos_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "glass",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Build two Rampardos; they die fast.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "B",
+   "rank": null,
+   "name": "Rampardos",
+   "speciesId": "rampardos",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Build two Rampardos; they die fast.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "B",
+   "rank": null,
+   "name": "Rhyperior",
+   "speciesId": "rhyperior",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Build two Rampardos; they die fast.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "B",
+   "rank": null,
+   "name": "Tyranitar",
+   "speciesId": "tyranitar",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Build two Rampardos; they die fast.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Rock",
+   "tier": "B",
+   "rank": null,
+   "name": "Gigalith",
+   "speciesId": "gigalith",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Build two Rampardos; they die fast.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Bug",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Heracross",
+   "speciesId": "heracross_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Fury Cutter / Megahorn",
+   "ivs": null,
+   "obtain": "Medium. Regional in the wild; Mega raids",
+   "notes": "Best Bug.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Bug",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Pinsir",
+   "speciesId": "pinsir_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Bug Bite / X-Scissor",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Bug",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Pheromosa",
+   "speciesId": "pheromosa",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Bug rarely has a boss to hit. Lowest investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Bug",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Beedrill",
+   "speciesId": "beedrill_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Bug rarely has a boss to hit. Lowest investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Bug",
+   "tier": "B",
+   "rank": null,
+   "name": "Genesect",
+   "speciesId": "genesect",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Fury Cutter / X-Scissor",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Bug rarely has a boss to hit. Lowest investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Bug",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Scizor",
+   "speciesId": "scizor_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Bug rarely has a boss to hit. Lowest investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Bug",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Scizor",
+   "speciesId": "scizor_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Bug rarely has a boss to hit. Lowest investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Bug",
+   "tier": "B",
+   "rank": null,
+   "name": "Volcarona",
+   "speciesId": "volcarona",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Bug rarely has a boss to hit. Lowest investment priority.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ghost",
+   "tier": "S",
+   "rank": null,
+   "name": "Dawn Wings Necrozma",
+   "speciesId": "necrozma_dawn_wings",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Shadow Claw / Moongeist Beam",
+   "ivs": null,
+   "obtain": "Hard. Fusion: Necrozma + Lunala, 1,000 Lunar Fusion Energy + 30/30 candy",
+   "notes": "#1 Ghost.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ghost",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Gengar",
+   "speciesId": "gengar_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Lick (legacy) or Shadow Claw / Shadow Ball",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Shadow Ball nerfed 100→90 in raids Sep 2026, still elite.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ghost",
+   "tier": "A",
+   "rank": null,
+   "name": "Shadow Giratina Origin",
+   "speciesId": "giratina_origin",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Shadow Claw / Shadow Force (Elite)",
+   "ivs": null,
+   "obtain": "Hard",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ghost",
+   "tier": "A",
+   "rank": null,
+   "name": "Giratina Origin",
+   "speciesId": "giratina_origin",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Shadow Claw / Shadow Force",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Bulky and reusable; build two.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ghost",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Chandelure",
+   "speciesId": "chandelure_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Hex / Shadow Ball",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Chandelure covers Fire and Ghost.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ghost",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Banette",
+   "speciesId": "banette_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Chandelure covers Fire and Ghost.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ghost",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Gengar",
+   "speciesId": "gengar_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Chandelure covers Fire and Ghost.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Ghost",
+   "tier": "B",
+   "rank": null,
+   "name": "Chandelure",
+   "speciesId": "chandelure",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Chandelure covers Fire and Ghost.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "S",
+   "rank": null,
+   "name": "Shadow Darkrai",
+   "speciesId": "darkrai_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Sucker Punch / Dark Pulse",
+   "ivs": null,
+   "obtain": "Hard. Darkrai raids (Halloween) then a Shadow source",
+   "notes": "Sucker Punch added Sep 2026 made it #1 Dark until Mega Absol Z arrives.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Tyranitar",
+   "speciesId": "tyranitar_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Bite / Brutal Swing",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Houndoom",
+   "speciesId": "houndoom_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Snarl / Dark Pulse+",
+   "ivs": null,
+   "obtain": "Easy. Mega raids Sep 2026",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Greninja",
+   "speciesId": "greninja_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Feint Attack / Brutal Swing",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "B",
+   "rank": null,
+   "name": "Hydreigon",
+   "speciesId": "hydreigon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Bite / Brutal Swing",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Hydreigon is the best non-mega non-shadow.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Tyranitar",
+   "speciesId": "tyranitar_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Hydreigon is the best non-mega non-shadow.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "B",
+   "rank": null,
+   "name": "Yveltal",
+   "speciesId": "yveltal",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Hydreigon is the best non-mega non-shadow.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Hydreigon",
+   "speciesId": "hydreigon_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Hydreigon is the best non-mega non-shadow.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Weavile",
+   "speciesId": "weavile_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Hydreigon is the best non-mega non-shadow.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dark",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Honchkrow",
+   "speciesId": "honchkrow_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Hydreigon is the best non-mega non-shadow.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "S",
+   "rank": null,
+   "name": "Crowned Shield Zamazenta",
+   "speciesId": "zamazenta_crowned_shield",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Metal Claw / Behemoth Bash",
+   "ivs": null,
+   "obtain": "Medium. T5 raids 16–22 Sep 2026; 1,000 Crowned Shield Energy",
+   "notes": "#1 Steel. Behemoth Bash Adventure Effect boosts party defence.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "S",
+   "rank": null,
+   "name": "Crowned Sword Zacian",
+   "speciesId": "zacian_crowned_sword",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Metal Claw / Behemoth Blade",
+   "ivs": null,
+   "obtain": "Medium. T5 raids 9–15 Sep 2026; Crowned Sword Energy",
+   "notes": "Also #2 Master League.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Metagross",
+   "speciesId": "metagross_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Bullet Punch / Meteor Mash (CD)",
+   "ivs": null,
+   "obtain": "Easy–Medium. Beldum; Meteor Mash rerun Worlds 2026",
+   "notes": "Highest Steel DPS.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "A",
+   "rank": null,
+   "name": "Dusk Mane Necrozma",
+   "speciesId": "necrozma_dusk_mane",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Metal Claw / Sunsteel Strike",
+   "ivs": null,
+   "obtain": "Hard. Fusion with Solgaleo",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Metagross",
+   "speciesId": "metagross_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Aggron",
+   "speciesId": "aggron_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "B",
+   "rank": null,
+   "name": "Mega Skarmory",
+   "speciesId": "skarmory_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Drill Run, Sep 2026",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Excadrill",
+   "speciesId": "excadrill_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Steel",
+   "tier": "B",
+   "rank": null,
+   "name": "Excadrill",
+   "speciesId": "excadrill",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Metal Claw / Iron Head",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Rayquaza",
+   "speciesId": "rayquaza_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Tail / Outrage or Breaking Swipe",
+   "ivs": null,
+   "obtain": "Hard",
+   "notes": "#1 overall on Dittobase.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "S",
+   "rank": null,
+   "name": "Eternatus",
+   "speciesId": "eternatus",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Tail / Dynamax Cannon",
+   "ivs": null,
+   "obtain": "Locked. One per trainer from GO Pass: Max Finale (2025); no rerun announced",
+   "notes": "Higher DPS and TDO than Mega Rayquaza's Dragon set. Hold it if you have it.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "A",
+   "rank": null,
+   "name": "White Kyurem",
+   "speciesId": "kyurem_white",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Breath / signature moves",
+   "ivs": null,
+   "obtain": "Hard",
+   "notes": "See Ice.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "A",
+   "rank": null,
+   "name": "Black Kyurem",
+   "speciesId": "kyurem_black",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Breath / signature moves",
+   "ivs": null,
+   "obtain": "Hard",
+   "notes": "See Ice.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Garchomp",
+   "speciesId": "garchomp_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Tail / Outrage; Dragon Tail / Outrage+",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Dragonite Mega debuted Feb 2026.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Dragonite",
+   "speciesId": "dragonite_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Tail / Outrage; Dragon Tail / Outrage+",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Dragonite Mega debuted Feb 2026.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "B",
+   "rank": null,
+   "name": "Origin Palkia",
+   "speciesId": "palkia_origin",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Spacial Rend",
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Dragonite is the budget king.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Palkia",
+   "speciesId": "palkia_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Spacial Rend",
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Dragonite is the budget king.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Dragonite",
+   "speciesId": "dragonite_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Dragonite is the budget king.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Salamence",
+   "speciesId": "salamence_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Dragonite is the budget king.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "B",
+   "rank": null,
+   "name": "Garchomp",
+   "speciesId": "garchomp",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Dragonite is the budget king.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Dragon",
+   "tier": "B",
+   "rank": null,
+   "name": "Haxorus",
+   "speciesId": "haxorus",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Hard",
+   "notes": "Shadow Dragonite is the budget king.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "S",
+   "rank": null,
+   "name": "Mega Gardevoir",
+   "speciesId": "gardevoir_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": "Charm / Dazzling Gleam",
+   "ivs": null,
+   "obtain": "Easy. Ralts common (Dynamax Ralts 7 Sep 2026)",
+   "notes": "#1 Fairy.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "A",
+   "rank": null,
+   "name": "Xerneas",
+   "speciesId": "xerneas",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Geomancy (Elite fast) / Moonblast",
+   "ivs": null,
+   "obtain": "Medium. T5 raids end Sep 2026",
+   "notes": "Needs Geomancy; also top-6 Master League.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "A",
+   "rank": null,
+   "name": "Crowned Sword Zacian",
+   "speciesId": "zacian_crowned_sword",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium / Hard",
+   "notes": "Cross-type value.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "A",
+   "rank": null,
+   "name": "Mega Diancie",
+   "speciesId": "diancie_mega",
+   "flags": {
+    "shadow": false,
+    "mega": true,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium / Hard",
+   "notes": "Cross-type value.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "B",
+   "rank": null,
+   "name": "Shadow Gardevoir",
+   "speciesId": "gardevoir_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Fairy is only for Dragon and Fighting bosses; Ice usually does the same job.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "B",
+   "rank": null,
+   "name": "Tapu Koko",
+   "speciesId": "tapu_koko",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Fairy is only for Dragon and Fighting bosses; Ice usually does the same job.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "B",
+   "rank": null,
+   "name": "Togekiss",
+   "speciesId": "togekiss",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Charm / Dazzling Gleam",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Fairy is only for Dragon and Fighting bosses; Ice usually does the same job.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "B",
+   "rank": null,
+   "name": "Granbull",
+   "speciesId": "granbull",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Fairy is only for Dragon and Fighting bosses; Ice usually does the same job.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "raids",
+   "kind": "pve-by-type",
+   "section": "Fairy",
+   "tier": "B",
+   "rank": null,
+   "name": "Primarina",
+   "speciesId": "primarina",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Fairy is only for Dragon and Fighting bosses; Ice usually does the same job.",
+   "source": "01-general-pve-by-type.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": null,
+   "name": "Blissey",
+   "speciesId": "blissey",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Zen Headbutt / Dazzling Gleam (or Pound / Hyper Beam)",
+   "ivs": null,
+   "obtain": "Easy. Chansey wild, eggs, Dynamax Chansey in 3-star Max Battles daily",
+   "notes": "Highest bulk. Gleam punishes Fighting attackers.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": null,
+   "name": "Chansey",
+   "speciesId": "chansey",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Zen Headbutt or Pound / Dazzling Gleam or Psychic",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Low max CP so it barely decays. Best overnight defender.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": null,
+   "name": "Snorlax",
+   "speciesId": "snorlax",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Lick / Body Slam",
+   "ivs": null,
+   "obtain": "Easy. Wild, eggs, Rocket typeless grunt",
+   "notes": "Resists Ghost; unpredictable charged pool.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Togekiss",
+   "speciesId": "togekiss",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Charm / Dazzling Gleam or Aerial Ace",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Immune to Dragon; annoying for Machamp.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Metagross",
+   "speciesId": "metagross",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Bullet Punch / Meteor Mash or Psychic",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Resistance wall; forces Fire or Ground.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Milotic",
+   "speciesId": "milotic",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Waterfall / Surf",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Only Electric and Grass weak.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Wobbuffet",
+   "speciesId": "wobbuffet",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Mirror Coat",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Set at 1,000–1,500 CP for quiet gyms; very slow decay.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Slaking",
+   "speciesId": "slaking",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Yawn / Play Rough or Body Slam",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Huge Stamina, bad moves, fast decay. Use for the top slot only.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Umbreon",
+   "speciesId": "umbreon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Snarl / Foul Play",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Dark bulk vs Psychic and Ghost attackers.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Dragonite",
+   "speciesId": "dragonite",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Tail / Outrage",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Neutral coverage.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Goodra",
+   "speciesId": "goodra",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Dragon Tail / Outrage",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Neutral coverage.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Steelix",
+   "speciesId": "steelix",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Situational resistances.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Lickitung",
+   "speciesId": "lickitung",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Situational resistances.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "gym",
+   "kind": "defence",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Giratina Altered",
+   "speciesId": "giratina_altered",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Situational resistances.",
+   "source": "03-gym-defense.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "S",
+   "rank": null,
+   "name": "Lucario",
+   "speciesId": "lucario",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Power-Up Punch + Aura Sphere",
+   "ivs": null,
+   "obtain": "Easy. Riolu from eggs",
+   "notes": "The shield-breaker lead: 35-energy PUP spam. Hits Persian, Snorlax, Tyranitar, Amaura.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "S",
+   "rank": null,
+   "name": "Swampert",
+   "speciesId": "swampert",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Hydro Cannon (CD)",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Arlo lead. Mud Shot is the fastest energy fast move; Hydro Cannon strips shields.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "S",
+   "rank": null,
+   "name": "Mamoswine",
+   "speciesId": "mamoswine",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Powder Snow / Avalanche + High Horsepower",
+   "ivs": null,
+   "obtain": "Easy. Swinub + Sinnoh Stone",
+   "notes": "Kills Axew, Flygon, Tyrunt, and any Dragon the leaders throw.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "S",
+   "rank": null,
+   "name": "Machamp",
+   "speciesId": "machamp",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Counter / Cross Chop + Dynamic Punch",
+   "ivs": null,
+   "obtain": "Easy. Shadow Machop in Sep 2026 Shadow raids",
+   "notes": "35-energy Cross Chop for baiting. Shadow version is fine here.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Mewtwo",
+   "speciesId": "mewtwo",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Psycho Cut / Psystrike",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Giovanni team; handles Machamp and Weezing.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Rhyperior",
+   "speciesId": "rhyperior",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud-Slap / Rock Wrecker (CD) + Surf",
+   "ivs": null,
+   "obtain": "Easy. Dynamax Rhyhorn 14 Sep 2026",
+   "notes": "Reshiram finisher; Electric and Fire grunt lead.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Charizard",
+   "speciesId": "charizard",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Fire Spin or Wing Attack / Dragon Claw + Blast Burn",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Dragon Claw at 35 energy plus Fire for Scizor and Ferrothorn.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Garchomp",
+   "speciesId": "garchomp",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Earth Power + Outrage",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Ground and Dragon coverage on a fast fast move.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Metagross",
+   "speciesId": "metagross",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Bullet Punch / Meteor Mash",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Fairy, Rock and Ice grunt answer.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Yveltal",
+   "speciesId": "yveltal",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Snarl / Dark Pulse or Brutal Swing",
+   "ivs": null,
+   "obtain": "Medium / Easy",
+   "notes": "Arlo slot 2 (Slowbro, Alakazam, Golurk).",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "A",
+   "rank": null,
+   "name": "Hydreigon",
+   "speciesId": "hydreigon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Snarl / Dark Pulse or Brutal Swing",
+   "ivs": null,
+   "obtain": "Medium / Easy",
+   "notes": "Arlo slot 2 (Slowbro, Alakazam, Golurk).",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Terrakion",
+   "speciesId": "terrakion",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Double Kick / Rock Slide; Counter / Dynamic Punch",
+   "ivs": null,
+   "obtain": "Medium / Easy",
+   "notes": "Sierra's Amaura lead alternatives.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Conkeldurr",
+   "speciesId": "conkeldurr",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Double Kick / Rock Slide; Counter / Dynamic Punch",
+   "ivs": null,
+   "obtain": "Medium / Easy",
+   "notes": "Sierra's Amaura lead alternatives.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Tyranitar",
+   "speciesId": "tyranitar",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Smack Down / Stone Edge; Thunder Shock / Wild Charge; Powder Snow / Weather Ball",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Flying grunt trio.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Electivire",
+   "speciesId": "electivire",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Smack Down / Stone Edge; Thunder Shock / Wild Charge; Powder Snow / Weather Ball",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Flying grunt trio.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Abomasnow",
+   "speciesId": "abomasnow",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Smack Down / Stone Edge; Thunder Shock / Wild Charge; Powder Snow / Weather Ball",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Flying grunt trio.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Gardevoir",
+   "speciesId": "gardevoir",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Charm / Dazzling Gleam",
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Dragon grunt.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Weavile",
+   "speciesId": "weavile",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Snarl / Foul Play; Shadow Claw / Shadow Ball",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Ghost grunt.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Gengar",
+   "speciesId": "gengar",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Snarl / Foul Play; Shadow Claw / Shadow Ball",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Ghost grunt.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Darkrai",
+   "speciesId": "darkrai",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Snarl / Foul Play; Shadow Claw / Shadow Ball",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Ghost grunt.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Groudon",
+   "speciesId": "groudon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Precipice Blades; Fire Fang / Earth Power",
+   "ivs": null,
+   "obtain": "Medium / Easy",
+   "notes": "Electric grunt.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "rocket",
+   "kind": "attacker",
+   "section": "Attacker tiers",
+   "tier": "B",
+   "rank": null,
+   "name": "Hippowdon",
+   "speciesId": "hippowdon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Mud Shot / Precipice Blades; Fire Fang / Earth Power",
+   "ivs": null,
+   "obtain": "Medium / Easy",
+   "notes": "Electric grunt.",
+   "source": "04-team-rocket.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 1,
+   "name": "Melmetal",
+   "speciesId": "melmetal",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Safe swap, bulky generalist",
+   "moves": "Thunder Shock / Double Iron Bash (Elite) + Dynamic Punch",
+   "ivs": "4/10/14 @ 15.5",
+   "obtain": "Hard. Meltan via Mystery Box (send a Pokémon to HOME), 400 candy; DIB via Elite Charged TM",
+   "notes": "Untradeable mythical. 100k dust second move. Level 15.5 means a low-level Meltan is fine.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 2,
+   "name": "Altaria",
+   "speciesId": "altaria",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer, consistency 95.8",
+   "moves": "Dragon Breath / Moonblast (Elite) + Flamethrower",
+   "ivs": "4/12/13 @ 28.5",
+   "obtain": "Medium. Swablu wild, 400 candy; Moonblast via Elite TM",
+   "notes": "Regular beats Shadow here.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 3,
+   "name": "Shadow Ninetales",
+   "speciesId": "ninetales_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Generalist",
+   "moves": "Ember (Elite fast) / Weather Ball Fire + Energy Ball (Elite)",
+   "ivs": "4/15/14 @ 24.5",
+   "obtain": "Hard. Rocket Shadow Vulpix; two Elite TMs",
+   "notes": "The most expensive top-5 build.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 4,
+   "name": "Cramorant",
+   "speciesId": "cramorant",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Safe swap 97.6",
+   "moves": "Peck / Dive + Fly",
+   "ivs": "5/15/13 @ 26",
+   "obtain": "Hard. Debut 18 Aug 2026 (5 km eggs, GO Pass, GBL encounters); not wild",
+   "notes": "No TMs needed if you have one.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 5,
+   "name": "Tinkaton",
+   "speciesId": "tinkaton",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Safe swap 100",
+   "moves": "Fairy Wind / Gigaton Hammer (CD) + Bulldoze",
+   "ivs": "4/15/14 @ 25",
+   "obtain": "Medium. Tinkatink CD 11 Apr 2026; else Elite Charged TM",
+   "notes": "Bulldoze now guarantees −1 Def on the target.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 6,
+   "name": "Mimikyu",
+   "speciesId": "mimikyu",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 100, closer 100",
+   "moves": "Shadow Claw / Shadow Sneak + Play Rough",
+   "ivs": "4/14/15 @ 25",
+   "obtain": "Locked. Debut 1 Apr 2026; trade only until a rerun",
+   "notes": "Disguise is a free third shield. Best all-rounder in the game.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 7,
+   "name": "Corviknight",
+   "speciesId": "corviknight",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Safe swap 95.6",
+   "moves": "Sand Attack / Air Cutter (CD) + Iron Head (Elite)",
+   "ivs": "4/12/14 @ 23",
+   "obtain": "Medium. Rookidee wild; two event moves",
+   "notes": "Regular beats Shadow in GL.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 8,
+   "name": "Galarian Corsola",
+   "speciesId": "corsola_galarian",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 92.5",
+   "moves": "Astonish / Night Shade + Power Gem",
+   "ivs": "4/15/14 @ 47.5 (XL)",
+   "obtain": "Hard. 7 km eggs in events, Routes",
+   "notes": "Egg-only XL grind; prioritise XL here.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 9,
+   "name": "Shadow Altaria",
+   "speciesId": "altaria_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer",
+   "moves": "as Altaria",
+   "ivs": "same",
+   "obtain": "Medium. Rocket Swablu",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 10,
+   "name": "Shadow Corviknight",
+   "speciesId": "corviknight_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Generalist",
+   "moves": "as Corviknight",
+   "ivs": "same",
+   "obtain": "Medium",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 11,
+   "name": "Florges",
+   "speciesId": "florges",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Bulky generalist",
+   "moves": "Fairy Wind / Chilling Water (Elite) + Moonblast",
+   "ivs": "6/13/14 @ 17",
+   "obtain": "Medium. Flabébé wild; Floette needs buddy hearts + 100 candy",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 12,
+   "name": "Shadow Quagsire",
+   "speciesId": "quagsire_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 90.7",
+   "moves": "Mud Shot / Aqua Tail (Elite) + Stone Edge",
+   "ivs": "4/15/10 @ 28.5",
+   "obtain": "Medium. Rocket Wooper",
+   "notes": "Shadow beats regular.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 13,
+   "name": "Ninetales",
+   "speciesId": "ninetales",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "",
+   "moves": "as Shadow Ninetales",
+   "ivs": "4/15/14 @ 24.5",
+   "obtain": "Hard (two Elite TMs)",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 14,
+   "name": "Quagsire",
+   "speciesId": "quagsire",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "",
+   "moves": "as Shadow Quagsire",
+   "ivs": "4/15/10 @ 28.5",
+   "obtain": "Medium",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 15,
+   "name": "Thievul",
+   "speciesId": "thievul",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 98.7",
+   "moves": "Sucker Punch / Night Slash + Icy Wind (CD)",
+   "ivs": "4/15/15 @ 26",
+   "obtain": "Medium. Nickit CD 16 Aug 2026",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 16,
+   "name": "Araquanid",
+   "speciesId": "araquanid",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead, switch 93",
+   "moves": "Infestation / Water Pulse + Mirror Coat",
+   "ivs": "5/15/14 @ 32",
+   "obtain": "Easy. Dewpider wild",
+   "notes": "Infestation buffed Sep 2026. No TMs.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 17,
+   "name": "Clodsire",
+   "speciesId": "clodsire",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 92.5",
+   "moves": "Poison Sting / Earthquake + Stone Edge",
+   "ivs": "4/14/10 @ 29.5",
+   "obtain": "Easy. Paldean Wooper wild",
+   "notes": "No TMs.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 18,
+   "name": "Shadow Sableye",
+   "speciesId": "sableye_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 100",
+   "moves": "Shadow Claw / Foul Play + Drain Punch",
+   "ivs": "4/15/15 @ 47 (XL)",
+   "obtain": "Hard. Rocket Sableye; Shadow XL",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 19,
+   "name": "Marowak",
+   "speciesId": "marowak",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Generalist",
+   "moves": "Mud Slap / Bone Club + Rock Slide",
+   "ivs": "4/15/14 @ 31.5",
+   "obtain": "Easy",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 20,
+   "name": "Stunfisk",
+   "speciesId": "stunfisk",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 92.2",
+   "moves": "Thunder Shock / Mud Bomb + Discharge",
+   "ivs": "5/15/13 @ 26",
+   "obtain": "Easy",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 21,
+   "name": "Vigoroth",
+   "speciesId": "vigoroth",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 92.4",
+   "moves": "Scratch / Body Slam + Bulldoze",
+   "ivs": "4/15/14 @ 28.5",
+   "obtain": "Easy",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 22,
+   "name": "Jellicent",
+   "speciesId": "jellicent",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Generalist",
+   "moves": "Hex / Surf + Shadow Ball",
+   "ivs": "4/15/14 @ 24",
+   "obtain": "Easy. Frillish (hemisphere regional)",
+   "notes": "Shadow Ball nerfed to 90.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 23,
+   "name": "Empoleon",
+   "speciesId": "empoleon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 100",
+   "moves": "Metal Sound / Hydro Cannon (CD) + Drill Peck",
+   "ivs": "5/15/13 @ 19",
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 24,
+   "name": "Shadow Empoleon",
+   "speciesId": "empoleon_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "",
+   "moves": "as Empoleon",
+   "ivs": "same",
+   "obtain": "Medium",
+   "notes": "",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "gl",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 25,
+   "name": "Fearow",
+   "speciesId": "fearow",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 100",
+   "moves": "Peck / Drill Peck + Drill Run",
+   "ivs": "4/15/13 @ 28",
+   "obtain": "Easy. Spearow wild",
+   "notes": "Drill Run buffed Jun 2026. Cheapest top-25 build.",
+   "source": "05-great-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 1,
+   "name": "Tinkaton",
+   "speciesId": "tinkaton",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 97.6, switch 94.5, lead 92.3",
+   "moves": "Fairy Wind / Gigaton Hammer (CD) + Bulldoze",
+   "ivs": "12/15/15 @ 50 (XL)",
+   "obtain": "Medium–Hard. CD Apr 2026; XL to 50",
+   "notes": "The best Pokémon in the league in every role.",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 2,
+   "name": "Corviknight",
+   "speciesId": "corviknight",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 100, lead 96.9",
+   "moves": "Sand Attack / Air Cutter (CD) + Iron Head (Elite)",
+   "ivs": "4/14/13 @ 47 (XL)",
+   "obtain": "Hard. Rookidee; XL plus two event moves",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 3,
+   "name": "Shadow Snorlax",
+   "speciesId": "snorlax_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 99.5",
+   "moves": "Psywave / Body Slam + Earthquake",
+   "ivs": "5/15/14 @ 28.5",
+   "obtain": "Easy. Rocket Snorlax (typeless grunt now)",
+   "notes": "No XL, no TMs. Best value in the league.",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 4,
+   "name": "Shadow Corviknight",
+   "speciesId": "corviknight_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Generalist",
+   "moves": "Sand Attack / Air Cutter + Payback",
+   "ivs": "4/14/13 @ 47 (XL)",
+   "obtain": "Hard",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 5,
+   "name": "Melmetal",
+   "speciesId": "melmetal",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 94",
+   "moves": "Thunder Shock / Double Iron Bash (Elite) + Dynamic Punch",
+   "ivs": "4/15/14 @ 25.5",
+   "obtain": "Hard. Mystery Box, 400 candy, Elite TM",
+   "notes": "The same Melmetal can serve both leagues at different levels.",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 6,
+   "name": "Virizion",
+   "speciesId": "virizion",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 100",
+   "moves": "Double Kick / Leaf Blade + Sacred Sword (Elite)",
+   "ivs": "6/15/11 @ 31",
+   "obtain": "Medium. T5 raids",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 7,
+   "name": "Zygarde Complete",
+   "speciesId": "zygarde_complete",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 94.7",
+   "moves": "Dragon Tail / Crunch + Bulldoze",
+   "ivs": "13/10/15 @ 24",
+   "obtain": "Hard. 250 Zygarde Cells from Routes (3/day)",
+   "notes": "Time-expensive, dust-cheap.",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 8,
+   "name": "Empoleon",
+   "speciesId": "empoleon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 100",
+   "moves": "Metal Sound / Hydro Cannon (CD) + Drill Peck",
+   "ivs": "6/15/14 @ 33",
+   "obtain": "Easy–Medium",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 9,
+   "name": "Shadow Empoleon",
+   "speciesId": "empoleon_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "",
+   "moves": "same",
+   "ivs": "same",
+   "obtain": "Medium",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 10,
+   "name": "Mimikyu",
+   "speciesId": "mimikyu",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 100, closer 100",
+   "moves": "Shadow Claw / Shadow Sneak + Play Rough",
+   "ivs": "13/15/15 @ 50 (XL)",
+   "obtain": "Locked",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 11,
+   "name": "Snorlax",
+   "speciesId": "snorlax",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 93.1",
+   "moves": "as Shadow Snorlax",
+   "ivs": "5/15/14 @ 28.5",
+   "obtain": "Easy",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 12,
+   "name": "Florges",
+   "speciesId": "florges",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 100",
+   "moves": "Fairy Wind / Chilling Water (Elite) + Disarming Voice",
+   "ivs": "4/13/15 @ 28.5",
+   "obtain": "Medium",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 13,
+   "name": "Galarian Moltres",
+   "speciesId": "moltres_galarian",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 92.4",
+   "moves": "Sucker Punch / Fly + Brave Bird",
+   "ivs": "4/11/11 @ 29.5",
+   "obtain": "Hard. Daily Adventure Incense, rare and fleeing",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 14,
+   "name": "Shadow Feraligatr",
+   "speciesId": "feraligatr_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 98.5",
+   "moves": "Shadow Claw / Hydro Cannon (CD) + Ice Beam",
+   "ivs": "4/15/11 @ 35",
+   "obtain": "Medium. Rocket Totodile",
+   "notes": "Shadow beats regular.",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 15,
+   "name": "Feraligatr",
+   "speciesId": "feraligatr",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 88.6",
+   "moves": "same",
+   "ivs": "same",
+   "obtain": "Easy",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 16,
+   "name": "Jellicent",
+   "speciesId": "jellicent",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 91.2",
+   "moves": "Hex / Surf + Shadow Ball",
+   "ivs": "12/14/12 @ 47.5 (XL)",
+   "obtain": "Easy plus XL grind",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 17,
+   "name": "Giratina Altered",
+   "speciesId": "giratina_altered",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 93.7",
+   "moves": "Dragon Breath / Ancient Power + Shadow Force (Elite)",
+   "ivs": "5/15/8 @ 27.5",
+   "obtain": "Medium",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 18,
+   "name": "Cramorant",
+   "speciesId": "cramorant",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 93.4",
+   "moves": "Peck / Dive + Fly",
+   "ivs": "15/15/15 @ 50 (XL)",
+   "obtain": "Hard",
+   "notes": "Needs a hundo at 50.",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 19,
+   "name": "Guzzlord",
+   "speciesId": "guzzlord",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 95.2",
+   "moves": "Dragon Tail / Brutal Swing + Sludge Bomb",
+   "ivs": "4/15/14 @ 34",
+   "obtain": "Medium. UB raids",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 20,
+   "name": "Skeledirge",
+   "speciesId": "skeledirge",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Generalist",
+   "moves": "Incinerate / Torch Song + Shadow Ball",
+   "ivs": "6/15/13 @ 30.5",
+   "obtain": "Easy",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 21,
+   "name": "Rillaboom",
+   "speciesId": "rillaboom",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 91.1",
+   "moves": "Scratch / Drum Beating + Earth Power",
+   "ivs": "4/14/15 @ 27.5",
+   "obtain": "Easy",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 22,
+   "name": "Lapras",
+   "speciesId": "lapras",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 92.9",
+   "moves": "Psywave / Sparkling Aria + Ice Beam (Elite)",
+   "ivs": "4/15/15 @ 40.5",
+   "obtain": "Medium",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 23,
+   "name": "Shadow Lapras",
+   "speciesId": "lapras_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 92.4",
+   "moves": "same",
+   "ivs": "same",
+   "obtain": "Medium",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 24,
+   "name": "Dusknoir",
+   "speciesId": "dusknoir",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 92.4",
+   "moves": "Astonish / Dynamic Punch + Shadow Punch",
+   "ivs": "4/13/15 @ 48.5 (XL)",
+   "obtain": "Easy plus XL grind",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ul",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 25,
+   "name": "Alolan Ninetales",
+   "speciesId": "ninetales_alolan",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 99.7",
+   "moves": "Powder Snow / Weather Ball Ice + Chilling Water (Elite)",
+   "ivs": "13/15/14 @ 47.5 (XL)",
+   "obtain": "Hard",
+   "notes": "",
+   "source": "06-ultra-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 1,
+   "name": "Origin Palkia",
+   "speciesId": "palkia_origin",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 100, lead 96.3",
+   "moves": "Dragon Breath / Aqua Tail + Spacial Rend (legacy)",
+   "ivs": null,
+   "obtain": "Hard. Raids Jul 2026; Spacial Rend Elite-TM-able only in that window",
+   "notes": "Wait for the next Origin Palkia raid window to get the move.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 2,
+   "name": "Crowned Sword Zacian",
+   "speciesId": "zacian_crowned_sword",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 96.9",
+   "moves": "Metal Claw / Close Combat + Behemoth Blade (legacy)",
+   "ivs": null,
+   "obtain": "Medium. Zacian raids 9–15 Sep 2026; Crowned Sword Energy converts Iron Head to Behemoth Blade",
+   "notes": "Same hundo doubles as a Steel raider and Max attacker.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 3,
+   "name": "Zygarde Complete",
+   "speciesId": "zygarde_complete",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 100",
+   "moves": "Dragon Tail / Crunch + Bulldoze",
+   "ivs": null,
+   "obtain": "Hard. 250 Route cells",
+   "notes": "No raid candy needed; XL comes from cells and walking.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 4,
+   "name": "Metagross",
+   "speciesId": "metagross",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 98.2",
+   "moves": "Shadow Claw (Elite) / Meteor Mash (CD) + Earthquake",
+   "ivs": null,
+   "obtain": "Easy–Medium. Beldum; Meteor Mash via Worlds 2026 rerun or Elite TM; Shadow Claw from Mega Metagross Raid Day",
+   "notes": "Cheapest top-5 build. Regular beats Shadow.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 5,
+   "name": "White Kyurem",
+   "speciesId": "kyurem_white",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Def 96.5",
+   "moves": "Dragon Breath / Fusion Flare + Ice Burn (fusion-only)",
+   "ivs": null,
+   "obtain": "Hard. Fuse Kyurem + Reshiram",
+   "notes": "Same fusion as the #1 Ice raider.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 6,
+   "name": "Xerneas",
+   "speciesId": "xerneas",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 94.4, closer 95.3",
+   "moves": "Geomancy (Elite fast) / Close Combat + Moonblast",
+   "ivs": null,
+   "obtain": "Medium. Raids end Sep 2026",
+   "notes": "Geomancy needs an Elite Fast TM unless caught during its event.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "S",
+   "rank": 7,
+   "name": "Kyogre",
+   "speciesId": "kyogre",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 98",
+   "moves": "Waterfall / Avalanche + Origin Pulse (Elite)",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 8,
+   "name": "Origin Dialga",
+   "speciesId": "dialga_origin",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 95.5",
+   "moves": "Dragon Breath / Roar of Time (legacy) + Iron Head",
+   "ivs": null,
+   "obtain": "Hard. Raids 2026",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 9,
+   "name": "Reshiram",
+   "speciesId": "reshiram",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 99.2",
+   "moves": "Dragon Breath / Fusion Flare (Elite) + Draco Meteor",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 10,
+   "name": "Ursaluna",
+   "speciesId": "ursaluna",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 98.8",
+   "moves": "Scratch / Ice Punch + High Horsepower (CD)",
+   "ivs": null,
+   "obtain": "Easy. Teddiursa CD; evolve Ursaring on a full-moon night",
+   "notes": "Cheapest top-10 build.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 11,
+   "name": "Eternatus",
+   "speciesId": "eternatus",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 100",
+   "moves": "Dragon Tail / Dynamax Cannon + Flamethrower",
+   "ivs": null,
+   "obtain": "Locked. GO Pass: Max Finale (2025), one per trainer",
+   "notes": "XL from Eternamax Max Battles.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 12,
+   "name": "Shadow Reshiram",
+   "speciesId": "reshiram_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Switch 99.5",
+   "moves": "as Reshiram",
+   "ivs": null,
+   "obtain": "Hard. Giovanni now",
+   "notes": "Shadow beats regular here.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 13,
+   "name": "Black Kyurem",
+   "speciesId": "kyurem_black",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 89.9",
+   "moves": "Dragon Tail / Freeze Shock (legacy) + Fusion Bolt",
+   "ivs": null,
+   "obtain": "Hard. Fuse Kyurem + Zekrom",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 14,
+   "name": "Lugia",
+   "speciesId": "lugia",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 98.4",
+   "moves": "Dragon Tail / Aeroblast (Elite) + Earth Power",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Earth Power added Sep 2026 lifted it here.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 15,
+   "name": "Lunala",
+   "speciesId": "lunala",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 100",
+   "moves": "Shadow Claw / Shadow Ball + Moonblast",
+   "ivs": null,
+   "obtain": "Medium. Evolve Cosmoem",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 16,
+   "name": "Crowned Shield Zamazenta",
+   "speciesId": "zamazenta_crowned_shield",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 95.5",
+   "moves": "Ice Fang / Close Combat + Behemoth Bash (legacy)",
+   "ivs": null,
+   "obtain": "Medium. Raids 16–22 Sep 2026",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "A",
+   "rank": 17,
+   "name": "Shadow Ursaluna",
+   "speciesId": "ursaluna_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 98.3",
+   "moves": "as Ursaluna",
+   "ivs": null,
+   "obtain": "Medium. Rocket Teddiursa",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 18,
+   "name": "Dawn Wings Necrozma",
+   "speciesId": "necrozma_dawn_wings",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Def 96.7",
+   "moves": "Shadow Claw / Dark Pulse + Moongeist Beam",
+   "ivs": null,
+   "obtain": "Hard. Fusion",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 19,
+   "name": "Marshadow",
+   "speciesId": "marshadow",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 100",
+   "moves": "Shadow Claw / Close Combat + Ice Punch",
+   "ivs": null,
+   "obtain": "Locked. GO Fest 2025 ticket mythical",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 20,
+   "name": "Zekrom",
+   "speciesId": "zekrom",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 94",
+   "moves": "Dragon Breath / Outrage + Fusion Bolt (Elite)",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Shadow Zekrom arrives 2 Oct 2026.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 21,
+   "name": "Dusk Mane Necrozma",
+   "speciesId": "necrozma_dusk_mane",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Def 95.8",
+   "moves": "Shadow Claw / Dark Pulse + Sunsteel Strike",
+   "ivs": null,
+   "obtain": "Hard. Fusion",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 22,
+   "name": "Shadow Lugia",
+   "speciesId": "lugia_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 97.8",
+   "moves": "as Lugia",
+   "ivs": null,
+   "obtain": "Hard",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 23,
+   "name": "Shadow Palkia",
+   "speciesId": "palkia_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Lead 96.6",
+   "moves": "Dragon Breath / Aqua Tail + Draco Meteor",
+   "ivs": null,
+   "obtain": "Hard. Shadow raids Jul 2026",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 24,
+   "name": "Ho-Oh",
+   "speciesId": "ho_oh",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Closer 96.9",
+   "moves": "Incinerate / Brave Bird + Sacred Fire (Elite)",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "ml",
+   "kind": "pvp",
+   "section": "Tiers",
+   "tier": "B",
+   "rank": 25,
+   "name": "Shadow Garchomp",
+   "speciesId": "garchomp_shadow",
+   "flags": {
+    "shadow": true,
+    "mega": false,
+    "max": false
+   },
+   "role": "Consistency 92.5",
+   "moves": "Dragon Tail / Twister + Earth Power (Elite)",
+   "ivs": null,
+   "obtain": "Easy–Medium. Rocket Gible",
+   "notes": "Cheaper than any legendary above it.",
+   "source": "07-master-league.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "S",
+   "rank": null,
+   "name": "Gigantamax Inteleon",
+   "speciesId": "inteleon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "G-Max Hydrosnipe (Water)",
+   "ivs": null,
+   "obtain": "Medium. Past G-Max days; Dynamax Sobble 28 Sep–4 Oct 2026 gives the Dynamax version",
+   "notes": "Top Water; the counter for G-Max Cinderace on 3 Oct.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "S",
+   "rank": null,
+   "name": "Gigantamax Gengar",
+   "speciesId": "gengar",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "G-Max Terror (Ghost)",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "S",
+   "rank": null,
+   "name": "Gigantamax Kingler",
+   "speciesId": "kingler",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "G-Max Foam Burst (Water)",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Second Water pick.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "S",
+   "rank": null,
+   "name": "Gigantamax Rillaboom",
+   "speciesId": "rillaboom",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "G-Max Drum Solo (Grass)",
+   "ivs": null,
+   "obtain": "Medium. Max Battle Day 1 Aug 2026",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "S",
+   "rank": null,
+   "name": "Gigantamax Cinderace",
+   "speciesId": "cinderace",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "G-Max Fireball (Fire)",
+   "ivs": null,
+   "obtain": "Medium. Max Battle Day 3 Oct 2026 (shiny debut)",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "S",
+   "rank": null,
+   "name": "Gigantamax Machamp",
+   "speciesId": "machamp",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "G-Max Chi Strike (Fighting)",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "S",
+   "rank": null,
+   "name": "Crowned Sword Zacian",
+   "speciesId": "zacian_crowned_sword",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Behemoth Blade (Steel)",
+   "ivs": null,
+   "obtain": "Medium. Raids Sep 2026",
+   "notes": "Adventure Effect boosts the whole party's Attack.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Dynamax Excadrill",
+   "speciesId": "excadrill",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "Max Quake (Ground)",
+   "ivs": null,
+   "obtain": "Easy. Drilbur Max Monday Apr 2026; recurs",
+   "notes": "The must-have Dynamax attacker; still top tier 500+ days on.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Dynamax Rhyperior",
+   "speciesId": "rhyperior",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "Max Rockfall / Max Quake",
+   "ivs": null,
+   "obtain": "Easy. Dynamax Rhyhorn 14 Sep 2026",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Dynamax Urshifu Rapid Strike",
+   "speciesId": "urshifu_rapid_strike",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "Max Geyser",
+   "ivs": null,
+   "obtain": "Hard",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Dynamax Inteleon",
+   "speciesId": "inteleon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "Max Geyser",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Use until you have the G-Max.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Kingler",
+   "speciesId": "kingler",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Max Geyser",
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Use until you have the G-Max.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Dynamax Ho-Oh",
+   "speciesId": "ho_oh",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "Max Flare / Max Hailstorm",
+   "ivs": null,
+   "obtain": "Medium. Added Mar 2026",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Regice",
+   "speciesId": "regice",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "Max Flare / Max Hailstorm",
+   "ivs": null,
+   "obtain": "Medium. Added Mar 2026",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Gigantamax Charizard",
+   "speciesId": "charizard",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": "G-Max Wildfire / Stun Shock / Resonance",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Were S tier in 2025; still strong.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Toxtricity",
+   "speciesId": "toxtricity",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "G-Max Wildfire / Stun Shock / Resonance",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Were S tier in 2025; still strong.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "A",
+   "rank": null,
+   "name": "Lapras",
+   "speciesId": "lapras",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": "G-Max Wildfire / Stun Shock / Resonance",
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Were S tier in 2025; still strong.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "B",
+   "rank": null,
+   "name": "Gigantamax Garbodor",
+   "speciesId": "garbodor",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Type-specific or dex-only. G-Max Pikachu cannot evolve.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "B",
+   "rank": null,
+   "name": "Grimmsnarl",
+   "speciesId": "grimmsnarl",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Type-specific or dex-only. G-Max Pikachu cannot evolve.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "B",
+   "rank": null,
+   "name": "Venusaur",
+   "speciesId": "venusaur",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Type-specific or dex-only. G-Max Pikachu cannot evolve.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "B",
+   "rank": null,
+   "name": "Blastoise",
+   "speciesId": "blastoise",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Type-specific or dex-only. G-Max Pikachu cannot evolve.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "B",
+   "rank": null,
+   "name": "Butterfree",
+   "speciesId": "butterfree",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Type-specific or dex-only. G-Max Pikachu cannot evolve.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "B",
+   "rank": null,
+   "name": "Snorlax",
+   "speciesId": "snorlax",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Type-specific or dex-only. G-Max Pikachu cannot evolve.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "B",
+   "rank": null,
+   "name": "Pikachu",
+   "speciesId": "pikachu",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Type-specific or dex-only. G-Max Pikachu cannot evolve.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Attackers",
+   "tier": "B",
+   "rank": null,
+   "name": "Meowth",
+   "speciesId": "meowth",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": null,
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium",
+   "notes": "Type-specific or dex-only. G-Max Pikachu cannot evolve.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "S",
+   "rank": null,
+   "name": "Dynamax Blissey",
+   "speciesId": "blissey",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": true
+   },
+   "role": "Tank and healer",
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy. Dynamax Chansey in 3-star Max Battles daily since Jul 2026",
+   "notes": "Pound at 0.5 s. Max Guard L3 and Max Spirit L3 on one Blissey covers both jobs. Alone in S for healing.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "S",
+   "rank": null,
+   "name": "Crowned Shield Zamazenta",
+   "speciesId": "zamazenta_crowned_shield",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Tank",
+   "moves": null,
+   "ivs": null,
+   "obtain": "Medium. Raids Sep 2026",
+   "notes": "Behemoth Bash boosts party Defence.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "A",
+   "rank": null,
+   "name": "Regirock",
+   "speciesId": "regirock",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Per-boss tank",
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Pick by boss typing.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "A",
+   "rank": null,
+   "name": "Metagross",
+   "speciesId": "metagross",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Per-boss tank",
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Pick by boss typing.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "A",
+   "rank": null,
+   "name": "Snorlax",
+   "speciesId": "snorlax",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Per-boss tank",
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy–Medium",
+   "notes": "Pick by boss typing.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "A",
+   "rank": null,
+   "name": "Wailord",
+   "speciesId": "wailord",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Healer",
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Behind Blissey.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "A",
+   "rank": null,
+   "name": "Snorlax",
+   "speciesId": "snorlax",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Healer",
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Behind Blissey.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "A",
+   "rank": null,
+   "name": "Lapras",
+   "speciesId": "lapras",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Healer",
+   "moves": null,
+   "ivs": null,
+   "obtain": "Easy",
+   "notes": "Behind Blissey.",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "B",
+   "rank": null,
+   "name": "Omastar",
+   "speciesId": "omastar",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Cinderace-specific tanks",
+   "moves": null,
+   "ivs": null,
+   "obtain": "",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "B",
+   "rank": null,
+   "name": "Suicune",
+   "speciesId": "suicune",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Cinderace-specific tanks",
+   "moves": null,
+   "ivs": null,
+   "obtain": "",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "B",
+   "rank": null,
+   "name": "Kabutops",
+   "speciesId": "kabutops",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Cinderace-specific tanks",
+   "moves": null,
+   "ivs": null,
+   "obtain": "",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "B",
+   "rank": null,
+   "name": "Latias",
+   "speciesId": "latias",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Cinderace-specific tanks",
+   "moves": null,
+   "ivs": null,
+   "obtain": "",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "B",
+   "rank": null,
+   "name": "Vaporeon",
+   "speciesId": "vaporeon",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Cinderace-specific tanks",
+   "moves": null,
+   "ivs": null,
+   "obtain": "",
+   "notes": "",
+   "source": "08-max-battles.md"
+  },
+  {
+   "area": "max",
+   "kind": "max",
+   "section": "Tanks and healers",
+   "tier": "B",
+   "rank": null,
+   "name": "Latios",
+   "speciesId": "latios",
+   "flags": {
+    "shadow": false,
+    "mega": false,
+    "max": false
+   },
+   "role": "Cinderace-specific tanks",
+   "moves": null,
+   "ivs": null,
+   "obtain": "",
+   "notes": "",
+   "source": "08-max-battles.md"
+  }
+ ]
+}

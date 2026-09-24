@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+# recordings and frames are large and personal; keep them out of git
+recordings/
+frames/
