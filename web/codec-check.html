@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pogo Assist+ codec check</title>
+<style>
+body{margin:0;padding:16px;font:16px/1.5 system-ui,sans-serif;background:#f2f6f5;color:#152229;max-width:720px}
+h1{font-size:1.3rem;margin:0 0 8px}
+pre{background:#fff;border:1px solid #cfdad7;border-radius:8px;padding:12px;white-space:pre-wrap;word-break:break-word}
+canvas{max-width:100%;border:1px solid #cfdad7;border-radius:8px;background:#000}
+button,label.btn{display:inline-block;background:#0f7c8a;color:#fff;border:0;border-radius:6px;padding:10px 14px;font:inherit;cursor:pointer}
+input[type=file]{display:none}
+@media (prefers-color-scheme:dark){body{background:#0f1a1f;color:#e6eef0}pre{background:#172329;border-color:#2c3c44}}
+</style>
+</head>
+<body>
+<h1>Codec check</h1>
+<p>Pick a screen recording. It stays on this device; the page only reads it to report what your browser can decode. Copy the box below back to Greg.</p>
+<label class="btn" for="f">Choose a recording</label>
+<input type="file" id="f" accept="video/*,.mov,.mp4">
+<pre id="out">Waiting for a file…</pre>
+<canvas id="c" width="360" height="780" hidden></canvas>
+<video id="v" muted playsinline preload="auto" hidden></video>
+<script>
+const out = document.getElementById('out'), v = document.getElementById('v'), c = document.getElementById('c');
+const lines = [];
+const log = (s) => { lines.push(s); out.textContent = lines.join('\n'); };
+log(`Browser: ${navigator.userAgent}`);
+log(`WebCodecs: ${typeof VideoDecoder !== 'undefined' ? 'available' : 'not available'}`);
+log(`<video> H.264: "${v.canPlayType('video/mp4; codecs="avc1.640028"')}"  HEVC: "${v.canPlayType('video/mp4; codecs="hvc1.1.6.L120.B0"')}"`);
+if (typeof VideoDecoder !== 'undefined') {
+  for (const [name, codec] of [['H.264 High', 'avc1.640028'], ['HEVC Main', 'hvc1.1.6.L120.B0'], ['HEVC Main (hev1)', 'hev1.1.6.L120.B0']]) {
+    VideoDecoder.isConfigSupported({ codec }).then((r) => log(`WebCodecs ${name}: ${r.supported ? 'supported' : 'NOT supported'}`)).catch((e) => log(`WebCodecs ${name}: error ${e.message}`));
+  }
+}
+// Read the MP4/MOV sample description to find the codec box (avc1 = H.264, hvc1/hev1 = HEVC) without any library.
+async function sniff(file) {
+  const head = new Uint8Array(await file.slice(0, Math.min(file.size, 8 * 1024 * 1024)).arrayBuffer());
+  const tail = new Uint8Array(await file.slice(Math.max(0, file.size - 8 * 1024 * 1024)).arrayBuffer());
+  const find = (buf, tag) => { const t = [...tag].map((ch) => ch.charCodeAt(0)); outer: for (let i = 0; i < buf.length - 4; i++) { for (let j = 0; j < 4; j++) if (buf[i + j] !== t[j]) continue outer; return i; } return -1; };
+  const found = [];
+  for (const tag of ['avc1', 'hvc1', 'hev1', 'av01', 'vp09']) if (find(head, tag) >= 0 || find(tail, tag) >= 0) found.push(tag);
+  return found;
+}
+document.getElementById('f').addEventListener('change', async () => {
+  const file = document.getElementById('f').files[0];
+  if (!file) return;
+  log(`\nFile: ${file.name}, ${(file.size / 1e6).toFixed(1)} MB, type "${file.type || 'unknown'}"`);
+  try { log(`Codec boxes found: ${(await sniff(file)).join(', ') || 'none recognised'}`); } catch (e) { log(`Sniff failed: ${e.message}`); }
+  const url = URL.createObjectURL(file);
+  v.src = url;
+  v.addEventListener('loadedmetadata', () => { log(`Decoded metadata: ${v.videoWidth}×${v.videoHeight}, ${v.duration.toFixed(1)} s`); v.currentTime = Math.min(2, v.duration / 2); }, { once: true });
+  v.addEventListener('seeked', () => {
+    c.hidden = false;
+    const scale = Math.min(360 / v.videoWidth, 780 / v.videoHeight);
+    c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    log(`Frame at ${v.currentTime.toFixed(1)} s drawn to canvas: decoding works in this browser.`);
+  }, { once: true });
+  v.addEventListener('error', () => log(`Decode FAILED: video error code ${v.error && v.error.code} (${v.error && v.error.message})`), { once: true });
+});
+</script>
+</body>
+</html>

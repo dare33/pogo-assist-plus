@@ -78,7 +78,10 @@ frame rate at 5 fps after decode (the 60 fps source is wasted work), and run the
 codec spike below before writing any extraction code, because HEVC decoding differs by
 browser. Dynamic Island and the home indicator overlap the top and bottom of the game view;
 locate regions relative to detected UI anchors (the CP text, the appraisal panel edge), never
-from the frame edges.
+from the frame edges. Recordings that passed through a trimmer or a messenger arrive
+re-encoded, sometimes pillarboxed into a landscape frame (seen 25 Sep: Clipchamp output at
+1920×1080 with the phone content 608 px wide), so the first step is to find the content
+rectangle (non-black columns) and work in its coordinates.
 
 **Recording protocol (README).** Two passes over the same storage order. Do Not Disturb on,
 default display scaling, chunks of 50 to 100 Pokémon, one-second pause per Pokémon.
@@ -123,7 +126,7 @@ Path A is chosen because it matches the free-and-zero-install goal and reuses th
 page. A hosted upload service (Path C) is ruled out: it costs money to run, and other people's
 recordings would sit on a server.
 
-**Codec spike (do first, half a day).** Record 20 Pokémon on the iPhone 16 Pro, then confirm
+**Codec spike (do first, half a day).** Tool: `web/codec-check.html`, run on the device with the original file. Record 20 Pokémon on the iPhone 16 Pro, then confirm
 the `.mov` decodes through WebCodecs in Safari on iPhone, Safari on Mac and Chrome on
 Windows. If it is HEVC and Chrome on Windows refuses it, the fallback is `ffmpeg.wasm`
 transcoding in the page (slow but works everywhere) or a README instruction to set the
