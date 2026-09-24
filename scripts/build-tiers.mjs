@@ -3,7 +3,8 @@
 // Usage: node scripts/build-tiers.mjs data/source data/tiers.json
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
-import { loadGamemaster, resolveSpecies } from '../src/gamemaster.js';
+import { loadGamemaster } from '../src/node/load.js';
+import { resolveSpecies } from '../src/gamemaster.js';
 
 const [srcDir = 'data/source', outPath = 'data/tiers.json'] = process.argv.slice(2);
 const gm = loadGamemaster();

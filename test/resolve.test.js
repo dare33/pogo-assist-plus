@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadGamemaster, resolveSpecies, evolutionsOf, baseSpeciesId, megaIdsOf } from '../src/gamemaster.js';
+import { loadGamemaster } from '../src/node/load.js';
+import { resolveSpecies, evolutionsOf, baseSpeciesId, megaIdsOf } from '../src/gamemaster.js';
 
 const gm = loadGamemaster();
 const id = (name, opts) => resolveSpecies(gm, name, opts)?.speciesId ?? null;

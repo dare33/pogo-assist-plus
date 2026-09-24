@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pogo Assist+</title>
+<meta name="description" content="Turns a Pokémon GO storage export into build decisions. Runs in your browser; nothing is uploaded.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="web/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <h1>Pogo Assist+</h1>
+      <span class="tag">Your box, turned into build decisions</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections" id="tabs" hidden>
+      <button class="tab" role="tab" data-tab="builds" aria-selected="true">Builds</button>
+      <button class="tab" role="tab" data-tab="gaps" aria-selected="false">Gaps</button>
+      <button class="tab" role="tab" data-tab="hygiene" aria-selected="false">Storage</button>
+      <button class="tab" role="tab" data-tab="all" aria-selected="false">All Pokémon</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section id="intro" class="intro">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose or drop a Poke Genie CSV export">
+      <div class="drop-title">Drop your Poke Genie export here</div>
+      <div class="drop-sub">or <label for="file" class="linkish">choose the CSV file</label>. It is read in your browser and never uploaded.</div>
+      <input type="file" id="file" accept=".csv,text/csv" hidden>
+    </div>
+    <div class="howto">
+      <h2>How to get the export</h2>
+      <ol>
+        <li>In Poke Genie, scan your storage with the screen-recording scan (moves are optional, IVs matter).</li>
+        <li>Open the Pokémon tab, tap the menu, choose Export, and save the CSV.</li>
+        <li>Drop that file above. A Calcy IV export will be supported next. Or <a href="?sample">try it with a sample export</a>.</li>
+      </ol>
+      <p class="fine" id="datastamp">Loading reference data…</p>
+    </div>
+  </section>
+
+  <section id="results" hidden>
+    <div class="summary" id="summary"></div>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Filter this tab (name, area, move…)" aria-label="Filter rows" autocomplete="off">
+      <div class="chips" id="areaChips" aria-label="Filter by game area"></div>
+    </div>
+    <section class="panel" id="panel-builds" role="tabpanel"></section>
+    <section class="panel" id="panel-gaps" role="tabpanel" hidden></section>
+    <section class="panel" id="panel-hygiene" role="tabpanel" hidden></section>
+    <section class="panel" id="panel-all" role="tabpanel" hidden></section>
+  </section>
+</main>
+<footer>
+  <span>Nothing leaves your device. Reference data: PvPoke game master and rankings; tier tables maintained in this project.</span>
+  <a href="https://github.com/dare33/pogo-assist-plus" target="_blank" rel="noopener">Source</a>
+</footer>
+<script type="module" src="web/app.js"></script>
+</body>
+</html>

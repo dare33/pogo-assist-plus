@@ -1,15 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-/** Load PvPoke's game master (data/gamemaster.json) and build lookup indexes. */
-export function loadGamemaster(path = join(HERE, '..', 'data', 'gamemaster.json')) {
-  const gm = JSON.parse(readFileSync(path, 'utf8'));
-  return indexGamemaster(gm);
-}
-
+/** Index PvPoke's game master JSON for lookups. Node code loads the file via src/node/load.js; the browser fetches it. */
 export function indexGamemaster(gm) {
   const byId = new Map();
   const byTokens = new Map();      // sorted normalised tokens of speciesName -> speciesId

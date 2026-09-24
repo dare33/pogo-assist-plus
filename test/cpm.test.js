@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { cpAt, hpAt, cpm } from '../src/cpm.js';
 import { powerUpCost, step } from '../src/cost.js';
 import { importPokeGenie } from '../src/import/pokegenie.js';
-import { loadGamemaster, resolveSpecies } from '../src/gamemaster.js';
+import { loadGamemaster } from '../src/node/load.js';
+import { resolveSpecies } from '../src/gamemaster.js';
 
 const gm = loadGamemaster();
 const box = importPokeGenie(readFileSync(new URL('../fixtures/greg-2026-09-25.pokegenie.csv', import.meta.url), 'utf8'));

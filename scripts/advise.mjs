@@ -2,8 +2,7 @@
 // Print the advisor's report for an export. Usage: node scripts/advise.mjs fixtures/greg-2026-09-25.pokegenie.csv
 import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
-import { loadGamemaster } from '../src/gamemaster.js';
-import { loadTiers, loadRankings } from '../src/data.js';
+import { loadGamemaster, loadTiers, loadRankings } from '../src/node/load.js';
 import { analyseBox, AREA_LABEL } from '../src/advise.js';
 
 const [csvPath] = process.argv.slice(2);

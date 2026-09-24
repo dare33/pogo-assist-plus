@@ -2,7 +2,8 @@
 // Annotate a Poke Genie export with tier hits. Usage: node scripts/dump-box.mjs fixtures/greg-2026-09-25.pokegenie.csv
 import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
-import { loadGamemaster, resolveSpecies, evolutionsOf, formChangesOf, megaIdsOf } from '../src/gamemaster.js';
+import { loadGamemaster } from '../src/node/load.js';
+import { resolveSpecies, evolutionsOf, formChangesOf, megaIdsOf } from '../src/gamemaster.js';
 
 const [csvPath, tiersPath = 'data/tiers.json'] = process.argv.slice(2);
 if (!csvPath) { console.error('usage: dump-box.mjs <pokegenie.csv> [tiers.json]'); process.exit(1); }

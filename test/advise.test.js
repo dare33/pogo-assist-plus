@@ -2,8 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
-import { loadGamemaster } from '../src/gamemaster.js';
-import { loadTiers, loadRankings } from '../src/data.js';
+import { loadGamemaster, loadTiers, loadRankings } from '../src/node/load.js';
 import { analyseBox } from '../src/advise.js';
 
 const ctx = { gm: loadGamemaster(), tiers: loadTiers(), rankings: loadRankings() };

@@ -1,20 +1,17 @@
 # Status — Pogo Assist+
 
-**25 Sep 2026, phase 0b done (core logic).** `src/advise.js` turns an export into ranked builds,
-a gap list and storage hygiene. Scoring: raid value counts each attacking type covered (up to
-three); PvP areas are scaled by the Pokémon's own rank in that league from the export; Gym and
-Max count less; Mega hits fold into the base Pokémon; Gigantamax entries are never credited to
-an evolution; Dynamax entries are flagged "needs a Dynamax copy"; duplicate copies fold into one
-build with spares. `scripts/advise.mjs` prints the report. Tests: 13 passing.
+**25 Sep 2026, phase 0c built.** `index.html` + `web/app.js`: drop a Poke Genie CSV, get the
+Builds, Gaps, Storage and All Pokémon tabs with a text filter and area chips. Runs entirely in
+the browser from the same `src/` modules the tests use. `?sample` loads the bundled export.
+Pages workflow added (tests, then deploy). Tests: 13 passing.
 
-Against the hand-written build plan the top of the list agrees (Mewtwo, Zamazenta Crowned,
-Gengar, Tyranitar, Rhyperior, Charizard, Blissey, Tinkaton). Known differences: Snorlax ranks
-higher here because it scores in four areas; Xurkitree ranks lower because it is a single-area
-build. Both are defensible; revisit after the page exists and real use shows what people want.
+**Waiting on Greg:** enable GitHub Pages (Settings → Pages → Source: GitHub Actions). Pages on a
+private repo needs a paid plan; making the repo public is the free route.
 
-**Next, phase 0c:** the web page. Drop a CSV, see the builds, gaps and hygiene; GitHub Pages
-deploy. Then the codec spike on an iPhone 16 Pro recording before any extractor code.
+**Next:** Calcy IV import; a "Next steps" style dated view; then the codec spike on an original
+(not WhatsApp) iPhone 16 Pro recording before any extractor code. A WhatsApp-compressed
+recording (384×848, H.264) was checked on 25 Sep: CP, names, HP and the appraisal bars are still
+legible at that size, which bounds the worst case for phase 1.
 
-**Data notes:** evolution candy costs are a table in `advise.js` (the game master lacks them);
-unknown species default by family position. Dynamax status is not in exports, so Max hits are
-advisory until the extractor captures the badge.
+**Data notes:** evolution candy costs are a table in `advise.js`; Dynamax status is not in
+exports, so Max hits are advisory until the extractor captures the badge.
