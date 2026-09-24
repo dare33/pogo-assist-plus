@@ -20,5 +20,9 @@ Chrome). Design consequence: the extractor must locate the phone content inside 
 **Next:** Greg runs the codec check on the untrimmed original in three browsers and pastes the
 results; Calcy IV import; a "Next steps" style dated view.
 
+**25 Sep, late:** added `src/pvp-rank.js` (stat-product IV rank and target level under a CP cap;
+matches Poke Genie's ranks on the fixture). Not yet used by the page; the advisor should switch
+to it for PvP builds so ranks no longer depend on the export having scored the evolved form.
+
 **Data notes:** evolution candy costs are a table in `advise.js`; Dynamax status is not in
 exports, so Max hits are advisory until the extractor captures the badge.
