@@ -9,7 +9,9 @@ Status: phase 0 (advisor on Poke Genie exports) working. See `PLAN.md` for the p
 
 ## Use it
 
-Open the published page, drop your Poke Genie export, read the Builds, Gaps and Storage tabs.
+Live at https://dare33.github.io/pogo-assist-plus/ (sample: https://dare33.github.io/pogo-assist-plus/?sample).
+
+Open the page, drop your Poke Genie export, read the Builds, Gaps and Storage tabs.
 Add `?sample` to the URL to see it with a bundled example export.
 
 ## Develop

@@ -5,8 +5,9 @@ Builds, Gaps, Storage and All Pokémon tabs with a text filter and area chips. R
 the browser from the same `src/` modules the tests use. `?sample` loads the bundled export.
 Pages workflow added (tests, then deploy). Tests: 13 passing.
 
-**Waiting on Greg:** enable GitHub Pages (Settings → Pages → Source: GitHub Actions). Pages on a
-private repo needs a paid plan; making the repo public is the free route.
+**Deployed:** repo made public and Pages enabled 25 Sep; the workflow's first successful run
+(#3) published https://dare33.github.io/pogo-assist-plus/ . Codec check page at
+https://dare33.github.io/pogo-assist-plus/web/codec-check.html .
 
 **Codec spike, 25 Sep (partial):** two recordings checked with ffmpeg. WhatsApp copy: 384×848
 H.264 Baseline, 60 fps; text and appraisal bars still legible. Trimmed-in-Clipchamp copy:
