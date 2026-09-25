@@ -135,4 +135,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const r = await fetch('fixtures/greg-2026-09-25.pokegenie.csv');
     if (r.ok) analyse(await r.text(), 'sample export');
   }
+  // web/extract.html hands its CSV over via sessionStorage and sends us here with ?extracted.
+  if (new URLSearchParams(location.search).has('extracted')) {
+    const csv = sessionStorage.getItem('pogo-extracted-csv');
+    if (csv) analyse(csv, 'screen recording'); // kept in sessionStorage so a reload of this tab keeps the roster
+  }
 });
