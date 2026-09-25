@@ -45,7 +45,8 @@ recorded as limits in the report. Tests after the fold: 62 passing; in a clean c
 **Merge state:** `extractor` merged into `main` on 26 Sep 2026 once `npm test` was green and the
 CLI met the acceptance table on the trimmed and original recordings (the two gates Greg set).
 The Pages deploy publishes `web/extract.html`; the morning test is the first run of the page on
-real video.
+real video. To pick this up on another machine see `docs/continue-on-laptop.md`; the recordings
+are in Google Drive under `F. Hobbies & Gaming/Pogo Assist recordings/`.
 
 ## Earlier
 
