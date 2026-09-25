@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pogo Assist+ — extract from a recording</title>
+<meta name="description" content="Turn a Pokémon GO storage screen recording into a roster export, entirely in your browser.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  /* Extractor-only additions, kept out of style.css so the shared stylesheet stays untouched. */
+  .progress{background:var(--surface-2);border:1px solid var(--line);border-radius:999px;height:10px;overflow:hidden;margin:10px 0}
+  .progress > span{display:block;height:100%;background:var(--accent);width:0%;transition:width .2s}
+  .runstats{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:.9rem;margin-bottom:6px}
+  .runstats strong{color:var(--text)}
+  .flagset{display:flex;gap:4px;flex-wrap:wrap}
+  .flagtag{background:var(--warn-bg);color:var(--warn);border-radius:4px;padding:1px 6px;font-size:.72rem;font-weight:700;white-space:nowrap}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+  .actions button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer}
+  .actions button.secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
+  #stop{background:var(--bad);color:#fff;border:0;border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+  .error{background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:10px 14px;margin-bottom:14px}
+  td.empty{color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <h1>Pogo Assist+</h1>
+      <span class="tag">Screen recording → roster</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="intro" class="intro">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose or drop a screen recording">
+      <div class="drop-title">Drop your storage screen recording here</div>
+      <div class="drop-sub">or <label for="file" class="linkish">choose the video file</label>. It is decoded and read in your browser and never uploaded anywhere.</div>
+      <input type="file" id="file" accept="video/*,.mp4,.mov" hidden>
+    </div>
+    <div class="howto">
+      <h2>How to record</h2>
+      <ol>
+        <li>Open a Pokémon in storage and tap Appraise so the Willow panel stays open.</li>
+        <li>Swipe through storage, pausing about a second on each Pokémon.</li>
+        <li>Stop the recording and drop the file above.</li>
+      </ol>
+      <p class="fine">The first run downloads the OCR language file (about 4 MB), then everything happens on this device. Already have a Poke Genie export instead? Use <a href="../index.html">the CSV importer</a>.</p>
+    </div>
+  </section>
+
+  <section id="run" hidden>
+    <div class="runstats">
+      <span>Elapsed: <strong id="elapsed">0:00</strong></span>
+      <span><strong id="foundCount">0</strong> Pokémon found</span>
+      <span id="frameStats"></span>
+    </div>
+    <div class="progress"><span id="bar"></span></div>
+    <button id="stop" type="button">Stop</button>
+  </section>
+
+  <section id="results" hidden>
+    <div class="runstats">
+      <span><strong id="rowCount">0</strong> Pokémon</span>
+      <span id="flagSummary"></span>
+      <span>Elapsed: <strong id="elapsedFinal"></strong></span>
+    </div>
+    <div class="actions">
+      <button id="downloadCsv" type="button">Download CSV</button>
+      <button id="downloadReview" type="button" class="secondary">Download review JSON</button>
+      <button id="loadAdvisor" type="button">Load into advisor</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>Form</th><th>CP</th><th>HP</th><th>IVs</th><th>Level</th><th>Flags</th><th>Frame</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<footer>
+  <span>Nothing leaves your device. OCR runs locally via tesseract.js; nothing is sent to any server.</span>
+  <a href="https://github.com/dare33/pogo-assist-plus" target="_blank" rel="noopener">Source</a>
+</footer>
+<script type="module" src="extract.js"></script>
+</body>
+</html>
