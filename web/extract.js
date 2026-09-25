@@ -78,7 +78,9 @@ async function runExtraction(file) {
   let ocr = null;
 
   try {
-    const { createWorker } = await import(`https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.esm.min.js`);
+    // The ESM bundle has a default export only (checked against dist/tesseract.esm.min.js).
+    const Tesseract = (await import(`https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.esm.min.js`)).default;
+    const createWorker = Tesseract.createWorker;
     ocr = await createOcr(createWorker, {
       workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/worker.min.js`,
       corePath: `https://cdn.jsdelivr.net/npm/tesseract.js-core@${TESSERACT_VERSION}`,
