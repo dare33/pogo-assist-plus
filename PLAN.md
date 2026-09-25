@@ -62,7 +62,7 @@ alone satisfies "friends and family can use it for free".
 **Effort.** Roughly one to two weeks of evenings. Most of the work is data wrangling (name
 mapping, form handling) and the cost tables.
 
-## Phase 1 — Extractor prototype
+## Phase 1 — Extractor (moved to first priority 25 Sep; detailed spec in docs/extractor-handoff.md)
 
 Purpose: prove segmentation and OCR on real recordings and capture the fields the CSV
 exports lack (moves, candy and XL counts, Dynamax flag, Mega energy, gender, favourite).

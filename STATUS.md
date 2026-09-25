@@ -1,5 +1,10 @@
 # Status — Pogo Assist+
 
+**25 Sep, evening: priority changed.** The screen-recording extractor is now first; see
+`docs/extractor-handoff.md`. Experiments on 25 Sep proved content-rect detection, OCR of name,
+CP and HP with tesseract.js, appraisal-bar geometry and swipe detection on a re-encoded 1080p
+recording. Calcy import and the dated view are deferred.
+
 **25 Sep 2026, phase 0c built.** `index.html` + `web/app.js`: drop a Poke Genie CSV, get the
 Builds, Gaps, Storage and All Pokémon tabs with a text filter and area chips. Runs entirely in
 the browser from the same `src/` modules the tests use. `?sample` loads the bundled export.

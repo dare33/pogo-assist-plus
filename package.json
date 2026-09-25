@@ -9,6 +9,12 @@
     "build:tiers": "node scripts/build-tiers.mjs data/source data/tiers.json",
     "dump": "node scripts/dump-box.mjs"
   },
-  "engines": { "node": ">=20" },
-  "license": "MIT"
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "pngjs": "^7.0.0",
+    "tesseract.js": "^7.0.0"
+  }
 }
