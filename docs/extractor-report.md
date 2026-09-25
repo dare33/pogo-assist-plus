@@ -54,6 +54,12 @@ green HP bar, the three bar tracks) rather than fixed fractions.
 7. **Solver**: every IV combination and level is checked against CP and HP with the game master;
    the read is exact, corrected by one unit, or ambiguous (flagged with the number of fits).
 
+`src/extract/segment.js` (frame-diff signature, segments, sharpest frames — handoff step 2) is
+built and tested but is not on the main path: on the fast-swipe half of the original recording
+most Pokémon never settle by the diff measure (one or two frames each), so the pipeline reads
+every frame and groups by what it read instead. The throwaway `experiments/` scripts it replaces
+are removed.
+
 ## Acceptance table
 
 | Pokémon | CP | HP | IVs | Level | Trimmed | Original | WhatsApp |
