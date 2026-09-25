@@ -65,9 +65,9 @@ No flags expected on any of the four rows. Takes well under a minute to process 
 and blurrier. About 212 frames, so it'll take longer (OCR is the slow part, not the video decode).
 
 **Expect:** the same four Pokémon as above, in among many more (the untrimmed recording covers
-the whole box) — lower accuracy than the trimmed file, so expect more rows with flags such as
-`ivs-unread` or `ambiguous:N-solutions`. Check the four known Pokémon above come out right; the
-rest is a general accuracy check, not a pass/fail line.
+the whole box; the CLI found 46 rows, 31 of them flagged) — lower accuracy than the trimmed file,
+so expect flags such as `ivs-unread`, `bars-unsettled` or `ambiguous-ivs:N-fit`. Check the four
+known Pokémon above come out right; the rest is a general accuracy check, not a pass/fail line.
 
 ### 3. `iphone-original.mp4`
 
@@ -84,6 +84,30 @@ hard-coded to the iPhone's proportions (the iPad's panel sits in different place
 rows come out with plausible CP/HP/IV combinations at all, that's the layout-independence check
 done, even if a few flag for review. It ends with the iPad's Control Centre pulled down over the
 game for a couple of seconds — don't worry if the last row or two look odd, that's why.
+
+## What the flags mean
+
+| Flag | Meaning |
+|---|---|
+| `bars-unsettled` | The appraisal bars were still animating on every frame this Pokémon got; the IVs are a best guess. |
+| `ivs-corrected-from-A/D/H` | The bars read A/D/H, which fits no level; the one set within one unit that fits was used. |
+| `ambiguous-ivs:N-fit` | Nothing near the bar read fits CP and HP; N IV sets do, the nearest is shown. Check this one in the game. |
+| `ivs-unread` | No appraisal panel was readable; level is a range from CP and HP. |
+| `hp-unread` / `hp-computed` | The "n / n HP" text was covered (Willow's hair does this on the iPad); HP is missing, or computed from the solved level. |
+| `cp-chosen-X-over-Y` | Frames disagreed on the CP; X fits the HP and bars, Y was read more often. |
+| `no-level-fits` | Name, CP, HP and bars cannot be reconciled at any level: a misread somewhere. |
+
+Rows with no flag solved to exactly one level from name, CP, HP and bars, which is the same
+check Poke Genie does.
+
+## Already verified without a video
+
+The OCR side of the page was run in a real browser (Chromium) against the local site with six
+PNG frames of the trimmed recording fed in place of video frames: tesseract.js, its worker and
+core loaded from jsdelivr, the language file loaded from `data/tessdata`, and the four expected
+rows came out with no flags. The "Load into advisor" hand-off was also exercised: the advisor
+page opened with the four Pokémon and their builds. What remains untested is only the `<video>`
+decode of your actual files, which is what this morning's run is for.
 
 ## While it's running
 
