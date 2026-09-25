@@ -49,5 +49,6 @@ test('no bars gives a level range from CP and HP', () => {
 
 test('a wrong CP fits nothing', () => {
   const r = solve({ species: sp('xurkitree'), cp: 3023, hp: 145, ivs: { atk: 15, def: 14, hp: 15 } });
-  assert.ok(r.status === 'none' || r.solutions[0].tier === 2);
+  assert.ok(r.status === 'none' || r.status === 'ambiguous', `status ${r.status}`);
+  assert.ok(!r.solutions.length || r.solutions[0].tier === 2);
 });

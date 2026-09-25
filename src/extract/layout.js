@@ -112,7 +112,9 @@ export function findHpBar(img, rect) {
   const { width, data } = img;
   const ya = Math.round(rect.y + 0.34 * rect.h), yb = Math.round(rect.y + 0.66 * rect.h);
   const xa = Math.round(rect.x + 0.2 * rect.w), xb = Math.round(rect.x + 0.8 * rect.w);
-  const need = 0.22 * rect.w;
+  // A damaged Pokémon's bar is short (its right part is grey), so a short run of green counts;
+  // the thin-band test below is what keeps a green sprite from matching.
+  const need = 0.08 * rect.w;
   const rows = [];
   for (let y = ya; y < yb; y++) {
     let n = 0;

@@ -13,7 +13,7 @@ const scaleFor = (h, target) => target / h;
  * @param img        RGBA frame
  * @param ocr        from createOcr
  * @param names      displayNames(gm)
- * @param opts       { frame, time, readHp: true, readBars: true }
+ * @param opts       { frame, time, wantHp: true, wantBars: true }
  * @returns a reading; `cp` and `name` are null when the frame is not a settled Pokémon screen.
  */
 export async function readFrame(img, ocr, names, { frame = null, time = null, wantHp = true, wantBars = true } = {}) {
@@ -33,7 +33,6 @@ export async function readFrame(img, ocr, names, { frame = null, time = null, wa
   const cpValues = cpReads.map((r) => parseCp(r.text));
   out.cpText = cpReads.map((r) => r.text).join('|');
   out.cp = cpValues[0] !== null && cpValues[0] === cpValues[1] ? cpValues[0] : cpValues[0] ?? cpValues[1];
-  out.cpAgreed = cpValues[0] !== null && cpValues[0] === cpValues[1];
   out.cpReads = cpValues.filter((v) => v !== null);
 
   const nameCrop = crop(img, regions.name);

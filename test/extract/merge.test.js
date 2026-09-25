@@ -75,3 +75,19 @@ test('vote and ranked', () => {
   assert.equal(vote([1, 2, 2, null, 3]), 2);
   assert.deepEqual(ranked(['a', 'b', 'a']).map((e) => [e.v, e.n]), [['a', 2], ['b', 1]]);
 });
+
+test('groupRuns keeps two adjacent Pokémon apart when both CP and settled bars differ', () => {
+  const rs = [
+    reading('Pidgey', 135, 49, { atk: 10, def: 5, hp: 12 }, 0.95), reading('Pidgey', 135, 49, { atk: 10, def: 5, hp: 12 }, 0.95),
+    { frame: 'swipe', name: null, cp: null, flags: ['mid-swipe'] },
+    reading('Pidgey', 139, 49, { atk: 12, def: 6, hp: 12 }, 0.95), reading('Pidgey', 139, 49, { atk: 12, def: 6, hp: 12 }, 0.95),
+  ];
+  assert.equal(groupRuns(rs).length, 2);
+  // but the same CP with a chance-settled mid-animation read stays one run, and the disagreement is recorded
+  const same = [reading('Meltan', 492, 74, { atk: 13, def: 14, hp: 6 }, 0.9), reading('Meltan', 492, 74, { atk: 8, def: 14, hp: 1 }, 0.9), reading('Meltan', 492, 74, { atk: 8, def: 14, hp: 1 }, 0.9)];
+  const runs = groupRuns(same);
+  assert.equal(runs.length, 1);
+  const row = collapseRun(runs[0]);
+  assert.deepEqual(row.ivs, { atk: 8, def: 14, hp: 1 });
+  assert.equal(row.ivsDisagree, true);
+});

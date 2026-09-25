@@ -64,10 +64,12 @@ No flags expected on any of the four rows. Takes well under a minute to process 
 384×848 portrait, H.264, 42 seconds — the same recording sent through WhatsApp, so it's small
 and blurrier. About 212 frames, so it'll take longer (OCR is the slow part, not the video decode).
 
-**Expect:** the same four Pokémon as above, in among many more (the untrimmed recording covers
+**Expect:** the four Pokémon above plus Xurkitree 2223, in among many more (the untrimmed recording covers
 the whole box; the CLI found 46 rows, 31 of them flagged) — lower accuracy than the trimmed file,
 so expect flags such as `ivs-unread`, `bars-unsettled` or `ambiguous-ivs:N-fit`. Check the four
 known Pokémon above come out right; the rest is a general accuracy check, not a pass/fail line.
+One known miss: Mega Mewtwo Y's pink CP text is not readable at this size, so the CLI gives it
+CP 873 with a `no-level-fits` flag (and "Load into advisor" leaves such rows out).
 
 ### 3. `iphone-original.mp4`
 
@@ -78,8 +80,8 @@ be good anywhere, it's here.
 
 ### 4. `ipad-original.mp4`
 
-2266×1488 as stored, rotated to 1488×2266 portrait, HEVC, about 17 seconds, roughly 25 Pokémon,
-mostly Meltan. Also HEVC — same browser caveat as above. This one also proves the layout isn't
+2266×1488 as stored, rotated to 1488×2266 portrait, HEVC, about 17 seconds; the CLI found 20
+Pokémon, mostly Meltan. Also HEVC — same browser caveat as above. This one also proves the layout isn't
 hard-coded to the iPhone's proportions (the iPad's panel sits in different places on screen); if
 rows come out with plausible CP/HP/IV combinations at all, that's the layout-independence check
 done, even if a few flag for review. It ends with the iPad's Control Centre pulled down over the

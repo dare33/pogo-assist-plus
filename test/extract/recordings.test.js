@@ -5,17 +5,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { createWorker } from 'tesseract.js';
 import { loadGamemaster } from '../../src/node/load.js';
-import { readPng } from '../../src/extract/node.js';
 import { createOcr } from '../../src/extract/ocr.js';
 import { extract, toPokeGenieCsv } from '../../src/extract/pipeline.js';
 import { importPokeGenie } from '../../src/import/pokegenie.js';
 
-const root = new URL('../../', import.meta.url);
-const path = (p) => join(root.pathname.replace(/^\/([A-Za-z]:)/, '$1'), p);
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const path = (p) => join(root, p);
+// tesseract.js is not installed where the Pages workflow runs npm test; skip rather than fail there.
+const tesseract = await import('tesseract.js').catch(() => null);
+const nodeIo = await import('../../src/extract/node.js').catch(() => null); // needs pngjs
+const readPng = (p) => nodeIo.readPng(p);
 
 // The handoff's acceptance table. Both iPhone recordings must produce every row; the trimmed
 // copy only reaches the first Zamazenta of the second (it ends there).
@@ -30,15 +33,18 @@ const ACCEPTANCE = [
 function findFfmpeg() {
   if (process.env.FFMPEG && existsSync(process.env.FFMPEG)) return process.env.FFMPEG;
   if (spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0) return 'ffmpeg';
-  for (const py of ['python3', 'python']) {
-    const r = spawnSync(py, ['-c', 'import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())'], { encoding: 'utf8' });
-    if (r.status === 0 && r.stdout.trim()) return r.stdout.trim();
-  }
   return null;
 }
 
-/** Directory of 5 fps PNG frames for a recording, or null when neither frames nor a decodable recording exist. */
+/** Directory of 5 fps PNG frames for a recording, or null when neither frames nor a decodable recording exist. Cached per name. */
+const framesCache = new Map();
 function framesFor(name, temps) {
+  if (framesCache.has(name)) return framesCache.get(name);
+  const dir = resolveFrames(name, temps);
+  framesCache.set(name, dir);
+  return dir;
+}
+function resolveFrames(name, temps) {
   const dir = path(`frames/${name}`);
   if (existsSync(dir) && readdirSync(dir).some((f) => f.endsWith('.png'))) return dir;
   const video = path(`recordings/${name}.mp4`);
@@ -56,7 +62,7 @@ async function* frames(dir) {
 }
 
 async function run(dir) {
-  const ocr = await createOcr(createWorker, { langPath: path('data/tessdata'), cachePath: path('data/tessdata'), gzip: false });
+  const ocr = await createOcr(tesseract.createWorker, { langPath: path('data/tessdata'), cachePath: path('data/tessdata'), gzip: false });
   try {
     const { rows } = await extract(frames(dir), { ocr, gm: loadGamemaster() });
     return rows;
@@ -79,14 +85,28 @@ function check(rows, expected, label) {
 const temps = [];
 const cleanup = () => { for (const t of temps) rmSync(t, { recursive: true, force: true }); };
 
-test('trimmed recording: acceptance rows it contains, no duplicates', { skip: !framesFor('iphone-clipchamp-trimmed', temps) && 'no recording or frames present' }, async () => {
+test('trimmed recording: acceptance rows it contains, no duplicates', { skip: (!(tesseract && nodeIo) && 'tesseract.js or pngjs not installed') || (!framesFor('iphone-clipchamp-trimmed', temps) && 'no recording or frames present') }, async () => {
   const rows = await run(framesFor('iphone-clipchamp-trimmed', temps));
   for (const e of ACCEPTANCE.slice(0, 4)) check(rows, e, 'trimmed');
   assert.equal(rows.length, 4, `trimmed: expected 4 rows, got ${rows.map((r) => `${r.name} ${r.cp}`).join(', ')}`);
 });
 
-test('original recording: every acceptance row, each exactly once', { skip: !framesFor('iphone-original', temps) && 'no recording or frames present' }, async () => {
+test('original recording: every acceptance row, each exactly once', { skip: (!(tesseract && nodeIo) && 'tesseract.js or pngjs not installed') || (!framesFor('iphone-original', temps) && 'no recording or frames present') }, async () => {
   const rows = await run(framesFor('iphone-original', temps));
   for (const e of ACCEPTANCE) check(rows, e, 'original');
-  cleanup();
+  // No row may be a wrong-and-silent duplicate: every unflagged row must solve to one level.
+  for (const r of rows) if (!r.flags.length) assert.equal(r.level, r.levelMax, `original: unflagged ${r.name} ${r.cp} has a level range`);
 });
+
+// The WhatsApp copy is the worst case and not the merge gate: at 384 px wide the Mega's pink CP
+// text is not readable, so Mewtwo comes out with a wrong CP and a flag. The other four rows must
+// still be right, and the Mewtwo row must be flagged rather than wrong and silent.
+test('WhatsApp copy: four acceptance rows right, Mewtwo present but flagged', { skip: (!(tesseract && nodeIo) && 'tesseract.js or pngjs not installed') || (!framesFor('iphone-whatsapp', temps) && 'no recording or frames present') }, async () => {
+  const rows = await run(framesFor('iphone-whatsapp', temps));
+  for (const e of ACCEPTANCE.slice(1)) check(rows, e, 'whatsapp');
+  const mewtwo = rows.filter((r) => r.name === 'Mewtwo');
+  assert.ok(mewtwo.length >= 1, 'a Mewtwo row exists');
+  for (const m of mewtwo) if (m.cp !== 3673) assert.ok(m.flags.length, `Mewtwo with CP ${m.cp} must be flagged`);
+});
+
+test('clean up decoded frames', () => { cleanup(); });

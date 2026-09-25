@@ -63,6 +63,7 @@ export async function* decodeFrames(file, fps, onFrame = () => {}) {
     onFrame({ phase: 'start', width: video.videoWidth, height: video.videoHeight, duration, totalEstimate: duration !== null ? Math.ceil(duration * fps) + 1 : null });
 
     const step = 1 / fps;
+    let stoppedEarly = null;
     // Start a hair after 0: setting currentTime to the position the element is already at does
     // not fire 'seeked' in every browser, and the first frame of a recording is the same screen.
     let index = 0, t = 0.05, lastActual = -1, stuck = 0;
@@ -73,7 +74,8 @@ export async function* decodeFrames(file, fps, onFrame = () => {}) {
       video.currentTime = t;
       try {
         await waitFor(video, 'seeked', { describeError: () => decodeErrorMessage(video, file) });
-      } catch {
+      } catch (e) {
+        stoppedEarly = `seek to ${t.toFixed(1)} s failed: ${e.message}`;
         break;
       }
       if (video.ended) break;
@@ -86,6 +88,7 @@ export async function* decodeFrames(file, fps, onFrame = () => {}) {
       lastActual = video.currentTime;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (index === 0 && isBlank(image)) throw new Error(`The first frame of "${file.name}" came out blank. The browser decoded the metadata but paints nothing, which happens when a codec is only half supported; try Safari on an iPhone or Mac, or re-export as H.264.`);
       const frame = { index, time: video.currentTime, label: `t=${video.currentTime.toFixed(1)}s`, image };
       onFrame({ phase: 'frame', frame });
       yield frame;
@@ -94,10 +97,18 @@ export async function* decodeFrames(file, fps, onFrame = () => {}) {
       if (duration === null && index > 20000) break; // safety valve if a duration can never be pinned down
     }
     if (index === 0) throw new Error(`No frames could be decoded from "${file.name}". The browser accepted the file but never produced a picture, which usually means the codec is not supported here; see the notes on HEVC below.`);
-    onFrame({ phase: 'end' });
+    if (duration !== null && !stoppedEarly && t < duration - step) stoppedEarly = `decoding stopped at ${t.toFixed(1)} s of ${duration.toFixed(1)} s`;
+    onFrame({ phase: 'end', stoppedEarly });
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** True when a frame is all black or fully transparent (a decoder that paints nothing). */
+export function isBlank(image) {
+  const d = image.data;
+  for (let i = 0; i < d.length; i += 4 * 97) if (d[i + 3] !== 0 && (d[i] > 8 || d[i + 1] > 8 || d[i + 2] > 8)) return false;
+  return true;
 }
 
 /** `some-recording.mp4` -> `some-recording.pokegenie.csv`, matching the CLI's naming. */
@@ -118,7 +129,8 @@ export function downloadText(text, filename, type = 'text/plain') {
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // WebKit can drop the download if the URL is revoked before the click is processed.
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 /** `125.4` seconds -> `2:05`. */

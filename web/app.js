@@ -138,6 +138,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // web/extract.html hands its CSV over via sessionStorage and sends us here with ?extracted.
   if (new URLSearchParams(location.search).has('extracted')) {
     const csv = sessionStorage.getItem('pogo-extracted-csv');
-    if (csv) { sessionStorage.removeItem('pogo-extracted-csv'); analyse(csv, 'screen recording'); }
+    if (csv) analyse(csv, 'screen recording'); // kept in sessionStorage so a reload of this tab keeps the roster
   }
 });

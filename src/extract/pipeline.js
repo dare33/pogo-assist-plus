@@ -35,8 +35,11 @@ export function finish(readings, gm) {
   const runs = groupRuns(readings);
   const collapsed = runs.map(collapseRun);
   const rows = dedupeAdjacent(collapsed).map((row, i) => resolveRow(row, gm, i + 1));
-  const review = rows.filter((r) => r.flags.length).map((r) => ({ index: r.index, name: r.name, cp: r.cp, hp: r.hp, ivs: r.ivs, level: r.level, flags: r.flags, frames: r.frames }));
-  return { rows, review };
+  // Frames that showed a CP but no species name (a nickname, or a garbled read) never become a
+  // row; list them so a Pokémon that was on screen and not read is not silently missing.
+  const unmatched = readings.filter((r) => r.cp && !r.name).map((r) => ({ frame: r.frame, cp: r.cp, nameText: r.nameText, hp: r.hp?.max ?? null }));
+  const review = rows.filter((r) => r.flags.length).map((r) => ({ index: r.index, name: r.name, cp: r.cp, hp: r.hp, ivs: r.ivs, ivsRead: r.ivsRead, ivsGuess: r.ivsGuess, level: r.level, levelMax: r.levelMax, flags: r.flags, frames: r.frames }));
+  return { rows, review, unmatched };
 }
 
 function resolveRow(row, gm, index) {
@@ -55,9 +58,22 @@ function resolveRow(row, gm, index) {
   const s = result.solutions[0];
   const take = () => { ivs = s.ivs; level = s.level; levelMax = s.level; speciesId = s.speciesId; if (hp === null) { hp = s.hp; flags.push('hp-computed'); } };
   switch (result.status) {
-    case 'exact': take(); break;
+    case 'exact': {
+      take();
+      const levels = new Set(result.solutions.filter((x) => x.tier === 0).map((x) => x.level));
+      if (levels.size > 1) { level = Math.min(...levels); levelMax = Math.max(...levels); flags.push(`level-ambiguous:${[...levels].join('|')}`); }
+      break;
+    }
     case 'corrected': take(); flags.push(`ivs-corrected-from-${row.ivs.atk}/${row.ivs.def}/${row.ivs.hp}`); break;
-    case 'ambiguous': take(); flags.push(`ambiguous-ivs:${result.solutions.filter((x) => x.tier === s.tier).length}-fit`); break;
+    case 'ambiguous': {
+      // Several IV sets fit: export none of them (the advisor must not treat a guess as fact) and
+      // give the level range they span; the nearest guess stays in review.json.
+      const top = result.solutions.filter((x) => x.tier === s.tier);
+      ivs = null; level = Math.min(...top.map((x) => x.level)); levelMax = Math.max(...top.map((x) => x.level)); speciesId = s.speciesId;
+      if (hp === null) { hp = s.hp; flags.push('hp-computed'); }
+      flags.push(`ambiguous-ivs:${top.length}-fit`);
+      break;
+    }
     case 'unknown-ivs': {
       ivs = null;
       const levels = result.solutions.map((x) => x.level);
@@ -65,8 +81,10 @@ function resolveRow(row, gm, index) {
       flags.push('ivs-unread');
       break;
     }
-    default: flags.push('no-level-fits');
+    default: ivs = null; flags.push('no-level-fits');
   }
+  if (result.forms?.length > 1) flags.push(`form-ambiguous:${result.forms.join('|')}`);
+  if (row.ivsDisagree) flags.push('ivs-disagree');
   if (hp === null) flags.push('hp-unread');
   if (row.ivs && row.ivConfidence < SETTLED) flags.push('bars-unsettled');
   // Name and form as Poke Genie writes them, from the species the solver settled on (the screen
@@ -75,7 +93,7 @@ function resolveRow(row, gm, index) {
   const nf = sp ? nameAndForm(sp) : { name: row.baseName ?? row.name, form: row.form ?? '' };
   return {
     index, name: nf.name, display: row.name, form: nf.form, speciesId, dex: sp?.dex ?? null,
-    cp, hp, ivs, level, levelMax,
+    cp, hp, ivs, ivsRead: row.ivs, ivsGuess: ivs === null && s ? s.ivs : null, level, levelMax,
     dust: level ? dustStep(level).dust : null,
     solveStatus: result.status, flags, frames: row.frames, merged: row.merged ?? 1,
   };
@@ -94,7 +112,8 @@ export function toPokeGenieCsv(rows, { scanDate = new Date() } = {}) {
       'Atk IV': r.ivs?.atk ?? '', 'Def IV': r.ivs?.def ?? '', 'Sta IV': r.ivs?.hp ?? '',
       'IV Avg': r.ivs ? ((r.ivs.atk + r.ivs.def + r.ivs.hp) / 45 * 100).toFixed(1) : '',
       'Level Min': r.level !== null ? r.level.toFixed(1) : '', 'Level Max': r.levelMax !== null ? r.levelMax.toFixed(1) : '',
-      'Scan Date': date, 'Original Scan Date': date, Lucky: 0, 'Shadow/Purified': 0, Favorite: 0, Dust: r.dust ?? '',
+      // Shadow, Lucky and Favourite are not read from the screen: left blank, not asserted as 0.
+      'Scan Date': date, 'Original Scan Date': date, Lucky: '', 'Shadow/Purified': '', Favorite: '', Dust: r.dust ?? '',
     };
     lines.push(POKEGENIE_COLUMNS.map((c) => q(rec[c] ?? '')).join(','));
   }

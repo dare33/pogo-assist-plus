@@ -74,7 +74,7 @@ async function runExtraction(file) {
   run = controller;
   const t0 = performance.now();
   const timer = setInterval(() => { $('#elapsed').textContent = formatElapsed(elapsedSeconds(t0)); }, 250);
-  let totalEstimate = null;
+  let totalEstimate = null, stoppedEarly = null;
   let ocr = null;
 
   try {
@@ -95,6 +95,7 @@ async function runExtraction(file) {
 
     const decoded = decodeFrames(file, FPS, (ev) => {
       if (ev.phase === 'start') totalEstimate = ev.totalEstimate;
+      if (ev.phase === 'end') stoppedEarly = ev.stoppedEarly;
     });
     async function* guarded() {
       for await (const frame of decoded) {
@@ -103,7 +104,7 @@ async function runExtraction(file) {
       }
     }
 
-    const { rows, review } = await extract(guarded(), {
+    const { rows, review, unmatched } = await extract(guarded(), {
       ocr, gm,
       onProgress: ({ done, found }) => setProgress(done, totalEstimate, found),
     });
@@ -111,8 +112,13 @@ async function runExtraction(file) {
     $('#run').hidden = true;
     $('#results').hidden = false;
     $('#elapsedFinal').textContent = formatElapsed(elapsedSeconds(t0));
+    const notes = [];
+    if (controller.cancelled) notes.push('Stopped early by you: these rows cover only the part of the recording that was processed.');
+    else if (stoppedEarly) notes.push(`The browser stopped decoding before the end (${stoppedEarly}); rows cover only the part that was decoded.`);
+    if (unmatched.length) notes.push(`${unmatched.length} frame${unmatched.length === 1 ? '' : 's'} showed a CP but no recognisable species name (a nickname, or a garbled read); they are listed in the review JSON, not in the table.`);
+    $('#notes').innerHTML = notes.map((n) => `<div class="note">${esc(n)}</div>`).join('');
     renderRows(rows);
-    wireResultActions(file, rows, review);
+    wireResultActions(file, rows, review, unmatched);
   } catch (e) {
     $('#run').hidden = true;
     $('#intro').hidden = false;
@@ -124,11 +130,16 @@ async function runExtraction(file) {
   }
 }
 
-function wireResultActions(file, rows, review) {
+function wireResultActions(file, rows, review, unmatched) {
   $('#downloadCsv').onclick = () => downloadText(toPokeGenieCsv(rows), csvFilename(file), 'text/csv');
-  $('#downloadReview').onclick = () => downloadText(JSON.stringify({ rows, review }, null, 2), reviewFilename(file), 'application/json');
+  $('#downloadReview').onclick = () => downloadText(JSON.stringify({ rows, review, unmatched }, null, 2), reviewFilename(file), 'application/json');
+  // Rows whose name, CP, HP and bars cannot be reconciled are misreads, not Pokémon: the advisor
+  // gets the rest. Ambiguous rows go through with blank IVs (the CSV already leaves them blank).
+  const junk = rows.filter((r) => r.flags.includes('no-level-fits'));
+  const good = rows.filter((r) => !junk.includes(r));
+  $('#loadAdvisor').textContent = junk.length ? `Load ${good.length} into advisor (${junk.length} unreadable left out)` : 'Load into advisor';
   $('#loadAdvisor').onclick = () => {
-    sessionStorage.setItem('pogo-extracted-csv', toPokeGenieCsv(rows));
+    sessionStorage.setItem('pogo-extracted-csv', toPokeGenieCsv(good));
     location.href = '../index.html?extracted';
   };
 }

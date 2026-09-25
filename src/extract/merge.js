@@ -56,11 +56,13 @@ export function groupRuns(readings) {
 function joins(run, r) {
   const last = run.frames[run.frames.length - 1];
   if (last.name !== r.name) return false;
-  // Bars are not used to split runs: a mid-animation read can look settled by chance, and two
-  // consecutive Pokémon with the same name, CP and HP but different IVs are rarer than that.
   if (!hpAgree(run.hp, r.hp)) return false;
   const topCp = [...run.cpCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
   const reads = r.cpReads ?? [r.cp];
+  // Contradictory settled bars split the run only when the CP read also differs: with the same
+  // CP a mid-animation read can look settled by chance, but a different CP and different bars
+  // is another Pokémon (adjacent hatched Meltan at CP 150 and 151, say).
+  if (run.ivs && r.ivs && (r.ivConfidence ?? 0) >= SETTLED && !ivsCompatible(run.ivs, r.ivs) && !reads.includes(topCp)) return false;
   if (reads.some((c) => cpSimilar(c, last.cp) || cpSimilar(c, topCp))) return true;
   // A badly garbled CP read on a frame whose HP and settled bars match the run exactly is still the same Pokémon.
   return Boolean(run.hp && r.hp && run.ivs && r.ivs && (r.ivConfidence ?? 0) >= SETTLED && run.hp.max === r.hp.max && run.ivs.atk === r.ivs.atk && run.ivs.def === r.ivs.def && run.ivs.hp === r.ivs.hp);
@@ -69,13 +71,15 @@ function joins(run, r) {
 /** Values ranked by count (ties: the later value); returns [{ v, n }]. */
 export function ranked(values, keyOf = (v) => JSON.stringify(v)) {
   const counts = new Map();
+  let i = 0;
   for (const v of values) {
+    i++;
     if (v === null || v === undefined) continue;
     const k = keyOf(v);
-    const e = counts.get(k) ?? { v, n: 0 };
-    e.n++; e.v = v; counts.set(k, e);
+    const e = counts.get(k) ?? { v, n: 0, last: 0 };
+    e.n++; e.v = v; e.last = i; counts.set(k, e);
   }
-  return [...counts.values()].sort((a, b) => b.n - a.n);
+  return [...counts.values()].sort((a, b) => b.n - a.n || b.last - a.last);
 }
 
 export function vote(values, keyOf) { return ranked(values, keyOf)[0]?.v ?? null; }
@@ -93,12 +97,13 @@ export function collapseRun(run) {
   // reads (whole units) count; they are voted, ties to the later frame. With no settled read the
   // last read is the closest to the final state and is flagged.
   const settled = frames.filter((f) => f.ivs && f.ivConfidence >= SETTLED);
+  const ivsDisagree = new Set(settled.map((f) => `${f.ivs.atk}/${f.ivs.def}/${f.ivs.hp}`)).size > 1;
   let best = null;
   if (settled.length) { const v = vote(settled.map((f) => f.ivs), (x) => `${x.atk}/${x.def}/${x.hp}`); best = { f: settled.filter((f) => f.ivs.atk === v.atk && f.ivs.def === v.def && f.ivs.hp === v.hp).pop() }; }
   else { const any = frames.filter((f) => f.ivs); if (any.length) best = { f: any[any.length - 1] }; }
   return {
     name: frames[0].name, cp: cpCandidates[0].v, cpCandidates: cpCandidates.map((c) => c.v),
-    hp, ivs: best?.f.ivs ?? null, ivConfidence: best?.f.ivConfidence ?? 0, fills: best?.f.fills ?? null,
+    hp, ivs: best?.f.ivs ?? null, ivConfidence: best?.f.ivConfidence ?? 0, fills: best?.f.fills ?? null, ivsDisagree,
     speciesIds: frames[0].speciesIds, form: frames[0].form, baseName: frames[0].baseName,
     frames: frames.map((f) => ({ frame: f.frame, time: f.time, cp: f.cp, cpText: f.cpText, name: f.nameText, hp: f.hp ? `${f.hp.current}/${f.hp.max}` : null, ivs: f.ivs ? `${f.ivs.atk}/${f.ivs.def}/${f.ivs.hp}` : null, ivConfidence: f.ivConfidence, sharpness: f.sharpness })),
   };

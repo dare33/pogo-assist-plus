@@ -16,7 +16,8 @@ import { cpAt, hpAt, LEVELS } from '../cpm.js';
  * @param cp       read CP (required)
  * @param hp       read HP or null
  * @param ivs      { atk, def, hp } from the bars, or null when the panel was not read
- * @returns { status, solutions: [{ speciesId, ivs, level, hp, tier }] } sorted best first.
+ * @returns { status, solutions: [{ speciesId, ivs, level, hp, tier }], forms } sorted best first;
+ *   `forms` lists the species ids that fit equally well (same stats), first one used.
  *   status: 'exact' | 'corrected' (one tier-1 set) | 'ambiguous' (several sets in the best
  *           tier, or nothing near the read) | 'unknown-ivs' (no bars) | 'none'
  */
@@ -36,13 +37,17 @@ export function solve({ species, cp, hp = null, ivs = null }) {
     }
   }
   if (!fits.length) return { status: ivs ? 'none' : 'unknown-ivs', solutions: [] };
-  fits.sort((a, b) => a.tier - b.tier || dist(ivs, a.ivs) - dist(ivs, b.ivs) || a.level - b.level);
-  if (!ivs) return { status: 'unknown-ivs', solutions: fits };
+  // Ties between forms with the same stats (costume Pikachu, say) go to the plainest id, and are
+  // reported so the row can be flagged: the screen name does not say which form it is.
+  fits.sort((a, b) => a.tier - b.tier || dist(ivs, a.ivs) - dist(ivs, b.ivs) || a.level - b.level || a.speciesId.length - b.speciesId.length || (a.speciesId < b.speciesId ? -1 : 1));
   const bestTier = fits[0].tier;
   const top = fits.filter((f) => f.tier === bestTier);
-  const distinct = new Set(top.map((s) => `${s.speciesId}:${s.ivs.atk}/${s.ivs.def}/${s.ivs.hp}`));
-  if (distinct.size > 1 && bestTier > 0) return { status: 'ambiguous', solutions: fits };
-  return { status: ['exact', 'corrected', 'ambiguous'][bestTier], solutions: fits };
+  const forms = new Set(top.map((s) => s.speciesId));
+  const out = (status) => ({ status, solutions: fits, forms: [...forms] });
+  if (!ivs) return out('unknown-ivs');
+  const distinct = new Set(top.map((s) => `${s.ivs.atk}/${s.ivs.def}/${s.ivs.hp}`));
+  if (distinct.size > 1 && bestTier > 0) return out('ambiguous');
+  return out(['exact', 'corrected', 'ambiguous'][bestTier]);
 }
 
 function tierOf(read, c) {

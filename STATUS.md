@@ -14,8 +14,9 @@ integration test that runs the real recordings when they are present and skips w
   HP 35/35, IVs 31/35, level 33/35, and every wrong row is flagged. The four misses are
   single-frame Pokémon from the fast-swipe half of the recording (bars still animating, or the
   previous Pokémon's panel).
-- WhatsApp copy (384×848): 46 rows; the five acceptance rows right; 29 rows in the export with
-  HP 29/29, IVs 26/29; two CP misreads unflagged (9↔2 and 8↔6 at that size).
+- WhatsApp copy (384×848): 46 rows; four of the five acceptance rows right, Mega Mewtwo Y's
+  pink CP is unreadable at that size (row present, flagged `no-level-fits`); 31 rows in the
+  export with HP 30/31, IVs 26/31; one CP misread unflagged (9↔2 at that size).
 - iPad (1488×2266 after rotation, 4:3, HEVC): 20 rows, none flagged, all solved to one level;
   no export exists for that account so they are self-consistent, not verified. Layout
   independence holds: regions are anchored on the CP text, the green HP bar and the bar tracks.
@@ -36,7 +37,15 @@ Purified, Lucky, gender, moves, candy and Dynamax are not read. Mega colours oth
 Nicknamed Pokémon (skipped as unmatched names). Recordings with the appraisal panel closed give
 rows with `ivs-unread` and a level range.
 
-**Merge state:** see the end of this file.
+**Review gate:** two adversarial reviews (Opus reviewer, Sol 5.6 cross-vendor) on the first
+build commit; every finding folded except shadow detection and browser colour range, which are
+recorded as limits in the report. Tests after the fold: 62 passing; in a clean copy without
+`node_modules` (what the Pages workflow runs) 58 pass and 4 skip.
+
+**Merge state:** `extractor` merged into `main` on 26 Sep 2026 once `npm test` was green and the
+CLI met the acceptance table on the trimmed and original recordings (the two gates Greg set).
+The Pages deploy publishes `web/extract.html`; the morning test is the first run of the page on
+real video.
 
 ## Earlier
 
