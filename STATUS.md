@@ -1,5 +1,45 @@
 # Status — Pogo Assist+
 
+**26 Sep 2026, overnight: the screen-recording extractor is built** on branch `extractor`
+(`src/extract/`, `scripts/extract.mjs`, `web/extract.html`, tests in `test/extract/`). Full
+results and method in `docs/extractor-report.md`; what to click in the morning in
+`docs/morning-test.md`. Tests: 60 passing (`npm test`, Node 24, Windows), including an
+integration test that runs the real recordings when they are present and skips when not.
+
+**What works (measured on the four recordings, CLI at 5 fps):**
+- Trimmed Clipchamp copy (1920×1080 pillarboxed): 4 rows, all four acceptance rows right in
+  every field, none flagged, 3.4 s.
+- iPhone original (1320×2868 HEVC, not the 1206×2622 the handoff expected): 47 rows in 15.8 s;
+  all five acceptance rows present exactly once; of the 35 rows also in the Poke Genie export,
+  HP 35/35, IVs 31/35, level 33/35, and every wrong row is flagged. The four misses are
+  single-frame Pokémon from the fast-swipe half of the recording (bars still animating, or the
+  previous Pokémon's panel).
+- WhatsApp copy (384×848): 46 rows; the five acceptance rows right; 29 rows in the export with
+  HP 29/29, IVs 26/29; two CP misreads unflagged (9↔2 and 8↔6 at that size).
+- iPad (1488×2266 after rotation, 4:3, HEVC): 20 rows, none flagged, all solved to one level;
+  no export exists for that account so they are self-consistent, not verified. Layout
+  independence holds: regions are anchored on the CP text, the green HP bar and the bar tracks.
+- Mega Mewtwo Y: pink CP text handled by a colour-mask fallback; Mega stats used for the solve.
+
+**Assumptions made overnight (Greg was not asked):** recordings saved as
+`recordings/{iphone-original,iphone-whatsapp,iphone-clipchamp-trimmed,ipad-original}.mp4`;
+the acceptance table is checked against the trimmed and original recordings (the trimmed copy
+also contains Xurkitree 3028, and ends on the second Zamazenta); the CLI may locate ffmpeg via
+the imageio-ffmpeg Python package as a last resort (development convenience only; the browser
+page uses no ffmpeg and no Python); the web page loads tesseract.js 7.0.0 from jsdelivr and the
+language file from the site's `data/tessdata`; `web/app.js` gained one hook (`?extracted`
+reads a CSV from sessionStorage) and `index.html` one link, nothing else in the advisor changed.
+
+**Untested:** browser video decode (no H.264/HEVC decoder in the container's Chromium), so
+`web/extract.html` has only been import-checked in Node; the morning test covers it. Shadow,
+Purified, Lucky, gender, moves, candy and Dynamax are not read. Mega colours other than Mega Y.
+Nicknamed Pokémon (skipped as unmatched names). Recordings with the appraisal panel closed give
+rows with `ivs-unread` and a level range.
+
+**Merge state:** see the end of this file.
+
+## Earlier
+
 **25 Sep, evening: priority changed.** The screen-recording extractor is now first; see
 `docs/extractor-handoff.md`. Experiments on 25 Sep proved content-rect detection, OCR of name,
 CP and HP with tesseract.js, appraisal-bar geometry and swipe detection on a re-encoded 1080p
@@ -22,9 +62,6 @@ container's Chromium has no H.264 decoder, so browser decoding is checked with
 `web/codec-check.html` on Greg's own devices instead (iPhone Safari, Mac Safari, Windows
 Chrome). Design consequence: the extractor must locate the phone content inside the frame
 (pillarboxing, letterboxing) rather than assume the frame is the screen.
-
-**Next:** Greg runs the codec check on the untrimmed original in three browsers and pastes the
-results; Calcy IV import; a "Next steps" style dated view.
 
 **25 Sep, late:** added `src/pvp-rank.js` (stat-product IV rank and target level under a CP cap;
 matches Poke Genie's ranks on the fixture). Not yet used by the page; the advisor should switch
