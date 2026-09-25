@@ -26,11 +26,13 @@ re-encoded by a messenger or a trimmer (pillarboxed, downscaled).
 
 ## Fixtures
 
-Recordings are not in git (they show catch locations). Greg attaches them to the session:
-`greg-2026-09-25-whatsapp.mp4` (384×848 H.264, 60 fps, 42 s, worst case) and
-`greg-2026-09-25-trimmed.mp4` (1920×1080 landscape, phone content pillarboxed to about 498 px
-wide, 30 fps, 10 s), plus the untrimmed original if he has it. Save them under `recordings/`
-(gitignored). Expected values, from the Poke Genie export in `fixtures/`:
+Recordings are not in git (they show catch locations). Greg attaches four to the session as
+his first message: the WhatsApp copy (384×848 H.264, 60 fps, 42 s, the worst case), the
+Clipchamp-trimmed copy (1920×1080 landscape, phone content pillarboxed to about 498 px wide,
+30 fps, 10 s), the untrimmed iPhone 16 Pro original (expect 1206×2622), and an iPad recording of
+about 20 Pokémon (expect a 4:3 frame with different UI proportions; use it to prove the layout
+independence, and add its Pokémon to the acceptance table once you can read them). Save them
+under `recordings/` (gitignored) with descriptive names. Expected values, from the Poke Genie export in `fixtures/`:
 
 | Pokémon in the recording | CP | HP | IVs | Notes |
 |---|---|---|---|---|
@@ -86,10 +88,16 @@ duplicates and no missed Pokémon, and the report says which frame each value ca
 8. Tests in `test/extract/`: unit tests on small synthetic buffers for image and segment
    functions; an integration test that runs on the recordings when present under `recordings/`
    and skips (not fails) when absent.
-9. `web/extract.html`: the browser version. `<video>` plus canvas frame grabs at 5 fps (WebCodecs
-   later), the same modules, a progress bar, the CSV offered for download and a "Load into
-   advisor" button that feeds `web/app.js`. Cannot be decode-tested in the container; keep it
-   thin and mark it untested in STATUS.md.
+9. `web/extract.html`: the browser version, and it must be usable by Greg in the morning, not a
+   stub. Pick the video with a file input, decode with a `<video>` element and canvas frame grabs
+   at 5 fps (WebCodecs is a later upgrade), run the same modules (tesseract.js from
+   cdn.jsdelivr.net with `data/tessdata` served from the site), show a progress bar and a live
+   count of Pokémon found, then a results table with a "Download CSV" link and a "Load into
+   advisor" button that hands the rows to `web/app.js`. Video decode cannot be tested in the
+   container, so test everything else in Node on PNG frames and keep the decode step isolated in
+   one function with a clear error message. Write a short `docs/morning-test.md` telling Greg
+   exactly what to click and what he should see for each recording. Deploy by pushing to `main`
+   only if `npm test` is green; otherwise leave it on the branch and say so.
 
 Leave alone: the advisor, the tier data, the Pages workflow. Do not add Python to the shipped
 pipeline. Do not send frames to any API.
