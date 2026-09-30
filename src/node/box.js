@@ -4,8 +4,8 @@
 // so importing this module needs none of them.
 
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { copyFileSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { finish, toPokeGenieCsv } from '../extract/pipeline.js';
 import { mergeClips, orderClips, passKind } from '../extract/batch.js';
@@ -15,7 +15,7 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 /** 2: the cache holds the raw frame readings (rows are rebuilt on load), keyed on the extractor. */
 export const CACHE_VERSION = 2;
 const CLIP_EXT = /\.(mp4|mov|m4v)$/i;
-const CHECK_FLAGS = ['ambiguous-ivs', 'no-level-fits', 'shadow-match-ambiguous', 'shadow-match-weak', 'ivs-unread'];
+const CHECK_FLAGS = ['ambiguous-ivs', 'no-level-fits', 'shadow-match-ambiguous', 'shadow-match-weak', 'ivs-unread', 'hp-mismatch'];
 const CHECK_CAP = 40;
 const VALUE_FLAGS = new Set(['account', 'fps', 'order', 'inbox', 'out-dir', 'ffmpeg']);
 const BOOLEAN_FLAGS = new Set(['force', 'quiet']);
@@ -35,7 +35,22 @@ export function cleanFolder(p) {
   return s;
 }
 
-export function parseArgs(argv) {
+/**
+ * A quoted drive root, "C:\", reaches node as C:" (Windows reads \" as a literal quote) and swallows
+ * the rest of the command line into the same argument. Split it back into C:\ and the words after.
+ */
+export function expandArgs(argv) {
+  const out = [];
+  for (const a of argv) {
+    const m = /^([A-Za-z]):\\?"(.*)$/.exec(a);
+    if (m) out.push(`${m[1]}:\\`, ...m[2].split(/\s+/).filter(Boolean));
+    else out.push(a);
+  }
+  return out;
+}
+
+export function parseArgs(rawArgv) {
+  const argv = expandArgs(rawArgv);
   const opts = {}, folders = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -59,9 +74,14 @@ export function parseArgs(argv) {
   return { folders, fps, order, account: opts.account ?? null, inbox: opts.inbox ?? null, outDir: opts['out-dir'] ?? null, ffmpeg: opts.ffmpeg ?? null, force: Boolean(opts.force), quiet: Boolean(opts.quiet) };
 }
 
-const clipsIn = (dir) => readdirSync(dir, { withFileTypes: true })
-  .filter((e) => e.isFile() && CLIP_EXT.test(e.name))
-  .map((e) => ({ name: e.name, path: join(dir, e.name), mtimeMs: statSync(join(dir, e.name)).mtimeMs }));
+// A folder that cannot be read (system folders when a drive root is given) simply has no clips.
+const clipsIn = (dir) => {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && CLIP_EXT.test(e.name))
+      .map((e) => ({ name: e.name, path: join(dir, e.name), mtimeMs: statSync(join(dir, e.name)).mtimeMs }));
+  } catch { return []; }
+};
 
 /** A folder with clips is one account; one with none but with subfolders that have clips is several. */
 export function discoverAccounts(folder, account = null) {
@@ -75,16 +95,27 @@ export function discoverAccounts(folder, account = null) {
   return accounts;
 }
 
-const EXTRACTOR_FILES = ['frame', 'ocr', 'bars', 'image', 'layout', 'names', 'png'].map((n) => `src/extract/${n}.js`);
+const EXTRACTOR_FILES = ['frame', 'ocr', 'bars', 'image', 'layout', 'names', 'png', 'node'].map((n) => `src/extract/${n}.js`).concat('src/node/extract-video.js');
+
+/** version of an installed dependency, looked for in node_modules from the repo upwards; '' if absent. */
+function depVersion(root, pkg) {
+  for (let dir = root, i = 0; i < 6; i++, dir = dirname(dir)) {
+    const p = join(dir, 'node_modules', pkg, 'package.json');
+    if (existsSync(p)) { try { return String(JSON.parse(readFileSync(p, 'utf8')).version ?? ''); } catch { return ''; } }
+  }
+  return '';
+}
 
 /**
- * What the frame readings depend on: the reading code, the game master (name matching) and the
- * OCR language file. Line endings are normalised so a Windows and a Mac checkout agree.
+ * What the frame readings depend on: the reading code and the decode step, the game master (name
+ * matching), the OCR language file (contents) and the versions of the OCR and PNG libraries. Line
+ * endings are normalised so a Windows and a Mac checkout agree.
  */
 export function computeCodeHash(root = ROOT) {
   const h = createHash('sha256');
   for (const f of [...EXTRACTOR_FILES, 'data/gamemaster.json']) h.update(f).update(readFileSync(join(root, f), 'utf8').replace(/\r\n/g, '\n'));
-  h.update(`tessdata:${statSync(join(root, 'data/tessdata/eng.traineddata')).size}`);
+  h.update(`tessdata:${createHash('sha256').update(readFileSync(join(root, 'data/tessdata/eng.traineddata'))).digest('hex')}`);
+  h.update(`tesseract.js:${depVersion(root, 'tesseract.js')}`).update(`pngjs:${depVersion(root, 'pngjs')}`);
   return h.digest('hex');
 }
 
@@ -97,6 +128,7 @@ function readCache(clipPath, st, { fps, codeHash }) {
   let c;
   try { c = JSON.parse(readFileSync(file, 'utf8')); } catch { return { cache: null, why: 'cache unreadable' }; }
   if (c.version !== CACHE_VERSION) return { cache: null, why: 'cache from an older version of this tool' };
+  if (!Array.isArray(c.readings)) return { cache: null, why: 'cache is incomplete' };
   if (c.size !== st.size || c.mtimeMs !== st.mtimeMs || c.fps !== fps) return { cache: null, why: 'clip or fps changed since the cache was written' };
   if (c.codeHash !== codeHash) return { cache: null, why: 'extractor changed since the cache was written' };
   return { cache: c, why: null };
@@ -159,19 +191,39 @@ export async function runAccount(acct, ctx) {
   const outDir = ctx.outDir ?? acct.folder;
   const csvPath = join(outDir, `${stem}${suffix}.csv`), reviewPath = join(outDir, `${stem}${suffix}.review.json`);
   const clipsOut = clipInfo.map((c) => ({ ...c, ...(merged.clips.find((m) => m.name === c.name) ?? {}) }));
-  writeFileSync(csvPath, toPokeGenieCsv(merged.rows, { scanDate }));
-  writeFileSync(reviewPath, JSON.stringify({
-    account: acct.name, folder: acct.folder, date, partial, fps, clips: clipsOut, boundaries: merged.boundaries, reconciled: merged.reconciled,
-    rows: merged.rows.length, flagged: merged.review.length, failedClips, review: merged.review, unmatched: merged.unmatched,
-  }, null, 2));
-  // A partial export must never reach the inbox, where the complete one would be replaced by it.
-  let inboxCopy = null;
-  if (ctx.inbox && !partial) { inboxCopy = join(ctx.inbox, `${stem}.csv`); copyFileSync(csvPath, inboxCopy); }
+  let writing = csvPath, inboxCopy = null;
+  try {
+    writeFileSync(csvPath, toPokeGenieCsv(merged.rows, { scanDate }));
+    writing = reviewPath;
+    writeFileSync(reviewPath, JSON.stringify({
+      account: acct.name, folder: acct.folder, date, partial, fps, clips: clipsOut, boundaries: merged.boundaries, reconciled: merged.reconciled,
+      rows: merged.rows.length, flagged: merged.review.length, failedClips, review: merged.review, unmatched: merged.unmatched,
+    }, null, 2));
+    // A complete run supersedes an earlier partial export of the same recording.
+    if (!partial) {
+      for (const stale of [join(outDir, `${stem}.partial.csv`), join(outDir, `${stem}.partial.review.json`)]) {
+        if (existsSync(stale)) { writing = stale; rmSync(stale); log(`removed the stale partial export ${stale}`); }
+      }
+    }
+    // A partial export must never reach the inbox, where the complete one would be replaced by it.
+    if (ctx.inbox && !partial) { inboxCopy = join(ctx.inbox, `${stem}.csv`); writing = inboxCopy; copyFileSync(csvPath, inboxCopy); }
+  } catch (e) {
+    log(`could not write ${writing}: ${e.code ? `${e.code} ` : ''}${e.message} (is it open in Excel?)`);
+    return { failed: failedClips.length, writeFailed: true, csvPath: null };
+  }
 
   log(`\nSummary for ${acct.name}`);
   for (const c of clipsOut) log(`  ${c.name} [${c.kind}]: ${c.failed ? 'FAILED' : `${c.rows} Pokémon, ${c.flagged} flagged, ${c.cached ? 'cached' : `processed in ${c.seconds} s`}`}`);
+  const names = (rows) => rows.map((r) => `${r.name} ${r.cp}`).join(', ');
   for (const b of merged.boundaries) {
-    log(`  ${b.before} → ${b.after}: ${b.dropped} duplicate row${b.dropped === 1 ? '' : 's'} dropped: ${b.droppedRows.map((r) => `${r.name} ${r.cp}`).join(', ')}${b.weak ? ' (weak join, flagged boundary-weak: check these)' : ''}`);
+    if (b.unmatched) {
+      log(`  ${b.before} → ${b.after}: no overlap found (tail ${b.tail.name} ${b.tail.cp}, head ${b.head.name} ${b.head.cp}): if you restarted on the last Pokémon you saw, it may be listed twice — check`);
+      continue;
+    }
+    let line = `  ${b.before} → ${b.after}: ${b.dropped} duplicate row${b.dropped === 1 ? '' : 's'} dropped (${names(b.droppedRows)})`;
+    if (b.maybeRepeated.length) line += `; ${b.maybeRepeated.length} more may be repeats: ${names(b.maybeRepeated)} — check (flagged boundary-weak)`;
+    else if (b.weak) line += ' (weak join, flagged boundary-weak: check these)';
+    log(line);
   }
   const r = merged.reconciled;
   if (clipsOut.some((c) => c.kind !== 'normal')) {
@@ -238,6 +290,13 @@ export async function runBox(argv, deps = {}) {
     if (args.account && found.some((a) => a.folder !== folder)) log('Note: --account is ignored when each subfolder is its own account.');
     accounts.push(...found);
   }
+  if (args.account && accounts.length > 1) { log(`--account ${args.account} names one account but ${accounts.length} were found (${accounts.map((a) => a.name).join(', ')}); give one folder that holds clips directly.`); return 2; }
+  const seen = new Map();
+  for (const a of accounts) {
+    const key = a.name.toLowerCase();
+    if (seen.has(key)) { log(`Two accounts would write the same export name (${a.name}): ${seen.get(key)} and ${a.folder}. Rename one folder or run them separately.`); return 2; }
+    seen.set(key, a.folder);
+  }
   if (args.outDir && !(existsSync(args.outDir) && statSync(args.outDir).isDirectory())) { log(`--out-dir ${args.outDir} is not a folder.`); return 2; }
   const inboxOk = args.inbox && existsSync(args.inbox) && statSync(args.inbox).isDirectory();
   if (args.inbox && !inboxOk) log(`Warning: inbox ${args.inbox} does not exist; the CSV will not be copied there.`);
@@ -252,9 +311,9 @@ export async function runBox(argv, deps = {}) {
     finish: deps.finish ?? ((readings) => finish(readings, gm)),
     extractClip: deps.extractClip ?? real.extractClip,
   };
-  let failed = 0;
+  let failed = 0, writeFailures = 0;
   try {
-    for (const acct of accounts) failed += (await runAccount(acct, ctx)).failed;
+    for (const acct of accounts) { const r = await runAccount(acct, ctx); failed += r.failed; if (r.writeFailed) writeFailures++; }
   } catch (e) {
     if (!(e instanceof FatalError)) throw e;
     log(e.message);
@@ -262,6 +321,7 @@ export async function runBox(argv, deps = {}) {
   } finally {
     if (real) await real.close();
   }
+  if (writeFailures) { log(`\n${writeFailures} account${writeFailures === 1 ? '' : 's'} could not be written (see above).`); if (!failed) return 1; }
   if (failed) { log(`\n${failed} clip${failed === 1 ? '' : 's'} failed; Pokémon from ${failed === 1 ? 'it are' : 'them are'} missing from the export (the file written is marked .partial and was not copied to the inbox).`); return 1; }
   return 0;
 }

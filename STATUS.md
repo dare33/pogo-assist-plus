@@ -7,7 +7,7 @@ CSV plus a review JSON (optionally copied to an inbox). ffmpeg is found automati
 winget, imageio-ffmpeg). Per-clip results are cached beside the clips. The browser page takes
 several clips and merges them the same way. Protocol and summary lines: `docs/whole-box.md`.
 New modules: `src/extract/batch.js` (pure merge), `src/node/ffmpeg.js`, `src/node/extract-video.js`.
-Tests: 108 passing, 3 skipped (`npm test`, after the review fold below).
+Tests: 118 passing, 3 skipped (`npm test`, after the two review folds below).
 
 **Verified (30 Sep, Windows, Node 24, ffmpeg found as imageio-ffmpeg with no `FFMPEG` set):**
 three clips (trimmed, original, trimmed again named `03-shadow-trimmed.mp4`) in one folder gave
@@ -35,6 +35,20 @@ ticks and lists clips skipped by Stop. Re-run after the fold on the same three c
 CSV (SHA-256 `0291af71...b9a3`) before and after windowing; 02-original alone gives the same 48 rows
 with the window at 60, 10 and 7 seconds; a folder with all clips cached merged with
 `--ffmpeg C:\nonexistent`; a garbage clip gave a `.partial.csv`, no inbox copy and exit 1.
+
+**Second review round (30 Sep, same day)** (Opus: mergeable with fixes; Sol 5.6: not mergeable) confirmed the
+first fixes and found more, all folded: when several overlaps fit, the smallest is still dropped but
+every row up to the largest fitting overlap is flagged and listed as a possible repeat; a join where
+nothing matches is now reported ("no overlap found"); combining rows no longer hides a
+`no-level-fits`, flags a computed HP replaced by a different read HP (`hp-mismatch`), and drops the
+IV-guess flags of the losing row; two folders (or `--account` with several accounts) that would
+write the same export are refused up front; the cache key also covers `node.js`, `extract-video.js`,
+the tesseract.js and pngjs versions and the full language file; a cache without readings is
+re-read; a stale `.partial` export is removed by a complete run; a failed write (file open in
+Excel) is reported per account instead of aborting; the tests use `scratch/` not `os.tmpdir()`;
+the windowed decode continues through an empty window when the clip's duration says there is more;
+a quoted drive root (`"C:\"`) no longer breaks the launcher's argument handling; an unreadable
+folder under a drive root is skipped. Re-run: the batch CSV hash is unchanged (`0291af71...b9a3`).
 
 **Not yet tested:** a real multi-clip whole-box recording (overlap dropping is tested on synthetic
 rows and on one exact-duplicate clip pair only); a real Shadow-filtered pass (the shadow clip in

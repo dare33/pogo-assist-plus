@@ -27,7 +27,10 @@ batch mode added on 30 Sep 2026; single recordings still work with `node scripts
   the folder path). The window stays open at the end. If `%USERPROFILE%\dare33\pokemon-go-tier-list\inbox`
   exists the CSV is also copied there.
 - Anywhere: `npm run extract:box -- "<folder>"` or `node scripts/extract-box.mjs "<folder>"`.
-  Several folders can be given. Options: `--account NAME` (letters, digits, `.`, `_`, `-`; default:
+  Several folders can be given, each handled as an account or a parent of accounts. `--account`
+  is only for one folder that holds clips directly: with several resulting accounts it is refused
+  (exit 2), and so are two accounts that would get the same name (they would write the same file).
+  Both checks happen before anything is read. Options: `--account NAME` (letters, digits, `.`, `_`, `-`; default:
   the folder name), `--fps 5`, `--order name|mtime`, `--inbox DIR`, `--out-dir DIR` (must exist;
   default: the folder), `--ffmpeg PATH`, `--force` (ignore the cache), `--quiet`. Unknown options,
   and options missing their value, are an error (exit 2).
@@ -56,7 +59,12 @@ the inbox is replaced rather than a second file added.
 If any clip failed, the files are named `...-<date>.partial.csv` and `...-<date>.partial.review.json`
 instead, the inbox copy is skipped, and the command exits 1. A complete export from an earlier run is
 never overwritten by a partial one. The failed clips are listed under `failedClips` in the review
-JSON; Pokémon from them are missing.
+JSON; Pokémon from them are missing. When a later run is complete, the stale `.partial` files for the
+same recording are deleted and the log says so.
+
+If a file cannot be written (for example the CSV is open in Excel) the tool says
+`could not write <path>: <reason> (is it open in Excel?)`, carries on with the other accounts, and
+exits 1.
 
 ## How clips are joined
 
@@ -67,15 +75,26 @@ JSON; Pokémon from them are missing.
 - The **smallest** overlap that is consistent (at most 10 rows) is dropped. For a run of distinct
   Pokémon only the true overlap is consistent, so this loses nothing; for identical Pokémon (a run
   of the same Meltan) it drops the fewest, so no real Pokémon is lost.
-- A join is **weak** when more than one overlap length was consistent, or when any matched pair had
-  a missing or guessed HP or IVs. Every row of a weak join gets the flag `boundary-weak`, and the
-  summary lists the dropped rows by name and CP, so you can check them:
-  `01-a.mp4 → 02-b.mp4: 4 duplicate rows dropped: Mewtwo 3673, Xurkitree 3028, ... (weak join ...)`.
+- When **more than one** overlap length is consistent, the rows between the smallest and the largest
+  may be repeats that were kept. Every head row up to the largest fitting overlap, and the tail rows
+  they would repeat, get `boundary-weak`, and the summary lists them:
+  `01-a.mp4 → 02-b.mp4: 1 duplicate row dropped (Meltan 150); 2 more may be repeats: Zapdos 1969, Meltan 150 — check`.
+  The review JSON has `alternatives` (every consistent length) and `maybeRepeated` on the boundary.
+- A join is also **weak** when any matched pair had a missing or guessed HP or IVs; its rows get
+  `boundary-weak` and the dropped rows are listed by name and CP.
+- A join where **nothing matches** is reported too, since restarting on the last Pokémon you saw
+  should always overlap: `01-a.mp4 → 02-b.mp4: no overlap found (tail Meltan 300, head Meltan 308):
+  if you restarted on the last Pokémon you saw, it may be listed twice — check` (a misread at the
+  join is the usual cause). It is recorded in the review JSON with `unmatched: true`.
 - Only rows at a join are ever dropped: two identical Pokémon in the middle of a box stay two
   Pokémon. Two different Pokémon of the same name and CP with different HP or settled IVs are never
   merged.
 - Where a dropped row had information the kept row lacked (HP, IVs), it is filled in, and flags that
-  no longer apply (`ivs-unread`, `ambiguous-ivs`, `hp-unread`, ...) are removed.
+  no longer apply (`ivs-unread`, `ambiguous-ivs`, `hp-unread`, IV-guess flags when the kept IVs are
+  settled) are removed. `no-level-fits` is never removed. If a computed HP is replaced by a different
+  read HP, the row is flagged `hp-mismatch:<computed>/<read>` (its IVs and level were solved for the
+  old HP) and goes on the "check these" list. Settled IVs are preferred over a guess whatever the
+  number of frames.
 
 ## Shadow and purified passes
 
@@ -97,11 +116,14 @@ JSON; Pokémon from them are missing.
 ## Cache files
 
 Each clip gets `<clip>.extract.json` beside it: the raw per-frame readings (not the rows), the frame
-count and time taken, keyed by file size, modified time, fps and a hash of the extractor (the frame-
-reading code, `data/gamemaster.json` and the OCR language file). On every run the rows are rebuilt
-from the readings, so fixes to the solver, merge and export take effect without re-reading video.
-If the reading code or data changed, the tool says "extractor changed since the cache was written"
-and re-reads that clip. `--force` re-reads everything. The `.extract.json` files are safe to delete.
+count and time taken, keyed by file size, modified time, fps and a hash of the extractor. The hash
+covers the frame-reading code (`frame`, `ocr`, `bars`, `image`, `layout`, `names`, `png`, `node` under
+`src/extract/`), the decode step (`src/node/extract-video.js`), `data/gamemaster.json`, the full
+contents of the OCR language file, and the installed versions of `tesseract.js` and `pngjs`. On every
+run the rows are rebuilt from the readings, so fixes to the solver, merge and export take effect
+without re-reading video. If the reading code or data changed, the tool says "extractor changed since
+the cache was written" and re-reads that clip. A cache with no readings is re-read. `--force`
+re-reads everything. The `.extract.json` files are safe to delete.
 
 ## Reading the summary
 
@@ -113,7 +135,7 @@ shadow pass: 12 matched, 0 appended, 1 ambiguous, 2 weak
   written, and the command exits with status 1.
 - "Check these in the game" (capped at 40 lines; the rest is in the review JSON) lists the rows worth
   checking: name, CP, HP, clip and flags. It covers `ambiguous-ivs`, `no-level-fits`,
-  `shadow-match-ambiguous`, `shadow-match-weak` and `ivs-unread`. Weak joins are listed on their
+  `shadow-match-ambiguous`, `shadow-match-weak`, `hp-mismatch` and `ivs-unread`. Weak joins are listed on their
   own boundary lines.
 
 ## Flags
@@ -127,6 +149,7 @@ shadow pass: 12 matched, 0 appended, 1 ambiguous, 2 weak
 | `hp-unread` / `hp-computed` | The HP text was covered; HP is missing, or computed from the solved level. |
 | `cp-chosen-X-over-Y` | Frames disagreed on the CP; X fits the HP and bars, Y was read more often. |
 | `no-level-fits` | Name, CP, HP and bars cannot be reconciled at any level: a misread somewhere. |
+| `hp-mismatch:C/R` | Clips were joined and a computed HP (C) was replaced by a different read HP (R); IVs and level were solved for C. Check it. |
 | `boundary-weak` | The row is at a clip join that could not be confirmed (several overlaps fit, or a matched pair lacked HP or IVs). |
 | `shadow-match-ambiguous` | A shadow/purified row matched several identical main-pass rows; the first was marked. |
 | `shadow-match-weak` | A shadow/purified row was matched without both HP and IVs read on both sides. |

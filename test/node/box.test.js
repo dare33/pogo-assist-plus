@@ -1,12 +1,24 @@
 // The batch command with a fake extractor: no ffmpeg, OCR or video is involved. Clip "files" are
 // arbitrary bytes; the readings the fake returns are just [{ name, cp }] and the fake `finish`
 // turns them into rows.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { cleanFolder, parseArgs, runBox, FatalError, CACHE_VERSION } from '../../src/node/box.js';
+import { cleanFolder, expandArgs, parseArgs, runBox, FatalError, CACHE_VERSION } from '../../src/node/box.js';
+
+// Temp dirs live under <repo>/scratch (gitignored): sandboxed runs may not write to os.tmpdir().
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const made = [];
+function scratchDir() {
+  const base = join(root, 'scratch');
+  mkdirSync(base, { recursive: true });
+  const d = mkdtempSync(join(base, 'box-test-'));
+  made.push(d);
+  return d;
+}
+after(() => { for (const d of made) rmSync(d, { recursive: true, force: true }); });
 
 const IVS = { atk: 15, def: 14, hp: 15 };
 const mkRow = ({ name, cp }) => ({
@@ -17,7 +29,7 @@ const finish = (readings) => ({ rows: readings.map(mkRow), review: [], unmatched
 
 /** A temp folder with fake clips; `mtimes` are local Dates. Returns { dir, paths }. */
 function fixture(names, { under = null, mtime = new Date(2026, 2, 5, 12, 0) } = {}) {
-  const base = under ?? mkdtempSync(join(tmpdir(), 'pogo-box-'));
+  const base = under ?? scratchDir();
   mkdirSync(base, { recursive: true });
   for (const n of names) { const p = join(base, n); writeFileSync(p, `bytes of ${n}`); utimesSync(p, mtime, mtime); }
   return base;
@@ -68,7 +80,7 @@ test('an unknown flag exits 2 with usage before any work', async () => {
 });
 
 test('extract then all-cached: the export has the recording date, rows are rebuilt from the readings', async () => {
-  const dir = fixture(['01-a.mp4', '02-b.mp4']), inbox = fixture([], { under: mkdtempSync(join(tmpdir(), 'pogo-inbox-')) });
+  const dir = fixture(['01-a.mp4', '02-b.mp4']), inbox = fixture([], { under: scratchDir() });
   try {
     const fx = fakeExtractor();
     let r = await run([dir, '--inbox', inbox], { extractClip: fx.extractClip });
@@ -157,7 +169,7 @@ test('an old version-1 cache is re-read, not trusted', async () => {
 });
 
 test('one failing clip: a .partial export, no inbox copy, exit 1, scan date from the good clips', async () => {
-  const dir = fixture(['01-a.mp4', '03-c.mp4']), inbox = mkdtempSync(join(tmpdir(), 'pogo-inbox-'));
+  const dir = fixture(['01-a.mp4', '03-c.mp4']), inbox = scratchDir();
   try {
     const bad = join(dir, '02-bad.mp4');
     writeFileSync(bad, 'garbage');
@@ -202,7 +214,7 @@ test('every clip failing writes nothing and exits 1', async () => {
 });
 
 test('a parent folder with two account subfolders makes one export per account; several folders work too', async () => {
-  const parent = mkdtempSync(join(tmpdir(), 'pogo-parent-')), other = fixture(['01-x.mp4']);
+  const parent = scratchDir(), other = fixture(['01-x.mp4']);
   try {
     fixture(['01-a.mp4'], { under: join(parent, 'alpha') });
     fixture(['01-b.mp4', '02-b.mp4'], { under: join(parent, 'beta') });
@@ -219,7 +231,7 @@ test('a parent folder with two account subfolders makes one export per account; 
 });
 
 test('--account names the export; --out-dir must exist; a folder with no clips exits 2', async () => {
-  const dir = fixture(['01-a.mp4']), out = mkdtempSync(join(tmpdir(), 'pogo-out-')), none = mkdtempSync(join(tmpdir(), 'pogo-none-'));
+  const dir = fixture(['01-a.mp4']), out = scratchDir(), none = scratchDir();
   try {
     let r = await run([dir, '--account', 'greg', '--out-dir', out], { extractClip: fakeExtractor().extractClip });
     assert.equal(r.code, 0, r.log);
@@ -243,5 +255,83 @@ test('shadow clip in the folder marks the matching row in the CSV', async () => 
     const csv = csvLines(join(dir, `poke-genie-export-${dir.split(/[\\/]/).pop()}-2026-03-05.csv`));
     const col = csv[0].split(',').indexOf('Shadow/Purified');
     assert.deepEqual(csv.slice(1).map((l) => l.split(',')[col]), ['1', '']);
+  } finally { cleanup(dir); }
+});
+
+test('a quoted drive root reaches the parser as C:" and is split back into C:\\ and the words after it', () => {
+  assert.deepEqual(expandArgs(['C:" --bogus']), ['C:\\', '--bogus']);
+  assert.deepEqual(expandArgs(['C:\\" --force --quiet']), ['C:\\', '--force', '--quiet']);
+  assert.deepEqual(expandArgs(['C:"']), ['C:\\']);
+  assert.deepEqual(parseArgs(['C:"']).folders, ['C:\\']);
+  assert.throws(() => parseArgs(['C:" --bogus']), /unknown option --bogus/);
+  assert.deepEqual(expandArgs(['D:\\clips', '--force']), ['D:\\clips', '--force']);
+});
+
+test('--account with several accounts, or two accounts with one name, is refused before any work', async () => {
+  const parent = scratchDir(), other = scratchDir();
+  try {
+    fixture(['01-a.mp4'], { under: join(parent, 'alpha') });
+    fixture(['01-b.mp4'], { under: join(parent, 'beta') });
+    const fx = fakeExtractor();
+    let r = await run([parent, '--account', 'greg'], { extractClip: fx.extractClip });
+    assert.equal(r.code, 2);
+    assert.match(r.log, /--account greg names one account but 2 were found \(alpha, beta\)/);
+    // two folders that both resolve to the account name "same"
+    const one = fixture(['01-a.mp4'], { under: join(other, 'x', 'same') }), two = fixture(['01-b.mp4'], { under: join(other, 'y', 'same') });
+    r = await run([one, two], { extractClip: fx.extractClip });
+    assert.equal(r.code, 2);
+    assert.match(r.log, /same export name \(same\)/);
+    assert.deepEqual(fx.calls, [], 'nothing was read');
+  } finally { cleanup(parent, other); }
+});
+
+test('a v2 cache without readings is re-read, not a crash', async () => {
+  const dir = fixture(['01-a.mp4']);
+  try {
+    const st = statSync(join(dir, '01-a.mp4'));
+    writeFileSync(join(dir, '01-a.mp4.extract.json'), JSON.stringify({ version: CACHE_VERSION, size: st.size, mtimeMs: st.mtimeMs, fps: 5, codeHash: 'H1' }));
+    const fx = fakeExtractor();
+    const r = await run([dir], { extractClip: fx.extractClip });
+    assert.equal(r.code, 0, r.log);
+    assert.deepEqual(fx.calls, ['01-a.mp4']);
+    assert.match(r.log, /cache is incomplete/);
+  } finally { cleanup(dir); }
+});
+
+test('a complete run removes a stale .partial export of the same recording', async () => {
+  const dir = fixture(['01-a.mp4', '02-b.mp4']);
+  try {
+    await run([dir], { extractClip: fakeExtractor({ fail: ['02-b.mp4'] }).extractClip });
+    const stem = `poke-genie-export-${dir.split(/[\\/]/).pop()}-2026-03-05`;
+    assert.ok(existsSync(join(dir, `${stem}.partial.csv`)));
+    const r = await run([dir], { extractClip: fakeExtractor().extractClip });
+    assert.equal(r.code, 0, r.log);
+    assert.ok(!existsSync(join(dir, `${stem}.partial.csv`)));
+    assert.ok(!existsSync(join(dir, `${stem}.partial.review.json`)));
+    assert.ok(existsSync(join(dir, `${stem}.csv`)));
+    assert.match(r.log, /removed the stale partial export/);
+  } finally { cleanup(dir); }
+});
+
+test('a write that fails is reported per account, the other accounts still run, exit 1', async () => {
+  const parent = scratchDir();
+  try {
+    fixture(['01-a.mp4'], { under: join(parent, 'alpha') });
+    fixture(['01-b.mp4'], { under: join(parent, 'beta') });
+    // a directory squatting on alpha's CSV name makes the write fail the way a locked file does
+    mkdirSync(join(parent, 'alpha', 'poke-genie-export-alpha-2026-03-05.csv'));
+    const r = await run([parent], { extractClip: fakeExtractor().extractClip });
+    assert.equal(r.code, 1);
+    assert.match(r.log, /could not write .*poke-genie-export-alpha-2026-03-05\.csv: .*\(is it open in Excel\?\)/);
+    assert.ok(existsSync(join(parent, 'beta', 'poke-genie-export-beta-2026-03-05.csv')), 'the other account was still exported');
+  } finally { cleanup(parent); }
+});
+
+test('the summary reports an unmatched join', async () => {
+  const dir = fixture(['01-a.mp4', '02-b.mp4']);
+  try {
+    const readings = { '01-a.mp4': [{ name: 'A', cp: 1 }, { name: 'C', cp: 300 }], '02-b.mp4': [{ name: 'C', cp: 308 }, { name: 'D', cp: 4 }] };
+    const r = await run([dir], { extractClip: fakeExtractor({ readings }).extractClip });
+    assert.match(r.log, /01-a\.mp4 → 02-b\.mp4: no overlap found \(tail C 300, head C 308\)[^\n]*may be listed twice/);
   } finally { cleanup(dir); }
 });

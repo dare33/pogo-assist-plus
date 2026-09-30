@@ -74,16 +74,22 @@ export function overlapInfo(tailRows, headRows, { max = 10 } = {}) {
     for (let i = 0; i < k && ok; i++) ok = sameMon(tailRows[tailRows.length - k + i], headRows[i]);
     if (ok) consistent.push(k);
   }
-  if (!consistent.length) return { k: 0, weak: false };
+  if (!consistent.length) return { k: 0, weak: false, ks: [] };
   const k = consistent[0];
   let weak = consistent.length > 1;
   for (let i = 0; i < k; i++) weak ||= weakPair(tailRows[tailRows.length - k + i], headRows[i]);
-  return { k, weak };
+  return { k, weak, ks: consistent };
 }
 
+/**
+ * When several overlaps fit, the smallest is dropped but rows up to the largest may be repeats:
+ * head rows k..largest-1 are Pokémon that might be listed twice, so they and the tail rows they
+ * would repeat are flagged. `ks` lists every consistent overlap length.
+ */
 export const overlapLength = (tailRows, headRows, opts) => overlapInfo(tailRows, headRows, opts).k;
 
-const richness = (r) => [r.ivs ? 1 : 0, has(r.hp) ? 1 : 0, r.frames?.length ?? 0];
+// Settled IVs beat a lenient guess whatever the frame count, then any HP, then frames.
+const richness = (r) => [r.ivs ? (ivsLenient(r) ? 1 : 2) : 0, has(r.hp) ? 1 : 0, r.frames?.length ?? 0];
 const richer = (a, b) => { const x = richness(a), y = richness(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
 
 /**
@@ -93,14 +99,23 @@ const richer = (a, b) => { const x = richness(a), y = richness(b); for (let i = 
 export function combine(a, b) {
   const bFuller = richer(b, a);
   const keep = { ...(bFuller ? b : a) }, other = bFuller ? a : b;
-  // HP: a read beats a computed one, and any HP beats none.
-  let computed = hpLenient(keep);
-  if (has(other.hp) && (!has(keep.hp) || (computed && !hpLenient(other)))) { keep.hp = other.hp; computed = hpLenient(other); }
+  // The IV reliability of the row whose IVs are kept decides whether the other row's doubts apply.
+  const ivsGuessed = ivsLenient(keep.ivs || !other.ivs ? keep : other);
+  // HP: a read beats a computed one, and any HP beats none. Replacing a computed HP with a
+  // different read one leaves IVs and level solved for the old HP, so that is flagged, not hidden.
+  let computed = hpLenient(keep), mismatch = null;
+  if (has(other.hp) && (!has(keep.hp) || (computed && !hpLenient(other)))) {
+    if (has(keep.hp) && keep.hp !== other.hp) mismatch = `hp-mismatch:${keep.hp}/${other.hp}`;
+    keep.hp = other.hp; computed = hpLenient(other);
+  }
   if (!keep.ivs && other.ivs) keep.ivs = other.ivs;
   const flags = new Set([...(a.flags ?? []), ...(b.flags ?? [])]);
-  if (keep.ivs) for (const f of flags) if (f.startsWith('ambiguous-ivs') || f === 'ivs-unread' || f === 'no-level-fits') flags.delete(f);
+  // no-level-fits is never pruned: a misread on either row stays visible.
+  if (keep.ivs) for (const f of flags) if (f.startsWith('ambiguous-ivs') || f === 'ivs-unread') flags.delete(f);
+  if (keep.ivs && !ivsGuessed) for (const f of flags) if (f === 'bars-unsettled' || f === 'ivs-disagree' || f.startsWith('ivs-corrected-from-')) flags.delete(f);
   if (has(keep.hp)) flags.delete('hp-unread');
   if (has(keep.hp) && computed) flags.add('hp-computed'); else flags.delete('hp-computed');
+  if (mismatch) flags.add(mismatch);
   keep.frames = [...(a.frames ?? []), ...(b.frames ?? [])];
   keep.flags = [...flags];
   return keep;
@@ -123,19 +138,30 @@ export function mergeClips(clips, { maxOverlap = 10 } = {}) {
     const out = [];
     for (const c of tagged.filter((x) => x.kind === kind)) {
       let rows = c.rows;
-      if (out.length) {
-        const { k, weak } = overlapInfo(out, rows, { max: maxOverlap });
-        if (k) {
-          // The tail row may itself belong to an earlier clip (a clip that was wholly overlap).
-          const before = out[out.length - 1].clip;
+      if (out.length && rows.length) {
+        const { k, weak, ks } = overlapInfo(out, rows, { max: maxOverlap });
+        // The tail row may itself belong to an earlier clip (a clip that was wholly overlap).
+        const before = out[out.length - 1].clip;
+        if (!k) {
+          // Restarting on the last Pokémon seen should always overlap, so nothing matching
+          // means a misread at the join and probably a Pokémon listed twice.
+          boundaries.push({ before, after: c.name, dropped: 0, unmatched: true, tail: nameCp(out[out.length - 1]), head: nameCp(rows[0]) });
+        } else {
+          const largest = ks[ks.length - 1];
           const droppedRows = rows.slice(0, k).map(nameCp);
+          const mark = (r) => { if (!r.flags.includes('boundary-weak')) r.flags.push('boundary-weak'); };
           for (let i = 0; i < k; i++) {
             const at = out.length - k + i, clipOf = out[at].clip;
             out[at] = combine(out[at], rows[i]);
             out[at].clip = clipOf;
-            if (weak && !out[at].flags.includes('boundary-weak')) out[at].flags.push('boundary-weak');
+            if (weak) mark(out[at]);
           }
-          boundaries.push({ before, after: c.name, dropped: k, weak, droppedRows });
+          const maybeRepeated = rows.slice(k, largest).map(nameCp);
+          if (ks.length > 1) {
+            for (const r of rows.slice(k, largest)) mark(r);
+            for (const r of out.slice(out.length - largest)) mark(r);
+          }
+          boundaries.push({ before, after: c.name, dropped: k, weak, droppedRows, alternatives: ks, maybeRepeated });
           rows = rows.slice(k);
         }
       }

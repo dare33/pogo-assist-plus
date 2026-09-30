@@ -31,24 +31,33 @@ export async function* pngFrames(dir, fps) {
 
 export const countPngs = (dir) => readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.png')).length;
 
-/** Frame count to expect from the clip's duration (ffmpeg -i prints it), or null when unknown. */
-function estimateFrames(video, fps, ffmpegPath) {
+/** The clip's duration in seconds as ffmpeg -i reports it, or null when unknown. */
+function probeDuration(video, ffmpegPath) {
   const r = spawnSync(ffmpegPath, ['-hide_banner', '-i', video], { encoding: 'utf8' });
   const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(`${r.stderr ?? ''}`);
-  return m ? Math.ceil((Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])) * fps) : null;
+  return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
 }
 
 /**
  * Frames of a whole recording, decoded a window at a time so a long clip never needs its whole
  * decode on disk. Index and time continue across windows (time = start + i/fps) and labels are
  * the running frame number, the same as a single full decode would give.
+ * With a known duration the loop runs until the start reaches it, so a window with no decodable
+ * frames (variable frame rate, a damaged stretch) does not silently drop the rest of the clip;
+ * with an unknown duration the first empty window is the end.
  */
-async function* windowedFrames(video, dir, fps, ffmpegPath, counter, windowSeconds) {
+async function* windowedFrames(video, dir, fps, ffmpegPath, counter, windowSeconds, duration, warn) {
   for (let w = 0; ; w++) {
     const start = w * windowSeconds;
+    if (duration !== null && start >= duration) return;
     decodeFrames(video, dir, fps, ffmpegPath, { start, duration: windowSeconds });
     const files = readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.png')).sort();
-    if (!files.length) return;
+    if (!files.length) {
+      if (duration === null) return;
+      // Under a second of footage left is just the tail of the duration rounding up.
+      if (duration - start > 1) warn(`no frames decoded from ${start} s to ${Math.min(start + windowSeconds, duration).toFixed(1)} s of ${video}`);
+      continue;
+    }
     for (let i = 0; i < files.length; i++) {
       const index = counter.frames++;
       yield { index, time: start + i / fps, label: `f${String(index + 1).padStart(4, '0')}.png`, image: readPng(join(dir, files[i])) };
@@ -62,7 +71,7 @@ async function* windowedFrames(video, dir, fps, ffmpegPath, counter, windowSecon
  * afterwards. `ocr` and `gm` are made once by the caller so a batch reuses them.
  * @returns { rows, review, unmatched, readings, frames }
  */
-export async function extractVideo(video, { fps, ffmpeg, ocr, gm, framesDir = null, onProgress = () => {}, windowSeconds = WINDOW_SECONDS }) {
+export async function extractVideo(video, { fps, ffmpeg, ocr, gm, framesDir = null, onProgress = () => {}, windowSeconds = WINDOW_SECONDS, warn = (m) => console.error(`warning: ${m}`) }) {
   if (framesDir) {
     decodeFrames(video, framesDir, fps, ffmpeg);
     const total = countPngs(framesDir);
@@ -73,8 +82,9 @@ export async function extractVideo(video, { fps, ffmpeg, ocr, gm, framesDir = nu
   const temp = mkdtempSync(join(tmpdir(), 'pogo-extract-'));
   const counter = { frames: 0 };
   try {
-    const total = estimateFrames(video, fps, ffmpeg);
-    const r = await extract(windowedFrames(video, temp, fps, ffmpeg, counter, windowSeconds), { ocr, gm, total, onProgress });
+    const duration = probeDuration(video, ffmpeg);
+    const total = duration === null ? null : Math.ceil(duration * fps);
+    const r = await extract(windowedFrames(video, temp, fps, ffmpeg, counter, windowSeconds, duration, warn), { ocr, gm, total, onProgress });
     if (!counter.frames) throw new Error(`ffmpeg produced no frames from ${video}`);
     return { rows: r.rows, review: r.review, unmatched: r.unmatched, readings: r.readings, frames: counter.frames };
   } finally {

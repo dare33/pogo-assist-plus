@@ -140,7 +140,16 @@ async function runExtraction(files, kinds) {
     for (const c of merged.clips) if (c.kind !== 'normal') notes.push(`"${c.name}" was treated as a ${c.kind}-filtered pass: matching Pokémon are marked in the Shadow column.`);
     const r = merged.reconciled;
     if (r.appended) notes.push(`${r.appended} Pokémon appeared only in the shadow/purified pass and were added to the end of the list.`);
-    for (const b of merged.boundaries) notes.push(`${b.before} → ${b.after}: ${b.dropped} repeated Pokémon dropped (${b.droppedRows.map((x) => `${x.name} ${x.cp}`).join(', ')})${b.weak ? '; this join is weak, so those rows are flagged boundary-weak: check them' : ''}.`);
+    const names = (list) => list.map((x) => `${x.name} ${x.cp}`).join(', ');
+    for (const b of merged.boundaries) {
+      if (b.unmatched) { notes.push(`${b.before} → ${b.after}: no overlap found (tail ${b.tail.name} ${b.tail.cp}, head ${b.head.name} ${b.head.cp}). If you restarted on the last Pokémon you saw, it may be listed twice: check.`); continue; }
+      let n = `${b.before} → ${b.after}: ${b.dropped} repeated Pokémon dropped (${names(b.droppedRows)})`;
+      if (b.maybeRepeated.length) n += `; ${b.maybeRepeated.length} more may be repeats: ${names(b.maybeRepeated)}. Check them (flagged boundary-weak)`;
+      else if (b.weak) n += '; this join is weak, so those rows are flagged boundary-weak: check them';
+      notes.push(n + '.');
+    }
+    const mismatched = merged.rows.filter((row) => row.flags.some((f) => f.startsWith('hp-mismatch')));
+    if (mismatched.length) notes.push(`${mismatched.length} Pokémon had a computed HP replaced by a different read HP when clips were joined (flag hp-mismatch); their IVs and level were solved for the old HP, so check them: ${names(mismatched)}.`);
     if (r.weak) notes.push(`${r.weak} shadow/purified Pokémon were matched on incomplete HP or IV readings and are flagged shadow-match-weak: check them.`);
     if (r.ambiguous) notes.push(`${r.ambiguous} shadow/purified Pokémon matched several identical rows; the first was marked and flagged shadow-match-ambiguous.`);
     if (merged.unmatched.length) notes.push(`${merged.unmatched.length} frame${merged.unmatched.length === 1 ? '' : 's'} showed a CP but no recognisable species name (a nickname, or a garbled read); they are listed in the review JSON, not in the table.`);

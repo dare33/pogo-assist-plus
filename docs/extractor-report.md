@@ -343,3 +343,11 @@ Numbers after the fold, same three clips: 48 merged rows, 4 boundary duplicates 
 `02-original.mp4` alone gives 48 rows and the same CSV whether the window is 60, 10 or 7 seconds
 (212 frames each, last frame f0212 at 42.2 s); its 42 s fit in one 60 s window, so the shorter
 windows were used to exercise window edges.
+
+Second review round (Opus: mergeable with fixes; Sol 5.6: not mergeable): folded the possible-repeat
+flagging for overlaps that fit at several lengths, reporting of joins with no overlap, hp-mismatch and
+no-level-fits handling when rows are combined, refusal of duplicate export names and of `--account`
+with several accounts, a wider cache key (extra source files, library versions, full language file),
+stale `.partial` cleanup, per-account write failures, tests under `scratch/`, windowed decode that
+continues through an empty window, and the launcher's quoted-drive-root handling. Same three clips:
+48 rows, CSV SHA-256 `0291af71...b9a3` (unchanged); 118 tests pass, 3 skip.

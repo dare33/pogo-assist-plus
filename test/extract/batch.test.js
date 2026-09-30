@@ -44,13 +44,13 @@ test('sameMon tolerates a missing HP, not a different form or settled IVs', () =
 test('overlapLength takes the smallest consistent k; weak when several fit or a pair is incomplete', () => {
   const seq = (from, to) => Array.from({ length: to - from }, (_, i) => row('Meltan', 100 + from + i));
   assert.equal(overlapLength(seq(0, 5), seq(10, 15)), 0);
-  assert.deepEqual(overlapInfo(seq(0, 5), seq(4, 9)), { k: 1, weak: false });
-  assert.deepEqual(overlapInfo(seq(0, 8), seq(4, 12)), { k: 4, weak: false });
+  assert.deepEqual(overlapInfo(seq(0, 5), seq(4, 9)), { k: 1, weak: false, ks: [1] });
+  assert.deepEqual(overlapInfo(seq(0, 8), seq(4, 12)), { k: 4, weak: false, ks: [4] });
   assert.equal(overlapLength(seq(0, 30), seq(0, 30), { max: 10 }), 0); // tail 20..29 is not head 0..9
   // A run of identical rows: k = 1, 2, ... are all consistent, so the fewest is dropped and it is weak.
   const same = Array.from({ length: 20 }, () => row('Meltan', 150));
-  assert.deepEqual(overlapInfo(same, same, { max: 10 }), { k: 1, weak: true });
-  assert.deepEqual(overlapInfo(same, same, { max: 3 }), { k: 1, weak: true });
+  assert.deepEqual(overlapInfo(same, same, { max: 10 }), { k: 1, weak: true, ks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] });
+  assert.deepEqual(overlapInfo(same, same, { max: 3 }), { k: 1, weak: true, ks: [1, 2, 3] });
   assert.equal(overlapLength([], same), 0);
   // A distinct overlap with an unread HP or IVs is weak too.
   assert.equal(overlapInfo([row('A', 1), row('B', 2, { hp: null })], [row('B', 2), row('C', 3)]).weak, true);
@@ -60,7 +60,7 @@ test('mergeClips drops a 4-row boundary overlap unflagged and lists what was dro
   const mk = (from, to, frame) => Array.from({ length: to - from }, (_, i) => row('Meltan', 100 + from + i, { frame }));
   const m = mergeClips([clip('01.mp4', mk(1, 7, 'a')), clip('02.mp4', mk(3, 8, 'b'))]);
   assert.deepEqual(m.rows.map((r) => r.cp), [101, 102, 103, 104, 105, 106, 107]);
-  assert.deepEqual(m.boundaries, [{ before: '01.mp4', after: '02.mp4', dropped: 4, weak: false, droppedRows: [103, 104, 105, 106].map((cp) => ({ name: 'Meltan', cp })) }]);
+  assert.deepEqual(m.boundaries, [{ before: '01.mp4', after: '02.mp4', dropped: 4, weak: false, droppedRows: [103, 104, 105, 106].map((cp) => ({ name: 'Meltan', cp })), alternatives: [4], maybeRepeated: [] }]);
   assert.ok(m.rows.every((r) => !r.flags.length));
   assert.equal(m.rows[2].frames.length, 2, 'frames of both rows are kept');
   assert.deepEqual([...new Set(m.rows[2].frames.map((f) => f.clip))].sort(), ['01.mp4', '02.mp4']);
@@ -84,7 +84,7 @@ test('mergeClips never deduplicates identical rows away from a boundary', () => 
   const b = [row('Mew', 500), row('Mew', 500)];
   const m = mergeClips([clip('01.mp4', a), clip('02.mp4', b)]);
   assert.equal(m.rows.length, 5);
-  assert.deepEqual(m.boundaries, []);
+  assert.deepEqual(m.boundaries.map((b) => [b.dropped, b.unmatched]), [[0, true]]);
 });
 
 test('mergeClips chains three normal clips and reindexes 1..n', () => {
@@ -164,7 +164,7 @@ test('two different Mew 500 at a join are not merged', () => {
   const x = row('Mew', 500, { hp: 90, ivs: { atk: 0, def: 0, hp: 0 } }), y = row('Mew', 500, { hp: 95, ivs: { atk: 15, def: 15, hp: 15 } });
   const m = mergeClips([clip('01.mp4', [row('A', 1), x]), clip('02.mp4', [y, row('B', 2)])]);
   assert.equal(m.rows.length, 4);
-  assert.deepEqual(m.boundaries, []);
+  assert.deepEqual(m.boundaries.map((b) => [b.dropped, b.unmatched]), [[0, true]]);
 });
 
 test('identical Meltans at a join drop the fewest and are flagged boundary-weak', () => {
@@ -173,7 +173,9 @@ test('identical Meltans at a join drop the fewest and are flagged boundary-weak'
   assert.deepEqual(m.rows.map((r) => r.name), ['Xurkitree', 'Meltan', 'Meltan', 'Meltan', 'Yveltal']);
   assert.equal(m.boundaries[0].dropped, 1);
   assert.equal(m.boundaries[0].weak, true);
-  assert.deepEqual(m.rows.map((r) => r.flags.includes('boundary-weak')), [false, false, true, false, false]);
+  assert.deepEqual(m.rows.map((r) => r.flags.includes('boundary-weak')), [false, true, true, true, false]);
+  assert.deepEqual(m.boundaries[0].alternatives, [1, 2]);
+  assert.deepEqual(m.boundaries[0].maybeRepeated, [{ name: 'Meltan', cp: 150 }]);
 });
 
 test('boundary before names the clip the tail row belongs to', () => {
@@ -187,7 +189,8 @@ test('combine drops flags that the other row has made stale', () => {
   const bare = row('Mew', 500, { ivs: null, hp: null, flags: ['ambiguous-ivs:3-fit', 'hp-unread', 'no-level-fits', 'ivs-unread'] });
   const full = row('Mew', 500, { flags: ['cp-chosen-500-over-501'] });
   for (const c of [combine(bare, full), combine(full, bare)]) {
-    assert.deepEqual(c.flags, ['cp-chosen-500-over-501']);
+    assert.deepEqual(c.flags.filter((f) => f !== 'no-level-fits'), ['cp-chosen-500-over-501']);
+    assert.ok(c.flags.includes('no-level-fits'), 'no-level-fits is never pruned');
     assert.equal(c.hp, 100);
   }
   // A read HP replaces a computed one, and hp-computed goes; a computed HP alone keeps its flag.
@@ -216,4 +219,45 @@ test('a strong shadow match is preferred over a weak candidate', () => {
   const m = mergeClips([clip('01.mp4', [weakRow, strongRow]), clip('02-shadow.mp4', [row('Mew', 500)])]);
   assert.deepEqual(m.rows.map((r) => r.shadow), [undefined, 1]);
   assert.deepEqual(m.reconciled, { matched: 1, appended: 0, ambiguous: 0, weak: 0 });
+});
+
+test('A1 probe: several overlaps fit, so rows up to the largest are flagged and listed as possible repeats', () => {
+  const X = row('Xurkitree', 3028), Y = row('Yveltal', 3000), Z = () => row('Zapdos', 1969), M = () => row('Meltan', 150);
+  const m = mergeClips([clip('01.mp4', [X, M(), Z(), M()]), clip('02.mp4', [M(), Z(), M(), Y])]);
+  const b = m.boundaries[0];
+  assert.equal(b.dropped, 1);
+  assert.deepEqual(b.alternatives, [1, 3]);
+  assert.deepEqual(b.droppedRows, [{ name: 'Meltan', cp: 150 }]);
+  assert.deepEqual(b.maybeRepeated, [{ name: 'Zapdos', cp: 1969 }, { name: 'Meltan', cp: 150 }]);
+  assert.equal(b.weak, true);
+  assert.deepEqual(m.rows.map((r) => r.name), ['Xurkitree', 'Meltan', 'Zapdos', 'Meltan', 'Zapdos', 'Meltan', 'Yveltal']);
+  assert.deepEqual(m.rows.map((r) => r.flags.includes('boundary-weak')), [false, true, true, true, true, true, false]);
+});
+
+test('A2: a join where nothing matches is recorded as unmatched with tail and head', () => {
+  const A = row('A', 1), B = row('B', 2), D = row('D', 4);
+  const m = mergeClips([clip('01.mp4', [A, B, row('C', 300)]), clip('02.mp4', [row('B', 2), row('C', 308), D])]);
+  assert.equal(m.rows.length, 6);
+  assert.deepEqual(m.boundaries, [{ before: '01.mp4', after: '02.mp4', dropped: 0, unmatched: true, tail: { name: 'C', cp: 300 }, head: { name: 'B', cp: 2 } }]);
+});
+
+test('A3: a read HP replacing a computed HP that differs is flagged hp-mismatch', () => {
+  const computed = row('Mew', 500, { hp: 99, flags: ['hp-computed'] });
+  const c = combine(computed, row('Mew', 500, { hp: 100, ivs: null, flags: [] }));
+  assert.equal(c.hp, 100);
+  assert.ok(c.flags.includes('hp-mismatch:99/100'));
+  assert.ok(!c.flags.includes('hp-computed'));
+  assert.ok(!combine(computed, row('Mew', 500, { hp: 99 })).flags.some((f) => f.startsWith('hp-mismatch')), 'equal HP: no mismatch');
+});
+
+test('A4: settled IVs win over a lenient guess, and the guess flags of the loser go', () => {
+  const guess = row('Mew', 500, { ivs: { atk: 1, def: 2, hp: 3 }, flags: ['bars-unsettled'], frames: 50 });
+  const settled = row('Mew', 500, { frames: 1, flags: ['ivs-disagree'] });
+  const settledClean = row('Mew', 500, { frames: 1 });
+  const c = combine(guess, settledClean);
+  assert.deepEqual(c.ivs, IVS);
+  assert.ok(!c.flags.includes('bars-unsettled'));
+  // Both orders keep the settled row; its own lenient flag stays when its own IVs are the doubtful ones.
+  assert.deepEqual(combine(settledClean, guess).ivs, IVS);
+  assert.ok(combine(guess, settled).flags.includes('ivs-disagree'));
 });

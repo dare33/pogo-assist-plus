@@ -44,7 +44,7 @@ const gm = loadGamemaster();
 let ocr = null, result;
 try {
   ocr = await createOcr(createWorker, { langPath: join(ROOT, 'data/tessdata'), cachePath: join(ROOT, 'data/tessdata'), gzip: false });
-  const onProgress = ({ done, total, found }) => { if (!quiet && done % 25 === 0) console.error(`  ${done}/${total} frames, ${found} Pokémon so far`); };
+  const onProgress = ({ done, total, found }) => { if (!quiet && done % 25 === 0) console.error(`  ${done}/${total ?? '?'} frames, ${found} Pokémon so far`); };
   if (isDir) {
     const total = countPngs(input);
     result = { ...(await extract(pngFrames(input, fps), { ocr, gm, total, onProgress })), frames: total };

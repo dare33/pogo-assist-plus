@@ -21,6 +21,8 @@ if not defined FOLDER goto :end
 rem A pasted path may carry quotes or a trailing backslash (but keep a drive root such as C:\).
 set "FOLDER=%FOLDER:"=%"
 if "%FOLDER:~-1%"=="\" if not "%FOLDER:~1%"==":\" set "FOLDER=%FOLDER:~0,-1%"
+rem A quoted drive root ("C:\") would end in \" and swallow the quote; "C:\." is the same folder and quotes safely.
+if "%FOLDER:~-2%"==":\" set "FOLDER=%FOLDER%."
 node "%~dp0scripts\extract-box.mjs" %INBOXARG% "%FOLDER%"
 goto :end
 
