@@ -29,7 +29,10 @@ npm test
 ```
 
 Node 20 or newer (the test glob needs 21+). ffmpeg for decoding: `winget install Gyan.FFmpeg`
-on Windows, `brew install ffmpeg` on a Mac, or set `FFMPEG` to any ffmpeg binary. Then copy the
+on Windows, `brew install ffmpeg` on a Mac, or set `FFMPEG` to any ffmpeg binary. ffmpeg is found
+automatically from PATH, winget, or the imageio-ffmpeg Python package; `--ffmpeg PATH` overrides.
+For a folder of several clips (a whole box) use `node scripts/extract-box.mjs <folder>` or drag
+the folder onto `extract-box.cmd`; see `docs/whole-box.md`. Then copy the
 recordings from Drive into `recordings/` (gitignored) and run:
 
 ```bash

@@ -7,11 +7,12 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { loadGamemaster } from '../../src/node/load.js';
 import { createOcr } from '../../src/extract/ocr.js';
 import { extract, toPokeGenieCsv } from '../../src/extract/pipeline.js';
 import { importPokeGenie } from '../../src/import/pokegenie.js';
+import { findFfmpeg as locateFfmpeg } from '../../src/node/ffmpeg.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const path = (p) => join(root, p);
@@ -30,12 +31,6 @@ const ACCEPTANCE = [
   { name: 'Xurkitree', form: '', cp: 2223, hp: 125, ivs: null, level: null },
 ];
 
-function findFfmpeg() {
-  if (process.env.FFMPEG && existsSync(process.env.FFMPEG)) return process.env.FFMPEG;
-  if (spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0) return 'ffmpeg';
-  return null;
-}
-
 /** Directory of 5 fps PNG frames for a recording, or null when neither frames nor a decodable recording exist. Cached per name. */
 const framesCache = new Map();
 function framesFor(name, temps) {
@@ -48,7 +43,7 @@ function resolveFrames(name, temps) {
   const dir = path(`frames/${name}`);
   if (existsSync(dir) && readdirSync(dir).some((f) => f.endsWith('.png'))) return dir;
   const video = path(`recordings/${name}.mp4`);
-  const ffmpeg = findFfmpeg();
+  const ffmpeg = locateFfmpeg()?.path ?? null;
   if (!existsSync(video) || !ffmpeg) return null;
   const tmp = mkdtempSync(join(tmpdir(), `pogo-test-${name}-`));
   temps.push(tmp);

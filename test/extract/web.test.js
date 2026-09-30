@@ -35,3 +35,31 @@ test('formatElapsed renders m:ss', async () => {
   assert.equal(formatElapsed(65), '1:05');
   assert.equal(formatElapsed(3661), '61:01');
 });
+
+test('merged export filenames use the date, from a Date or a string', async () => {
+  const { mergedCsvFilename, mergedReviewFilename } = await import('../../web/extract-core.js');
+  assert.equal(mergedCsvFilename('2026-09-30'), 'poke-genie-export-2026-09-30.csv');
+  assert.equal(mergedReviewFilename('2026-09-30'), 'poke-genie-export-2026-09-30.review.json');
+  assert.equal(mergedCsvFilename(new Date(2026, 8, 5)), 'poke-genie-export-2026-09-05.csv');
+});
+
+test('decodeFrames failure text names the file and the three fixes', async () => {
+  const { decodeFrames } = await import('../../web/extract-core.js');
+  // Drive the private message builder through a stub document whose video element errors on load.
+  const listeners = {};
+  const video = { error: { code: 4 }, addEventListener: (e, f) => { listeners[e] = f; }, removeEventListener() {}, set src(_) { queueMicrotask(() => listeners.error?.()); } };
+  globalThis.document = { createElement: () => video };
+  globalThis.URL.createObjectURL = () => 'blob:x';
+  globalThis.URL.revokeObjectURL = () => {};
+  try {
+    await assert.rejects(decodeFrames({ name: 'my clip.mp4' }, 5).next(), (e) => {
+      assert.match(e.message, /"my clip\.mp4"/);
+      assert.match(e.message, /HEVC/);
+      assert.match(e.message, /Safari/);
+      assert.match(e.message, /extract-box\.cmd/);
+      assert.match(e.message, /Most Compatible/);
+      assert.ok(e.message.split(/\s+/).length < 110);
+      return true;
+    });
+  } finally { delete globalThis.document; }
+});

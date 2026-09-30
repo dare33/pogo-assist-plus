@@ -1,5 +1,28 @@
 # Status — Pogo Assist+
 
+**30 Sep 2026: batch mode for a whole box.** `node scripts/extract-box.mjs <folder>` (or drag the
+folder onto `extract-box.cmd`) reads every clip in an account folder, drops the Pokémon repeated at
+clip joins, marks the Shadow column from a `shadow`-named clip, and writes one Poke Genie-layout
+CSV plus a review JSON (optionally copied to an inbox). ffmpeg is found automatically (PATH,
+winget, imageio-ffmpeg). Per-clip results are cached beside the clips. The browser page takes
+several clips and merges them the same way. Protocol and summary lines: `docs/whole-box.md`.
+New modules: `src/extract/batch.js` (pure merge), `src/node/ffmpeg.js`, `src/node/extract-video.js`.
+Tests: 85 passing, 3 skipped (`npm test`).
+
+**Verified (30 Sep, Windows, Node 24, ffmpeg found as imageio-ffmpeg with no `FFMPEG` set):**
+three clips (trimmed, original, trimmed again named `03-shadow-trimmed.mp4`) in one folder gave
+48 rows: 4 boundary duplicates dropped at 01 to 02, shadow pass 4 matched, 0 appended, 0
+ambiguous, and exactly those four rows (Mewtwo 3673, Xurkitree 3028, Zamazenta 2692, Zamazenta
+2651) have Shadow/Purified = 1. Running `02-original.mp4` alone gives the same 48 rows. A second
+run reported all three clips `cached` and wrote a byte-identical CSV (same SHA-256); running on the parent folder
+processed the `dare33` subfolder as the account; `extract-box.cmd` ran from PowerShell (also with
+`&`, spaces and parentheses in the folder path); `scripts/extract.mjs` on one clip still gives its 4 rows.
+
+**Not yet tested:** a real multi-clip whole-box recording (overlap dropping is tested on synthetic
+rows and on one exact-duplicate clip pair only); a real Shadow-filtered pass (the shadow clip in
+the run above is a copy of the trimmed clip); `.mov` and `.m4v` inputs; the browser multi-file
+path on a device (import-checked in Node only).
+
 **26 Sep 2026, overnight: the screen-recording extractor is built** on branch `extractor`
 (`src/extract/`, `scripts/extract.mjs`, `web/extract.html`, tests in `test/extract/`). Full
 results and method in `docs/extractor-report.md`; what to click in the morning in

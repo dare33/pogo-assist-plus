@@ -298,3 +298,28 @@ differences between ffmpeg PNGs and canvas frames, which only a device run can s
 | 20 | Meltan |  | 198 | 47 | 15/12/5 | 7 | 6 |  | not in export |
 
 20 rows: 0 match the export in every field, 0 differ, 20 are not in the export (caught after it, or the export scanned the Mega form).
+
+## Batch mode (30 Sep 2026)
+
+`scripts/extract-box.mjs` reads a folder of clips (one account), merges them with
+`src/extract/batch.js` and writes one Poke Genie-layout CSV; see `docs/whole-box.md`. Acceptance
+run on Windows, Node 24, ffmpeg found automatically as the imageio-ffmpeg binary (no `FFMPEG`
+variable), clips copied from the Drive recordings into a scratch folder:
+
+| Clip | Kind | Rows | Flagged | Time |
+|---|---|---|---|---|
+| `01-trimmed.mp4` (the trimmed Clipchamp copy) | normal | 4 | 0 | 3.3 s |
+| `02-original.mp4` (the iPhone original) | normal | 48 | 16 | 17.4 s |
+| `03-shadow-trimmed.mp4` (the trimmed copy again) | shadow | 4 | 0 | 3.0 s |
+
+- Boundary `01-trimmed.mp4 → 02-original.mp4`: 4 duplicate rows dropped. Merged total 48 rows,
+  equal to `02-original.mp4` alone through `scripts/extract.mjs` (48 rows, 16 flagged).
+- Shadow pass: 4 matched, 0 appended, 0 ambiguous. Exactly Mewtwo 3673, Xurkitree 3028,
+  Zamazenta 2692 and Zamazenta 2651 have `Shadow/Purified` = 1.
+- Second run: all three clips `cached`, CSV byte-identical (SHA-256 `0291af71...b9a3`, the
+  scan date is the newest clip's modified time, not the wall clock).
+- Run on the parent folder: the `dare33` subfolder was processed as the account.
+- Single-video CLI on `01-trimmed.mp4` with ffmpeg auto-found: the same 4 rows, 3.3 s.
+
+Limits: the overlap and shadow logic was exercised on synthetic rows and on this exact-duplicate
+clip pair; a real multi-clip recording and a real Shadow-filtered pass have not been run.

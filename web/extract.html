@@ -36,17 +36,17 @@
 
 <main>
   <section id="intro" class="intro">
-    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose or drop a screen recording">
-      <div class="drop-title">Drop your storage screen recording here</div>
-      <div class="drop-sub">or <label for="file" class="linkish">choose the video file</label>. It is decoded and read in your browser and never uploaded anywhere.</div>
-      <input type="file" id="file" accept="video/*,.mp4,.mov" hidden>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose or drop one or more screen recordings">
+      <div class="drop-title">Drop one or more recordings</div>
+      <div class="drop-sub">or <label for="file" class="linkish">choose the video files</label>. A clip whose filename contains "shadow" is treated as your Shadow-filtered pass. It is decoded and read in your browser and never uploaded anywhere.</div>
+      <input type="file" id="file" accept="video/*,.mp4,.mov" multiple hidden>
     </div>
     <div class="howto">
       <h2>How to record</h2>
       <ol>
         <li>Open a Pokémon in storage and tap Appraise so the Willow panel stays open.</li>
         <li>Swipe through storage, pausing about a second on each Pokémon.</li>
-        <li>Stop the recording and drop the file above.</li>
+        <li>Stop the recording and drop the file above. For a whole box, record it in several clips (restart from the last Pokémon you saw and the overlap is dropped) and drop them all together.</li>
       </ol>
       <p class="fine">The first run downloads the OCR language file (about 4 MB), then everything happens on this device. Already have a Poke Genie export instead? Use <a href="../index.html">the CSV importer</a>.</p>
     </div>
@@ -76,7 +76,7 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>#</th><th>Name</th><th>Form</th><th>CP</th><th>HP</th><th>IVs</th><th>Level</th><th>Flags</th><th>Frame</th></tr></thead>
+        <thead><tr><th>#</th><th>Name</th><th>Form</th><th>CP</th><th>HP</th><th>IVs</th><th>Level</th><th>Shadow</th><th>Flags</th><th>Clip · frame</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>

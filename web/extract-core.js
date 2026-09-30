@@ -21,11 +21,12 @@ function decodeErrorMessage(video, file) {
   const code = video.error?.code;
   const reason = code ? ` (${codeNames[code] ?? `code ${code}`})` : '';
   return new Error(
-    `This browser could not decode "${file.name}"${reason}. If the recording is HEVC/H.265 — common for `
-    + `iPhone recordings that have not been re-encoded — try AirDropping the original to a Mac or opening `
-    + `it on the iPhone itself (Safari decodes HEVC natively there), or re-export it as H.264 (WhatsApp and `
-    + `Clipchamp both do this automatically). You can also run "node scripts/extract.mjs <file>" from a `
-    + `checkout instead.`,
+    `This browser has no decoder for the video codec in "${file.name}"${reason}, most likely HEVC/H.265, `
+    + `the iPhone and iPad screen-recording default. Fixes: (1) open this same page in Safari on the iPhone or `
+    + `iPad and pick the recording from Photos, which decodes HEVC natively; (2) on a PC use the batch tool from `
+    + `the repository (extract-box.cmd, drop the folder of clips on it), which uses ffmpeg and handles HEVC; `
+    + `(3) with Settings > Camera > Formats set to "Most Compatible" a recording may come out as H.264 and play `
+    + `here - check one short clip first, this is not confirmed for screen recordings.`,
   );
 }
 
@@ -119,6 +120,21 @@ export function csvFilename(file) {
 /** `some-recording.mp4` -> `some-recording.review.json`. */
 export function reviewFilename(file) {
   return `${file.name.replace(/\.[^.]+$/, '')}.review.json`;
+}
+
+/** A local date as YYYY-MM-DD (a string is passed through). */
+function isoDay(date) {
+  if (typeof date === 'string') return date;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** Merged export of several clips, named as the batch CLI names its account exports. */
+export function mergedCsvFilename(date = new Date()) {
+  return `poke-genie-export-${isoDay(date)}.csv`;
+}
+
+export function mergedReviewFilename(date = new Date()) {
+  return `poke-genie-export-${isoDay(date)}.review.json`;
 }
 
 /** Trigger a browser download of `text` as `filename`. */
