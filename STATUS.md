@@ -34,8 +34,7 @@ decode on disk (60 s windows, under about 720 MB); the browser page has per-clip
 ticks and lists clips skipped by Stop. Re-run after the fold on the same three clips: identical
 CSV (SHA-256 `0291af71...b9a3`) before and after windowing; 02-original alone gives the same 48 rows
 with the window at 60, 10 and 7 seconds; a folder with all clips cached merged with
-`--ffmpeg C:
-onexistent`; a garbage clip gave a `.partial.csv`, no inbox copy and exit 1.
+`--ffmpeg C:\nonexistent`; a garbage clip gave a `.partial.csv`, no inbox copy and exit 1.
 
 **Not yet tested:** a real multi-clip whole-box recording (overlap dropping is tested on synthetic
 rows and on one exact-duplicate clip pair only); a real Shadow-filtered pass (the shadow clip in
