@@ -27,7 +27,10 @@ that doesn't have an HEVC decoder — Windows Chrome, mainly. If you see that:
 - Or re-export the file as H.264 (AirDrop it to a Mac and re-save, or send it through WhatsApp/
   Clipchamp the way the two re-encoded fixtures were made) and try again.
 - Or run it through the command-line version instead: `node scripts/extract.mjs <file>` from a
-  checkout of this repo (needs ffmpeg; see `scripts/extract.mjs`'s header comment).
+  checkout of this repo. It needs ffmpeg, which is now found automatically (`--ffmpeg`, the
+  `FFMPEG` variable, PATH, winget, or the imageio-ffmpeg Python package).
+- For a whole box of clips on a PC, drag the folder onto `extract-box.cmd` (batch mode; see
+  `docs/whole-box.md`).
 
 ## Which browsers to try
 

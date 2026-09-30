@@ -8,7 +8,8 @@
 import { extract, toPokeGenieCsv } from '../src/extract/pipeline.js';
 import { createOcr } from '../src/extract/ocr.js';
 import { indexGamemaster } from '../src/gamemaster.js';
-import { decodeFrames, csvFilename, reviewFilename, downloadText, formatElapsed } from './extract-core.js';
+import { mergeClips, orderClips, passKind } from '../src/extract/batch.js';
+import { decodeFrames, csvFilename, reviewFilename, mergedCsvFilename, mergedReviewFilename, downloadText, formatElapsed } from './extract-core.js';
 
 const TESSERACT_VERSION = '7.0.0';
 const FPS = 5;
@@ -26,9 +27,11 @@ function clearErrors() {
   $('#intro').querySelectorAll('.error').forEach((e) => e.remove());
 }
 
-function setProgress(done, total, found) {
+// `clipLabel` is "clip i of n — name" for several files, empty for one.
+function setProgress(done, total, found, clipLabel = '') {
   $('#foundCount').textContent = String(found);
-  $('#frameStats').textContent = total ? `frame ${done} / ${total}` : `frame ${done}`;
+  const frames = total ? `frame ${done} / ${total}` : `frame ${done}`;
+  $('#frameStats').textContent = clipLabel ? `${clipLabel}, ${frames}` : frames;
   $('#bar').style.width = total ? `${Math.min(100, (done / total) * 100)}%` : '0%';
 }
 
@@ -57,13 +60,20 @@ function renderRows(rows) {
     <td class="num">${r.hp ?? '?'}</td>
     <td class="num">${esc(ivsText(r.ivs))}</td>
     <td class="num">${esc(levelText(r))}</td>
+    <td>${r.shadow === 1 ? 'Shadow' : r.shadow === 2 ? 'Purified' : ''}</td>
     <td><div class="flagset">${r.flags.map((f) => `<span class="flagtag">${esc(f)}</span>`).join('')}</div></td>
-    <td class="muted">${esc(r.frames?.[0]?.frame ?? '')}${r.frames?.length > 1 ? ` +${r.frames.length - 1}` : ''}</td>
-  </tr>`).join('') || '<tr><td colspan="9" class="empty">No Pokémon found.</td></tr>';
+    <td class="muted">${esc([r.clip, r.frames?.[0]?.frame].filter(Boolean).join(' · '))}${r.frames?.length > 1 ? ` +${r.frames.length - 1}` : ''}</td>
+  </tr>`).join('') || '<tr><td colspan="10" class="empty">No Pokémon found.</td></tr>';
 }
 
-async function runExtraction(file) {
+// One or more recordings of one account: each is decoded and read in turn, then merged the way
+// scripts/extract-box.mjs merges a folder (boundary duplicates dropped, a "shadow" clip marks the
+// Shadow column). A file that cannot be decoded is reported and the rest still count.
+// `files` are already in clip order and `kinds[i]` is the pass ('normal' | 'shadow' | 'purified')
+// chosen for files[i] on the planning screen.
+async function runExtraction(files, kinds) {
   clearErrors();
+  $('#plan').hidden = true;
   $('#intro').hidden = true;
   $('#results').hidden = true;
   $('#run').hidden = false;
@@ -74,7 +84,6 @@ async function runExtraction(file) {
   run = controller;
   const t0 = performance.now();
   const timer = setInterval(() => { $('#elapsed').textContent = formatElapsed(elapsedSeconds(t0)); }, 250);
-  let totalEstimate = null, stoppedEarly = null;
   let ocr = null;
 
   try {
@@ -93,32 +102,64 @@ async function runExtraction(file) {
     });
     const gm = indexGamemaster(gmJson);
 
-    const decoded = decodeFrames(file, FPS, (ev) => {
-      if (ev.phase === 'start') totalEstimate = ev.totalEstimate;
-      if (ev.phase === 'end') stoppedEarly = ev.stoppedEarly;
-    });
-    async function* guarded() {
-      for await (const frame of decoded) {
-        if (controller.cancelled) return;
-        yield frame;
+    const done = [], failed = [], notes = [];
+    let foundBefore = 0;
+    for (const [i, file] of files.entries()) {
+      if (controller.cancelled) { notes.push(`Stopped: ${files.slice(i).map((f) => f.name).join(', ')} ${files.length - i === 1 ? 'was' : 'were'} not processed.`); break; }
+      const clipLabel = files.length > 1 ? `clip ${i + 1} of ${files.length} — ${file.name}` : '';
+      setProgress(0, null, foundBefore, clipLabel);
+      let totalEstimate = null, stoppedEarly = null;
+      try {
+        const decoded = decodeFrames(file, FPS, (ev) => {
+          if (ev.phase === 'start') totalEstimate = ev.totalEstimate;
+          if (ev.phase === 'end') stoppedEarly = ev.stoppedEarly;
+        });
+        async function* guarded() {
+          for await (const frame of decoded) {
+            if (controller.cancelled) return;
+            yield frame;
+          }
+        }
+        const r = await extract(guarded(), {
+          ocr, gm,
+          onProgress: ({ done: n, found }) => setProgress(n, totalEstimate, foundBefore + found, clipLabel),
+        });
+        foundBefore += r.rows.length;
+        const where = files.length > 1 ? ` in ${file.name}` : '';
+        if (controller.cancelled) notes.push(`Stopped early by you: rows${where} cover only the part of the recording that was processed.`);
+        else if (stoppedEarly) notes.push(`The browser stopped decoding${where} before the end (${stoppedEarly}); rows cover only the part that was decoded.`);
+        done.push({ name: file.name, kind: kinds[i], rows: r.rows, unmatched: r.unmatched });
+      } catch (e) {
+        failed.push({ name: file.name, error: e.message });
       }
     }
+    if (!done.length) throw new Error(failed.length ? failed.map((f) => f.error).join('\n\n') : 'No recording was processed.');
+    for (const f of failed) notes.push(`Could not read "${f.name}", so its Pokémon are missing: ${f.error}`);
 
-    const { rows, review, unmatched } = await extract(guarded(), {
-      ocr, gm,
-      onProgress: ({ done, found }) => setProgress(done, totalEstimate, found),
-    });
+    const merged = mergeClips(done);
+    for (const c of merged.clips) if (c.kind !== 'normal') notes.push(`"${c.name}" was treated as a ${c.kind}-filtered pass: matching Pokémon are marked in the Shadow column.`);
+    const r = merged.reconciled;
+    if (r.appended) notes.push(`${r.appended} Pokémon appeared only in the shadow/purified pass and were added to the end of the list.`);
+    const names = (list) => list.map((x) => `${x.name} ${x.cp}`).join(', ');
+    for (const b of merged.boundaries) {
+      if (b.unmatched) { notes.push(`${b.before} → ${b.after}: no overlap found (tail ${b.tail.name} ${b.tail.cp}, head ${b.head.name} ${b.head.cp}). If you restarted on the last Pokémon you saw, it may be listed twice: check.`); continue; }
+      let n = `${b.before} → ${b.after}: ${b.dropped} repeated Pokémon dropped (${names(b.droppedRows)})`;
+      if (b.maybeRepeated.length) n += `; ${b.maybeRepeated.length} more may be repeats: ${names(b.maybeRepeated)}. Check them (flagged boundary-weak)`;
+      else if (b.weak) n += '; this join is weak, so those rows are flagged boundary-weak: check them';
+      notes.push(n + '.');
+    }
+    const mismatched = merged.rows.filter((row) => row.flags.some((f) => f.startsWith('hp-mismatch')));
+    if (mismatched.length) notes.push(`${mismatched.length} Pokémon had a computed HP replaced by a different read HP when clips were joined (flag hp-mismatch); their IVs and level were solved for the old HP, so check them: ${names(mismatched)}.`);
+    if (r.weak) notes.push(`${r.weak} shadow/purified Pokémon were matched on incomplete HP or IV readings and are flagged shadow-match-weak: check them.`);
+    if (r.ambiguous) notes.push(`${r.ambiguous} shadow/purified Pokémon matched several identical rows; the first was marked and flagged shadow-match-ambiguous.`);
+    if (merged.unmatched.length) notes.push(`${merged.unmatched.length} frame${merged.unmatched.length === 1 ? '' : 's'} showed a CP but no recognisable species name (a nickname, or a garbled read); they are listed in the review JSON, not in the table.`);
 
     $('#run').hidden = true;
     $('#results').hidden = false;
     $('#elapsedFinal').textContent = formatElapsed(elapsedSeconds(t0));
-    const notes = [];
-    if (controller.cancelled) notes.push('Stopped early by you: these rows cover only the part of the recording that was processed.');
-    else if (stoppedEarly) notes.push(`The browser stopped decoding before the end (${stoppedEarly}); rows cover only the part that was decoded.`);
-    if (unmatched.length) notes.push(`${unmatched.length} frame${unmatched.length === 1 ? '' : 's'} showed a CP but no recognisable species name (a nickname, or a garbled read); they are listed in the review JSON, not in the table.`);
     $('#notes').innerHTML = notes.map((n) => `<div class="note">${esc(n)}</div>`).join('');
-    renderRows(rows);
-    wireResultActions(file, rows, review, unmatched);
+    renderRows(merged.rows);
+    wireResultActions(files, merged, failed);
   } catch (e) {
     $('#run').hidden = true;
     $('#intro').hidden = false;
@@ -130,13 +171,22 @@ async function runExtraction(file) {
   }
 }
 
-function wireResultActions(file, rows, review, unmatched) {
-  $('#downloadCsv').onclick = () => downloadText(toPokeGenieCsv(rows), csvFilename(file), 'text/csv');
-  $('#downloadReview').onclick = () => downloadText(JSON.stringify({ rows, review, unmatched }, null, 2), reviewFilename(file), 'application/json');
-  // Rows whose name, CP, HP and bars cannot be reconciled are misreads, not Pokémon: the advisor
-  // gets the rest. Ambiguous rows go through with blank IVs (the CSV already leaves them blank).
-  const junk = rows.filter((r) => r.flags.includes('no-level-fits'));
-  const good = rows.filter((r) => !junk.includes(r));
+// Rows the extractor could not reconcile are misreads, not Pokémon, so the advisor gets the rest:
+// every row flagged no-level-fits (name, CP, HP and bars fit no level) or hp-mismatch (a joined
+// clip's HP disagreed with the one the IVs were solved for) is left out. Ambiguous rows go through
+// with blank IVs (the CSV already leaves them blank).
+export function splitForAdvisor(rows) {
+  const unreconciled = (r) => r.flags.some((f) => f === 'no-level-fits' || f.startsWith('hp-mismatch'));
+  return { good: rows.filter((r) => !unreconciled(r)), junk: rows.filter(unreconciled) };
+}
+
+function wireResultActions(files, merged, failedClips) {
+  const { rows, review, unmatched, boundaries, reconciled, clips } = merged;
+  const one = files.length === 1;
+  const today = new Date();
+  $('#downloadCsv').onclick = () => downloadText(toPokeGenieCsv(rows), one ? csvFilename(files[0]) : mergedCsvFilename(today), 'text/csv');
+  $('#downloadReview').onclick = () => downloadText(JSON.stringify({ rows, review, unmatched, boundaries, reconciled, clips, failedClips }, null, 2), one ? reviewFilename(files[0]) : mergedReviewFilename(today), 'application/json');
+  const { good, junk } = splitForAdvisor(rows);
   $('#loadAdvisor').textContent = junk.length ? `Load ${good.length} into advisor (${junk.length} unreadable left out)` : 'Load into advisor';
   $('#loadAdvisor').onclick = () => {
     sessionStorage.setItem('pogo-extracted-csv', toPokeGenieCsv(good));
@@ -144,19 +194,43 @@ function wireResultActions(file, rows, review, unmatched) {
   };
 }
 
-function pickFile(file) {
-  if (!file) return;
-  runExtraction(file);
+// Show the chosen clips in order with a "Shadow pass" and a "Purified pass" tick each (pre-ticked
+// from the filename), then wait for Start. The iPhone Photos picker cannot rename a file, so the
+// ticks are the only way a Safari user can mark the Shadow-filtered clip.
+function pickFiles(list) {
+  const picked = Array.from(list ?? []);
+  if (!picked.length) return;
+  const files = orderClips(picked.map((f) => ({ name: f.name, mtimeMs: f.lastModified, file: f }))).map((c) => c.file);
+  clearErrors();
+  $('#planRows').innerHTML = files.map((f, i) => {
+    const kind = passKind(f.name);
+    return `<tr><td class="num">${i + 1}</td><td class="name">${esc(f.name)}</td>
+      <td><label><input type="checkbox" data-kind="shadow" data-i="${i}"${kind === 'shadow' ? ' checked' : ''}> Shadow pass</label></td>
+      <td><label><input type="checkbox" data-kind="purified" data-i="${i}"${kind === 'purified' ? ' checked' : ''}> Purified pass</label></td></tr>`;
+  }).join('');
+  // A clip is one pass or the other, never both.
+  $('#planRows').onchange = (e) => {
+    const box = e.target;
+    if (box.checked) $('#planRows').querySelectorAll(`input[data-i="${box.dataset.i}"]`).forEach((o) => { if (o !== box) o.checked = false; });
+  };
+  $('#plan').hidden = false;
+  $('#start').onclick = () => {
+    const kinds = files.map((_, i) => {
+      const on = (k) => $('#planRows').querySelector(`input[data-i="${i}"][data-kind="${k}"]`).checked;
+      return on('shadow') ? 'shadow' : on('purified') ? 'purified' : 'normal';
+    });
+    runExtraction(files, kinds);
+  };
 }
 
 function init() {
   const drop = $('#drop'), input = $('#file');
   drop.addEventListener('click', (e) => { if (!e.target.closest('label')) input.click(); });
   drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
-  input.addEventListener('change', () => pickFile(input.files[0]));
+  input.addEventListener('change', () => { pickFiles(input.files); input.value = ''; });
   ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
   ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', (e) => pickFile(e.dataTransfer.files[0]));
+  drop.addEventListener('drop', (e) => pickFiles(e.dataTransfer.files));
   $('#stop').addEventListener('click', () => { if (run) run.cancelled = true; });
 }
 

@@ -7,7 +7,9 @@
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "build:tiers": "node scripts/build-tiers.mjs data/source data/tiers.json",
-    "dump": "node scripts/dump-box.mjs"
+    "dump": "node scripts/dump-box.mjs",
+    "extract": "node scripts/extract.mjs",
+    "extract:box": "node scripts/extract-box.mjs"
   },
   "engines": {
     "node": ">=20"

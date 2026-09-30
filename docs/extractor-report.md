@@ -298,3 +298,63 @@ differences between ffmpeg PNGs and canvas frames, which only a device run can s
 | 20 | Meltan |  | 198 | 47 | 15/12/5 | 7 | 6 |  | not in export |
 
 20 rows: 0 match the export in every field, 0 differ, 20 are not in the export (caught after it, or the export scanned the Mega form).
+
+## Batch mode (30 Sep 2026)
+
+`scripts/extract-box.mjs` reads a folder of clips (one account), merges them with
+`src/extract/batch.js` and writes one Poke Genie-layout CSV; see `docs/whole-box.md`. Acceptance
+run on Windows, Node 24, ffmpeg found automatically as the imageio-ffmpeg binary (no `FFMPEG`
+variable), clips copied from the Drive recordings into a scratch folder:
+
+| Clip | Kind | Rows | Flagged | Time |
+|---|---|---|---|---|
+| `01-trimmed.mp4` (the trimmed Clipchamp copy) | normal | 4 | 0 | 3.3 s |
+| `02-original.mp4` (the iPhone original) | normal | 48 | 16 | 17.4 s |
+| `03-shadow-trimmed.mp4` (the trimmed copy again) | shadow | 4 | 0 | 3.0 s |
+
+- Boundary `01-trimmed.mp4 → 02-original.mp4`: 4 duplicate rows dropped. Merged total 48 rows,
+  equal to `02-original.mp4` alone through `scripts/extract.mjs` (48 rows, 16 flagged).
+- Shadow pass: 4 matched, 0 appended, 0 ambiguous. Exactly Mewtwo 3673, Xurkitree 3028,
+  Zamazenta 2692 and Zamazenta 2651 have `Shadow/Purified` = 1.
+- Second run: all three clips `cached`, CSV byte-identical (SHA-256 `0291af71...b9a3`, the
+  scan date is the newest clip's modified time, not the wall clock; the export file name carries
+  the same recording date, not the run date).
+- Run on the parent folder: the `dare33` subfolder was processed as the account.
+- Single-video CLI on `01-trimmed.mp4` with ffmpeg auto-found: the same 4 rows, 3.3 s.
+
+Limits: the overlap and shadow logic was exercised on synthetic rows and on this exact-duplicate
+clip pair; a real multi-clip recording and a real Shadow-filtered pass have not been run.
+
+### Review fold (30 Sep 2026)
+
+Two adversarial reviews of the batch-mode commit (Opus reviewer: mergeable with fixes; Sol 5.6
+cross-vendor: not mergeable) agreed on the substance. Folded: cache keyed on a hash of the extractor
+(readings cached, rows rebuilt every run); merge leniency based on flags, since resolved rows carry no
+ivConfidence; smallest consistent overlap with `boundary-weak` joins listed by name and CP; strong and
+weak shadow matches (`shadow-match-weak`); stale flags dropped when rows are combined; `.partial`
+exports that never overwrite the complete one or reach the inbox; ffmpeg found only when needed; export
+named by recording date; argument checks; explicit ffmpeg paths probed; natural sort of Python
+versions; launcher `%*`; `.gitattributes`; per-clip Shadow/Purified ticks on the page. Decoding is
+now windowed (60 s at a time, about 720 MB peak instead of about 12 MB per second of recording).
+
+Numbers after the fold, same three clips: 48 merged rows, 4 boundary duplicates dropped
+(Mega Mewtwo Y 3673, Xurkitree 3028, Zamazenta 2692, Zamazenta 2651; join not weak), shadow pass 4 matched,
+0 appended, 0 ambiguous, 0 weak; CSV SHA-256 `0291af71...b9a3`, the same before and after windowing.
+`02-original.mp4` alone gives 48 rows and the same CSV whether the window is 60, 10 or 7 seconds
+(212 frames each, last frame f0212 at 42.2 s); its 42 s fit in one 60 s window, so the shorter
+windows were used to exercise window edges.
+
+Second review round (Opus: mergeable with fixes; Sol 5.6: not mergeable): folded the possible-repeat
+flagging for overlaps that fit at several lengths, reporting of joins with no overlap, hp-mismatch and
+no-level-fits handling when rows are combined, refusal of duplicate export names and of `--account`
+with several accounts, a wider cache key (extra source files, library versions, full language file),
+stale `.partial` cleanup, per-account write failures, tests under `scratch/`, windowed decode that
+continues through an empty window, and the launcher's quoted-drive-root handling. Same three clips:
+48 rows, CSV SHA-256 `0291af71...b9a3` (unchanged); 118 tests pass, 3 skip.
+
+Final review round (Opus and Sol 5.6, both "mergeable with fixes"): folded `no-level-fits` handling
+when rows are combined (and the page's advisor filter), best-effort removal of stale `.partial`
+files after the inbox copy, duplicate-account refusal only where exports would collide, the
+launcher's per-argument quoting (drive roots and spaced `--out-dir` values), final-row per-clip
+flagged counts and a single empty-window warning. Same three clips: 48 rows, CSV SHA-256
+`0291af71...b9a3` (unchanged); 123 tests pass, 3 skip.

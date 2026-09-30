@@ -112,8 +112,10 @@ export function toPokeGenieCsv(rows, { scanDate = new Date() } = {}) {
       'Atk IV': r.ivs?.atk ?? '', 'Def IV': r.ivs?.def ?? '', 'Sta IV': r.ivs?.hp ?? '',
       'IV Avg': r.ivs ? ((r.ivs.atk + r.ivs.def + r.ivs.hp) / 45 * 100).toFixed(1) : '',
       'Level Min': r.level !== null ? r.level.toFixed(1) : '', 'Level Max': r.levelMax !== null ? r.levelMax.toFixed(1) : '',
-      // Shadow, Lucky and Favourite are not read from the screen: left blank, not asserted as 0.
-      'Scan Date': date, 'Original Scan Date': date, Lucky: '', 'Shadow/Purified': '', Favorite: '', Dust: r.dust ?? '',
+      // Lucky and Favourite are not read from the screen: left blank, not asserted as 0. Shadow/
+      // Purified is only known when a batch merge marked the row from a Shadow-filtered pass
+      // (1 shadow, 2 purified); otherwise it is unread, so blank rather than 0.
+      'Scan Date': date, 'Original Scan Date': date, Lucky: '', 'Shadow/Purified': r.shadow === 1 || r.shadow === 2 ? r.shadow : '', Favorite: '', Dust: r.dust ?? '',
     };
     lines.push(POKEGENIE_COLUMNS.map((c) => q(rec[c] ?? '')).join(','));
   }
