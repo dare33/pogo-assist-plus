@@ -145,7 +145,7 @@ export async function runAccount(acct, ctx) {
   log(`\nAccount ${acct.name} (${acct.folder}): ${ordered.length} clip${ordered.length === 1 ? '' : 's'}`);
   for (const c of ordered) log(`  ${c.name}  [${passKind(c.name)}]`);
 
-  const done = [], failedClips = [], clipInfo = [];
+  const done = [], failedClips = [], clipInfo = [], failedMtimes = [];
   for (const [i, clip] of ordered.entries()) {
     const kind = passKind(clip.name);
     try {
@@ -175,15 +175,19 @@ export async function runAccount(acct, ctx) {
       log(`  ${clip.name}: FAILED: ${String(e.message).split('\n')[0].slice(0, 200)}`);
       failedClips.push({ name: clip.name, error: e.message });
       clipInfo.push({ name: clip.name, kind, cached: false, seconds: null, failed: true, rows: 0, flagged: 0 });
+      // A failed clip still counts towards the recording date (see below), when it can be stat'ed.
+      try { failedMtimes.push(statSync(clip.path).mtimeMs); } catch { /* unreadable: no date */ }
     }
   }
   if (!done.length) { log(`No clip for ${acct.name} could be read, so no export was written (an earlier export is left untouched).`); return { failed: failedClips.length, csvPath: null }; }
 
   const merged = mergeClips(done.map(({ name, kind, rows, unmatched }) => ({ name, kind, rows, unmatched })));
-  // The recording date (newest clip that was read), not the run date: re-running on a later day
-  // updates the same file. It is also the CSV's scan date, so an unchanged folder re-exports
-  // byte for byte.
-  const scanDate = new Date(Math.max(...done.map((c) => c.mtimeMs)));
+  // The recording date (newest clip in the folder by modified time, counting clips that failed to
+  // read), not the run date: re-running on a later day updates the same file. Counting failed clips
+  // means a partial written after a failed newest clip carries the same date as the later complete
+  // run, so that run finds and removes it. It is also the CSV's scan date, so an unchanged folder
+  // re-exports byte for byte.
+  const scanDate = new Date(Math.max(...done.map((c) => c.mtimeMs), ...failedMtimes));
   const date = localDate(scanDate);
   const partial = failedClips.length > 0;
   const stem = `poke-genie-export-${acct.name}-${date}`;
@@ -215,7 +219,7 @@ export async function runAccount(acct, ctx) {
   }
 
   log(`\nSummary for ${acct.name}`);
-  for (const c of clipsOut) log(`  ${c.name} [${c.kind}]: ${c.failed ? 'FAILED' : `${c.rows} Pokémon, ${c.flagged} flagged, ${c.cached ? 'cached' : `processed in ${c.seconds} s`}`}`);
+  for (const c of clipsOut) log(`  ${c.name} [${c.kind}]: ${c.failed ? 'FAILED' : `${c.rows} Pokémon read, ${c.flagged} flagged rows attributed to this clip, ${c.cached ? 'cached' : `processed in ${c.seconds} s`}`}`);
   const names = (rows) => rows.map((r) => `${r.name} ${r.cp}`).join(', ');
   for (const b of merged.boundaries) {
     if (b.unmatched) {
@@ -293,12 +297,18 @@ export async function runBox(argv, deps = {}) {
     accounts.push(...found);
   }
   if (args.account && accounts.length > 1) { log(`--account ${args.account} names one account but ${accounts.length} were found (${accounts.map((a) => a.name).join(', ')}); give one folder that holds clips directly.`); return 2; }
+  if (args.outDir && !(existsSync(args.outDir) && statSync(args.outDir).isDirectory())) { log(`--out-dir ${args.outDir} is not a folder.`); return 2; }
+  const inboxOk = args.inbox && existsSync(args.inbox) && statSync(args.inbox).isDirectory();
+  if (args.inbox && !inboxOk) log(`Warning: inbox ${args.inbox} does not exist; the CSV will not be copied there.`);
   // Two accounts of one name collide only where their exports land in the same place: a shared
-  // --out-dir or --inbox, or the same folder. Otherwise each writes into its own folder.
-  const shared = Boolean(args.outDir || args.inbox);
+  // --out-dir, an inbox that exists (so the copy will really happen), or the same folder. A missing
+  // inbox only warns above and each account then writes into its own folder.
+  const shared = Boolean(args.outDir || inboxOk);
   const seen = new Map();
   for (const a of accounts) {
-    const key = shared ? a.name.toLowerCase() : resolve(a.folder).toLowerCase();
+    // Windows paths are case-insensitive; elsewhere two folders differing in case are different.
+    const folderKey = process.platform === 'win32' ? resolve(a.folder).toLowerCase() : resolve(a.folder);
+    const key = shared ? a.name.toLowerCase() : folderKey;
     if (seen.has(key)) {
       log(shared
         ? `Two accounts would write the same export name (${a.name}): ${seen.get(key)} and ${a.folder}, into the same --out-dir or --inbox. Rename one folder or run them separately.`
@@ -307,9 +317,6 @@ export async function runBox(argv, deps = {}) {
     }
     seen.set(key, a.folder);
   }
-  if (args.outDir && !(existsSync(args.outDir) && statSync(args.outDir).isDirectory())) { log(`--out-dir ${args.outDir} is not a folder.`); return 2; }
-  const inboxOk = args.inbox && existsSync(args.inbox) && statSync(args.inbox).isDirectory();
-  if (args.inbox && !inboxOk) log(`Warning: inbox ${args.inbox} does not exist; the CSV will not be copied there.`);
 
   let gm = null;
   const getGm = async () => (gm ??= (await import('./load.js')).loadGamemaster());

@@ -15,8 +15,8 @@ three clips (trimmed, original, trimmed again named `03-shadow-trimmed.mp4`) in 
 ambiguous, and exactly those four rows (Mewtwo 3673, Xurkitree 3028, Zamazenta 2692, Zamazenta
 2651) have Shadow/Purified = 1. Running `02-original.mp4` alone gives the same 48 rows. A second
 run reported all three clips `cached` and wrote a byte-identical CSV (same SHA-256); running on the parent folder
-processed the `dare33` subfolder as the account; `extract-box.cmd` ran from PowerShell (also with
-`&`, spaces and parentheses in the folder path); `scripts/extract.mjs` on one clip still gives its 4 rows.
+processed the `dare33` subfolder as the account; the 30 Sep claim that `extract-box.cmd` ran with
+arguments is withdrawn: argument-driven launches were broken until the 1 Oct fold below; `scripts/extract.mjs` on one clip still gives its 4 rows.
 
 **Review fold (30 Sep, same day).** Two adversarial reviews (Opus reviewer: mergeable with fixes; Sol 5.6
 cross-vendor: not mergeable) agreed on the substance; all of it was folded. Found and fixed: the
@@ -55,8 +55,20 @@ third fold and left small items, all folded: a correctly read Pokémon joined wi
 no longer keeps `no-level-fits` (and the page's "Load into advisor" drops only rows with that flag
 and no IVs); a stale `.partial` that cannot be deleted is a warning after the inbox copy, not a
 failed write; two accounts of one name are refused only when their exports would land in the same
-place; the launcher rebuilds its arguments one at a time so `"C:\" --out-dir "D:\Output Files"`
-survives; per-clip flagged counts come from the final rows; an empty-window warning is printed once.
+place; the launcher rebuilds its arguments one at a time (untested until the 1 Oct fold, which found it
+failed for every argument-driven launch); per-clip flagged counts come from the final rows; an empty-window warning is printed once.
+
+**Post-merge review fold (1 Oct 2026)** on 2fa7a45 (Opus and Sol 5.6 agreed), all folded: the launcher
+took its own folder after `shift`, so every argument-driven launch failed with MODULE_NOT_FOUND (now
+captured first; an empty argument no longer drops the ones after it); the page's advisor now leaves
+out every `no-level-fits` and `hp-mismatch` row; the duplicate-account check follows an inbox that
+really exists and compares folder paths case-insensitively only on Windows; the export date counts
+a failed newest clip, so its stale partial is found; the gap warning names the window and the
+total count. Verified 1 Oct on Windows, Node 24, from `cmd /c` as Explorer starts it: a folder path
+with spaces, parentheses and `&` reached the script and wrote an export (4 rows from the trimmed
+clip); `"C:\" --out-dir "<folder with spaces>"` reached the script's own "No clips" message (no
+drive-root export run). A launcher test runs `cmd /c` with a nonexistent folder and fails on the
+old launcher. Tests: 131 passing, 3 skipped (`npm test`).
 
 **Not yet tested:** a real multi-clip whole-box recording (overlap dropping is tested on synthetic
 rows and on one exact-duplicate clip pair only); a real Shadow-filtered pass (the shadow clip in

@@ -171,16 +171,22 @@ async function runExtraction(files, kinds) {
   }
 }
 
+// Rows the extractor could not reconcile are misreads, not Pokémon, so the advisor gets the rest:
+// every row flagged no-level-fits (name, CP, HP and bars fit no level) or hp-mismatch (a joined
+// clip's HP disagreed with the one the IVs were solved for) is left out. Ambiguous rows go through
+// with blank IVs (the CSV already leaves them blank).
+export function splitForAdvisor(rows) {
+  const unreconciled = (r) => r.flags.some((f) => f === 'no-level-fits' || f.startsWith('hp-mismatch'));
+  return { good: rows.filter((r) => !unreconciled(r)), junk: rows.filter(unreconciled) };
+}
+
 function wireResultActions(files, merged, failedClips) {
   const { rows, review, unmatched, boundaries, reconciled, clips } = merged;
   const one = files.length === 1;
   const today = new Date();
   $('#downloadCsv').onclick = () => downloadText(toPokeGenieCsv(rows), one ? csvFilename(files[0]) : mergedCsvFilename(today), 'text/csv');
   $('#downloadReview').onclick = () => downloadText(JSON.stringify({ rows, review, unmatched, boundaries, reconciled, clips, failedClips }, null, 2), one ? reviewFilename(files[0]) : mergedReviewFilename(today), 'application/json');
-  // Rows whose name, CP, HP and bars cannot be reconciled are misreads, not Pokémon: the advisor
-  // gets the rest. Ambiguous rows go through with blank IVs (the CSV already leaves them blank).
-  const junk = rows.filter((r) => r.flags.includes('no-level-fits') && !r.ivs);
-  const good = rows.filter((r) => !junk.includes(r));
+  const { good, junk } = splitForAdvisor(rows);
   $('#loadAdvisor').textContent = junk.length ? `Load ${good.length} into advisor (${junk.length} unreadable left out)` : 'Load into advisor';
   $('#loadAdvisor').onclick = () => {
     sessionStorage.setItem('pogo-extracted-csv', toPokeGenieCsv(good));

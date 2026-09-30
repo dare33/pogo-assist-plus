@@ -168,7 +168,7 @@ test('an old version-1 cache is re-read, not trusted', async () => {
   } finally { cleanup(dir); }
 });
 
-test('one failing clip: a .partial export, no inbox copy, exit 1, scan date from the good clips', async () => {
+test('one failing clip: a .partial export, no inbox copy, exit 1, dated by the newest clip even though it failed', async () => {
   const dir = fixture(['01-a.mp4', '03-c.mp4']), inbox = scratchDir();
   try {
     const bad = join(dir, '02-bad.mp4');
@@ -177,12 +177,12 @@ test('one failing clip: a .partial export, no inbox copy, exit 1, scan date from
     const fx = fakeExtractor({ fail: ['02-bad.mp4'] });
     const r = await run([dir, '--inbox', inbox], { extractClip: fx.extractClip });
     assert.equal(r.code, 1);
-    const stem = `poke-genie-export-${dir.split(/[\\/]/).pop()}-2026-03-05`;
+    const stem = `poke-genie-export-${dir.split(/[\\/]/).pop()}-2026-03-09`;
     assert.ok(existsSync(join(dir, `${stem}.partial.csv`)), r.log);
     assert.ok(existsSync(join(dir, `${stem}.partial.review.json`)));
     assert.ok(!existsSync(join(dir, `${stem}.csv`)), 'the complete export name is not written');
     assert.deepEqual(readdirSync(inbox), [], 'nothing copied to the inbox');
-    assert.match(csvLines(join(dir, `${stem}.partial.csv`))[1], /2026-03-05 12:00/);
+    assert.match(csvLines(join(dir, `${stem}.partial.csv`))[1], /2026-03-09 08:00/);
     assert.match(r.log, /PARTIAL export/);
     assert.match(r.log, /02-bad\.mp4/);
     const review = JSON.parse(readFileSync(join(dir, `${stem}.partial.review.json`), 'utf8'));
@@ -296,6 +296,18 @@ test('--account with several accounts, or two accounts with one name, is refused
   } finally { cleanup(parent, other); }
 });
 
+test('two same-named accounts run when the --inbox does not exist (no copy will happen, so no collision)', async () => {
+  const other = scratchDir();
+  try {
+    const one = fixture(['01-a.mp4'], { under: join(other, 'x', 'same') }), two = fixture(['01-b.mp4'], { under: join(other, 'y', 'same') });
+    const r = await run([one, two, '--inbox', join(other, 'missing')], { extractClip: fakeExtractor().extractClip });
+    assert.equal(r.code, 0, r.log);
+    assert.match(r.log, /inbox .* does not exist/);
+    assert.ok(existsSync(join(one, 'poke-genie-export-same-2026-03-05.csv')));
+    assert.ok(existsSync(join(two, 'poke-genie-export-same-2026-03-05.csv')));
+  } finally { cleanup(other); }
+});
+
 test('a v2 cache without readings is re-read, not a crash', async () => {
   const dir = fixture(['01-a.mp4']);
   try {
@@ -320,6 +332,25 @@ test('a complete run removes a stale .partial export of the same recording', asy
     assert.ok(!existsSync(join(dir, `${stem}.partial.csv`)));
     assert.ok(!existsSync(join(dir, `${stem}.partial.review.json`)));
     assert.ok(existsSync(join(dir, `${stem}.csv`)));
+    assert.match(r.log, /removed the stale partial export/);
+  } finally { cleanup(dir); }
+});
+
+test('a partial written after a failed newest clip is found and removed by the later complete run', async () => {
+  const dir = fixture(['01-a.mp4']);
+  try {
+    const bad = join(dir, '02-newest.mp4');
+    writeFileSync(bad, 'garbage');
+    utimesSync(bad, new Date(2026, 2, 9, 8, 0), new Date(2026, 2, 9, 8, 0));
+    let r = await run([dir], { extractClip: fakeExtractor({ fail: ['02-newest.mp4'] }).extractClip });
+    assert.equal(r.code, 1, r.log);
+    const stem = `poke-genie-export-${dir.split(/[\\/]/).pop()}-2026-03-09`;
+    assert.ok(existsSync(join(dir, `${stem}.partial.csv`)), r.log);
+    r = await run([dir], { extractClip: fakeExtractor().extractClip });
+    assert.equal(r.code, 0, r.log);
+    assert.ok(existsSync(join(dir, `${stem}.csv`)), 'same date, so the same stem');
+    assert.ok(!existsSync(join(dir, `${stem}.partial.csv`)));
+    assert.ok(!existsSync(join(dir, `${stem}.partial.review.json`)));
     assert.match(r.log, /removed the stale partial export/);
   } finally { cleanup(dir); }
 });

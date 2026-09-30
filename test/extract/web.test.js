@@ -63,3 +63,19 @@ test('decodeFrames failure text names the file and the three fixes', async () =>
     });
   } finally { delete globalThis.document; }
 });
+
+test('splitForAdvisor leaves out every no-level-fits and hp-mismatch row, IVs or not', async () => {
+  const { splitForAdvisor } = await import('../../web/extract.js');
+  const row = (name, flags, ivs = null) => ({ name, flags, ivs });
+  const rows = [
+    row('clean', []),
+    row('ambiguous', ['ambiguous-ivs:2-fit']),
+    row('nofit-no-ivs', ['no-level-fits']),
+    row('nofit-with-ivs', ['no-level-fits'], { atk: 1, def: 2, hp: 3 }),
+    row('hp-mismatch', ['hp-mismatch:120/121'], { atk: 1, def: 2, hp: 3 }),
+    row('both', ['boundary-weak', 'no-level-fits', 'hp-mismatch:9/10'], { atk: 1, def: 2, hp: 3 }),
+  ];
+  const { good, junk } = splitForAdvisor(rows);
+  assert.deepEqual(good.map((r) => r.name), ['clean', 'ambiguous']);
+  assert.deepEqual(junk.map((r) => r.name), ['nofit-no-ivs', 'nofit-with-ivs', 'hp-mismatch', 'both']);
+});

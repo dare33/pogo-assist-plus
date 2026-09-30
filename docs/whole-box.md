@@ -30,11 +30,18 @@ batch mode added on 30 Sep 2026; single recordings still work with `node scripts
   Several folders can be given, each handled as an account or a parent of accounts. `--account`
   is only for one folder that holds clips directly: with several resulting accounts it is refused
   (exit 2), and so are two accounts of the same name whose exports would land in the same place (a
-  shared `--out-dir` or `--inbox`, or the same folder given twice); without those each account writes
-  into its own folder and `C:\one\same` and `D:\two\same` both run. Both checks happen before
-  anything is read. When calling the script directly, write a drive root as `C:\.` or `C:/` (a
-  quoted `"C:\"` loses its closing quote on Windows; `extract-box.cmd` fixes that for you, including
-  for `--out-dir` values with spaces). Options: `--account NAME` (letters, digits, `.`, `_`, `-`; default:
+  shared `--out-dir`, an `--inbox` that exists so the copy will really happen, or the same folder
+  given twice); without those each account writes into its own folder and `C:\one\same` and
+  `D:\two\same` both run. An `--inbox` that does not exist only warns (no copy), so it does not
+  make same-named accounts collide. `extract-box.cmd` adds `--inbox` whenever the tier-list inbox
+  exists, so **through the launcher two same-named accounts are refused**; call the script directly
+  (without `--inbox`) to run them. Both checks happen before anything is read. When calling the
+  script directly, write a drive root as `C:\.` or `C:/` (a quoted `"C:\"` loses its closing quote
+  on Windows). `extract-box.cmd` rewrites a trailing backslash for you. Tested on 1 Oct 2026 from
+  `cmd /c` (as Explorer starts it): a folder path containing spaces, parentheses and `&` reached the
+  script and wrote its export; `"C:\" --out-dir "<folder with spaces>"` reached the script's own
+  message ("No clips ... in C:\."), but no drive root holding clips has been run, so an export from
+  a drive root is untested. Options: `--account NAME` (letters, digits, `.`, `_`, `-`; default:
   the folder name), `--fps 5`, `--order name|mtime`, `--inbox DIR`, `--out-dir DIR` (must exist;
   default: the folder), `--ffmpeg PATH`, `--force` (ignore the cache), `--quiet`. Unknown options,
   and options missing their value, are an error (exit 2).
@@ -56,7 +63,8 @@ batch mode added on 30 Sep 2026; single recordings still work with `node scripts
 
 Written next to the clips (or in `--out-dir`): `poke-genie-export-<account>-<YYYY-MM-DD>.csv` and
 `poke-genie-export-<account>-<YYYY-MM-DD>.review.json`. The date is the **recording date**, the local
-date of the newest clip that was read (not the day you ran it), and it is also the CSV's scan date.
+date of the newest clip in the folder by modified time, counting a clip that failed to read (not
+the day you ran it), and it is also the CSV's scan date.
 So re-running on unchanged clips, on any day, rewrites the same file byte for byte and the copy in
 the inbox is replaced rather than a second file added.
 
@@ -64,7 +72,12 @@ If any clip failed, the files are named `...-<date>.partial.csv` and `...-<date>
 instead, the inbox copy is skipped, and the command exits 1. A complete export from an earlier run is
 never overwritten by a partial one. The failed clips are listed under `failedClips` in the review
 JSON; Pokémon from them are missing. When a later run is complete, the stale `.partial` files for the
-same recording are deleted and the log says so.
+same recording are removed on a best-effort basis, with one of two outcomes: they are deleted and the
+log says `removed the stale partial export <path>`; or they cannot be deleted (open in Excel, say),
+the log warns `could not remove stale <path>: <reason>`, the run still exits 0, and the partial file
+is left beside the complete export for you to delete. A failed clip counts towards the date, so a
+partial written after a failed newest clip has the same date as the later complete run and that run
+finds it.
 
 If a file cannot be written (for example the CSV is open in Excel) the tool says
 `could not write <path>: <reason> (is it open in Excel?)`, carries on with the other accounts, and

@@ -45,26 +45,40 @@ function probeDuration(video, ffmpegPath) {
  * With a known duration the loop runs until the start reaches it, so a window with no decodable
  * frames (variable frame rate, a damaged stretch) does not silently drop the rest of the clip;
  * with an unknown duration the first empty window is the end.
+ * A run of empty windows is a gap. Only the first gap is warned about (a container that outruns
+ * its video stream would otherwise warn per window); the total is reported at the end. `io` lets
+ * a test replace ffmpeg and the PNG reader.
  */
-async function* windowedFrames(video, dir, fps, ffmpegPath, counter, windowSeconds, duration, warn) {
-  let warned = false;
+export async function* windowedFrames(video, dir, fps, ffmpegPath, counter, windowSeconds, duration, warn, io = { decode: decodeFrames, read: readPng }) {
+  let gaps = 0, gapStart = null;
+  const closeGap = (end, toEnd) => {
+    gaps++;
+    if (gaps === 1) {
+      warn(toEnd
+        ? `no frames from ${gapStart} s to the end; the file reports ${duration.toFixed(1)} s, so the video stream may be shorter (${video})`
+        : `no frames between ${gapStart} s and ${end} s, then decoding resumed (${video})`);
+    }
+    gapStart = null;
+  };
   for (let w = 0; ; w++) {
     const start = w * windowSeconds;
-    if (duration !== null && start >= duration) return;
-    decodeFrames(video, dir, fps, ffmpegPath, { start, duration: windowSeconds });
+    if (duration !== null && start >= duration) break;
+    io.decode(video, dir, fps, ffmpegPath, { start, duration: windowSeconds });
     const files = readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.png')).sort();
     if (!files.length) {
       if (duration === null) return;
-      // Under a second of footage left is just the tail of the duration rounding up.
-      // Once is enough: a container that outruns its video stream would otherwise warn per window.
-      if (duration - start > 1 && !warned) { warned = true; warn(`no frames after ${start} s; the file reports ${duration.toFixed(1)} s, the video stream may be shorter (${video})`); }
+      gapStart ??= start;
       continue;
     }
+    if (gapStart !== null) closeGap(start, false);
     for (let i = 0; i < files.length; i++) {
       const index = counter.frames++;
-      yield { index, time: start + i / fps, label: `f${String(index + 1).padStart(4, '0')}.png`, image: readPng(join(dir, files[i])) };
+      yield { index, time: start + i / fps, label: `f${String(index + 1).padStart(4, '0')}.png`, image: io.read(join(dir, files[i])) };
     }
   }
+  // Under a second of footage left is just the tail of the duration rounding up.
+  if (gapStart !== null && duration - gapStart > 1) closeGap(duration, true);
+  if (gaps > 1) warn(`${gaps} stretches of ${video} had no decodable frames`);
 }
 
 /**

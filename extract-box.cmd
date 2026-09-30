@@ -1,5 +1,7 @@
 @echo off
 setlocal
+rem "shift" also shifts %0, so the script folder is taken before any shift.
+set "HERE=%~dp0"
 rem Double-click, or drag a folder of screen-recording clips onto this file.
 rem Merges the clips of one Pokemon GO box into one Poke Genie-layout CSV (see docs/whole-box.md).
 rem Paths are always quoted and set with set "VAR=..." so "&" and spaces in a Drive folder name
@@ -13,7 +15,7 @@ rem It goes first so an --inbox given on the command line overrides it.
 set "INBOXARG="
 if exist "%USERPROFILE%\dare33\pokemon-go-tier-list\inbox\" set INBOXARG=--inbox "%USERPROFILE%\dare33\pokemon-go-tier-list\inbox"
 
-if not "%~1"=="" goto :given
+if not "%~1%~2%~3%~4%~5%~6%~7%~8%~9"=="" goto :given
 
 set "FOLDER="
 set /p "FOLDER=Folder of recordings (paste the path; next time you can drag the folder onto this file): "
@@ -23,7 +25,7 @@ set "FOLDER=%FOLDER:"=%"
 if "%FOLDER:~-1%"=="\" if not "%FOLDER:~1%"==":\" set "FOLDER=%FOLDER:~0,-1%"
 rem A quoted drive root ("C:\") would end in \" and swallow the quote; "C:\." is the same folder and quotes safely.
 if "%FOLDER:~-2%"==":\" set "FOLDER=%FOLDER%."
-node "%~dp0scripts\extract-box.mjs" %INBOXARG% "%FOLDER%"
+node "%HERE%scripts\extract-box.mjs" %INBOXARG% "%FOLDER%"
 goto :end
 
 :given
@@ -33,15 +35,19 @@ rem of a trailing backslash). A trailing backslash gets a "." because \" would s
 rem quote: "C:\" becomes "C:\." and "D:\x\" becomes "D:\x\.", the same folders.
 set "NODEARGS="
 :next
-if "%~1"=="" goto :run
+rem An empty argument ("") is skipped, not the end of the list: the run ends only when the next
+rem nine arguments are all empty.
+if "%~1%~2%~3%~4%~5%~6%~7%~8%~9"=="" goto :run
 set "ARG=%~1"
+if not defined ARG goto :skip
 if "%ARG:~-1%"=="\" set "ARG=%ARG%."
 set NODEARGS=%NODEARGS% "%ARG%"
+:skip
 shift
 goto :next
 
 :run
-node "%~dp0scripts\extract-box.mjs" %INBOXARG% %NODEARGS%
+node "%HERE%scripts\extract-box.mjs" %INBOXARG% %NODEARGS%
 goto :end
 
 :nonode
