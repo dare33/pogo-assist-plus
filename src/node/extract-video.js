@@ -4,16 +4,23 @@
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readPng } from '../extract/node.js';
 import { extract } from '../extract/pipeline.js';
 
-/** Decode a video to PNG frames at `fps` into `dir` with ffmpeg (rotation metadata is applied). */
-export function decodeFrames(video, dir, fps, ffmpegPath) {
+/** Seconds of recording decoded to PNGs at a time: about 12 MB per second at 5 fps, so ~720 MB peak. */
+export const WINDOW_SECONDS = 60;
+
+/**
+ * Decode a video to PNG frames at `fps` into `dir` with ffmpeg (rotation metadata is applied).
+ * `start` and `duration` (seconds) decode only that window of the recording.
+ */
+export function decodeFrames(video, dir, fps, ffmpegPath, { start = null, duration = null } = {}) {
   mkdirSync(dir, { recursive: true });
-  // A reused --frames directory must not keep frames of an earlier, longer recording.
+  // A reused directory must not keep frames of an earlier window or a longer recording.
   for (const f of readdirSync(dir)) if (f.toLowerCase().endsWith('.png')) rmSync(join(dir, f));
-  execFileSync(ffmpegPath, ['-loglevel', 'error', '-y', '-i', video, '-vf', `fps=${fps}`, join(dir, 'f%04d.png')], { stdio: 'inherit' });
+  const window = [...(start !== null ? ['-ss', String(start)] : []), ...(duration !== null ? ['-t', String(duration)] : [])];
+  execFileSync(ffmpegPath, ['-loglevel', 'error', '-y', ...window, '-i', video, '-vf', `fps=${fps}`, join(dir, 'f%04d.png')], { stdio: 'inherit' });
   return dir;
 }
 
@@ -24,22 +31,54 @@ export async function* pngFrames(dir, fps) {
 
 export const countPngs = (dir) => readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.png')).length;
 
+/** Frame count to expect from the clip's duration (ffmpeg -i prints it), or null when unknown. */
+function estimateFrames(video, fps, ffmpegPath) {
+  const r = spawnSync(ffmpegPath, ['-hide_banner', '-i', video], { encoding: 'utf8' });
+  const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(`${r.stderr ?? ''}`);
+  return m ? Math.ceil((Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])) * fps) : null;
+}
+
 /**
- * Decode `video` to `framesDir` (or a fresh temp dir, removed afterwards) and extract it.
- * `ffmpeg` is the binary path; `ocr` and `gm` are made once by the caller so a batch reuses them.
+ * Frames of a whole recording, decoded a window at a time so a long clip never needs its whole
+ * decode on disk. Index and time continue across windows (time = start + i/fps) and labels are
+ * the running frame number, the same as a single full decode would give.
+ */
+async function* windowedFrames(video, dir, fps, ffmpegPath, counter, windowSeconds) {
+  for (let w = 0; ; w++) {
+    const start = w * windowSeconds;
+    decodeFrames(video, dir, fps, ffmpegPath, { start, duration: windowSeconds });
+    const files = readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.png')).sort();
+    if (!files.length) return;
+    for (let i = 0; i < files.length; i++) {
+      const index = counter.frames++;
+      yield { index, time: start + i / fps, label: `f${String(index + 1).padStart(4, '0')}.png`, image: readPng(join(dir, files[i])) };
+    }
+  }
+}
+
+/**
+ * Extract one video. With `framesDir` the whole recording is decoded there first (kept, so the
+ * PNGs can be inspected); otherwise it is decoded in windows into a temp dir that is removed
+ * afterwards. `ocr` and `gm` are made once by the caller so a batch reuses them.
  * @returns { rows, review, unmatched, readings, frames }
  */
-export async function extractVideo(video, { fps, ffmpeg, ocr, gm, framesDir = null, onProgress = () => {} }) {
-  const temp = framesDir ? null : mkdtempSync(join(tmpdir(), 'pogo-extract-'));
-  const dir = framesDir ?? temp;
-  try {
-    decodeFrames(video, dir, fps, ffmpeg);
-    const total = countPngs(dir);
+export async function extractVideo(video, { fps, ffmpeg, ocr, gm, framesDir = null, onProgress = () => {}, windowSeconds = WINDOW_SECONDS }) {
+  if (framesDir) {
+    decodeFrames(video, framesDir, fps, ffmpeg);
+    const total = countPngs(framesDir);
     if (!total) throw new Error(`ffmpeg produced no frames from ${video}`);
-    const result = await extract(pngFrames(dir, fps), { ocr, gm, total, onProgress });
-    return { rows: result.rows, review: result.review, unmatched: result.unmatched, readings: result.readings, frames: total };
+    const r = await extract(pngFrames(framesDir, fps), { ocr, gm, total, onProgress });
+    return { rows: r.rows, review: r.review, unmatched: r.unmatched, readings: r.readings, frames: total };
+  }
+  const temp = mkdtempSync(join(tmpdir(), 'pogo-extract-'));
+  const counter = { frames: 0 };
+  try {
+    const total = estimateFrames(video, fps, ffmpeg);
+    const r = await extract(windowedFrames(video, temp, fps, ffmpeg, counter, windowSeconds), { ocr, gm, total, onProgress });
+    if (!counter.frames) throw new Error(`ffmpeg produced no frames from ${video}`);
+    return { rows: r.rows, review: r.review, unmatched: r.unmatched, readings: r.readings, frames: counter.frames };
   } finally {
-    if (temp) rmSync(temp, { recursive: true, force: true });
+    rmSync(temp, { recursive: true, force: true });
   }
 }
 

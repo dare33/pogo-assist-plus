@@ -52,6 +52,18 @@
     </div>
   </section>
 
+  <section id="plan" hidden>
+    <h2>Clips, in the order they will be merged</h2>
+    <p class="fine">Tick "Shadow pass" for the clip you recorded with the Shadow filter on (ticked automatically when its filename contains "shadow"). Pokémon in it are matched to the same ones in your other clips and marked Shadow.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Clip</th><th>Shadow</th><th>Purified</th></tr></thead>
+        <tbody id="planRows"></tbody>
+      </table>
+    </div>
+    <div class="actions"><button id="start" type="button">Start</button></div>
+  </section>
+
   <section id="run" hidden>
     <div class="runstats">
       <span>Elapsed: <strong id="elapsed">0:00</strong></span>

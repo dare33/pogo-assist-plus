@@ -7,7 +7,7 @@ CSV plus a review JSON (optionally copied to an inbox). ffmpeg is found automati
 winget, imageio-ffmpeg). Per-clip results are cached beside the clips. The browser page takes
 several clips and merges them the same way. Protocol and summary lines: `docs/whole-box.md`.
 New modules: `src/extract/batch.js` (pure merge), `src/node/ffmpeg.js`, `src/node/extract-video.js`.
-Tests: 85 passing, 3 skipped (`npm test`).
+Tests: 108 passing, 3 skipped (`npm test`, after the review fold below).
 
 **Verified (30 Sep, Windows, Node 24, ffmpeg found as imageio-ffmpeg with no `FFMPEG` set):**
 three clips (trimmed, original, trimmed again named `03-shadow-trimmed.mp4`) in one folder gave
@@ -17,6 +17,25 @@ ambiguous, and exactly those four rows (Mewtwo 3673, Xurkitree 3028, Zamazenta 2
 run reported all three clips `cached` and wrote a byte-identical CSV (same SHA-256); running on the parent folder
 processed the `dare33` subfolder as the account; `extract-box.cmd` ran from PowerShell (also with
 `&`, spaces and parentheses in the folder path); `scripts/extract.mjs` on one clip still gives its 4 rows.
+
+**Review fold (30 Sep, same day).** Two adversarial reviews (Opus reviewer: mergeable with fixes; Sol 5.6
+cross-vendor: not mergeable) agreed on the substance; all of it was folded. Found and fixed: the
+cache ignored code and data changes (now keyed on the extractor and stores raw readings, rows rebuilt
+every run); the "same Pokémon" leniency was dead code because resolved rows carry no ivConfidence
+(now judged from flags); the overlap took the largest consistent k and could swallow real identical
+Pokémon (now the smallest, weak joins flagged `boundary-weak` and listed by name and CP); weak
+shadow matches flagged `shadow-match-weak`; stale flags after merging rows; a partial run could
+overwrite the complete export and reach the inbox (now `.partial` files, no inbox copy); ffmpeg
+was required even for an all-cached folder (now looked for only when a clip needs reading); export
+name used the run date (now the recording date, matching the scan date); argument hygiene; explicit
+ffmpeg paths are probed; Python versions sorted naturally; the launcher passes `%*` and keeps a
+drive root; `.gitattributes` forces CRLF for `.cmd`; a whole-box clip no longer needs its whole
+decode on disk (60 s windows, under about 720 MB); the browser page has per-clip Shadow/Purified
+ticks and lists clips skipped by Stop. Re-run after the fold on the same three clips: identical
+CSV (SHA-256 `0291af71...b9a3`) before and after windowing; 02-original alone gives the same 48 rows
+with the window at 60, 10 and 7 seconds; a folder with all clips cached merged with
+`--ffmpeg C:
+onexistent`; a garbage clip gave a `.partial.csv`, no inbox copy and exit 1.
 
 **Not yet tested:** a real multi-clip whole-box recording (overlap dropping is tested on synthetic
 rows and on one exact-duplicate clip pair only); a real Shadow-filtered pass (the shadow clip in

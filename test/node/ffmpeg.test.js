@@ -9,18 +9,29 @@ const never = () => { throw new Error('should not be called'); };
 const win = { platform: 'win32', env: { LOCALAPPDATA: 'C:\\L', APPDATA: 'C:\\A' } };
 
 test('--ffmpeg wins over everything and must exist', () => {
-  const r = findFfmpeg({ ...win, explicit: 'X', env: { FFMPEG: 'Y' }, exists: (p) => p === 'X', probe: never, glob: never });
+  const r = findFfmpeg({ ...win, explicit: 'X', env: { FFMPEG: 'Y' }, exists: (p) => p === 'X', probe: (p) => p === 'X', glob: never });
   assert.deepEqual(r, { path: 'X', source: '--ffmpeg' });
   assert.throws(() => findFfmpeg({ explicit: 'nope', exists: () => false, probe: never, glob: never }), /--ffmpeg is nope/);
+  assert.throws(() => findFfmpeg({ explicit: 'notffmpeg', exists: () => true, probe: () => false, glob: never }), /--ffmpeg is notffmpeg, which exists but does not run as ffmpeg/);
 });
 
 test('FFMPEG env var wins over PATH', () => {
-  const r = findFfmpeg({ env: { FFMPEG: 'E' }, exists: () => true, probe: never, glob: never });
+  const r = findFfmpeg({ env: { FFMPEG: 'E' }, exists: () => true, probe: (p) => p === 'E', glob: never });
   assert.deepEqual(r, { path: 'E', source: 'FFMPEG' });
 });
 
 test('FFMPEG pointing at a missing file throws', () => {
   assert.throws(() => findFfmpeg({ env: { FFMPEG: 'gone' }, exists: () => false, probe: never, glob: never }), /FFMPEG is set to gone but no such file exists/);
+});
+
+test('FFMPEG pointing at something that does not run is a configuration error', () => {
+  assert.throws(() => findFfmpeg({ env: { FFMPEG: 'junk' }, exists: () => true, probe: () => false, glob: never }), /FFMPEG is set to junk, which exists but does not run as ffmpeg/);
+});
+
+test('the highest Python version wins (Python312 before Python39)', () => {
+  const p = (v) => `C:\\L\\Programs\\Python\\Python${v}\\Lib\\site-packages\\imageio_ffmpeg\\binaries\\ffmpeg-win-x86_64-v7.1.exe`;
+  const r = findFfmpeg({ ...win, exists: () => false, glob: (pat) => (pat.includes('imageio_ffmpeg') && pat.startsWith('C:\\L') ?[p('39'), p('312'), p('310')] : []), probe: (c) => c !== 'ffmpeg' && c !== 'ffmpeg.exe' });
+  assert.equal(r.path, p('312'));
 });
 
 test('PATH is used when its -version probe succeeds', () => {
@@ -70,5 +81,7 @@ test('globFiles matches * and ** against a real directory', () => {
     assert.deepEqual(globFiles(join(d, 'Gyan.FFmpeg*', '**', 'bin', 'ffmpeg.exe')), [join(d, 'Gyan.FFmpeg_x', 'ffmpeg-7', 'bin', 'ffmpeg.exe')]);
     assert.deepEqual(globFiles(join(d, 'Other', 'ffmpeg-*.exe')), [join(d, 'Other', 'ffmpeg-1.exe')]);
     assert.deepEqual(globFiles(join(d, 'Missing*', 'x')), []);
+    writeFileSync(join(d, 'Other', 'ffmpeg-2.exe'), '');
+    assert.deepEqual(globFiles(join(d, 'Other', 'ffmpeg-?.exe')), [], 'a question mark is literal, not a wildcard');
   } finally { rmSync(d, { recursive: true, force: true }); }
 });

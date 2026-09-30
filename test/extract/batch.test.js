@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { passKind, naturalCompare, orderClips, sameMon, overlapLength, mergeClips } from '../../src/extract/batch.js';
+import { passKind, naturalCompare, orderClips, sameMon, overlapLength, overlapInfo, combine, mergeClips } from '../../src/extract/batch.js';
 import { toPokeGenieCsv } from '../../src/extract/pipeline.js';
 import { importPokeGenie } from '../../src/import/pokegenie.js';
 
@@ -41,28 +41,42 @@ test('sameMon tolerates a missing HP, not a different form or settled IVs', () =
   assert.ok(!sameMon(row('Zapdos', 1969), row('Zapdos', 1969, { ivs: { atk: 1, def: 2, hp: 3 } })));
 });
 
-test('overlapLength: none, one, four, and capped', () => {
+test('overlapLength takes the smallest consistent k; weak when several fit or a pair is incomplete', () => {
   const seq = (from, to) => Array.from({ length: to - from }, (_, i) => row('Meltan', 100 + from + i));
   assert.equal(overlapLength(seq(0, 5), seq(10, 15)), 0);
-  assert.equal(overlapLength(seq(0, 5), seq(4, 9)), 1);
-  assert.equal(overlapLength(seq(0, 8), seq(4, 12)), 4);
+  assert.deepEqual(overlapInfo(seq(0, 5), seq(4, 9)), { k: 1, weak: false });
+  assert.deepEqual(overlapInfo(seq(0, 8), seq(4, 12)), { k: 4, weak: false });
   assert.equal(overlapLength(seq(0, 30), seq(0, 30), { max: 10 }), 0); // tail 20..29 is not head 0..9
+  // A run of identical rows: k = 1, 2, ... are all consistent, so the fewest is dropped and it is weak.
   const same = Array.from({ length: 20 }, () => row('Meltan', 150));
-  assert.equal(overlapLength(same, same, { max: 10 }), 10);
-  assert.equal(overlapLength(same, same, { max: 3 }), 3);
+  assert.deepEqual(overlapInfo(same, same, { max: 10 }), { k: 1, weak: true });
+  assert.deepEqual(overlapInfo(same, same, { max: 3 }), { k: 1, weak: true });
   assert.equal(overlapLength([], same), 0);
+  // A distinct overlap with an unread HP or IVs is weak too.
+  assert.equal(overlapInfo([row('A', 1), row('B', 2, { hp: null })], [row('B', 2), row('C', 3)]).weak, true);
 });
 
-test('mergeClips drops a 4-row boundary overlap, keeps the fuller row, unions frames', () => {
-  const a = [row('Meltan', 101), row('Meltan', 102), row('Meltan', 103, { hp: null, ivs: null, frames: 1, frame: 'a' }), row('Meltan', 104), row('Meltan', 105), row('Meltan', 106)];
-  const b = [row('Meltan', 103, { frames: 3, frame: 'b' }), row('Meltan', 104), row('Meltan', 105), row('Meltan', 106), row('Meltan', 107)];
-  const m = mergeClips([clip('01.mp4', a), clip('02.mp4', b)]);
+test('mergeClips drops a 4-row boundary overlap unflagged and lists what was dropped', () => {
+  const mk = (from, to, frame) => Array.from({ length: to - from }, (_, i) => row('Meltan', 100 + from + i, { frame }));
+  const m = mergeClips([clip('01.mp4', mk(1, 7, 'a')), clip('02.mp4', mk(3, 8, 'b'))]);
   assert.deepEqual(m.rows.map((r) => r.cp), [101, 102, 103, 104, 105, 106, 107]);
-  assert.deepEqual(m.boundaries, [{ before: '01.mp4', after: '02.mp4', dropped: 4 }]);
-  const kept = m.rows[2];
-  assert.ok(kept.ivs && kept.hp === 100, 'the row with IVs and HP wins');
-  assert.equal(kept.frames.length, 4, 'frames of both rows are kept');
-  assert.deepEqual([...new Set(kept.frames.map((f) => f.clip))].sort(), ['01.mp4', '02.mp4']);
+  assert.deepEqual(m.boundaries, [{ before: '01.mp4', after: '02.mp4', dropped: 4, weak: false, droppedRows: [103, 104, 105, 106].map((cp) => ({ name: 'Meltan', cp })) }]);
+  assert.ok(m.rows.every((r) => !r.flags.length));
+  assert.equal(m.rows[2].frames.length, 2, 'frames of both rows are kept');
+  assert.deepEqual([...new Set(m.rows[2].frames.map((f) => f.clip))].sort(), ['01.mp4', '02.mp4']);
+});
+
+test('mergeClips keeps the fuller row at an incomplete join and flags the join boundary-weak', () => {
+  const a = [row('Meltan', 101), row('Meltan', 102), row('Meltan', 103, { hp: null, ivs: null, flags: ['hp-unread', 'ivs-unread'] }), row('Meltan', 104)];
+  const b = [row('Meltan', 103, { frames: 3, frame: 'b' }), row('Meltan', 104), row('Meltan', 105)];
+  const m = mergeClips([clip('01.mp4', a), clip('02.mp4', b)]);
+  assert.deepEqual(m.rows.map((r) => r.cp), [101, 102, 103, 104, 105]);
+  assert.equal(m.boundaries[0].dropped, 2);
+  assert.equal(m.boundaries[0].weak, true);
+  assert.ok(m.rows[2].ivs && m.rows[2].hp === 100, 'the row with IVs and HP wins');
+  assert.equal(m.rows[2].frames.length, 4);
+  assert.deepEqual(m.rows[2].flags, ['boundary-weak'], 'stale hp-unread and ivs-unread are dropped');
+  assert.ok(m.rows[3].flags.includes('boundary-weak') && !m.rows[4].flags.length);
 });
 
 test('mergeClips never deduplicates identical rows away from a boundary', () => {
@@ -88,13 +102,13 @@ test('mergeClips: a shadow clip marks the matching normal row and its own row is
   assert.equal(m.rows.length, 3);
   assert.deepEqual(m.rows.map((r) => r.shadow), [undefined, 1, undefined]);
   assert.equal(m.rows[1].frames.length, 3);
-  assert.deepEqual(m.reconciled, { matched: 1, appended: 0, ambiguous: 0 });
+  assert.deepEqual(m.reconciled, { matched: 1, appended: 0, ambiguous: 0, weak: 0 });
 });
 
 test('mergeClips: a shadow row with no normal match is appended with shadow 1', () => {
   const m = mergeClips([clip('01.mp4', [row('Meltan', 101)]), clip('02-shadow.mp4', [row('Mew', 500)])]);
   assert.deepEqual(m.rows.map((r) => [r.name, r.shadow, r.index]), [['Meltan', undefined, 1], ['Mew', 1, 2]]);
-  assert.deepEqual(m.reconciled, { matched: 0, appended: 1, ambiguous: 0 });
+  assert.deepEqual(m.reconciled, { matched: 0, appended: 1, ambiguous: 0, weak: 0 });
 });
 
 test('mergeClips: two identical unmarked matches mark the first and flag it', () => {
@@ -104,12 +118,12 @@ test('mergeClips: two identical unmarked matches mark the first and flag it', ()
   assert.equal(m.rows[0].shadow, 1);
   assert.ok(m.rows[0].flags.includes('shadow-match-ambiguous'));
   assert.equal(m.rows[2].shadow, undefined);
-  assert.deepEqual(m.reconciled, { matched: 0, appended: 0, ambiguous: 1 });
+  assert.deepEqual(m.reconciled, { matched: 0, appended: 0, ambiguous: 1, weak: 0 });
   assert.equal(m.review.length, 1);
 });
 
 test('mergeClips: a purified clip marks 2; review carries clip and shadow', () => {
-  const m = mergeClips([clip('01.mp4', [row('Mew', 500, { flags: ['ivs-unread'] })]), clip('03-Purified.mp4', [row('Mew', 500)])]);
+  const m = mergeClips([clip('01.mp4', [row('Mew', 500, { flags: ['cp-chosen-500-over-501'] })]), clip('03-Purified.mp4', [row('Mew', 500)])]);
   assert.equal(m.rows[0].shadow, 2);
   assert.equal(m.review[0].clip, '01.mp4');
   assert.equal(m.review[0].shadow, 2);
@@ -131,4 +145,75 @@ test('toPokeGenieCsv writes Shadow/Purified 1, 2 and blank', () => {
   assert.deepEqual(back.map((r) => [r.shadow, r.purified]), [[true, false], [false, true], [false, false], [false, false]]);
   const col = csv.split('\n')[0].split(',').indexOf('Shadow/Purified');
   assert.deepEqual(csv.trim().split('\n').slice(1).map((l) => l.split(',')[col]), ['1', '2', '', '']);
+});
+
+// Rows as pipeline.js resolveRow makes them: no ivConfidence, the guesses are only in `flags`.
+test('sameMon judges guessed IVs and HP from flags on pipeline-shaped rows', () => {
+  const a = row('Mew', 500), noConf = (r) => { assert.equal(r.ivConfidence, undefined); return r; };
+  const other = { atk: 1, def: 2, hp: 3 };
+  assert.ok(!sameMon(noConf(a), noConf(row('Mew', 500, { ivs: other }))), 'settled IVs that differ conflict');
+  assert.ok(sameMon(a, row('Mew', 500, { ivs: other, flags: ['bars-unsettled'] })));
+  assert.ok(sameMon(a, row('Mew', 500, { ivs: other, flags: ['ivs-corrected-from-1/2/3'] })));
+  assert.ok(sameMon(a, row('Mew', 500, { ivs: other, flags: ['ivs-disagree'] })));
+  assert.ok(sameMon(a, { ...row('Mew', 500, { ivs: other }), solveStatus: 'corrected' }));
+  assert.ok(!sameMon(a, row('Mew', 500, { hp: 90 })));
+  assert.ok(sameMon(a, row('Mew', 500, { hp: 90, flags: ['hp-computed'] })));
+});
+
+test('two different Mew 500 at a join are not merged', () => {
+  const x = row('Mew', 500, { hp: 90, ivs: { atk: 0, def: 0, hp: 0 } }), y = row('Mew', 500, { hp: 95, ivs: { atk: 15, def: 15, hp: 15 } });
+  const m = mergeClips([clip('01.mp4', [row('A', 1), x]), clip('02.mp4', [y, row('B', 2)])]);
+  assert.equal(m.rows.length, 4);
+  assert.deepEqual(m.boundaries, []);
+});
+
+test('identical Meltans at a join drop the fewest and are flagged boundary-weak', () => {
+  const M = () => row('Meltan', 150), X = row('Xurkitree', 3028), Y = row('Yveltal', 3000);
+  const m = mergeClips([clip('01.mp4', [X, M(), M()]), clip('02.mp4', [M(), M(), Y])]);
+  assert.deepEqual(m.rows.map((r) => r.name), ['Xurkitree', 'Meltan', 'Meltan', 'Meltan', 'Yveltal']);
+  assert.equal(m.boundaries[0].dropped, 1);
+  assert.equal(m.boundaries[0].weak, true);
+  assert.deepEqual(m.rows.map((r) => r.flags.includes('boundary-weak')), [false, false, true, false, false]);
+});
+
+test('boundary before names the clip the tail row belongs to', () => {
+  const mk = (from, to) => Array.from({ length: to - from }, (_, i) => row('Meltan', 100 + from + i));
+  // 02 is nothing but overlap, so 03 joins against a row that came from 01.
+  const m = mergeClips([clip('01.mp4', mk(0, 5)), clip('02.mp4', mk(3, 5)), clip('03.mp4', mk(4, 8))]);
+  assert.deepEqual(m.boundaries.map((b) => [b.before, b.after]), [['01.mp4', '02.mp4'], ['01.mp4', '03.mp4']]);
+});
+
+test('combine drops flags that the other row has made stale', () => {
+  const bare = row('Mew', 500, { ivs: null, hp: null, flags: ['ambiguous-ivs:3-fit', 'hp-unread', 'no-level-fits', 'ivs-unread'] });
+  const full = row('Mew', 500, { flags: ['cp-chosen-500-over-501'] });
+  for (const c of [combine(bare, full), combine(full, bare)]) {
+    assert.deepEqual(c.flags, ['cp-chosen-500-over-501']);
+    assert.equal(c.hp, 100);
+  }
+  // A read HP replaces a computed one, and hp-computed goes; a computed HP alone keeps its flag.
+  const computed = row('Mew', 500, { hp: 99, flags: ['hp-computed'] });
+  const read = combine(computed, row('Mew', 500, { hp: 100 }));
+  assert.equal(read.hp, 100);
+  assert.ok(!read.flags.includes('hp-computed'));
+  assert.ok(combine(computed, row('Mew', 500, { hp: null, flags: ['hp-unread'] })).flags.includes('hp-computed'));
+});
+
+test('shadow match on incomplete readings marks the row weak; strong matches do not', () => {
+  const normal = [row('Mew', 500, { hp: null, ivs: null, flags: ['hp-unread', 'ivs-unread'] }), row('Zapdos', 1969)];
+  const shadow = [row('Mew', 500), row('Zapdos', 1969)];
+  const m = mergeClips([clip('01.mp4', normal), clip('02-shadow.mp4', shadow)]);
+  assert.equal(m.rows.length, 2);
+  assert.deepEqual(m.reconciled, { matched: 1, appended: 0, ambiguous: 0, weak: 1 });
+  assert.equal(m.rows[0].shadow, 1);
+  assert.deepEqual(m.rows[0].flags, ['shadow-match-weak'], 'the shadow row supplied the missing HP and IVs');
+  assert.ok(m.rows[0].ivs && m.rows[0].hp === 100);
+  assert.deepEqual(m.rows[1].flags, []);
+  assert.equal(m.review.length, 1);
+});
+
+test('a strong shadow match is preferred over a weak candidate', () => {
+  const weakRow = row('Mew', 500, { ivs: null, flags: ['ivs-unread'] }), strongRow = row('Mew', 500);
+  const m = mergeClips([clip('01.mp4', [weakRow, strongRow]), clip('02-shadow.mp4', [row('Mew', 500)])]);
+  assert.deepEqual(m.rows.map((r) => r.shadow), [undefined, 1]);
+  assert.deepEqual(m.reconciled, { matched: 1, appended: 0, ambiguous: 0, weak: 0 });
 });

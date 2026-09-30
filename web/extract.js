@@ -69,9 +69,11 @@ function renderRows(rows) {
 // One or more recordings of one account: each is decoded and read in turn, then merged the way
 // scripts/extract-box.mjs merges a folder (boundary duplicates dropped, a "shadow" clip marks the
 // Shadow column). A file that cannot be decoded is reported and the rest still count.
-async function runExtraction(fileList) {
-  const files = orderClips(fileList.map((f) => ({ name: f.name, mtimeMs: f.lastModified, file: f }))).map((c) => c.file);
+// `files` are already in clip order and `kinds[i]` is the pass ('normal' | 'shadow' | 'purified')
+// chosen for files[i] on the planning screen.
+async function runExtraction(files, kinds) {
   clearErrors();
+  $('#plan').hidden = true;
   $('#intro').hidden = true;
   $('#results').hidden = true;
   $('#run').hidden = false;
@@ -103,7 +105,7 @@ async function runExtraction(fileList) {
     const done = [], failed = [], notes = [];
     let foundBefore = 0;
     for (const [i, file] of files.entries()) {
-      if (controller.cancelled) break;
+      if (controller.cancelled) { notes.push(`Stopped: ${files.slice(i).map((f) => f.name).join(', ')} ${files.length - i === 1 ? 'was' : 'were'} not processed.`); break; }
       const clipLabel = files.length > 1 ? `clip ${i + 1} of ${files.length} — ${file.name}` : '';
       setProgress(0, null, foundBefore, clipLabel);
       let totalEstimate = null, stoppedEarly = null;
@@ -126,7 +128,7 @@ async function runExtraction(fileList) {
         const where = files.length > 1 ? ` in ${file.name}` : '';
         if (controller.cancelled) notes.push(`Stopped early by you: rows${where} cover only the part of the recording that was processed.`);
         else if (stoppedEarly) notes.push(`The browser stopped decoding${where} before the end (${stoppedEarly}); rows cover only the part that was decoded.`);
-        done.push({ name: file.name, kind: passKind(file.name), rows: r.rows, unmatched: r.unmatched });
+        done.push({ name: file.name, kind: kinds[i], rows: r.rows, unmatched: r.unmatched });
       } catch (e) {
         failed.push({ name: file.name, error: e.message });
       }
@@ -138,6 +140,8 @@ async function runExtraction(fileList) {
     for (const c of merged.clips) if (c.kind !== 'normal') notes.push(`"${c.name}" was treated as a ${c.kind}-filtered pass: matching Pokémon are marked in the Shadow column.`);
     const r = merged.reconciled;
     if (r.appended) notes.push(`${r.appended} Pokémon appeared only in the shadow/purified pass and were added to the end of the list.`);
+    for (const b of merged.boundaries) notes.push(`${b.before} → ${b.after}: ${b.dropped} repeated Pokémon dropped (${b.droppedRows.map((x) => `${x.name} ${x.cp}`).join(', ')})${b.weak ? '; this join is weak, so those rows are flagged boundary-weak: check them' : ''}.`);
+    if (r.weak) notes.push(`${r.weak} shadow/purified Pokémon were matched on incomplete HP or IV readings and are flagged shadow-match-weak: check them.`);
     if (r.ambiguous) notes.push(`${r.ambiguous} shadow/purified Pokémon matched several identical rows; the first was marked and flagged shadow-match-ambiguous.`);
     if (merged.unmatched.length) notes.push(`${merged.unmatched.length} frame${merged.unmatched.length === 1 ? '' : 's'} showed a CP but no recognisable species name (a nickname, or a garbled read); they are listed in the review JSON, not in the table.`);
 
@@ -175,10 +179,33 @@ function wireResultActions(files, merged, failedClips) {
   };
 }
 
+// Show the chosen clips in order with a "Shadow pass" and a "Purified pass" tick each (pre-ticked
+// from the filename), then wait for Start. The iPhone Photos picker cannot rename a file, so the
+// ticks are the only way a Safari user can mark the Shadow-filtered clip.
 function pickFiles(list) {
-  const files = Array.from(list ?? []);
-  if (!files.length) return;
-  runExtraction(files);
+  const picked = Array.from(list ?? []);
+  if (!picked.length) return;
+  const files = orderClips(picked.map((f) => ({ name: f.name, mtimeMs: f.lastModified, file: f }))).map((c) => c.file);
+  clearErrors();
+  $('#planRows').innerHTML = files.map((f, i) => {
+    const kind = passKind(f.name);
+    return `<tr><td class="num">${i + 1}</td><td class="name">${esc(f.name)}</td>
+      <td><label><input type="checkbox" data-kind="shadow" data-i="${i}"${kind === 'shadow' ? ' checked' : ''}> Shadow pass</label></td>
+      <td><label><input type="checkbox" data-kind="purified" data-i="${i}"${kind === 'purified' ? ' checked' : ''}> Purified pass</label></td></tr>`;
+  }).join('');
+  // A clip is one pass or the other, never both.
+  $('#planRows').onchange = (e) => {
+    const box = e.target;
+    if (box.checked) $('#planRows').querySelectorAll(`input[data-i="${box.dataset.i}"]`).forEach((o) => { if (o !== box) o.checked = false; });
+  };
+  $('#plan').hidden = false;
+  $('#start').onclick = () => {
+    const kinds = files.map((_, i) => {
+      const on = (k) => $('#planRows').querySelector(`input[data-i="${i}"][data-kind="${k}"]`).checked;
+      return on('shadow') ? 'shadow' : on('purified') ? 'purified' : 'normal';
+    });
+    runExtraction(files, kinds);
+  };
 }
 
 function init() {

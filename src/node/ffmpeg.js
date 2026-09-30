@@ -6,6 +6,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { naturalCompare } from '../extract/batch.js';
 
 export const FFMPEG_NOT_FOUND = 'ffmpeg not found. Install it with "winget install Gyan.FFmpeg" (Windows) or "brew install ffmpeg" (Mac), or pass --ffmpeg <path> / set FFMPEG.';
 
@@ -13,7 +14,7 @@ export const FFMPEG_NOT_FOUND = 'ffmpeg not found. Install it with "winget insta
 export function globFiles(pattern) {
   const parts = pattern.split(/[\\/]/);
   const out = [];
-  const rx = (seg) => new RegExp(`^${seg.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`, 'i');
+  const rx = (seg) => new RegExp(`^${seg.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`, 'i');
   const walk = (dir, i) => {
     if (i === parts.length) { out.push(dir); return; }
     const seg = parts[i];
@@ -45,10 +46,12 @@ const probeVersion = (cmd) => spawnSync(cmd, ['-version'], { stdio: 'ignore' }).
 export function findFfmpeg({ explicit = null, env = process.env, platform = process.platform, exists = existsSync, glob = globFiles, probe = probeVersion } = {}) {
   if (explicit) {
     if (!exists(explicit)) throw new Error(`--ffmpeg is ${explicit} but no such file exists`);
+    if (!probe(explicit)) throw new Error(`--ffmpeg is ${explicit}, which exists but does not run as ffmpeg ("-version" failed)`);
     return { path: explicit, source: '--ffmpeg' };
   }
   if (env.FFMPEG) {
     if (!exists(env.FFMPEG)) throw new Error(`FFMPEG is set to ${env.FFMPEG} but no such file exists`);
+    if (!probe(env.FFMPEG)) throw new Error(`FFMPEG is set to ${env.FFMPEG}, which exists but does not run as ffmpeg ("-version" failed)`);
     return { path: env.FFMPEG, source: 'FFMPEG' };
   }
   for (const cmd of platform === 'win32' ? ['ffmpeg', 'ffmpeg.exe'] : ['ffmpeg']) if (probe(cmd)) return { path: 'ffmpeg', source: 'PATH' };
@@ -75,8 +78,8 @@ export function findFfmpeg({ explicit = null, env = process.env, platform = proc
   }
   for (const { source, pattern } of candidates) {
     const found = pattern.includes('*') ? glob(pattern) : (exists(pattern) ? [pattern] : []);
-    // Newest-named first: with several Python versions the highest is the most likely to be current.
-    for (const p of [...found].sort().reverse()) if (probe(p)) return { path: p, source };
+    // Highest version first (natural order, so Python312 beats Python39): the newest install is the most likely to work.
+    for (const p of [...found].sort((x, y) => naturalCompare(y, x))) if (probe(p)) return { path: p, source };
   }
   return null;
 }

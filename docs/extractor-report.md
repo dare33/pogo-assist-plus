@@ -317,9 +317,29 @@ variable), clips copied from the Drive recordings into a scratch folder:
 - Shadow pass: 4 matched, 0 appended, 0 ambiguous. Exactly Mewtwo 3673, Xurkitree 3028,
   Zamazenta 2692 and Zamazenta 2651 have `Shadow/Purified` = 1.
 - Second run: all three clips `cached`, CSV byte-identical (SHA-256 `0291af71...b9a3`, the
-  scan date is the newest clip's modified time, not the wall clock).
+  scan date is the newest clip's modified time, not the wall clock; the export file name carries
+  the same recording date, not the run date).
 - Run on the parent folder: the `dare33` subfolder was processed as the account.
 - Single-video CLI on `01-trimmed.mp4` with ffmpeg auto-found: the same 4 rows, 3.3 s.
 
 Limits: the overlap and shadow logic was exercised on synthetic rows and on this exact-duplicate
 clip pair; a real multi-clip recording and a real Shadow-filtered pass have not been run.
+
+### Review fold (30 Sep 2026)
+
+Two adversarial reviews of the batch-mode commit (Opus reviewer: mergeable with fixes; Sol 5.6
+cross-vendor: not mergeable) agreed on the substance. Folded: cache keyed on a hash of the extractor
+(readings cached, rows rebuilt every run); merge leniency based on flags, since resolved rows carry no
+ivConfidence; smallest consistent overlap with `boundary-weak` joins listed by name and CP; strong and
+weak shadow matches (`shadow-match-weak`); stale flags dropped when rows are combined; `.partial`
+exports that never overwrite the complete one or reach the inbox; ffmpeg found only when needed; export
+named by recording date; argument checks; explicit ffmpeg paths probed; natural sort of Python
+versions; launcher `%*`; `.gitattributes`; per-clip Shadow/Purified ticks on the page. Decoding is
+now windowed (60 s at a time, about 720 MB peak instead of about 12 MB per second of recording).
+
+Numbers after the fold, same three clips: 48 merged rows, 4 boundary duplicates dropped
+(Mega Mewtwo Y 3673, Xurkitree 3028, Zamazenta 2692, Zamazenta 2651; join not weak), shadow pass 4 matched,
+0 appended, 0 ambiguous, 0 weak; CSV SHA-256 `0291af71...b9a3`, the same before and after windowing.
+`02-original.mp4` alone gives 48 rows and the same CSV whether the window is 60, 10 or 7 seconds
+(212 frames each, last frame f0212 at 42.2 s); its 42 s fit in one 60 s window, so the shorter
+windows were used to exercise window edges.

@@ -128,7 +128,7 @@ function isoDay(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-/** Merged export of several clips, named as the batch CLI names its account exports. */
+/** Merged export of several clips: `poke-genie-export-<date>.csv` (the page has no account name; the CLI's adds one). */
 export function mergedCsvFilename(date = new Date()) {
   return `poke-genie-export-${isoDay(date)}.csv`;
 }
