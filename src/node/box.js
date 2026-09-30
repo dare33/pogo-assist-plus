@@ -199,17 +199,19 @@ export async function runAccount(acct, ctx) {
       account: acct.name, folder: acct.folder, date, partial, fps, clips: clipsOut, boundaries: merged.boundaries, reconciled: merged.reconciled,
       rows: merged.rows.length, flagged: merged.review.length, failedClips, review: merged.review, unmatched: merged.unmatched,
     }, null, 2));
-    // A complete run supersedes an earlier partial export of the same recording.
-    if (!partial) {
-      for (const stale of [join(outDir, `${stem}.partial.csv`), join(outDir, `${stem}.partial.review.json`)]) {
-        if (existsSync(stale)) { writing = stale; rmSync(stale); log(`removed the stale partial export ${stale}`); }
-      }
-    }
     // A partial export must never reach the inbox, where the complete one would be replaced by it.
     if (ctx.inbox && !partial) { inboxCopy = join(ctx.inbox, `${stem}.csv`); writing = inboxCopy; copyFileSync(csvPath, inboxCopy); }
   } catch (e) {
     log(`could not write ${writing}: ${e.code ? `${e.code} ` : ''}${e.message} (is it open in Excel?)`);
     return { failed: failedClips.length, writeFailed: true, csvPath: null };
+  }
+  // A complete run supersedes an earlier partial export of the same recording. Best effort: a
+  // partial that is open in Excel must not stop the inbox copy or the summary.
+  if (!partial) {
+    for (const stale of [join(outDir, `${stem}.partial.csv`), join(outDir, `${stem}.partial.review.json`)]) {
+      if (!existsSync(stale)) continue;
+      try { rmSync(stale); log(`removed the stale partial export ${stale}`); } catch (e) { log(`could not remove stale ${stale}: ${e.code ?? e.message}`); }
+    }
   }
 
   log(`\nSummary for ${acct.name}`);
@@ -291,10 +293,18 @@ export async function runBox(argv, deps = {}) {
     accounts.push(...found);
   }
   if (args.account && accounts.length > 1) { log(`--account ${args.account} names one account but ${accounts.length} were found (${accounts.map((a) => a.name).join(', ')}); give one folder that holds clips directly.`); return 2; }
+  // Two accounts of one name collide only where their exports land in the same place: a shared
+  // --out-dir or --inbox, or the same folder. Otherwise each writes into its own folder.
+  const shared = Boolean(args.outDir || args.inbox);
   const seen = new Map();
   for (const a of accounts) {
-    const key = a.name.toLowerCase();
-    if (seen.has(key)) { log(`Two accounts would write the same export name (${a.name}): ${seen.get(key)} and ${a.folder}. Rename one folder or run them separately.`); return 2; }
+    const key = shared ? a.name.toLowerCase() : resolve(a.folder).toLowerCase();
+    if (seen.has(key)) {
+      log(shared
+        ? `Two accounts would write the same export name (${a.name}): ${seen.get(key)} and ${a.folder}, into the same --out-dir or --inbox. Rename one folder or run them separately.`
+        : `${a.folder} was given twice.`);
+      return 2;
+    }
     seen.set(key, a.folder);
   }
   if (args.outDir && !(existsSync(args.outDir) && statSync(args.outDir).isDirectory())) { log(`--out-dir ${args.outDir} is not a folder.`); return 2; }

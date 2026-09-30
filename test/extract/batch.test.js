@@ -189,8 +189,7 @@ test('combine drops flags that the other row has made stale', () => {
   const bare = row('Mew', 500, { ivs: null, hp: null, flags: ['ambiguous-ivs:3-fit', 'hp-unread', 'no-level-fits', 'ivs-unread'] });
   const full = row('Mew', 500, { flags: ['cp-chosen-500-over-501'] });
   for (const c of [combine(bare, full), combine(full, bare)]) {
-    assert.deepEqual(c.flags.filter((f) => f !== 'no-level-fits'), ['cp-chosen-500-over-501']);
-    assert.ok(c.flags.includes('no-level-fits'), 'no-level-fits is never pruned');
+    assert.deepEqual(c.flags, ['cp-chosen-500-over-501'], "a discarded row's misread does not condemn the row that solved");
     assert.equal(c.hp, 100);
   }
   // A read HP replaces a computed one, and hp-computed goes; a computed HP alone keeps its flag.
@@ -260,4 +259,38 @@ test('A4: settled IVs win over a lenient guess, and the guess flags of the loser
   // Both orders keep the settled row; its own lenient flag stays when its own IVs are the doubtful ones.
   assert.deepEqual(combine(settledClean, guess).ivs, IVS);
   assert.ok(combine(guess, settled).flags.includes('ivs-disagree'));
+});
+
+test('no-level-fits stays when the kept row itself carried it, or an hp-mismatch fired', () => {
+  const bad = () => row('Mew', 500, { ivs: null, hp: null, flags: ['no-level-fits', 'hp-unread'] });
+  assert.ok(combine(bad(), bad()).flags.includes('no-level-fits'));
+  const computed = row('Mew', 500, { hp: 99, frames: 9, flags: ['hp-computed'] });
+  const c = combine(computed, row('Mew', 500, { hp: 100, frames: 1, flags: ['no-level-fits'] }));
+  assert.ok(c.flags.some((f) => f.startsWith('hp-mismatch')));
+  assert.ok(c.flags.includes('no-level-fits'), 'kept because the HP swap disagreed');
+});
+
+test('a clip join: a misread partner does not leave no-level-fits on the row that solved', () => {
+  const misread = row('Mew', 500, { ivs: null, hp: null, flags: ['no-level-fits', 'bars-unsettled'] });
+  const m = mergeClips([clip('01.mp4', [row('A', 1), misread]), clip('02.mp4', [row('Mew', 500, { hp: 100 }), row('B', 2)])]);
+  assert.deepEqual(m.rows.map((r) => r.name), ['A', 'Mew', 'B']);
+  assert.deepEqual(m.rows[1].ivs, IVS);
+  assert.ok(!m.rows[1].flags.includes('no-level-fits'));
+  assert.ok(!m.rows[1].flags.includes('bars-unsettled'));
+});
+
+test('a shadow match: a misread shadow row does not put no-level-fits on the read main row', () => {
+  const shadow = row('Mew', 500, { ivs: null, flags: ['no-level-fits'] });
+  const m = mergeClips([clip('01.mp4', [row('Mew', 500)]), clip('02-shadow.mp4', [shadow])]);
+  assert.equal(m.rows.length, 1);
+  assert.equal(m.rows[0].shadow, 1);
+  assert.ok(!m.rows[0].flags.includes('no-level-fits'));
+});
+
+test('per-clip flagged counts come from the final rows, after boundary marking', () => {
+  const M = () => row('Meltan', 150);
+  const m = mergeClips([clip('01.mp4', [row('X', 1), M(), M()]), clip('02.mp4', [M(), M(), row('Y', 2)])]);
+  const flaggedRows = (name) => m.rows.filter((r) => r.clip === name && r.flags.length).length;
+  assert.deepEqual(m.clips.map((c) => c.flagged), [flaggedRows('01.mp4'), flaggedRows('02.mp4')]);
+  assert.ok(m.clips[0].flagged > 0);
 });

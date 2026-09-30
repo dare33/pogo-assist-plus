@@ -276,12 +276,23 @@ test('--account with several accounts, or two accounts with one name, is refused
     let r = await run([parent, '--account', 'greg'], { extractClip: fx.extractClip });
     assert.equal(r.code, 2);
     assert.match(r.log, /--account greg names one account but 2 were found \(alpha, beta\)/);
-    // two folders that both resolve to the account name "same"
+    // two folders that both resolve to the account name "same": fine while each exports into its
+    // own folder, refused when the exports would land in one place
     const one = fixture(['01-a.mp4'], { under: join(other, 'x', 'same') }), two = fixture(['01-b.mp4'], { under: join(other, 'y', 'same') });
-    r = await run([one, two], { extractClip: fx.extractClip });
-    assert.equal(r.code, 2);
-    assert.match(r.log, /same export name \(same\)/);
+    const out = scratchDir(), inbox = scratchDir();
+    for (const shared of [['--out-dir', out], ['--inbox', inbox]]) {
+      r = await run([one, two, ...shared], { extractClip: fx.extractClip });
+      assert.equal(r.code, 2, r.log);
+      assert.match(r.log, /same export name \(same\)/);
+    }
     assert.deepEqual(fx.calls, [], 'nothing was read');
+    r = await run([one, two], { extractClip: fx.extractClip });
+    assert.equal(r.code, 0, r.log);
+    assert.ok(existsSync(join(one, 'poke-genie-export-same-2026-03-05.csv')));
+    assert.ok(existsSync(join(two, 'poke-genie-export-same-2026-03-05.csv')));
+    r = await run([one, one], { extractClip: fx.extractClip });
+    assert.equal(r.code, 2);
+    assert.match(r.log, /was given twice/);
   } finally { cleanup(parent, other); }
 });
 
@@ -334,4 +345,19 @@ test('the summary reports an unmatched join', async () => {
     const r = await run([dir], { extractClip: fakeExtractor({ readings }).extractClip });
     assert.match(r.log, /01-a\.mp4 → 02-b\.mp4: no overlap found \(tail C 300, head C 308\)[^\n]*may be listed twice/);
   } finally { cleanup(dir); }
+});
+
+test('a stale .partial that cannot be removed is a warning: the inbox copy, summary and exit 0 stand', async () => {
+  const dir = fixture(['01-a.mp4']), inbox = scratchDir();
+  try {
+    const stem = `poke-genie-export-${dir.split(/[\\/]/).pop()}-2026-03-05`;
+    mkdirSync(join(dir, `${stem}.partial.csv`)); // a directory squatting on the name makes rmSync throw
+    const r = await run([dir, '--inbox', inbox], { extractClip: fakeExtractor().extractClip });
+    assert.equal(r.code, 0, r.log);
+    assert.match(r.log, /could not remove stale .*\.partial\.csv: /);
+    assert.ok(existsSync(join(dir, `${stem}.csv`)), 'the complete CSV was written');
+    assert.deepEqual(readdirSync(inbox), [`${stem}.csv`], 'and copied to the inbox');
+    assert.match(r.log, /Summary for/);
+    assert.match(r.log, /copied the CSV to/);
+  } finally { cleanup(dir, inbox); }
 });

@@ -351,3 +351,10 @@ with several accounts, a wider cache key (extra source files, library versions, 
 stale `.partial` cleanup, per-account write failures, tests under `scratch/`, windowed decode that
 continues through an empty window, and the launcher's quoted-drive-root handling. Same three clips:
 48 rows, CSV SHA-256 `0291af71...b9a3` (unchanged); 118 tests pass, 3 skip.
+
+Final review round (Opus and Sol 5.6, both "mergeable with fixes"): folded `no-level-fits` handling
+when rows are combined (and the page's advisor filter), best-effort removal of stale `.partial`
+files after the inbox copy, duplicate-account refusal only where exports would collide, the
+launcher's per-argument quoting (drive roots and spaced `--out-dir` values), final-row per-clip
+flagged counts and a single empty-window warning. Same three clips: 48 rows, CSV SHA-256
+`0291af71...b9a3` (unchanged); 123 tests pass, 3 skip.

@@ -47,6 +47,7 @@ function probeDuration(video, ffmpegPath) {
  * with an unknown duration the first empty window is the end.
  */
 async function* windowedFrames(video, dir, fps, ffmpegPath, counter, windowSeconds, duration, warn) {
+  let warned = false;
   for (let w = 0; ; w++) {
     const start = w * windowSeconds;
     if (duration !== null && start >= duration) return;
@@ -55,7 +56,8 @@ async function* windowedFrames(video, dir, fps, ffmpegPath, counter, windowSecon
     if (!files.length) {
       if (duration === null) return;
       // Under a second of footage left is just the tail of the duration rounding up.
-      if (duration - start > 1) warn(`no frames decoded from ${start} s to ${Math.min(start + windowSeconds, duration).toFixed(1)} s of ${video}`);
+      // Once is enough: a container that outruns its video stream would otherwise warn per window.
+      if (duration - start > 1 && !warned) { warned = true; warn(`no frames after ${start} s; the file reports ${duration.toFixed(1)} s, the video stream may be shorter (${video})`); }
       continue;
     }
     for (let i = 0; i < files.length; i++) {

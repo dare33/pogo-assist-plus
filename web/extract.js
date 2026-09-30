@@ -179,7 +179,7 @@ function wireResultActions(files, merged, failedClips) {
   $('#downloadReview').onclick = () => downloadText(JSON.stringify({ rows, review, unmatched, boundaries, reconciled, clips, failedClips }, null, 2), one ? reviewFilename(files[0]) : mergedReviewFilename(today), 'application/json');
   // Rows whose name, CP, HP and bars cannot be reconciled are misreads, not Pokémon: the advisor
   // gets the rest. Ambiguous rows go through with blank IVs (the CSV already leaves them blank).
-  const junk = rows.filter((r) => r.flags.includes('no-level-fits'));
+  const junk = rows.filter((r) => r.flags.includes('no-level-fits') && !r.ivs);
   const good = rows.filter((r) => !junk.includes(r));
   $('#loadAdvisor').textContent = junk.length ? `Load ${good.length} into advisor (${junk.length} unreadable left out)` : 'Load into advisor';
   $('#loadAdvisor').onclick = () => {

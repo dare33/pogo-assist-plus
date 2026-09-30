@@ -110,7 +110,9 @@ export function combine(a, b) {
   }
   if (!keep.ivs && other.ivs) keep.ivs = other.ivs;
   const flags = new Set([...(a.flags ?? []), ...(b.flags ?? [])]);
-  // no-level-fits is never pruned: a misread on either row stays visible.
+  // no-level-fits stays only when the kept row itself carried it, or the HP swap disagreed: a
+  // discarded row's misread does not condemn a row whose own read solved.
+  if (!(keep.flags ?? []).includes('no-level-fits') && !mismatch) flags.delete('no-level-fits');
   if (keep.ivs) for (const f of flags) if (f.startsWith('ambiguous-ivs') || f === 'ivs-unread') flags.delete(f);
   if (keep.ivs && !ivsGuessed) for (const f of flags) if (f === 'bars-unsettled' || f === 'ivs-disagree' || f.startsWith('ivs-corrected-from-')) flags.delete(f);
   if (has(keep.hp)) flags.delete('hp-unread');
@@ -198,6 +200,6 @@ export function mergeClips(clips, { maxOverlap = 10 } = {}) {
   const unmatched = tagged.flatMap((c) => (c.unmatched ?? []).map((u) => ({ ...u, clip: c.name })));
   return {
     rows: merged, review, unmatched, boundaries, reconciled,
-    clips: tagged.map((c) => ({ name: c.name, kind: c.kind, rows: c.rows.length, flagged: c.rows.filter((r) => r.flags.length).length })),
+    clips: tagged.map((c) => ({ name: c.name, kind: c.kind, rows: c.rows.length, flagged: merged.filter((r) => r.clip === c.name && r.flags.length).length })),
   };
 }

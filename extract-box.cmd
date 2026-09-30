@@ -27,8 +27,21 @@ node "%~dp0scripts\extract-box.mjs" %INBOXARG% "%FOLDER%"
 goto :end
 
 :given
-rem Explorer already quotes paths with spaces; %* keeps that quoting and passes every argument on.
-node "%~dp0scripts\extract-box.mjs" %INBOXARG% %*
+rem Rebuild the command one argument at a time so each stays a single quoted argument (a value
+rem with spaces, such as --out-dir "D:\Output Files", would otherwise be split by the quote rules
+rem of a trailing backslash). A trailing backslash gets a "." because \" would swallow the closing
+rem quote: "C:\" becomes "C:\." and "D:\x\" becomes "D:\x\.", the same folders.
+set "NODEARGS="
+:next
+if "%~1"=="" goto :run
+set "ARG=%~1"
+if "%ARG:~-1%"=="\" set "ARG=%ARG%."
+set NODEARGS=%NODEARGS% "%ARG%"
+shift
+goto :next
+
+:run
+node "%~dp0scripts\extract-box.mjs" %INBOXARG% %NODEARGS%
 goto :end
 
 :nonode

@@ -29,8 +29,12 @@ batch mode added on 30 Sep 2026; single recordings still work with `node scripts
 - Anywhere: `npm run extract:box -- "<folder>"` or `node scripts/extract-box.mjs "<folder>"`.
   Several folders can be given, each handled as an account or a parent of accounts. `--account`
   is only for one folder that holds clips directly: with several resulting accounts it is refused
-  (exit 2), and so are two accounts that would get the same name (they would write the same file).
-  Both checks happen before anything is read. Options: `--account NAME` (letters, digits, `.`, `_`, `-`; default:
+  (exit 2), and so are two accounts of the same name whose exports would land in the same place (a
+  shared `--out-dir` or `--inbox`, or the same folder given twice); without those each account writes
+  into its own folder and `C:\one\same` and `D:\two\same` both run. Both checks happen before
+  anything is read. When calling the script directly, write a drive root as `C:\.` or `C:/` (a
+  quoted `"C:\"` loses its closing quote on Windows; `extract-box.cmd` fixes that for you, including
+  for `--out-dir` values with spaces). Options: `--account NAME` (letters, digits, `.`, `_`, `-`; default:
   the folder name), `--fps 5`, `--order name|mtime`, `--inbox DIR`, `--out-dir DIR` (must exist;
   default: the folder), `--ffmpeg PATH`, `--force` (ignore the cache), `--quiet`. Unknown options,
   and options missing their value, are an error (exit 2).
@@ -78,7 +82,7 @@ exits 1.
 - When **more than one** overlap length is consistent, the rows between the smallest and the largest
   may be repeats that were kept. Every head row up to the largest fitting overlap, and the tail rows
   they would repeat, get `boundary-weak`, and the summary lists them:
-  `01-a.mp4 → 02-b.mp4: 1 duplicate row dropped (Meltan 150); 2 more may be repeats: Zapdos 1969, Meltan 150 — check`.
+  `01-a.mp4 → 02-b.mp4: 1 duplicate row dropped (Meltan 150); 2 more may be repeats: Zapdos 1969, Meltan 150 — check (flagged boundary-weak)`.
   The review JSON has `alternatives` (every consistent length) and `maybeRepeated` on the boundary.
 - A join is also **weak** when any matched pair had a missing or guessed HP or IVs; its rows get
   `boundary-weak` and the dropped rows are listed by name and CP.
@@ -91,7 +95,8 @@ exits 1.
   merged.
 - Where a dropped row had information the kept row lacked (HP, IVs), it is filled in, and flags that
   no longer apply (`ivs-unread`, `ambiguous-ivs`, `hp-unread`, IV-guess flags when the kept IVs are
-  settled) are removed. `no-level-fits` is never removed. If a computed HP is replaced by a different
+  settled) are removed. `no-level-fits` stays only when the kept row itself carried it (or the HP swap below disagreed): a
+  misread partner does not condemn a row whose own read solved. If a computed HP is replaced by a different
   read HP, the row is flagged `hp-mismatch:<computed>/<read>` (its IVs and level were solved for the
   old HP) and goes on the "check these" list. Settled IVs are preferred over a guess whatever the
   number of frames.

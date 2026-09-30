@@ -7,7 +7,7 @@ CSV plus a review JSON (optionally copied to an inbox). ffmpeg is found automati
 winget, imageio-ffmpeg). Per-clip results are cached beside the clips. The browser page takes
 several clips and merges them the same way. Protocol and summary lines: `docs/whole-box.md`.
 New modules: `src/extract/batch.js` (pure merge), `src/node/ffmpeg.js`, `src/node/extract-video.js`.
-Tests: 118 passing, 3 skipped (`npm test`, after the two review folds below).
+Tests: 123 passing, 3 skipped (`npm test`, after the three review folds below).
 
 **Verified (30 Sep, Windows, Node 24, ffmpeg found as imageio-ffmpeg with no `FFMPEG` set):**
 three clips (trimmed, original, trimmed again named `03-shadow-trimmed.mp4`) in one folder gave
@@ -49,6 +49,14 @@ Excel) is reported per account instead of aborting; the tests use `scratch/` not
 the windowed decode continues through an empty window when the clip's duration says there is more;
 a quoted drive root (`"C:\"`) no longer breaks the launcher's argument handling; an unreadable
 folder under a drive root is skipped. Re-run: the batch CSV hash is unchanged (`0291af71...b9a3`).
+
+**Final review round (30 Sep, same day)** (Opus and Sol 5.6, both "mergeable with fixes") confirmed the
+third fold and left small items, all folded: a correctly read Pokémon joined with a misread partner
+no longer keeps `no-level-fits` (and the page's "Load into advisor" drops only rows with that flag
+and no IVs); a stale `.partial` that cannot be deleted is a warning after the inbox copy, not a
+failed write; two accounts of one name are refused only when their exports would land in the same
+place; the launcher rebuilds its arguments one at a time so `"C:\" --out-dir "D:\Output Files"`
+survives; per-clip flagged counts come from the final rows; an empty-window warning is printed once.
 
 **Not yet tested:** a real multi-clip whole-box recording (overlap dropping is tested on synthetic
 rows and on one exact-duplicate clip pair only); a real Shadow-filtered pass (the shadow clip in
