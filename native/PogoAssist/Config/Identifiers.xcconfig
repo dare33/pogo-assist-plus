@@ -1,0 +1,10 @@
+// The one place the bundle id prefix and the app group live. If Xcode cannot register these
+// (an identifier already taken on the developer account), change BUNDLE_ID_PREFIX here and
+// nowhere else: the app, the extension, both entitlement files and the Info.plist values all
+// derive from it.
+BUNDLE_ID_PREFIX = com.dare33
+APP_BUNDLE_ID = $(BUNDLE_ID_PREFIX).pogoassist
+EXTENSION_BUNDLE_ID = $(BUNDLE_ID_PREFIX).pogoassist.broadcast
+APP_GROUP = group.$(BUNDLE_ID_PREFIX).pogoassist
+// Left empty on purpose: the owner picks his team in Xcode (automatic signing).
+DEVELOPMENT_TEAM =

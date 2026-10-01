@@ -1,0 +1,515 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2851EAE92D472650A78CD032 /* SampleHandler.swift */; };
+		097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 00436FF3692616EF8377125B /* PogoReader */; };
+		53E565D8D2134740F880785D /* StateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9E2F476A7C0759293BCB1F /* StateModel.swift */; };
+		676B795352FD800C5AC8AD78 /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 16E6951D5A5A38B33745BA2B /* PogoReader */; };
+		6C36CD15ECE70F69B86AD66A /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
+		83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */; };
+		A0129EF312F80693A11F6889 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7BBE6B4B350600CD9DBB146 /* ContentView.swift */; };
+		CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D6CBB60EDDFC066527674173 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABF508185C418D773A2E16EA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1F7F526800B6D63AAD20F8D3;
+			remoteInfo = PogoBroadcast;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		624150CED5EC66A79A7FD39D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		00027E9C738C8485EF328388 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		2851EAE92D472650A78CD032 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
+		2E3538488989AE3C1ABAA66B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4C694C91A68984883C8CC317 /* PogoAssist.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoAssist.entitlements; sourceTree = "<group>"; };
+		5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PogoBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PogoAssistApp.swift; sourceTree = "<group>"; };
+		6B9E2F476A7C0759293BCB1F /* StateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateModel.swift; sourceTree = "<group>"; };
+		9DD3B9B348BAD6411BC1C01A /* SharedState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedState.swift; sourceTree = "<group>"; };
+		B7BBE6B4B350600CD9DBB146 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Identifiers.xcconfig; sourceTree = "<group>"; };
+		C6F031A6C112AFF16F56C17A /* PogoReader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PogoReader; path = ../PogoReader; sourceTree = SOURCE_ROOT; };
+		CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoBroadcast.entitlements; sourceTree = "<group>"; };
+		F391C1A79CF135A501834207 /* PogoAssist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PogoAssist.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		43C7191C0D0E29B8721FAF17 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2B9BC1BE8EBC5FE0C4A37FE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				676B795352FD800C5AC8AD78 /* PogoReader in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		136978DFB9C1E3E522338822 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		33DC935E8680C780EF432B5E /* PogoBroadcast */ = {
+			isa = PBXGroup;
+			children = (
+				2E3538488989AE3C1ABAA66B /* Info.plist */,
+				CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */,
+				2851EAE92D472650A78CD032 /* SampleHandler.swift */,
+			);
+			path = PogoBroadcast;
+			sourceTree = "<group>";
+		};
+		4A22D7B44AB27CD127531B1A /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				9DD3B9B348BAD6411BC1C01A /* SharedState.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		5D6EDB9C210D9187585D781D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F391C1A79CF135A501834207 /* PogoAssist.app */,
+				5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		83D4555883DC4E6375E28D61 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				C6F031A6C112AFF16F56C17A /* PogoReader */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		A6DD4DFF546C8659517B4EF3 = {
+			isa = PBXGroup;
+			children = (
+				136978DFB9C1E3E522338822 /* Config */,
+				83D4555883DC4E6375E28D61 /* Packages */,
+				D1230AB8CB500A6F206667F1 /* PogoAssist */,
+				33DC935E8680C780EF432B5E /* PogoBroadcast */,
+				4A22D7B44AB27CD127531B1A /* Shared */,
+				5D6EDB9C210D9187585D781D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D1230AB8CB500A6F206667F1 /* PogoAssist */ = {
+			isa = PBXGroup;
+			children = (
+				B7BBE6B4B350600CD9DBB146 /* ContentView.swift */,
+				00027E9C738C8485EF328388 /* Info.plist */,
+				4C694C91A68984883C8CC317 /* PogoAssist.entitlements */,
+				55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */,
+				6B9E2F476A7C0759293BCB1F /* StateModel.swift */,
+			);
+			path = PogoAssist;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1F7F526800B6D63AAD20F8D3 /* PogoBroadcast */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 601830ECC46122AAE0399C36 /* Build configuration list for PBXNativeTarget "PogoBroadcast" */;
+			buildPhases = (
+				E3E4F8E83C4C7E6BC24510AA /* Sources */,
+				A2B9BC1BE8EBC5FE0C4A37FE /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PogoBroadcast;
+			packageProductDependencies = (
+				16E6951D5A5A38B33745BA2B /* PogoReader */,
+			);
+			productName = PogoBroadcast;
+			productReference = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		282114AC3DFA08D4C66E6E04 /* PogoAssist */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5487725AE03AB7A6D39EB43E /* Build configuration list for PBXNativeTarget "PogoAssist" */;
+			buildPhases = (
+				DF6ACB2D44293C40A2B1BC47 /* Sources */,
+				43C7191C0D0E29B8721FAF17 /* Frameworks */,
+				624150CED5EC66A79A7FD39D /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2D012D71862B1D676EA51A5 /* PBXTargetDependency */,
+			);
+			name = PogoAssist;
+			packageProductDependencies = (
+				00436FF3692616EF8377125B /* PogoReader */,
+			);
+			productName = PogoAssist;
+			productReference = F391C1A79CF135A501834207 /* PogoAssist.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		ABF508185C418D773A2E16EA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					1F7F526800B6D63AAD20F8D3 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					282114AC3DFA08D4C66E6E04 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 169BDF417580650D1D1C1947 /* Build configuration list for PBXProject "PogoAssist" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = A6DD4DFF546C8659517B4EF3;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				FD0F4D83FBF63D631A6AAE65 /* XCLocalSwiftPackageReference "../PogoReader" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5D6EDB9C210D9187585D781D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				282114AC3DFA08D4C66E6E04 /* PogoAssist */,
+				1F7F526800B6D63AAD20F8D3 /* PogoBroadcast */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DF6ACB2D44293C40A2B1BC47 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0129EF312F80693A11F6889 /* ContentView.swift in Sources */,
+				83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */,
+				CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */,
+				53E565D8D2134740F880785D /* StateModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E3E4F8E83C4C7E6BC24510AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */,
+				6C36CD15ECE70F69B86AD66A /* SharedState.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B2D012D71862B1D676EA51A5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1F7F526800B6D63AAD20F8D3 /* PogoBroadcast */;
+			targetProxy = D6CBB60EDDFC066527674173 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		443FCD486119C4E24EC55995 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PogoBroadcast/PogoBroadcast.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PogoBroadcast/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(EXTENSION_BUNDLE_ID)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		87987F379C67731CA24E27C0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PogoAssist/PogoAssist.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PogoAssist/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		99B724FD294EE3CC8D97D75A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PogoBroadcast/PogoBroadcast.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PogoBroadcast/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(EXTENSION_BUNDLE_ID)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9B920A69E5E0B972DCC12E91 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		E3C3CC2CF33FC005565D4E41 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PogoAssist/PogoAssist.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PogoAssist/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E9BFF95E228A3ABD0DAE8991 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		169BDF417580650D1D1C1947 /* Build configuration list for PBXProject "PogoAssist" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9B920A69E5E0B972DCC12E91 /* Debug */,
+				E9BFF95E228A3ABD0DAE8991 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5487725AE03AB7A6D39EB43E /* Build configuration list for PBXNativeTarget "PogoAssist" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E3C3CC2CF33FC005565D4E41 /* Debug */,
+				87987F379C67731CA24E27C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		601830ECC46122AAE0399C36 /* Build configuration list for PBXNativeTarget "PogoBroadcast" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				99B724FD294EE3CC8D97D75A /* Debug */,
+				443FCD486119C4E24EC55995 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		FD0F4D83FBF63D631A6AAE65 /* XCLocalSwiftPackageReference "../PogoReader" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../PogoReader;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		00436FF3692616EF8377125B /* PogoReader */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PogoReader;
+		};
+		16E6951D5A5A38B33745BA2B /* PogoReader */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PogoReader;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = ABF508185C418D773A2E16EA /* Project object */;
+}

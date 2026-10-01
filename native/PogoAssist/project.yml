@@ -1,0 +1,86 @@
+# XcodeGen spec for the Pogo Assist+ proof-2 app. Regenerate with `xcodegen generate` in this folder;
+# the generated PogoAssist.xcodeproj is committed too. Identifiers live in Config/Identifiers.xcconfig.
+name: PogoAssist
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Identifiers.xcconfig
+  Release: Config/Identifiers.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+packages:
+  PogoReader:
+    path: ../PogoReader
+targets:
+  PogoAssist:
+    type: application
+    platform: iOS
+    sources:
+      - PogoAssist
+      - Shared
+    dependencies:
+      - package: PogoReader
+        product: PogoReader
+      - target: PogoBroadcast
+        embed: true
+    entitlements:
+      path: PogoAssist/PogoAssist.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP)
+    info:
+      path: PogoAssist/Info.plist
+      properties:
+        CFBundleDisplayName: Pogo Assist+
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        AppGroupID: $(APP_GROUP)
+        BroadcastExtensionID: $(EXTENSION_BUNDLE_ID)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        GENERATE_INFOPLIST_FILE: NO
+  PogoBroadcast:
+    type: app-extension
+    platform: iOS
+    sources:
+      - PogoBroadcast
+      - Shared
+    dependencies:
+      - package: PogoReader
+        product: PogoReader
+    entitlements:
+      path: PogoBroadcast/PogoBroadcast.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP)
+    info:
+      path: PogoBroadcast/Info.plist
+      properties:
+        CFBundleDisplayName: Pogo Broadcast
+        AppGroupID: $(APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(EXTENSION_BUNDLE_ID)
+        GENERATE_INFOPLIST_FILE: NO
+schemes:
+  PogoAssist:
+    build:
+      targets:
+        PogoAssist: all
+    run:
+      config: Debug
