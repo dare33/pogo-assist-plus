@@ -76,8 +76,14 @@ export function parseCp(text) {
   return m ? Number(m[1]) : null;
 }
 
-/** Parse "145 / 145 HP" style reads; returns { current, max } or null. */
+/**
+ * Parse "145 / 145 HP" style reads; returns { current, max } or null. A current above the max is
+ * a truncated read (on the iPad the team leader covers the end of the text: "139 / 13"), so it
+ * is no read at all.
+ */
 export function parseHp(text) {
   const m = String(text).replace(/[Oo]/g, '0').match(/(\d{1,3})\s*\/\s*(\d{1,3})/);
-  return m ? { current: Number(m[1]), max: Number(m[2]) } : null;
+  if (!m) return null;
+  const hp = { current: Number(m[1]), max: Number(m[2]) };
+  return hp.current > hp.max ? null : hp;
 }

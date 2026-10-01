@@ -152,7 +152,7 @@ async function runExtraction(files, kinds) {
     if (mismatched.length) notes.push(`${mismatched.length} Pokémon had a computed HP replaced by a different read HP when clips were joined (flag hp-mismatch); their IVs and level were solved for the old HP, so check them: ${names(mismatched)}.`);
     if (r.weak) notes.push(`${r.weak} shadow/purified Pokémon were matched on incomplete HP or IV readings and are flagged shadow-match-weak: check them.`);
     if (r.ambiguous) notes.push(`${r.ambiguous} shadow/purified Pokémon matched several identical rows; the first was marked and flagged shadow-match-ambiguous.`);
-    if (merged.unmatched.length) notes.push(`${merged.unmatched.length} frame${merged.unmatched.length === 1 ? '' : 's'} showed a CP but no recognisable species name (a nickname, or a garbled read); they are listed in the review JSON, not in the table.`);
+    if (merged.unmatched.length) notes.push(`${merged.unmatched.length} frame${merged.unmatched.length === 1 ? '' : 's'} showed a Pokémon that could not be read (a nickname, a garbled name, or a CP hidden behind the model); they are listed in the review JSON, not in the table.`);
 
     $('#run').hidden = true;
     $('#results').hidden = false;

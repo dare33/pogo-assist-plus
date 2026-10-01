@@ -236,7 +236,7 @@ export async function runAccount(acct, ctx) {
     const label = clipsOut.some((c) => c.kind === 'purified') ? 'shadow/purified passes' : 'shadow pass';
     log(`  ${label}: ${r.matched} matched, ${r.appended} appended, ${r.ambiguous} ambiguous, ${r.weak} weak`);
   }
-  log(`  ${merged.rows.length} Pokémon, ${merged.review.length} flagged for review, ${merged.unmatched.length} frames showed a CP but no known name`);
+  log(`  ${merged.rows.length} Pokémon, ${merged.review.length} flagged for review, ${merged.unmatched.length} unread (a CP with no known name, or a name whose CP was hidden)`);
   if (partial) log(`  WARNING: ${failedClips.length} clip${failedClips.length === 1 ? '' : 's'} failed (${failedClips.map((f) => f.name).join(', ')}); Pokémon from ${failedClips.length === 1 ? 'that clip are' : 'those clips are'} missing, so this is a PARTIAL export (${stem}${suffix}.csv) and was not copied to the inbox.`);
 
   const check = merged.rows.filter((row) => row.flags.some((f) => CHECK_FLAGS.some((c) => f === c || f.startsWith(`${c}:`))));

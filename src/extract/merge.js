@@ -5,10 +5,16 @@
 // the pipeline then validates the CP candidates with the solver. Adjacent rows that are the
 // same Pokémon settled twice are merged; non-adjacent identical rows are never merged.
 
-/** Identity of a frame reading, or null when the frame did not identify a Pokémon. */
+/**
+ * Identity of a frame reading, or null when the frame did not identify a Pokémon. A frame whose
+ * CP is hidden behind the model still identifies one when the name and the HP were read.
+ */
 export function identity(r) {
-  return r && r.cp && r.name ? `${r.name}|${r.cp}` : null;
+  if (!r || !r.name) return null;
+  return r.cp ? `${r.name}|${r.cp}` : r.hp ? `${r.name}|?` : null;
 }
+
+const cpReadsOf = (r) => (r.cpReads ?? [r.cp]).filter(Boolean);
 
 /** Two CP reads that could be the same number: equal, one digit different, or one digit dropped. */
 export function cpSimilar(a, b) {
@@ -44,9 +50,9 @@ export function groupRuns(readings) {
       cur.frames.push(r);
       if (r.hp && !cur.hp) cur.hp = r.hp;
       if (r.ivs && r.ivConfidence >= SETTLED && !cur.ivs) cur.ivs = r.ivs;
-      for (const c of r.cpReads ?? [r.cp]) cur.cpCounts.set(c, (cur.cpCounts.get(c) ?? 0) + 1);
+      for (const c of cpReadsOf(r)) cur.cpCounts.set(c, (cur.cpCounts.get(c) ?? 0) + 1);
     } else {
-      cur = { key: identity(r), frames: [r], hp: r.hp ?? null, ivs: r.ivs && r.ivConfidence >= SETTLED ? r.ivs : null, cpCounts: new Map((r.cpReads ?? [r.cp]).map((c) => [c, 1])) };
+      cur = { key: identity(r), frames: [r], hp: r.hp ?? null, ivs: r.ivs && r.ivConfidence >= SETTLED ? r.ivs : null, cpCounts: new Map(cpReadsOf(r).map((c) => [c, 1])) };
       runs.push(cur);
     }
   }
@@ -57,8 +63,11 @@ function joins(run, r) {
   const last = run.frames[run.frames.length - 1];
   if (last.name !== r.name) return false;
   if (!hpAgree(run.hp, r.hp)) return false;
-  const topCp = [...run.cpCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-  const reads = r.cpReads ?? [r.cp];
+  const topCp = [...run.cpCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const reads = cpReadsOf(r);
+  // With the CP hidden on this frame or on the whole run so far, the HP decides (the name is
+  // already the same): equal HP and bars that do not contradict each other is the same Pokémon.
+  if (!reads.length || topCp === undefined) return Boolean(run.hp && r.hp && run.hp.max === r.hp.max && ivsCompatible(run.ivs, r.ivs, 1, r.ivConfidence ?? 0));
   // Contradictory settled bars split the run only when the CP read also differs: with the same
   // CP a mid-animation read can look settled by chance, but a different CP and different bars
   // is another Pokémon (adjacent hatched Meltan at CP 150 and 151, say).
@@ -91,7 +100,7 @@ export function vote(values, keyOf) { return ranked(values, keyOf)[0]?.v ?? null
  */
 export function collapseRun(run) {
   const frames = run.frames;
-  const cpCandidates = ranked(frames.flatMap((f) => f.cpReads ?? [f.cp]));
+  const cpCandidates = ranked(frames.flatMap(cpReadsOf));
   const hp = vote(frames.map((f) => f.hp?.max ?? null));
   // Bars: the panel animates from the previous Pokémon's bars to this one's, so only settled
   // reads (whole units) count; they are voted, ties to the later frame. With no settled read the
@@ -102,7 +111,7 @@ export function collapseRun(run) {
   if (settled.length) { const v = vote(settled.map((f) => f.ivs), (x) => `${x.atk}/${x.def}/${x.hp}`); best = { f: settled.filter((f) => f.ivs.atk === v.atk && f.ivs.def === v.def && f.ivs.hp === v.hp).pop() }; }
   else { const any = frames.filter((f) => f.ivs); if (any.length) best = { f: any[any.length - 1] }; }
   return {
-    name: frames[0].name, cp: cpCandidates[0].v, cpCandidates: cpCandidates.map((c) => c.v),
+    name: frames[0].name, cp: cpCandidates[0]?.v ?? null, cpCandidates: cpCandidates.map((c) => c.v),
     hp, ivs: best?.f.ivs ?? null, ivConfidence: best?.f.ivConfidence ?? 0, fills: best?.f.fills ?? null, ivsDisagree,
     speciesIds: frames[0].speciesIds, form: frames[0].form, baseName: frames[0].baseName,
     frames: frames.map((f) => ({ frame: f.frame, time: f.time, cp: f.cp, cpText: f.cpText, name: f.nameText, hp: f.hp ? `${f.hp.current}/${f.hp.max}` : null, ivs: f.ivs ? `${f.ivs.atk}/${f.ivs.def}/${f.ivs.hp}` : null, ivConfidence: f.ivConfidence, sharpness: f.sharpness })),

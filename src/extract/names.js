@@ -4,12 +4,18 @@
 // picks between those by CP and HP.
 
 const REGIONAL = { alolan: 'Alola', galarian: 'Galar', hisuian: 'Hisui', paldean: 'Paldea' };
+// The game prints "Nidoran♀" and "Nidoran♂". The OCR cannot read the symbol (it is not in the
+// whitelist and comes out as nothing or one stray letter), so both share the display name
+// "Nidoran" and the solver tells them apart by their stats. The export uses Poke Genie's names.
+const NIDORAN = { nidoran_female: 'Nidoran♀', nidoran_male: 'Nidoran♂' };
 
 /** Base name and Poke Genie style form ("", "Hero", "Mega Y", "Alola") of a game-master species. */
 export function nameAndForm(species) {
   const m = species.speciesName.match(/^(.*?)\s*\((.*)\)$/);
   const base = m ? m[1] : species.speciesName;
   const form = m ? m[2] : '';
+  const nidoran = NIDORAN[species.speciesId];
+  if (nidoran) return { name: nidoran, form: '' };
   return { name: base, form: REGIONAL[form.toLowerCase()] ?? form };
 }
 
@@ -23,6 +29,7 @@ export function displayNames(gm) {
   };
   for (const p of gm.byId.values()) {
     if (p.speciesId.endsWith('_shadow')) continue; // same name on screen; the shadow flag is elsewhere
+    if (NIDORAN[p.speciesId]) { add('Nidoran', 'Nidoran', '', p.speciesId); continue; }
     const m = p.speciesName.match(/^(.*?)\s*\((.*)\)$/);
     const base = m ? m[1] : p.speciesName;
     const form = m ? m[2] : '';
@@ -60,6 +67,12 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   const variants = new Set();
   const norm = normalise(text);
   if (!norm) return null;
+  // "Nidoran" plus at most one stray character is Nidoran with its gender symbol misread; without
+  // this it is as close to "Nidorino" as to "Nidoran".
+  if (/^nidoran ?[a-z0-9]?$/.test(norm)) {
+    const nidoran = candidates.find((c) => normalise(c.display) === 'nidoran');
+    if (nidoran) return { candidate: nidoran, distance: 0, text: 'nidoran' };
+  }
   variants.add(norm);
   const tokens = norm.split(' ');
   variants.add(tokens.filter((t) => t.length > 1).join(' '));

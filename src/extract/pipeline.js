@@ -4,9 +4,10 @@
 
 import { readFrame } from './frame.js';
 import { displayNames, nameAndForm } from './names.js';
-import { groupRuns, collapseRun, dedupeAdjacent, SETTLED } from './merge.js';
+import { groupRuns, collapseRun, dedupeAdjacent, cpSimilar, SETTLED } from './merge.js';
 import { solve, speciesFor } from './solve.js';
 import { step as dustStep } from '../cost.js';
+import { cpAt, hpAt, LEVELS } from '../cpm.js';
 
 /**
  * @param frames    async iterable of { index, time, image, label }
@@ -34,26 +35,64 @@ export async function extract(frames, { ocr, gm, onProgress = () => {}, total = 
 export function finish(readings, gm) {
   const runs = groupRuns(readings);
   const collapsed = runs.map(collapseRun);
-  const rows = dedupeAdjacent(collapsed).map((row, i) => resolveRow(row, gm, i + 1));
+  const deduped = dedupeAdjacent(collapsed);
+  const resolved = deduped.map((row) => resolveRow(row, gm));
+  settleByOrder(resolved, deduped, gm);
+  const rows = absorbStrays(resolved.filter(Boolean));
+  rows.forEach((r, i) => { r.index = i + 1; });
   // Frames that showed a CP but no species name (a nickname, or a garbled read) never become a
-  // row; list them so a Pokémon that was on screen and not read is not silently missing.
+  // row; list them so a Pokémon that was on screen and not read is not silently missing. The same
+  // goes for a named Pokémon whose CP was hidden and could not be worked out.
   const unmatched = readings.filter((r) => r.cp && !r.name).map((r) => ({ frame: r.frame, cp: r.cp, nameText: r.nameText, hp: r.hp?.max ?? null }));
+  deduped.forEach((row, i) => { if (!resolved[i]) unmatched.push({ frame: row.frames[0].frame, cp: null, name: row.name, nameText: row.frames[0].name, hp: row.hp ?? null, reason: 'cp-hidden' }); });
   const review = rows.filter((r) => r.flags.length).map((r) => ({ index: r.index, name: r.name, cp: r.cp, hp: r.hp, ivs: r.ivs, ivsRead: r.ivsRead, ivsGuess: r.ivsGuess, level: r.level, levelMax: r.levelMax, flags: r.flags, frames: r.frames }));
   return { rows, review, unmatched };
 }
 
-function resolveRow(row, gm, index) {
+/**
+ * The CPs a Pokémon could have, from what a model in front of the CP text cannot hide: its HP and
+ * its settled bars. Each level whose HP matches gives one CP. `reads` are the partial CP reads
+ * (the model usually covers the leading digits, so a read is the tail of the real number).
+ * Returns { options, supported, tailOf }: every CP that fits, those a partial read is the tail
+ * of, and for each of those the read that supports it.
+ */
+export function cpOptions(species, { hp, ivs, ivConfidence = 1 }, reads = []) {
+  if (!hp || !ivs || ivConfidence < SETTLED) return { options: [], supported: [], tailOf: new Map() };
+  const options = new Set();
+  for (const sp of species) for (const level of LEVELS) if (hpAt(sp.baseStats, ivs, level) === hp) options.add(cpAt(sp.baseStats, ivs, level));
+  const tails = reads.filter((r) => r >= 10).map(String);
+  const all = [...options].sort((a, b) => a - b);
+  const tailOf = new Map();
+  for (const cp of all) { const t = tails.find((x) => x.length < String(cp).length && String(cp).endsWith(x)); if (t) tailOf.set(cp, Number(t)); }
+  return { options: all, supported: [...tailOf.keys()], tailOf };
+}
+
+/** One collapsed run to one row, or null when the CP was hidden and nothing pins it down. */
+function resolveRow(row, gm, forcedCp = null) {
   const species = speciesFor(gm, row.speciesIds ?? []);
   const flags = [];
   // The CP: the first candidate read (ranked by how many frames read it) that the solver can
   // reconcile with the HP and bars; failing that, the most-read one.
-  let cp = row.cp, result = null;
-  for (const candidate of row.cpCandidates ?? [row.cp]) {
+  const candidates = row.cpCandidates?.length ? row.cpCandidates : row.cp ? [row.cp] : [];
+  let cp = row.cp, result = null, pending = null;
+  for (const candidate of forcedCp ? [] : candidates) {
     const r = solve({ species, cp: candidate, hp: row.hp, ivs: row.ivs });
     if (r.solutions.length && (!row.ivs || r.solutions[0].tier <= 1)) { cp = candidate; result = r; break; }
   }
-  if (!result) result = solve({ species, cp, hp: row.hp, ivs: row.ivs });
-  if (cp !== row.cp) flags.push(`cp-chosen-${cp}-over-${row.cp}`);
+  if (!result) {
+    // No read fits (or there was none): the model hid part or all of the CP. Work it out from the
+    // HP and the bars. One CP with a partial read as its tail is taken; so is the only CP that
+    // fits when nothing was read. Several left over are settled by the neighbours' CPs afterwards
+    // (settleByOrder), else the row keeps the lowest and says so.
+    const { options, supported, tailOf } = cpOptions(species, row, candidates);
+    const pool = supported.length ? supported : candidates.length ? [] : options;
+    if (forcedCp) { cp = forcedCp; flags.push(`cp-recovered-${cp}-by-order`); }
+    else if (supported.length === 1) { cp = supported[0]; flags.push(`cp-recovered-${cp}-from-${tailOf.get(cp)}`); }
+    else if (pool.length === 1) { cp = pool[0]; flags.push(`cp-recovered-${cp}-unverified`); }
+    else if (pool.length > 1) { cp = pool[0]; pending = pool; flags.push(`cp-uncertain:${pool.join('|')}`); }
+    else if (!cp) return null;
+    result = solve({ species, cp, hp: row.hp, ivs: row.ivs });
+  } else if (cp !== row.cp) flags.push(`cp-chosen-${cp}-over-${row.cp}`);
   let ivs = row.ivs, level = null, levelMax = null, speciesId = species[0]?.speciesId ?? null, hp = row.hp;
   const s = result.solutions[0];
   const take = () => { ivs = s.ivs; level = s.level; levelMax = s.level; speciesId = s.speciesId; if (hp === null) { hp = s.hp; flags.push('hp-computed'); } };
@@ -92,11 +131,48 @@ function resolveRow(row, gm, index) {
   const sp = speciesId ? gm.byId.get(speciesId) : null;
   const nf = sp ? nameAndForm(sp) : { name: row.baseName ?? row.name, form: row.form ?? '' };
   return {
-    index, name: nf.name, display: row.name, form: nf.form, speciesId, dex: sp?.dex ?? null,
+    index: null, cpPending: pending, name: nf.name, display: row.name, form: nf.form, speciesId, dex: sp?.dex ?? null,
     cp, hp, ivs, ivsRead: row.ivs, ivsGuess: ivs === null && s ? s.ivs : null, level, levelMax,
     dust: level ? dustStep(level).dust : null,
     solveStatus: result.status, flags, frames: row.frames, merged: row.merged ?? 1,
   };
+}
+
+/**
+ * A hidden CP with several candidates: a box is recorded in CP order, so the one candidate that
+ * lies between the CPs of the rows either side is the CP. Rows are replaced in place.
+ */
+function settleByOrder(resolved, collapsed, gm) {
+  const sure = (r) => r && !r.cpPending && !r.flags.includes('no-level-fits');
+  resolved.forEach((r, i) => {
+    if (!r?.cpPending) return;
+    let a = i - 1, b = i + 1;
+    while (a >= 0 && !sure(resolved[a])) a--;
+    while (b < resolved.length && !sure(resolved[b])) b++;
+    if (a < 0 || b >= resolved.length) return;
+    const lo = Math.min(resolved[a].cp, resolved[b].cp), hi = Math.max(resolved[a].cp, resolved[b].cp);
+    const within = r.cpPending.filter((cp) => cp >= lo && cp <= hi);
+    if (within.length === 1) resolved[i] = resolveRow(collapsed[i], gm, within[0]);
+  });
+  for (const r of resolved) if (r) delete r.cpPending;
+}
+
+/**
+ * A one-frame row with no HP read that did not solve, next to a row of the same Pokémon with a
+ * similar CP, is the same Pokémon caught on the frame before its screen settled (one digit
+ * misread, HP not yet drawn). Its frame goes to the neighbour and the row is dropped.
+ */
+function absorbStrays(rows) {
+  const out = [];
+  const noHp = (r) => r.flags.includes('hp-computed') || r.flags.includes('hp-unread');
+  const stray = (r, other) => r.frames.length === 1 && noHp(r) && r.solveStatus !== 'exact' && other && other.frames.length > 1 && other.display === r.display && cpSimilar(r.cp, other.cp);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], prev = out[out.length - 1], next = rows[i + 1];
+    if (stray(r, prev)) { prev.frames = [...prev.frames, ...r.frames]; continue; }
+    if (stray(r, next)) { next.frames = [...r.frames, ...next.frames]; continue; }
+    out.push(r);
+  }
+  return out;
 }
 
 /** Poke Genie's column layout, so src/import/pokegenie.js reads the result back. */

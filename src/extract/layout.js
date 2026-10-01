@@ -121,22 +121,28 @@ export function findHpBar(img, rect) {
     for (let x = xa; x < xb; x++) if (isGreen(data, (y * width + x) * 4)) n++;
     rows.push(n >= need);
   }
-  // Candidate bands: runs of green rows that are thin (the bar is under 1.5% of the height); pick the longest thin run.
+  // Candidate bands: runs of green rows that are thin (the bar is under 1.5% of the height). The
+  // bar is the band whose middle row holds the longest unbroken run of green: a row of green type
+  // icons (Bug / Grass) is also a thin green band, and taller than the bar, but it is two short
+  // runs; a green background beside the card is not part of the bar either.
   const maxH = 0.015 * rect.h, minH = Math.max(2, 0.002 * rect.h);
   let best = null, start = null;
   for (let i = 0; i <= rows.length; i++) {
     if (i < rows.length && rows[i]) { if (start === null) start = i; continue; }
     if (start !== null) {
       const h = i - start;
-      if (h >= minH && h <= maxH && (!best || h > best.h)) best = { y0: ya + start, y1: ya + i, h };
+      if (h >= minH && h <= maxH) {
+        const ym = Math.round(ya + start + h / 2);
+        const flags = [];
+        for (let x = rect.x; x < rect.x + rect.w; x++) flags.push(isGreen(data, (ym * width + x) * 4));
+        const [a, b] = widestRun(flags);
+        if (b - a >= need && (!best || b - a > best.run)) best = { y0: ya + start, y1: ya + i, x0: rect.x + a, x1: rect.x + b, run: b - a };
+      }
       start = null;
     }
   }
   if (!best) return null;
-  const ym = Math.round((best.y0 + best.y1) / 2);
-  let x0 = Infinity, x1 = -Infinity;
-  for (let x = rect.x; x < rect.x + rect.w; x++) if (isGreen(data, (ym * width + x) * 4)) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
-  return { y0: best.y0, y1: best.y1, x0, x1: x1 + 1 };
+  return { y0: best.y0, y1: best.y1, x0: best.x0, x1: best.x1 };
 }
 
 /** OCR regions derived from the anchors, in frame pixels. */
