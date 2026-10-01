@@ -1,0 +1,68 @@
+import XCTest
+@testable import PogoReader
+
+final class ParsingTests: XCTestCase {
+    func testParseCpTakesDigitsAfterLastLetterAndMapsO() {
+        XCTAssertEqual(parseCp("CP3028"), 3028)
+        XCTAssertEqual(parseCp("CP 3028"), 3028)
+        XCTAssertEqual(parseCp("P2651"), 2651)
+        XCTAssertEqual(parseCp("cp3O28"), 3028)
+        XCTAssertEqual(parseCp("23028"), 3028)
+        XCTAssertEqual(parseCp("711"), 711)
+        XCTAssertNil(parseCp("7"))
+        XCTAssertNil(parseCp(""))
+    }
+
+    func testParseHpReadsCurrentAndMax() {
+        XCTAssertEqual(parseHp("145 / 145 HP"), HP(current: 145, max: 145))
+        XCTAssertEqual(parseHp("79/79 1"), HP(current: 79, max: 79))
+        XCTAssertNil(parseHp("HP"))
+    }
+
+    /// Fault 5: the iPad's team leader covers the end of the text.
+    func testParseHpRejectsCurrentAboveMax() {
+        XCTAssertNil(parseHp("139 / 13"))
+        XCTAssertNil(parseHp("130/13"))
+        XCTAssertEqual(parseHp("100 / 139 HP"), HP(current: 100, max: 139)) // a damaged Pokémon is still a read
+    }
+
+    func testCpSimilar() {
+        XCTAssertTrue(cpSimilar(3028, 3023))
+        XCTAssertTrue(cpSimilar(902, 92))
+        XCTAssertFalse(cpSimilar(902, 2))
+        XCTAssertTrue(cpSimilar(2223, 223))
+        XCTAssertTrue(cpSimilar(1969, 1962))
+        XCTAssertFalse(cpSimilar(3028, 2592))
+        XCTAssertFalse(cpSimilar(22, 2692))
+        XCTAssertFalse(cpSimilar(1614, 94))
+    }
+
+    func testCpAndHpFormulas() {
+        let mewtwo = table.byId["mewtwo"]!.baseStats
+        let max = IVs(atk: 15, def: 15, hp: 15)
+        XCTAssertEqual(cpAt(mewtwo, max, 40), 4178)
+        XCTAssertEqual(cpAt(mewtwo, max, 20), 2387)
+        XCTAssertEqual(cpm(25), 0.667934)
+        XCTAssertEqual(levels.count, 101)
+        XCTAssertEqual(hpAt(BaseStats(atk: 100, def: 100, hp: 100), IVs(atk: 0, def: 0, hp: 0), 1), 10)
+    }
+
+    func testJsonShapeMatchesTheJsReading() throws {
+        var r = FrameReading(frame: "f0001.png", time: 0.2)
+        r.cp = 1234; r.cpText = "CP1234"; r.cpReads = [1234]; r.name = "Zapdos"; r.baseName = "Zapdos"; r.form = ""; r.speciesIds = ["zapdos"]
+        r.nameText = "Zapdos"; r.nameConfidence = 92; r.nameDistance = 0; r.nameWeak = false
+        r.hp = HP(current: 129, max: 129); r.hpText = "129 / 129 HP"; r.ivs = IVs(atk: 1, def: 2, hp: 3); r.ivConfidence = 0.9; r.fills = [0.1, 0.2, 0.3]; r.sharpness = 5
+        let obj = try JSONSerialization.jsonObject(with: JSONEncoder().encode(r)) as! [String: Any]
+        let expected: Set<String> = ["frame", "time", "cp", "cpText", "cpReads", "name", "baseName", "form", "speciesIds", "nameText", "nameConfidence", "nameDistance", "nameWeak", "hp", "hpText", "ivs", "ivConfidence", "fills", "sharpness", "flags"]
+        XCTAssertEqual(Set(obj.keys), expected)
+        XCTAssertEqual((obj["hp"] as! [String: Int]), ["current": 129, "max": 129])
+        XCTAssertEqual((obj["ivs"] as! [String: Int]), ["atk": 1, "def": 2, "hp": 3])
+        // A frame that read nothing still writes the fields the JS initialises to null.
+        let empty = try JSONSerialization.jsonObject(with: JSONEncoder().encode(FrameReading(frame: "x", time: 0))) as! [String: Any]
+        for k in ["cp", "name", "hp", "ivs", "fills"] { XCTAssertTrue(empty[k] is NSNull, k) }
+        XCTAssertNil(empty["baseName"])
+        // Round trip.
+        let back = try JSONDecoder().decode(FrameReading.self, from: JSONEncoder().encode(r))
+        XCTAssertEqual(back, r)
+    }
+}
