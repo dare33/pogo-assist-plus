@@ -124,6 +124,7 @@ def main():
     p.add_argument("out")
     p.add_argument("--count", type=int, required=True, help="how many Pokémon to page past (the storage count)")
     p.add_argument("--name", default="Pogo scan", help="what to say; keep it unlike any other command")
+    p.add_argument("--batch-name", default="Storage page step", help="name of the batch gesture; it must not share words with --name, or Voice Control can run the wrong one")
     p.add_argument("--batch", type=int, default=20, help="swipes in one gesture (50 was tested)")
     p.add_argument("--every", type=float, default=2.1, help="seconds between swipe starts (2.1 gives 7 frames at 5 fps; 1.6 was tested on a small sample)")
     p.add_argument("--duration", type=float, default=0.85, help="seconds one swipe lasts (0.6 with --every 1.6)")
@@ -139,7 +140,7 @@ def main():
     repeats = math.ceil(args.count / args.batch)
     base = dict(ConfirmationRequired=False, CustomModifyDate=now, CustomScope="com.apple.speech.SystemWideScope")
     table = {
-        batch_id: dict(base, CustomCommands={args.locale: [f"{args.name} batch"]}, CustomType="RunGesture",
+        batch_id: dict(base, CustomCommands={args.locale: [args.batch_name]}, CustomType="RunGesture",
                        CustomGesture=gesture(swipes(ref, args.batch, args.x_from, args.x_to, args.y, args.every, args.duration))),
         chain_id: dict(base, CustomCommands={args.locale: [args.name]}, CustomType="RunUserActionFlow",
                        CustomUserActionFlow=flow(batch_id, repeats, args.locale)),
