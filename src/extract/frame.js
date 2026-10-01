@@ -49,10 +49,11 @@ export async function readFrame(img, ocr, names, { frame = null, time = null, wa
   };
   let nameRead = await readName(regions.name);
   // A Lucky Pokémon has a "LUCKY POKÉMON" line between its name and the HP bar, so the name sits
-  // higher: when nothing matched, look one line up.
+  // higher: when nothing matched, look one line up. That line is the model's feet on any other
+  // screen, so only a confident, exact, whole read of four letters or more counts there.
   if (!nameRead.match) {
     const lucky = await readName({ ...regions.name, y: regions.name.y - 0.025 * rect.h });
-    if (lucky.match) nameRead = lucky;
+    if (lucky.match && lucky.confidence >= 40 && lucky.match.distance === 0 && lucky.match.whole && lucky.match.text.length >= 4) nameRead = lucky;
   }
   out.sharpness = nameRead.sharpness;
   out.nameText = nameRead.text;
