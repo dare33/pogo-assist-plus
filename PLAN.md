@@ -132,6 +132,83 @@ Windows. If it is HEVC and Chrome on Windows refuses it, the fallback is `ffmpeg
 transcoding in the page (slow but works everywhere) or a README instruction to set the
 iPhone to record in the compatible format. The result decides the video ingest design.
 
+## Phase 3 — Native iPhone app (proposed 1 Oct 2026, awaiting Greg's approval)
+
+**Why.** Greg wants friends and family to capture their boxes with as little effort as possible;
+a seamless experience is the core goal. The browser path (phase 2) leaves three manual steps no
+web page can remove: starting a screen recording, finding and picking a file of 700 MB to 1.5 GB,
+and waiting for it to be read. A native app receives the screen live and reads as the player
+pages, so there is no recording file at all. Phase 2's page stays as the web viewer and the
+route for Android and desktop.
+
+**Decisions taken 1 Oct 2026 (Greg):** go native for iPhone; distribute through TestFlight to
+friends and family first (a public App Store listing is a later, separate decision); Greg has a
+Mac and an Apple developer account; prove the two unknowns below before building the app.
+
+**What the app does**
+
+- Capture: one tap starts a screen broadcast (ReplayKit Broadcast Upload Extension); the player
+  switches to Pokémon GO and pages through storage; the extension reads each detail screen with
+  Apple's Vision text recognition and hands rows to the app. Precedent: the open-source
+  `BaesTheorem/pogo-lens` reads Pokémon GO this way.
+- Paging: by hand, or hands-off with an iOS Voice Control custom gesture (slow swipes about two
+  seconds apart) chained to cover a whole box. The app supplies the commands file for the
+  player's phone and the shortest possible checklist.
+- Box: stored on the device; a later capture of only the new Pokémon merges into it.
+- Stats and advice: a concise box view with the existing advisor on top; raid, PvP and gym tips
+  from `data/`, tuned over time.
+
+**What no app can do (stays with the player).** An app cannot send touches to another app, turn
+Voice Control on, change its settings or import its commands. One-time setup: import the commands
+file; turn off Voice Control's Show Confirmation and Show Hints (their labels cover the CP). Each
+scan: start the scan in the app, turn Voice Control on ("Hey Siri, turn on Voice Control"), say
+the command. Voice Control is optional: without it the player swipes by hand.
+
+**Voice Control commands file (findings, 1 Oct).** An exported `.voicecontrolcommands` file is an
+XML property list. A gesture is a keyed archive (`AXMutableReplayableGesture`) of touch events:
+finger positions in screen points, forces, timestamps, with `ArePointsDeviceRelative` false. A
+chained command (`CACRecordedUserActionFlow`) is a list of repeats of a command identifier. Both
+can be generated. Getting the positions right on another phone, in order of preference: (1) a
+mid-screen swipe, which needs no precision and may let one file serve every iPhone; (2) the
+player gives the app one screenshot and the app sizes the gesture to it; (3) a table of screen
+sizes with proportional scaling, only if the game's layout proves proportional.
+
+**Proofs before any app work**
+
+1. *Generated commands file.* A file with a synthesised nine-swipe gesture ("Pogo swipe test")
+   and a twelve-repeat chain that was never spoken ("Pogo chain test") is imported on Greg's
+   iPhone. Pass: both import, the gesture pages one Pokémon per swipe, and the chain plays all
+   twelve repeats. Then the same file on a second, different-sized iPhone.
+2. *Live-read prototype.* A minimal Xcode project (app plus broadcast extension) shows name and CP
+   for each Pokémon as "Pogo Scan" pages through storage on Greg's phone. Pass: every Pokémon in
+   a 50-swipe run is read, within the extension's memory limit (about 50 MB), with the phone
+   staying responsive. Built and run on the Mac; this Windows machine cannot build it.
+
+**Build order after the proofs**
+
+1. Reader: port the detail-screen reading (CP, name, HP, appraisal bars, moves) to Swift with
+   Vision; benchmark against the darentas box CSV.
+2. Solver and advisor: reuse the JavaScript modules in `src/` inside the app (JavaScriptCore or a
+   web view) before considering a Swift port, so the web page and the app share one
+   implementation and one test suite.
+3. Capture flow and first-run setup (commands file, two-line checklist).
+4. Box storage, incremental capture, stats view.
+5. TestFlight build to two family members; watch them use it; then widen.
+
+**Risks and open decisions**
+
+- **Repository rule.** `CLAUDE.md` says nothing here may "automate input to" the game, and the
+  tier-list project says never automate play. Shipping a Voice Control commands file that pages
+  through storage is automated input, even though it only reads and uses an Apple accessibility
+  feature. Greg to decide: amend the rule to permit read-only paging through the player's own
+  storage, or keep the commands file out of the repo and the app. Players must be told that
+  Niantic's terms discourage automation.
+- App Review may object to a public listing that documents automated swiping; TestFlight avoids
+  full review but builds expire after 90 days.
+- Voice Control behaviour on other iOS versions is unknown (Greg's phone runs an iOS 27.2 beta).
+- Where the Swift code lives: a folder in this repo (shared data and tests) or its own repo.
+- Android has no Voice Control; Android players use the web page or page by hand.
+
 ## Tech stack
 
 - Phase 0 and the extractor: a small Vite project in plain JavaScript or TypeScript. PapaParse for CSV, Tesseract.js for OCR, WebCodecs for video, IndexedDB (via `idb`) for snapshots and intermediate stages. Hosted on GitHub Pages.
@@ -148,6 +225,7 @@ iPhone to record in the compatible format. The result decides the video ingest d
 6. Phase 1b: Tesseract.js OCR, bar counting, solver, benchmark against the Poke Genie CSV.
 7. Phase 1c: review queue, two-pass merge, export in the extended CSV layout.
 8. Phase 2: hardening for other people's phones (Android sizes, older iPhones), README with the recording protocol, optional Claude fallback.
+9. Phase 3 (proposed): the two proofs, then the native iPhone app in the build order given in its section.
 
 ## Remaining open items
 
