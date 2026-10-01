@@ -65,6 +65,9 @@ export async function readFrame(img, ocr, names, { frame = null, time = null, wa
     out.form = match.candidate.form;
     out.speciesIds = match.candidate.speciesIds;
     out.nameDistance = match.distance;
+    // A name taken without OCR confidence (Nidoran aside: its symbol is what Tesseract could not
+    // place). The pipeline uses such a frame only when a neighbouring frame agrees on the name.
+    out.nameWeak = nameRead.confidence < 40 && !match.symbol;
   } else if (nameRead.text) out.flags.push('name-unmatched');
 
   if (!out.cp && cpText) out.flags.push('cp-unread');

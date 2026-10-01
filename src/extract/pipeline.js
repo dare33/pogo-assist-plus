@@ -33,8 +33,9 @@ export async function extract(frames, { ocr, gm, onProgress = () => {}, total = 
 
 /** Everything after the frames are read: group, vote, solve, dedupe, flag. */
 export function finish(readings, gm) {
+  readings = supportedNames(readings);
   const runs = groupRuns(readings);
-  const collapsed = runs.map(collapseRun);
+  const collapsed = runs.map((run) => ({ ...collapseRun(run), nameWeak: run.frames.every((f) => f.nameWeak) }));
   const { rows, absorbed } = absorbStrays(dedupeAdjacent(collapsed).map((row) => resolveRow(row, gm)));
   rows.forEach((r, i) => { r.index = i + 1; });
   // What was on screen and did not become a row is listed, so it is not silently missing: frames
@@ -63,6 +64,23 @@ export function cpOptions(species, { hp, ivs, ivConfidence = 1 }, reads = []) {
   const tailOf = new Map();
   for (const cp of all) { const t = tails.find((x) => x.length < String(cp).length && String(cp).endsWith(x)); if (t) tailOf.set(cp, Number(t)); }
   return { options: all, supported: [...tailOf.keys()], tailOf };
+}
+
+/**
+ * A name read without OCR confidence counts only when the nearest named frame before or after it
+ * has the same name; otherwise the frame is treated as unnamed. One such frame in the middle of
+ * another Pokémon's frames ("Paras" on one frame of a Parasect) would otherwise split its run in
+ * two. A Pokémon whose every frame was read that way keeps its frames and its row is flagged.
+ */
+export function supportedNames(readings) {
+  const named = readings.map((r, i) => (r?.name ? i : -1)).filter((i) => i >= 0);
+  return readings.map((r, i) => {
+    if (!r?.nameWeak) return r;
+    const at = named.indexOf(i);
+    const around = [named[at - 1], named[at + 1]].filter((j) => j !== undefined).map((j) => readings[j].name);
+    if (!around.length || around.includes(r.name)) return r;
+    return { ...r, name: null, nameWeak: false, flags: [...(r.flags ?? []), 'name-unsupported'] };
+  });
 }
 
 function resolveRow(row, gm) {
@@ -118,6 +136,12 @@ function resolveRow(row, gm) {
   }
   if (result.forms?.length > 1) flags.push(`form-ambiguous:${result.forms.join('|')}`);
   if (row.ivsDisagree) flags.push('ivs-disagree');
+  // Every frame's name was read without OCR confidence: it can be a longer name cut short by an
+  // overlay ("Paras" from "Parasect"), so the row is for a check in the game.
+  if (row.nameWeak) flags.push('name-low-confidence');
+  // The screen cannot tell Nidoran♀ from Nidoran♂ here (the symbol is not read): the sex is the
+  // one whose stats fit the CP, HP and bars, so a misread CP could also pick the wrong one.
+  if (row.name === 'Nidoran') flags.push('sex-from-stats');
   if (hp === null) flags.push('hp-unread');
   if (row.ivs && row.ivConfidence < SETTLED) flags.push('bars-unsettled');
   // Name and form as Poke Genie writes them, from the species the solver settled on (the screen
@@ -191,7 +215,9 @@ function hiddenEntries(readings, runs, gm) {
  * A one-frame row with no HP and no settled bars that did not solve, next to a row of the same
  * Pokémon with a similar CP, is almost always that Pokémon caught on the frame before its screen
  * settled (one digit misread, HP not yet drawn). Its frame goes to the neighbour, and because it
- * could be a Pokémon of its own it is also listed in `unmatched`.
+ * could be a Pokémon of its own it is also listed in `unmatched`. The same goes for a one-frame
+ * unsolved row sitting between two rows that are one and the same solved Pokémon: a single
+ * garbled frame split that Pokémon's run, and the two halves are put back together.
  * Returns { rows, absorbed }.
  */
 function absorbStrays(rows) {
@@ -199,8 +225,17 @@ function absorbStrays(rows) {
   const bare = (r) => (r.flags.includes('hp-computed') || r.flags.includes('hp-unread')) && (!r.ivsRead || r.flags.includes('bars-unsettled'));
   const stray = (r, other) => r.frames.length === 1 && bare(r) && r.solveStatus !== 'exact' && other && other.frames.length > 1 && other.display === r.display && cpSimilar(r.cp, other.cp);
   const note = (r, other) => absorbed.push({ frame: r.frames[0].frame, cp: r.cp, name: r.display, nameText: r.frames[0].name, hp: null, reason: 'absorbed', into: other.cp });
+  const sameIvs = (a, b) => a && b && a.atk === b.atk && a.def === b.def && a.hp === b.hp;
+  const halves = (a, b) => a && b && a.solveStatus === 'exact' && b.solveStatus === 'exact' && a.display === b.display && a.cp === b.cp && a.hp === b.hp && sameIvs(a.ivs, b.ivs);
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], prev = out[out.length - 1], next = rows[i + 1];
+    if (r.frames.length === 1 && r.solveStatus !== 'exact' && halves(prev, next)) {
+      note(r, prev);
+      prev.frames = [...prev.frames, ...r.frames, ...next.frames];
+      prev.flags = [...new Set([...prev.flags, ...next.flags])];
+      i++;
+      continue;
+    }
     if (stray(r, prev)) { note(r, prev); prev.frames = [...prev.frames, ...r.frames]; continue; }
     if (stray(r, next)) { note(r, next); next.frames = [...r.frames, ...next.frames]; continue; }
     out.push(r);

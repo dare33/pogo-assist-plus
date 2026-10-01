@@ -176,7 +176,9 @@ async function runExtraction(files, kinds) {
 // clip's HP disagreed with the one the IVs were solved for) is left out. Ambiguous rows go through
 // with blank IVs (the CSV already leaves them blank).
 export function splitForAdvisor(rows) {
-  const unreconciled = (r) => r.flags.some((f) => f === 'no-level-fits' || f.startsWith('hp-mismatch'));
+  // A one-frame row whose HP was not read rests on a single CP read: a garbled CP that happens to
+  // fit the bars looks like a Pokémon, so it is left out too.
+  const unreconciled = (r) => r.flags.some((f) => f === 'no-level-fits' || f.startsWith('hp-mismatch')) || (r.frames?.length === 1 && r.flags.includes('hp-computed'));
   return { good: rows.filter((r) => !unreconciled(r)), junk: rows.filter(unreconciled) };
 }
 

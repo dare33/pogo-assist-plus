@@ -15,7 +15,7 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 /** 2: the cache holds the raw frame readings (rows are rebuilt on load), keyed on the extractor. */
 export const CACHE_VERSION = 2;
 const CLIP_EXT = /\.(mp4|mov|m4v)$/i;
-const CHECK_FLAGS = ['ambiguous-ivs', 'no-level-fits', 'cp-recovered', 'shadow-match-ambiguous', 'shadow-match-weak', 'ivs-unread', 'hp-mismatch'];
+const CHECK_FLAGS = ['ambiguous-ivs', 'no-level-fits', 'cp-recovered', 'name-low-confidence', 'shadow-match-ambiguous', 'shadow-match-weak', 'ivs-unread', 'hp-mismatch'];
 const CHECK_CAP = 40;
 const VALUE_FLAGS = new Set(['account', 'fps', 'order', 'inbox', 'out-dir', 'ffmpeg']);
 const BOOLEAN_FLAGS = new Set(['force', 'quiet']);

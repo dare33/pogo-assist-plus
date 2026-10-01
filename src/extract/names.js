@@ -72,7 +72,7 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   // this it is as close to "Nidorino" as to "Nidoran".
   if (/^nidoran ?[a-z0-9]?$/.test(norm)) {
     const nidoran = candidates.find((c) => normalise(c.display) === 'nidoran');
-    if (nidoran) return { candidate: nidoran, distance: 0, text: 'nidoran', whole: true };
+    if (nidoran) return { candidate: nidoran, distance: 0, text: 'nidoran', whole: true, symbol: true };
   }
   variants.add(norm);
   const tokens = norm.split(' ');

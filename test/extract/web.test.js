@@ -79,3 +79,15 @@ test('splitForAdvisor leaves out every no-level-fits and hp-mismatch row, IVs or
   assert.deepEqual(good.map((r) => r.name), ['clean', 'ambiguous']);
   assert.deepEqual(junk.map((r) => r.name), ['nofit-no-ivs', 'nofit-with-ivs', 'hp-mismatch', 'both']);
 });
+
+test('splitForAdvisor leaves out a one-frame row whose HP was computed, and keeps a longer one', async () => {
+  const { splitForAdvisor } = await import('../../web/extract.js');
+  const rows = [
+    { name: 'Dedenne', cp: 50, flags: ['hp-computed', 'ambiguous-ivs:3-fit'], frames: [{}] },
+    { name: 'Lucario', cp: 3000, flags: ['hp-computed'], frames: [{}, {}, {}] },
+    { name: 'Moltres', cp: 1927, flags: ['cp-recovered:1927-from-927'], frames: [{}, {}] },
+  ];
+  const { good, junk } = splitForAdvisor(rows);
+  assert.deepEqual(junk.map((r) => r.name), ['Dedenne']);
+  assert.deepEqual(good.map((r) => r.name), ['Lucario', 'Moltres']);
+});

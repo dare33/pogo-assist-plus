@@ -8,7 +8,7 @@ import { parseHp } from '../../src/extract/ocr.js';
 import { makeImage, fillRect } from '../../src/extract/image.js';
 import { findHpBar } from '../../src/extract/layout.js';
 import { groupRuns } from '../../src/extract/merge.js';
-import { finish, cpOptions } from '../../src/extract/pipeline.js';
+import { finish, cpOptions, supportedNames } from '../../src/extract/pipeline.js';
 import { cpAt, hpAt } from '../../src/cpm.js';
 import { loadGamemaster } from '../../src/node/load.js';
 
@@ -44,8 +44,8 @@ test('findHpBar takes the long bar, not a taller row of green type icons or a gr
   fillRect(img, { x: 0, y: 0, w: W, h: H }, [255, 255, 255]);
   fillRect(img, { x: 0, y: 0, w: 14, h: H }, [60, 160, 40]);            // grass background beside the card
   fillRect(img, { x: 165, y: 645, w: 330, h: 9 }, green);               // the HP bar
-  fillRect(img, { x: 180, y: 759, w: 40, h: 13 }, green);               // Bug and Grass type icons: a taller band,
-  fillRect(img, { x: 240, y: 759, w: 40, h: 13 }, green);               // two short runs
+  fillRect(img, { x: 180, y: 759, w: 60, h: 13 }, green);               // Bug and Grass type icons: a taller band,
+  fillRect(img, { x: 260, y: 759, w: 60, h: 13 }, green);               // two runs, each long enough to count
   const bar = findHpBar(img, { x: 0, y: 0, w: W, h: H });
   assert.deepEqual(bar, { y0: 645, y1: 654, x0: 165, x1: 495 });
 });
@@ -209,4 +209,96 @@ test('matchName says whether the whole text matched, so a dropped word cannot pa
   assert.ok(!(lead.distance === 0 && lead.whole));
   const dropped = matchName('Aloan Rattata', names);
   assert.ok(!(dropped.distance === 0 && dropped.whole), 'an exact match on a part of the text is not a whole match');
+});
+
+test('recovery needs exactly one candidate CP with a read as its tail, and a tail of two digits or more', () => {
+  // A species, bars and HP that two levels share, so there are two candidate CPs.
+  let found = null;
+  for (const sp of gm.byId.values()) {
+    if (found || sp.speciesId.includes('_') || !sp.baseStats) continue;
+    const ivs = { atk: 7, def: 7, hp: 7 };
+    for (const hp of [20, 25, 30, 35, 40]) {
+      const { options } = cpOptions([sp], { hp, ivs }, []);
+      if (options.length === 2 && options.every((c) => c >= 100 && c % 100 >= 10) && options[0] % 100 !== options[1] % 100) { found = { sp, ivs, hp, options }; break; }
+    }
+  }
+  assert.ok(found, 'a species with two levels at one HP');
+  const { sp, ivs, hp, options } = found;
+  const display = names.find((n) => n.speciesIds.includes(sp.speciesId)).display;
+  const f = (cp, n) => frame(cp, { name: display, hp, ivs, n });
+  const both = finish([f(options[0] % 100, 1), f(options[0] % 100, 2), f(options[1] % 100, 3), f(options[1] % 100, 4)], gm);
+  assert.ok(both.rows.every((r) => !r.flags.some((x) => x.startsWith('cp-recovered'))), 'two candidates fit the reads: none is taken');
+  const one = finish([1, 2, 3].map((n) => f(options[0] % 100, n)), gm);
+  assert.deepEqual(one.rows.map((r) => [r.cp, r.flags.filter((x) => x.startsWith('cp-'))]), [[options[0], [`cp-recovered:${options[0]}-from-${options[0] % 100}`]]]);
+  assert.deepEqual(cpOptions([sp], { hp, ivs }, [options[0] % 10]).supported, [], 'one digit is not evidence');
+});
+
+test('absorbStrays leaves alone a one-frame row of another species or with an unrelated CP, and works in both directions', () => {
+  const tail = CP % 1000, wrong = CP % 10 === 9 ? CP - 1 : CP + 1;
+  const run = (from) => [0, 1, 2, 3].map((k) => frame(tail, { n: from + k }));
+  const lone = (o) => frame(wrong, { hp: null, ivs: null, n: 9, ...o });
+  // After the run instead of before it.
+  const after = finish([...run(1), lone()], gm);
+  assert.equal(after.rows.length, 1);
+  assert.deepEqual(after.unmatched.map((u) => [u.cp, u.reason, u.into]), [[wrong, 'absorbed', CP]]);
+  // Another species with a similar CP is not this Pokémon.
+  const zapdos = finish([...run(1), lone({ name: 'Zapdos' })], gm);
+  assert.equal(zapdos.rows.length, 2);
+  assert.equal(zapdos.unmatched.length, 0);
+  // Nor is the same species with a CP that is not a one-digit misread.
+  const far = finish([...run(1), frame(CP - 333, { hp: null, ivs: null, n: 9 })], gm);
+  assert.equal(far.rows.length, 2);
+  assert.equal(far.unmatched.length, 0);
+});
+
+test('a hidden-CP stretch is listed when its HP or name differs from the run beside it, or a swipe lies between', () => {
+  const run = [1, 2].map((n) => frame(CP, { n }));
+  const listed = (hidden) => finish([...run, ...hidden], gm).unmatched.filter((u) => u.reason === 'cp-not-read').length;
+  assert.equal(listed([frame(null, { n: 3 }), frame(null, { n: 4 })]), 0);
+  assert.equal(listed([frame(null, { hp: HP + 1, n: 3 }), frame(null, { hp: HP + 1, n: 4 })]), 1);
+  assert.equal(listed([frame(null, { name: 'Zapdos', n: 3 }), frame(null, { name: 'Zapdos', n: 4 })]), 1);
+  assert.equal(listed([swipe, frame(null, { n: 4 }), frame(null, { n: 5 })]), 1);
+});
+
+test('unnamed frames with unrelated CPs are separate entries', () => {
+  const nick = (cp, n) => ({ frame: `f${n}`, name: null, nameText: 'Buddy', cp, cpReads: [cp], cpText: String(cp), hp: null, ivs: null, ivConfidence: 0, flags: ['name-unmatched'] });
+  const { unmatched } = finish([nick(2409, 1), nick(2409, 2), nick(1500, 3), nick(1500, 4)], gm);
+  assert.deepEqual(unmatched.map((u) => [u.cp, u.frames]), [[2409, 2], [1500, 2]]);
+});
+
+test('a name read without confidence counts only when a neighbouring frame agrees', () => {
+  const weak = (r) => ({ ...r, nameWeak: true });
+  // One "Paras" frame in the middle of a Parasect: unnamed, so it cannot split the run.
+  const sect = (n) => frame(1531, { name: 'Parasect', hp: 118, ivs: null, n });
+  const gated = supportedNames([sect(1), sect(2), weak(frame(1531, { name: 'Paras', hp: 118, ivs: null, n: 3 })), sect(4), sect(5)]);
+  assert.deepEqual(gated.map((r) => r.name), ['Parasect', 'Parasect', null, 'Parasect', 'Parasect']);
+  assert.ok(gated[2].flags.includes('name-unsupported'));
+  assert.equal(finish([sect(1), sect(2), weak(frame(1531, { name: 'Paras', hp: 118, ivs: null, n: 3 })), sect(4), sect(5)], gm).rows.length, 1);
+  // Weak frames that agree with each other stay, and the row says how its name was read.
+  const all = finish([1, 2, 3].map((n) => weak(frame(CP, { n }))), gm);
+  assert.deepEqual(all.rows.map((r) => [r.cp, r.flags]), [[CP, ['name-low-confidence']]]);
+  // A weak frame next to a confident one of the same name is ordinary.
+  const mixed = finish([frame(CP, { n: 1 }), weak(frame(CP, { n: 2 })), frame(CP, { n: 3 })], gm);
+  assert.deepEqual(mixed.rows.map((r) => [r.cp, r.flags]), [[CP, []]]);
+});
+
+test('one garbled frame in the middle of a Pokémon does not leave it in the export twice', () => {
+  const garbled = frame(312, { hp: null, ivs: null, n: 3 });
+  const { rows, unmatched } = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), garbled, frame(CP, { n: 4 }), frame(CP, { n: 5 })], gm);
+  assert.deepEqual(rows.map((r) => [r.cp, r.frames.length, r.flags]), [[CP, 5, []]]);
+  assert.deepEqual(unmatched.map((u) => [u.cp, u.reason, u.into]), [[312, 'absorbed', CP]]);
+  // Two different solved Pokémon either side are not halves of one: nothing is folded.
+  const other = { atk: 1, def: 2, hp: 3 };
+  const cp2 = cpAt(moltres.baseStats, other, LEVEL), hp2 = hpAt(moltres.baseStats, other, LEVEL);
+  const apart = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), garbled, frame(cp2, { hp: hp2, ivs: other, n: 4 }), frame(cp2, { hp: hp2, ivs: other, n: 5 })], gm);
+  assert.equal(apart.rows.length, 3);
+});
+
+test('every Nidoran row says its sex came from the stats', () => {
+  const female = gm.byId.get('nidoran_female');
+  const ivs = { atk: 1, def: 9, hp: 12 };
+  const cp = cpAt(female.baseStats, ivs, 20), hp = hpAt(female.baseStats, ivs, 20);
+  const { rows } = finish([1, 2, 3].map((n) => frame(cp, { name: 'Nidoran', hp, ivs, n })), gm);
+  assert.equal(rows[0].name, 'Nidoran♀');
+  assert.ok(rows[0].flags.includes('sex-from-stats'));
 });
