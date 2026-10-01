@@ -68,14 +68,6 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   const variants = new Set();
   const norm = normalise(text);
   if (!norm) return null;
-  // "Nidoran" plus at most one stray character is Nidoran with its gender symbol misread; without
-  // this it is as close to "Nidorino" as to "Nidoran".
-  if (/^nidoran ?[a-z0-9]?$/.test(norm)) {
-    const nidoran = candidates.find((c) => normalise(c.display) === 'nidoran');
-    // `attached`: a letter stuck to the name ("Nidorano"), which a misread Nidorino or Nidorina
-    // also gives; the pipeline does not let such a frame interrupt a run of either.
-    if (nidoran) return { candidate: nidoran, distance: 0, text: 'nidoran', whole: true, symbol: true, attached: norm.length === 8 && !norm.includes(' ') };
-  }
   variants.add(norm);
   const tokens = norm.split(' ');
   variants.add(tokens.filter((t) => t.length > 1).join(' '));
@@ -85,6 +77,15 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   while (trimmed.length > 1 && trimmed[trimmed.length - 1].length === 1) trimmed.pop();
   const wholeText = new Set([norm, trimmed.join(' ')]);
   if (tokens.length > 1) { variants.add(tokens.slice(1).join(' ')); variants.add(tokens.slice(0, -1).join(' ')); }
+  // "Nidoran" plus at most one stray character is Nidoran with its gender symbol misread; without
+  // this it is as close to "Nidorino" as to "Nidoran". Checked on the whole text first, then on
+  // the text with a word dropped (an overlay can add a word after the name).
+  // `attached`: a letter stuck to the name ("Nidorano"), which a misread Nidorino or Nidorina
+  // also gives; the pipeline does not let such a frame interrupt a run of either.
+  const nidoran = candidates.find((c) => normalise(c.display) === 'nidoran');
+  if (nidoran) for (const v of variants) {
+    if (/^nidoran ?[a-z0-9]?$/.test(v)) return { candidate: nidoran, distance: 0, text: 'nidoran', whole: wholeText.has(v), symbol: true, attached: v.length === 8 && !v.includes(' ') };
+  }
   let best = null;
   for (const v of variants) {
     if (!v) continue;

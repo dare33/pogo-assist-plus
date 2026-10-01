@@ -344,6 +344,9 @@ test('a Nidoran read with a letter stuck to it does not split a Nidorina or Nido
   assert.equal(matchName('Nidorano', names).attached, true);
   assert.equal(matchName('Nidoran', names).attached, false);
   assert.equal(matchName('Nidoran 9', names).attached, false);
+  // An overlay's word after the name does not turn it into Nidorino.
+  for (const text of ['Nidorano Saal', 'Nidorano ad']) assert.equal(matchName(text, names).candidate.display, 'Nidoran', text);
+  assert.equal(matchName('a Nidorino a', names).candidate.display, 'Nidorino');
   assert.match(matchName('Nidorin', names).candidate.display, /^Nidorin[ao]$/); // a lost letter is not Nidoran
 });
 
