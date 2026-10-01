@@ -214,12 +214,11 @@ sizes with proportional scaling, only if the game's layout proves proportional.
 
 **Risks and open decisions**
 
-- **Repository rule.** `CLAUDE.md` says nothing here may "automate input to" the game, and the
-  tier-list project says never automate play. Shipping a Voice Control commands file that pages
-  through storage is automated input, even though it only reads and uses an Apple accessibility
-  feature. Greg to decide: amend the rule to permit read-only paging through the player's own
-  storage, or keep the commands file out of the repo and the app. Players must be told that
-  Niantic's terms discourage automation.
+- **Repository rule (decided 1 Oct 2026).** `CLAUDE.md` used to say nothing here may "automate
+  input to" the game. Greg amended it: paging through the player's own storage by a Voice Control
+  swipe gesture is allowed, because it only moves from one Pokémon to the next; anything that
+  acts in the game stays forbidden. The generator is `experiments/voice-control/generate_commands.py`.
+  Players must be told that Niantic's terms discourage automation.
 - App Review may object to a public listing that documents automated swiping; TestFlight avoids
   full review but builds expire after 90 days.
 - Voice Control behaviour on other iOS versions is unknown (Greg's phone runs an iOS 27.2 beta).
