@@ -179,6 +179,23 @@ sizes with proportional scaling, only if the game's layout proves proportional.
    and a twelve-repeat chain that was never spoken ("Pogo chain test") is imported on Greg's
    iPhone. Pass: both import, the gesture pages one Pokémon per swipe, and the chain plays all
    twelve repeats. Then the same file on a second, different-sized iPhone.
+   **Result, 1 Oct 2026 (Greg's iPhone, 440 x 956 points, iOS 27.2 beta; iPad mini 6; clips read
+   with `scripts/extract.mjs` on Windows): passed.** Generated files import. A synthesised swipe
+   (x 340 to 75 at y 340, 0.85 s, one every 2.1 s) moves one Pokémon per swipe and gives 7 frames
+   at 5 fps with the appraisal bars read. No opening touch is needed; an opening *tap* closes the
+   appraisal panel and must not be used. Chains never spoken aloud play in full: 12 repeats of 9
+   swipes and 40 repeats of 3. A single gesture of 50 swipes (104 s) plays in full on both
+   devices. A faster pace (0.6 s swipe, one every 1.6 s) gives 5 to 6 frames and still reads, on
+   a 20-Pokémon sample. At the end of the list the game stays on the last Pokémon (no wrap), so
+   overshooting is harmless. The phone's positions, unscaled, also work on the iPad mini, as do
+   proportionally scaled ones, so one file may serve every device. At a join between repeats
+   the Pokémon on screen gets about 1.7 s (4 to 5 frames). Voice Control can mishear similar
+   command names ("Pogo test long" probably ran as "Pogo test phone"), so shipped commands need
+   distinct names. Reading faults found on the way, all in the extractor: Nidoran♂ and Nidoran♀
+   names unread, Paras unread twice, CP hidden behind tall models (Zapdos, Moltres), and more
+   unread or misread rows on the iPad layout than on the iPhone.
+   **Design consequence:** the app asks for the storage count and generates one command sized
+   to it (Greg, 1 Oct), built from repeats of a fixed batch.
 2. *Live-read prototype.* A minimal Xcode project (app plus broadcast extension) shows name and CP
    for each Pokémon as "Pogo Scan" pages through storage on Greg's phone. Pass: every Pokémon in
    a 50-swipe run is read, within the extension's memory limit (about 50 MB), with the phone
