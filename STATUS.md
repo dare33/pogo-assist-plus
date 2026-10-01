@@ -1,5 +1,33 @@
 # Status — Pogo Assist+
 
+**2 Oct 2026: reader faults found on the Voice Control test clips (branch `extractor-read-faults`, not merged).**
+What the branch changes: Nidoran♀/♂ are read (both share the display name, the sex is the one
+whose stats fit, every such row is flagged `sex-from-stats`); the HP bar is the thin green band
+with the longest unbroken run (a row of green type icons used to win, so Paras, Bulbasaur, Flabébé
+and others were skipped); a truncated HP read (current above max) is no read; a Lucky Pokémon's
+name is looked for one line up; a CP whose leading digits are behind the model is worked out
+from HP and settled bars when exactly one candidate ends in the digits read (flag
+`cp-recovered:<cp>-from-<read>`); a name read without OCR confidence can only add a row of its
+own, flagged `name-low-confidence`, never change a row that has a confident frame; and
+`unmatched` now lists what was on screen and not read (`name-not-read`, `cp-not-read`,
+`absorbed`), which on `main` was always empty. `merge.js` is unchanged from `main`.
+**Verified (Windows, Node 24, commit 8ab2ad4):** `npm test` 168 passing. The three darentas clips
+re-read to scratch: 1,362 rows against 1,340 on `main`, every original row present except 19
+misreads that are now read correctly, 263 flagged (255), 7 listed as unread. Clips v3 (109 of
+109 Pokémon), v2, the iPhone and iPad "Marathon" clips re-read.
+**Review:** six rounds, each an Opus reviewer and a Sol 5.6 cross-vendor pass (round 5's Sol pass
+did not run). Rounds 1 to 5 refused it and were folded. Round 6 on 74c7794: Sol 5.6 confirmed OK
+against the standard (no new unflagged wrong row, no row lost unlisted, no duplicate unflagged
+row, compared with `main`); Opus said mergeable with fixes (weak rows at a clip edge hiding the
+join with the next clip; Nidoran near-misses splitting a Nidorina run; row order after dedupe).
+Those fixes are a35b1b3 and 8ab2ad4 and have NOT been reviewed. **The review gate is not passed;
+one confirmation round on 8ab2ad4 is outstanding.**
+**Known and left alone (same on `main`):** two different Pokémon with similar CPs and equal HP
+and bars merge across a swipe; a partial CP read that solves as another form (Zygarde 704) is
+accepted; an HP bar under 8% of the width is not found; a Pokémon read only weakly beside one
+of the same species is dropped. Recovered-CP rows go to the advisor like any other flagged row;
+the CSV has no flag column.
+
 **30 Sep 2026: batch mode for a whole box.** `node scripts/extract-box.mjs <folder>` (or drag the
 folder onto `extract-box.cmd`) reads every clip in an account folder, drops the Pokémon repeated at
 clip joins, marks the Shadow column from a `shadow`-named clip, and writes one Poke Genie-layout
