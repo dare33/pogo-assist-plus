@@ -41,12 +41,30 @@ export async function extract(frames, { ocr, gm, onProgress = () => {}, total = 
  * confident row could be theirs (weakRows), and those rows are flagged `name-low-confidence`.
  */
 export function finish(readings, gm) {
-  const strong = readings.map((r) => (r?.nameWeak ? { ...r, name: null, cp: null, nameWeak: false } : r));
+  const named = readings.map((r, i) => (r?.name ? i : -1)).filter((i) => i >= 0);
+  // "Nidoran" with a letter stuck to it, next to a Nidorina or Nidorino frame, is that Pokémon's
+  // name misread by a letter: unreadable, so it cannot split the run.
+  const nidorStray = (r, i) => {
+    if (r?.name !== 'Nidoran' || !r.nameAttached) return false;
+    const at = named.indexOf(i);
+    return [named[at - 1], named[at + 1]].some((j) => j !== undefined && /^Nidorin[ao]$/.test(readings[j].name));
+  };
+  const strong = readings.map((r, i) => (r?.nameWeak || nidorStray(r, i) ? { ...r, name: null, cp: null, nameWeak: false } : r));
   const runs = groupRuns(strong);
   const at = new Map(strong.map((r, i) => [r, i]));
-  const spans = runs.map((run) => [at.get(run.frames[0]), at.get(run.frames[run.frames.length - 1])]);
-  const strongRows = dedupeAdjacent(runs.map((run, k) => ({ ...collapseRun(run), order: spans[k][0] })));
-  const { rows: weak, setAside } = weakRows(readings, runs, spans);
+  const runSpans = runs.map((run) => [at.get(run.frames[0]), at.get(run.frames[run.frames.length - 1])]);
+  const strongRows = dedupeAdjacent(runs.map((run, k) => ({ ...collapseRun(run), order: runSpans[k][0] })));
+  // Where each row's Pokémon was on screen. dedupeAdjacent can join two runs into one row, whose
+  // span is then first frame to last frame; that needs frame labels to find them again, so
+  // without unique labels the spans stay those of the runs.
+  const labels = new Map();
+  let unique = true;
+  strong.forEach((r, i) => { const key = r?.frame; if (key === null || key === undefined || labels.has(key)) unique = false; else labels.set(key, i); });
+  const spans = unique
+    ? strongRows.map((row) => ({ name: row.name, a: labels.get(row.frames[0].frame), b: labels.get(row.frames[row.frames.length - 1].frame) }))
+    : runs.map((run, k) => ({ name: run.frames[0].name, a: runSpans[k][0], b: runSpans[k][1] }));
+  if (unique) strongRows.forEach((row, k) => { row.order = spans[k].a; });
+  const { rows: weak, setAside } = weakRows(readings, spans);
   const collapsed = [...strongRows, ...weak].sort((a, b) => a.order - b.order);
   const { rows, absorbed } = absorbStrays(collapsed.map((row) => resolveRow(row, gm)));
   rows.forEach((r, i) => { r.index = i + 1; });
@@ -80,26 +98,31 @@ export function cpOptions(species, { hp, ivs, ivConfidence = 1 }, reads = []) {
 }
 
 /**
- * Rows for Pokémon read only with weak names. A weak frame with a CP:
- * - between the first and last frame of a confident run belongs to that Pokémon's time on
- *   screen. With the run's name it is dropped (as before weak names were read); with another
- *   name ("Paras" in the middle of a Parasect) it is set aside to be listed as unread;
- * - between two runs (or before the first, or after the last) is dropped when it has the name
- *   of the run on either side, since it may be that Pokémon's first or last frame; otherwise
- *   it is a Pokémon no confident frame accounts for, and such frames are grouped into rows.
+ * Rows for Pokémon read only with weak names. `spans` are the confident rows' times on screen
+ * ({ name, a, b }, in order). A weak frame with a CP:
+ * - between the first and last frame of a confident row belongs to that Pokémon's time on
+ *   screen. With its name it is dropped (as before weak names were read); with another name
+ *   ("Paras" in the middle of a Parasect) it is set aside to be listed as unread;
+ * - between two confident rows is dropped when it has the name of the row on either side, since
+ *   it may be that Pokémon's first or last frame; otherwise it is a Pokémon no confident frame
+ *   accounts for, and such frames are grouped into rows;
+ * - before the first confident row or after the last is dropped: a clip is joined to the next
+ *   by matching its last rows to the next clip's first rows (batch.js), and a row that only one
+ *   of the two clips has there would hide the overlap. A clip with no confident row at all keeps
+ *   its weak rows.
  * Returns { rows: collapsed rows with nameWeak and order, setAside: Set of reading indices }.
  */
-function weakRows(readings, runs, spans) {
+function weakRows(readings, spans) {
   const setAside = new Set();
-  const gaps = new Map(); // index of the run after the gap -> weak readings in it
-  const nameOf = (k) => (k >= 0 && k < runs.length ? runs[k].frames[0].name : null);
+  const gaps = new Map(); // index of the confident row after the gap -> weak readings in it
   readings.forEach((r, i) => {
     if (!r?.nameWeak || !r.name || !r.cp) return;
-    const inside = spans.findIndex(([a, b]) => i > a && i < b);
-    if (inside >= 0) { if (r.name !== nameOf(inside)) setAside.add(i); return; }
-    let next = spans.findIndex(([a]) => a > i);
-    if (next < 0) next = runs.length;
-    if (r.name === nameOf(next - 1) || r.name === nameOf(next)) return;
+    const inside = spans.find((s) => i > s.a && i < s.b);
+    if (inside) { if (r.name !== inside.name) setAside.add(i); return; }
+    let next = spans.findIndex((s) => s.a > i);
+    if (next < 0) next = spans.length;
+    if (spans.length && (next === 0 || next === spans.length)) return;
+    if (r.name === spans[next - 1]?.name || r.name === spans[next]?.name) return;
     if (!gaps.has(next)) gaps.set(next, []);
     gaps.get(next).push({ r, i });
   });

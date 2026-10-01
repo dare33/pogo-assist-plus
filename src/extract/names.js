@@ -72,7 +72,9 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   // this it is as close to "Nidorino" as to "Nidoran".
   if (/^nidoran ?[a-z0-9]?$/.test(norm)) {
     const nidoran = candidates.find((c) => normalise(c.display) === 'nidoran');
-    if (nidoran) return { candidate: nidoran, distance: 0, text: 'nidoran', whole: true, symbol: true };
+    // `attached`: a letter stuck to the name ("Nidorano"), which a misread Nidorino or Nidorina
+    // also gives; the pipeline does not let such a frame interrupt a run of either.
+    if (nidoran) return { candidate: nidoran, distance: 0, text: 'nidoran', whole: true, symbol: true, attached: norm.length === 8 && !norm.includes(' ') };
   }
   variants.add(norm);
   const tokens = norm.split(' ');
@@ -90,7 +92,9 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
       const key = normalise(c.display);
       const d = distance(v, key);
       const limit = Math.max(1, Math.floor(key.length * maxRatio));
-      if (d <= limit && (!best || d < best.distance || (d === best.distance && v.length > best.text.length))) best = { candidate: c, distance: d, text: v, whole: wholeText.has(v) };
+      // Equally near, "Nidoran" gives way ("Nidorin" is Nidorina or Nidorino with a letter lost).
+      const yields = best && d === best.distance && best.candidate.display === 'Nidoran' && c.display !== 'Nidoran';
+      if (d <= limit && (!best || d < best.distance || yields || (d === best.distance && v.length > best.text.length && c.display !== 'Nidoran'))) best = { candidate: c, distance: d, text: v, whole: wholeText.has(v) };
     }
   }
   return best;
