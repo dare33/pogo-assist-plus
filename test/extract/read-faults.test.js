@@ -7,7 +7,7 @@ import { displayNames, matchName, nameAndForm } from '../../src/extract/names.js
 import { parseHp } from '../../src/extract/ocr.js';
 import { makeImage, fillRect } from '../../src/extract/image.js';
 import { findHpBar } from '../../src/extract/layout.js';
-import { groupRuns, collapseRun } from '../../src/extract/merge.js';
+import { groupRuns } from '../../src/extract/merge.js';
 import { finish, cpOptions } from '../../src/extract/pipeline.js';
 import { cpAt, hpAt } from '../../src/cpm.js';
 import { loadGamemaster } from '../../src/node/load.js';
@@ -63,19 +63,40 @@ const frame = (cp, { hp = HP, ivs = IVS, name = 'Moltres', n = 0 } = {}) => ({
 
 const swipe = { frame: 'swipe', name: null, cp: null, flags: ['mid-swipe'] };
 
-test('frames with the CP hidden form a run and join a run that has a CP, but not across a swipe', () => {
-  const hidden = groupRuns([frame(null, { n: 1 }), frame(null, { n: 2 })]);
-  assert.equal(hidden.length, 1);
-  assert.equal(collapseRun(hidden[0]).cp, null);
-  assert.equal(groupRuns([frame(CP, { n: 1 }), frame(null, { n: 2 }), frame(null, { n: 3 })]).length, 1);
-  assert.equal(groupRuns([frame(null, { n: 1 }), frame(null, { n: 2, hp: HP + 1 })]).length, 2); // another HP is another Pokémon
-  assert.equal(groupRuns([{ ...frame(null, { n: 1 }), hp: null }]).length, 0); // no CP and no HP identifies nothing
-  // Two Pokémon of one species with the same HP and bars, the first with its CP hidden: the swipe
-  // between them keeps them apart, in either order.
-  assert.equal(groupRuns([frame(null, { n: 1 }), frame(null, { n: 2 }), swipe, frame(CP, { n: 4 }), frame(CP, { n: 5 })]).length, 2);
-  assert.equal(groupRuns([frame(CP, { n: 1 }), frame(CP, { n: 2 }), swipe, frame(null, { n: 4 }), frame(null, { n: 5 })]).length, 2);
-  // With a CP on both sides a swipe does not split a run (the CP says it is the same Pokémon).
-  assert.equal(groupRuns([frame(CP, { n: 1 }), swipe, frame(CP, { n: 3 })]).length, 1);
+test('frames with the CP hidden never join or split a run: rows are built as if they were unreadable', () => {
+  assert.equal(groupRuns([frame(null, { n: 1 }), frame(null, { n: 2 })]).length, 0);
+  const runs = groupRuns([frame(CP, { n: 1 }), frame(null, { n: 2 }), frame(CP, { n: 3 })]);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].frames.length, 2);
+  // The same Pokémon with its model in front of the CP for two frames, between unreadable frames:
+  // one row, as before these frames were read at all (a second, identical row would be a
+  // duplicate nobody could tell from a real twin).
+  const { rows } = finish([...[1, 2, 3].map((n) => frame(CP, { n })), swipe, frame(null, { n: 5 }), frame(null, { n: 6 }), swipe, ...[8, 9, 10].map((n) => frame(CP, { n }))], gm);
+  assert.deepEqual(rows.map((r) => [r.cp, r.flags]), [[CP, []]]);
+});
+
+test('a hidden-CP frame of the next Pokémon sliding in does not pull two Pokémon into one row', () => {
+  // The whatsapp fixture's Charizards: 1613 with bars not yet settled, then a frame with no CP text
+  // that already shows the next Charizard's HP and settled bars, then that Charizard (1608).
+  const zard = (cp, n, o = {}) => ({ ...frame(cp, { name: 'Charizard', hp: 118, ivs: { atk: 10, def: 15, hp: 13 }, n, ...o }) });
+  const unsettled = (cp, n) => ({ ...zard(cp, n), ivConfidence: 0.6 });
+  const { rows, unmatched } = finish([unsettled(1613, 1), unsettled(1613, 2), zard(null, 3), zard(1608, 4), zard(1608, 5)], gm);
+  assert.deepEqual(rows.map((r) => r.cp), [1613, 1608]);
+  assert.equal(unmatched.length, 0); // the sliding frame sits right beside its own Pokémon's run
+});
+
+test('a hidden-CP stretch right beside a run of the same Pokémon is that Pokémon, not an entry', () => {
+  const after = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), frame(null, { n: 3 }), frame(null, { n: 4 })], gm);
+  assert.equal(after.rows.length, 1);
+  assert.equal(after.unmatched.length, 0);
+  const before = finish([frame(null, { n: 1 }), frame(CP, { n: 2 }), frame(CP, { n: 3 })], gm);
+  assert.equal(before.unmatched.length, 0);
+  // Different settled bars next to a run say it is another Pokémon: listed.
+  const other = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), frame(null, { ivs: { atk: 1, def: 2, hp: IVS.hp }, n: 3 }), frame(null, { ivs: { atk: 1, def: 2, hp: IVS.hp }, n: 4 })], gm);
+  assert.equal(other.unmatched.length, 1);
+  // A hidden Pokémon whose HP was never read is still listed.
+  const noHp = finish([frame(null, { hp: null, n: 1 }), frame(null, { hp: null, n: 2 })], gm);
+  assert.deepEqual(noHp.unmatched.map((u) => [u.name, u.hp, u.reason, u.frames]), [['Moltres', null, 'cp-not-read', 2]]);
 });
 
 test('a hidden-CP Pokémon followed by its twin with a visible CP is listed, not merged away', () => {
@@ -113,6 +134,33 @@ test('a CP read in full that does not fit is never replaced by a recovered one',
   assert.equal(rows.length, 1);
   assert.equal(rows[0].cp, CP);
   assert.ok(!rows[0].flags.some((f) => f.startsWith('cp-recovered')));
+});
+
+test('any full-length read in the run blocks recovery, even one frame against several short reads', () => {
+  const wrongBars = { atk: IVS.atk + 2, def: IVS.def, hp: IVS.hp };
+  const decoy = cpOptions([moltres], { hp: HP, ivs: wrongBars }, []).options[0];
+  const tail = decoy % 100;
+  assert.ok(tail >= 10);
+  const { rows } = finish([frame(CP, { ivs: wrongBars, n: 1 }), ...[2, 3, 4].map((n) => frame(tail, { ivs: wrongBars, n }))], gm);
+  assert.ok(rows.every((r) => !r.flags.some((f) => f.startsWith('cp-recovered'))));
+  assert.ok(rows.every((r) => r.cp !== decoy));
+});
+
+test('frames with a CP but no species name are listed once per Pokémon, and a lone frame is not', () => {
+  const nick = (cp, n) => ({ frame: `f${n}`, time: n / 5, name: null, nameText: 'Firebird', cp, cpReads: [cp], cpText: String(cp), hp: null, ivs: null, ivConfidence: 0, sharpness: 1, flags: ['name-unmatched'] });
+  const { rows, unmatched } = finish([nick(2409, 1), nick(2409, 2), nick(2409, 3), swipe, ...[5, 6, 7].map((n) => frame(CP, { n })), swipe, nick(1500, 9)], gm);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(unmatched.map((u) => [u.cp, u.nameText, u.frames, u.reason]), [[2409, 'Firebird', 3, 'name-not-read']]);
+});
+
+test('a Nidoran with no bars read is exported as the one that fits, not the first in the list', () => {
+  const male = gm.byId.get('nidoran_male');
+  const ivs = { atk: 9, def: 10, hp: 13 };
+  const cp = cpAt(male.baseStats, ivs, 20), hp = hpAt(male.baseStats, ivs, 20);
+  const { rows } = finish([1, 2, 3].map((n) => frame(cp, { name: 'Nidoran', hp, ivs: null, n })), gm);
+  assert.equal(rows.length, 1);
+  const femaleFits = rows[0].flags.some((f) => f.startsWith('form-ambiguous'));
+  assert.ok(rows[0].speciesId === 'nidoran_male' || femaleFits, `${rows[0].speciesId} ${rows[0].flags}`);
 });
 
 test('a wholly hidden CP never becomes a row: it is listed with the CPs its HP and bars allow', () => {
@@ -156,6 +204,9 @@ test('a one-frame row with nothing but a similar CP is folded into its neighbour
 test('matchName says whether the whole text matched, so a dropped word cannot pass without confidence', () => {
   assert.equal(matchName('Rattata', names).whole, true);
   assert.equal(matchName('Rattata .', names).whole, true);          // the pencil icon read as a dot
+  assert.equal(matchName('Rattata a', names).whole, true);          // or as a letter
+  const lead = matchName('x Rattata', names);                        // what is left of "Alolan"
+  assert.ok(!(lead.distance === 0 && lead.whole));
   const dropped = matchName('Aloan Rattata', names);
   assert.ok(!(dropped.distance === 0 && dropped.whole), 'an exact match on a part of the text is not a whole match');
 });

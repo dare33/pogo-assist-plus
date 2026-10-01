@@ -4,7 +4,7 @@
 
 import { readFrame } from './frame.js';
 import { displayNames, nameAndForm } from './names.js';
-import { groupRuns, collapseRun, dedupeAdjacent, cpSimilar, SETTLED } from './merge.js';
+import { groupRuns, collapseRun, dedupeAdjacent, cpSimilar, ivsCompatible, vote, SETTLED } from './merge.js';
 import { solve, speciesFor } from './solve.js';
 import { step as dustStep } from '../cost.js';
 import { cpAt, hpAt, LEVELS } from '../cpm.js';
@@ -35,16 +35,14 @@ export async function extract(frames, { ocr, gm, onProgress = () => {}, total = 
 export function finish(readings, gm) {
   const runs = groupRuns(readings);
   const collapsed = runs.map(collapseRun);
-  const deduped = dedupeAdjacent(collapsed);
-  const resolved = deduped.map((row) => resolveRow(row, gm));
-  const { rows, absorbed } = absorbStrays(resolved.filter(Boolean));
+  const { rows, absorbed } = absorbStrays(dedupeAdjacent(collapsed).map((row) => resolveRow(row, gm)));
   rows.forEach((r, i) => { r.index = i + 1; });
   // What was on screen and did not become a row is listed, so it is not silently missing: frames
-  // that showed a CP but no species name (a nickname, or a garbled read); a named Pokémon whose
+  // that showed a CP but no species name (a nickname, or a garbled read: two frames or more in a
+  // row with the same CP, so a single frame caught mid-change is not listed); a named Pokémon whose
   // CP was never read (hidden behind its model), with the CPs its HP and bars allow; and a
   // one-frame row folded into its neighbour.
-  const unmatched = readings.filter((r) => r.cp && !r.name).map((r) => ({ frame: r.frame, cp: r.cp, nameText: r.nameText, hp: r.hp?.max ?? null }));
-  unmatched.push(...hiddenEntries(deduped.filter((row, i) => !resolved[i]), gm), ...absorbed);
+  const unmatched = [...unnamedEntries(readings), ...hiddenEntries(readings, runs, gm), ...absorbed];
   const review = rows.filter((r) => r.flags.length).map((r) => ({ index: r.index, name: r.name, cp: r.cp, hp: r.hp, ivs: r.ivs, ivsRead: r.ivsRead, ivsGuess: r.ivsGuess, level: r.level, levelMax: r.levelMax, flags: r.flags, frames: r.frames }));
   return { rows, review, unmatched };
 }
@@ -67,14 +65,12 @@ export function cpOptions(species, { hp, ivs, ivConfidence = 1 }, reads = []) {
   return { options: all, supported: [...tailOf.keys()], tailOf };
 }
 
-/** One collapsed run to one row, or null when no CP was read at all (listed by hiddenEntries). */
 function resolveRow(row, gm) {
   const species = speciesFor(gm, row.speciesIds ?? []);
   const flags = [];
   // The CP: the first candidate read (ranked by how many frames read it) that the solver can
   // reconcile with the HP and bars; failing that, the most-read one.
-  const candidates = row.cpCandidates?.length ? row.cpCandidates : row.cp ? [row.cp] : [];
-  if (!candidates.length) return null;
+  const candidates = row.cpCandidates ?? [row.cp];
   let cp = row.cp, result = null;
   for (const candidate of candidates) {
     const r = solve({ species, cp: candidate, hp: row.hp, ivs: row.ivs });
@@ -83,11 +79,11 @@ function resolveRow(row, gm) {
   if (result) { if (cp !== row.cp) flags.push(`cp-chosen-${cp}-over-${row.cp}`); }
   else {
     // No read fits. When the model covered the leading digits, the reads are the tail of the real
-    // CP: work the CP out from the HP and the settled bars and take it when exactly one such CP
-    // ends in a read, and the most-read value is shorter than it (a full-length read that does
-    // not fit means misread bars, not a hidden digit). The row stays flagged for a check in game.
+    // CP: work the CP out from the HP and the settled bars, and take it when exactly one such CP
+    // ends in a read and no read at all is as long as it (a full-length read that does not fit
+    // means misread bars, not a hidden digit). The row stays flagged for a check in the game.
     const { supported, tailOf } = cpOptions(species, row, candidates);
-    if (supported.length === 1 && String(row.cp).length < String(supported[0]).length) { cp = supported[0]; flags.push(`cp-recovered:${cp}-from-${tailOf.get(cp)}`); }
+    if (supported.length === 1 && !candidates.some((c) => String(c).length >= String(supported[0]).length)) { cp = supported[0]; flags.push(`cp-recovered:${cp}-from-${tailOf.get(cp)}`); }
     result = solve({ species, cp, hp: row.hp, ivs: row.ivs });
   }
   let ivs = row.ivs, level = null, levelMax = null, speciesId = species[0]?.speciesId ?? null, hp = row.hp;
@@ -112,6 +108,7 @@ function resolveRow(row, gm) {
     }
     case 'unknown-ivs': {
       ivs = null;
+      if (s) speciesId = s.speciesId; // the species that fits, not just the first the name could be
       const levels = result.solutions.map((x) => x.level);
       if (levels.length) { level = Math.min(...levels); levelMax = Math.max(...levels); }
       flags.push('ivs-unread');
@@ -136,24 +133,58 @@ function resolveRow(row, gm) {
 }
 
 /**
- * Runs whose CP was never read, as entries for `unmatched`: the name, the HP, the settled bars
- * and the CPs those allow, for a check in the game. Consecutive entries that agree are one
- * Pokémon seen on both sides of an unreadable frame.
+ * Frames that showed a CP but no species name, as entries for `unmatched`: one per stretch of
+ * two or more such frames in a row whose CPs agree. { frame, cp, nameText, hp: null, frames, reason }.
  */
-function hiddenEntries(rows, gm) {
+function unnamedEntries(readings) {
   const out = [];
-  for (const row of rows) {
-    const ivs = row.ivs && row.ivConfidence >= SETTLED ? row.ivs : null;
-    const prev = out[out.length - 1];
-    const sameIvs = !ivs || !prev?.ivs || (ivs.atk === prev.ivs.atk && ivs.def === prev.ivs.def && ivs.hp === prev.ivs.hp);
-    if (prev && prev.name === row.name && prev.hp === (row.hp ?? null) && (sameIvs || row.frames.length === 1 || prev.frames === 1)) {
-      if (row.frames.length > prev.frames) { prev.ivs = ivs ?? prev.ivs; prev.cpOptions = cpOptions(speciesFor(gm, row.speciesIds ?? []), row).options; }
-      prev.frames += row.frames.length;
-      continue;
-    }
-    out.push({ frame: row.frames[0].frame, cp: null, name: row.name, nameText: row.frames[0].name, hp: row.hp ?? null, ivs, cpOptions: cpOptions(speciesFor(gm, row.speciesIds ?? []), row).options, frames: row.frames.length, reason: 'cp-not-read' });
+  let cur = null;
+  const close = () => { if (cur && cur.frames >= 2) out.push({ frame: cur.frame, cp: vote(cur.cps), nameText: vote(cur.texts) ?? '', hp: null, frames: cur.frames, reason: 'name-not-read' }); cur = null; };
+  for (const r of readings) {
+    if (!r.cp || r.name) { close(); continue; }
+    if (cur && cur.cps.some((c) => cpSimilar(c, r.cp))) { cur.cps.push(r.cp); cur.texts.push(r.nameText || null); cur.frames++; }
+    else { close(); cur = { frame: r.frame, cps: [r.cp], texts: [r.nameText || null], frames: 1 }; }
   }
+  close();
   return out;
+}
+
+/**
+ * Pokémon that were on screen with a name but no CP on any frame (the model covered it), as
+ * entries for `unmatched`: name, HP, settled bars and the CPs those allow, for a check in the
+ * game. Such frames never join a run (rows are built exactly as if they were unreadable); a
+ * stretch of them is one entry, unless it sits right beside a run of the same Pokémon (same name,
+ * HP not different, bars not contradicting, no unreadable frame between), which is that Pokémon
+ * with its model in front of the CP for a moment.
+ */
+function hiddenEntries(readings, runs, gm) {
+  const runOf = new Map();
+  for (const run of runs) for (const f of run.frames) runOf.set(f, run);
+  const settledIvs = (frames) => vote(frames.filter((f) => f.ivs && f.ivConfidence >= SETTLED).map((f) => f.ivs), (x) => `${x.atk}/${x.def}/${x.hp}`);
+  const stretches = [];
+  let cur = null, prevRun = null, gap = false;
+  for (const r of readings) {
+    const run = runOf.get(r);
+    if (run) {
+      if (cur) { cur.next = run; cur.gapAfter = gap; cur = null; }
+      prevRun = run; gap = false;
+    } else if (r.name && !r.cp) {
+      const hp = r.hp?.max ?? null;
+      const ivs = r.ivs && r.ivConfidence >= SETTLED ? r.ivs : null;
+      const same = cur && cur.name === r.name && (cur.hp === null || hp === null || cur.hp === hp) && (!gap || ivsCompatible(settledIvs(cur.frames), ivs));
+      if (same) { cur.frames.push(r); cur.hp ??= hp; }
+      else { cur = { name: r.name, hp, frames: [r], prev: prevRun, gapBefore: gap || cur !== null, next: null, gapAfter: true }; stretches.push(cur); }
+      gap = false;
+    } else gap = true;
+  }
+  const beside = (s, run, gapBetween) => run && !gapBetween && run.frames[0].name === s.name && (s.hp === null || !run.hp || run.hp.max === s.hp) && ivsCompatible(run.ivs, settledIvs(s.frames));
+  return stretches.filter((s) => !beside(s, s.prev, s.gapBefore) && !beside(s, s.next, s.gapAfter)).map((s) => {
+    const ivs = settledIvs(s.frames);
+    return {
+      frame: s.frames[0].frame, cp: null, name: s.name, nameText: s.frames[0].nameText, hp: s.hp, ivs,
+      cpOptions: cpOptions(speciesFor(gm, s.frames[0].speciesIds ?? []), { hp: s.hp, ivs }).options, frames: s.frames.length, reason: 'cp-not-read',
+    };
+  });
 }
 
 /**

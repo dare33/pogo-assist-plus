@@ -62,7 +62,7 @@ export function distance(a, b) {
  * Best candidate for an OCR'd name. Tries the whole text, then the text with stray one-letter or
  * punctuation tokens dropped (the edit-pencil icon often reads as a dot or a letter). Returns
  * { candidate, distance, text, whole } or null when nothing is close enough; `whole` says the match
- * used the whole text (stray one-letter tokens aside), not the text with a word dropped.
+ * used the whole text (trailing one-letter tokens aside), not the text with a word dropped.
  */
 export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   const variants = new Set();
@@ -77,7 +77,11 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   variants.add(norm);
   const tokens = norm.split(' ');
   variants.add(tokens.filter((t) => t.length > 1).join(' '));
-  const wholeText = new Set(variants);
+  // The pencil icon sits after the name, so only trailing one-letter tokens may be dropped from a
+  // "whole" match; a stray token in front could be what is left of "Alolan".
+  const trimmed = [...tokens];
+  while (trimmed.length > 1 && trimmed[trimmed.length - 1].length === 1) trimmed.pop();
+  const wholeText = new Set([norm, trimmed.join(' ')]);
   if (tokens.length > 1) { variants.add(tokens.slice(1).join(' ')); variants.add(tokens.slice(0, -1).join(' ')); }
   let best = null;
   for (const v of variants) {

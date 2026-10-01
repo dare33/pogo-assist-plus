@@ -68,7 +68,9 @@ export async function readFrame(img, ocr, names, { frame = null, time = null, wa
   } else if (nameRead.text) out.flags.push('name-unmatched');
 
   if (!out.cp && cpText) out.flags.push('cp-unread');
-  if (!out.name) { out.cp = null; return out; } // a frame without an identifiable Pokémon is not a reading
+  // A frame without an identifiable Pokémon is not a reading (merge.js asks for a name), but it
+  // keeps its CP so the pipeline can list a Pokémon that was on screen under a nickname.
+  if (!out.name) return out;
 
   if (wantHp) {
     const hpCrop = crop(img, regions.hp);
