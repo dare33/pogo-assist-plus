@@ -31,19 +31,32 @@ export async function extract(frames, { ocr, gm, onProgress = () => {}, total = 
   return { ...finish(readings, gm), readings };
 }
 
-/** Everything after the frames are read: group, vote, solve, dedupe, flag. */
+/**
+ * Everything after the frames are read: group, vote, solve, dedupe, flag.
+ *
+ * Names read without OCR confidence (`nameWeak`, frame.js) are kept apart from the rest. The rows
+ * of every Pokémon with a confidently named frame are built from the confident frames alone, by
+ * exactly the steps used before weak names were read (group, collapse, dedupe), so a weak frame
+ * can neither outvote such a row's CP nor split it. Weak frames then add rows only where no
+ * confident row could be theirs (weakRows), and those rows are flagged `name-low-confidence`.
+ */
 export function finish(readings, gm) {
-  readings = supportedNames(readings);
-  const runs = groupRuns(readings);
-  const collapsed = runs.map((run) => ({ ...collapseRun(run), nameWeak: run.frames.every((f) => f.nameWeak) }));
-  const { rows, absorbed } = absorbStrays(dedupeAdjacent(collapsed).map((row) => resolveRow(row, gm)));
+  const strong = readings.map((r) => (r?.nameWeak ? { ...r, name: null, cp: null, nameWeak: false } : r));
+  const runs = groupRuns(strong);
+  const at = new Map(strong.map((r, i) => [r, i]));
+  const spans = runs.map((run) => [at.get(run.frames[0]), at.get(run.frames[run.frames.length - 1])]);
+  const strongRows = dedupeAdjacent(runs.map((run, k) => ({ ...collapseRun(run), order: spans[k][0] })));
+  const { rows: weak, setAside } = weakRows(readings, runs, spans);
+  const collapsed = [...strongRows, ...weak].sort((a, b) => a.order - b.order);
+  const { rows, absorbed } = absorbStrays(collapsed.map((row) => resolveRow(row, gm)));
   rows.forEach((r, i) => { r.index = i + 1; });
   // What was on screen and did not become a row is listed, so it is not silently missing: frames
   // that showed a CP but no species name (a nickname, or a garbled read: two frames or more in a
   // row with the same CP, so a single frame caught mid-change is not listed); a named Pokémon whose
   // CP was never read (hidden behind its model), with the CPs its HP and bars allow; and a
   // one-frame row folded into its neighbour.
-  const unmatched = [...unnamedEntries(readings), ...hiddenEntries(readings, runs, gm), ...absorbed];
+  const view = strong.map((r, i) => (setAside.has(i) ? { ...readings[i], name: null, nameWeak: false, flags: [...(readings[i].flags ?? []), 'name-unsupported'] } : r));
+  const unmatched = [...unnamedEntries(view), ...hiddenEntries(view, runs, gm), ...absorbed];
   const review = rows.filter((r) => r.flags.length).map((r) => ({ index: r.index, name: r.name, cp: r.cp, hp: r.hp, ivs: r.ivs, ivsRead: r.ivsRead, ivsGuess: r.ivsGuess, level: r.level, levelMax: r.levelMax, flags: r.flags, frames: r.frames }));
   return { rows, review, unmatched };
 }
@@ -67,34 +80,35 @@ export function cpOptions(species, { hp, ivs, ivConfidence = 1 }, reads = []) {
 }
 
 /**
- * Names read without OCR confidence (`nameWeak`) are used only for a Pokémon that has no
- * confidently named frame at all. Consecutive named frames with one name are a block:
- * - a block with a confident frame drops its weak frames altogether (name and CP cleared), which
- *   is exactly what happened to them before weak names were read, so such a Pokémon's row is
- *   built from the same frames as before;
- * - a block of weak frames only is kept, and its row is flagged `name-low-confidence`, unless the
- *   blocks either side of it share a name: then it is most likely that Pokémon's name cut short
- *   for a moment ("Paras" in the middle of a Parasect), so its frames lose the name, keep the CP
- *   and are listed as unread.
+ * Rows for Pokémon read only with weak names. A weak frame with a CP:
+ * - between the first and last frame of a confident run belongs to that Pokémon's time on
+ *   screen. With the run's name it is dropped (as before weak names were read); with another
+ *   name ("Paras" in the middle of a Parasect) it is set aside to be listed as unread;
+ * - between two runs (or before the first, or after the last) is dropped when it has the name
+ *   of the run on either side, since it may be that Pokémon's first or last frame; otherwise
+ *   it is a Pokémon no confident frame accounts for, and such frames are grouped into rows.
+ * Returns { rows: collapsed rows with nameWeak and order, setAside: Set of reading indices }.
  */
-export function supportedNames(readings) {
-  const named = readings.map((r, i) => (r?.name ? i : -1)).filter((i) => i >= 0);
-  const blocks = [];
-  for (const i of named) {
-    const last = blocks[blocks.length - 1];
-    if (last && last.name === readings[i].name) last.at.push(i);
-    else blocks.push({ name: readings[i].name, at: [i] });
-  }
-  const out = [...readings];
-  blocks.forEach((b, k) => {
-    const weak = b.at.filter((i) => readings[i].nameWeak);
-    if (!weak.length) return;
-    const unsupported = (i, keepCp) => { const r = readings[i]; out[i] = { ...r, name: null, nameWeak: false, cp: keepCp ? r.cp : null, flags: [...(r.flags ?? []), 'name-unsupported'] }; };
-    if (weak.length < b.at.length) { for (const i of weak) unsupported(i, false); return; }
-    const before = blocks[k - 1], after = blocks[k + 1];
-    if (before && after && before.name === after.name) for (const i of weak) unsupported(i, true);
+function weakRows(readings, runs, spans) {
+  const setAside = new Set();
+  const gaps = new Map(); // index of the run after the gap -> weak readings in it
+  const nameOf = (k) => (k >= 0 && k < runs.length ? runs[k].frames[0].name : null);
+  readings.forEach((r, i) => {
+    if (!r?.nameWeak || !r.name || !r.cp) return;
+    const inside = spans.findIndex(([a, b]) => i > a && i < b);
+    if (inside >= 0) { if (r.name !== nameOf(inside)) setAside.add(i); return; }
+    let next = spans.findIndex(([a]) => a > i);
+    if (next < 0) next = runs.length;
+    if (r.name === nameOf(next - 1) || r.name === nameOf(next)) return;
+    if (!gaps.has(next)) gaps.set(next, []);
+    gaps.get(next).push({ r, i });
   });
-  return out;
+  const rows = [];
+  for (const members of gaps.values()) {
+    const first = new Map(members.map(({ r, i }) => [r, i]));
+    for (const run of groupRuns(members.map(({ r }) => r))) rows.push({ ...collapseRun(run), nameWeak: true, order: first.get(run.frames[0]) });
+  }
+  return { rows, setAside };
 }
 
 function resolveRow(row, gm) {
@@ -173,7 +187,7 @@ function resolveRow(row, gm) {
 /**
  * Frames that showed a CP but no species name, as entries for `unmatched`: one per stretch of
  * two or more such frames in a row whose CPs agree, or of any length when the name was read
- * without confidence and set aside (supportedNames). { frame, cp, nameText, hp: null, frames, reason }.
+ * without confidence and set aside (weakRows). { frame, cp, nameText, hp: null, frames, reason }.
  */
 function unnamedEntries(readings) {
   const out = [];
@@ -218,7 +232,9 @@ function hiddenEntries(readings, runs, gm) {
     } else gap = true;
   }
   const beside = (s, run, gapBetween) => run && !gapBetween && run.frames[0].name === s.name && (s.hp === null || !run.hp || run.hp.max === s.hp) && ivsCompatible(run.ivs, settledIvs(s.frames));
-  return stretches.filter((s) => !beside(s, s.prev, s.gapBefore) && !beside(s, s.next, s.gapAfter)).map((s) => {
+  // One or two frames with no HP read are a card caught sliding in or out, not a Pokémon to list.
+  const substantial = (s) => s.hp !== null || s.frames.length >= 3;
+  return stretches.filter((s) => substantial(s) && !beside(s, s.prev, s.gapBefore) && !beside(s, s.next, s.gapAfter)).map((s) => {
     const ivs = settledIvs(s.frames);
     return {
       frame: s.frames[0].frame, cp: null, name: s.name, nameText: s.frames[0].nameText, hp: s.hp, ivs,

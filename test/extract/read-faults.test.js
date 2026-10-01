@@ -8,7 +8,7 @@ import { parseHp } from '../../src/extract/ocr.js';
 import { makeImage, fillRect } from '../../src/extract/image.js';
 import { findHpBar } from '../../src/extract/layout.js';
 import { groupRuns } from '../../src/extract/merge.js';
-import { finish, cpOptions, supportedNames } from '../../src/extract/pipeline.js';
+import { finish, cpOptions } from '../../src/extract/pipeline.js';
 import { cpAt, hpAt } from '../../src/cpm.js';
 import { loadGamemaster } from '../../src/node/load.js';
 
@@ -95,8 +95,10 @@ test('a hidden-CP stretch right beside a run of the same Pokémon is that Pokém
   const other = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), frame(null, { ivs: { atk: 1, def: 2, hp: IVS.hp }, n: 3 }), frame(null, { ivs: { atk: 1, def: 2, hp: IVS.hp }, n: 4 })], gm);
   assert.equal(other.unmatched.length, 1);
   // A hidden Pokémon whose HP was never read is still listed.
-  const noHp = finish([frame(null, { hp: null, n: 1 }), frame(null, { hp: null, n: 2 })], gm);
-  assert.deepEqual(noHp.unmatched.map((u) => [u.name, u.hp, u.reason, u.frames]), [['Moltres', null, 'cp-not-read', 2]]);
+  const noHp = finish([1, 2, 3].map((n) => frame(null, { hp: null, n })), gm);
+  assert.deepEqual(noHp.unmatched.map((u) => [u.name, u.hp, u.reason, u.frames]), [['Moltres', null, 'cp-not-read', 3]]);
+  // One or two such frames are a card sliding past, not an entry.
+  assert.equal(finish([frame(null, { hp: null, n: 1 }), frame(null, { hp: null, n: 2 })], gm).unmatched.length, 0);
 });
 
 test('a hidden-CP Pokémon followed by its twin with a visible CP is listed, not merged away', () => {
@@ -267,42 +269,58 @@ test('unnamed frames with unrelated CPs are separate entries', () => {
 });
 
 const weak = (r) => ({ ...r, nameWeak: true });
+const zapdos = (n) => frame(1977, { name: 'Zapdos', hp: 129, ivs: { atk: 15, def: 12, hp: 10 }, n });
+const articuno = (n) => frame(1729, { name: 'Articuno', hp: 132, ivs: { atk: 15, def: 11, hp: 15 }, n });
+const sect = (n) => frame(1531, { name: 'Parasect', hp: 118, ivs: null, n });
+const paras = (n, cp = 1531) => weak(frame(cp, { name: 'Paras', hp: 118, ivs: null, n }));
+/** What the code before weak names did with a weak frame: no name, no CP. */
+const asBefore = (readings) => readings.map((r) => (r.nameWeak ? { ...r, name: null, cp: null, nameWeak: false } : r));
+const core = (rows) => rows.map((r) => [r.display, r.cp, r.hp, r.ivs, r.level, r.frames.length, r.flags]);
 
-test('names read without confidence are used only for a Pokémon with no confident frame', () => {
-  // Among confident frames of the same name the weak ones are dropped outright, as before weak
-  // names were read: a weak last frame cannot outvote the CP, and a garbled weak frame in the
-  // middle cannot split the run.
-  const late = finish([frame(CP, { n: 1 }), weak(frame(CP + 8, { hp: null, n: 2 }))], gm);
-  assert.deepEqual(late.rows.map((r) => [r.cp, r.frames.length, r.flags]), [[CP, 1, []]]);
-  const middle = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), weak(frame(450, { hp: null, n: 3 })), frame(CP, { n: 4 }), frame(CP, { n: 5 })], gm);
-  assert.deepEqual(middle.rows.map((r) => [r.cp, r.frames.length, r.flags]), [[CP, 4, []]]);
-  assert.equal(middle.unmatched.length, 0);
-  const gated = supportedNames([frame(CP, { n: 1 }), weak(frame(450, { n: 2 }))]);
-  assert.deepEqual([gated[1].name, gated[1].cp], [null, null]);
-  // A Pokémon read only weakly keeps its frames, and its row says so.
-  const all = finish([1, 2, 3].map((n) => weak(frame(CP, { n }))), gm);
-  assert.deepEqual(all.rows.map((r) => [r.cp, r.flags]), [[CP, ['name-low-confidence']]]);
-  // Between two other Pokémon it is still a row of its own, flagged.
-  const zapdos = (n) => frame(1977, { name: 'Zapdos', hp: 129, ivs: { atk: 15, def: 12, hp: 10 }, n });
-  const articuno = (n) => frame(1729, { name: 'Articuno', hp: 132, ivs: { atk: 15, def: 11, hp: 15 }, n });
-  const between = finish([zapdos(1), zapdos(2), weak(frame(CP, { n: 3 })), articuno(4), articuno(5)], gm);
-  assert.deepEqual(between.rows.map((r) => [r.display, r.flags.includes('name-low-confidence')]), [['Zapdos', false], ['Moltres', true], ['Articuno', false]]);
+test('a Pokémon with a confident frame gets exactly the row it had before weak names were read', () => {
+  const cases = {
+    'a weak last frame with another CP': [frame(CP, { n: 1 }), weak(frame(CP + 8, { hp: null, n: 2 }))],
+    'a garbled weak frame in the middle': [frame(CP, { n: 1 }), frame(CP, { n: 2 }), weak(frame(450, { hp: null, n: 3 })), frame(CP, { n: 4 }), frame(CP, { n: 5 })],
+    'a weak frame whose garbled CP would solve': [frame(CP, { n: 1 }), frame(CP, { n: 2 }), weak(frame(CP - 9, { hp: null, ivs: null, n: 3 })), frame(CP, { n: 4 })],
+    'two weak frames of another name in the middle': [sect(1), sect(2), paras(3), paras(4), sect(5), sect(6)],
+    'weak frames of two other names in the middle': [sect(1), sect(2), paras(3), weak(frame(1531, { name: 'Venonat', hp: 118, ivs: null, n: 4 })), sect(5), sect(6)],
+    'another name, then the right name weakly, at the end': [sect(1), paras(2), weak(frame(1540, { name: 'Parasect', hp: 118, ivs: null, n: 3 }))],
+    'the right name weakly, another name, then confident': [weak(frame(1540, { name: 'Parasect', hp: 118, ivs: null, n: 1 })), paras(2), sect(3)],
+    'a weak frame with bars after confident frames without': [sect(1), paras(2), weak(frame(1531, { name: 'Parasect', hp: 118, ivs: { atk: 2, def: 12, hp: 13 }, n: 3 }))],
+    'a weak frame and a hidden-CP frame of another name in the middle': [sect(1), sect(2), paras(3), frame(null, { name: 'Venonat', hp: 118, ivs: null, n: 4 }), sect(5), sect(6)],
+  };
+  for (const [label, readings] of Object.entries(cases)) {
+    const now = finish(readings, gm).rows.filter((r) => !r.flags.includes('name-low-confidence'));
+    assert.deepEqual(core(now), core(finish(asBefore(readings), gm).rows), label);
+  }
 });
 
-test('weak frames with another name in the middle of one Pokémon do not split it, and are listed', () => {
-  const sect = (n) => frame(1531, { name: 'Parasect', hp: 118, ivs: null, n });
-  const paras = (n) => weak(frame(1531, { name: 'Paras', hp: 118, ivs: null, n }));
-  const gated = supportedNames([sect(1), sect(2), paras(3), paras(4), sect(5), sect(6)]);
-  assert.deepEqual(gated.map((r) => r.name), ['Parasect', 'Parasect', null, null, 'Parasect', 'Parasect']);
-  assert.deepEqual(gated.slice(2, 4).map((r) => r.cp), [1531, 1531]); // the CP is kept so they can be listed
+test('a Pokémon read only with weak names is a flagged row of its own, wherever it sits', () => {
+  const all = finish([1, 2, 3].map((n) => weak(frame(CP, { n }))), gm);
+  assert.deepEqual(all.rows.map((r) => [r.cp, r.flags]), [[CP, ['name-low-confidence']]]);
+  const between = finish([zapdos(1), zapdos(2), weak(frame(CP, { n: 3 })), articuno(4), articuno(5)], gm);
+  assert.deepEqual(between.rows.map((r) => [r.display, r.flags.includes('name-low-confidence')]), [['Zapdos', false], ['Moltres', true], ['Articuno', false]]);
+  assert.deepEqual(between.rows.map((r) => r.index), [1, 2, 3]);
+  const first = finish([weak(frame(CP, { n: 1 })), zapdos(2), zapdos(3)], gm);
+  assert.deepEqual(first.rows.map((r) => [r.display, r.flags.includes('name-low-confidence')]), [['Moltres', true], ['Zapdos', false]]);
+  const last = finish([zapdos(1), zapdos(2), weak(frame(CP, { n: 3 }))], gm);
+  assert.deepEqual(last.rows.map((r) => [r.display, r.flags.includes('name-low-confidence')]), [['Zapdos', false], ['Moltres', true]]);
+  // Two weak Pokémon in one gap are two rows.
+  const two = finish([zapdos(1), weak(frame(CP, { n: 2 })), weak(frame(1729, { name: 'Articuno', hp: 132, ivs: { atk: 15, def: 11, hp: 15 }, n: 3 }))], gm);
+  assert.deepEqual(two.rows.map((r) => r.display), ['Zapdos', 'Moltres', 'Articuno']);
+  // With the name of the Pokémon beside it, a weak frame is that Pokémon's first or last frame.
+  assert.equal(finish([zapdos(1), zapdos(2), weak(zapdos(3)), articuno(4)], gm).rows.length, 2);
+  assert.equal(finish([zapdos(1), weak(articuno(2)), articuno(3)], gm).rows.length, 2);
+});
+
+test('weak frames with another name inside one Pokémon are listed, not exported', () => {
   const { rows, unmatched } = finish([sect(1), sect(2), paras(3), paras(4), sect(5), sect(6)], gm);
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].display, 'Parasect');
+  assert.deepEqual(rows.map((r) => r.display), ['Parasect']);
   assert.deepEqual(unmatched.map((u) => [u.cp, u.frames, u.reason]), [[1531, 2, 'name-not-read']]);
-  // One such frame is listed too, though a lone unnamed frame otherwise is not.
   const one = finish([sect(1), sect(2), paras(3), sect(5), sect(6)], gm);
-  assert.equal(one.rows.length, 1);
-  assert.deepEqual(one.unmatched.map((u) => [u.cp, u.frames]), [[1531, 1]]);
+  assert.deepEqual(one.unmatched.map((u) => [u.cp, u.frames]), [[1531, 1]]); // one such frame is listed too
+  // A weak frame with the run's own name inside it is simply dropped.
+  assert.equal(finish([sect(1), weak(sect(2)), sect(3)], gm).unmatched.length, 0);
 });
 
 test('a one-frame unsolved row between two identical Pokémon is not a reason to merge them', () => {
