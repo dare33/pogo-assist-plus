@@ -61,6 +61,9 @@ test('at confidence 0 only an exact, whole name of four letters or more is taken
     assert.ok(r.flags.includes('name-unmatched'), text);
   }
   assert.equal((await read(screen(), ocrOf({ name: ['Zapdo', 90] }))).name, 'Zapdos'); // a near miss still passes with confidence
+  // The line between weak and confident is 40.
+  assert.equal((await read(screen(), ocrOf({ name: ['Zapdos', 39] }))).nameWeak, true);
+  assert.equal((await read(screen(), ocrOf({ name: ['Zapdos', 40] }))).nameWeak, false);
 });
 
 test('Nidoran is taken at any confidence and is not marked weak (its symbol is what was not read)', async () => {
@@ -79,6 +82,8 @@ test('a frame with no CP text is read only when the HP bar sits where a settled 
   const sliding = await read(screen({ cp: false, barX: 0.5 }), ocrOf());
   assert.equal(sliding.name, null);
   assert.deepEqual(sliding.flags, ['no-cp-text']);
+  const leaving = await read(screen({ cp: false, barX: 0.1 }), ocrOf());
+  assert.equal(leaving.name, null);
 });
 
 test('the Lucky retry looks one line up, and takes only a confident exact name there', async () => {

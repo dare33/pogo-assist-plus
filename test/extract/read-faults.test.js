@@ -266,32 +266,49 @@ test('unnamed frames with unrelated CPs are separate entries', () => {
   assert.deepEqual(unmatched.map((u) => [u.cp, u.frames]), [[2409, 2], [1500, 2]]);
 });
 
-test('a name read without confidence counts only when a neighbouring frame agrees', () => {
-  const weak = (r) => ({ ...r, nameWeak: true });
-  // One "Paras" frame in the middle of a Parasect: unnamed, so it cannot split the run.
-  const sect = (n) => frame(1531, { name: 'Parasect', hp: 118, ivs: null, n });
-  const gated = supportedNames([sect(1), sect(2), weak(frame(1531, { name: 'Paras', hp: 118, ivs: null, n: 3 })), sect(4), sect(5)]);
-  assert.deepEqual(gated.map((r) => r.name), ['Parasect', 'Parasect', null, 'Parasect', 'Parasect']);
-  assert.ok(gated[2].flags.includes('name-unsupported'));
-  assert.equal(finish([sect(1), sect(2), weak(frame(1531, { name: 'Paras', hp: 118, ivs: null, n: 3 })), sect(4), sect(5)], gm).rows.length, 1);
-  // Weak frames that agree with each other stay, and the row says how its name was read.
+const weak = (r) => ({ ...r, nameWeak: true });
+
+test('names read without confidence are used only for a Pokémon with no confident frame', () => {
+  // Among confident frames of the same name the weak ones are dropped outright, as before weak
+  // names were read: a weak last frame cannot outvote the CP, and a garbled weak frame in the
+  // middle cannot split the run.
+  const late = finish([frame(CP, { n: 1 }), weak(frame(CP + 8, { hp: null, n: 2 }))], gm);
+  assert.deepEqual(late.rows.map((r) => [r.cp, r.frames.length, r.flags]), [[CP, 1, []]]);
+  const middle = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), weak(frame(450, { hp: null, n: 3 })), frame(CP, { n: 4 }), frame(CP, { n: 5 })], gm);
+  assert.deepEqual(middle.rows.map((r) => [r.cp, r.frames.length, r.flags]), [[CP, 4, []]]);
+  assert.equal(middle.unmatched.length, 0);
+  const gated = supportedNames([frame(CP, { n: 1 }), weak(frame(450, { n: 2 }))]);
+  assert.deepEqual([gated[1].name, gated[1].cp], [null, null]);
+  // A Pokémon read only weakly keeps its frames, and its row says so.
   const all = finish([1, 2, 3].map((n) => weak(frame(CP, { n }))), gm);
   assert.deepEqual(all.rows.map((r) => [r.cp, r.flags]), [[CP, ['name-low-confidence']]]);
-  // A weak frame next to a confident one of the same name is ordinary.
-  const mixed = finish([frame(CP, { n: 1 }), weak(frame(CP, { n: 2 })), frame(CP, { n: 3 })], gm);
-  assert.deepEqual(mixed.rows.map((r) => [r.cp, r.flags]), [[CP, []]]);
+  // Between two other Pokémon it is still a row of its own, flagged.
+  const zapdos = (n) => frame(1977, { name: 'Zapdos', hp: 129, ivs: { atk: 15, def: 12, hp: 10 }, n });
+  const articuno = (n) => frame(1729, { name: 'Articuno', hp: 132, ivs: { atk: 15, def: 11, hp: 15 }, n });
+  const between = finish([zapdos(1), zapdos(2), weak(frame(CP, { n: 3 })), articuno(4), articuno(5)], gm);
+  assert.deepEqual(between.rows.map((r) => [r.display, r.flags.includes('name-low-confidence')]), [['Zapdos', false], ['Moltres', true], ['Articuno', false]]);
 });
 
-test('one garbled frame in the middle of a Pokémon does not leave it in the export twice', () => {
-  const garbled = frame(312, { hp: null, ivs: null, n: 3 });
-  const { rows, unmatched } = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), garbled, frame(CP, { n: 4 }), frame(CP, { n: 5 })], gm);
-  assert.deepEqual(rows.map((r) => [r.cp, r.frames.length, r.flags]), [[CP, 5, []]]);
-  assert.deepEqual(unmatched.map((u) => [u.cp, u.reason, u.into]), [[312, 'absorbed', CP]]);
-  // Two different solved Pokémon either side are not halves of one: nothing is folded.
-  const other = { atk: 1, def: 2, hp: 3 };
-  const cp2 = cpAt(moltres.baseStats, other, LEVEL), hp2 = hpAt(moltres.baseStats, other, LEVEL);
-  const apart = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), garbled, frame(cp2, { hp: hp2, ivs: other, n: 4 }), frame(cp2, { hp: hp2, ivs: other, n: 5 })], gm);
-  assert.equal(apart.rows.length, 3);
+test('weak frames with another name in the middle of one Pokémon do not split it, and are listed', () => {
+  const sect = (n) => frame(1531, { name: 'Parasect', hp: 118, ivs: null, n });
+  const paras = (n) => weak(frame(1531, { name: 'Paras', hp: 118, ivs: null, n }));
+  const gated = supportedNames([sect(1), sect(2), paras(3), paras(4), sect(5), sect(6)]);
+  assert.deepEqual(gated.map((r) => r.name), ['Parasect', 'Parasect', null, null, 'Parasect', 'Parasect']);
+  assert.deepEqual(gated.slice(2, 4).map((r) => r.cp), [1531, 1531]); // the CP is kept so they can be listed
+  const { rows, unmatched } = finish([sect(1), sect(2), paras(3), paras(4), sect(5), sect(6)], gm);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].display, 'Parasect');
+  assert.deepEqual(unmatched.map((u) => [u.cp, u.frames, u.reason]), [[1531, 2, 'name-not-read']]);
+  // One such frame is listed too, though a lone unnamed frame otherwise is not.
+  const one = finish([sect(1), sect(2), paras(3), sect(5), sect(6)], gm);
+  assert.equal(one.rows.length, 1);
+  assert.deepEqual(one.unmatched.map((u) => [u.cp, u.frames]), [[1531, 1]]);
+});
+
+test('a one-frame unsolved row between two identical Pokémon is not a reason to merge them', () => {
+  const stray = frame(1900, { name: 'Zapdos', hp: null, ivs: null, n: 3 });
+  const { rows } = finish([frame(CP, { n: 1 }), frame(CP, { n: 2 }), stray, frame(CP, { n: 4 }), frame(CP, { n: 5 })], gm);
+  assert.deepEqual(rows.map((r) => r.display), ['Moltres', 'Zapdos', 'Moltres']);
 });
 
 test('every Nidoran row says its sex came from the stats', () => {
@@ -301,4 +318,10 @@ test('every Nidoran row says its sex came from the stats', () => {
   const { rows } = finish([1, 2, 3].map((n) => frame(cp, { name: 'Nidoran', hp, ivs, n })), gm);
   assert.equal(rows[0].name, 'Nidoran♀');
   assert.ok(rows[0].flags.includes('sex-from-stats'));
+  const male = gm.byId.get('nidoran_male');
+  const mcp = cpAt(male.baseStats, ivs, 20), mhp = hpAt(male.baseStats, ivs, 20);
+  const m = finish([1, 2, 3].map((n) => frame(mcp, { name: 'Nidoran', hp: mhp, ivs, n })), gm).rows[0];
+  assert.equal(m.name, 'Nidoran♂');
+  assert.ok(m.flags.includes('sex-from-stats'));
+  assert.ok(!finish([1, 2, 3].map((n) => frame(CP, { n })), gm).rows[0].flags.includes('sex-from-stats'));
 });

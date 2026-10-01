@@ -67,20 +67,34 @@ export function cpOptions(species, { hp, ivs, ivConfidence = 1 }, reads = []) {
 }
 
 /**
- * A name read without OCR confidence counts only when the nearest named frame before or after it
- * has the same name; otherwise the frame is treated as unnamed. One such frame in the middle of
- * another Pokémon's frames ("Paras" on one frame of a Parasect) would otherwise split its run in
- * two. A Pokémon whose every frame was read that way keeps its frames and its row is flagged.
+ * Names read without OCR confidence (`nameWeak`) are used only for a Pokémon that has no
+ * confidently named frame at all. Consecutive named frames with one name are a block:
+ * - a block with a confident frame drops its weak frames altogether (name and CP cleared), which
+ *   is exactly what happened to them before weak names were read, so such a Pokémon's row is
+ *   built from the same frames as before;
+ * - a block of weak frames only is kept, and its row is flagged `name-low-confidence`, unless the
+ *   blocks either side of it share a name: then it is most likely that Pokémon's name cut short
+ *   for a moment ("Paras" in the middle of a Parasect), so its frames lose the name, keep the CP
+ *   and are listed as unread.
  */
 export function supportedNames(readings) {
   const named = readings.map((r, i) => (r?.name ? i : -1)).filter((i) => i >= 0);
-  return readings.map((r, i) => {
-    if (!r?.nameWeak) return r;
-    const at = named.indexOf(i);
-    const around = [named[at - 1], named[at + 1]].filter((j) => j !== undefined).map((j) => readings[j].name);
-    if (!around.length || around.includes(r.name)) return r;
-    return { ...r, name: null, nameWeak: false, flags: [...(r.flags ?? []), 'name-unsupported'] };
+  const blocks = [];
+  for (const i of named) {
+    const last = blocks[blocks.length - 1];
+    if (last && last.name === readings[i].name) last.at.push(i);
+    else blocks.push({ name: readings[i].name, at: [i] });
+  }
+  const out = [...readings];
+  blocks.forEach((b, k) => {
+    const weak = b.at.filter((i) => readings[i].nameWeak);
+    if (!weak.length) return;
+    const unsupported = (i, keepCp) => { const r = readings[i]; out[i] = { ...r, name: null, nameWeak: false, cp: keepCp ? r.cp : null, flags: [...(r.flags ?? []), 'name-unsupported'] }; };
+    if (weak.length < b.at.length) { for (const i of weak) unsupported(i, false); return; }
+    const before = blocks[k - 1], after = blocks[k + 1];
+    if (before && after && before.name === after.name) for (const i of weak) unsupported(i, true);
   });
+  return out;
 }
 
 function resolveRow(row, gm) {
@@ -158,16 +172,18 @@ function resolveRow(row, gm) {
 
 /**
  * Frames that showed a CP but no species name, as entries for `unmatched`: one per stretch of
- * two or more such frames in a row whose CPs agree. { frame, cp, nameText, hp: null, frames, reason }.
+ * two or more such frames in a row whose CPs agree, or of any length when the name was read
+ * without confidence and set aside (supportedNames). { frame, cp, nameText, hp: null, frames, reason }.
  */
 function unnamedEntries(readings) {
   const out = [];
   let cur = null;
-  const close = () => { if (cur && cur.frames >= 2) out.push({ frame: cur.frame, cp: vote(cur.cps), nameText: vote(cur.texts) ?? '', hp: null, frames: cur.frames, reason: 'name-not-read' }); cur = null; };
+  const close = () => { if (cur && (cur.frames >= 2 || cur.setAside)) out.push({ frame: cur.frame, cp: vote(cur.cps), nameText: vote(cur.texts) ?? '', hp: null, frames: cur.frames, reason: 'name-not-read' }); cur = null; };
   for (const r of readings) {
     if (!r.cp || r.name) { close(); continue; }
-    if (cur && cur.cps.some((c) => cpSimilar(c, r.cp))) { cur.cps.push(r.cp); cur.texts.push(r.nameText || null); cur.frames++; }
-    else { close(); cur = { frame: r.frame, cps: [r.cp], texts: [r.nameText || null], frames: 1 }; }
+    const setAside = Boolean(r.flags?.includes('name-unsupported'));
+    if (cur && cur.cps.some((c) => cpSimilar(c, r.cp))) { cur.cps.push(r.cp); cur.texts.push(r.nameText || null); cur.frames++; cur.setAside ||= setAside; }
+    else { close(); cur = { frame: r.frame, cps: [r.cp], texts: [r.nameText || null], frames: 1, setAside }; }
   }
   close();
   return out;
@@ -215,9 +231,7 @@ function hiddenEntries(readings, runs, gm) {
  * A one-frame row with no HP and no settled bars that did not solve, next to a row of the same
  * Pokémon with a similar CP, is almost always that Pokémon caught on the frame before its screen
  * settled (one digit misread, HP not yet drawn). Its frame goes to the neighbour, and because it
- * could be a Pokémon of its own it is also listed in `unmatched`. The same goes for a one-frame
- * unsolved row sitting between two rows that are one and the same solved Pokémon: a single
- * garbled frame split that Pokémon's run, and the two halves are put back together.
+ * could be a Pokémon of its own it is also listed in `unmatched`.
  * Returns { rows, absorbed }.
  */
 function absorbStrays(rows) {
@@ -225,17 +239,8 @@ function absorbStrays(rows) {
   const bare = (r) => (r.flags.includes('hp-computed') || r.flags.includes('hp-unread')) && (!r.ivsRead || r.flags.includes('bars-unsettled'));
   const stray = (r, other) => r.frames.length === 1 && bare(r) && r.solveStatus !== 'exact' && other && other.frames.length > 1 && other.display === r.display && cpSimilar(r.cp, other.cp);
   const note = (r, other) => absorbed.push({ frame: r.frames[0].frame, cp: r.cp, name: r.display, nameText: r.frames[0].name, hp: null, reason: 'absorbed', into: other.cp });
-  const sameIvs = (a, b) => a && b && a.atk === b.atk && a.def === b.def && a.hp === b.hp;
-  const halves = (a, b) => a && b && a.solveStatus === 'exact' && b.solveStatus === 'exact' && a.display === b.display && a.cp === b.cp && a.hp === b.hp && sameIvs(a.ivs, b.ivs);
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], prev = out[out.length - 1], next = rows[i + 1];
-    if (r.frames.length === 1 && r.solveStatus !== 'exact' && halves(prev, next)) {
-      note(r, prev);
-      prev.frames = [...prev.frames, ...r.frames, ...next.frames];
-      prev.flags = [...new Set([...prev.flags, ...next.flags])];
-      i++;
-      continue;
-    }
     if (stray(r, prev)) { note(r, prev); prev.frames = [...prev.frames, ...r.frames]; continue; }
     if (stray(r, next)) { note(r, next); next.frames = [...r.frames, ...next.frames]; continue; }
     out.push(r);
