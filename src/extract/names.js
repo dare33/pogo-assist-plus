@@ -61,7 +61,8 @@ export function distance(a, b) {
 /**
  * Best candidate for an OCR'd name. Tries the whole text, then the text with stray one-letter or
  * punctuation tokens dropped (the edit-pencil icon often reads as a dot or a letter). Returns
- * { candidate, distance, text } or null when nothing is close enough.
+ * { candidate, distance, text, whole } or null when nothing is close enough; `whole` says the match
+ * used the whole text (stray one-letter tokens aside), not the text with a word dropped.
  */
 export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   const variants = new Set();
@@ -71,11 +72,12 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   // this it is as close to "Nidorino" as to "Nidoran".
   if (/^nidoran ?[a-z0-9]?$/.test(norm)) {
     const nidoran = candidates.find((c) => normalise(c.display) === 'nidoran');
-    if (nidoran) return { candidate: nidoran, distance: 0, text: 'nidoran' };
+    if (nidoran) return { candidate: nidoran, distance: 0, text: 'nidoran', whole: true };
   }
   variants.add(norm);
   const tokens = norm.split(' ');
   variants.add(tokens.filter((t) => t.length > 1).join(' '));
+  const wholeText = new Set(variants);
   if (tokens.length > 1) { variants.add(tokens.slice(1).join(' ')); variants.add(tokens.slice(0, -1).join(' ')); }
   let best = null;
   for (const v of variants) {
@@ -84,7 +86,7 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
       const key = normalise(c.display);
       const d = distance(v, key);
       const limit = Math.max(1, Math.floor(key.length * maxRatio));
-      if (d <= limit && (!best || d < best.distance || (d === best.distance && v.length > best.text.length))) best = { candidate: c, distance: d, text: v };
+      if (d <= limit && (!best || d < best.distance || (d === best.distance && v.length > best.text.length))) best = { candidate: c, distance: d, text: v, whole: wholeText.has(v) };
     }
   }
   return best;

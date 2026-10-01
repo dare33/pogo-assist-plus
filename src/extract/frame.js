@@ -30,22 +30,34 @@ export async function readFrame(img, ocr, names, { frame = null, time = null, wa
   if (!cpText) {
     out.flags.push('no-cp-text');
     const left = (hpBar.x0 - rect.x) / rect.w;
-    if (left < 0.2 || left > 0.33) return out;
+    if (left < 0.2 || left > 0.4) return out;
   }
   if (cpText) await readCp(img, ocr, regions, cpText, out);
 
-  const nameCrop = crop(img, regions.name);
-  out.sharpness = laplacianVariance(nameCrop);
-  const nameRead = await ocr.read(nameCrop, { whitelist: WHITELIST.name, psm: 7, scale: scaleFor(nameCrop.height, 70) });
-  out.nameText = nameRead.text;
-  const letterWords = nameRead.words.filter((w) => /[a-z]{2,}/i.test(w.text));
-  out.nameConfidence = letterWords.length ? letterWords.reduce((s, w) => s + w.confidence, 0) / letterWords.length : 0;
   // Tesseract reports confidence 0 for a line with anything it could not place (the gender
-  // symbol, the leader's hair on the iPad) even when the word itself is right, so a read that is
-  // exactly a species name (of four letters or more) is taken whatever the confidence; a near
-  // miss still needs confidence.
-  const found = matchName(nameRead.text, names);
-  const match = found && (out.nameConfidence >= 40 || (found.distance === 0 && found.text.length >= 4)) ? found : null;
+  // symbol, the leader's hair on the iPad) even when the word itself is right, so a read whose
+  // whole text is exactly a species name (of four letters or more) is taken whatever the
+  // confidence; a near miss, or a match that dropped a word, still needs confidence.
+  const readName = async (region) => {
+    const nameCrop = crop(img, region);
+    const read = await ocr.read(nameCrop, { whitelist: WHITELIST.name, psm: 7, scale: scaleFor(nameCrop.height, 70) });
+    const letterWords = read.words.filter((w) => /[a-z]{2,}/i.test(w.text));
+    const confidence = letterWords.length ? letterWords.reduce((s, w) => s + w.confidence, 0) / letterWords.length : 0;
+    const found = matchName(read.text, names);
+    const ok = found && (confidence >= 40 || (found.distance === 0 && found.whole && found.text.length >= 4));
+    return { text: read.text, confidence, match: ok ? found : null, sharpness: laplacianVariance(nameCrop) };
+  };
+  let nameRead = await readName(regions.name);
+  // A Lucky Pokémon has a "LUCKY POKÉMON" line between its name and the HP bar, so the name sits
+  // higher: when nothing matched, look one line up.
+  if (!nameRead.match) {
+    const lucky = await readName({ ...regions.name, y: regions.name.y - 0.025 * rect.h });
+    if (lucky.match) nameRead = lucky;
+  }
+  out.sharpness = nameRead.sharpness;
+  out.nameText = nameRead.text;
+  out.nameConfidence = nameRead.confidence;
+  const match = nameRead.match;
   if (match) {
     out.name = match.candidate.display;
     out.baseName = match.candidate.name;

@@ -37,14 +37,14 @@ export function finish(readings, gm) {
   const collapsed = runs.map(collapseRun);
   const deduped = dedupeAdjacent(collapsed);
   const resolved = deduped.map((row) => resolveRow(row, gm));
-  settleByOrder(resolved, deduped, gm);
-  const rows = absorbStrays(resolved.filter(Boolean));
+  const { rows, absorbed } = absorbStrays(resolved.filter(Boolean));
   rows.forEach((r, i) => { r.index = i + 1; });
-  // Frames that showed a CP but no species name (a nickname, or a garbled read) never become a
-  // row; list them so a Pokémon that was on screen and not read is not silently missing. The same
-  // goes for a named Pokémon whose CP was hidden and could not be worked out.
+  // What was on screen and did not become a row is listed, so it is not silently missing: frames
+  // that showed a CP but no species name (a nickname, or a garbled read); a named Pokémon whose
+  // CP was never read (hidden behind its model), with the CPs its HP and bars allow; and a
+  // one-frame row folded into its neighbour.
   const unmatched = readings.filter((r) => r.cp && !r.name).map((r) => ({ frame: r.frame, cp: r.cp, nameText: r.nameText, hp: r.hp?.max ?? null }));
-  deduped.forEach((row, i) => { if (!resolved[i]) unmatched.push({ frame: row.frames[0].frame, cp: null, name: row.name, nameText: row.frames[0].name, hp: row.hp ?? null, reason: 'cp-hidden' }); });
+  unmatched.push(...hiddenEntries(deduped.filter((row, i) => !resolved[i]), gm), ...absorbed);
   const review = rows.filter((r) => r.flags.length).map((r) => ({ index: r.index, name: r.name, cp: r.cp, hp: r.hp, ivs: r.ivs, ivsRead: r.ivsRead, ivsGuess: r.ivsGuess, level: r.level, levelMax: r.levelMax, flags: r.flags, frames: r.frames }));
   return { rows, review, unmatched };
 }
@@ -67,32 +67,29 @@ export function cpOptions(species, { hp, ivs, ivConfidence = 1 }, reads = []) {
   return { options: all, supported: [...tailOf.keys()], tailOf };
 }
 
-/** One collapsed run to one row, or null when the CP was hidden and nothing pins it down. */
-function resolveRow(row, gm, forcedCp = null) {
+/** One collapsed run to one row, or null when no CP was read at all (listed by hiddenEntries). */
+function resolveRow(row, gm) {
   const species = speciesFor(gm, row.speciesIds ?? []);
   const flags = [];
   // The CP: the first candidate read (ranked by how many frames read it) that the solver can
   // reconcile with the HP and bars; failing that, the most-read one.
   const candidates = row.cpCandidates?.length ? row.cpCandidates : row.cp ? [row.cp] : [];
-  let cp = row.cp, result = null, pending = null;
-  for (const candidate of forcedCp ? [] : candidates) {
+  if (!candidates.length) return null;
+  let cp = row.cp, result = null;
+  for (const candidate of candidates) {
     const r = solve({ species, cp: candidate, hp: row.hp, ivs: row.ivs });
     if (r.solutions.length && (!row.ivs || r.solutions[0].tier <= 1)) { cp = candidate; result = r; break; }
   }
-  if (!result) {
-    // No read fits (or there was none): the model hid part or all of the CP. Work it out from the
-    // HP and the bars. One CP with a partial read as its tail is taken; so is the only CP that
-    // fits when nothing was read. Several left over are settled by the neighbours' CPs afterwards
-    // (settleByOrder), else the row keeps the lowest and says so.
-    const { options, supported, tailOf } = cpOptions(species, row, candidates);
-    const pool = supported.length ? supported : candidates.length ? [] : options;
-    if (forcedCp) { cp = forcedCp; flags.push(`cp-recovered-${cp}-by-order`); }
-    else if (supported.length === 1) { cp = supported[0]; flags.push(`cp-recovered-${cp}-from-${tailOf.get(cp)}`); }
-    else if (pool.length === 1) { cp = pool[0]; flags.push(`cp-recovered-${cp}-unverified`); }
-    else if (pool.length > 1) { cp = pool[0]; pending = pool; flags.push(`cp-uncertain:${pool.join('|')}`); }
-    else if (!cp) return null;
+  if (result) { if (cp !== row.cp) flags.push(`cp-chosen-${cp}-over-${row.cp}`); }
+  else {
+    // No read fits. When the model covered the leading digits, the reads are the tail of the real
+    // CP: work the CP out from the HP and the settled bars and take it when exactly one such CP
+    // ends in a read, and the most-read value is shorter than it (a full-length read that does
+    // not fit means misread bars, not a hidden digit). The row stays flagged for a check in game.
+    const { supported, tailOf } = cpOptions(species, row, candidates);
+    if (supported.length === 1 && String(row.cp).length < String(supported[0]).length) { cp = supported[0]; flags.push(`cp-recovered:${cp}-from-${tailOf.get(cp)}`); }
     result = solve({ species, cp, hp: row.hp, ivs: row.ivs });
-  } else if (cp !== row.cp) flags.push(`cp-chosen-${cp}-over-${row.cp}`);
+  }
   let ivs = row.ivs, level = null, levelMax = null, speciesId = species[0]?.speciesId ?? null, hp = row.hp;
   const s = result.solutions[0];
   const take = () => { ivs = s.ivs; level = s.level; levelMax = s.level; speciesId = s.speciesId; if (hp === null) { hp = s.hp; flags.push('hp-computed'); } };
@@ -131,7 +128,7 @@ function resolveRow(row, gm, forcedCp = null) {
   const sp = speciesId ? gm.byId.get(speciesId) : null;
   const nf = sp ? nameAndForm(sp) : { name: row.baseName ?? row.name, form: row.form ?? '' };
   return {
-    index: null, cpPending: pending, name: nf.name, display: row.name, form: nf.form, speciesId, dex: sp?.dex ?? null,
+    index: null, name: nf.name, display: row.name, form: nf.form, speciesId, dex: sp?.dex ?? null,
     cp, hp, ivs, ivsRead: row.ivs, ivsGuess: ivs === null && s ? s.ivs : null, level, levelMax,
     dust: level ? dustStep(level).dust : null,
     solveStatus: result.status, flags, frames: row.frames, merged: row.merged ?? 1,
@@ -139,40 +136,45 @@ function resolveRow(row, gm, forcedCp = null) {
 }
 
 /**
- * A hidden CP with several candidates: a box is recorded in CP order, so the one candidate that
- * lies between the CPs of the rows either side is the CP. Rows are replaced in place.
+ * Runs whose CP was never read, as entries for `unmatched`: the name, the HP, the settled bars
+ * and the CPs those allow, for a check in the game. Consecutive entries that agree are one
+ * Pokémon seen on both sides of an unreadable frame.
  */
-function settleByOrder(resolved, collapsed, gm) {
-  const sure = (r) => r && !r.cpPending && !r.flags.includes('no-level-fits');
-  resolved.forEach((r, i) => {
-    if (!r?.cpPending) return;
-    let a = i - 1, b = i + 1;
-    while (a >= 0 && !sure(resolved[a])) a--;
-    while (b < resolved.length && !sure(resolved[b])) b++;
-    if (a < 0 || b >= resolved.length) return;
-    const lo = Math.min(resolved[a].cp, resolved[b].cp), hi = Math.max(resolved[a].cp, resolved[b].cp);
-    const within = r.cpPending.filter((cp) => cp >= lo && cp <= hi);
-    if (within.length === 1) resolved[i] = resolveRow(collapsed[i], gm, within[0]);
-  });
-  for (const r of resolved) if (r) delete r.cpPending;
+function hiddenEntries(rows, gm) {
+  const out = [];
+  for (const row of rows) {
+    const ivs = row.ivs && row.ivConfidence >= SETTLED ? row.ivs : null;
+    const prev = out[out.length - 1];
+    const sameIvs = !ivs || !prev?.ivs || (ivs.atk === prev.ivs.atk && ivs.def === prev.ivs.def && ivs.hp === prev.ivs.hp);
+    if (prev && prev.name === row.name && prev.hp === (row.hp ?? null) && (sameIvs || row.frames.length === 1 || prev.frames === 1)) {
+      if (row.frames.length > prev.frames) { prev.ivs = ivs ?? prev.ivs; prev.cpOptions = cpOptions(speciesFor(gm, row.speciesIds ?? []), row).options; }
+      prev.frames += row.frames.length;
+      continue;
+    }
+    out.push({ frame: row.frames[0].frame, cp: null, name: row.name, nameText: row.frames[0].name, hp: row.hp ?? null, ivs, cpOptions: cpOptions(speciesFor(gm, row.speciesIds ?? []), row).options, frames: row.frames.length, reason: 'cp-not-read' });
+  }
+  return out;
 }
 
 /**
- * A one-frame row with no HP read that did not solve, next to a row of the same Pokémon with a
- * similar CP, is the same Pokémon caught on the frame before its screen settled (one digit
- * misread, HP not yet drawn). Its frame goes to the neighbour and the row is dropped.
+ * A one-frame row with no HP and no settled bars that did not solve, next to a row of the same
+ * Pokémon with a similar CP, is almost always that Pokémon caught on the frame before its screen
+ * settled (one digit misread, HP not yet drawn). Its frame goes to the neighbour, and because it
+ * could be a Pokémon of its own it is also listed in `unmatched`.
+ * Returns { rows, absorbed }.
  */
 function absorbStrays(rows) {
-  const out = [];
-  const noHp = (r) => r.flags.includes('hp-computed') || r.flags.includes('hp-unread');
-  const stray = (r, other) => r.frames.length === 1 && noHp(r) && r.solveStatus !== 'exact' && other && other.frames.length > 1 && other.display === r.display && cpSimilar(r.cp, other.cp);
+  const out = [], absorbed = [];
+  const bare = (r) => (r.flags.includes('hp-computed') || r.flags.includes('hp-unread')) && (!r.ivsRead || r.flags.includes('bars-unsettled'));
+  const stray = (r, other) => r.frames.length === 1 && bare(r) && r.solveStatus !== 'exact' && other && other.frames.length > 1 && other.display === r.display && cpSimilar(r.cp, other.cp);
+  const note = (r, other) => absorbed.push({ frame: r.frames[0].frame, cp: r.cp, name: r.display, nameText: r.frames[0].name, hp: null, reason: 'absorbed', into: other.cp });
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], prev = out[out.length - 1], next = rows[i + 1];
-    if (stray(r, prev)) { prev.frames = [...prev.frames, ...r.frames]; continue; }
-    if (stray(r, next)) { next.frames = [...r.frames, ...next.frames]; continue; }
+    if (stray(r, prev)) { note(r, prev); prev.frames = [...prev.frames, ...r.frames]; continue; }
+    if (stray(r, next)) { note(r, next); next.frames = [...r.frames, ...next.frames]; continue; }
     out.push(r);
   }
-  return out;
+  return { rows: out, absorbed };
 }
 
 /** Poke Genie's column layout, so src/import/pokegenie.js reads the result back. */

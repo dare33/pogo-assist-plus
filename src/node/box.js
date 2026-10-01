@@ -15,7 +15,7 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 /** 2: the cache holds the raw frame readings (rows are rebuilt on load), keyed on the extractor. */
 export const CACHE_VERSION = 2;
 const CLIP_EXT = /\.(mp4|mov|m4v)$/i;
-const CHECK_FLAGS = ['ambiguous-ivs', 'no-level-fits', 'shadow-match-ambiguous', 'shadow-match-weak', 'ivs-unread', 'hp-mismatch'];
+const CHECK_FLAGS = ['ambiguous-ivs', 'no-level-fits', 'cp-recovered', 'shadow-match-ambiguous', 'shadow-match-weak', 'ivs-unread', 'hp-mismatch'];
 const CHECK_CAP = 40;
 const VALUE_FLAGS = new Set(['account', 'fps', 'order', 'inbox', 'out-dir', 'ffmpeg']);
 const BOOLEAN_FLAGS = new Set(['force', 'quiet']);
@@ -236,7 +236,7 @@ export async function runAccount(acct, ctx) {
     const label = clipsOut.some((c) => c.kind === 'purified') ? 'shadow/purified passes' : 'shadow pass';
     log(`  ${label}: ${r.matched} matched, ${r.appended} appended, ${r.ambiguous} ambiguous, ${r.weak} weak`);
   }
-  log(`  ${merged.rows.length} Pokémon, ${merged.review.length} flagged for review, ${merged.unmatched.length} unread (a CP with no known name, or a name whose CP was hidden)`);
+  log(`  ${merged.rows.length} Pokémon, ${merged.review.length} flagged for review, ${merged.unmatched.length} on screen but not read (see "unmatched" in the review JSON)`);
   if (partial) log(`  WARNING: ${failedClips.length} clip${failedClips.length === 1 ? '' : 's'} failed (${failedClips.map((f) => f.name).join(', ')}); Pokémon from ${failedClips.length === 1 ? 'that clip are' : 'those clips are'} missing, so this is a PARTIAL export (${stem}${suffix}.csv) and was not copied to the inbox.`);
 
   const check = merged.rows.filter((row) => row.flags.some((f) => CHECK_FLAGS.some((c) => f === c || f.startsWith(`${c}:`))));

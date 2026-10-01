@@ -60,7 +60,7 @@ writeFileSync(outCsv, toPokeGenieCsv(rows));
 writeFileSync(outReview, JSON.stringify({ input, fps, frames: total, rows: rows.length, flagged: review.length, review, unmatched, readings: compactReadings(readings) }, null, 2));
 
 if (!quiet) {
-  console.error(`\n${rows.length} Pokémon from ${total} frames in ${((Date.now() - t0) / 1000).toFixed(1)} s; ${review.length} flagged for review; ${unmatched.length} unread (a CP with no known name, or a name whose CP was hidden)`);
+  console.error(`\n${rows.length} Pokémon from ${total} frames in ${((Date.now() - t0) / 1000).toFixed(1)} s; ${review.length} flagged for review; ${unmatched.length} on screen but not read (see "unmatched" in the review JSON)`);
   console.error('idx  name                 cp    hp   ivs       level  frames  flags');
   for (const r of rows) {
     console.error(`${String(r.index).padStart(3)}  ${(r.display ?? r.name).padEnd(20)} ${String(r.cp).padStart(4)}  ${String(r.hp ?? '?').padStart(4)}  ${(r.ivs ? `${r.ivs.atk}/${r.ivs.def}/${r.ivs.hp}` : '?').padEnd(9)} ${(r.level === null ? '?' : r.level === r.levelMax ? String(r.level) : `${r.level}-${r.levelMax}`).padEnd(6)} ${String(r.frames.length).padStart(4)}    ${r.flags.join(' ')}`);

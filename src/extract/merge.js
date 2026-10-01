@@ -45,8 +45,11 @@ export function groupRuns(readings) {
   const runs = [];
   let cur = null;
   for (const r of readings) {
-    if (!identity(r)) continue;
+    // A frame that identifies nothing is a swipe, or the screen in between: the run may go on
+    // after it, but the weaker HP-only join below does not reach across it.
+    if (!identity(r)) { if (cur) cur.gap = true; continue; }
     if (cur && joins(cur, r)) {
+      cur.gap = false;
       cur.frames.push(r);
       if (r.hp && !cur.hp) cur.hp = r.hp;
       if (r.ivs && r.ivConfidence >= SETTLED && !cur.ivs) cur.ivs = r.ivs;
@@ -66,8 +69,10 @@ function joins(run, r) {
   const topCp = [...run.cpCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   const reads = cpReadsOf(r);
   // With the CP hidden on this frame or on the whole run so far, the HP decides (the name is
-  // already the same): equal HP and bars that do not contradict each other is the same Pokémon.
-  if (!reads.length || topCp === undefined) return Boolean(run.hp && r.hp && run.hp.max === r.hp.max && ivsCompatible(run.ivs, r.ivs, 1, r.ivConfidence ?? 0));
+  // already the same): equal HP and bars that do not contradict each other is the same Pokémon,
+  // but only on the very next frame. After a swipe the next Pokémon can be the same species with
+  // the same HP, and then nothing but the CP tells them apart.
+  if (!reads.length || topCp === undefined) return Boolean(!run.gap && run.hp && r.hp && run.hp.max === r.hp.max && ivsCompatible(run.ivs, r.ivs, 1, r.ivConfidence ?? 0));
   // Contradictory settled bars split the run only when the CP read also differs: with the same
   // CP a mid-animation read can look settled by chance, but a different CP and different bars
   // is another Pokémon (adjacent hatched Meltan at CP 150 and 151, say).
@@ -120,13 +125,14 @@ export function collapseRun(run) {
 
 /**
  * Merge adjacent rows that are the same Pokémon (same name and CP, HP and IVs not in conflict).
- * Keeps the row with more information. Never merges rows that are not adjacent.
+ * Keeps the row with more information. Never merges rows that are not adjacent, nor rows whose
+ * CP was hidden (two of those are told apart by nothing here).
  */
 export function dedupeAdjacent(rows) {
   const out = [];
   for (const r of rows) {
     const prev = out[out.length - 1];
-    if (prev && prev.name === r.name && prev.cp === r.cp && agree(prev.hp, r.hp) && ivsCompatible(prev.ivs, r.ivs, prev.ivConfidence, r.ivConfidence)) {
+    if (prev && prev.cp && prev.name === r.name && prev.cp === r.cp && agree(prev.hp, r.hp) && ivsCompatible(prev.ivs, r.ivs, prev.ivConfidence, r.ivConfidence)) {
       const keep = score(r) > score(prev) ? { ...r } : { ...prev };
       keep.hp = prev.hp ?? r.hp; keep.ivs = keep.ivs ?? prev.ivs ?? r.ivs;
       keep.cpCandidates = [...new Set([...(prev.cpCandidates ?? []), ...(r.cpCandidates ?? [])])];
