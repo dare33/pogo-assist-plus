@@ -1,7 +1,8 @@
 import Foundation
 
-// Port of the parsers in src/extract/ocr.js. The recogniser itself changed (Vision, not
-// Tesseract); the parsers are the same.
+// The parsers of src/extract/ocr.js, adapted to Vision. `parseHp` is the JS parser unchanged; `parseCp` is NOT
+// a port any more: Vision splits and garbles the figure differently from Tesseract's digit crops, so it has its own
+// rules (see its doc comment), and it refuses what the JS parser would have repaired (five digits, a leading zero).
 
 private func replacingO(_ text: String) -> [Character] {
     text.map { ($0 == "O" || $0 == "o") ? "0" : $0 }
@@ -21,12 +22,12 @@ private func isSpace(_ c: Character) -> Bool { c.isWhitespace }
 ///   "CP2 008" is 2008), the first attached to a CP-like prefix or alone; anything else with two groups
 ///   ("CP1 6", "CP1S 66", "CP1234 5") is no read;
 /// - a letter or separator between digits is no read ("1A86", "CP 1A86", "2.641", "CP 2,641", "CP²641"), except
-///   one leading digit that is a misread C or the O of an "op" label (0, 5, 6 or 8) followed by exactly one letter: "5p2641", "8p2611" (any
+///   one leading digit that is a misread C or the O of an "op" label (0, 5, 6 or 8) followed by exactly one letter: "5p2641", "8p2611", "op2614" (any
 ///   letter, figure of three digits or more) and "5p86" (a P, a figure of two digits); "5pX2641" and "1A862" are not;
 /// - a leading zero in the figure is a misread ("CP0123", "CPO28") and so is a figure of more than four digits
 ///   ("CP12345", "23028"): no read, the last digits are not kept; a result below 10 is no read ("CP0 001"), and a
 ///   lone O or o token before the figure is no read ("CP O 28", "CP o 1500");
-/// - more than four digits in one group keep the last four (JS), fewer than two are no read.
+/// - fewer than two digits are no read.
 public func parseCp(_ text: String) -> Int? {
     let raw = text.split(whereSeparator: { isSpace($0) }).map { Array($0) }
     let tokens: [[Character]] = raw.map { tok in
@@ -41,7 +42,7 @@ public func parseCp(_ text: String) -> Int? {
     // A digit-like character that is not an ASCII digit ("²") next to the figure is a garbled digit, not a label.
     if before.contains(where: { $0.isNumber && !isAsciiDigit($0) }) { return nil }
     if before.contains(where: isAsciiDigit) {
-        // Digits before the figure are allowed only as one leading digit that a C can be misread as (5, 6, 8) followed
+        // Digits before the figure are allowed only as one leading digit that a C or the o of "op" can be misread as (0, 5, 6, 8) followed
         // by exactly one letter ("5p"); a short figure needs that letter to be the P of "CP" ("5p86").
         let lead = before.prefix(while: isAsciiDigit), rest = before.dropFirst(lead.count)
         guard lead.count == 1, "0568".contains(lead[lead.startIndex]), rest.count == 1, isAsciiLetter(rest[rest.startIndex]) else { return nil }

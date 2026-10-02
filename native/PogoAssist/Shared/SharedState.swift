@@ -20,6 +20,37 @@ struct BroadcastState: Codable, Equatable {
     var savedFrames = 0         // "save crops" mode: frames written
     var savedFiles = 0
     var savedMB = 0.0
+    var replayLines = 0          // lines in replay.jsonl so far (live modes)
+    var replayLogTruncated = false   // the replay log hit its size cap and stopped
+    var replayLogFailed = false      // a write to the replay log failed: it was switched off (reading was unaffected)
+}
+
+extension BroadcastState {
+    /// Every field falls back to its default, so a state file written by an older build (without the
+    /// newer fields) still decodes and its results stay visible after an update.
+    init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rows = try c.decodeIfPresent([LiveRow].self, forKey: .rows) ?? rows
+        framesSeen = try c.decodeIfPresent(Int.self, forKey: .framesSeen) ?? framesSeen
+        framesRead = try c.decodeIfPresent(Int.self, forKey: .framesRead) ?? framesRead
+        framesDropped = try c.decodeIfPresent(Int.self, forKey: .framesDropped) ?? framesDropped
+        meanMsPerFrame = try c.decodeIfPresent(Double.self, forKey: .meanMsPerFrame) ?? meanMsPerFrame
+        footprintMB = try c.decodeIfPresent(Double.self, forKey: .footprintMB) ?? footprintMB
+        peakFootprintMB = try c.decodeIfPresent(Double.self, forKey: .peakFootprintMB) ?? peakFootprintMB
+        lowestAvailableMB = try c.decodeIfPresent(Double.self, forKey: .lowestAvailableMB)
+        started = try c.decodeIfPresent(Date.self, forKey: .started) ?? started
+        updated = try c.decodeIfPresent(Date.self, forKey: .updated) ?? updated
+        finished = try c.decodeIfPresent(Bool.self, forKey: .finished) ?? finished
+        mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? mode
+        skippedLowMemory = try c.decodeIfPresent(Int.self, forKey: .skippedLowMemory) ?? skippedLowMemory
+        savedFrames = try c.decodeIfPresent(Int.self, forKey: .savedFrames) ?? savedFrames
+        savedFiles = try c.decodeIfPresent(Int.self, forKey: .savedFiles) ?? savedFiles
+        savedMB = try c.decodeIfPresent(Double.self, forKey: .savedMB) ?? savedMB
+        replayLines = try c.decodeIfPresent(Int.self, forKey: .replayLines) ?? replayLines
+        replayLogTruncated = try c.decodeIfPresent(Bool.self, forKey: .replayLogTruncated) ?? replayLogTruncated
+        replayLogFailed = try c.decodeIfPresent(Bool.self, forKey: .replayLogFailed) ?? replayLogFailed
+    }
 }
 
 /// The app group container and the Darwin notification the extension posts after each write.
@@ -62,11 +93,17 @@ enum SharedStore {
 
     static func clear() {
         if let url = stateURL { try? FileManager.default.removeItem(at: url) }
+        if let url = replayURL { try? FileManager.default.removeItem(at: url) }
     }
 
     /// Where "save crops" mode writes (and the app reads and then empties).
     static var cropsURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("crops", isDirectory: true)
+    }
+
+    /// The extension's replay log: one JSON line per reading, swipe tick and dropped frame (live modes).
+    static var replayURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("replay.jsonl")
     }
 
     /// The app's result of reading the saved crops (shareable).

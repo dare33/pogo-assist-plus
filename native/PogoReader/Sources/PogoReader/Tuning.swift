@@ -59,9 +59,16 @@ public enum Tuning {
     /// covers the HP and the bars still animate).
     public static let strayMaxSeconds = 0.6
 
-    /// A swipe tick can end a run only between two card readings at least this far apart: a swipe takes 0.6 s or more,
-    /// so two readings one or two frame periods apart cannot have one between them.
+    /// A swipe tick can end a run only between two card readings at least this far apart. A swipe lasts 0.6 s or more
+    /// (three frames at 5 fps), but its first and last frames can themselves be readable cards (the old card still
+    /// legible while it starts to slide, the new one already legible as it lands), so the readings that bracket it can
+    /// be as little as 0.4 s apart (one blank between): that is NOT covered, and two identical Pokémon with such a
+    /// swipe merge. 0.55 s is the shortest gap that holds a swipe with two non-card frames between its card readings;
+    /// closer than that a tick is taken to be a jump inside one stay (a touch dot, the iPad leader's animation).
     public static let swipeMinGapSeconds = 0.55
+
+    /// The extension's replay log stops growing at this size (about 10000 readings).
+    public static let maxReplayLogBytes = 3_000_000
 
     /// At most this many swipe ticks are kept waiting for a reading; the oldest is dropped past it.
     public static let maxPendingTicks = 64

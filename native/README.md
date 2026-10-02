@@ -110,7 +110,9 @@ phone on an iOS 27 beta needs the matching Xcode beta).
    the three-second countdown, turn Voice Control on and say "Marathon" (50 swipes, about 105 s).
 7. When it stops, stop the broadcast (red pill at the top), open the app, and note: rows listed,
    frames read and dropped, ms each, memory peak and lowest free, and the status line
-   ("Broadcast finished" or "ended without a finish marker"). Tap share and send the JSON.
+   ("Broadcast finished" or "ended without a finish marker"). Tap share and send every file it
+   offers: the state JSON and `replay.jsonl` (the per-reading log; a new live broadcast overwrites
+   it, so export after each run). Clear is disabled while a broadcast is live.
 8. If it ended without a finish marker (iOS killed the extension, most likely for memory): tap
    Clear, set Reader to "Read live (fast)", repeat 5 to 7; if that dies too, "Save crops, read in
    app", repeat, then open the app and wait for it to read the saved crops.
@@ -139,6 +141,24 @@ iOS enforces the extension's limit (about 50 MB) on `phys_footprint`. `MemoryPro
   group; the app shows memory now, the peak (red from 45 MB) and the lowest `os_proc_available_memory`.
   The share button exports the state file so a run's numbers can be sent back. Only the phone figure
   settles the proof.
+
+## Replaying a device run (`replay.jsonl`)
+
+In the two live reader modes the broadcast extension writes `replay.jsonl` into the app group (truncated at each broadcast
+start, written on the reader queue only, nothing buffered beyond one line, capped at 3 MB: `replayLogTruncated` in the state
+file says it stopped, `replayLogFailed` says a write failed and the log was switched off; reading is never affected). One
+JSON line per reading (time, CP and its text, name and its text, weak flag, HP and its text, bars, bar confidence, flags,
+milliseconds the read took, plus the species ids the grouper uses), one per swipe tick (`{"k":"t","t":...}`), one per
+frame dropped because the reader was busy or skipped for memory (`{"k":"d","t":...}`), in the order the extension's own
+grouper received them (ticks drained right before the reading that followed). The app's share button exports it with the
+state file (and `deferred.json` when there is one); Clear deletes it.
+
+To replay it through the current grouper offline:
+
+    swift run -c release --package-path native/PogoReader pogo-drop --replay replay.jsonl [--json]
+
+It prints the rows the grouper makes from that run (`ReplayLog.replay` in the package does the same for a test or another
+grouper). A damaged last line is skipped.
 
 ## Which Pokemon were on screen: timeline.mjs
 
@@ -272,20 +292,29 @@ on screen was captured (a Pokemon the full-rate run misses is missed in both). R
 
 The phone's twin Staraptor 1986 is two rows at full rate and under every model with ticks (it merges at 450/200 without).
 On the phone no row is wrong, lost or split without a flag. On the iPad, ticks add 3 rows at 450/200 and 2 at 650/200: fragments
-of one Pokemon (flagged `short-run` or `same-as-previous`; a fragment can also carry no flag when it is long enough and its
-first reading is not a copy of the row before) and one lost row with a flagged trace at 650/200. On darentas-01 at 650/200 the
+of one Pokemon (flagged `short-run`, or `same-as-previous` when its voted values match the row before it; a fragment carries
+no flag when it was seen for 0.4 s or more and its votes differ from the row before it, when a tick-started stray was
+absorbed into the next run, or when another row landed between the fragments) and one lost row with a flagged trace at 650/200. On darentas-01 at 650/200 the
 reader sees one frame in four and 21 Pokemon on screen for 1.2 s each are never read, with or without ticks.
 
 ## Known limits
 
-- Identical neighbours can merge into one row when the swipe between them is not seen: on the iPad, and on hand-tapped
-  paging, the signature and the separator frames both miss swipes. Such a row spans 2.4 s or more and is flagged
-  `long-stay`.
+- Identical neighbours can merge into one row. This happens when the swipe is not seen (the iPad, hand-tapped paging: the
+  signature and the separator frames both miss swipes), and also when a tick DID see it but the card readings that bracket
+  the swipe are only 0.4 s apart (the old card still readable on the first changed frame, one blank, the new card on the
+  third): that is shorter than the 0.55 s the tick rule needs, and a test documents it (`testKnownLimit...`).
+- A merged row is NOT always flagged. `long-stay` needs a span of 2.4 s: two identical Pokemon at a 1.2 s pace merge into
+  about 2.0 to 2.2 s and carry no flag at all; at a 2.1 s pace the row is flagged.
 - A swipe tick can split one Pokemon in two when readings were dropped (the iPad's leader animation): the fragments
   are usually marked (`short-run`, `same-as-previous`), but a marker depends on the readings' votes and is not a guarantee.
+  `same-as-previous` is lost when a tick-started stray is absorbed into the next run or another row lands between the
+  fragments. At 450 ms per read, any tick inside a stay splits it (every gap between readings is then at least 0.55 s).
 - A name alone that is the name of the Pokemon on screen counts as neither separator nor card, so identical neighbours
-  whose swipe shows only same-species sliding name-only frames merge unless a tick saw the swipe; such a row spans
-  2.4 s or more only if the stay is long, so it may carry no `long-stay` flag.
+  whose swipe shows only same-species sliding name-only frames merge unless a tick saw the swipe (and the 0.4 s limit above
+  applies); such a row may carry no `long-stay` flag. After a seen swipe the first name-only reading belongs to the new
+  Pokemon, and a hidden-CP Pokemon of the same species is listed (`cp-not-read`).
+- An unreadable reading, a neutral name-only reading of the Pokemon on screen, and another unreadable reading still chain
+  into one separator run (the neutral reading neither extends nor breaks it).
 - Cards without an HP bar (special backgrounds, a Lucky nicknamed one) are listed by CP only (`(name not read)`).
 - A damaged HP bar shorter than a row of green type icons can lose to the icons, as in the JS reader; the looser green
   test (margins 10 and 16, needed for the iPad's muted bar through 4:2:0) may make it more likely. Untested.
@@ -298,15 +327,18 @@ reader sees one frame in four and 21 Pokemon on screen for 1.2 s each are never 
 
 ### Review findings at 4898acc: status after the grouper pass
 
-Fixed (each with a test written first and failing before):
-- The 0.3 s silence guard: replaced by a physical rule (a tick ends a run between two card readings at least 0.55 s
+Fixed (tests were written first for the items marked *; the others were checked afterwards):
+- * The 0.3 s silence guard: replaced by a physical rule (a tick ends a run between two card readings at least 0.55 s
   apart, is ignored closer). Twins with a two-separator swipe at full rate are two rows at 1.4, 1.6, 2.0 and 2.4 s paces.
-  Deleting the rule fails several tests (the twin pace test, the carry-over test, the tick-only marker test).
-- A tick used up by a card reading that starts no run: the swipe now waits for the next strong reading.
-- `same-as-previous` is decided from the voted values of both rows when the run closes.
-- An unreadable reading followed by a short name-only reading of the Pokemon on screen no longer chains separators; two
-  name-only readings more than a second apart no longer make a `cp-not-read` row; same-species name-only slides on both
-  sides of a swipe are not one card.
+  I checked by making `seenTick` always false: that fails the twin pace test, the carry-over test, the tick tests and the
+  tick-only marker test (one more crashes); the tick-acceptance rule itself was not deleted from the file.
+- * A tick used up by a card reading that starts no run: the swipe now waits for the next strong reading.
+- * `same-as-previous` is decided from the voted values of both rows when the run closes.
+- * An unreadable reading followed by a short name-only reading of the Pokemon on screen no longer chains separators; two
+  name-only readings more than a second apart no longer make a `cp-not-read` row. (The test for same-species name-only
+  slides on both sides of a swipe could not tell the rule from the carried swipe and was deleted.)
+- * A same-species Pokemon with CP and HP hidden after a swipe (seen by blanks or by a tick) is listed again, and a new
+  Pokemon whose first readings have a CP but no name is one row, not a row plus a `(name not read)` row.
 - `parseCp`: "5pX2641", "CP0123", "CPO28", "1A862", "CP12345" and "23028" are no read; "5p86" and "op2614" read. Over every
   distinct `cpText` in `pogo-frames/_out/*.swift.readings.json` (1,617 texts, 11,555 reads): no read changed number,
   19 texts (29 reads) became no read (leading-zero partials such as "019", "0199", "096", and five-digit reads with a doubled
