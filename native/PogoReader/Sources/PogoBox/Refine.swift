@@ -65,17 +65,21 @@ public enum Refine {
             base = try engine.finish(readings: readings)
         }
         // step 1: one Pokemon cut into two rows by a single disagreeing frame
-        let fragments = absorbFragments(base)
+        let fragments = absorbFragments(base, ticks: ticks.filter { $0.isFinite }.sorted())
         let outliers = try dropCpOutliers(fragments.scan, readings: readings, engine: engine)
-        let bars = try splitByBars(outliers.scan, readings: readings, engine: engine)
+        let bars = try splitByBars(outliers.scan, readings: readings, engine: engine, hintPeriod: paging?.pagedByCommand == true ? paging?.expectedPeriod : nil)
         var r = try run(bars.scan, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
         // then the timing step (off when the app says the player paged by hand)
         let t = splitByTiming(r.scan, readings: readings, paging: paging)
         r.changes = r.changes.map { var c = $0; c.rowIndex = t.indexMap[c.rowIndex] ?? c.rowIndex; return c } + t.changes
         r.scan = t.scan; r.notices += t.notices
         // the step-1 actions, found again by the flag they left on the surviving row
-        func place(_ marks: [(flag: String, detail: String)], _ kind: Change.Kind) {
-            for m in marks { r.changes.append(Change(kind: kind, rowIndex: r.scan.rows.first { $0.flags.contains(m.flag) }?.index ?? 0, detail: m.detail)) }
+        // by the kept row's first frame label, so a repeated flag string cannot send a change to the wrong row
+        func place(_ marks: [(flag: String, detail: String, label: String)], _ kind: Change.Kind) {
+            for m in marks {
+                let row = r.scan.rows.first { $0.frames.contains { $0.frame == m.label } } ?? r.scan.rows.first { $0.flags.contains(m.flag) }
+                r.changes.append(Change(kind: kind, rowIndex: row?.index ?? 0, detail: m.detail))
+            }
         }
         place(fragments.marks, .fragmentAbsorbed); place(outliers.marks, .cpOutlierDropped)
         for m in bars.marks { r.changes.append(Change(kind: .barsSplit, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }

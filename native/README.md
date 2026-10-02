@@ -640,7 +640,7 @@ of identical Pokemon: that is why only pairs are split, why the no-hint rule ask
 
 ### Fragments and lone CP reads (`RefineFragments.swift`), the first steps of `Refine.apply`
 
-Order: (1) `absorbFragments` and `dropCpOutliers` on the JavaScript rows, (2) twin split / hidden CP / duplicate, (3) timing split.
+Order: (1) `absorbFragments`, `dropCpOutliers` and `splitByBars` on the JavaScript rows, (2) twin split / hidden CP / duplicate, (3) timing split.
 A row backed by one reading (or less than half a period) next to a row of the same species, with no paging boundary between them
 (the pair lasts at most 1.4 periods of a regular beat; with no regular beat, readings 0.4 s apart at most), the same or unread HP and
 read bars that are equal, unread, or within one unit while unsettled, is that Pokemon: it is removed and the neighbour is flagged
@@ -650,6 +650,27 @@ tail of one number is run through the JavaScript again without that read (`cp-ou
 from two or more readings that agree on HP and on the entry's settled bars. Not built: the row-level "single reading near the same
 species goes to `unmatched`" rule, because tap mode at 1.0 s gives one real reading per Pokemon (Moltres 1927, 1920 and 1918 are
 three real neighbours, the last backed by a single recovered read).
+
+Fourth review round (the owner's standard: no new wrong row without a flag, no real Pokémon lost without a trace, no duplicate without a flag; a
+flagged doubtful row is fine):
+- A fragment that has its own CP which solved (a level fits), differs from the neighbour's CP and is not a part read of it (its digits are not a run of the
+  other's) is NOT absorbed: it stays its own row with the check-level flag `read-once-beside:<neighbour cp>` ("read only once beside CP N ... check both").
+- A fragment that IS absorbed with a different CP (unsolved, or a part read) leaves `absorbed-other-cp:<cp>` (check-level: "a Pokémon read as CP N was folded
+  into this one, check whether another exists") when a page tick or a beat boundary lies between the two (adjacent rows of a regular beat always have one);
+  the same CP stays the note `absorbed-fragment:<cp>`. The fragment's readings join the kept row.
+- The worse of the two is the fragment: a row that solved exactly is kept, then the one with more readings (a good 2-reading row beside a 1-reading unsolved
+  fragment is no longer replaced by it).
+- Bars split: BOTH parts get `split-by-bars` (check both), and each keeps the refine flags the row had. With no regular beat the split needs evidence: each
+  state held for about 0.6 of the command's period (`barsSplitFallbackHeldPeriods`), and with no period known the row is not split and keeps its
+  `ivs-disagree` (a gap of 0.4 s is every gap at the tap reading rate). The real Fidough 768 pairs in run8 and run9 still split (they have a beat).
+- A row solved again (`cp-outlier-dropped`, bars split) carries the flags the earlier steps left on it, and each change is recorded against the row that was
+  kept (by its frames), not the first row with the same flag text. The timing step no longer force-unwraps frame times.
+On the device logs the row counts are unchanged (run1, run5, run7 51; run3 49; run4 51; run6 50; run8 311; run9 310) and on run8 and run9 the rows' values are
+identical to before (`rows-before-fourth-round-run8.txt` and `-run9.txt`, compared by `testRun8AndRun9RowValuesAreUnchangedByTheFragmentAndBarsFixes`); only
+flags differ (the first Fidough 768 now carries `split-by-bars`; three absorbed fragments now keep the better of their pair). The reviewers' expected
+run6 gain (Staraptor 1946 as a flagged row) does not appear on this fixture: there the 1946 row has two readings and is a row both before and after; what
+run6 lacks compared with the 51 is the second identical Staraptor 1986 and the Moltres read as "19" (documented above). The one-reading case is covered by
+a constructed test (`testAFragmentWithItsOwnSolvedCPIsNotAbsorbedAndAsksForALook`).
 
 ### To check, and reading a saved scan again
 

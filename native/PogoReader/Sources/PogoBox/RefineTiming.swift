@@ -94,9 +94,10 @@ extension Refine {
                 if best == nil || resid < best!.resid { best = (n, resid, joined) }
             }
             guard let b = best, b.n >= 2, b.n <= timingMaxCopies, b.resid <= timingMultipleTolerance * period else { placed.append((row, nil)); continue }
-            let frames = row.frames.sorted { $0.time! < $1.time! }
+            guard row.frames.allSatisfy({ $0.time != nil }) else { placed.append((row, nil)); continue }
+            let frames = row.frames.sorted { ($0.time ?? 0) < ($1.time ?? 0) }
             var parts = [[FrameLabel]](repeating: [], count: b.n)
-            for f in frames { parts[min(b.n - 1, max(0, Int(((f.time! - startB) / stay * Double(b.n)).rounded(.down))))].append(f) }
+            for f in frames { parts[min(b.n - 1, max(0, Int((((f.time ?? startB) - startB) / stay * Double(b.n)).rounded(.down))))].append(f) }
             guard parts.allSatisfy({ !$0.isEmpty }) else {
                 notices.append("timing: \(row.display) CP \(row.cp) stayed \(String(format: "%.1f", stay)) s (\(b.n) periods of \(String(format: "%.2f", period)) s) but a piece would have no readings: not split")
                 placed.append((row, nil)); continue

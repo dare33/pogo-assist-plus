@@ -24,7 +24,7 @@ final class BarsSplitTests: XCTestCase {
         XCTAssertEqual(f.count, 2)
         XCTAssertEqual(f.map(\.hp), [89, 89])
         XCTAssertEqual(f.map(\.ivs), [IVs(atk: 15, def: 4, hp: 10), IVs(atk: 15, def: 11, hp: 12)])
-        XCTAssertEqual(f.map { $0.flags.contains("split-by-bars") }, [false, true])
+        XCTAssertEqual(f.map { $0.flags.contains("split-by-bars") }, [true, true], "both parts are flagged: either may be the wrong one")
         XCTAssertFalse(f[1].flags.contains("same-as-previous"), "different Pokemon, not a repeat")
         XCTAssertEqual(f.map { $0.frames.count }.reduce(0, +), 6, "the six readings of the joined row are divided")
         XCTAssertEqual(r.changes.filter { $0.kind == .barsSplit }.count, 1)
@@ -63,6 +63,33 @@ final class BarsSplitTests: XCTestCase {
         XCTAssertEqual(r.changes.filter { $0.kind == .barsSplit }.count, 0)
     }
 
+    // MARK: the fallback branch (no regular beat), fourth review round
+
+    /// Only the two Fidough's readings, evenly spaced `every` seconds: a lone row with no beat around it, so the fallback decides.
+    private func loneFidough(every: Double) throws -> [FrameReading] {
+        let all = try load("device-run8-fidough-stretch.replay.jsonl").readings
+        let t0 = all.filter { $0.name == "Fidough" }.compactMap(\.time).min()!   // the 768 pair is the first Fidough block: six readings
+        var rs = all.filter { $0.name == "Fidough" && $0.ivs != nil && $0.time! < t0 + 2.2 }
+        for k in rs.indices { rs[k].time = 500 + Double(k) * every }
+        return rs
+    }
+
+    func testTheFallbackNeedsRealEvidenceNotAShortGap() throws {
+        let slow = try loneFidough(every: 0.8)       // each state held for at least 0.6 of a 1.2 s period
+        // no period known: the row is not split and keeps its ivs-disagree (a gap of 0.4 s is every gap at the tap reading rate)
+        let none = try refine(slow, paging: nil)
+        XCTAssertEqual(fidough(none).count, 1)
+        XCTAssertTrue(fidough(none)[0].flags.contains("ivs-disagree"))
+        // a period known and each state held for at least 0.6 of it: split, and BOTH parts are flagged
+        let hinted = try refine(slow, paging: PagingHint(pagedByCommand: true, expectedPeriod: 1.2))
+        let f = fidough(hinted)
+        XCTAssertEqual(f.count, 2)
+        XCTAssertEqual(f.map { $0.flags.contains("split-by-bars") }, [true, true], "the first part can solve exactly on transient bars: it is flagged too")
+        // states held for less than 0.6 of the period (reads 0.1 s apart): not split even with the period known
+        let quick = try loneFidough(every: 0.1)
+        XCTAssertEqual(fidough(try refine(quick, paging: PagingHint(pagedByCommand: true, expectedPeriod: 1.2))).count, 1)
+    }
+
     // MARK: the whole run
 
     /// 313 Pokemon on a 1.2 s tap beat: 310 rows from the JavaScript plus the second Fidough; three one-Pokemon-read-three-times
@@ -75,6 +102,12 @@ final class BarsSplitTests: XCTestCase {
         XCTAssertEqual(r.changes.filter { $0.kind == .barsSplit }.count, 1)
         XCTAssertEqual(r.changes.filter { $0.kind == .fragmentAbsorbed }.map { $0.detail.prefix(14) }.sorted(), ["Honedge CP 760", "Quaxly CP 772 ", "Skarmory CP 71"])
         XCTAssertEqual(fidough(r).count, 2)
+        // each change points at the row it is about (by the kept row's frames, not by the first row that has the same flag text)
+        for c in r.changes where c.kind == .fragmentAbsorbed || c.kind == .barsSplit {
+            XCTAssertGreaterThan(c.rowIndex, 0, c.detail)
+            let row = r.scan.rows[c.rowIndex - 1]
+            XCTAssertTrue(c.detail.hasPrefix(row.display), "\(c.detail) belongs to row \(c.rowIndex), \(row.display)")
+        }
         // no row left with two states of bars
         for row in r.scan.rows where row.flags.contains("ivs-disagree") {
             var runs = [(String, Int)]()

@@ -20,7 +20,7 @@ public enum FlagInfo {
         "form-ambiguous": .note, "level-ambiguous": .note,
         "no-level-fits": .check, "ivs-unread": .check, "ambiguous-ivs": .check, "cp-computed": .check, "hp-unread": .check, "name-low-confidence": .check,
         "same-as-previous": .check, "split-by-timing": .check, "split-by-bars": .check, "absorbed-unread": .check, "mega-when-scanned": .check,
-        "sex-from-stats": .check, "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check,
+        "sex-from-stats": .check, "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check,
     ]
 
     public static func severity(of flag: String, solveStatus: String) -> Severity {
@@ -49,6 +49,8 @@ public enum FlagInfo {
         Entry(prefix: "split-by-timing", field: nil) { _ in "Looked like two identical Pokémon in a row, judged from the paging beat. Check in the game that there are two." },
         Entry(prefix: "cp-outlier-dropped", field: .cp) { _ in "One early reading of the CP disagreed with the rest and was set aside. Check the CP in the game." },
         Entry(prefix: "absorbed-fragment", field: nil) { _ in "A stray first reading of this Pokémon was folded into it. Nothing to do unless the values look wrong." },
+        Entry(prefix: "read-once-beside", field: nil) { cp in "This Pokémon was read only once, right beside CP \(cp) of the same species and HP. It may be part of that Pokémon or another one. Check both in the game." },
+        Entry(prefix: "absorbed-other-cp", field: nil) { cp in "A Pokémon read as CP \(cp) was folded into this one. Check whether another one exists beside it." },
         Entry(prefix: "absorbed-unread", field: nil) { _ in "A reading without a CP was treated as this same Pokémon. Check that you do not own a second identical one." },
         Entry(prefix: "split-by-bars", field: nil) { _ in "Two different Pokémon with the same CP were read one after the other. Check both." },
         Entry(prefix: "single-read", field: nil) { _ in "Only one frame showed this Pokémon, so a value may be misread. Check it in the game." },
