@@ -37,13 +37,16 @@ export function solve({ species, cp, hp = null, ivs = null }) {
     for (let a = 0, k = 0; a <= 15; a++) {
       for (let d = 0; d <= 15; d++) {
         const x = (A + a) * Math.sqrt(D + d);
+        // CP also never falls as the hp IV rises, so the first level for h is at or below the one for h - 1.
+        let bound = LEVELS.length;
         for (let h = 0; h <= 15; h++, k++) {
           const y = x * Math.sqrt(S + h);
-          let lo = 0, hi = LEVELS.length;
+          let lo = 0, hi = bound;
           while (lo < hi) {
             const mid = (lo + hi) >> 1;
             if (cpFast(y, mid) < cp) lo = mid + 1; else hi = mid;
           }
+          bound = lo;
           const c = combos[k];
           for (let i = lo; i < LEVELS.length; i++) {
             const v = cpFast(y, i);
