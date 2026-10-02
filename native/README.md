@@ -287,3 +287,26 @@ of one Pokemon, each marked (`short-run`, `same-as-previous`) so none is an unfl
 - A card on screen for less than the reader's busy gap can be missed entirely.
 - Nothing has run on a device: the extension, the signature ticks, the low-memory guard, the heartbeat and the app are
   compile-checked on the simulator only. The Vision memory on the phone is unmeasured.
+
+### Open review findings at 4898acc (not fixed; the grouper needs one more pass)
+
+Both reviewers of `f9569df..4898acc` found the extension's frame handling and the dark-screen fix
+sound, and the live grouper not: statements above that a split or merge is "never silent" are
+too strong. Known holes, none seen on the iPhone Voice Control clips at a 2.1 s pace:
+
+- A swipe tick only counts when a frame was dropped since the last card (the 0.3 s guard). When
+  every frame is read, identical neighbours are split only if three readings in a row show no
+  card; with two, they merge. At a 2.1 s pace the merged row is flagged `long-stay`; at about
+  1.6 s it can fall under 2.4 s and carry no flag. No unit test exercises the guard.
+- A tick is used up by a card reading that does not start a row (name and HP with no CP, CP with
+  no name, a weak name), so the split it should have made is lost.
+- `same-as-previous` is decided on the first reading of the new row only: a garbled first read
+  leaves a false split unflagged, and a different Pokémon of the same species with a similar CP
+  is flagged wrongly and stays flagged.
+- An unreadable reading followed by a short name-only reading counts as 0.6 s of separator and
+  can split one Pokémon, unflagged. Two name-only readings more than a second apart can make a row.
+- `parseCp`: "5pX2641" still gives 2641; "CP0123" gives 123; "5p86" and "CP o 1500" are no read.
+- A dark screen whose top rows average under 30 over more than 0.5% of the height is still cut
+  (the synthetic test screen is brighter than the darkest real sky).
+- `pogo-drop` compares a dropped run with the tool's own full-rate rows, so it shows consistency,
+  not that every Pokémon on screen was captured.
