@@ -17,6 +17,8 @@ private func frame(_ cp: Int?, hp: Int? = HPV, ivs: IVs? = IVS, name: String = "
     return r
 }
 private func swipe() -> FrameReading { var r = FrameReading(frame: "swipe"); r.flags = ["mid-swipe"]; return r }
+/// What a real swipe leaves: a mid-swipe frame then frames with no anchors (3 to 7 of them on the marathon clips).
+private func swipes(_ n: Int = 4) -> [FrameReading] { (0..<n).map { _ in swipe() } }
 
 private func groupAll(_ readings: [FrameReading]) -> [LiveRow] {
     var g = LiveGrouper(species: table)
@@ -38,14 +40,15 @@ final class GrouperTests: XCTestCase {
     }
 
     func testADifferentHpSplitsEvenWithTheSameNameAndCp() {
-        let rows = groupAll([frame(14, hp: 13, ivs: IVs(atk: 12, def: 4, hp: 15), name: "Meltan"), frame(14, hp: 12, ivs: IVs(atk: 1, def: 1, hp: 1), name: "Meltan")])
+        let rows = groupAll([frame(14, hp: 13, ivs: IVs(atk: 12, def: 4, hp: 15), name: "Meltan", n: 1), frame(14, hp: 13, ivs: IVs(atk: 12, def: 4, hp: 15), name: "Meltan", n: 2), frame(14, hp: 13, ivs: IVs(atk: 12, def: 4, hp: 15), name: "Meltan", n: 3),
+                          frame(14, hp: 12, ivs: IVs(atk: 1, def: 1, hp: 1), name: "Meltan", n: 4), frame(14, hp: 12, ivs: IVs(atk: 1, def: 1, hp: 1), name: "Meltan", n: 5), frame(14, hp: 12, ivs: IVs(atk: 1, def: 1, hp: 1), name: "Meltan", n: 6)])
         XCTAssertEqual(rows.count, 2)
     }
 
     func testTwoAdjacentPokemonStayApartWhenBothCpAndSettledBarsDiffer() {
         let a = IVs(atk: 10, def: 5, hp: 12), b = IVs(atk: 12, def: 6, hp: 12)
-        let rows = groupAll([frame(135, hp: 49, ivs: a, name: "Pidgey"), frame(135, hp: 49, ivs: a, name: "Pidgey"), swipe(),
-                        frame(139, hp: 49, ivs: b, name: "Pidgey"), frame(139, hp: 49, ivs: b, name: "Pidgey")])
+        let rows = groupAll([frame(135, hp: 49, ivs: a, name: "Pidgey"), frame(135, hp: 49, ivs: a, name: "Pidgey"), frame(135, hp: 49, ivs: a, name: "Pidgey")] + swipes()
+                        + [frame(139, hp: 49, ivs: b, name: "Pidgey"), frame(139, hp: 49, ivs: b, name: "Pidgey"), frame(139, hp: 49, ivs: b, name: "Pidgey")])
         XCTAssertEqual(rows.map(\.cp), [135, 139])
     }
 
@@ -118,15 +121,50 @@ final class GrouperTests: XCTestCase {
         XCTAssertEqual(before.count, 1)
     }
 
-    func testAHiddenCpPokemonOfItsOwnIsListedWithTheCpsItAllows() {
-        let rows = groupAll([frame(CP + 9, hp: HPV + 1, ivs: nil, n: 1), frame(CP + 9, hp: HPV + 1, ivs: nil, n: 2), swipe(), frame(nil, n: 4), frame(nil, n: 5), frame(nil, n: 6), swipe(),
-                        frame(CP - 9, hp: HPV - 1, ivs: nil, n: 8), frame(CP - 9, hp: HPV - 1, ivs: nil, n: 9)])
-        XCTAssertEqual(rows.map(\.cp), [CP + 9, nil, CP - 9])
-        XCTAssertEqual(rows[1].flags.first, "cp-not-read")
-        XCTAssertTrue(rows[1].flags.contains("cp-options:\(CP)"))
+    func testAHiddenCpPokemonOfItsOwnIsListedAndItsOnlyFittingCpIsWorkedOut() {
+        let rows = groupAll([frame(CP + 9, hp: HPV + 1, ivs: nil, n: 1), frame(CP + 9, hp: HPV + 1, ivs: nil, n: 2), frame(CP + 9, hp: HPV + 1, ivs: nil, n: 3)] + swipes()
+                            + [frame(nil, n: 4), frame(nil, n: 5), frame(nil, n: 6)] + swipes()
+                            + [frame(CP - 9, hp: HPV - 1, ivs: nil, n: 8), frame(CP - 9, hp: HPV - 1, ivs: nil, n: 9), frame(CP - 9, hp: HPV - 1, ivs: nil, n: 10)])
+        XCTAssertEqual(rows.map(\.cp), [CP + 9, CP, CP - 9])
+        XCTAssertEqual(rows[1].flags, ["cp-computed:\(CP)"])
         XCTAssertEqual(rows.map(\.index), [1, 2, 3])
         // One or two such frames with no HP are a card sliding past, not an entry.
-        XCTAssertEqual(groupAll([frame(CP, n: 1), swipe(), frame(nil, hp: nil, n: 3), frame(nil, hp: nil, n: 4), swipe(), frame(CP - 9, hp: HPV - 1, ivs: nil, n: 6)]).count, 2)
+        XCTAssertEqual(groupAll([frame(CP, n: 1), frame(CP, n: 2), frame(CP, n: 3)] + swipes() + [frame(nil, hp: nil, n: 3), frame(nil, hp: nil, n: 4)] + swipes() + [frame(CP - 9, hp: HPV - 1, ivs: nil, n: 6), frame(CP - 9, hp: HPV - 1, ivs: nil, n: 7), frame(CP - 9, hp: HPV - 1, ivs: nil, n: 8)]).count, 2)
+        // A hidden Pokémon whose HP and bars allow several CPs stays listed, with the options.
+        let ambiguous = cpOptions([moltres], hp: HPV, ivs: IVS).options
+        XCTAssertEqual(ambiguous.count, 1)
+    }
+
+    /// Two identical Pokémon in a row (marathon-phone Staraptor 1986) are told apart by the swipe between them.
+    func testASwipeBetweenTwoIdenticalReadingsMakesTwoRows() {
+        let a = (1...4).map { frame(CP, n: $0) }, b = (6...9).map { frame(CP, n: $0) }
+        XCTAssertEqual(groupAll(a + swipes() + b).count, 2)
+        // A single unreadable frame inside a Pokémon's time on screen does not split it.
+        XCTAssertEqual(groupAll(a + [swipe()] + b).count, 1)
+        XCTAssertEqual(groupAll(a + swipes(2) + b).count, 1)
+    }
+
+    /// iPad junk rows: partial CP reads while a model crosses the CP, and a mid-slide frame, are absorbed.
+    func testPartialAndStrayCardsAreAbsorbedIntoTheSamePokemon() {
+        let tail = CP % 1000
+        // A tail of the real CP (971 of 1971) is the same Pokémon, not a new row.
+        let rows = groupAll([frame(CP, n: 1), frame(CP, n: 2), frame(tail, n: 3), frame(CP % 100, n: 4), frame(CP, n: 5)])
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue(cpRelated(1971, 971)); XCTAssertTrue(cpRelated(1971, 197)); XCTAssertTrue(cpRelated(1971, 71))
+        XCTAssertFalse(cpRelated(1971, 7)); XCTAssertFalse(cpRelated(1971, 1861))
+        // One slide frame with the next card's CP and the last card's HP, bars unsettled, then the next card.
+        let slide = frame(CP - 15, hp: HPV + 2, ivs: IVS, n: 5, conf: 0.4)
+        let rows2 = groupAll([frame(CP, n: 1), frame(CP, n: 2), frame(CP, n: 3)] + swipes() + [slide, frame(CP - 15, hp: HPV, ivs: IVS, n: 9), frame(CP - 15, hp: HPV, ivs: IVS, n: 10), frame(CP - 15, hp: HPV, ivs: IVS, n: 11)])
+        XCTAssertEqual(rows2.map(\.cp), [CP, CP - 15])
+        // A one-frame card of another name is not absorbed.
+        let other = frame(CP, hp: HPV, ivs: nil, name: "Zapdos", n: 5)
+        XCTAssertEqual(groupAll([frame(CP, n: 1), frame(CP, n: 2), frame(CP, n: 3), other, frame(CP, n: 6)]).count, 3)
+    }
+
+    func testRowsRememberWhereThePokemonWasOnScreen() {
+        let rows = groupAll((1...4).map { frame(CP, n: $0) })
+        XCTAssertEqual([rows[0].firstFrame, rows[0].lastFrame], ["f1", "f4"])
+        XCTAssertEqual(rows[0].firstTime, 0.2)
     }
 
     /// Fault 1 in the grouper: a symbol read names the row, and no sex-from-stats flag is needed.

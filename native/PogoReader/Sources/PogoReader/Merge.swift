@@ -29,3 +29,16 @@ public func ivsCompatible(_ a: IVs?, _ b: IVs?, _ ca: Double = 1, _ cb: Double =
     guard let a = a, let b = b, ca >= SETTLED, cb >= SETTLED else { return true }
     return a == b
 }
+
+/// Two CP reads of one Pokémon: `cpSimilar`, or one is the tail or a digit-subsequence of the other
+/// (a model in front of the CP hides the leading digits: 971 and 1971). The shorter needs two
+/// digits at least, as in `cpSimilar`. Only used where name and HP already agree.
+public func cpRelated(_ a: Int, _ b: Int) -> Bool {
+    if cpSimilar(a, b) { return true }
+    let x = Array(String(a)), y = Array(String(b))
+    let (s, l) = x.count <= y.count ? (x, y) : (y, x)
+    if s.count < 2 || s.count >= l.count { return false }
+    var i = 0
+    for c in l where i < s.count && c == s[i] { i += 1 }
+    return i == s.count
+}

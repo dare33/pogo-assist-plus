@@ -40,6 +40,33 @@ public enum Tuning {
     /// sliding in or out, not a settled one (frame.js).
     public static let settledBarLeft = 0.2...0.4
 
+    /// This many consecutive frames with neither a CP nor an HP read (mid-swipe, no anchors, a card
+    /// sliding past) is a swipe: the next card is a new Pokemon, even if it reads the same as the
+    /// last (two identical Staraptor in a row). On the marathon clips every swipe leaves 3 to 7
+    /// such frames and nothing inside a Pokemon's time on screen leaves more than 2.
+    public static let swipeSeparatorFrames = 3
+
+    /// A run of at most this many frames that has no settled bars or whose CP does not fit its HP
+    /// and bars, next to a row of the same Pokemon with a related CP, is a card caught mid-slide:
+    /// it is absorbed into that neighbour (the intent of JS absorbStrays, which takes one frame).
+    public static let strayMaxFrames = 2
+
+    /// "Save crops" mode: at most this many frames are kept per on-screen segment (frames 2, 4, 6 of a
+    /// segment whose bars have settled), and the whole archive is capped in files and bytes so a
+    /// broadcast cannot fill the app group container.
+    public static let maxCropFramesPerSegment = 3
+    public static let maxSavedFiles = 1500
+    public static let maxSavedBytes = 48 * 1_048_576
+
+    /// Below this much `os_proc_available_memory()` the live modes skip Vision for the frame (and count
+    /// it) instead of risking the extension being killed. A guess: Vision's own working set while it
+    /// reads is the big unknown on the phone; raise it if runs are still killed.
+    public static let lowMemoryAvailableBytes = 8 * 1_048_576
+
+    /// The app calls the broadcast dead when no state has been written for this long (seconds); the
+    /// extension writes at least once a second.
+    public static let staleStateSeconds = 4.0
+
     /// Longest run of frames for which the grouper keeps a hidden-CP or weak-name stretch pending.
     public static let maxPendingFrames = 60
 }

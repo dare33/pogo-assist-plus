@@ -9,6 +9,12 @@ public struct LiveRow: Codable, Equatable {
     public var ivs: IVs?
     public var frames: Int
     public var flags: [String]
+    /// Where the Pokémon was on screen: first and last frame label and time (seconds), for the
+    /// timeline report and for matching rows to on-screen segments.
+    public var firstFrame: String?
+    public var lastFrame: String?
+    public var firstTime: Double?
+    public var lastTime: Double?
 }
 
 /// A streaming grouper for the phone: consecutive readings of one Pokémon become one row. It keeps
@@ -37,9 +43,12 @@ public struct LiveGrouper {
         var lastIvs: IVs?               // latest read of any kind
         var lastIvConfidence = 0.0
         var stamp = 0
+        var startedAfterSwipe = false
+        var firstFrame: String?, lastFrame: String?, firstTime: Double?, lastTime: Double?
 
         init(_ r: FrameReading, weak: Bool) {
             self.weak = weak
+            firstFrame = r.frame; firstTime = r.time
             name = r.name ?? ""
             speciesIds = r.speciesIds ?? []
             add(r)
@@ -55,6 +64,7 @@ public struct LiveGrouper {
 
         mutating func add(_ r: FrameReading) {
             frames += 1
+            lastFrame = r.frame; lastTime = r.time
             if hp == nil, let h = r.hp { hp = h }
             if let h = r.hp { Run.bump(&hpTally, &stamp, h.max, cap: 8) }
             if let v = r.ivs {
@@ -80,7 +90,7 @@ public struct LiveGrouper {
             // same CP a mid-animation read can look settled by chance, but a different CP and
             // different bars is another Pokémon (adjacent hatched Meltan at CP 150 and 151, say).
             if let a = ivs, let b = r.ivs, r.ivConfidence >= SETTLED, !ivsCompatible(a, b), !reads.contains(top) { return false }
-            if reads.contains(where: { cpSimilar($0, lastCp) || cpSimilar($0, top) }) { return true }
+            if reads.contains(where: { cpRelated($0, lastCp) || cpRelated($0, top) }) { return true }
             // A badly garbled CP read on a frame whose HP and settled bars match the run exactly is
             // still the same Pokémon.
             if let a = hp, let b = r.hp, let x = ivs, let y = r.ivs, r.ivConfidence >= SETTLED, a.max == b.max, x == y { return true }
@@ -102,6 +112,7 @@ public struct LiveGrouper {
         var ivTally = [IVs: Tally]()
         var stamp = 0
         var prevBeside: Bool        // sits right beside the run before it
+        var firstFrame: String?, lastFrame: String?, firstTime: Double?, lastTime: Double?
         func settledIvs() -> IVs? { ivTally.max(by: { ($0.value.n, $0.value.last) < ($1.value.n, $1.value.last) })?.key }
     }
 
@@ -112,6 +123,10 @@ public struct LiveGrouper {
     private var weakPending: Run?
     /// An unreadable frame (no name) lies between the last Pokémon frame and now.
     private var gap = false
+    /// Consecutive frames with neither a CP nor an HP read; `swipe` says this many came right before the
+    /// reading being consumed (a swipe happened: the next card is a new Pokémon).
+    private var sepRun = 0
+    private var swipe = false
 
     public init(species: SpeciesTable?) { table = species }
 
@@ -142,13 +157,17 @@ public struct LiveGrouper {
             if finished.isEmpty && current == nil { finished.append(makeRow(w, index: finished.count + 1)) }
             weakPending = nil
         }
-        if let c = current { finished.append(makeRow(c, index: finished.count + 1)); current = nil }
+        var none: Run? = nil
+        closeCurrent(next: &none)
         return rows != before
     }
 
     // MARK: - one reading
 
     private mutating func consume(_ r: FrameReading) {
+        let isCard = r.cp != nil || r.hp != nil
+        swipe = sepRun >= Tuning.swipeSeparatorFrames
+        if isCard { sepRun = 0 } else { sepRun += 1 }
         guard let name = r.name else { gap = true; return }          // mid-swipe, unnamed, cut off
         if r.cp == nil {
             if r.nameWeak == true { gap = true } else { addHidden(r) }
@@ -162,7 +181,7 @@ public struct LiveGrouper {
     }
 
     private mutating func addStrong(_ r: FrameReading) {
-        if var c = current, c.joins(r) {
+        if var c = current, !swipe, c.joins(r) {
             resolveHidden(next: c, gapAfter: gap)
             // A weak frame of another name inside this Pokémon's time on screen is set aside.
             weakPending = nil
@@ -171,10 +190,11 @@ public struct LiveGrouper {
             gap = false
             return
         }
-        let fresh = Run(r, weak: false)
-        if let c = current { finished.append(makeRow(c, index: finished.count + 1)); current = nil }
+        var fresh = Run(r, weak: false)
+        fresh.startedAfterSwipe = swipe
+        closeCurrent(next: &fresh)
         let prevName = finished.last?.name
-        resolveHidden(next: fresh, gapAfter: gap)
+        resolveHidden(next: fresh, gapAfter: gap || swipe)
         if let w = weakPending {
             // A weak read between two Pokémon is dropped when it has the name of either (it may be
             // that Pokémon's first or last frame); otherwise nothing confident accounts for it.
@@ -183,6 +203,48 @@ public struct LiveGrouper {
         }
         current = fresh
         gap = false
+    }
+
+    /// Close the run in progress into a finished row. A short run that is no Pokémon of its own (no
+    /// settled bars, or a CP that does not fit its HP and bars) next to a row of the same Pokémon with a
+    /// related CP is a card caught mid-slide (a partial CP while the model crosses the text): its frames
+    /// go to that neighbour, the one it slid out of if no swipe came between, else the one it slid into.
+    private mutating func closeCurrent(next: inout Run) {
+        var none: Run? = next
+        closeCurrent(next: &none)
+        if let n = none { next = n }
+    }
+
+    private mutating func closeCurrent(next: inout Run?) {
+        guard let c = current else { return }
+        current = nil
+        let row = makeRow(c, index: finished.count + 1)
+        if c.frames <= Tuning.strayMaxFrames, isStray(c, row) {
+            if !c.startedAfterSwipe, let p = finished.last, p.name == row.name, Self.cpsRelated(p.cp, row.cp) {
+                finished[finished.count - 1].frames += c.frames
+                finished[finished.count - 1].lastFrame = c.lastFrame; finished[finished.count - 1].lastTime = c.lastTime
+                return
+            }
+            if var n = next, !n.startedAfterSwipe, n.name == c.name, Self.cpsRelated(n.topCp, row.cp) {
+                n.frames += c.frames
+                n.firstFrame = c.firstFrame; n.firstTime = c.firstTime
+                n.startedAfterSwipe = c.startedAfterSwipe
+                next = n
+                return
+            }
+        }
+        finished.append(row)
+    }
+
+    private static func cpsRelated(_ a: Int?, _ b: Int?) -> Bool {
+        guard let a = a, let b = b else { return true }
+        return cpRelated(a, b)
+    }
+
+    private func isStray(_ run: Run, _ row: LiveRow) -> Bool {
+        if row.ivs == nil || row.flags.contains("bars-unsettled") { return true }
+        if let t = table, let ivs = row.ivs, let cp = row.cp, cpFits(t.species(for: run.speciesIds), cp: cp, hp: row.hp, ivs: ivs) == false { return true }
+        return false
     }
 
     private mutating func addWeak(_ r: FrameReading) {
@@ -195,9 +257,10 @@ public struct LiveGrouper {
     private mutating func addHidden(_ r: FrameReading) {
         let ivs = (r.ivs != nil && r.ivConfidence >= SETTLED) ? r.ivs : nil
         let hpMax = r.hp?.max
-        if var h = hidden, h.name == r.name, h.hp == nil || hpMax == nil || h.hp == hpMax,
+        if var h = hidden, h.name == r.name, !swipe, h.hp == nil || hpMax == nil || h.hp == hpMax,
            !gap || ivsCompatible(h.settledIvs(), ivs) {
             h.frames += 1
+            h.lastFrame = r.frame; h.lastTime = r.time
             if h.hp == nil { h.hp = hpMax }
             if let v = ivs { h.stamp += 1; var e = h.ivTally[v] ?? Tally(n: 0, first: h.stamp, last: 0); e.n += 1; e.last = h.stamp; h.ivTally[v] = e }
             hidden = h
@@ -206,8 +269,9 @@ public struct LiveGrouper {
             resolveHidden(next: nil, gapAfter: true)
             var h = Hidden(name: r.name ?? "", speciesIds: r.speciesIds ?? [], hp: hpMax, prevBeside: false)
             h.frames = 1
+            h.firstFrame = r.frame; h.lastFrame = r.frame; h.firstTime = r.time; h.lastTime = r.time
             if let v = ivs { h.stamp = 1; h.ivTally[v] = Tally(n: 1, first: 1, last: 1) }
-            if let c = current { h.prevBeside = Self.beside(h, c, gapBetween: gap || hadOther) }
+            if let c = current { h.prevBeside = Self.beside(h, c, gapBetween: gap || hadOther || swipe) }
             hidden = h
         }
         gap = false
@@ -228,12 +292,17 @@ public struct LiveGrouper {
         let substantial = h.hp != nil || h.frames >= 3
         if h.prevBeside || nextBeside || !substantial { return }
         var flags = ["cp-not-read"]
+        var cp: Int? = nil
         let ivs = h.settledIvs()
         if let t = table {
             let opts = cpOptions(t.species(for: h.speciesIds), hp: h.hp, ivs: ivs).options
-            if !opts.isEmpty && opts.count <= 6 { flags.append("cp-options:" + opts.map(String.init).joined(separator: "|")) }
+            // One level fits the HP and the settled bars: that is the CP, worked out (the model hid all
+            // of it). Flagged for a check in the game, like a recovered CP.
+            if opts.count == 1 { cp = opts[0]; flags = ["cp-computed:\(opts[0])"] }
+            else if !opts.isEmpty && opts.count <= 6 { flags.append("cp-options:" + opts.map(String.init).joined(separator: "|")) }
         }
-        finished.append(LiveRow(index: finished.count + 1, name: Self.displayName(h.name, h.speciesIds), cp: nil, hp: h.hp, ivs: ivs, frames: h.frames, flags: flags))
+        finished.append(LiveRow(index: finished.count + 1, name: Self.displayName(h.name, h.speciesIds), cp: cp, hp: h.hp, ivs: ivs, frames: h.frames, flags: flags,
+                                firstFrame: h.firstFrame, lastFrame: h.lastFrame, firstTime: h.firstTime, lastTime: h.lastTime))
     }
 
     // MARK: - rows
@@ -281,6 +350,7 @@ public struct LiveGrouper {
         if run.name == "Nidoran" && run.speciesIds.count != 1 { flags.append("sex-from-stats") }
         if hp == nil { flags.append("hp-unread") }
         if ivs == nil { flags.append("no-bars") }
-        return LiveRow(index: index, name: Self.displayName(run.name, run.speciesIds), cp: cp, hp: hp, ivs: ivs, frames: run.frames, flags: flags)
+        return LiveRow(index: index, name: Self.displayName(run.name, run.speciesIds), cp: cp, hp: hp, ivs: ivs, frames: run.frames, flags: flags,
+                       firstFrame: run.firstFrame, lastFrame: run.lastFrame, firstTime: run.firstTime, lastTime: run.lastTime)
     }
 }

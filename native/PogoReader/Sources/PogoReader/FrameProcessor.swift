@@ -45,28 +45,46 @@ public final class FrameProcessor {
     /// The reused scaled buffer as last filled (for tests).
     var scaledFrame: RGBAImage { scaled }
 
+    /// A processor that only does the pixel work (`analyse`): no Vision request is ever created. The
+    /// broadcast extension uses it in "save crops" mode.
+    public static func cropsOnly(names: [NameCandidate], targetWidth: Int? = 750, memory: MemoryProbe? = nil) -> FrameProcessor {
+        FrameProcessor(textReader: NullTextReader(), names: names, targetWidth: targetWidth, memory: memory)
+    }
+
     // MARK: - RGBA input (PNG frames)
 
     /// Read an RGBA frame (a decoded PNG). Scaled into the reused buffer when wider than the target;
     /// read in place otherwise.
     public func process(_ image: RGBAImage, time: Double, frame: String? = nil) -> FrameReading {
         autoreleasepool {
-            guard let tw = targetWidth, image.width > tw else {
-                memory?.sample()
-                return reader.read(image, frame: frame, time: time)
-            }
-            let (dw, dh) = scaledSize(srcWidth: image.width, srcHeight: image.height)
-            prepare(width: dw, height: dh, scratchFor: (image.width, image.height))
-            let ok = image.bytes.withUnsafeBytes { s in
-                scaled.bytes.withUnsafeMutableBytes { d in
-                    Scale.argb8888(src: s.baseAddress!, srcWidth: image.width, srcHeight: image.height, srcRowBytes: image.width * 4,
-                                   dst: d.baseAddress!, dstWidth: dw, dstHeight: dh, temp: temp)
-                }
-            }
-            memory?.sample()
-            guard ok else { var r = FrameReading(frame: frame, time: time); r.flags.append("scale-failed"); return r }
-            return reader.read(scaled, frame: frame, time: time)
+            guard let working = prepared(image) else { var r = FrameReading(frame: frame, time: time); r.flags.append("scale-failed"); return r }
+            return reader.read(working, frame: frame, time: time)
         }
+    }
+
+    /// The pixel half only: anchors, bars and the small text crops of an RGBA frame.
+    public func analyse(_ image: RGBAImage, time: Double, frame: String? = nil) -> (FrameAnalysis, FrameCrops?) {
+        autoreleasepool {
+            guard let working = prepared(image) else { var a = FrameAnalysis(frame: frame, time: time); a.flags.append("scale-failed"); return (a, nil) }
+            let r = reader.analyse(working, frame: frame, time: time)
+            memory?.sample()
+            return r
+        }
+    }
+
+    /// The frame to read: the input itself when no wider than the target, else scaled into the reused buffer.
+    private func prepared(_ image: RGBAImage) -> RGBAImage? {
+        guard let tw = targetWidth, image.width > tw else { memory?.sample(); return image }
+        let (dw, dh) = scaledSize(srcWidth: image.width, srcHeight: image.height)
+        prepare(width: dw, height: dh, scratchFor: (image.width, image.height))
+        let ok = image.bytes.withUnsafeBytes { s in
+            scaled.bytes.withUnsafeMutableBytes { d in
+                Scale.argb8888(src: s.baseAddress!, srcWidth: image.width, srcHeight: image.height, srcRowBytes: image.width * 4,
+                               dst: d.baseAddress!, dstWidth: dw, dstHeight: dh, temp: temp)
+            }
+        }
+        memory?.sample()
+        return ok ? scaled : nil
     }
 
     // MARK: - CVPixelBuffer input (ReplayKit)
@@ -79,6 +97,19 @@ public final class FrameProcessor {
             }
             memory?.sample()
             return reader.read(scaled, frame: frame, time: time)
+        }
+    }
+
+    /// The pixel half only, for a ReplayKit frame.
+    public func analyse(_ pixelBuffer: CVPixelBuffer, time: Double, frame: String? = nil) -> (FrameAnalysis, FrameCrops?) {
+        autoreleasepool {
+            guard fill(from: pixelBuffer) else {
+                var a = FrameAnalysis(frame: frame, time: time); a.flags.append("unsupported-pixel-format"); return (a, nil)
+            }
+            memory?.sample()
+            let r = reader.analyse(scaled, frame: frame, time: time)
+            memory?.sample()
+            return r
         }
     }
 

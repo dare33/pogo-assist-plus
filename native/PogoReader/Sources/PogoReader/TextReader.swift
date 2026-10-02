@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import Vision
+import CoreML
 
 /// What a crop is meant to hold; the reader may treat each differently (size, expectations), and
 /// a test fake uses it to know which read is being asked for.
@@ -26,17 +27,58 @@ public protocol TextReader: AnyObject {
     func read(_ image: RGBAImage, kind: TextKind) -> TextRead
 }
 
+/// Vision settings that may change its memory or speed. Every one is off by default; the Mac tool
+/// (`pogo-read --vision-device`, `--vision-min-text-height`, `--vision-recreate`) measures them. Mac
+/// figures may not transfer to an iPhone extension, so only what the phone shows should be adopted.
+public struct VisionOptions: Equatable {
+    public enum Device: String { case system, cpu, gpu, neuralEngine }
+    /// Vision's fast level instead of accurate.
+    public var fast = false
+    /// Restrict the recognition model to one compute device (iOS 17 / macOS 14 `setComputeDevice`).
+    public var device: Device = .system
+    /// `minimumTextHeight`: text smaller than this fraction of the image height is ignored.
+    public var minimumTextHeight: Float?
+    /// Build a new request for every read (lets Vision drop whatever the old one cached).
+    public var recreateRequestEachRead = false
+    public init() {}
+}
+
 /// Apple Vision text recognition: accurate level, language correction off (it would "fix" Pokémon
 /// names and digits into words), en-US. The request object is created once and reused.
 public final class VisionTextReader: TextReader {
-    private let request: VNRecognizeTextRequest
+    private var request: VNRecognizeTextRequest
+    private let options: VisionOptions
     private let colourSpace = CGColorSpaceCreateDeviceRGB()
 
-    public init(fast: Bool = false) {
-        request = VNRecognizeTextRequest()
-        request.recognitionLevel = fast ? .fast : .accurate
-        request.usesLanguageCorrection = false
-        request.recognitionLanguages = ["en-US"]
+    public convenience init(fast: Bool = false) {
+        var o = VisionOptions(); o.fast = fast
+        self.init(options: o)
+    }
+
+    public init(options: VisionOptions) {
+        self.options = options
+        request = VisionTextReader.makeRequest(options)
+    }
+
+    private static func makeRequest(_ o: VisionOptions) -> VNRecognizeTextRequest {
+        let r = VNRecognizeTextRequest()
+        r.recognitionLevel = o.fast ? .fast : .accurate
+        r.usesLanguageCorrection = false
+        r.recognitionLanguages = ["en-US"]
+        if let h = o.minimumTextHeight { r.minimumTextHeight = h }
+        if o.device != .system {
+            let all = (try? r.supportedComputeStageDevices) ?? [:]
+            for devices in all.values {
+                let pick = devices.first { d in
+                    switch (d, o.device) {
+                    case (.cpu, .cpu), (.gpu, .gpu), (.neuralEngine, .neuralEngine): return true
+                    default: return false
+                    }
+                }
+                if let p = pick { for stage in all.keys { r.setComputeDevice(p, for: stage) }; break }
+            }
+        }
+        return r
     }
 
     public func read(_ image: RGBAImage, kind: TextKind) -> TextRead {
@@ -48,6 +90,7 @@ public final class VisionTextReader: TextReader {
         case .hp: target = Tuning.hpCropTargetHeight
         }
         return autoreleasepool {
+            if options.recreateRequestEachRead { request = VisionTextReader.makeRequest(options) }
             var work = upscaled(image, toHeight: target)
             guard let cg = cgImage(&work) else { return .empty }
             let handler = VNImageRequestHandler(cgImage: cg, options: [:])
@@ -73,4 +116,11 @@ public final class VisionTextReader: TextReader {
             return ctx.makeImage()
         }
     }
+}
+
+/// Reads nothing. Used where only the pixel half of the reader runs (the extension's "save crops"
+/// mode, memory tests): no Vision request exists.
+public final class NullTextReader: TextReader {
+    public init() {}
+    public func read(_ image: RGBAImage, kind: TextKind) -> TextRead { .empty }
 }

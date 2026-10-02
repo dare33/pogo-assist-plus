@@ -1,8 +1,62 @@
 import Foundation
 
+/// What the pixel work of `readFrame` (src/extract/frame.js) found in one frame, before any text is
+/// read: anchors, the flags those decided, the appraisal bars, and the sharpness of the name crop.
+/// The text reads then happen live (`FrameReader.read`) or later on saved crops
+/// (`FrameReader.complete`); both go through the same two functions, so a deferred read of a frame
+/// gives the same reading as a live one. Codable: a saved frame's JSON is this.
+public struct FrameAnalysis: Codable, Equatable {
+    public var frame: String?
+    public var time: Double?
+    /// Flags decided by the pixel work (mid-swipe, no-hp-bar, no-cp-text).
+    public var flags: [String] = []
+    /// False when the reading ends before any text is read (not a settled card).
+    public var needsText = false
+    /// The CP text was found (a tall model can hide it; the card is then read without CP).
+    public var hasCpText = false
+    public var sharpness = 0.0          // of the usual name crop
+    public var sharpnessUp = 0.0        // of the Lucky second-look crop
+    public var ivs: IVs?
+    public var ivConfidence = 0.0
+    public var fills: [Double]?
+    /// Where the crops were cut, in frame pixels (information only).
+    public var cpRect: Rect?
+    public var nameRect: Rect?
+    public var hpRect: Rect?
+    /// "Save crops" mode: which on-screen segment (swipe to swipe) the frame belongs to.
+    public var segment: Int?
+
+    public init(frame: String? = nil, time: Double? = nil) { self.frame = frame; self.time = time }
+
+    /// Bars settled: the appraisal panel finished animating (whole units).
+    public var barsSettled: Bool { ivs != nil && ivConfidence >= SETTLED }
+}
+
+extension Rect: Codable {
+    private enum K: String, CodingKey { case x, y, w, h }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: K.self)
+        self.init(x: try c.decode(Double.self, forKey: .x), y: try c.decode(Double.self, forKey: .y), w: try c.decode(Double.self, forKey: .w), h: try c.decode(Double.self, forKey: .h))
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: K.self)
+        try c.encode(x, forKey: .x); try c.encode(y, forKey: .y); try c.encode(w, forKey: .w); try c.encode(h, forKey: .h)
+    }
+}
+
+/// The small crops the text reads need; the only pixels that leave the frame buffer.
+public struct FrameCrops {
+    public var cp: RGBAImage?
+    public var name: RGBAImage
+    /// One line above the usual name position (the Lucky Pokémon second look).
+    public var nameUp: RGBAImage
+    public var hp: RGBAImage
+}
+
 /// Port of `readFrame` (src/extract/frame.js): anchors, text reads of CP / name / HP, bar IVs,
-/// sharpness. A pure function of the image plus a text reader; the grouper decides what to do with
-/// the readings. The regions and the decisions are the JS ones; only the recogniser changed.
+/// sharpness. The regions and the decisions are the JS ones; only the recogniser changed. The work is
+/// split in two so the extension can do the pixel half alone (`analyse`) and leave the text reads
+/// (`complete`) to the app: `read` is just the two in a row.
 public final class FrameReader {
     public let text: TextReader
     public let names: [NameCandidate]
@@ -15,34 +69,60 @@ public final class FrameReader {
         var text: String
         var confidence: Double
         var match: NameMatch?
-        var sharpness: Double
     }
 
     /// `cp` and `name` are nil when the frame is not a settled Pokémon screen; `flags` say why.
     public func read(_ img: RGBAImage, frame: String? = nil, time: Double? = nil, wantHp: Bool = true, wantBars: Bool = true) -> FrameReading {
-        var out = FrameReading(frame: frame, time: time)
+        let (analysis, crops) = analyse(img, frame: frame, time: time)
+        return complete(analysis, crops, wantHp: wantHp, wantBars: wantBars)
+    }
+
+    // MARK: - pixel half
+
+    /// Anchors, bars and crops; no text is read. `crops` is nil when the frame is not a settled card.
+    public func analyse(_ img: RGBAImage, frame: String? = nil, time: Double? = nil) -> (FrameAnalysis, FrameCrops?) {
+        var a = FrameAnalysis(frame: frame, time: time)
         let rect = contentRect(img)
-        guard rect.w > 0, rect.h > 0 else { out.flags.append("no-cp-text"); return out }
+        guard rect.w > 0, rect.h > 0 else { a.flags.append("no-cp-text"); return (a, nil) }
         let cpText = findCpText(img, rect)
         let hpBar = findHpBar(img, rect)
         let regions = regionsFrom(rect, cpText, hpBar, cpPadding: cpPadding, cpIncludesPrefix: cpIncludesPrefix)
         guard let bar = hpBar, let nameRegion = regions.name, let hpRegion = regions.hp, let panel = regions.panelSearch else {
-            out.flags.append(cpText == nil ? "no-cp-text" : "no-hp-bar")
-            return out
+            a.flags.append(cpText == nil ? "no-cp-text" : "no-hp-bar")
+            return (a, nil)
         }
         // Mid-swipe: the CP text is there but off-centre (the card is sliding).
-        if let c = cpText, !c.centred { out.flags.append("mid-swipe"); return out }
+        if let c = cpText, !c.centred { a.flags.append("mid-swipe"); return (a, nil) }
         // A tall model (Zapdos, Moltres) can cover the CP completely (fault 3). The name, HP and
         // bars are still on screen, and the grouper can work the CP out from them, so read on when
         // the HP bar sits where a settled card puts it (its left edge does not move when the
         // Pokémon is damaged).
         if cpText == nil {
-            out.flags.append("no-cp-text")
+            a.flags.append("no-cp-text")
             let left = Double(bar.x0 - rect.x) / Double(rect.w)
-            if left < Tuning.settledBarLeft.lowerBound || left > Tuning.settledBarLeft.upperBound { return out }
+            if left < Tuning.settledBarLeft.lowerBound || left > Tuning.settledBarLeft.upperBound { return (a, nil) }
         }
-        if cpText != nil {
-            let r = text.read(crop(img, regions.cp), kind: .cp)
+        a.needsText = true
+        a.hasCpText = cpText != nil
+        var up = nameRegion
+        up.y -= Tuning.luckyLineOffset * Double(rect.h)
+        a.cpRect = cpText != nil ? regions.cp : nil; a.nameRect = nameRegion; a.hpRect = hpRegion
+        let nameCrop = crop(img, nameRegion), upCrop = crop(img, up)
+        a.sharpness = laplacianVariance(nameCrop)
+        a.sharpnessUp = laplacianVariance(upCrop)
+        if let result = readBars(img, rect, panel).result { a.ivs = result.ivs; a.ivConfidence = result.confidence; a.fills = result.fills }
+        return (a, FrameCrops(cp: cpText != nil ? crop(img, regions.cp) : nil, name: nameCrop, nameUp: upCrop, hp: crop(img, hpRegion)))
+    }
+
+    // MARK: - text half
+
+    /// Read the text on the crops and assemble the reading, exactly as `readFrame` does.
+    public func complete(_ a: FrameAnalysis, _ crops: FrameCrops?, wantHp: Bool = true, wantBars: Bool = true) -> FrameReading {
+        var out = FrameReading(frame: a.frame, time: a.time)
+        out.flags = a.flags
+        guard a.needsText, let crops = crops else { return out }
+        if let cpCrop = crops.cp {
+            let r = text.read(cpCrop, kind: .cp)
             out.cpText = r.text
             out.cp = cpReadHasValidShape(r.text) ? parseCp(r.text) : nil
             if let cp = out.cp { out.cpReads = [cp] } else { out.cpReads = [] }
@@ -52,28 +132,28 @@ public final class FrameReader {
         // whose whole text is exactly a species name (four letters or more) is taken whatever the
         // confidence; Vision gives a real confidence, but the rule stays: a near miss, or a match
         // that dropped a word, still needs confidence.
-        func readName(_ region: Rect) -> NameRead {
-            let nameCrop = crop(img, region)
-            let r = text.read(nameCrop, kind: .name)
+        func readName(_ crop: RGBAImage) -> NameRead {
+            let r = text.read(crop, kind: .name)
             let letterWords = r.words.filter { hasLetterRun($0.text) }
             let confidence = letterWords.isEmpty ? 0 : letterWords.reduce(0) { $0 + $1.confidence } / Double(letterWords.count)
             let found = matchName(r.text, names)
             var ok = false
             if let f = found { ok = confidence >= Tuning.weakNameConfidence || (f.distance == 0 && f.whole && f.text.count >= 4) }
-            return NameRead(text: r.text, confidence: confidence, match: ok ? found : nil, sharpness: laplacianVariance(nameCrop))
+            return NameRead(text: r.text, confidence: confidence, match: ok ? found : nil)
         }
-        var nameRead = readName(nameRegion)
+        var nameRead = readName(crops.name)
+        out.sharpness = a.sharpness
         // Fault 2: a Lucky Pokémon has a "LUCKY POKÉMON" line between its name and the HP bar, so
         // the name sits higher: when nothing matched, look one line up. That line is the model's
         // feet on any other screen, so only a confident, exact, whole read of four letters or more
         // counts there.
         if nameRead.match == nil {
-            var up = nameRegion
-            up.y -= Tuning.luckyLineOffset * Double(rect.h)
-            let lucky = readName(up)
-            if let m = lucky.match, lucky.confidence >= Tuning.luckyNameConfidence, m.distance == 0, m.whole, m.text.count >= 4 { nameRead = lucky }
+            let lucky = readName(crops.nameUp)
+            if let m = lucky.match, lucky.confidence >= Tuning.luckyNameConfidence, m.distance == 0, m.whole, m.text.count >= 4 {
+                nameRead = lucky
+                out.sharpness = a.sharpnessUp
+            }
         }
-        out.sharpness = nameRead.sharpness
         out.nameText = nameRead.text
         out.nameConfidence = nameRead.confidence
         if let m = nameRead.match {
@@ -87,7 +167,7 @@ public final class FrameReader {
             // sex is left to the stats.
             if m.candidate.display == "Nidoran", let id = nidoranSex(inRawText: nameRead.text) {
                 out.speciesIds = [id]
-                out.baseName = nameAndFormNidoran(id)
+                out.baseName = id == "nidoran_female" ? "Nidoran♀" : "Nidoran♂"
             }
             // A name taken without confidence (Nidoran aside: its symbol is what could not be
             // placed). The grouper uses such a frame only when a neighbouring frame agrees.
@@ -95,21 +175,20 @@ public final class FrameReader {
             if m.attached { out.nameAttached = true }
         } else if !nameRead.text.isEmpty { out.flags.append("name-unmatched") }
 
-        if out.cp == nil && cpText != nil { out.flags.append("cp-unread") }
+        if out.cp == nil && a.hasCpText { out.flags.append("cp-unread") }
         // A frame without an identifiable Pokémon is not a reading (the grouper asks for a name),
         // but it keeps its CP so a Pokémon on screen under a nickname can be listed.
         if out.name == nil { return out }
 
         if wantHp {
-            let r = text.read(crop(img, hpRegion), kind: .hp)
+            let r = text.read(crops.hp, kind: .hp)
             out.hpText = r.text
             out.hp = hpReadHasValidShape(r.text) ? parseHp(r.text) : nil
             if out.hp == nil { out.flags.append("hp-unread") }
         }
         if wantBars {
-            if let result = readBars(img, rect, panel).result {
-                out.ivs = result.ivs; out.ivConfidence = result.confidence; out.fills = result.fills
-            } else { out.flags.append("no-bars") }
+            if a.ivs != nil { out.ivs = a.ivs; out.ivConfidence = a.ivConfidence; out.fills = a.fills }
+            else { out.flags.append("no-bars") }
         }
         return out
     }
@@ -122,5 +201,3 @@ private func hasLetterRun(_ s: String) -> Bool {
     }
     return false
 }
-
-private func nameAndFormNidoran(_ id: String) -> String { id == "nidoran_female" ? "Nidoran♀" : "Nidoran♂" }
