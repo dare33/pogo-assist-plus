@@ -208,9 +208,14 @@ Reading:
   busy. A tick is emitted once the signature has stayed above the threshold for 3 consecutive frames
   (`SwipeTicker`), stamped with the frame that confirmed the swipe. The grouper keeps every pending tick and a
   reading starts a new run when a tick lies in (last card, reading]; the extension drains the ticks right after
-  Vision returns, immediately before the reading is added. A tick only counts where readings are missing (a
-  silence over 0.3 s since the last card). A run started only by a tick that reads like the row before it is
-  flagged `same-as-previous` (a genuine twin gets it too: check in the game). A row that spans 2.4 s or more is
+  Vision returns, immediately before the reading is added. A tick ends a run when the two card readings it lies
+  between are at least 0.55 s apart (a swipe takes 0.6 s or more, so it fits), whatever lies between them and even
+  when the two readings are indistinguishable; closer than that (one or two frames at full rate) there was no time
+  for a swipe and the tick, a jump inside one stay, is ignored. A swipe seen on a card reading that starts no run
+  (a hidden-CP card, a CP-only card, a weak name) waits for the next strong reading. A run that began only with a tick
+  is marked `same-as-previous` when its voted values (name, HP, settled bars, CP) match the row before it, decided when
+  the row closes (a genuine twin gets it too: check in the game). A name alone that is the name of the Pokemon on screen
+  is neither separator nor card. A row that spans 2.4 s or more is
   flagged `long-stay`. The signature is validated below and is an additional signal: it can add a swipe, never
   remove one.
 - A stray of up to 0.6 s with no settled bars, or a CP that does not fit its HP and bars, is absorbed into the
@@ -250,34 +255,37 @@ fully read frames whose name or max HP differs, counted as covered when an event
 On the Voice Control phone clips the signature agrees with the separator rule and finds no swipe inside a stay. On the
 iPad it sees only 17 events (the leader's animation hides the change) and the rule does most of the work; on the
 hand-tapped clip a swipe lasts one frame, so neither sees it and content changes alone separate the Pokemon.
-A tick is evidence only where readings are missing (a silence of more than 0.3 s between readings since the last
-card): at full rate the readings already show whether a swipe happened, and a tick there could only split a Pokemon.
+A tick only counts between two card readings at least 0.55 s apart (see the rule above): a swipe does not fit in less.
 
-### Rows with swipe ticks and without (`pogo-drop`, same readings)
+### Rows with swipe ticks and without (`pogo-drop`, fresh readings at HEAD)
 
 `pogo-drop` replays the readings through the grouper with a busy model (a frame needing Vision costs X ms, any other
-Y ms; a frame arriving while busy is dropped) and gives every frame, dropped or not, to the signature. Rows with ticks /
-without ticks:
+Y ms; a frame arriving while busy is dropped) and gives every frame, dropped or not, to the signature. It compares a
+dropped run with the tool's own full-rate rows, so it shows CONSISTENCY with the full-rate rows, not that every Pokemon
+on screen was captured (a Pokemon the full-rate run misses is missed in both). Rows with ticks / without ticks:
 
 | Clip | full rate | 250/20 | 450/200 | 650/200 |
 |---|---|---|---|---|
 | marathon-phone | 47 / 47 | 47 / 47 | 47 / 46 | 47 / 47 |
-| marathon-ipad-mini | 48 / 48 | 51 / 46 | 51 / 48 | 49 / 47 |
-| darentas-01 | 449 / 449 | 461 / 449 | 455 / 448 | 428 / 422 |
+| marathon-ipad-mini | 48 / 48 | 46 / 46 | 51 / 48 | 49 / 47 |
+| darentas-01 | 451 / 451 | 451 / 451 | 457 / 449 | 431 / 423 |
 
-The phone's twin Staraptor 1986 is two rows at every setting with ticks (one merged row at 450/200 without). On the
-phone and v3 no row is wrong, lost or split without a flag. On the iPad, ticks add 2 to 5 rows under drops: fragments
-of one Pokemon, each marked (`short-run`, `same-as-previous`) so none is an unflagged split, and one lost row
-(flagged trace) at 650/200. On darentas-01 at 650/200 the reader sees one frame in four and 21 Pokemon on screen for
-1.2 s each are never read, with or without ticks (6 more are lost with a flagged trace).
+The phone's twin Staraptor 1986 is two rows at full rate and under every model with ticks (it merges at 450/200 without).
+On the phone no row is wrong, lost or split without a flag. On the iPad, ticks add 3 to 5 rows at 450/200 and 650/200: fragments
+of one Pokemon (flagged `short-run` or `same-as-previous`; a fragment can also carry no flag when it is long enough and its
+first reading is not a copy of the row before) and one lost row with a flagged trace at 650/200. On darentas-01 at 650/200 the
+reader sees one frame in four and 21 Pokemon on screen for 1.2 s each are never read, with or without ticks.
 
 ## Known limits
 
 - Identical neighbours can merge into one row when the swipe between them is not seen: on the iPad, and on hand-tapped
   paging, the signature and the separator frames both miss swipes. Such a row spans 2.4 s or more and is flagged
   `long-stay`.
-- A swipe tick can split one Pokemon in two under drops (the iPad's leader animation): each fragment is flagged
-  (`short-run`, `same-as-previous`), never silent.
+- A swipe tick can split one Pokemon in two when readings were dropped (the iPad's leader animation): the fragments
+  are usually marked (`short-run`, `same-as-previous`), but a marker depends on the readings' votes and is not a guarantee.
+- A name alone that is the name of the Pokemon on screen counts as neither separator nor card, so identical neighbours
+  whose swipe shows only same-species sliding name-only frames merge unless a tick saw the swipe; such a row spans
+  2.4 s or more only if the stay is long, so it may carry no `long-stay` flag.
 - Cards without an HP bar (special backgrounds, a Lucky nicknamed one) are listed by CP only (`(name not read)`).
 - A damaged HP bar shorter than a row of green type icons can lose to the icons, as in the JS reader; the looser green
   test (margins 10 and 16, needed for the iPad's muted bar through 4:2:0) may make it more likely. Untested.
@@ -288,25 +296,30 @@ of one Pokemon, each marked (`short-run`, `same-as-previous`) so none is an unfl
 - Nothing has run on a device: the extension, the signature ticks, the low-memory guard, the heartbeat and the app are
   compile-checked on the simulator only. The Vision memory on the phone is unmeasured.
 
-### Open review findings at 4898acc (not fixed; the grouper needs one more pass)
+### Review findings at 4898acc: status after the grouper pass
 
-Both reviewers of `f9569df..4898acc` found the extension's frame handling and the dark-screen fix
-sound, and the live grouper not: statements above that a split or merge is "never silent" are
-too strong. Known holes, none seen on the iPhone Voice Control clips at a 2.1 s pace:
+Fixed (each with a test written first and failing before):
+- The 0.3 s silence guard: replaced by a physical rule (a tick ends a run between two card readings at least 0.55 s
+  apart, is ignored closer). Twins with a two-separator swipe at full rate are two rows at 1.4, 1.6, 2.0 and 2.4 s paces.
+  Deleting the rule fails five tests.
+- A tick used up by a card reading that starts no run: the swipe now waits for the next strong reading.
+- `same-as-previous` is decided from the voted values of both rows when the run closes.
+- An unreadable reading followed by a short name-only reading of the Pokemon on screen no longer chains separators; two
+  name-only readings more than a second apart no longer make a `cp-not-read` row; same-species name-only slides on both
+  sides of a swipe are not one card.
+- `parseCp`: "5pX2641", "CP0123", "CPO28", "1A862", "CP12345" and "23028" are no read; "5p86" and "op2614" read. Over every
+  distinct `cpText` in `pogo-frames/_out/*.swift.readings.json` (1,617 texts, 11,555 reads): no read changed number,
+  19 texts (29 reads) became no read (leading-zero partials such as "019", "0199", "096", and five-digit reads with a doubled
+  first digit such as "11999", "CP11999", "c11986" whose true CP is the last four), none became a read. "CP o 1500" stays
+  no read (an O token before the figure is ambiguous).
+- `contentRect`: tests for column bridging, the limit and limit+1 boundary in rows and columns (a width/height mix-up fails
+  them), a dark top band. Darkest real sky measured (2,490 frames, every 6th, through 4:2:0 at 750 wide): four frames have
+  a dark band at the very top edge, cut as a border by design and harmless: darentas-02 f3049, f3055, f3061 (22 rows,
+  Axew, still read) and f3961 (a near-black, non-Pokemon frame, row mean 2.5, 333 rows at the top and a 385-row internal band).
+  No Pokemon screen has an internal band under 30 wider than the limit, so no live bug was found.
 
-- A swipe tick only counts when a frame was dropped since the last card (the 0.3 s guard). When
-  every frame is read, identical neighbours are split only if three readings in a row show no
-  card; with two, they merge. At a 2.1 s pace the merged row is flagged `long-stay`; at about
-  1.6 s it can fall under 2.4 s and carry no flag. No unit test exercises the guard.
-- A tick is used up by a card reading that does not start a row (name and HP with no CP, CP with
-  no name, a weak name), so the split it should have made is lost.
-- `same-as-previous` is decided on the first reading of the new row only: a garbled first read
-  leaves a false split unflagged, and a different Pokémon of the same species with a similar CP
-  is flagged wrongly and stays flagged.
-- An unreadable reading followed by a short name-only reading counts as 0.6 s of separator and
-  can split one Pokémon, unflagged. Two name-only readings more than a second apart can make a row.
-- `parseCp`: "5pX2641" still gives 2641; "CP0123" gives 123; "5p86" and "CP o 1500" are no read.
-- A dark screen whose top rows average under 30 over more than 0.5% of the height is still cut
-  (the synthetic test screen is brighter than the darkest real sky).
-- `pogo-drop` compares a dropped run with the tool's own full-rate rows, so it shows consistency,
-  not that every Pokémon on screen was captured.
+Remaining:
+- Identical neighbours can still merge when no tick and no separator frames saw the swipe (see Known limits).
+- A tick between two card readings at least 0.55 s apart splits even when it is a false jump; the marker helps but is not certain.
+- `pogo-drop` shows consistency with the full-rate rows, not capture of every Pokemon.
+- Nothing has run on a device.
