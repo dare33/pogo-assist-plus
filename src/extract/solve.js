@@ -9,7 +9,10 @@
 //   tier 1  every bar within one unit (a rounding miss on a small frame)
 //   tier 2  anything else that fits CP and HP (the read was mid-animation or another panel)
 
-import { cpAt, hpAt, LEVELS } from '../cpm.js';
+import { cpm, hpAt, LEVELS } from '../cpm.js';
+
+const LEVEL_CPM = LEVELS.map(cpm);
+const cpFast = (y, i) => Math.max(10, Math.floor((y * LEVEL_CPM[i] * LEVEL_CPM[i]) / 10));
 
 /**
  * @param species  [{ speciesId, baseStats }] candidates the name could be
@@ -24,23 +27,34 @@ import { cpAt, hpAt, LEVELS } from '../cpm.js';
 export function solve({ species, cp, hp = null, ivs = null }) {
   if (!cp || !species?.length) return { status: 'none', solutions: [] };
   const fits = [];
+  const combos = allCombos();
   for (const sp of species) {
-    for (const c of allCombos()) {
-      // CP never falls as the level rises, so the first level that can give `cp` is found by bisection
-      // and the scan starts there (the levels below it are all under `cp`); this was a scan from level 1.
-      let lo = 0, hi = LEVELS.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (cpAt(sp.baseStats, c, LEVELS[mid]) < cp) lo = mid + 1; else hi = mid;
-      }
-      for (let i = lo; i < LEVELS.length; i++) {
-        const level = LEVELS[i];
-        const v = cpAt(sp.baseStats, c, level);
-        if (v > cp) break;
-        if (v !== cp) continue;
-        const h = hpAt(sp.baseStats, c, level);
-        if (hp !== null && h !== hp) continue;
-        fits.push({ speciesId: sp.speciesId, ivs: c, level, hp: h, tier: ivs ? tierOf(ivs, c) : 3 });
+    // The CP formula of cpm.js `cpAt`, with the parts that do not depend on the level hoisted out of the loop
+    // (same operations in the same order, so the same floating-point results). CP never falls as the level
+    // rises, so the first level that can give `cp` is found by bisection and the scan starts there (the levels
+    // below it are all under `cp`).
+    const { atk: A, def: D, hp: S } = sp.baseStats;
+    for (let a = 0, k = 0; a <= 15; a++) {
+      for (let d = 0; d <= 15; d++) {
+        const x = (A + a) * Math.sqrt(D + d);
+        for (let h = 0; h <= 15; h++, k++) {
+          const y = x * Math.sqrt(S + h);
+          let lo = 0, hi = LEVELS.length;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (cpFast(y, mid) < cp) lo = mid + 1; else hi = mid;
+          }
+          const c = combos[k];
+          for (let i = lo; i < LEVELS.length; i++) {
+            const v = cpFast(y, i);
+            if (v > cp) break;
+            if (v !== cp) continue;
+            const level = LEVELS[i];
+            const hpv = hpAt(sp.baseStats, c, level);
+            if (hp !== null && hpv !== hp) continue;
+            fits.push({ speciesId: sp.speciesId, ivs: c, level, hp: hpv, tier: ivs ? tierOf(ivs, c) : 3 });
+          }
+        }
       }
     }
   }
