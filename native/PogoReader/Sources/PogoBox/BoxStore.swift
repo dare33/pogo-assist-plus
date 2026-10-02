@@ -58,6 +58,13 @@ public final class BoxStore {
         public var paging: StoredPaging?
         /// When the scan was last read again with newer rules (`BoxLibrary.commitReread`), if ever.
         public var lastReread: Date?
+        /// What Refine changed, one line each (kept so a report can include it).
+        public var refineChanges: [String]?
+        /// What the person answered at review (unsure rows, rows left out, entries kept from "gone").
+        public var reviewActions: [String]?
+        /// When this scan's report was sent ("Make scans better"), and a hash of what was sent, so the same scan is not sent twice unchanged.
+        public var reportSentAt: Date?
+        public var reportHash: String?
     }
 
     public struct Summary: Equatable {
@@ -70,6 +77,7 @@ public final class BoxStore {
         public var flagged: Int
         public var unmatched: Int
         public var lastReread: Date?
+        public var reportSentAt: Date?
     }
 
     /// `scans` newest first by scan date; `unreadable` the file names that could not be read.
@@ -88,11 +96,13 @@ public final class BoxStore {
 
     @discardableResult
     public func save(_ result: ScanResult, account: String, scanDate: Date = Date(), source: String, kind: Kind = .full,
-                     storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil) throws -> Summary {
+                     storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil,
+                     refineChanges: [String]? = nil, reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil) throws -> Summary {
         let dir = try accountDirectory(account, create: true)
         let id = Self.makeID(scanDate)
         let scan = StoredScan(schema: Self.schemaVersion, id: id, account: account, scanDate: scanDate, savedAt: Date(), source: source, kind: kind,
-                              rows: result.rows, review: result.review, unmatched: result.unmatched, storageCount: storageCount, paging: paging, lastReread: nil)
+                              rows: result.rows, review: result.review, unmatched: result.unmatched, storageCount: storageCount, paging: paging, lastReread: nil, refineChanges: refineChanges, reviewActions: reviewActions,
+                              reportSentAt: reportSentAt, reportHash: reportHash)
         // The replay log goes first: if the scan file is then written, the log it rebuilds from is already there.
         if let log = replayLog { try log.write(to: dir.appendingPathComponent("\(id).replay.jsonl"), options: .atomic) }
         try Self.encoder.encode(scan).write(to: dir.appendingPathComponent("\(id).json"), options: .atomic)
@@ -103,6 +113,14 @@ public final class BoxStore {
     public func markReread(account: String, id: String, at date: Date = Date()) throws {
         var scan = try load(account: account, id: id)
         scan.lastReread = date
+        let file = try accountDirectory(account, create: false).appendingPathComponent("\(Self.safeFileStem(id)).json")
+        try Self.encoder.encode(scan).write(to: file, options: .atomic)
+    }
+
+    /// Record that a scan's report was sent, and what was sent (a hash), so the same unchanged scan is not sent again.
+    public func markReportSent(account: String, id: String, at date: Date, hash: String) throws {
+        var scan = try load(account: account, id: id)
+        scan.reportSentAt = date; scan.reportHash = hash
         let file = try accountDirectory(account, create: false).appendingPathComponent("\(Self.safeFileStem(id)).json")
         try Self.encoder.encode(scan).write(to: file, options: .atomic)
     }
@@ -240,7 +258,7 @@ public final class BoxStore {
     }
 
     private static func summary(_ s: StoredScan) -> Summary {
-        Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count, lastReread: s.lastReread)
+        Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count, lastReread: s.lastReread, reportSentAt: s.reportSentAt)
     }
 
     private static func makeID(_ date: Date) -> String {

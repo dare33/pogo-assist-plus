@@ -63,3 +63,32 @@ extension BoxLibrary {
         return snap
     }
 }
+
+extension BoxLibrary {
+    /// What happened to the Pokémon that first came from a scan after it was saved, as the box versions record it: hand corrections and
+    /// removals, one line each. A Pokémon "came from" the scan when it was first seen on the scan's date. Edits to Pokémon from earlier
+    /// scans, and "These values are right", are not included (an edit version only keeps the box, not what the person did).
+    public func editsAfter(account: String, scanId: String) throws -> [String] {
+        let headers = try history(account: account).sorted { $0.seq < $1.seq }
+        guard let first = headers.first(where: { $0.scanId == scanId && $0.reason == .scan }) else { return [] }
+        let scan = try store.load(account: account, id: scanId)
+        var lines = [String]()
+        var before = try load(account: account, seq: first.seq).entries
+        for h in headers where h.seq > first.seq {
+            let after = try load(account: account, seq: h.seq).entries
+            guard h.reason == .edit else { before = after; continue }
+            let afterById = Dictionary(after.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            for e in before where e.firstSeen == scan.scanDate {
+                guard let now = afterById[e.id] else { lines.append("Removed from the box: \(e.row.title), CP \(e.row.cp)."); continue }
+                var changes = [String]()
+                if now.row.cp != e.row.cp { changes.append("CP \(e.row.cp) to \(now.row.cp)") }
+                if now.row.hp != e.row.hp { changes.append("HP \(e.row.hp.map(String.init) ?? "none") to \(now.row.hp.map(String.init) ?? "none")") }
+                if now.row.ivs != e.row.ivs { changes.append("IVs \(e.row.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "none") to \(now.row.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "none")") }
+                if now.row.speciesId != e.row.speciesId { changes.append("species \(e.row.speciesId) to \(now.row.speciesId)") }
+                if !changes.isEmpty { lines.append("Corrected by hand: \(e.row.title): \(changes.joined(separator: ", ")).") }
+            }
+            before = after
+        }
+        return lines
+    }
+}
