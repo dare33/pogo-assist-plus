@@ -144,11 +144,8 @@ public enum VoiceCommandFile {
         var events: [(Double, (Double, Double)?)]
         let ref = now.timeIntervalSinceReferenceDate
         if pace.isTap {
-            guard let tap else { throw Failure.needsTapPoint }
-            // Only the measured point of a checked screen of exactly this width and height (a point that merely passes the edge rule is not enough).
-            guard let w = screenWidth, let h = screenHeight, w.isFinite, h.isFinite, let measured = tapPoint(width: w, height: h), Double(tap.x) == Double(measured.x), Double(tap.y) == Double(measured.y) else { throw Failure.tapNotChecked }
-            guard tap.x >= minTapXFraction * w else { throw Failure.tapTooFarLeft(x: Double(tap.x), limit: minTapXFraction * w) }
-            events = taps(start: ref, count: batch, x: Double(tap.x), y: Double(tap.y), every: pace.every)
+            let point = try verifiedTap(tap, screenWidth, screenHeight)
+            events = taps(start: ref, count: batch, x: Double(point.x), y: Double(point.y), every: pace.every)
         } else {
             events = swipes(start: ref, count: batch, xFrom: 340, xTo: 75, y: 340, every: pace.every, duration: pace.swipeDuration)
         }
@@ -164,6 +161,80 @@ public enum VoiceCommandFile {
         let system: [String: Any] = ["ProductName": "iPhone OS", "ProductVersion": "27.2", "ProductBuildVersion": "24B5089g", "ReleaseType": "Beta"]
         let root: [String: Any] = ["CommandsTable": [batchId: batchEntry, chainId: chainEntry], "ExportDate": ref, "SystemVersion": system]
         return try PropertyListSerialization.data(fromPropertyList: root, format: .xml, options: 0)
+    }
+
+    /// The one check a tap passes before any file holds it: only the measured point of a checked screen of exactly this width and height
+    /// (a point that merely passes the edge rule is not enough), and right of `minTapXFraction`. `make` and `makeSet` both call it.
+    private static func verifiedTap(_ tap: CGPoint?, _ screenWidth: Double?, _ screenHeight: Double?) throws -> CGPoint {
+        guard let tap else { throw Failure.needsTapPoint }
+        guard let w = screenWidth, let h = screenHeight, w.isFinite, h.isFinite, let measured = tapPoint(width: w, height: h), Double(tap.x) == Double(measured.x), Double(tap.y) == Double(measured.y) else { throw Failure.tapNotChecked }
+        guard tap.x >= minTapXFraction * w else { throw Failure.tapTooFarLeft(x: Double(tap.x), limit: minTapXFraction * w) }
+        return tap
+    }
+
+    // MARK: - the one-time set
+
+    /// The command sizes in the set: "Pogo scan N" pages for N Pokémon. One table; the owner chose these. A scan is started with the
+    /// smallest size that covers the storage count, because a running command cannot be stopped: this bounds the overshoot.
+    public static let setSizes = [25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000]
+
+    /// Tap on a checked screen; swipe everywhere else. The set has no fast (1.0 s) commands.
+    public enum SetKind: String, Codable, CaseIterable {
+        case tap, swipe
+        /// The pace every command of the set pages at: 1.2 s taps, 1.6 s swipes.
+        public var pace: Pace { self == .tap ? .tapNormal : .swipeFast }
+        public static func forScreen(tapAvailable: Bool) -> SetKind { tapAvailable ? .tap : .swipe }
+        /// The first identifier number: size `i` of the kind uses `Custom.<base + 100 i>` for its gesture and `+60` for its command. Clear of
+        /// the single-mode ids (780,000,000 to 780,000,660) and of the other kind.
+        var idBase: Double { self == .tap ? 781_000_000 : 781_100_000 }
+        /// Words nobody says, none shared with any spoken command, with another gesture name or with the single modes' gesture names.
+        var gestureNames: [String] {
+            let (adjectives, nouns) = self == .tap
+                ? (["Copper", "Maple", "Violet", "Cedar", "Linen", "Pewter", "Saffron", "Hazel", "Indigo", "Cobalt", "Russet", "Ivory", "Sable"],
+                   ["anchor", "ribbon", "thimble", "kettle", "pebble", "bobbin", "trowel", "bellows", "quill", "ladder", "spindle", "mallet", "chisel"])
+                : (["Tawny", "Olive", "Crimson", "Opal", "Umber", "Teal", "Ochre", "Fawn", "Slate", "Mauve", "Garnet", "Jade", "Coral"],
+                   ["pitcher", "sundial", "barrel", "basket", "anvil", "lattice", "bucket", "hammock", "tassel", "abacus", "crayon", "saddle", "trellis"])
+            return zip(adjectives, nouns).map { "\($0) \($1)" }
+        }
+    }
+
+    /// What is said for a size: digits in the command text ("Pogo scan 300"). Whether Voice Control matches a spoken "three hundred" to
+    /// digits is not known from the file format and has to be tried on a phone.
+    public static func setCommandName(size: Int) -> String { "Pogo scan \(size)" }
+
+    /// The smallest size that covers `count` Pokémon, or nil when `count` is above the largest (5,000 covers the first 5,000; the rest needs a
+    /// second scan with Add and update).
+    public static func setSize(covering count: Int) -> Int? { setSizes.first { $0 >= count } }
+
+    /// The file the app offers: "Pogo scan commands (440x956 iPhone).voicecontrolcommands" for tap (it carries the screen), without for swipe.
+    public static func setFileName(kind: SetKind, screen: String? = nil) -> String {
+        "Pogo scan commands" + ((kind == .tap && screen != nil) ? " (\(screen!))" : "") + ".voicecontrolcommands"
+    }
+
+    /// ONE commands file with the whole set: for each size in `setSizes` a spoken command and its own batch gesture, sized by `sizing` (so
+    /// "Pogo scan 300" pages exactly as `make(count: steps(300))` does). Tap kind goes through the same checks as `make`. Identifiers are
+    /// stable per size and kind, so importing again replaces these commands and nothing else.
+    public static func makeSet(kind: SetKind, locale: String = "en_AU", tap: CGPoint? = nil, screenWidth: Double? = nil, screenHeight: Double? = nil, now: Date = Date()) throws -> Data {
+        let pace = kind.pace
+        let point = kind == .tap ? try verifiedTap(tap, screenWidth, screenHeight) : nil
+        let ref = now.timeIntervalSinceReferenceDate
+        func base() -> [String: Any] { ["ConfirmationRequired": false, "CustomModifyDate": now, "CustomScope": "com.apple.speech.SystemWideScope"] }
+        var table = [String: Any]()
+        for (i, size) in setSizes.enumerated() {
+            let sizing = sizing(storageCount: size, pace: pace)
+            let events = point.map { taps(start: ref, count: sizing.batch, x: Double($0.x), y: Double($0.y), every: pace.every) }
+                ?? swipes(start: ref, count: sizing.batch, xFrom: 340, xTo: 75, y: 340, every: pace.every, duration: pace.swipeDuration)
+            let idBase = kind.idBase + Double(i) * 100
+            let batchId = "Custom." + String(format: "%.6f", idBase), chainId = "Custom." + String(format: "%.6f", idBase + 60)
+            var batchEntry = base()
+            batchEntry["CustomCommands"] = [locale: [kind.gestureNames[i]]]; batchEntry["CustomType"] = "RunGesture"; batchEntry["CustomGesture"] = gesture(events)
+            var chainEntry = base()
+            chainEntry["CustomCommands"] = [locale: [setCommandName(size: size)]]; chainEntry["CustomType"] = "RunUserActionFlow"
+            chainEntry["CustomUserActionFlow"] = flow(commandId: batchId, repeats: sizing.repeats, locale: locale)
+            table[batchId] = batchEntry; table[chainId] = chainEntry
+        }
+        let system: [String: Any] = ["ProductName": "iPhone OS", "ProductVersion": "27.2", "ProductBuildVersion": "24B5089g", "ReleaseType": "Beta"]
+        return try PropertyListSerialization.data(fromPropertyList: ["CommandsTable": table, "ExportDate": ref, "SystemVersion": system] as [String: Any], format: .xml, options: 0)
     }
 
     // MARK: - events

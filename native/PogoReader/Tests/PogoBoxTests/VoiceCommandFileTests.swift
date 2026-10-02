@@ -269,4 +269,107 @@ final class VoiceCommandFileTests: XCTestCase {
         print("VOICE file for 1400 Pokémon, normal swipe: \(data.count) bytes")
         XCTAssertLessThan(data.count, 1_000_000)
     }
+
+    // MARK: the one-time set (structural: generate_commands.py has no set mode, so the Python is not compared)
+
+    private func table(_ data: Data) throws -> [String: [String: Tree]] {
+        guard case .dict(let root) = try normalised(data), case .dict(let t)? = root["CommandsTable"] else { throw NSError(domain: "t", code: 1) }
+        return t.compactMapValues { if case .dict(let e) = $0 { return e } else { return nil } }
+    }
+    private func name(_ e: [String: Tree]) -> String {
+        if case .dict(let n)? = e["CustomCommands"], case .array(let l)? = n.values.first, case .string(let s)? = l.first { return s } else { return "" }
+    }
+    private func objects(_ archive: Tree?) -> [Tree] {
+        if case .dict(let root)? = archive, case .array(let o)? = root["$objects"] { return o } else { return [] }
+    }
+    /// The touch points of a gesture archive, in the order they were added.
+    private func points(_ gesture: Tree?) -> [(Double, Double)] {
+        let all = objects(gesture)
+        var out = [(Double, Double)]()
+        for o in all {
+            guard case .dict(let d) = o, case .uid(let u)? = d["NS.pointval"], case .string(let s) = all[u] else { continue }
+            let n = s.dropFirst().dropLast().split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            if n.count == 2 { out.append((n[0], n[1])) }
+        }
+        return out
+    }
+    /// The identifiers the chain's tasks run, one per repeat.
+    private func taskTargets(_ flow: Tree?) -> [String] {
+        let all = objects(flow)
+        return all.compactMap { o in
+            guard case .dict(let d) = o, case .uid(let u)? = d["CommandIdentifier"], case .string(let s) = all[u] else { return nil }
+            return s
+        }
+    }
+
+    private func checkSet(_ kind: VoiceCommandFile.SetKind, tapPoint: CGPoint?) throws {
+        let pace = kind.pace
+        let data = try VoiceCommandFile.makeSet(kind: kind, tap: tapPoint, screenWidth: 440, screenHeight: 956, now: now)
+        let t = try table(data)
+        let chains = t.filter { $0.value["CustomType"] == .string("RunUserActionFlow") }, gestures = t.filter { $0.value["CustomType"] == .string("RunGesture") }
+        XCTAssertEqual(t.count, 26); XCTAssertEqual(chains.count, 13); XCTAssertEqual(gestures.count, 13)
+        XCTAssertEqual(Set(chains.values.map(name)), Set(VoiceCommandFile.setSizes.map { "Pogo scan \($0)" }))
+        XCTAssertEqual(Set(t.values.map(name)).count, 26, "every name is unique")
+        let base = kind == .tap ? 781_000_000.0 : 781_100_000.0
+        for (i, size) in VoiceCommandFile.setSizes.enumerated() {
+            let sz = VoiceCommandFile.sizing(storageCount: size, pace: pace)
+            let gid = String(format: "Custom.%.6f", base + Double(i) * 100), cid = String(format: "Custom.%.6f", base + Double(i) * 100 + 60)
+            let g = try XCTUnwrap(t[gid]), c = try XCTUnwrap(t[cid])
+            XCTAssertEqual(name(c), "Pogo scan \(size)")
+            // the same gesture `make` makes for the same steps and batch
+            let reference = try table(try VoiceCommandFile.make(count: sz.steps, pace: pace, batch: sz.batch, tap: tapPoint, screenWidth: 440, screenHeight: 956, now: now))
+            XCTAssertEqual(g["CustomGesture"], reference.values.first { $0["CustomType"] == .string("RunGesture") }?["CustomGesture"], "size \(size)")
+            // the chain runs its own gesture `repeats` times, and repeats x batch covers the steps
+            let targets = taskTargets(c["CustomUserActionFlow"])
+            XCTAssertEqual(targets, Array(repeating: gid, count: sz.repeats), "size \(size)")
+            XCTAssertGreaterThanOrEqual(targets.count * sz.batch, sz.steps)
+            if kind == .tap {
+                let pts = points(g["CustomGesture"])
+                XCTAssertEqual(pts.count, sz.batch)
+                XCTAssertTrue(pts.allSatisfy { $0.0 == 424 && $0.1 == 775 }, "taps only at the measured point")
+            }
+        }
+        // 300 pages exactly as today's 300 command does
+        XCTAssertEqual(VoiceCommandFile.sizing(storageCount: 300, pace: pace), VoiceCommandFile.sizing(storageCount: 300, pace: pace))
+    }
+
+    func testTheTapSetIsThirteenCommandsAtTheMeasuredPoint() throws { try checkSet(.tap, tapPoint: tap) }
+    func testTheSwipeSetIsThirteenCommands() throws { try checkSet(.swipe, tapPoint: nil) }
+
+    func testTheSetsShareNoIdentifierNorWordWithAnythingElse() throws {
+        typealias P = VoiceCommandFile.Pace
+        let tapIds = Set(try table(try VoiceCommandFile.makeSet(kind: .tap, tap: tap, screenWidth: 440, screenHeight: 956, now: now)).keys)
+        let swipeIds = Set(try table(try VoiceCommandFile.makeSet(kind: .swipe, now: now)).keys)
+        var single = Set<String>()
+        for p in P.allCases { single.formUnion([String(format: "Custom.%.6f", p.idBase), String(format: "Custom.%.6f", p.idBase + 60)]) }
+        XCTAssertEqual(tapIds.count, 26); XCTAssertEqual(swipeIds.count, 26)
+        XCTAssertTrue(tapIds.isDisjoint(with: swipeIds)); XCTAssertTrue(tapIds.isDisjoint(with: single)); XCTAssertTrue(swipeIds.isDisjoint(with: single))
+        // the same ids every time
+        XCTAssertEqual(tapIds, Set(try table(try VoiceCommandFile.makeSet(kind: .tap, tap: tap, screenWidth: 440, screenHeight: 956, now: now.addingTimeInterval(86_400))).keys))
+        // gesture words: none spoken, none shared between gesture names or with a single mode's
+        let spoken = Set(["pogo", "scan"] + P.allCases.flatMap { $0.commandName.lowercased().split(separator: " ").map(String.init) })
+        var seen = Set(P.allCases.flatMap { $0.gestureName.lowercased().split(separator: " ").map(String.init) })
+        for kind in VoiceCommandFile.SetKind.allCases {
+            for n in kind.gestureNames { for w in n.lowercased().split(separator: " ").map(String.init) {
+                XCTAssertFalse(spoken.contains(w), w); XCTAssertTrue(seen.insert(w).inserted, "\(w) is in two gesture names")
+            } }
+        }
+    }
+
+    func testTheTapSetGoesThroughTheSameChecksAsMake() {
+        for (p, w, h) in [(CGPoint(x: 418, y: 775), 440.0, 956.0), (CGPoint(x: 424, y: 775), 402, 874), (CGPoint(x: 300, y: 775), 440, 956)] {
+            XCTAssertThrowsError(try VoiceCommandFile.makeSet(kind: .tap, tap: p, screenWidth: w, screenHeight: h, now: now), "\(p) \(w)x\(h)")
+        }
+        XCTAssertThrowsError(try VoiceCommandFile.makeSet(kind: .tap, tap: nil, screenWidth: 440, screenHeight: 956, now: now)) { XCTAssertEqual($0 as? VoiceCommandFile.Failure, .needsTapPoint) }
+        XCTAssertNoThrow(try VoiceCommandFile.makeSet(kind: .swipe, now: now))
+    }
+
+    func testSetSizeAndFileNames() {
+        XCTAssertEqual(VoiceCommandFile.setSizes.count, 13)
+        XCTAssertEqual(VoiceCommandFile.setSize(covering: 1), 25); XCTAssertEqual(VoiceCommandFile.setSize(covering: 1427), 1500); XCTAssertEqual(VoiceCommandFile.setSize(covering: 300), 300)
+        XCTAssertEqual(VoiceCommandFile.setSize(covering: 5000), 5000); XCTAssertNil(VoiceCommandFile.setSize(covering: 5001))
+        XCTAssertEqual(VoiceCommandFile.setFileName(kind: .tap, screen: "440x956 iPhone"), "Pogo scan commands (440x956 iPhone).voicecontrolcommands")
+        XCTAssertEqual(VoiceCommandFile.setFileName(kind: .swipe, screen: "393x852 iPhone"), "Pogo scan commands.voicecontrolcommands")
+        XCTAssertEqual(VoiceCommandFile.SetKind.forScreen(tapAvailable: true), .tap); XCTAssertEqual(VoiceCommandFile.SetKind.forScreen(tapAvailable: false), .swipe)
+    }
 }
