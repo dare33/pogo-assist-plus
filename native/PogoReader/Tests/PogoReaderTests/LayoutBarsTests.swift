@@ -109,6 +109,16 @@ final class LayoutBarsTests: XCTestCase {
         XCTAssertEqual(contentRect(img), PixelRect(x: 50, y: 0, w: 200, h: 200))
     }
 
+    /// A thin dark line between content is not a border: the whole screen stays (a real border is still cut).
+    func testContentRectIgnoresAThinDarkLineInsideTheContent() {
+        var img = RGBAImage(width: 300, height: 600)
+        img.fill(Rect(x: 0, y: 0, w: 300, h: 600), (200, 200, 200))
+        img.fill(Rect(x: 0, y: 250, w: 300, h: 2), (10, 10, 10))      // the card's dark top edge
+        XCTAssertEqual(contentRect(img), PixelRect(x: 0, y: 0, w: 300, h: 600))
+        img.fill(Rect(x: 0, y: 0, w: 300, h: 60), (0, 0, 0))          // a real letterbox border is still removed
+        XCTAssertEqual(contentRect(img).y, 60)
+    }
+
     func testLaplacianVarianceIsLowerForABlurredEdge() {
         var sharp = RGBAImage(width: 40, height: 40), soft = RGBAImage(width: 40, height: 40)
         sharp.fill(Rect(x: 0, y: 0, w: 40, h: 40), (0, 0, 0)); sharp.fill(Rect(x: 20, y: 0, w: 20, h: 40), WHITE)

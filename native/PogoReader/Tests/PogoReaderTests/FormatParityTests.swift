@@ -22,8 +22,31 @@ final class FormatParityTests: XCTestCase {
         return sum / n
     }
 
+    /// The conversion itself is right: black comes back as black and white as white (and a dark purple as itself), for
+    /// video and full range and for BT.601 and BT.709, at full size and scaled.
+    func testYCbCrConversionIsExactAtTheEnds() throws {
+        let colours: [(UInt8, UInt8, UInt8)] = [(0, 0, 0), (255, 255, 255), (8, 7, 52), (40, 20, 80), (20, 15, 40), (102, 231, 170)]
+        for full in [false, true] {
+            for bt601 in [false, true] {
+                for c in colours {
+                    var img = RGBAImage(width: 400, height: 800)
+                    img.fill(Rect(x: 0, y: 0, w: 400, h: 800), c)
+                    let pb = try Pixel420Maker(fullRange: full, bt601: bt601).make(from: img)
+                    for width in [Int?.none, 200] {
+                        let p = FrameProcessor(textReader: NullTextReader(), names: [], targetWidth: width)
+                        _ = p.analyse(pb, time: 0)
+                        let px = p.scaledFrame.pixel(p.scaledFrame.width / 2, p.scaledFrame.height / 2)
+                        for (got, want, ch) in [(Int(px.r), Int(c.0), "r"), (Int(px.g), Int(c.1), "g"), (Int(px.b), Int(c.2), "b")] {
+                            XCTAssertEqual(got, want, accuracy: 2, "\(ch) of \(c) full \(full) bt601 \(bt601) width \(String(describing: width))")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     func testEveryFormatAndSizeReadsTheSameAsRgba() throws {
-        for style in [SyntheticScreen.Style.phone, .padMuted] {
+        for style in [SyntheticScreen.Style.phone, .padMuted, .darkSky] {
             for (w, h) in sizes {
                 var img = RGBAImage(width: w, height: h)
                 SyntheticScreen.draw(into: &img, spec, style: style)

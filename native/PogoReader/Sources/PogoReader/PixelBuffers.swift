@@ -34,11 +34,13 @@ public enum PixelBuffers {
 /// would receive it. The buffer is allocated once; every frame is written into it.
 public final class Pixel420Maker {
     public let fullRange: Bool
+    /// Encode with the BT.601 matrix (and say so in the buffer's attachment) instead of BT.709.
+    public let bt601: Bool
     private var buffer: CVPixelBuffer?
     private var info = vImage_ARGBToYpCbCr()
     private var ready = false
 
-    public init(fullRange: Bool) { self.fullRange = fullRange }
+    public init(fullRange: Bool, bt601: Bool = false) { self.fullRange = fullRange; self.bt601 = bt601 }
 
     public func make(from img: RGBAImage) throws -> CVPixelBuffer {
         let w = img.width & ~1, h = img.height & ~1
@@ -49,14 +51,14 @@ public final class Pixel420Maker {
             guard CVPixelBufferCreate(kCFAllocatorDefault, w, h, format, attrs as CFDictionary, &pb) == kCVReturnSuccess, let made = pb else {
                 throw PixelBufferError.message("cannot create a \(w)x\(h) pixel buffer")
             }
-            CVBufferSetAttachment(made, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_709_2, .shouldPropagate)
+            CVBufferSetAttachment(made, kCVImageBufferYCbCrMatrixKey, bt601 ? kCVImageBufferYCbCrMatrix_ITU_R_601_4 : kCVImageBufferYCbCrMatrix_ITU_R_709_2, .shouldPropagate)
             buffer = made
         }
         if !ready {
             var range = fullRange
                 ? vImage_YpCbCrPixelRange(Yp_bias: 0, CbCr_bias: 128, YpRangeMax: 255, CbCrRangeMax: 255, YpMax: 255, YpMin: 1, CbCrMax: 255, CbCrMin: 0)
                 : vImage_YpCbCrPixelRange(Yp_bias: 16, CbCr_bias: 128, YpRangeMax: 235, CbCrRangeMax: 240, YpMax: 255, YpMin: 0, CbCrMax: 255, CbCrMin: 1)
-            vImageConvert_ARGBToYpCbCr_GenerateConversion(kvImage_ARGBToYpCbCrMatrix_ITU_R_709_2!, &range, &info, kvImageARGB8888, kvImage420Yp8_CbCr8, vImage_Flags(kvImageNoFlags))
+            vImageConvert_ARGBToYpCbCr_GenerateConversion(bt601 ? kvImage_ARGBToYpCbCrMatrix_ITU_R_601_4! : kvImage_ARGBToYpCbCrMatrix_ITU_R_709_2!, &range, &info, kvImageARGB8888, kvImage420Yp8_CbCr8, vImage_Flags(kvImageNoFlags))
             ready = true
         }
         let pb = buffer!

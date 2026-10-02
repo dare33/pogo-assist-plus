@@ -25,6 +25,7 @@ struct Options {
     var cpDigitsOnly = false
     var deferred = false
     var noSwipeTicks = false
+    var anchorsPath: String?
     var visionDevice = VisionOptions.Device.system
     var visionMinTextHeight: Float?
     var visionRecreate = false
@@ -61,6 +62,7 @@ func parse() -> Options {
         case "--cp-digits-only": o.cpDigitsOnly = true
         case "--deferred": o.deferred = true
         case "--no-swipe-ticks": o.noSwipeTicks = true
+        case "--anchors": o.anchorsPath = value()
         case "--vision-device": guard let d = VisionOptions.Device(rawValue: value()) else { usage() }; o.visionDevice = d
         case "--vision-min-text-height": guard let h = Float(value()) else { usage() }; o.visionMinTextHeight = h
         case "--vision-recreate": o.visionRecreate = true
@@ -73,7 +75,7 @@ func parse() -> Options {
     }
     if o.input == nil && o.synthetic == nil { usage() }
     if o.input != nil && o.synthetic != nil { usage() }
-    if o.synthetic == nil && o.out == nil { usage() }
+    if o.synthetic == nil && o.out == nil && o.anchorsPath == nil { usage() }
     return o
 }
 
@@ -131,6 +133,7 @@ func run() throws {
     var canvas = RGBAImage(width: o.synthetic != nil ? 1320 : 0, height: o.synthetic != nil ? 2868 : 0)
 
     var readings = [FrameReading]()
+    var anchorRows = [[String: Any]]()
     var msTotal = 0.0, msWorst = 0.0
     var deferredRows: [LiveRow]?
     // Baseline: after the tool's own buffers exist, before the first frame is read.
@@ -157,6 +160,12 @@ func run() throws {
             }
         }
         let time = Double(i) / o.fps
+        if o.anchorsPath != nil {
+            // Pixel half only: did the frame anchor (HP bar found on a settled card)? A fast check of the path itself.
+            let a = buffer.map { processor.analyse($0, time: time, frame: label).0 } ?? processor.analyse(image!, time: time, frame: label).0
+            anchorRows.append(["frame": label, "anchored": a.needsText && !a.cpOnly, "hasCp": a.hasCpText, "flags": a.flags])
+            continue
+        }
         // The swipe signature of every frame, as the extension computes it in its callback.
         let diff = buffer.map { detector.feed($0) } ?? detector.feed(image!)
         signatureDiffs.append(diff)
@@ -181,6 +190,7 @@ func run() throws {
             FileHandle.standardError.write(Data("\(label) \(String(format: "%.0f", ms)) ms  cp=\(reading.cp.map(String.init) ?? "-") name=\(reading.name ?? "-") (\(reading.nameText) @\(Int(reading.nameConfidence))) hp=\(reading.hp.map { "\($0.current)/\($0.max)" } ?? "-") ivs=\(reading.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "-") \(reading.flags.joined(separator: ","))\n".utf8))
         }
     }
+    if let ap = o.anchorsPath { try JSONSerialization.data(withJSONObject: anchorRows).write(to: URL(fileURLWithPath: ap)); print("anchors: \(anchorRows.filter { $0["anchored"] as? Bool == true }.count) of \(total) frames anchored"); return }
     var deferredInfo: Report.Deferred?
     if let archive = archive {
         // The app's half: Vision on the saved crops, then the grouper.

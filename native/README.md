@@ -185,6 +185,11 @@ transfer to the phone.
 ## Deviations from the JavaScript reader worth knowing
 
 Reading:
+- `contentRect` (the black-border test, mean brightness 30) bridges dark gaps of up to 0.5% of the height or width: a thin dark
+  line inside the content, such as the stroke along a card's top edge on a dark purple (Poison, Ghost) background, averaged just
+  under 30 on one row after the 4:2:0 conversion and scaling, and cut the screen in two so that nothing was read on the device path.
+  The YCbCr conversion itself is exact (black and white, video and full range, BT.601 and BT.709); the difference was the plane-wise
+  scaling, whose edge undershoot differs from RGB scaling's.
 - One Vision read per frame for the CP and one for the HP (JS reads the CP twice, two Tesseract modes, and
   takes the agreeing one); voting across frames replaces that.
 - A frame with a centred CP but no HP bar (a special-background or buddy card, a Lucky nicknamed one: the HP

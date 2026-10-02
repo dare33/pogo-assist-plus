@@ -38,6 +38,10 @@ public func contentRect(_ img: RGBAImage, threshold: Double = 30, step: Int = 4)
         }
         for x in 0..<width { colOn[x] = Double(sums[x]) / Double(3 * n) > threshold }
     }
+    // A black border is many rows or columns wide; a line a few pixels thick between content is not one. (A dark
+    // top and the thin dark stroke at a card's edge averaged just under the threshold on one row after the
+    // 4:2:0 conversion and scaling, and cut a whole screen in two.)
+    bridgeGaps(&colOn, maxGap: max(2, Int(0.005 * Double(width))))
     let (x0, x1) = widestRun(colOn)
     guard x1 > x0 else { return PixelRect(x: 0, y: 0, w: 0, h: 0) }
     var rowOn = [Bool](repeating: false, count: height)
@@ -49,8 +53,22 @@ public func contentRect(_ img: RGBAImage, threshold: Double = 30, step: Int = 4)
             rowOn[y] = Double(s) / Double(3 * n) > threshold
         }
     }
+    bridgeGaps(&rowOn, maxGap: max(2, Int(0.005 * Double(height))))
     let (y0, y1) = widestRun(rowOn)
     return PixelRect(x: x0, y: y0, w: x1 - x0, h: y1 - y0)
+}
+
+/// Turn short runs of false that sit between true values into true (a thin dark line inside the content, such as
+/// the stroke along a card's top edge, is not a border). Runs at either end are left alone.
+func bridgeGaps(_ flags: inout [Bool], maxGap: Int) {
+    var i = 0
+    while i < flags.count {
+        if flags[i] { i += 1; continue }
+        var j = i
+        while j < flags.count, !flags[j] { j += 1 }
+        if i > 0, j < flags.count, j - i <= maxGap { for k in i..<j { flags[k] = true } }
+        i = j
+    }
 }
 
 /// Copy a pixel rectangle, clamped to the image.
