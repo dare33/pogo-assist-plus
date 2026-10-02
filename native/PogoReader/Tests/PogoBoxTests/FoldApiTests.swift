@@ -181,6 +181,38 @@ final class FoldApiTests: XCTestCase {
         XCTAssertEqual(try lib.restoreLatestReadable(account: "a").restoredFrom, 1)
     }
 
+    func testNewerIsDecidedFromTheSchemaNumberAloneAndForAnyVersion() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-l3s-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        func file(_ seq: Int) -> URL { dir.appendingPathComponent("a/box").appendingPathComponent(String(format: "%06d.json", seq)) }
+        try lib.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "old", now: date(1))
+        let v2 = try lib.commit(account: "a", entries: [entry(row(cp: 200), "two")], reason: .scan, note: "newer", now: date(2))
+        let v3 = try lib.commit(account: "a", entries: [], reason: .scan, note: "damaged", now: date(3))
+        // P4: a newer app's file with a case this build cannot decode (an unknown reason) is still "newer", not "damaged"
+        var obj = try JSONSerialization.jsonObject(with: Data(contentsOf: file(v2.seq))) as! [String: Any]
+        obj["schema"] = BoxLibrary.schemaVersion + 1; obj["reason"] = "import"
+        try JSONSerialization.data(withJSONObject: obj).write(to: file(v2.seq))
+        XCTAssertThrowsError(try lib.load(account: "a", seq: v2.seq)) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
+        // P5: a damaged file ABOVE the newer one does not open the restore route
+        try Data("garbage".utf8).write(to: file(v3.seq))
+        XCTAssertThrowsError(try lib.current(account: "a")) { XCTAssertFalse(BoxLibrary.isNewerVersion($0), "the newest is damaged, not newer") }
+        XCTAssertTrue(lib.hasNewerVersion(account: "a"))
+        XCTAssertThrowsError(try lib.restoreLatestReadable(account: "a")) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
+        XCTAssertThrowsError(try lib.restore(account: "a", seq: 1)) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("a/box").path).filter { $0.hasSuffix(".json") }.count, 3, "no version was added")
+    }
+
+    func testAFileWithNoReadableSchemaNumberIsDamagedAndKeepsItsRestore() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-l3d-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        try lib.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "old", now: date(1))
+        let v2 = try lib.commit(account: "a", entries: [], reason: .scan, note: "x", now: date(2))
+        try Data("{\"seq\": 2}".utf8).write(to: dir.appendingPathComponent("a/box").appendingPathComponent(String(format: "%06d.json", v2.seq)))
+        XCTAssertThrowsError(try lib.current(account: "a")) { XCTAssertFalse(BoxLibrary.isNewerVersion($0)) }
+        XCTAssertFalse(lib.hasNewerVersion(account: "a"))
+        XCTAssertEqual(try lib.restoreLatestReadable(account: "a").restoredFrom, 1)
+    }
+
     // V1, V2
     func testV2TapNeedsAnExactCheckedPointForTheGivenWidthAndHeight() throws {
         func make(_ p: CGPoint?, _ w: Double?, _ h: Double?) throws -> Data { try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: p, screenWidth: w, screenHeight: h, now: date(1)) }

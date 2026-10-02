@@ -91,12 +91,13 @@ public final class BoxLibrary {
     public func load(account: String, seq: Int) throws -> BoxSnapshot {
         let file = try file(account, seq)
         guard fm.fileExists(atPath: file.path) else { throw Failure.noSuchVersion(seq) }
-        let snap: BoxSnapshot
-        do { snap = try Self.decoder.decode(BoxSnapshot.self, from: Data(contentsOf: file)) }
+        let data: Data
+        do { data = try Data(contentsOf: file) } catch { throw BoxStore.Failure.corrupt(file: file.lastPathComponent, reason: "\(error)") }
+        // Decided BEFORE the full decode: a newer app may have added a field or a case this build cannot decode, and that file is still
+        // "saved by a newer app", not "damaged" (a restore would roll the box back over it).
+        if let schema = Self.schema(of: data), schema > Self.schemaVersion { throw Failure.newerVersion(seq) }
+        do { return try Self.decoder.decode(BoxSnapshot.self, from: data) }
         catch { throw BoxStore.Failure.corrupt(file: file.lastPathComponent, reason: "\(error)") }
-        // Decodable is not enough: a later mutate would write an older-schema successor and drop the fields this build does not know.
-        guard snap.schema <= Self.schemaVersion else { throw Failure.newerVersion(seq) }
-        return snap
     }
 
     /// Every version, newest first. A file that cannot be read is left out (it shows in `unreadable` of a fuller listing later).
@@ -139,8 +140,25 @@ public final class BoxLibrary {
     /// Nothing is written on top of a newest version saved by a newer app, by any route (a scan, an edit, a restore): a restore would silently
     /// roll the box back to older content. A newest version that is merely damaged is not refused here; it is what the restore is for.
     private func refuseOverNewer(_ account: String) throws {
-        guard let seq = try seqs(account).last else { return }
-        do { _ = try load(account: account, seq: seq) } catch let f as Failure { if case .newerVersion = f { throw f } } catch {}
+        if let seq = try newerVersionSeq(account) { throw Failure.newerVersion(seq) }
+    }
+
+    /// The first version of the account (any, not only the newest) whose schema number is above this build's, or nil. A file with no
+    /// readable schema number is damaged, not newer.
+    private func newerVersionSeq(_ account: String) throws -> Int? {
+        for seq in try seqs(account) {
+            if let data = try? Data(contentsOf: file(account, seq)), let schema = Self.schema(of: data), schema > Self.schemaVersion { return seq }
+        }
+        return nil
+    }
+
+    /// Whether any saved version of the account came from a newer app.
+    public func hasNewerVersion(account: String) -> Bool { ((try? newerVersionSeq(account)) ?? nil) != nil }
+
+    /// The `schema` number of a version file without decoding the rest.
+    private static func schema(of data: Data) -> Int? {
+        struct SchemaOnly: Decodable { var schema: Int? }
+        return (try? JSONDecoder().decode(SchemaOnly.self, from: data))?.schema
     }
 
     /// Whether the newest version was saved by a newer app (so the app says to update, and offers no restore).

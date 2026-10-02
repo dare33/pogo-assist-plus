@@ -345,8 +345,9 @@ final class AppModel: ObservableObject {
         } catch {
             // Not an empty box: the newest version is damaged. Nothing is saved on top of it until the person restores a readable one.
             snapshot = nil; history = (try? library.history(account: a)) ?? []; previous = nil
-            boxNeedsNewerApp = BoxLibrary.isNewerVersion(error)
-            boxProblem = BoxLibrary.isNewerVersion(error)
+            let newer = BoxLibrary.isNewerVersion(error) || library.hasNewerVersion(account: a)
+            boxNeedsNewerApp = newer
+            boxProblem = newer
                 ? "The newest saved version of the box for \(a) was saved by a newer version of the app, so this version cannot open it. Update the app. Nothing has been changed, and scanning and saving are paused."
                 : "The newest saved version of the box for \(a) cannot be read (\(Self.plain(error))). Your earlier versions are still on this device."
         }

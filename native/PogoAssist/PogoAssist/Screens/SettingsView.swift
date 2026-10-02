@@ -21,6 +21,7 @@ struct SettingsView: View {
     }
 
     private var previousFooter: String {
+        if model.boxNeedsNewerApp { return "This box needs a newer version of the app, so it cannot be restored or changed here. Update the app." }
         guard let p = model.previous else { return "There is no earlier box to go back to yet." }
         return "Goes back to version \(p.seq), \(p.note.lowercased()), \(Fmt.date(p.createdAt)). The box as it is now stays in the history."
     }
