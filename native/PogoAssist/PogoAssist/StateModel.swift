@@ -27,6 +27,12 @@ final class StateModel: ObservableObject {
         }, SharedStore.notificationName as CFString, nil, .deliverImmediately)
     }
 
+    /// The observer above holds this object by pointer, so it must go when the object does: Diagnostics is a sheet now, and a
+    /// notification after it closed (the sample scan posts one) reached a freed model and crashed the app.
+    deinit {
+        CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), CFNotificationName(SharedStore.notificationName as CFString), nil)
+    }
+
     func startTimer() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
