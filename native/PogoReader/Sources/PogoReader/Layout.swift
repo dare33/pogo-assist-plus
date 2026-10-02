@@ -14,10 +14,15 @@ public let cpMasks: [(name: String, mask: ColourMask)] = [
     ("pink", { r, g, b in Int(r) > 190 && Int(r) - Int(g) > 100 && Int(r) - Int(b) > 60 && b > 60 }),
 ]
 
-/// The HP bar is bright green on the iPhone and a muted green on the iPad's red-tinted panel.
+/// The HP bar is bright green on the iPhone and a muted green on the iPad's red-tinted panel
+/// (about 120/142/108 there, only 4 units over JS's old g > r + 18). A 4:2:0 frame (what the device
+/// delivers) smears that chroma over 2x2 pixels, and scaling the planes separately smears it again, so
+/// the margins are 10 and 16 (JS: 18 and 22): the bar was lost on iPad frames through the pixel-buffer
+/// path at the old ones. Green type icons and green scenery are still told apart by the thin-band and
+/// longest-run rules in `findHpBar`.
 @inline(__always) private func isGreen(_ d: UnsafeBufferPointer<UInt8>, _ i: Int) -> Bool {
     let r = Int(d[i]), g = Int(d[i + 1]), b = Int(d[i + 2])
-    return g > r + 18 && g > b + 22 && g > 100
+    return g > r + 10 && g > b + 16 && g > 100
 }
 
 public struct CpText: Equatable {

@@ -6,6 +6,16 @@ import CoreText
 /// name, a green HP bar with "145 / 145 HP" under it, and a white appraisal panel with three
 /// bars. Everything is placed by fractions of the frame, like the real layout, so any size works.
 public struct SyntheticScreen {
+    /// Colours of the drawn screen. `.phone` is the iPhone's bright layout; `.padMuted` the iPad's red-tinted
+    /// card with its muted green HP bar (about 120/142/108), which only just passes the green test and is the
+    /// first thing a 4:2:0 round trip loses.
+    public struct Style {
+        public var header: (Int, Int, Int), card: (Int, Int, Int), hpBar: (Int, Int, Int)
+        public init(header: (Int, Int, Int), card: (Int, Int, Int), hpBar: (Int, Int, Int)) { self.header = header; self.card = card; self.hpBar = hpBar }
+        public static let phone = Style(header: (60, 80, 100), card: (250, 250, 245), hpBar: (102, 231, 170))
+        public static let padMuted = Style(header: (110, 115, 125), card: (218, 149, 149), hpBar: (120, 142, 108))
+    }
+
     public static let names = ["Pikachu", "Bulbasaur", "Charizard", "Mewtwo", "Zapdos", "Eevee", "Machamp", "Dragonite", "Snorlax", "Gengar"]
     /// How many consecutive frames show one Pokémon.
     public static let framesPerPokemon = 6
@@ -24,7 +34,7 @@ public struct SyntheticScreen {
                     ivs: IVs(atk: (k * 7) % 16, def: (k * 5 + 3) % 16, hp: (k * 3 + 9) % 16))
     }
 
-    public static func draw(into img: inout RGBAImage, _ s: Spec) {
+    public static func draw(into img: inout RGBAImage, _ s: Spec, style: Style = .phone) {
         let w = img.width, h = img.height
         let W = CGFloat(w), H = CGFloat(h)
         img.bytes.withUnsafeMutableBytes { raw in
@@ -48,14 +58,15 @@ public struct SyntheticScreen {
                 CTLineDraw(line, ctx)
                 ctx.restoreGState()
             }
-            rect((60, 80, 100), 0, 0, W, H)                                   // dark header / scene
-            rect((250, 250, 245), 0, 0.35 * H, W, 0.65 * H)                   // white card
+            rect(style.header, 0, 0, W, H)                                    // header / scene
+            rect(style.card, 0, 0.35 * H, W, 0.65 * H)                        // card
             let white = CGColor(red: 1, green: 1, blue: 1, alpha: 1), ink = CGColor(red: 0.12, green: 0.14, blue: 0.16, alpha: 1)
             text("CP\(s.cp)", size: 0.035 * H, centreX: 0.5 * W, baseline: 0.06 * H + 0.026 * H, colour: white)
             let barY = 0.45 * H
-            rect((102, 231, 170), 0.26 * W, barY, 0.48 * W, 0.006 * H)        // HP bar
+            rect(style.hpBar, 0.26 * W, barY, 0.48 * W, 0.006 * H)           // HP bar
             text(s.name, size: 0.03 * H, centreX: 0.5 * W, baseline: barY - 0.022 * H, colour: ink)
             text("\(s.hp) / \(s.hp) HP", size: 0.018 * H, centreX: 0.5 * W, baseline: barY + 0.006 * H + 0.004 * H + 0.019 * H, colour: ink)
+            rect((255, 255, 255), 0.04 * W, 0.58 * H, 0.58 * W, 0.34 * H)    // the appraisal panel's white box
             // Appraisal panel: three tracks of 3 blocks x 5 units, orange fill (pink at 15).
             let left = 0.08 * W, gap = (0.008 * W).rounded(), total = 0.45 * W
             let block = ((total - 2 * gap) / 3).rounded(), unit = block / 5, barH = (0.012 * H).rounded()
