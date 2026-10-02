@@ -66,6 +66,9 @@ public enum Tuning {
     /// A card with its CP hidden and no HP read is listed only if it lasted this long.
     public static let hiddenMinSeconds = 0.6
 
+    /// A row seen for less than this (one reading at full rate) is flagged `short-run`.
+    public static let shortRunSeconds = 0.4
+
     /// A row that spans more than this is flagged `long-stay`: an ordinary card is on screen 1.0 to 1.6 s,
     /// two identical Pokemon whose swipe was not seen (frames dropped) span 3 s or more. The last card
     /// of a run, which stays on screen, is flagged too.

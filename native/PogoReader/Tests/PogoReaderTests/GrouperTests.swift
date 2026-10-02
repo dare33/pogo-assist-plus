@@ -195,6 +195,13 @@ final class GrouperTests: XCTestCase {
         XCTAssertEqual(groupAll((1...3).map { frame(CP, n: $0) } + swipes() + [cpOnly(1484, n: 8), cpOnly(1484, n: 9)] + swipes() + (14...16).map { frame(CP - 15, hp: HPV, ivs: IVS, n: $0) }).map(\.name), ["Moltres", "(name not read)", "Moltres"])
     }
 
+    func testARowSeenInOneReadingIsFlaggedShortRun() {
+        let rows = groupAll((1...4).map { frame(CP, n: $0) } + swipes() + [frame(CP - 30, hp: HPV + 8, ivs: IVs(atk: 4, def: 5, hp: 6), n: 9)] + swipes())
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertFalse(rows[0].flags.contains("short-run"))
+        XCTAssertTrue(rows[1].flags.contains("short-run"))
+    }
+
     func testRowsRememberWhereThePokemonWasOnScreen() {
         let rows = groupAll((1...4).map { frame(CP, n: $0) })
         XCTAssertEqual([rows[0].firstFrame, rows[0].lastFrame], ["f1", "f4"])

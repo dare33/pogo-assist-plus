@@ -174,6 +174,7 @@ Reading:
   neighbour of the same Pokemon with a related CP **and an HP that does not differ**; the absorbing row says
   `absorbed:<cp>`. (JS `absorbStrays` takes one frame, and does not look at HP.) A CP that is a tail or
   digit-subsequence of the row's is the same Pokemon.
+- A row seen for under 0.4 s (one reading at full rate) is flagged `short-run`.
 - A row whose CP fits nothing and cannot be recovered is flagged `no-level-fits`, as in JS; there is no solver,
   only a check that some level gives that CP and HP with bars within one unit.
 - A card whose CP is fully hidden: with exactly one fitting level the CP is computed (`cp-computed:<cp>`);

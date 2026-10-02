@@ -460,6 +460,8 @@ public struct LiveGrouper {
         // A trace for each fold of a stray into this row, and for a stay long enough to be two identical Pokémon.
         for c in run.absorbed { Self.addTrace(&flags, "absorbed:\(c)") }
         if run.duration > Tuning.longStaySeconds { flags.append("long-stay") }
+        // Seen for under `shortRunSeconds` (one frame at full rate): too little evidence to leave unmarked.
+        if run.duration < Tuning.shortRunSeconds - 1e-9 { flags.append("short-run") }
         return LiveRow(index: index, name: Self.displayName(run.name, ids), cp: cp, hp: hp, ivs: ivs, frames: run.frames, flags: flags,
                        firstFrame: run.firstFrame, lastFrame: run.lastFrame, firstTime: run.firstT, lastTime: run.lastT)
     }
