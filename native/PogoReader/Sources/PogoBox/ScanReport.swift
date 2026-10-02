@@ -3,7 +3,7 @@ import Foundation
 import PogoReader
 
 /// One scan's files for the "Make scans better" button: a single JSON document, gzip-compressed, that the developer can read to improve
-/// the reader. Built by a pure function from what the app knows. It never holds the account name, any other scan or any device identifier.
+/// the reader. Built by a pure function from what the app knows. It has no account-name field and no device identifier, and no other scan's readings; its review lines can name saved Pokémon kept from Gone, which came from other scans.
 public struct ScanReport: Codable, Equatable {
     public struct AppInfo: Codable, Equatable { public var version: String; public var build: String
         public init(version: String, build: String) { self.version = version; self.build = build } }

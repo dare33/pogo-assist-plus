@@ -135,7 +135,7 @@ final class AppModel: ObservableObject {
             case .review: if case .review(var r) = flow { r.reportSentAt = now; r.reportHash = built.contentHash; flow = .review(r) }
             case .saved(let id):
                 // On the library's one queue, like every other write to the scan files.
-                if let a = account { let store = library.store, hash = built.contentHash; 
+                if let a = account { let store = library.store, hash = built.contentHash;
                     do { try await worker.run { _ in try store.markReportSent(account: a, id: id, at: now, hash: hash) } }
                     catch { message = "The report was sent, but the app could not record that it was: \(Self.plain(error)). The same scan may be offered again." }
                     loadScans() }
@@ -172,6 +172,10 @@ final class AppModel: ObservableObject {
     /// The last command made for each single mode of the selected account (older app versions made one file per scan; still checked for the wrong-screen warning).
     @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]
     @Published var setRecord: SetRecord?
+    /// The records of every account on this phone, read from UserDefaults when they change (not on every render).
+    private var deviceVoiceCache = [String: [(pace: VoiceCommandFile.Pace, screen: String?)]]()
+    private var deviceSetCache = [String: [(kind: VoiceCommandFile.SetKind, screen: String?)]]()
+    private func refreshDeviceRecords() { deviceVoiceCache = Self.deviceVoiceRecords(); deviceSetCache = Self.deviceSetRecords() }
 
     /// Tap on a checked screen, swipe elsewhere: the set's kind, and the pace every command of it pages at (the hint the reader gets).
     var setKind: VoiceCommandFile.SetKind { .forScreen(tapAvailable: tapAvailable) }
@@ -185,7 +189,7 @@ final class AppModel: ObservableObject {
 
     /// What the Scan screen says about the set, or nil: it has not been made on this phone yet (by any account, for this screen kind).
     var commandWarning: String? {
-        let made = Self.deviceSetRecords().values.joined().contains { $0.kind == setKind && (setKind == .swipe || $0.screen == screenLabel) }
+        let made = deviceSetCache.values.joined().contains { $0.kind == setKind && (setKind == .swipe || $0.screen == screenLabel) }
         return made ? nil : "The command set has not been made on this phone yet. Get the commands and import them, or Voice Control will not know \"Pogo scan 300\" and the others."
     }
 
@@ -205,7 +209,7 @@ final class AppModel: ObservableObject {
     /// screen the pace is forced to Swipe, but a tap command made earlier (Display Zoom turned on since, a restore onto another phone) is
     /// still installed in Voice Control.
     var tapCommandsOnOtherScreens: [VoiceCommandFile.Pace] {
-        var all = Self.deviceVoiceRecords()
+        var all = deviceVoiceCache
         // What was just made for the selected account counts even before it is read back.
         all[account ?? "", default: []].append(contentsOf: voiceRecords.map { (pace: $0.key, screen: $0.value.screen) })
         return TapCommandCheck.onOtherScreens(accounts: all, current: screenLabel)
@@ -224,7 +228,7 @@ final class AppModel: ObservableObject {
     }
     /// A TAP set made for another screen, on any account of this device.
     var tapSetOnOtherScreen: Bool {
-        var all = Self.deviceSetRecords()
+        var all = deviceSetCache
         if let r = setRecord { all[account ?? "", default: []].append((kind: r.kind, screen: r.screen)) }
         return TapCommandCheck.setOnOtherScreens(records: all.values.flatMap { $0 }, current: screenLabel)
     }
@@ -242,6 +246,7 @@ final class AppModel: ObservableObject {
 
     func loadVoiceRecord() {
         voiceRecords = [:]; setRecord = nil
+        defer { refreshDeviceRecords() }
         guard let a = account else { return }
         storageCountText = UserDefaults.standard.string(forKey: Keys.count + "." + a) ?? ""
         setRecord = UserDefaults.standard.data(forKey: Keys.set + a).flatMap { try? JSONDecoder().decode(SetRecord.self, from: $0) }
@@ -275,6 +280,7 @@ final class AppModel: ObservableObject {
                 let rec = SetRecord(kind: kind, date: Date(), screen: label)
                 if let d = try? JSONEncoder().encode(rec) { UserDefaults.standard.set(d, forKey: Keys.set + a) }
                 setRecord = rec
+                refreshDeviceRecords()
             }
             shareURLs = [url]
         } catch { message = "The commands could not be made: \(Self.plain(error))" }

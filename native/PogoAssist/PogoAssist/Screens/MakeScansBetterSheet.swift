@@ -13,7 +13,7 @@ struct MakeScansBetterSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("This sends this scan's reading log and results to the developer so the reader can be improved. It includes the Pokémon read, any nicknames on screen, your answers when you reviewed the scan, later corrections to those Pokémon, the date and time of the scan, the app version, your phone model, iOS version, screen size and language, and whatever you type in the note below. The report has no account-name field and no device identifier, so your account name appears only if it is a nickname on screen or you type it in the note.")
+                    Text("This sends this scan's reading log and results to the developer so the reader can be improved. It includes the Pokémon read, any nicknames on screen, your answers when you reviewed the scan, later corrections to those Pokémon, the date and time of the scan, the storage count, how the scan was paged and timed, later removals of its Pokémon, the app version, your phone model, iOS version, screen size and language, and whatever you type in the note below. The report has no account-name field and no device identifier, so your account name appears only if it is a nickname on screen or you type it in the note.")
                     Text("Nothing is sent unless you tap Send.").font(.footnote).foregroundStyle(.secondary)
                 }
                 switch model.reportState {

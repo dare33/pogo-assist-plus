@@ -33,9 +33,11 @@ import PogoReader
 ///     two rows that would each write values to one entry (part-read rows only mark seen, so any number of them may share one).
 /// 12. Extra twin (rule 5): any scanned row identical to a saved entry already paired is asked about, flagged by the paging beat or not.
 ///
-/// A row whose own CP is not trusted (flagged `no-level-fits`, a part read, or a `partialRead` question) never writes its CP, level or
-/// dust onto a saved entry; chosen for a misread entry it only fills the entry's unread IVs and HP. An entry already paired or updated
-/// by another row in the same plan is only marked seen by an unsure answer.
+/// A row whose own CP is not trusted (flagged `no-level-fits`, a part read, or a `partialRead` question) writes NOTHING onto a saved entry:
+/// "It is this one" only marks it seen. The automatic rules agree: such a row is never auto-paired as powered up, evolved, base of a Mega or
+/// IVs now read (it is asked about, with the entries it would have paired with); pairing as Same, which writes nothing, stays automatic. An
+/// entry already paired or updated by another row in the same plan is likewise only marked seen. `BoxMerge.effect` is the one decision of what
+/// an answer does, used by `apply` and by the review card.
 ///
 /// A full scan proposes saved entries matched by nothing as gone; an add-and-update scan removes nothing. Entries that are
 /// candidates in an unsure match are never proposed as gone (they might be one of the unsure Pokémon).

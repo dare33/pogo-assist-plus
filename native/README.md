@@ -481,7 +481,9 @@ that could be one entry are both asked, and Save refuses two rows that would eac
 may share an entry: they only mark it seen). For the same CP and HP with other IVs, "It is this one" keeps the saved IVs (always when
 hand-corrected) and flags the entry `ivs-rescan-differs` so it shows under "to check"; only saved IVs that were not an exact read are
 replaced by a clean read. A row whose own CP is not trusted (a part read, or flagged `no-level-fits`) never writes its CP, level or dust
-onto a saved entry, and an entry another row of the same scan already matched is only marked seen. A full scan proposes unmatched
+onto a saved entry, and an entry another row of the same scan already matched is only marked seen. More simply, a row whose CP is not trusted writes
+nothing at all: its answer only marks the entry seen, and the automatic rules never pair it as powered up, evolved, base of a Mega or IVs now read
+(it is asked about instead); `BoxMerge.effect` is the one decision that `apply` and the review card both follow. A full scan proposes unmatched
 saved Pokemon as gone (applied only on Save); add and update removes nothing. Hand corrections remember the value the scan had
 read: a later scan reading that same value, or the corrected one, leaves the correction; any other value replaces it. The box
 is kept as numbered versions (`BoxLibrary`, `<account>/box/NNNNNN.json`); a scan, a correction and a restore each add one and
@@ -664,8 +666,9 @@ keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone1
 the swipe ticks and dropped frames; it can include a Pokémon's nickname if one was on screen); `result` (the rows, the review list and the
 unmatched items); `refineChanges`; `review` (what you answered at review); `afterwards` (later hand corrections and removals of Pokémon
 that first came from that scan, as far as the box versions record them) and `notIncluded` (what the report could not include). It has no
-account-name field, no device identifier and no other scan, but it carries Pokémon nicknames as read and whatever is typed in the note, so the
-account name appears only if it is one of those. A scan already sent and unchanged is not sent twice (the scan keeps when it was sent
+account-name field, no device identifier and no other scan's readings, but it carries Pokémon nicknames as read and whatever is typed in the note, so the
+account name appears only if it is one of those. The review lines can name saved Pokémon that were kept from Gone, and those came from other scans
+(species and values only, no readings), so it is not true that nothing from other scans is in it. A scan already sent and unchanged is not sent twice (the scan keeps when it was sent
 and a hash of what was sent), at most 10 reports go out in 24 hours, and a report above 3.5 MB is refused with the option to share the files.
 A typical 313-Pokémon scan is about 640 KB of JSON and 80 KB compressed.
 
@@ -681,6 +684,6 @@ A saved entry flagged `no-level-fits` (or with no usable CP) and no IVs, of the 
 row that matched nothing else, is offered as Unsure with the entry as a candidate, whatever the CP. The two promises hold for each such
 candidate, whatever the kind of question (other, plausible candidates or a part-read CP may be in it too). "It is this one" for a misread
 candidate replaces its unread values with the row's read values (CP, IVs, level, dust; the id, first seen and hand corrections stay, and the
-flag clears). When the row's own CP is not trusted (a part read, or `no-level-fits`), only the entry's unread IVs and HP are filled and its
-CP, level and dust are left alone. "It is new" adds the row and leaves every misread candidate in the box, in a full scan too; the other candidates follow the
+flag clears). When the row's own CP is not trusted (a part read, or `no-level-fits`), nothing is written: "It is this one" only marks the entry
+seen (the IVs it read are not filled in either). "It is new" adds the row and leaves every misread candidate in the box, in a full scan too; the other candidates follow the
 usual rule and may go. Only read values are ever copied over a saved one.
