@@ -33,6 +33,8 @@ import PogoReader
 public enum BoxMerge {
     public enum UpdateReason: String, Codable, Equatable {
         case poweredUp, evolved
+        /// A saved Mega-form entry scanned in its base form: the base species and values replace it.
+        case megaToBase
         /// Rule 4: the saved entry had no IVs and the scan read them.
         case ivsNowRead
         /// The person chose this saved entry for an unsure Pokémon and its values differ.
@@ -49,6 +51,9 @@ public enum BoxMerge {
     public struct Pair: Equatable {
         public var scanned: Int
         public var savedId: String
+        /// The scanned Pokémon was Mega (or Primal) evolved and matched its base entry: only "last seen" is updated.
+        public var mega = false
+        public init(scanned: Int, savedId: String, mega: Bool = false) { self.scanned = scanned; self.savedId = savedId; self.mega = mega }
     }
 
     /// A scanned Pokémon that could be more than one saved one. `candidates` are saved ids, never empty.
@@ -71,6 +76,9 @@ public enum BoxMerge {
         public var unsure: [Unsure]
         /// Saved ids proposed as gone: always empty for an add-and-update scan.
         public var gone: [String]
+        /// Scanned positions whose species is a Mega or Primal form, with the base species id. A Mega row never writes its own
+        /// values into the box: it matches its base entry as "same", or is saved as New under the base species with no CP, HP or level.
+        public var megaBases: [Int: String] = [:]
 
         public var isUnresolvedFree: Bool { unsure.isEmpty }
     }
@@ -103,13 +111,18 @@ public enum BoxMerge {
         var plan = Plan(kind: kind, scanDate: scanDate, scanned: rows, new: [], updated: [], same: [], unsure: [], gone: [])
         var unsureSaved = Set<Int>()
 
-        func record(_ ruleIndex: Int, _ si: Int, _ vi: Int) {
+        for (i, r) in rows.enumerated() { if let b = megaBase(r.speciesId, gm) { plan.megaBases[i] = b } }
+
+        enum Rule { case unchanged, megaSame, baseOfMega, poweredUp, evolved, noIVs }
+        func record(_ rule: Rule, _ si: Int, _ vi: Int) {
             let s = rows[si], v = saved[vi], id = v.id
-            switch ruleIndex {
-            case 0: plan.same.append(Pair(scanned: si, savedId: id))
-            case 1: plan.updated.append(Update(scanned: si, savedId: id, reason: .poweredUp))
-            case 2: plan.updated.append(Update(scanned: si, savedId: id, reason: .evolved))
-            default:
+            switch rule {
+            case .unchanged: plan.same.append(Pair(scanned: si, savedId: id))
+            case .megaSame: plan.same.append(Pair(scanned: si, savedId: id, mega: true))
+            case .baseOfMega: plan.updated.append(Update(scanned: si, savedId: id, reason: .megaToBase))
+            case .poweredUp: plan.updated.append(Update(scanned: si, savedId: id, reason: .poweredUp))
+            case .evolved: plan.updated.append(Update(scanned: si, savedId: id, reason: .evolved))
+            case .noIVs:
                 if v.row.ivs == nil && s.ivs != nil { plan.updated.append(Update(scanned: si, savedId: id, reason: .ivsNowRead)) }
                 else { plan.same.append(Pair(scanned: si, savedId: id)) }
             }
@@ -117,23 +130,28 @@ public enum BoxMerge {
             vPool.removeAll { $0 == vi }
         }
 
-        // Rule 1 (with 5: twins by count), 2, 3, then 4. Each takes what the one before left.
-        let rules: [(ScanRow, BoxEntry) -> Bool] = [
-            { s, v in sameSpecies(s, v) && sameIVs(s, v) && sameCP(s, v) },
-            { s, v in sameSpecies(s, v) && sameIVs(s, v) && s.cp > v.row.cp },
-            { s, v in sameIVs(s, v) && evolved(s, from: v, gm) },
-            { s, v in (s.ivs == nil || v.row.ivs == nil) && sameSpecies(s, v) && sameCP(s, v) && sameHP(s, v) },
+        // Rule 1 (with 5: twins by count), the Mega rules, 2, 3, then 4. Each takes what the one before left.
+        let megaBases = plan.megaBases
+        let rules: [(Rule, (Int, ScanRow, BoxEntry) -> Bool)] = [
+            (.unchanged, { _, s, v in sameSpecies(s, v) && sameIVs(s, v) && sameCP(s, v) }),
+            // A Mega row against its base entry (the base is the saved species), same three IVs.
+            (.megaSame, { i, s, v in megaBases[i].map { $0 == v.speciesKey || v.corrections.species?.was == $0 } == true && sameIVs(s, v) }),
+            // A base row against an entry first saved in its Mega form.
+            (.baseOfMega, { i, s, v in megaBases[i] == nil && megaBase(v.row.speciesId, gm) == s.speciesId && sameIVs(s, v) }),
+            (.poweredUp, { _, s, v in sameSpecies(s, v) && sameIVs(s, v) && s.cp > v.row.cp }),
+            (.evolved, { i, s, v in megaBases[i] == nil && sameIVs(s, v) && evolved(s, from: v, gm) }),
+            (.noIVs, { _, s, v in (s.ivs == nil || v.row.ivs == nil) && sameSpecies(s, v) && sameCP(s, v) && sameHP(s, v) }),
         ]
-        for (n, test) in rules.enumerated() {
+        for (rule, test) in rules {
             var edges = [Int: [Int]]()   // scanned index -> saved indices
-            for si in sPool { for vi in vPool where test(rows[si], saved[vi]) { edges[si, default: []].append(vi) } }
+            for si in sPool { for vi in vPool where test(si, rows[si], saved[vi]) { edges[si, default: []].append(vi) } }
             for comp in components(edges) {
                 let ss = comp.scanned, vs = comp.saved
                 if ss.count == 1 && vs.count == 1 {
-                    record(n, ss[0], vs[0])
+                    record(rule, ss[0], vs[0])
                 } else if interchangeable(ss.map { rows[$0] }, key: scannedKey), interchangeable(vs.map { saved[$0] }, key: savedKey) {
                     // Identical twins on at least one side: pair by count, the surplus goes on to the later rules.
-                    for (si, vi) in zip(ss, vs) { record(n, si, vi) }
+                    for (si, vi) in zip(ss, vs) { record(rule, si, vi) }
                 } else {
                     for si in ss { plan.unsure.append(Unsure(scanned: si, candidates: (edges[si] ?? []).map { saved[$0].id })) }
                     unsureSaved.formUnion(vs)
@@ -146,7 +164,7 @@ public enum BoxMerge {
         // Rule 7: a part-read CP is asked about, never added as new.
         var stillNew = [Int]()
         for si in sPool {
-            let cands = partialCandidates(rows[si], saved)
+            let cands = megaBases[si] == nil ? partialCandidates(rows[si], saved) : []
             if cands.isEmpty { stillNew.append(si); continue }
             plan.unsure.append(Unsure(scanned: si, candidates: cands.map { saved[$0].id }, kind: .partialRead))
             unsureSaved.formUnion(cands)
@@ -162,6 +180,27 @@ public enum BoxMerge {
     }
 
     // MARK: - rule predicates
+
+    /// The base species of a Mega or Primal form (`<base>_mega`, `_mega_x`, `_mega_y`, `_primal`) when the game master has it.
+    public static func megaBase(_ id: String, _ gm: GameMaster) -> String? {
+        for suffix in ["_mega_x", "_mega_y", "_mega", "_primal"] where id.hasSuffix(suffix) {
+            let base = String(id.dropLast(suffix.count))
+            return gm.byId[base] != nil ? base : nil
+        }
+        return nil
+    }
+
+    /// What a Mega row is saved as when nothing in the box matches it: the base species with the IVs read, and no CP, HP or level
+    /// (the Mega values are temporary), flagged `mega-when-scanned`. CP 0 means "not known".
+    public static func asBase(_ r: ScanRow, base: String, _ gm: GameMaster) -> ScanRow {
+        var out = r
+        let sp = gm.byId[base]
+        let nf = GameMaster.nameAndForm(sp?.name ?? base)
+        out.speciesId = base; out.name = nf.name; out.display = nf.name; out.form = nf.form; out.dex = sp?.dex ?? r.dex
+        out.cp = 0; out.hp = nil; out.level = nil; out.levelMax = nil; out.dust = nil
+        out.solveStatus = "mega"; out.flags = ["mega-when-scanned"]
+        return out
+    }
 
     private static func partialCandidates(_ s: ScanRow, _ saved: [BoxEntry]) -> [Int] {
         let noLevelFits = s.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
@@ -261,13 +300,15 @@ public enum BoxMerge {
     /// Entries keep their order; new ones follow, in scan order. Gone entries are removed.
     public static func apply(_ plan: Plan, resolutions: [Int: Resolution] = [:], to saved: [BoxEntry], makeID: () -> String = { UUID().uuidString }) throws -> [BoxEntry] {
         try validate(plan, resolutions: resolutions)
+        let gm0 = try GameMaster.bundled()
         var byId = [String: BoxEntry](); for e in saved { byId[e.id] = e }
         var added = [BoxEntry]()
         let date = plan.scanDate
         func touch(_ id: String) { if let e = byId[id] { byId[id]?.lastSeen = max(e.lastSeen, date) } }
 
-        for p in plan.same { touch(p.savedId) }
-        for u in plan.updated { if let e = byId[u.savedId] { byId[u.savedId] = updated(e, with: plan.scanned[u.scanned], date: date) } }
+        func setMega(_ id: String, _ mega: Bool) { byId[id]?.megaWhenScanned = mega ? true : nil }
+        for p in plan.same { touch(p.savedId); setMega(p.savedId, p.mega) }
+        for u in plan.updated { if let e = byId[u.savedId] { byId[u.savedId] = updated(e, with: plan.scanned[u.scanned], date: date); setMega(u.savedId, false) } }
         var newRows = plan.new
         for u in plan.unsure {
             switch resolutions[u.scanned]! {
@@ -275,11 +316,21 @@ public enum BoxMerge {
             case .leaveOut: break
             case .existing(let id):
                 guard let e = byId[id] else { break }
-                // A part-read row only says "seen"; its values are wrong by definition.
-                if u.kind == .partialRead { byId[id]?.lastSeen = max(e.lastSeen, date) } else { byId[id] = updated(e, with: plan.scanned[u.scanned], date: date) }
+                if u.kind == .partialRead {
+                    // A part-read row only says "seen"; its values are wrong by definition.
+                    byId[id]?.lastSeen = max(e.lastSeen, date)
+                } else if plan.megaBases[u.scanned] != nil && Self.megaBase(e.row.speciesId, gm0) == nil {
+                    // A Mega row chosen for its base entry: seen, and Mega when scanned; the Mega values are not copied.
+                    touch(id); setMega(id, true)
+                } else { byId[id] = updated(e, with: plan.scanned[u.scanned], date: date); setMega(id, false) }
             }
         }
-        for i in newRows.sorted() { added.append(BoxEntry(id: makeID(), row: plan.scanned[i], firstSeen: date, lastSeen: date)) }
+        for i in newRows.sorted() {
+            var row = plan.scanned[i]
+            var mega = false
+            if let base = plan.megaBases[i] { row = Self.asBase(row, base: base, gm0); mega = true }
+            added.append(BoxEntry(id: makeID(), row: row, firstSeen: date, lastSeen: date, megaWhenScanned: mega ? true : nil))
+        }
         let gone = Set(plan.gone)
         return saved.filter { !gone.contains($0.id) }.compactMap { byId[$0.id] } + added
     }

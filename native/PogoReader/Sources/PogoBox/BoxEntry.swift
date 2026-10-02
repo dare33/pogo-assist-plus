@@ -31,9 +31,12 @@ public struct BoxEntry: Codable, Equatable, Identifiable {
     public var firstSeen: Date
     public var lastSeen: Date
     public var corrections = Corrections()
+    /// The latest scan that saw this Pokémon found it Mega (or Primal) evolved. Its values were not saved from that scan: the
+    /// Mega CP is temporary. nil or false when the latest scan saw it in its own form.
+    public var megaWhenScanned: Bool?
 
-    public init(id: String = UUID().uuidString, row: ScanRow, firstSeen: Date, lastSeen: Date, corrections: Corrections = Corrections()) {
-        self.id = id; self.row = Self.stripped(row); self.firstSeen = firstSeen; self.lastSeen = lastSeen; self.corrections = corrections
+    public init(id: String = UUID().uuidString, row: ScanRow, firstSeen: Date, lastSeen: Date, corrections: Corrections = Corrections(), megaWhenScanned: Bool? = nil) {
+        self.id = id; self.row = Self.stripped(row); self.firstSeen = firstSeen; self.lastSeen = lastSeen; self.corrections = corrections; self.megaWhenScanned = megaWhenScanned
     }
 
     public var isHandCorrected: Bool { !corrections.isEmpty }

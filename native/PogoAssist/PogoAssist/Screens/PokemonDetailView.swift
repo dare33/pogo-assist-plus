@@ -14,7 +14,7 @@ struct PokemonDetailView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(r.title).font(.title2.bold())
-                        Text(verbatim: "CP \(r.cp)").font(.title3).monospacedDigit()
+                        Text(verbatim: Fmt.cp(r.cp)).font(.title3).monospacedDigit()
                     }
                 }
                 Section("Stats") {
@@ -30,6 +30,9 @@ struct PokemonDetailView: View {
                         ForEach(r.flags, id: \.self) { Text(FlagInfo.explain($0)).font(.callout) }
                         Button("These values are right") { Task { await model.markChecked(id) } }
                     }
+                }
+                if e.megaWhenScanned == true {
+                    Section { Label("Mega evolved when scanned. The Mega CP is temporary, so the values above are from an earlier scan.", systemImage: "sparkles").font(.footnote).foregroundStyle(.secondary) }
                 }
                 if e.isHandCorrected {
                     Section { Label("Corrected by hand: \(corrected(e)). A later scan will not undo it unless the Pokémon has changed.", systemImage: "pencil").font(.footnote).foregroundStyle(.secondary) }
@@ -157,14 +160,14 @@ struct FixValueView: View {
 
     private func load() {
         let r = entry.row
-        name = r.title; cp = String(r.cp); hp = r.hp.map(String.init) ?? ""
+        name = r.title; cp = r.cp > 0 ? String(r.cp) : ""; hp = r.hp.map(String.init) ?? ""
         atk = r.ivs.map { String($0.atk) } ?? ""; def = r.ivs.map { String($0.def) } ?? ""; sta = r.ivs.map { String($0.hp) } ?? ""
     }
 
     private func save() {
         var edit = BoxMerge.Edit()
         func int(_ s: String) -> Int? { Int(s.trimmingCharacters(in: .whitespaces)) }
-        if cp.trimmingCharacters(in: .whitespaces) != String(entry.row.cp) {
+        if cp.trimmingCharacters(in: .whitespaces) != (entry.row.cp > 0 ? String(entry.row.cp) : "") {
             guard let v = int(cp) else { error = "CP must be a whole number."; return }
             edit.cp = v
         }

@@ -54,6 +54,11 @@ private struct ResultList: View {
     private var plan: BoxMerge.Plan { review.plan }
     private var saved: [String: BoxEntry] { Dictionary(review.base.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
     private func scanned(_ i: Int) -> ScanRow { plan.scanned[i] }
+    /// The scan ran at a pace unlike the command last made: probably an older command played.
+    private var paceWarning: String? {
+        guard let pace = review.outcome.pace, let last = model.voiceLast, abs(pace.secondsPerPokemon - last.pace.every) > 0.3 else { return nil }
+        return "This scan ran at about \(String(format: "%.1f", pace.secondsPerPokemon)) s per Pokémon; the command you last made was \(String(format: "%.1f", last.pace.every)) s. Voice Control may have played an older command."
+    }
     private var blocker: String? { model.saveBlocker(review) }
 
     var body: some View {
@@ -62,6 +67,8 @@ private struct ResultList: View {
                 row("Pokémon read", "\(review.outcome.scan.rows.count)")
                 row("Scan time", Fmt.duration(review.outcome.duration))
                 row("Frames read", "\(review.outcome.readings)")
+                if let pace = review.outcome.pace { row("Pace", "about \(String(format: "%.1f", pace.secondsPerPokemon)) s per Pokémon") }
+                if let warning = paceWarning { Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange) }
                 row("Box", review.account)
                 Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in Task { await model.setReviewKind(k) } })) {
                     Text("Full scan").tag(BoxStore.Kind.full)
@@ -76,7 +83,14 @@ private struct ResultList: View {
             }
             Section("What saving will do") {
                 group("new", "New", plan.new.count, "plus.circle") {
-                    ForEach(plan.new, id: \.self) { i in Text(Fmt.brief(scanned(i))).font(.callout) }
+                    ForEach(plan.new, id: \.self) { i in
+                        if let base = plan.megaBases[i] {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(scanned(i).title), IVs \(Fmt.ivs(scanned(i).ivs))").font(.callout)
+                                Text("Mega evolved when scanned. It will be saved as \((try? GameMaster.bundled().byId[base]?.name) ?? base) with no CP, HP or level, marked to check, because the Mega values are temporary.").font(.footnote).foregroundStyle(.secondary)
+                            }
+                        } else { Text(Fmt.brief(scanned(i))).font(.callout) }
+                    }
                 }
                 group("updated", "Updated", plan.updated.count, "arrow.up.circle") {
                     ForEach(plan.updated, id: \.scanned) { u in
@@ -87,7 +101,12 @@ private struct ResultList: View {
                     }
                 }
                 group("same", "Same", plan.same.count, "equal.circle") {
-                    ForEach(plan.same, id: \.scanned) { p in Text(Fmt.brief(scanned(p.scanned))).font(.callout) }
+                    ForEach(plan.same, id: \.scanned) { p in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(Fmt.brief(scanned(p.scanned))).font(.callout)
+                            if p.mega { Text("Mega evolved when scanned. The saved \(saved[p.savedId]?.row.title ?? "Pokémon") keeps its own values.").font(.footnote).foregroundStyle(.secondary) }
+                        }
+                    }
                 }
                 HStack { Label("Unsure", systemImage: "questionmark.circle"); Spacer(); Text("\(plan.unsure.count)").foregroundStyle(.secondary).monospacedDigit() }
                 if review.kind == .full {
@@ -150,6 +169,7 @@ private struct ResultList: View {
         case .poweredUp: return "Powered up: CP \(old?.cp ?? 0) to \(s.cp)"
         case .evolved: return "Evolved from \(old?.name ?? "?"): now \(s.title), CP \(s.cp)"
         case .ivsNowRead: return "IVs now read: \(Fmt.ivs(s.ivs))"
+        case .megaToBase: return "Saved in its Mega form before; now \(s.title), CP \(s.cp)"
         case .chosen: return "Matched by you: now CP \(s.cp)"
         }
     }

@@ -27,7 +27,10 @@ enum Fmt {
     }
 
     /// "Pidgey (CP 300, IVs 10/11/12)" for a scanned or saved row, to tell two apart.
-    static func brief(_ r: ScanRow) -> String { "\(r.title), CP \(r.cp), IVs \(ivs(r.ivs))" }
+    static func brief(_ r: ScanRow) -> String { "\(r.title), \(cp(r.cp)), IVs \(ivs(r.ivs))" }
+
+    /// "CP 1982", or "CP not known" for the 0 a Mega-when-scanned entry has.
+    static func cp(_ v: Int) -> String { v > 0 ? "CP \(v)" : "CP not known" }
 
     /// One line for an entry in the "on screen but not read" list.
     static func unmatched(_ u: Unmatched) -> String {
@@ -54,5 +57,5 @@ extension Fmt {
 
 extension Fmt {
     /// A saved Pokémon for a choice list: "Staraptor, CP 1982, HP 142, IVs 13/12/15".
-    static func candidate(_ r: ScanRow) -> String { "\(r.title), CP \(r.cp), HP \(r.hp.map(String.init) ?? "not read"), IVs \(ivs(r.ivs))" }
+    static func candidate(_ r: ScanRow) -> String { "\(r.title), \(cp(r.cp)), HP \(r.hp.map(String.init) ?? "not read"), IVs \(ivs(r.ivs))" }
 }

@@ -505,3 +505,17 @@ neighbours is absent in Tap mode; to revisit with timing-based boundaries.
 
 Merge rule 7 also asks when a row flagged `no-level-fits` (or with no usable CP) has the same species and HP as a saved Pokemon and its
 `ivsRead` (the JavaScript keeps it when it nulls `ivs`) equals that Pokemon's IVs, whatever the CP digits (Xerneas 281 for a saved 2611).
+
+### Round 3 additions
+
+- Pace: `ScanPace.measure` gives the median seconds between Pokemon in a replay log (from the swipe ticks, else from where the
+  on-screen Pokemon changed; a missed tick does not move the median). The scan result shows it, and warns when a command was
+  last made at a pace more than 0.3 s from it ("Voice Control may have played an older command"). The Scan screen numbers the
+  steps (choose how to page, get the command for that choice, import it, say it) and says which command was last made.
+- Mega and Primal forms (`<base>_mega`, `_mega_x`, `_mega_y`, `_primal`): after the unchanged rule and before powered up, a Mega row
+  matches a saved base entry with the same three IVs as Same: the entry keeps its own species, CP, HP, level and dust (the Mega CP
+  is temporary), gets `megaWhenScanned` and a new last-seen date; two different base candidates are Unsure (choosing one still copies
+  nothing); identical twins pair by count. The reverse: a base-form row with the same IVs updates an entry first saved in its Mega
+  form. A Mega row that matches nothing is saved as New under the BASE species with the IVs, but CP 0 ("not known"), no HP, level
+  or dust, and the flag `mega-when-scanned`; the review says so. Not handled: a Mega row whose base is not saved but an earlier
+  stage is (it is saved as New and the earlier stage stays).

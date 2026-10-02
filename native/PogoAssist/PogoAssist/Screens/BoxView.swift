@@ -108,7 +108,7 @@ struct EntryRow: View {
             Spacer(minLength: 8)
             if entry.isHandCorrected { Image(systemName: "pencil").font(.footnote).foregroundStyle(.secondary).accessibilityLabel("Corrected by hand") }
             if entry.needsCheck { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityLabel("Needs a check") }
-            Text(verbatim: "CP \(r.cp)").monospacedDigit().font(.body.weight(.medium))
+            Text(verbatim: Fmt.cp(r.cp)).monospacedDigit().font(.body.weight(.medium))
         }
     }
 }

@@ -24,6 +24,7 @@ public enum FlagInfo {
         Entry(prefix: "hp-computed", field: .hp) { _ in "The HP was not read, so it was worked out from the stats. Check it in the game." },
         Entry(prefix: "hp-unread", field: .hp) { _ in "The HP could not be read or worked out. Check it in the game." },
         Entry(prefix: "sex-from-stats", field: .species) { _ in "Nidoran male and female look the same on screen. The one whose stats fit was chosen." },
+        Entry(prefix: "mega-when-scanned", field: .cp) { _ in "This Pokémon was Mega evolved when it was scanned, so its CP, HP and level were not saved (the Mega values are temporary). Scan it again when it is not Mega evolved." },
         Entry(prefix: "ivs-disagree", field: .ivs) { _ in "The appraisal bars read differently on different frames. Check the IVs in the game." },
     ]
 

@@ -105,7 +105,7 @@ final class FlowTests: XCTestCase {
         let tapRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Tap (1.2'")).firstMatch
         if tapRow.exists && tapRow.isEnabled && tapRow.isHittable { tapRow.tap() }   // only on a screen where tap paging has been checked
         shot(name)
-        let get = app.buttons["Get the command"]
+        let get = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Get the'")).firstMatch
         XCTAssertTrue(get.waitForExistence(timeout: 5))
         get.tap()
         sleep(3)
