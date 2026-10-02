@@ -470,3 +470,35 @@ saved Pokemon as gone (applied only on Save); add and update removes nothing. Ha
 read: a later scan reading that same value, or the corrected one, leaves the correction; any other value replaces it. The box
 is kept as numbered versions (`BoxLibrary`, `<account>/box/NNNNNN.json`); a scan, a correction and a restore each add one and
 none is deleted; Settings restores any of them (as a new version). The replay log is kept beside the saved scan in `BoxStore`.
+
+### Round 2 additions (box and review)
+
+- Account names: the fields turn off autocorrection, spell checking and automatic capitals; Settings has Rename account (refuses an
+  empty name or another account's name, compared ignoring case; the folder, the name inside every scan and box version, the
+  replay logs and the cached advice all follow: `BoxLibrary.renameAccount`).
+- Merge rule 7 (part-read CP): a scanned Pokemon that matched nothing, has the `no-level-fits` flag or unread IVs, and whose CP
+  digits are a subsequence of a saved same-species CP (182 in 1982) with the same HP (or HP unread) is Unsure with those saved
+  Pokemon as candidates. The answers are "It is this one" (only marks it seen; the part-read values are not copied over), "It is new"
+  and "Leave it out of the box". Leave it out is available for every unsure row.
+- Delete one Pokemon (swipe, with a confirmation) and Settings > Scans (date, kind, Pokemon read, with a share button for the scan's
+  `replay.jsonl` and result JSON). "Fix a value" re-runs the JavaScript solver for the Pokemon (`LevelSolve`, the way `Refine` solves
+  a hidden-CP row) so level and dust follow the corrected values; when no level fits it keeps the edit, adds `no-level-fits` and says so.
+- Diagnostics has "Load partial-read sample" (one Staraptor read as CP 182) to drive the unsure card in the simulator.
+
+### Voice Control command made in the app (`PogoBox/VoiceCommandFile.swift`)
+
+A Swift port of `experiments/voice-control/generate_commands.py` (which stays the reference; `VoiceCommandFileTests` compares the two
+on fixtures made by the script with `--now` fixed, archives decoded to plain structures with their UIDs). The file holds a batch gesture
+of 50 page steps and a chain `Pogo scan` that repeats it `ceil(steps / 50)` times (no separate partial gesture; a small scan uses one short
+batch). Steps = storage count - 1, plus 2% rounded up, at least 3: 1,400 Pokemon is 1,427 steps, 29 x 50, about 715 KB.
+Modes: swipe normal (2.1 s, default), swipe fast (1.6 s), tap (1.2 s), tap (1.0 s); the three non-default ones are marked not yet proven
+on a full box. `pogo-voice <count> [--fast] [--tap] --out file` makes the same file on a Mac.
+
+Tap mode presses the game's right-hand next-Pokemon arrow (measured at 424, 775 pt on the 440 x 956 pt iPhone: fractions 0.964 and 0.811,
+kept in `VoiceCommandFile`). Safety rule: once the appraisal closes at the end of the list the Pokemon page shows, and its Power up and Evolve
+buttons sit to the left of that arrow. Taps therefore stay at the right edge: the generator refuses a tap point left of 0.95 of the screen
+width (Python and Swift, both tested), every tap in a file is at exactly the same point, and Tap is offered only on screen sizes in
+`VoiceCommandFile.checkedScreens` (today only 440 x 956; on any other the options are shown disabled). Taps past the end of the list close
+the appraisal and then do nothing (tested on that iPhone only). `TrailingNoBarsTests` checks that ten barless frames after the last Pokemon
+add no row and change none. Known limit: a tap leaves no sideways slide, so the swipe evidence the app uses to separate identical
+neighbours is absent in Tap mode; to revisit with timing-based boundaries.

@@ -14,6 +14,7 @@ let package = Package(
         // The app links this; the broadcast extension must NOT (iOS kills it at about 50 MB).
         .library(name: "PogoBox", targets: ["PogoBox"]),
         .executable(name: "pogo-rows", targets: ["pogo-rows"]),
+        .executable(name: "pogo-voice", targets: ["pogo-voice"]),
     ],
     targets: [
         .target(name: "PogoReader", resources: [.copy("Resources/species.json")]),
@@ -25,6 +26,7 @@ let package = Package(
             .copy("Resources/tiers.json"), .copy("Resources/pvp-rankings.json"),
         ]),
         .executableTarget(name: "pogo-rows", dependencies: ["PogoBox", "PogoReader"]),
+        .executableTarget(name: "pogo-voice", dependencies: ["PogoBox"]),
         .testTarget(name: "PogoBoxTests", dependencies: ["PogoBox", "PogoReader"], resources: [.copy("Fixtures")]),
     ]
 )

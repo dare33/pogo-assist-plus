@@ -58,18 +58,79 @@ final class AppModel: ObservableObject {
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
-    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount" }
+    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePace", voice = "voiceLast." }
+
+    // MARK: - the Voice Control command
+
+    /// What the last command made for an account was built for. The app cannot know whether it was imported on the phone.
+    struct VoiceRecord: Codable, Equatable { var storageCount: Int; var covers: Int; var pace: VoiceCommandFile.Pace; var date: Date }
+
+    @Published var pace: VoiceCommandFile.Pace { didSet { UserDefaults.standard.set(pace.rawValue, forKey: Keys.pace) } }
+    @Published var voiceLast: VoiceRecord?
+
+    /// Screen size in points, for the tap position check.
+    var screenSize: CGSize { UIScreen.main.bounds.size }
+    var tapAvailable: Bool { VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) != nil }
+
+    var storageCount: Int? { Int(storageCountText.trimmingCharacters(in: .whitespaces)).flatMap { $0 >= 1 ? $0 : nil } }
+
+    func loadVoiceRecord() {
+        guard let a = account, let data = UserDefaults.standard.data(forKey: Keys.voice + a) else { voiceLast = nil; return }
+        voiceLast = try? JSONDecoder().decode(VoiceRecord.self, from: data)
+    }
+
+    /// The device's language for the command, as Voice Control writes it (en_AU).
+    static var voiceLocale: String {
+        Locale.current.identifier.split(separator: "@").first.map { $0.replacingOccurrences(of: "-", with: "_") } ?? "en_AU"
+    }
+
+    /// Make the commands file for the typed storage count and hand it to the share sheet (Save to Files, AirDrop).
+    func getCommand() async {
+        guard let count = storageCount else { message = "Type how many Pokémon are in your storage first."; return }
+        var pace = self.pace
+        if pace.isTap && !tapAvailable { pace = .swipeNormal; self.pace = pace }
+        let size = VoiceCommandFile.sizing(storageCount: count, pace: pace)
+        let tap = pace.isTap ? VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) : nil
+        let width = Double(screenSize.width), locale = Self.voiceLocale
+        busy = "Making the command"
+        defer { busy = nil }
+        do {
+            let url = try await worker.run { _ -> URL in
+                let data = try VoiceCommandFile.make(count: size.steps, pace: pace, batch: size.batch, locale: locale, tap: tap, screenWidth: width)
+                let dir = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString)", isDirectory: true)
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let url = dir.appendingPathComponent("Pogo scan \(count).voicecontrolcommands")
+                try data.write(to: url, options: .atomic)
+                return url
+            }
+            if let a = account {
+                let rec = VoiceRecord(storageCount: count, covers: size.covers, pace: pace, date: Date())
+                if let d = try? JSONEncoder().encode(rec) { UserDefaults.standard.set(d, forKey: Keys.voice + a) }
+                voiceLast = rec
+            }
+            shareURLs = [url]
+        } catch { message = "The command could not be made: \(Self.plain(error))" }
+    }
 
     init() {
         let root = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))?
             .appendingPathComponent("PogoAssist", isDirectory: true).appendingPathComponent("boxes", isDirectory: true)
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("boxes", isDirectory: true)
+        // The UI test starts from a clean install each time: it passes this argument and the app forgets everything first.
+        if CommandLine.arguments.contains("-uitest-reset") {
+            if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
+            try? FileManager.default.removeItem(at: root)
+            SharedStore.clear()
+            if let c = SharedStore.containerURL { try? FileManager.default.removeItem(at: c.appendingPathComponent("replay.processed")) }
+        }
         library = BoxLibrary(root: root)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
         storageCountText = UserDefaults.standard.string(forKey: Keys.count) ?? ""
+        pace = VoiceCommandFile.Pace(rawValue: UserDefaults.standard.string(forKey: Keys.pace) ?? "") ?? .swipeNormal
         account = UserDefaults.standard.string(forKey: Keys.account)
         reloadAccounts()
         loadBox()
+        loadVoiceRecord()
         refreshBroadcast()
         CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), { _, observer, _, _, _ in
             guard let observer else { return }
@@ -99,6 +160,7 @@ final class AppModel: ObservableObject {
         guard name != account else { return }
         account = name
         loadBox()
+        loadVoiceRecord()
     }
 
     // MARK: - box
@@ -195,7 +257,10 @@ final class AppModel: ObservableObject {
             try await worker.run { _ in try lib.renameAccount(from: old, to: new) }
             let name = new.trimmingCharacters(in: .whitespacesAndNewlines)
             accounts = (try? library.accounts()) ?? accounts
-            if account == old { account = name; loadBox() }
+            if let d = UserDefaults.standard.data(forKey: Keys.voice + old) {
+                UserDefaults.standard.set(d, forKey: Keys.voice + name); UserDefaults.standard.removeObject(forKey: Keys.voice + old)
+            }
+            if account == old { account = name; loadBox(); loadVoiceRecord() }
             return nil
         } catch { return Self.plain(error) }
     }

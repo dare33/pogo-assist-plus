@@ -11,6 +11,7 @@ final class FlowTests: XCTestCase {
 
     func testWholeFlow() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset"]
         app.launch()
         let field = app.textFields["Trainer name"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -80,5 +81,34 @@ final class FlowTests: XCTestCase {
         fix.tap()
         sleep(1)
         shot("13-fix-a-value")
+    }
+
+    /// The Scan screen with a storage count typed: the command estimate and the pace choices.
+    func testScanCommandScreen() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset"]
+        app.launch()
+        let field = app.textFields["Trainer name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap(); field.typeText("Greg main")
+        app.buttons["Create account"].tap()
+        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
+        app.buttons["Scan Pokémon"].tap()
+        let count = app.textFields["Optional"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        count.tap(); count.typeText("1400")
+        app.buttons["Done"].tap()   // dismiss the number pad
+        sleep(1)
+        let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
+        shot(name + "-top")
+        app.swipeUp()
+        let tapRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Tap (1.2'")).firstMatch
+        if tapRow.exists && tapRow.isEnabled && tapRow.isHittable { tapRow.tap() }   // only on a screen where tap paging has been checked
+        shot(name)
+        let get = app.buttons["Get the command"]
+        XCTAssertTrue(get.waitForExistence(timeout: 5))
+        get.tap()
+        sleep(3)
+        shot(name + "-share")
     }
 }

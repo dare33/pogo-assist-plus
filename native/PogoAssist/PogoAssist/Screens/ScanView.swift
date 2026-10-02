@@ -4,6 +4,7 @@ import PogoReader
 
 struct ScanView: View {
     @EnvironmentObject var model: AppModel
+    @FocusState private var countFocused: Bool
 
     var body: some View {
         List {
@@ -31,9 +32,10 @@ struct ScanView: View {
                 HStack {
                     Text("Pokémon in storage")
                     Spacer()
-                    TextField("Optional", text: $model.storageCountText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120)
+                    TextField("Optional", text: $model.storageCountText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120).focused($countFocused)
                 }
-            } footer: { Text("Saved with the scan. Nothing uses it yet.") }
+            } footer: { Text("Saved with the scan, and used to size the Voice Control command below.") }
+            commandSection
             Section {
                 if model.live { liveStatus } else {
                     HStack {
@@ -49,6 +51,60 @@ struct ScanView: View {
         }
         .navigationTitle("Scan Pokémon")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { countFocused = false } } }
+    }
+
+    // MARK: - the Voice Control command
+
+    private var commandSection: some View {
+        Section {
+            ForEach(VoiceCommandFile.Pace.allCases) { p in paceRow(p) }
+            if let c = model.storageCount {
+                let size = VoiceCommandFile.sizing(storageCount: c, pace: model.pace)
+                Text("About \(minutes(size.estimatedSeconds)) for \(c.formatted()) Pokémon (\(size.steps) steps).").font(.footnote)
+            }
+            if model.pace.isTap {
+                Text("Taps stay at the right edge, away from Power up and Evolve. Taps past the end close the appraisal and then do nothing (tested on the 440 x 956 iPhone only).").font(.footnote).foregroundStyle(.secondary)
+            }
+            if !model.tapAvailable {
+                Text("Tap paging is only available on screens it has been checked on.").font(.footnote).foregroundStyle(.secondary)
+            }
+            if let last = model.voiceLast {
+                Text("Last generated for \(last.storageCount.formatted()) Pokémon (\(last.pace.shortTitle)), \(Fmt.day(last.date)).").font(.footnote).foregroundStyle(.secondary)
+                if let c = model.storageCount, VoiceCommandFile.steps(storageCount: c) > last.covers {
+                    Label("Your count is higher than that command covers. Get the command again.", systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.orange)
+                }
+            }
+            Button { Task { await model.getCommand() } } label: { Label("Get the command", systemImage: "square.and.arrow.up") }
+                .disabled(model.storageCount == nil)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("To install it").font(.footnote.weight(.semibold))
+                Text("1. Choose Save to Files or AirDrop in the sheet that opens.").font(.footnote)
+                Text("2. Settings > Accessibility > Voice Control > Commands > Import Custom Commands, then pick the file.").font(.footnote)
+                Text("3. With the first Pokémon's appraisal open, say \"Pogo scan\". A new file replaces the old command.").font(.footnote)
+            }
+            .foregroundStyle(.secondary)
+        } header: { Text("Voice Control command") } footer: { Text("Optional. Without it, swipe through the Pokémon by hand.") }
+    }
+
+    private func minutes(_ seconds: Double) -> String {
+        let m = Int((seconds / 60).rounded())
+        return m < 1 ? "under a minute" : m == 1 ? "1 minute" : "\(m) minutes"
+    }
+
+    private func paceRow(_ p: VoiceCommandFile.Pace) -> some View {
+        let disabled = p.isTap && !model.tapAvailable
+        return Button { model.pace = p } label: {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.title).foregroundStyle(disabled ? Color.secondary : Color.primary)
+                    if !p.provenOnFullBox { Text("not yet proven on a full box").font(.footnote).foregroundStyle(Color.secondary) }
+                }
+                Spacer()
+                if model.pace == p && !disabled { Image(systemName: "checkmark") }
+            }
+        }
+        .disabled(disabled)
     }
 
     @ViewBuilder private var liveStatus: some View {

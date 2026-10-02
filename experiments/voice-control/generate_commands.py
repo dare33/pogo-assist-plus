@@ -119,6 +119,23 @@ def swipes(start, count, x_from, x_to, y, every, duration, hz=60):
     return events
 
 
+def taps(start, count, x, y, every, hold=0.06):
+    """`count` taps at one fixed point, one starting every `every` seconds: a touch, and the lift `hold` seconds later.
+    A tap is a swipe that does not move."""
+    events = []
+    for k in range(count):
+        t0 = start + k * every
+        events.append((t0, (float(x), float(y))))
+        events.append((t0 + hold, None))
+    return events
+
+
+# Tap paging presses the game's right-hand "next Pokémon" arrow. Once the appraisal closes at the end of the list the
+# Pokémon page shows, with Power up and Evolve to the LEFT of that arrow, so a tap must stay at the right edge. The
+# generator refuses a tap point left of this fraction of the screen width; nothing may act in the game beyond paging.
+MIN_TAP_X_FRACTION = 0.95
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("out")
@@ -126,22 +143,30 @@ def main():
     p.add_argument("--name", default="Pogo scan", help="what to say; keep it unlike any other command")
     p.add_argument("--batch-name", default="Storage page step", help="name of the batch gesture; it must not share words with --name, or Voice Control can run the wrong one")
     p.add_argument("--batch", type=int, default=20, help="swipes in one gesture (50 was tested)")
-    p.add_argument("--every", type=float, default=2.1, help="seconds between swipe starts (2.1 gives 7 frames at 5 fps; 1.6 was tested on a small sample)")
+    p.add_argument("--every", type=float, default=None, help="seconds between swipe starts (default 2.1, or 1.2 with --tap; 2.1 gives 7 frames at 5 fps; 1.6 was tested on a small sample)")
     p.add_argument("--duration", type=float, default=0.85, help="seconds one swipe lasts (0.6 with --every 1.6)")
     p.add_argument("--x-from", type=float, default=340.0)
     p.add_argument("--x-to", type=float, default=75.0)
     p.add_argument("--y", type=float, default=340.0)
     p.add_argument("--locale", default="en_AU", help="the phone's Voice Control language")
+    p.add_argument("--tap", type=float, nargs=2, metavar=("X", "Y"), help="page by tapping the next-Pokémon arrow at this point (screen points) instead of swiping")
+    p.add_argument("--screen-width", type=float, default=440.0, help="width in points of the screen the --tap point was measured on")
+    p.add_argument("--now", help="fix the time stamps and identifiers (UTC, YYYY-MM-DDTHH:MM:SS) so two runs give the same file; for tests")
     args = p.parse_args()
+    if args.tap and args.tap[0] < MIN_TAP_X_FRACTION * args.screen_width:
+        p.error("--tap x %.1f is left of %.0f%% of the %.0f pt screen width: a tap there could reach Power up or Evolve" % (args.tap[0], MIN_TAP_X_FRACTION * 100, args.screen_width))
+    if args.every is None:
+        args.every = 1.2 if args.tap else 2.1
 
-    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    now = datetime.datetime.fromisoformat(args.now) if args.now else datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     ref = (now - datetime.datetime(2001, 1, 1)).total_seconds()  # Apple's reference date
     batch_id, chain_id = "Custom.%.6f" % ref, "Custom.%.6f" % (ref + 60)
     repeats = math.ceil(args.count / args.batch)
     base = dict(ConfirmationRequired=False, CustomModifyDate=now, CustomScope="com.apple.speech.SystemWideScope")
     table = {
         batch_id: dict(base, CustomCommands={args.locale: [args.batch_name]}, CustomType="RunGesture",
-                       CustomGesture=gesture(swipes(ref, args.batch, args.x_from, args.x_to, args.y, args.every, args.duration))),
+                       CustomGesture=gesture(taps(ref, args.batch, args.tap[0], args.tap[1], args.every) if args.tap
+                                              else swipes(ref, args.batch, args.x_from, args.x_to, args.y, args.every, args.duration))),
         chain_id: dict(base, CustomCommands={args.locale: [args.name]}, CustomType="RunUserActionFlow",
                        CustomUserActionFlow=flow(batch_id, repeats, args.locale)),
     }
@@ -151,7 +176,7 @@ def main():
     with open(args.out, "wb") as f:
         plistlib.dump({"CommandsTable": table, "ExportDate": ref, "SystemVersion": system}, f, fmt=plistlib.FMT_XML)
     minutes = repeats * (args.batch * args.every + 0.8) / 60
-    print(f'wrote {args.out}: say "{args.name}" for {repeats} x {args.batch} swipes ({repeats * args.batch} Pokémon, about {minutes:.0f} min)')
+    print(f'wrote {args.out}: say "{args.name}" for {repeats} x {args.batch} {"taps" if args.tap else "swipes"} ({repeats * args.batch} Pokémon, about {minutes:.0f} min)')
 
 
 if __name__ == "__main__":
