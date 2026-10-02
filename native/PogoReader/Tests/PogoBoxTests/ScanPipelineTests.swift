@@ -15,6 +15,7 @@ final class ScanPipelineTests: XCTestCase {
     func testReplayToSavedBoxAndBack() throws {
         let engine = CoreEngine()
         let out = try ScanPipeline.process(replay: sample, engine: engine)
+        print("TIMING sample scan: \(out.timings), \(out.scan.rows.count) rows")
         XCTAssertGreaterThan(out.scan.rows.count, 40)
         XCTAssertGreaterThan(out.readings, 300)
         XCTAssertGreaterThan(out.duration, 30)

@@ -126,9 +126,11 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 let result = try await worker.run { engine -> BoxAdvice in
+                    let t = Date()
                     let rows = Self.csvRows(entries)
                     let report = try engine.advise(rows: rows, scanDate: snap.scanDate ?? snap.createdAt)
                     let adv = BoxAdvice.make(from: report, entries: entries)
+                    NSLog("pogo timings: advise (engine, model) %.2f s", Date().timeIntervalSince(t))
                     try? lib.saveAdvice(adv, account: a, seq: seq)
                     return adv
                 }
@@ -256,7 +258,7 @@ final class AppModel: ObservableObject {
     func startReview(signature: String) {
         guard let url = SharedStore.replayURL, let a = account else { return }
         flow = .processing("Reading the scan")
-        let lib = library, entries = entries, kind = scanKind, date = Date()
+        let entries = entries, kind = scanKind, date = Date()
         let count = Int(storageCountText.trimmingCharacters(in: .whitespaces))
         Task {
             do {
@@ -266,7 +268,8 @@ final class AppModel: ObservableObject {
                     let plan = BoxMerge.plan(scanned: outcome.scan.rows, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
                     return (outcome, plan, Date().timeIntervalSince(t))
                 }
-                _ = lib
+                let t = outcome.timings
+                NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
                 flow = .review(Review(account: a, kind: kind, outcome: outcome, plan: plan, base: entries, storageCount: count, signature: signature, mergeSeconds: seconds))
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)

@@ -20,9 +20,12 @@ final class FlowTests: XCTestCase {
         shot("02-box-empty")
 
         app.buttons["More"].tap()
-        app.buttons["Diagnostics"].tap()
+        let diagnostics = app.buttons["Diagnostics"]
+        XCTAssertTrue(diagnostics.waitForExistence(timeout: 5))
+        diagnostics.tap()
         let load = app.buttons["Load sample scan"]
-        XCTAssertTrue(load.waitForExistence(timeout: 5))
+        if !load.waitForExistence(timeout: 8), diagnostics.exists { diagnostics.tap() }   // the menu can swallow the first tap
+        XCTAssertTrue(load.waitForExistence(timeout: 10))
         shot("03-diagnostics")
         load.tap()
         let save = app.buttons["Save to box"]

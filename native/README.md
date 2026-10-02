@@ -31,8 +31,8 @@ here contacts the game or sends input.
 
 Bundle ids and the app group are in one place, `PogoAssist/Config/Identifiers.xcconfig`
 (`com.dare33.pogoassist`, `com.dare33.pogoassist.broadcast`, `group.com.dare33.pogoassist`); change
-`BUNDLE_ID_PREFIX` there if Xcode cannot register them. `DEVELOPMENT_TEAM` is empty and signing is
-automatic: pick your team in Xcode (Signing & Capabilities, both targets) and run on a device. The
+`BUNDLE_ID_PREFIX` there if Xcode cannot register them. The signing team lives in the git-ignored
+`Config/Signing.local.xcconfig` (see `Signing.local.xcconfig.example`); signing is automatic. The
 simulator cannot run a broadcast extension usefully; the extension is only compile-checked there.
 
 ## Run the tests
@@ -96,8 +96,10 @@ Needs an Xcode that supports the phone's iOS version (Xcode 26.6 has the iOS 26.
 phone on an iOS 27 beta needs the matching Xcode beta).
 
 1. Open `native/PogoAssist/PogoAssist.xcodeproj`. In Xcode's Settings > Accounts, sign in.
-2. Select the `PogoAssist` target > Signing & Capabilities > pick the team. Do the same for the
-   `PogoBroadcast` target. Both must show the app group `group.com.dare33.pogoassist` with no
+2. Signing: copy `native/PogoAssist/Config/Signing.local.xcconfig.example` to `Signing.local.xcconfig` in the same
+   folder (git-ignored) and put your team id in it; `Identifiers.xcconfig` includes it, so no team id is ever written into
+   the tracked project file. Do not pick the team in Xcode's Signing & Capabilities pane (that writes it into the project);
+   open the pane only to check that both the `PogoAssist` and `PogoBroadcast` targets show no error. Both must show the app group `group.com.dare33.pogoassist` with no
    error. If an identifier is taken, change `BUNDLE_ID_PREFIX` in `Config/Identifiers.xcconfig`
    (the only place) and try again.
 3. Plug in the phone, choose it as the run destination, press Run (it builds Release). Trust the
@@ -437,3 +439,32 @@ The phone listed 51 Pokemon. The JavaScript `finish` on the log gives 49 rows an
 with `LiveGrouper`) gives exactly the phone's 51 (name and CP, in order): the twin Staraptor 1986 (HP 139), which no swipe
 tick separates, is split because `LiveGrouper` has two rows there; Zapdos 1977 is computed; the unmatched Staraptor 1994 entry
 is dropped as a duplicate of the row beside it. `DeviceRunTests` pins the three lists.
+
+## The app's screens (`PogoAssist/PogoAssist`)
+
+Tabs Box and Next, with Settings and Diagnostics in the menu at the top right. Box: one account at a time (switcher at the
+top; the first launch asks for a name), the list sorted by CP with an "All / To check" filter and search, a "Scan Pokemon"
+button, a detail screen per Pokemon (flags in plain words, the advisor's entries, "Fix a value"), CSV export. Scan: scan kind
+(full, or add and update), checklist, optional storage count, the system broadcast button, live frame and Pokemon counts.
+Scan result: opens by itself when the app finds a `replay.jsonl` that has not been through review (a `replay.processed` marker
+beside it holds the size and time of the last one that was); it runs `ScanPipeline.process` (log, `finish`, `Refine`) and
+`BoxMerge.plan` on one engine queue (`EngineWorker`) and shows New, Updated, Same, Unsure (each answered by hand) and, for a
+full scan, Gone, then Save to box or Discard. Next: the advisor's builds, gaps and duplicates, cached per box version.
+
+Diagnostics is the old one-screen test rig, unchanged in behaviour, plus "Load sample scan", which copies a bundled device log
+(`Resources/sample-scan.replay.jsonl`, the owner's own 51-Pokemon run) into the app group as if a broadcast had just finished.
+In the unsigned simulator build the app group does not exist; `SharedStore.containerURL` then uses the app's Documents folder
+(simulator only). `PogoAssistUITests/FlowTests` drives the whole flow in the simulator and saves screenshots:
+
+    TEST_RUNNER_POGO_SCREENS=<folder> xcodebuild -project PogoAssist.xcodeproj -scheme PogoAssist -sdk iphonesimulator \
+      -destination 'platform=iOS Simulator,id=<an iPhone simulator id>' CODE_SIGNING_ALLOWED=NO test
+
+### Box merge rules (`PogoBox/BoxMerge.swift`)
+
+A scanned Pokemon is matched to a saved one, in order: unchanged (species and form, three IVs, CP), powered up (same, higher
+CP), evolved (a later stage in the game master's family data, same IVs), IVs unread on either side (species, CP, HP), twins by
+count; more than one candidate that are not interchangeable is "unsure" and never guessed. A full scan proposes unmatched
+saved Pokemon as gone (applied only on Save); add and update removes nothing. Hand corrections remember the value the scan had
+read: a later scan reading that same value, or the corrected one, leaves the correction; any other value replaces it. The box
+is kept as numbered versions (`BoxLibrary`, `<account>/box/NNNNNN.json`); a scan, a correction and a restore each add one and
+none is deleted; Settings restores any of them (as a new version). The replay log is kept beside the saved scan in `BoxStore`.
