@@ -105,6 +105,69 @@ final class FoldMergeTests: XCTestCase {
         }
         XCTAssertTrue(plan([row(cp: 1000, ivs: x)], [plain, fixed], .partial).gone.isEmpty)
     }
+
+    // M12: a saved entry that was misread (no IVs, no level fits) meets a correctly read row of the same Pokémon
+    private func misread(_ id: String = "heatmor", cp: Int = 64, hp: Int? = 92, flags: [String] = ["no-level-fits"]) -> ScanRow {
+        var r = row(id, cp: cp, hp: hp, ivs: nil, level: nil, dust: nil, flags: flags); r.solveStatus = "none"; r.ivsRead = nil; return r
+    }
+
+    func testM12AMisreadSavedEntryIsOfferedAndTheGoodReadReplacesItsValues() throws {
+        let bad = entry(misread(), "h")
+        let good = row("heatmor", cp: 764, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)
+        let p = plan([good], [bad])
+        XCTAssertEqual(p.unsure.first?.candidates, ["h"]); XCTAssertTrue(p.new.isEmpty); XCTAssertEqual(p.unsure.first?.kind, .misreadSaved)
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("h")], to: [bad])
+        XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].id, "h"); XCTAssertEqual(out[0].firstSeen, date(0))
+        XCTAssertEqual(out[0].row.cp, 764); XCTAssertEqual(out[0].row.ivs, IVs(atk: 7, def: 14, hp: 2)); XCTAssertEqual(out[0].row.level, 30); XCTAssertEqual(out[0].row.dust, 5000)
+        XCTAssertTrue(out[0].row.flags.isEmpty, "the no-level-fits flag is cleared")
+        XCTAssertEqual(out[0].row.solveStatus, "exact")
+    }
+
+    func testM12AlsoWhenTheGoodReadsCPIsLowerAndOnlyReadValuesAreCopied() throws {
+        let bad = entry(misread(cp: 800), "h")
+        let good = row("heatmor", cp: 764, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)
+        let p = plan([good], [bad])
+        XCTAssertEqual(p.unsure.first?.candidates, ["h"], "a lower CP does not hide it")
+        // a part of the good read that is missing does not wipe the saved value (M1): here the HP was not read this time
+        var noHP = good; noHP.hp = nil
+        let p2 = plan([noHP], [bad])
+        XCTAssertEqual(p2.unsure.first?.candidates, ["h"], "an HP not read counts as the same HP")
+        let out = try BoxMerge.apply(p2, resolutions: [0: .existing("h")], to: [bad])
+        XCTAssertEqual(out[0].row.hp, 92); XCTAssertEqual(out[0].row.cp, 764)
+    }
+
+    func testM12KeepsHandCorrectionsOnFieldsThePersonSet() throws {
+        var fixed = entry(misread(), "h")
+        fixed.row.hp = 92; fixed.corrections = Corrections(hp: Fix(was: 91))
+        let good = row("heatmor", cp: 764, hp: 91, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)   // the scan reads the old wrong HP again
+        let p = plan([good], [fixed])
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("h")], to: [fixed])
+        XCTAssertEqual(out[0].row.hp, 92, "the corrected HP stays"); XCTAssertEqual(out[0].corrections.hp, Fix(was: 91)); XCTAssertEqual(out[0].row.cp, 764)
+    }
+
+    func testM12ItIsNewAddsTheRowAndLeavesTheSavedEntryEvenInAFullScan() throws {
+        let bad = entry(misread(), "h")
+        let good = row("heatmor", cp: 764, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)
+        let p = plan([good], [bad], .full)
+        let out = try BoxMerge.apply(p, resolutions: [0: .new], to: [bad], makeID: { "n" })
+        XCTAssertEqual(out.map { $0.id }, ["h", "n"], "the saved entry is left alone")
+        XCTAssertEqual(out[0].row.cp, 64)
+    }
+
+    func testM12TwoSavedCandidatesAreBothListed() {
+        let a = entry(misread(), "a"), b = entry(misread(cp: 66), "b")
+        let good = row("heatmor", cp: 764, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)
+        XCTAssertEqual(plan([good], [a, b]).unsure.first?.candidates.sorted(), ["a", "b"])
+    }
+
+    func testM12NeedsTheSameSpeciesAndHPAndAnIVlessMisreadEntry() {
+        let good = row("heatmor", cp: 764, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)
+        // another HP, another species, or a saved entry that was read properly: not offered
+        XCTAssertEqual(plan([good], [entry(misread(hp: 100), "h")]).new, [0], "a different HP, and a power-up never lowers it")
+        XCTAssertEqual(plan([good], [entry(misread("charmander"), "h")]).new, [0])
+        let proper = entry(row("heatmor", cp: 900, hp: 92, ivs: IVs(atk: 1, def: 1, hp: 1)), "h")   // has IVs, different ones: another Pokémon
+        XCTAssertEqual(plan([good], [proper]).new, [0])
+    }
 }
 
 final class FoldLibraryTests: XCTestCase {

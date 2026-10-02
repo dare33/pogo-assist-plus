@@ -59,7 +59,9 @@ public enum BoxMerge {
     /// A scanned Pokémon that could be more than one saved one. `candidates` are saved ids, never empty.
     public struct Unsure: Equatable {
         public enum Kind: String, Equatable {
-            case ambiguous, partialRead
+            case ambiguous, partialRead, misreadSaved
+            /// The saved entries are misreads (no IVs, no level fits) of what this correctly read row is: "It is this one" replaces their
+            /// unread values with the read ones; "It is new" adds the row and leaves them.
             /// The scan saw two identical Pokémon in a row (by the paging beat) and the box has one: add a second, or leave it out.
             case extraTwin
         }
@@ -247,8 +249,12 @@ public enum BoxMerge {
             }
             let part = partialCandidates(r, saved)
             let plausible = vPool.filter { plausibleCandidate(r, saved[$0]) && !part.contains($0) }
-            if part.isEmpty && plausible.isEmpty { stillNew.append(si); continue }
-            ask([si], part + plausible, kind: part.isEmpty ? .ambiguous : .partialRead)
+            // M12: a saved entry that was misread (no IVs, no level fits) of this correctly read row, whatever the CP.
+            let misread = vPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
+            if part.isEmpty && plausible.isEmpty && misread.isEmpty { stillNew.append(si); continue }
+            let all = part + plausible + misread
+            let kind: Unsure.Kind = !part.isEmpty ? .partialRead : (all.allSatisfy { misreadSaved(r, saved[$0]) } ? .misreadSaved : .ambiguous)
+            ask([si], all, kind: kind)
         }
         sPool = stillNew
         plan.new = sPool
@@ -279,7 +285,9 @@ public enum BoxMerge {
                 guard u.kind != .extraTwin else { break }
                 leftOutRows.append((plan.scanned[u.scanned].speciesKey, plan.scanned[u.scanned].title))
                 leftOutCandidates.formUnion(u.candidates)
-            case .new?: break
+            case .new?:
+                // Answering "new" to a row that a misread saved entry might have been leaves that entry alone, in a full scan too.
+                if u.kind == .misreadSaved { seen.formUnion(u.candidates) }
             }
         }
         let items = plan.unmatchedItems.filter { $0.reason != "absorbed" }
@@ -371,8 +379,17 @@ public enum BoxMerge {
 
     /// A saved entry the unmatched row could be, when it is not the exact or power-up match: the same species and IVs that do not
     /// contradict each other; and for a row that has no IVs, or a saved entry that has none, a CP that is not lower (a power-up).
+    /// A saved entry flagged `no-level-fits` (or without a usable CP) and without IVs, of the same species and HP (or an HP not read) as a
+    /// row that has its IVs: the saved one was probably a misread of this Pokémon.
+    private static func misreadSaved(_ s: ScanRow, _ v: BoxEntry) -> Bool {
+        guard s.ivs != nil, v.row.ivs == nil, sameSpecies(s, v) else { return false }
+        guard v.row.flags.contains(where: { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }) || v.row.cp <= 0 else { return false }
+        return s.hp == nil || v.row.hp == nil || sameHP(s, v)
+    }
+
     private static func plausibleCandidate(_ s: ScanRow, _ v: BoxEntry) -> Bool {
         guard sameSpecies(s, v) else { return false }
+        if let a = s.hp, let b = v.row.hp, a < b, s.ivs == nil || v.row.ivs == nil { return false }   // a power-up never lowers the HP
         if let a = s.ivs, let b = v.row.ivs { return a == b || v.corrections.ivs?.was == a }   // equal IVs: any CP or HP (a power-up that is not consistent, or a lower CP)
         return s.cp <= 0 || s.cp >= v.row.cp
     }

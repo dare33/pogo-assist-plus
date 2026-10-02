@@ -49,6 +49,7 @@ struct UnsureCard: View {
     private var explanation: String {
         switch unsure.kind {
         case .partialRead: return "Only part of the CP was read, so this may be a Pokémon already in your box."
+        case .misreadSaved: return "A Pokémon in your box was read badly earlier (no IVs). This may be the same Pokémon read properly: choosing it replaces the unread values with these."
         case .extraTwin: return "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
         case .ambiguous: return "It could be more than one Pokémon already in your box."
         }
