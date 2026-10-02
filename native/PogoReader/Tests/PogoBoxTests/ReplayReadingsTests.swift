@@ -28,7 +28,8 @@ final class ReplayReadingsTests: XCTestCase {
         ])
         let r = try ReplayReadings.parse(d)
         XCTAssertEqual(r.readings.map(\.frame), ["f0", "f1", "f2"])
-        XCTAssertEqual(r.skippedLines, 3)
+        XCTAssertEqual(r.skippedLines, 2, "the header and the dropped-frame marker; the tick line is a tick")
+        XCTAssertEqual(r.ticks, [0.3])
         XCTAssertEqual(r.malformedLines, 0)
     }
 
@@ -53,5 +54,36 @@ final class ReplayReadingsTests: XCTestCase {
 
     func testRealFixtureLoads() throws {
         XCTAssertEqual(try Fixture.readings().count, 60)
+    }
+}
+
+final class ReplayTickTests: XCTestCase {
+    func testTickLinesAreCollectedAndNotCountedAsSkipped() throws {
+        let reading: [String: Any] = ["frame": "f0", "time": 0.0, "cpText": "CP1", "nameText": "x", "cp": 1]
+        let objs: [Any] = [["kind": "tick", "time": 1.5], reading, ["type": "tick", "t": 2.5], ["tick": 3.5], ["kind": "dropped", "time": 4.0], ["kind": "tick"]]
+        let text = try objs.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }.joined(separator: "\n")
+        let r = try ReplayReadings.parse(Data(text.utf8))
+        XCTAssertEqual(r.ticks, [1.5, 2.5, 3.5])
+        XCTAssertEqual(r.readings.count, 1)
+        XCTAssertEqual(r.skippedLines, 2, "the dropped marker and a tick line with no time")
+        XCTAssertTrue(r.hasTicks)
+    }
+
+    func testPogoReadOutputDerivesTicksFromSignatureDiffs() throws {
+        // 3 consecutive frames above the threshold complete a swipe event; the tick is stamped on the third.
+        var readings = [[String: Any]]()
+        var diffs = [Any]()
+        for i in 0..<12 {
+            readings.append(["frame": "f\(i)", "time": Double(i) * 0.2, "cpText": "", "nameText": "", "flags": [String]()])
+            diffs.append(i == 0 ? NSNull() : (i >= 4 && i <= 7 ? 30.0 : 1.0))
+        }
+        let json = try JSONSerialization.data(withJSONObject: ["readings": readings, "signatureDiffs": diffs])
+        let r = try ReplayReadings.parse(json)
+        XCTAssertEqual(r.ticks.count, 1)
+        XCTAssertEqual(r.ticks[0], 6 * 0.2, accuracy: 1e-9)
+    }
+
+    func testNoSignatureDiffsNoTicks() throws {
+        XCTAssertFalse(try ReplayReadings.parse(Data(#"{"readings":[]}"#.utf8)).hasTicks)
     }
 }

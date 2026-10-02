@@ -323,3 +323,74 @@ Remaining:
 - A tick between two card readings at least 0.55 s apart splits even when it is a false jump; the marker helps but is not certain.
 - `pogo-drop` shows consistency with the full-rate rows, not capture of every Pokemon.
 - Nothing has run on a device.
+
+## PogoBox: the app core (JavaScript grouping and solver inside the app)
+
+`PogoReader/Sources/PogoBox` is a second library in the same package. It runs the project's own JavaScript
+(`finish`: group, vote, solve, dedupe, flag; the Poke Genie CSV; clip joining; the advisor) in JavaScriptCore, so a
+scan's frame readings become roster rows, a saved box and a CSV with no second implementation to keep in step. **The
+app links `PogoBox`; the broadcast extension must not** (nothing in PogoBox is reachable from `PogoReader`, which is
+all the extension links; iOS kills the extension at about 50 MB and the JavaScript data is 2 MB of JSON plus the
+interpreter).
+
+- `CoreEngine` owns a `JSContext`, loads `pogo-core.js` and the three data files once (lazily, or `prepare()`), and
+  passes readings and results as JSON text. JavaScript exceptions come out as `CoreEngine.Failure.script(message:line:)`.
+  Thread-confined: use it from one serial queue. API: `finish(readings:) -> ScanResult` (rows, review, unmatched),
+  `csv(rows:scanDate:)`, `mergeClips(_:)`, `advise(rows:)` / `advise(csv:)` / `advise(box:)`, `importPokeGenie(csv:)`.
+- `ReplayReadings.load(url:)` reads a `pogo-read` output (`{readings, signatureDiffs}`) or a JSON-lines replay log
+  (tolerant: reading lines are kept, tick lines become swipe ticks, other kinds are skipped; the assumed log format is in
+  `readingObject(line:)` and `tickTime(line:)`, the only two places to change).
+- `BoxStore(root:)` keeps a box per account as JSON files (`save`, `list`, `load`, `currentBox`, `exportCSV`, `delete`);
+  writes are atomic and an unreadable file is reported, not fatal. The current box is the latest FULL scan.
+  `mergeIncremental` is a stub that throws `notImplemented` (the matching rule for a later partial scan is undecided).
+- `Refine` is a separate Swift post-pass over the JavaScript result (`CoreEngine.finish` itself stays a pure
+  pass-through): it splits two identical neighbours at a swipe tick (rows after the first get `same-as-previous`) and
+  turns a `cp-not-read` entry with exactly one possible CP into a row (`cp-computed:<cp>`). `GrouperDiff` runs
+  `LiveGrouper` over the same readings and ticks and lists where it and the refined rows differ (a diagnostic).
+
+What the app will call after a scan: `let engine = CoreEngine()` (own queue) then
+`engine.finish(readings:)`, `Refine.apply(to:readings:ticks:engine:)`, `BoxStore.save(_:account:source:)`,
+`BoxStore.exportCSV(_:using:)`.
+
+### Rebuild the bundle
+
+`PogoBox/Resources/pogo-core.js` and the three data files are generated from a checkout of the JavaScript (they are
+committed; do not edit them):
+
+    node native/tools/build-js-bundle.mjs --repo <checkout> --out native/PogoReader/Sources/PogoBox/Resources
+
+Plain Node, no dependencies, no bundler: it resolves the import graph from the entry modules, rewrites `import`/`export`,
+wraps each module in a function scope, refuses a module that is not on its allow-list (Node, frame, OCR and PNG code),
+writes the source commit and a SHA-256 of every source file into the header, then loads the result in a bare `vm` context
+and runs `finish` as a self-test. `node native/tools/build-js-bundle.mjs --self-test <pogo-core.js>` repeats the
+self-test. The committed bundle comes from `extractor-read-faults` at 3464a9b, whose review gate is not passed: re-run
+the tool when that branch's logic changes. `native/tools/make-core-fixture.mjs` cuts the parity fixture
+(`Tests/PogoBoxTests/Fixtures`) from a readings file and the JavaScript's own output.
+
+### Run `pogo-rows`
+
+    cd native/PogoReader && swift build -c release
+    .build/release/pogo-rows <readings.json | replay.jsonl> [--csv out.csv] [--json out.json] [--advise] [--refine | --no-refine] [--diff]
+
+Prints the roster table of the JavaScript CLI, a summary line, the time taken and the peak physical footprint.
+`--refine` is the default when the input has swipe ticks and prints base and refined row counts; `--diff` compares the
+refined rows with `LiveGrouper`.
+
+### Tests
+
+`swift test` runs the PogoBox tests with the rest. The fixture parity test (60 readings from marathon-phone against the
+JavaScript's output under Node) is always on. The tests on real readings under `pogo-frames/_out` are opt-in:
+
+    POGO_PARITY=1 swift test --filter PogoBoxTests        # needs node on PATH and the reference checkout (POGO_REF)
+
+### Known limits
+
+- The JavaScript grouping merges two identical neighbouring Pokémon (same name, CP, HP, bars); `Refine` splits them only
+  where a swipe tick lies between two card readings at least 0.55 s apart.
+- A Pokémon whose CP was never read is listed under `unmatched`, not as a row, unless `Refine` can compute its CP
+  (one possible value).
+- Swipe ticks are not used by the JavaScript itself.
+- Speed: `finish` takes seconds on a phone-sized scan and about 35 s on a 3,975-reading, 770-row one (darentas-02) on a Mac with
+  JIT; the cost is almost all `cpm()` in `src/cpm.js` looking a fractional level up in an object (`CPM[12.5]`). An
+  equivalent Map lookup gives identical output about 5 times faster under Node; that change belongs in the JavaScript
+  source and is not made here. iOS runs JavaScriptCore without JIT in an app, which is slower still; unmeasured.
