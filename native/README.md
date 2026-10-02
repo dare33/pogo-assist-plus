@@ -471,7 +471,11 @@ In the unsigned simulator build the app group does not exist; `SharedStore.conta
 
 A scanned Pokemon is matched to a saved one, in order: unchanged (species and form, three IVs, CP), powered up (same, higher
 CP), evolved (a later stage in the game master's family data, same IVs), IVs unread on either side (species, CP, HP), twins by
-count; more than one candidate that are not interchangeable is "unsure" and never guessed. A full scan proposes unmatched
+count (an extra scanned row identical to a paired entry is asked about, flagged by the paging beat or not); more than one candidate
+that are not interchangeable is "unsure" and never guessed. What matched nothing is asked about when it could be a saved entry: a part-read
+CP, a power-up whose IVs were not read, a lower CP, the same CP and HP with other IVs (a misread or a hand correction), or an evolution
+whose IVs were not read (the saved precursor is the candidate). Every such row is judged against all the saved entries left, so two rows
+that could be one entry are both asked, and Save refuses one entry chosen for two rows. A full scan proposes unmatched
 saved Pokemon as gone (applied only on Save); add and update removes nothing. Hand corrections remember the value the scan had
 read: a later scan reading that same value, or the corrected one, leaves the correction; any other value replaces it. The box
 is kept as numbered versions (`BoxLibrary`, `<account>/box/NNNNNN.json`); a scan, a correction and a restore each add one and
@@ -623,6 +627,8 @@ links it. The UI test passes `-uitest-reports-enabled` to show the button; that 
 ### Merge: a misread saved entry (M12)
 
 A saved entry flagged `no-level-fits` (or with no usable CP) and no IVs, of the same species and HP (or an HP not read) as a correctly read
-row that matched nothing else, is offered as Unsure with the entry as the candidate, whatever the CP: "It is this one" replaces its unread
-values with the row's read values (CP, IVs, level, dust; the id, first seen and hand corrections stay, and the flag clears); "It is new" adds
-the row and leaves the entry, in a full scan too. Only read values are ever copied over a saved one.
+row that matched nothing else, is offered as Unsure with the entry as a candidate, whatever the CP. The two promises hold for each such
+candidate, whatever the kind of question (other, plausible candidates or a part-read CP may be in it too). "It is this one" for a misread
+candidate replaces its unread values with the row's read values (CP, IVs, level, dust; the id, first seen and hand corrections stay, and the
+flag clears). "It is new" adds the row and leaves every misread candidate in the box, in a full scan too; the other candidates follow the
+usual rule and may go. Only read values are ever copied over a saved one.

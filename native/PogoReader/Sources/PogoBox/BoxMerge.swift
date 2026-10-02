@@ -68,7 +68,10 @@ public enum BoxMerge {
         public var scanned: Int
         public var candidates: [String]
         public var kind: Kind = .ambiguous
-        public init(scanned: Int, candidates: [String], kind: Kind = .ambiguous) { self.scanned = scanned; self.candidates = candidates; self.kind = kind }
+        /// The candidates that are misread saved entries (no IVs, no level fits) of this correctly read row, whatever the kind: "It is new"
+        /// leaves them in the box and choosing one replaces its unread values, even when other, plausible candidates were present.
+        public var misread: [String] = []
+        public init(scanned: Int, candidates: [String], kind: Kind = .ambiguous, misread: [String] = []) { self.scanned = scanned; self.candidates = candidates; self.kind = kind; self.misread = misread }
     }
 
     public struct Plan: Equatable {
@@ -219,9 +222,10 @@ public enum BoxMerge {
                     let ordered = vs.sorted { (saved[$0].isHandCorrected ? 0 : 1, $0) < (saved[$1].isHandCorrected ? 0 : 1, $1) }
                     let paired = Array(zip(ss, ordered))
                     for (si, vi) in paired { record(rule, si, vi) }
-                    // M8: a surplus row that the paging beat says is a second identical Pokémon is asked about, not silently added.
+                    // M8: a surplus row identical to the saved entry it was paired with (same CP, IVs and HP) is a second identical Pokémon:
+                    // asked about whether or not the paging beat flagged it, never silently added.
                     if rule == .unchanged, ss.count > ordered.count, let last = paired.last {
-                        let extra = ss.dropFirst(ordered.count).filter { rows[$0].flags.contains { $0 == "same-as-previous" || $0 == "split-by-timing" } }
+                        let extra = ss.dropFirst(ordered.count).filter { rows[$0].hp == nil || saved[last.1].row.hp == nil || sameHP(rows[$0], saved[last.1]) }
                         for si in extra { plan.unsure.append(Unsure(scanned: si, candidates: [saved[last.1].id], kind: .extraTwin)); sPool.removeAll { $0 == si } }
                     }
                 } else {
@@ -236,6 +240,9 @@ public enum BoxMerge {
 
         // What is left: a row that matched nothing is asked about when it could be a saved Pokémon (a part-read CP, a power-up whose
         // IVs were not read, a lower CP, ...), and only otherwise is New.
+        // Every leftover row is judged against the same pool: a row asked about an entry does not hide it from the next row that could
+        // also be it (two reads of one saved Pokémon are both asked; applying the answers refuses one entry taken twice).
+        let leftoverPool = vPool
         var stillNew = [Int]()
         for si in sPool {
             let r = rows[si]
@@ -248,13 +255,14 @@ public enum BoxMerge {
                 stillNew.append(si); continue
             }
             let part = partialCandidates(r, saved)
-            let plausible = vPool.filter { plausibleCandidate(r, saved[$0]) && !part.contains($0) }
+            let plausible = leftoverPool.filter { plausibleCandidate(r, saved[$0], gm) && !part.contains($0) }
             // M12: a saved entry that was misread (no IVs, no level fits) of this correctly read row, whatever the CP.
-            let misread = vPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
+            let misread = leftoverPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
             if part.isEmpty && plausible.isEmpty && misread.isEmpty { stillNew.append(si); continue }
             let all = part + plausible + misread
             let kind: Unsure.Kind = !part.isEmpty ? .partialRead : (all.allSatisfy { misreadSaved(r, saved[$0]) } ? .misreadSaved : .ambiguous)
             ask([si], all, kind: kind)
+            plan.unsure[plan.unsure.count - 1].misread = all.filter { misreadSaved(r, saved[$0]) }.map { saved[$0].id }
         }
         sPool = stillNew
         plan.new = sPool
@@ -286,8 +294,9 @@ public enum BoxMerge {
                 leftOutRows.append((plan.scanned[u.scanned].speciesKey, plan.scanned[u.scanned].title))
                 leftOutCandidates.formUnion(u.candidates)
             case .new?:
-                // Answering "new" to a row that a misread saved entry might have been leaves that entry alone, in a full scan too.
-                if u.kind == .misreadSaved { seen.formUnion(u.candidates) }
+                // Answering "new" to a row that a misread saved entry might have been leaves that entry alone, in a full scan too, whatever
+                // the kind: the other, plausible candidates still follow M9.
+                seen.formUnion(u.misread)
             }
         }
         let items = plan.unmatchedItems.filter { $0.reason != "absorbed" }
@@ -387,10 +396,17 @@ public enum BoxMerge {
         return s.hp == nil || v.row.hp == nil || sameHP(s, v)
     }
 
-    private static func plausibleCandidate(_ s: ScanRow, _ v: BoxEntry) -> Bool {
+    private static func plausibleCandidate(_ s: ScanRow, _ v: BoxEntry, _ gm: GameMaster) -> Bool {
+        // An evolution whose IVs were not read: the later stage of a saved species (the rule the automatic match uses), HP not lower.
+        if s.ivs == nil, megaBase(s.speciesId, gm) == nil, evolved(s, from: v, gm) {
+            if let a = s.hp, let b = v.row.hp, a < b { return false }
+            return true
+        }
         guard sameSpecies(s, v) else { return false }
         if let a = s.hp, let b = v.row.hp, a < b, s.ivs == nil || v.row.ivs == nil { return false }   // a power-up never lowers the HP
-        if let a = s.ivs, let b = v.row.ivs { return a == b || v.corrections.ivs?.was == a }   // equal IVs: any CP or HP (a power-up that is not consistent, or a lower CP)
+        // equal IVs: any CP or HP (a power-up that is not consistent, or a lower CP). Different IVs with the same CP and the same HP
+        // read are one Pokémon whose bars were misread (or whose IVs were corrected by hand), so asked about, never New plus Gone.
+        if let a = s.ivs, let b = v.row.ivs { return a == b || v.corrections.ivs?.was == a || (sameCP(s, v) && sameHP(s, v)) }
         return s.cp <= 0 || s.cp >= v.row.cp
     }
 
@@ -468,8 +484,8 @@ public enum BoxMerge {
         for u in plan.unsure {
             if case .existing(let id)? = resolutions[u.scanned] {
                 guard u.candidates.contains(id) else { throw Failure.notACandidate(scanned: u.scanned, savedId: id) }
-                // Several part reads may point at one saved Pokémon; two real candidates for one cannot both be it.
-                if u.kind == .ambiguous { guard chosen.insert(id).inserted else { throw Failure.chosenTwice(savedId: id) } }
+                // Several part reads may point at one saved Pokémon; two rows that would write their values over one cannot both be it.
+                if u.kind == .ambiguous || u.kind == .misreadSaved || u.misread.contains(id) { guard chosen.insert(id).inserted else { throw Failure.chosenTwice(savedId: id) } }
             }
         }
     }
@@ -505,7 +521,7 @@ public enum BoxMerge {
             case .leaveOut: break
             case .existing(let id):
                 guard let e = byId[id] else { break }
-                if u.kind == .partialRead || u.kind == .extraTwin {
+                if (u.kind == .partialRead && !u.misread.contains(id)) || u.kind == .extraTwin {
                     // A part-read row only says "seen"; its values are wrong by definition. So does an extra twin.
                     byId[id]?.lastSeen = max(e.lastSeen, date)
                 } else if plan.megaBases[u.scanned] != nil && Self.megaBase(e.row.speciesId, gm0) == nil {
@@ -573,7 +589,7 @@ public enum BoxMerge {
         public var errorDescription: String? { if case .badValue(let m) = self { return m } else { return nil } }
     }
 
-    /// A person's corrections to one entry. nil leaves a value alone; `clearHP` and `clearIVs` say "unknown".
+    /// A person's corrections to one entry. nil leaves a value alone; there is no way to clear a value to "unknown": a scan that reads nothing leaves it alone.
     public struct Edit: Equatable {
         public var cp: Int?
         public var hp: Int?

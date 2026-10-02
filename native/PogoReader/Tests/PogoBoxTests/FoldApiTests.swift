@@ -76,10 +76,12 @@ final class FoldApiTests: XCTestCase {
         XCTAssertTrue(p.new.isEmpty)
         XCTAssertEqual(try BoxMerge.apply(p, resolutions: [1: .new], to: [saved], makeID: { "t" }).map { $0.id }, ["s", "t"], "add a second")
         XCTAssertEqual(try BoxMerge.apply(p, resolutions: [1: .leaveOut], to: [saved]).map { $0.id }, ["s"])
-        // without the beat flags the surplus identical row is New as before
-        XCTAssertEqual(plan([first, row(cp: 1982)], [saved]).new.count, 1)
-        // split-by-bars is two DIFFERENT Pokémon: it is not a twin
-        XCTAssertTrue(plan([first, row(cp: 1982, flags: ["split-by-bars"])], [saved]).unsure.isEmpty)
+        // without the beat flags the surplus identical row is asked about too
+        XCTAssertEqual(plan([first, row(cp: 1982)], [saved]).unsure, [BoxMerge.Unsure(scanned: 1, candidates: ["s"], kind: .extraTwin)])
+        XCTAssertEqual(plan([first, row(cp: 1982)], [saved]).new.count, 0)
+        // a surplus row identical to the paired entry asks whatever its flags; one that differs in HP or IVs is not that twin
+        XCTAssertEqual(plan([first, row(cp: 1982, flags: ["split-by-bars"])], [saved]).unsure.map { $0.kind }, [.extraTwin])
+        XCTAssertTrue(plan([first, row(cp: 1982, ivs: IVs(atk: 1, def: 2, hp: 3))], [saved]).unsure.allSatisfy { $0.kind != .extraTwin })
     }
 
     // M10
