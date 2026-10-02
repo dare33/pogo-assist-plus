@@ -489,8 +489,8 @@ none is deleted; Settings restores any of them (as a new version). The replay lo
 
 A Swift port of `experiments/voice-control/generate_commands.py` (which stays the reference; `VoiceCommandFileTests` compares the two
 on fixtures made by the script with `--now` fixed, archives decoded to plain structures with their UIDs). The file holds a batch gesture
-of 50 page steps and a chain `Pogo scan` that repeats it `ceil(steps / 50)` times (no separate partial gesture; a small scan uses one short
-batch). Steps = storage count - 1, plus 2% rounded up, at least 3: 1,400 Pokemon is 1,427 steps, 29 x 50, about 715 KB.
+of at most 50 page steps and a chain `Pogo scan` that repeats it `ceil(steps / 50)` times, the batch cut to `ceil(steps / repeats)` so the
+overshoot stays small (51 steps is 2 x 26; no separate partial gesture). Steps = storage count - 1, plus 2% rounded up, at least 3: 1,400 Pokemon is 1,427 steps, 29 x 50, about 715 KB.
 Modes: swipe normal (2.1 s, default), swipe fast (1.6 s), tap (1.2 s), tap (1.0 s); the three non-default ones are marked not yet proven
 on a full box. `pogo-voice <count> [--fast] [--tap] --out file` makes the same file on a Mac.
 
@@ -502,3 +502,6 @@ width (Python and Swift, both tested), every tap in a file is at exactly the sam
 the appraisal and then do nothing (tested on that iPhone only). `TrailingNoBarsTests` checks that ten barless frames after the last Pokemon
 add no row and change none. Known limit: a tap leaves no sideways slide, so the swipe evidence the app uses to separate identical
 neighbours is absent in Tap mode; to revisit with timing-based boundaries.
+
+Merge rule 7 also asks when a row flagged `no-level-fits` (or with no usable CP) has the same species and HP as a saved Pokemon and its
+`ivsRead` (the JavaScript keeps it when it nulls `ivs`) equals that Pokemon's IVs, whatever the CP digits (Xerneas 281 for a saved 2611).

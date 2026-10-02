@@ -61,7 +61,7 @@ struct ScanView: View {
             ForEach(VoiceCommandFile.Pace.allCases) { p in paceRow(p) }
             if let c = model.storageCount {
                 let size = VoiceCommandFile.sizing(storageCount: c, pace: model.pace)
-                Text("About \(minutes(size.estimatedSeconds)) for \(c.formatted()) Pokémon (\(size.steps) steps).").font(.footnote)
+                Text("About \(minutes(size.estimatedSeconds)) for \(c.formatted()) Pokémon. The file makes \(size.covers.formatted()) page steps (\(size.repeats) x \(size.batch)).").font(.footnote)
             }
             if model.pace.isTap {
                 Text("Taps stay at the right edge, away from Power up and Evolve. Taps past the end close the appraisal and then do nothing (tested on the 440 x 956 iPhone only).").font(.footnote).foregroundStyle(.secondary)

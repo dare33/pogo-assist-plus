@@ -168,3 +168,51 @@ final class RenameTests: XCTestCase {
         XCTAssertThrowsError(try lib.store.files(account: "A", id: "nope"))
     }
 }
+
+final class PartialReadByBarsTests: XCTestCase {
+    private let gm = try! GameMaster.bundled()
+    private func date(_ d: Int) -> Date { Date(timeIntervalSince1970: 1_790_000_000 + Double(d) * 86_400) }
+    private func fixture() throws -> (scanned: ScanRow, saved: ScanRow) {
+        struct F: Decodable { var scanned: ScanRow; var saved: ScanRow }
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "xerneas-part-read", withExtension: "json", subdirectory: "Fixtures"))
+        let f = try JSONDecoder().decode(F.self, from: Data(contentsOf: url))
+        return (f.scanned, f.saved)
+    }
+    private func plan(_ s: ScanRow, _ saved: [BoxEntry]) -> BoxMerge.Plan { BoxMerge.plan(scanned: [s], into: saved, kind: .partial, scanDate: date(5), gameMaster: gm) }
+
+    /// The owner's second scan: "Xerneas CP 281, HP 170, no IVs, no-level-fits", ivsRead 12/10/10, for the saved CP 2611.
+    func testTheRealPartReadIsUnsureNotNew() throws {
+        let (scanned, savedRow) = try fixture()
+        XCTAssertNil(scanned.ivs); XCTAssertEqual(scanned.ivsRead, IVs(atk: 12, def: 10, hp: 10)); XCTAssertEqual(scanned.cp, 281)
+        let saved = BoxEntry(id: "x", row: savedRow, firstSeen: date(0), lastSeen: date(0))
+        let p = plan(scanned, [saved])
+        XCTAssertEqual(p.unsure, [BoxMerge.Unsure(scanned: 0, candidates: ["x"], kind: .partialRead)])
+        XCTAssertTrue(p.new.isEmpty)
+        // 2-8-1 is not a subsequence of 2-6-1-1: it is the bars that tie them
+        XCTAssertFalse(String(2611).contains("281"))
+    }
+
+    func testDifferentBarsOrNoBarsAndNoSubsequenceIsNew() throws {
+        let (scanned, savedRow) = try fixture()
+        let saved = BoxEntry(id: "x", row: savedRow, firstSeen: date(0), lastSeen: date(0))
+        var other = scanned; other.ivsRead = IVs(atk: 1, def: 2, hp: 3)
+        XCTAssertEqual(plan(other, [saved]).new, [0], "different ivsRead")
+        var none = scanned; none.ivsRead = nil
+        XCTAssertEqual(plan(none, [saved]).new, [0], "ivsRead nil")
+        var hp = scanned; hp.hp = 171
+        XCTAssertEqual(plan(hp, [saved]).new, [0], "different HP")
+        var species = scanned; species.speciesId = "yveltal"; species.name = "Yveltal"
+        XCTAssertEqual(plan(species, [saved]).new, [0], "different species")
+        var fits = scanned; fits.flags = []; fits.ivs = scanned.ivsRead
+        XCTAssertEqual(plan(fits, [saved]).new, [0], "a clean row with IVs is just a new Pokémon")
+    }
+
+    func testTheBarsCandidateAnswersLikeAnyPartRead() throws {
+        let (scanned, savedRow) = try fixture()
+        let saved = BoxEntry(id: "x", row: savedRow, firstSeen: date(0), lastSeen: date(0))
+        let p = plan(scanned, [saved])
+        let seen = try BoxMerge.apply(p, resolutions: [0: .existing("x")], to: [saved])
+        XCTAssertEqual(seen[0].row.cp, 2611, "the part-read CP is not copied over the saved one"); XCTAssertEqual(seen[0].lastSeen, date(5))
+        XCTAssertEqual(try BoxMerge.apply(p, resolutions: [0: .leaveOut], to: [saved]).count, 1)
+    }
+}

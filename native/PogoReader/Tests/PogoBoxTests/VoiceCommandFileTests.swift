@@ -112,9 +112,10 @@ final class VoiceCommandFileTests: XCTestCase {
         try assertSame("swipe-normal-50", try VoiceCommandFile.make(count: 50, pace: .swipeNormal, batch: 50, now: now))
         try assertSame("swipe-normal-1427", try VoiceCommandFile.make(count: 1427, pace: .swipeNormal, batch: 50, now: now))
         try assertSame("swipe-fast-1427", try VoiceCommandFile.make(count: 1427, pace: .swipeFast, batch: 50, now: now))
+        try assertSame("swipe-normal-51", try VoiceCommandFile.make(count: 51, pace: .swipeNormal, batch: 26, now: now))   // 2 x 26, not 2 x 50
         try assertSame("swipe-normal-3", try VoiceCommandFile.make(count: 3, pace: .swipeNormal, batch: 3, now: now))
         try assertSame("tap-normal-1427", try VoiceCommandFile.make(count: 1427, pace: .tapNormal, batch: 50, tap: tap, now: now))
-        try assertSame("tap-fast-51", try VoiceCommandFile.make(count: 51, pace: .tapFast, batch: 50, tap: tap, now: now))
+        try assertSame("tap-fast-51", try VoiceCommandFile.make(count: 51, pace: .tapFast, batch: 26, tap: tap, now: now))
         try assertSame("tap-normal-3-fr_FR", try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, locale: "fr_FR", tap: tap, now: now))
     }
 
@@ -138,6 +139,17 @@ final class VoiceCommandFileTests: XCTestCase {
         let s = VoiceCommandFile.sizing(storageCount: 1400, pace: .swipeNormal)
         XCTAssertEqual([s.steps, s.batch, s.repeats, s.covers], [1427, 50, 29, 1450])
         XCTAssertEqual(s.estimatedSeconds, 29 * (50 * 2.1 + 0.8), accuracy: 0.001)
+        // the batch is cut so the last repeat does not overshoot by almost a batch
+        let b = VoiceCommandFile.sizing(storageCount: 51, pace: .swipeNormal)      // 51 steps
+        XCTAssertEqual([b.steps, b.batch, b.repeats, b.covers], [51, 26, 2, 52])
+        let c = VoiceCommandFile.sizing(storageCount: 101, pace: .swipeNormal)     // 102 steps -> 3 x 34
+        XCTAssertEqual([c.steps, c.batch, c.repeats], [102, 34, 3])
+        let d = VoiceCommandFile.sizing(storageCount: 99, pace: .swipeNormal)      // 100 steps
+        XCTAssertEqual([d.steps, d.batch, d.repeats], [100, 50, 2])
+        for n in [1, 2, 4, 20, 51, 52, 100, 101, 400, 1400, 3000] {
+            let z = VoiceCommandFile.sizing(storageCount: n, pace: .swipeNormal)
+            XCTAssertGreaterThanOrEqual(z.covers, z.steps); XCTAssertLessThan(z.covers - z.steps, z.repeats); XCTAssertLessThanOrEqual(z.batch, 50)
+        }
         let small = VoiceCommandFile.sizing(storageCount: 10, pace: .tapFast)
         XCTAssertEqual([small.steps, small.batch, small.repeats], [10, 10, 1], "a small scan is one short batch, not 50 steps")
     }

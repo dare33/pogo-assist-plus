@@ -142,7 +142,7 @@ def main():
     p.add_argument("--count", type=int, required=True, help="how many Pokémon to page past (the storage count)")
     p.add_argument("--name", default="Pogo scan", help="what to say; keep it unlike any other command")
     p.add_argument("--batch-name", default="Storage page step", help="name of the batch gesture; it must not share words with --name, or Voice Control can run the wrong one")
-    p.add_argument("--batch", type=int, default=20, help="swipes in one gesture (50 was tested)")
+    p.add_argument("--batch", type=int, default=20, help="most swipes in one gesture (50 was tested); the batch is then cut to ceil(count / repeats) so the last repeat does not overshoot by almost a batch")
     p.add_argument("--every", type=float, default=None, help="seconds between swipe starts (default 2.1, or 1.2 with --tap; 2.1 gives 7 frames at 5 fps; 1.6 was tested on a small sample)")
     p.add_argument("--duration", type=float, default=0.85, help="seconds one swipe lasts (0.6 with --every 1.6)")
     p.add_argument("--x-from", type=float, default=340.0)
@@ -162,6 +162,7 @@ def main():
     ref = (now - datetime.datetime(2001, 1, 1)).total_seconds()  # Apple's reference date
     batch_id, chain_id = "Custom.%.6f" % ref, "Custom.%.6f" % (ref + 60)
     repeats = math.ceil(args.count / args.batch)
+    args.batch = math.ceil(args.count / repeats)  # 51 steps with --batch 50 is 2 x 26, not 2 x 50
     base = dict(ConfirmationRequired=False, CustomModifyDate=now, CustomScope="com.apple.speech.SystemWideScope")
     table = {
         batch_id: dict(base, CustomCommands={args.locale: [args.batch_name]}, CustomType="RunGesture",

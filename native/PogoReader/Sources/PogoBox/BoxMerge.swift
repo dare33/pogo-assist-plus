@@ -18,7 +18,8 @@ import PogoReader
 ///  7. Part-read CP: a scanned Pokémon that matched nothing above, whose CP fits no level (`no-level-fits`) or whose IVs were
 ///     not read, and whose CP digits are a subsequence of a saved same-species Pokémon's CP digits (182 in 1982) with the same
 ///     HP (or HP unread on either side), is unsure with those saved ones as candidates: never New, never matched without the
-///     person. The candidate may already be matched to another scanned row (the real read of it); "It is this one" then only
+///     person. Also unsure: a row flagged `no-level-fits` (or with no usable CP) of the same species and HP whose `ivsRead` equals a
+///     saved Pokémon's IVs, whatever its CP digits (a read of 281 for a saved 2611). The candidate may already be matched to another scanned row (the real read of it); "It is this one" then only
 ///     marks it seen and does not copy the part-read values over it.
 ///
 /// A full scan proposes saved entries matched by nothing as gone; an add-and-update scan removes nothing. Entries that are
@@ -163,12 +164,18 @@ public enum BoxMerge {
     // MARK: - rule predicates
 
     private static func partialCandidates(_ s: ScanRow, _ saved: [BoxEntry]) -> [Int] {
-        guard s.flags.contains(where: { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }) || s.ivs == nil else { return [] }
+        let noLevelFits = s.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
+        guard noLevelFits || s.ivs == nil || s.cp <= 0 else { return [] }
         let digits = Array(String(s.cp))
         return saved.indices.filter { vi in
             let v = saved[vi]
-            guard sameSpecies(s, v), s.cp != v.row.cp, isSubsequence(digits, Array(String(v.row.cp))) else { return false }
-            return s.hp == nil || v.row.hp == nil || sameHP(s, v)
+            guard sameSpecies(s, v) else { return false }
+            // (a) the CP digits are a subsequence of the saved CP's (182 in 1982), HP equal or unread on either side
+            if s.cp != v.row.cp, isSubsequence(digits, Array(String(v.row.cp))), s.hp == nil || v.row.hp == nil || sameHP(s, v) { return true }
+            // (b) whatever the CP digits: the solver found no level (or the CP is unusable), the HP is the same, and the bars read as
+            // this saved Pokémon's IVs. The JavaScript nulls `ivs` when no level fits but keeps `ivsRead`.
+            if noLevelFits || s.cp <= 0, s.hp != nil, sameHP(s, v), let read = s.ivsRead, read == v.row.ivs || read == v.corrections.ivs?.was { return true }
+            return false
         }
     }
 

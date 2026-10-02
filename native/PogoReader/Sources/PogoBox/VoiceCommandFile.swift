@@ -6,9 +6,9 @@ import Foundation
 /// touch events in screen points) and a chain (`CACRecordedUserActionFlow`) that repeats the batch until enough Pokémon are
 /// passed. Nothing here acts in the game beyond paging: a swipe or a tap on the "next Pokémon" arrow.
 ///
-/// The scheme, as the Python does it: the batch gesture holds `batch` page steps (50 was proven on devices); the chain
-/// repeats it `ceil(steps / batch)` times; there is no separate final partial gesture. A scan of `steps` page steps therefore
-/// pages `repeats * batch` times, which overshoots by up to a batch; at the end of the list a swipe stays on the last Pokémon
+/// The scheme, as the Python does it: the batch gesture holds at most 50 page steps (50 was proven on devices); the chain
+/// repeats it `ceil(steps / 50)` times and the batch is cut to `ceil(steps / repeats)`; there is no separate final partial gesture.
+/// A scan of `steps` page steps pages `repeats * batch` times, which overshoots by less than the number of repeats; at the end of the list a swipe stays on the last Pokémon
 /// and a tap on the arrow closes the appraisal and then does nothing (tested on the 440 x 956 iPhone only).
 public enum VoiceCommandFile {
     // MARK: - paces
@@ -80,11 +80,12 @@ public enum VoiceCommandFile {
 
     public static func steps(storageCount: Int) -> Int { max(3, ((max(storageCount, 1) - 1) * 102 + 99) / 100) }
 
-    /// The batch is `defaultBatch` page steps, or all of them when fewer are needed.
+    /// At most `defaultBatch` page steps in a gesture, cut to `ceil(steps / repeats)` so the overshoot stays small (51 steps is
+    /// 2 x 26 = 52, not 2 x 50; 1,427 is 29 x 50). The Python does the same.
     public static func sizing(storageCount: Int, pace: Pace) -> Sizing {
         let steps = steps(storageCount: storageCount)
-        let batch = min(defaultBatch, steps)
-        let repeats = (steps + batch - 1) / batch
+        let repeats = (steps + defaultBatch - 1) / defaultBatch
+        let batch = (steps + repeats - 1) / repeats
         return Sizing(steps: steps, batch: batch, repeats: repeats, estimatedSeconds: Double(repeats) * (Double(batch) * pace.every + 0.8))
     }
 
