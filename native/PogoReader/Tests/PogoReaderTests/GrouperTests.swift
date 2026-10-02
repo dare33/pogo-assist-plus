@@ -386,76 +386,130 @@ final class GrouperTests: XCTestCase {
         }
         XCTAssertEqual(run(tick: nil).count, 1)
         XCTAssertEqual(run(tick: 1.0).count, 2)
-        // A tick before the last card, or at the time of the reading itself, is not between the two cards.
+        // A tick stamped with the reading's own time (the frame that confirmed the swipe) counts for that reading.
+        XCTAssertEqual(run(tick: 2.0).count, 2)
+        // A tick before the last card is used up; one after the reading waits for a later reading.
         XCTAssertEqual(run(tick: 0.4).count, 1)
-        XCTAssertEqual(run(tick: 2.0).count, 1)
+        XCTAssertEqual(run(tick: 9.0).count, 1)
         XCTAssertEqual(run(tick: .nan).count, 1)
     }
 
-    /// The extension's view of a stream: every frame at 5 fps delivers a swipe tick if it is a swipe frame; a frame is
-    /// read only if the reader is free; a read of a card keeps the reader busy `slow` ms, any other `fast` ms.
-    private func simulate(_ frames: [(reading: FrameReading, isCard: Bool, swipeFrame: Bool)], slow: Double, fast: Double) -> (rows: [LiveRow], kept: Int) {
-        var g = LiveGrouper(species: table)
-        var busyUntil = -1.0, kept = 0
+    /// The extension's order, with the real `SwipeDetector` and `SwipeTicker`: every frame goes through the signature
+    /// and the ticker; a frame is read only if the reader is free (a card read keeps it busy `slow` ms, any other
+    /// `fast` ms); the pending ticks are drained after the read, immediately before the reading is added.
+    private struct SimFrame { var image: RGBAImage; var reading: FrameReading; var isCard: Bool }
+
+    private func extensionSim(_ frames: [SimFrame], slow: Double, fast: Double, useTicks: Bool = true) -> (rows: [LiveRow], kept: Int) {
+        var detector = SwipeDetector(), ticker = SwipeTicker(), g = LiveGrouper(species: table)
+        var pending = [Double](), busyUntil = -1.0, kept = 0
         for (k, f) in frames.enumerated() {
             let t = Double(k) * 0.2
-            if f.swipeFrame { g.swipe(at: t) }
+            if let tick = ticker.feed(diff: detector.feed(f.image), time: t), useTicks { pending.append(tick) }
             if t < busyUntil - 1e-9 { continue }
             busyUntil = t + (f.isCard ? slow : fast) / 1000
             kept += 1
             var r = f.reading; r.time = t
+            for tick in pending { g.swipe(at: tick) }
+            pending.removeAll()
             g.add(r)
         }
+        for tick in pending { g.swipe(at: tick) }
         g.finish()
         return (g.rows, kept)
     }
 
-    /// A stream of cards `pace` seconds apart: each card is on screen `pace - 0.8` s then a 0.8 s swipe.
-    private func stream(pace: Double, cards: [(FrameReading, Bool)]) -> [(reading: FrameReading, isCard: Bool, swipeFrame: Bool)] {
-        var out = [(reading: FrameReading, isCard: Bool, swipeFrame: Bool)]()
-        for (reading, _) in cards {
-            for _ in 0..<Int(((pace - 0.8) / 0.2).rounded()) { out.append((reading, true, false)) }
-            for _ in 0..<4 { out.append((swipe(), false, true)) }
+    private static let cardImage: RGBAImage = { var i = RGBAImage(width: 300, height: 650); SyntheticScreen.draw(into: &i, SyntheticScreen.Spec(name: "Moltres", cp: 1984, hp: 140, ivs: IVs(atk: 15, def: 12, hp: 12))); return i }()
+    private static let slideImage: RGBAImage = { var i = RGBAImage(width: 300, height: 650); SyntheticScreen.draw(into: &i, SyntheticScreen.Spec(name: "Moltres", cp: 1984, hp: 140, ivs: IVs(atk: 15, def: 12, hp: 12)), style: .padMuted); return i }()
+    private static let blanks: [RGBAImage] = [40, 160, 70, 190].map { v in var i = RGBAImage(width: 300, height: 650); i.fill(Rect(x: 0, y: 0, w: 300, h: 650), (UInt8(v), UInt8(v), UInt8(v))); return i }
+
+    /// A stream of cards `pace` seconds apart: each card on screen for `pace - 0.8` s, then a 0.8 s swipe: four blank
+    /// moving frames, or (`slide`) one readable sliding frame of the old card and three blanks.
+    private func simStream(pace: Double, cards: [FrameReading], slide: Bool) -> [SimFrame] {
+        var out = [SimFrame]()
+        for reading in cards {
+            for _ in 0..<Int(((pace - 0.8) / 0.2).rounded()) { out.append(SimFrame(image: Self.cardImage, reading: reading, isCard: true)) }
+            for k in 0..<4 {
+                if slide && k == 0 { out.append(SimFrame(image: Self.slideImage, reading: reading, isCard: true)) }
+                else { out.append(SimFrame(image: Self.blanks[k], reading: swipe(), isCard: false)) }
+            }
         }
         return out
     }
 
     func testIdenticalNeighboursStayTwoRowsAtEveryPaceUnderEveryVisionModel() {
-        func card(_ cp: Int, hp: Int, _ ivs: IVs) -> (FrameReading, Bool) { (frame(cp, hp: hp, ivs: ivs, name: "Moltres"), true) }
+        func card(_ cp: Int, hp: Int, _ ivs: IVs) -> FrameReading { frame(cp, hp: hp, ivs: ivs, name: "Moltres") }
         let c = card(CP + 40, hp: HPV + 5, IVs(atk: 1, def: 2, hp: 3)), a = card(CP, hp: HPV, IVS), d = card(CP - 40, hp: HPV - 5, IVs(atk: 4, def: 5, hp: 6))
+        for slide in [false, true] {
+            for pace in [1.4, 1.6, 2.0, 2.4] {
+                for (slow, fast) in [(0.0, 0.0), (250.0, 20.0), (450.0, 200.0), (650.0, 200.0)] {
+                    let r = extensionSim(simStream(pace: pace, cards: [c, a, a, d, c], slide: slide), slow: slow, fast: fast)
+                    let twins = r.rows.filter { $0.cp == CP }
+                    let label = "slide \(slide) pace \(pace) model \(slow)/\(fast): \(r.rows.map { "\($0.cp as Any) \($0.flags)" })"
+                    XCTAssertEqual(twins.count, 2, label)
+                    XCTAssertEqual(r.rows.count, 5, label)
+                    // Only a twin can be marked "reads like the one before it" (when only the tick saw the swipe).
+                    XCTAssertTrue(r.rows.filter { $0.flags.contains("same-as-previous") }.allSatisfy { $0.cp == CP }, label)
+                    XCTAssertLessThanOrEqual(r.rows.filter { $0.flags.contains("same-as-previous") }.count, 1, label)
+                }
+            }
+        }
+        // Without the signature the twins merge when the reader sees one frame in five: the test is about the ticks.
+        XCTAssertEqual(extensionSim(simStream(pace: 1.4, cards: [c, a, a, d, c], slide: false), slow: 1000, fast: 1000, useTicks: false).rows.filter { $0.cp == CP }.count, 1)
+    }
+
+    func testAWeakNamedPokemonBetweenTwoOthersOrLastSurvivesDrops() {
+        func strong(_ cp: Int, hp: Int, _ ivs: IVs) -> FrameReading { frame(cp, hp: hp, ivs: ivs, name: "Moltres") }
+        let p = strong(CP + 40, hp: HPV + 5, IVs(atk: 1, def: 2, hp: 3)), q = strong(CP - 40, hp: HPV - 5, IVs(atk: 4, def: 5, hp: 6))
+        let w = frame(210, hp: 41, ivs: nil, name: "Rattata", weak: true)
         for pace in [1.4, 1.6, 2.0, 2.4] {
             for (slow, fast) in [(0.0, 0.0), (250.0, 20.0), (450.0, 200.0), (650.0, 200.0)] {
-                let r = simulate(stream(pace: pace, cards: [c, a, a, d, c]), slow: slow, fast: fast)
-                let twins = r.rows.filter { $0.cp == CP }
-                XCTAssertEqual(twins.count, 2, "pace \(pace) model \(slow)/\(fast): \(r.rows.map { "\($0.cp as Any) \($0.flags)" })")
-                XCTAssertEqual(r.rows.count, 5, "pace \(pace) model \(slow)/\(fast)")
+                for order in [[p, w, q], [p, q, w]] {
+                    let stream = simStream(pace: pace, cards: order, slide: false)
+                    let r = extensionSim(stream, slow: slow, fast: fast)
+                    // Survives whenever at least one of its readings was read (a card fully inside the busy gap is invisible).
+                    var busyUntil = -1.0, weakRead = false
+                    for (k, f) in stream.enumerated() {
+                        let t = Double(k) * 0.2
+                        if t < busyUntil - 1e-9 { continue }
+                        busyUntil = t + (f.isCard ? slow : fast) / 1000
+                        if f.reading.name == "Rattata" { weakRead = true }
+                    }
+                    if weakRead { XCTAssertTrue(r.rows.contains { $0.name == "Rattata" && $0.flags.contains("name-low-confidence") }, "pace \(pace) model \(slow)/\(fast) order \(order.map { $0.name ?? "" })") }
+                }
             }
         }
     }
 
-    func testAWeakNamedPokemonBetweenTwoOthersOrLastSurvivesDrops() {
-        func strong(_ cp: Int, hp: Int, _ ivs: IVs) -> (FrameReading, Bool) { (frame(cp, hp: hp, ivs: ivs, name: "Moltres"), true) }
-        let p = strong(CP + 40, hp: HPV + 5, IVs(atk: 1, def: 2, hp: 3)), q = strong(CP - 40, hp: HPV - 5, IVs(atk: 4, def: 5, hp: 6))
-        let w: (FrameReading, Bool) = (frame(210, hp: 41, ivs: nil, name: "Rattata", weak: true), false)
-        for pace in [1.4, 1.6, 2.0, 2.4] {
-            for (slow, fast) in [(0.0, 0.0), (250.0, 20.0), (450.0, 200.0), (650.0, 200.0)] {
-                let between = simulate(stream(pace: pace, cards: [p, w, q]), slow: slow, fast: fast)
-                let last = simulate(stream(pace: pace, cards: [p, q, w]), slow: slow, fast: fast)
-                // Survives whenever at least one of its readings was kept (a card fully inside the busy gap is invisible).
-                func weakKept(_ order: [(FrameReading, Bool)]) -> Bool {
-                    var busyUntil = -1.0
-                    for (k, f) in stream(pace: pace, cards: order).enumerated() {
-                        let t = Double(k) * 0.2
-                        if t < busyUntil - 1e-9 { continue }
-                        busyUntil = t + (f.isCard ? slow : fast) / 1000
-                        if f.reading.name == "Rattata" { return true }
-                    }
-                    return false
-                }
-                if weakKept([p, w, q]) { XCTAssertTrue(between.rows.contains { $0.name == "Rattata" && $0.flags.contains("name-low-confidence") }, "between: pace \(pace) model \(slow)/\(fast)") }
-                if weakKept([p, q, w]) { XCTAssertTrue(last.rows.contains { $0.name == "Rattata" && $0.flags.contains("name-low-confidence") }, "last: pace \(pace) model \(slow)/\(fast)") }
-            }
+    /// A card sliding past is often read with only its name: two such frames are separator frames, not a card.
+    func testATwoFrameNameOnlySlideBetweenIdenticalCardsIsASwipe() {
+        func nameOnly(_ n: Int) -> FrameReading { frame(nil, hp: nil, ivs: nil, name: "Moltres", n: n) }
+        let a = (1...4).map { frame(CP, n: $0) }, b = (10...13).map { frame(CP, n: $0) }
+        let rows = groupAll(a + [swipe(), nameOnly(6), nameOnly(7)] + b)
+        XCTAssertEqual(rows.filter { $0.cp == CP }.count, 2)
+        XCTAssertFalse(rows.contains { $0.flags.contains("cp-not-read") }, "a two-frame slide is not listed as a card")
+        // The same frames as 5 name-only readings (0.8 s with the same name) are a card.
+        XCTAssertTrue(groupAll(a + swipes() + (6...10).map(nameOnly) + swipes() + b).contains { $0.flags.contains("cp-not-read") })
+    }
+
+    /// A run started only by a tick that reads like the row before it is marked, so a false split is never unflagged.
+    func testATickOnlySplitThatReadsLikeThePreviousRowIsMarked() {
+        func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
+        func run(tick: Bool, secondHp: Int, separators: Bool = false) -> [LiveRow] {
+            var g = LiveGrouper(species: table)
+            for k in 0..<4 { g.add(at(frame(CP, n: k), Double(k) * 0.2)) }
+            if tick { g.swipe(at: 1.5) }
+            if separators { for k in 0..<4 { g.add(at(swipe(), 0.8 + Double(k) * 0.2)) } }
+            for k in 0..<4 { g.add(at(frame(CP, hp: secondHp, n: 10 + k), 2.0 + Double(k) * 0.2)) }
+            g.finish()
+            return g.rows
         }
+        let same = run(tick: true, secondHp: HPV)
+        XCTAssertEqual(same.count, 2)
+        XCTAssertFalse(same[0].flags.contains("same-as-previous"))
+        XCTAssertTrue(same[1].flags.contains("same-as-previous"))
+        // Seen by separator frames as well: not tick-only, no mark. A different HP is plainly another Pokémon.
+        XCTAssertFalse(run(tick: true, secondHp: HPV, separators: true)[1].flags.contains("same-as-previous"))
+        XCTAssertFalse(run(tick: true, secondHp: HPV + 6)[1].flags.contains("same-as-previous"))
     }
 
     func testLongStayIsFlaggedAtExactlyTheLimitWhateverTheTimestampBase() {
@@ -467,12 +521,20 @@ final class GrouperTests: XCTestCase {
         }
     }
 
-    func testSexInferredWithNoHpIsFlagged() {
-        let male = table.byId["nidoran_male"]!, ivs = IVs(atk: 9, def: 10, hp: 13)
-        let cp = cpAt(male.baseStats, ivs, 20)
-        func nido(_ n: Int) -> FrameReading { var r = frame(cp, hp: nil, ivs: ivs, name: "Nidoran", n: n); r.speciesIds = ["nidoran_female", "nidoran_male"]; return r }
+    func testSexInferredWithNoHpIsFlagged() throws {
+        // A level and bars at which the male's stats fit a CP and the female's do not (found, not assumed).
+        let male = table.byId["nidoran_male"]!, female = table.byId["nidoran_female"]!
+        var found: (cp: Int, ivs: IVs)?
+        search: for atk in [3, 9, 14] { for def in [2, 10, 15] { for hp in [4, 13] { for level in stride(from: 5.0, through: 30.0, by: 2.5) {
+            let ivs = IVs(atk: atk, def: def, hp: hp), cp = cpAt(male.baseStats, ivs, level)
+            if cpFits([male], cp: cp, hp: nil, ivs: ivs) == true && cpFits([female], cp: cp, hp: nil, ivs: ivs) == false { found = (cp, ivs); break search }
+        } } } }
+        let f = try XCTUnwrap(found, "no input reaches the flag")
+        func nido(_ n: Int) -> FrameReading { var r = frame(f.cp, hp: nil, ivs: f.ivs, name: "Nidoran", n: n); r.speciesIds = ["nidoran_female", "nidoran_male"]; return r }
         let rows = groupAll((1...4).map(nido))
-        if rows[0].name == "Nidoran♂" { XCTAssertTrue(rows[0].flags.contains("sex-from-stats-no-hp")) }
+        XCTAssertEqual(rows[0].name, "Nidoran♂")
+        XCTAssertTrue(rows[0].flags.contains("sex-from-stats-no-hp"), "\(rows[0].flags)")
+        XCTAssertFalse(rows[0].flags.contains("sex-not-read"))
     }
 
     func testNidorinaRunIsNotInterruptedByANidoranWithALetterStuckToIt() {

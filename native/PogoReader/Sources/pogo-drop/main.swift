@@ -45,15 +45,23 @@ func replay(slow: Double, fast: Double) -> (rows: [LiveRow], kept: Int) {
     var g = LiveGrouper(species: table)
     var busyUntil = -1.0, kept = 0
     var ticker = SwipeTicker()
+    var pending = [Double]()
     for (k, r) in file.readings.enumerated() {
         let t = r.time ?? Double(k) * 0.2
-        // The extension looks at EVERY frame for a swipe, read or dropped (the luma signature in its callback).
-        if let diffs = file.signatureDiffs, k < diffs.count, let tick = ticker.feed(diff: diffs[k], time: t), useTicks { g.swipe(at: tick) }
+        // The extension looks at EVERY frame for a swipe, read or dropped (the luma signature in its callback); a
+        // swipe confirmed waits in a list that the reader drains right after Vision returns, before adding the reading.
+        if let diffs = file.signatureDiffs, k < diffs.count, let tick = ticker.feed(diff: diffs[k], time: t), useTicks {
+            if pending.count >= Tuning.maxPendingTicks { pending.removeFirst() }
+            pending.append(tick)
+        }
         if t < busyUntil - 1e-9 { continue }
         busyUntil = t + (needsVision(r) ? slow : fast) / 1000
         kept += 1
+        for tick in pending { g.swipe(at: tick) }   // after the read, immediately before the reading is added
+        pending.removeAll()
         g.add(r)
     }
+    for tick in pending { g.swipe(at: tick) }
     g.finish()
     return (g.rows, kept)
 }

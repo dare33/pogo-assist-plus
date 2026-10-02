@@ -18,7 +18,8 @@ final class ParsingTests: XCTestCase {
 
     /// Strings that junk or a garbled label glued onto a CP: each is no read, or the figure alone.
     func testParseCpDoesNotGlueJunkOntoTheFigure() {
-        for junk in ["99 O", "66 O", "CP2 OO", "CP1 6", "CP1S 66", "CP1234 5", "CP1A86", "1234dO", "1 2", "CPL", "O", "CP 7"] {
+        for junk in ["99 O", "66 O", "CP2 OO", "CP1 6", "CP1S 66", "CP1234 5", "CP1A86", "1234dO", "1 2", "CPL", "O", "CP 7",
+                     "1A86", "CP 1A86", "2.641", "CP 2,641", "CP²641", "CP0 001", "CP 0 000", "CP O 28", "01", "CP 05"] {
             XCTAssertNil(parseCp(junk), junk)
         }
         // What stays a read.

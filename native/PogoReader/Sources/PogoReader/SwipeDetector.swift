@@ -1,5 +1,6 @@
 import Foundation
 import CoreVideo
+import os
 
 /// The cheap swipe signature of the JS reference (`src/extract/segment.js`), for the extension's callback: a
 /// swipe between two Pokémon makes the CP band (top 12% of the frame) and the name band (36% to 58%) change
@@ -31,7 +32,8 @@ public struct SwipeDetector {
 
     /// Mean absolute luma difference from the previous frame fed; nil for the first.
     public mutating func feed(_ pixelBuffer: CVPixelBuffer) -> Double? {
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        // A buffer that cannot be locked is skipped (and the comparison restarts: the next diff would span a gap).
+        guard CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly) == kCVReturnSuccess else { havePrevious = false; return nil }
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
         let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
         switch format {
@@ -53,9 +55,12 @@ public struct SwipeDetector {
                 return video ? (v - 16) * (255.0 / 219.0) : v     // video range to the 0-255 scale the threshold is on
             }
         default:
+            if !SwipeDetector.warned { SwipeDetector.warned = true; Logger(subsystem: "com.dare33.pogoreader", category: "swipe").error("swipe signature: unsupported pixel format \(format); no swipes will be seen") }
             return nil
         }
     }
+
+    private static var warned = false
 
     /// The same on an RGBA image (the tool's PNG path).
     public mutating func feed(_ img: RGBAImage) -> Double? {
@@ -84,19 +89,18 @@ public struct SwipeDetector {
 /// Turns the per-frame signature differences into swipe ticks. A real swipe keeps the signature above the
 /// threshold for several consecutive frames (3 to 6 on the Voice Control clips); a single jump comes from a
 /// touch dot or an animation inside one Pokémon's stay and must not split that Pokémon. So a tick is emitted
-/// only once `Tuning.swipeEventMinFrames` consecutive frames are above the threshold, and it carries the time of
-/// the FIRST of them (when the swipe began), once per event.
+/// only once `Tuning.swipeEventMinFrames` consecutive frames are above the threshold, once per event, and it is
+/// stamped with the frame that CONFIRMS the event (the last of those frames): the first frame of a swipe is
+/// often the old card still readable, and a tick stamped there would sit before that card's reading and be lost.
 public struct SwipeTicker {
     private var run = 0
-    private var firstTime = 0.0
     public init() {}
 
-    /// Feed one frame's difference (nil for the first frame) and its time; returns the swipe's start time when
-    /// this frame completes the minimum run, else nil.
+    /// Feed one frame's difference (nil for the first frame) and its time; returns that time when this frame
+    /// completes the minimum run, else nil.
     public mutating func feed(diff: Double?, time: Double) -> Double? {
         guard let d = diff, d > SwipeDetector.threshold else { run = 0; return nil }
-        if run == 0 { firstTime = time }
         run += 1
-        return run == Tuning.swipeEventMinFrames ? firstTime : nil
+        return run == Tuning.swipeEventMinFrames ? time : nil
     }
 }

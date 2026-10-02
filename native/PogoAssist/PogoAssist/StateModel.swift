@@ -95,9 +95,10 @@ final class StateModel: ObservableObject {
             if saved { archive.remove(frames: result.consumed) }   // only the frames that were read
             await MainActor.run {
                 self.deferredRows = result.rows
+                let kept = result.unreadable > 0 ? " Kept \(result.unreadable) unreadable frames." : ""
                 self.deferredNote = saved
-                    ? "Read \(result.readings.count) saved frames in \(String(format: "%.1f", secs)) s; the crops were deleted."
-                    : "Read \(result.readings.count) saved frames but could not write the result: the crops were kept."
+                    ? "Read \(result.readings.count) saved frames in \(String(format: "%.1f", secs)) s; the crops that were read were deleted.\(kept)"
+                    : "Read \(result.readings.count) saved frames but could not write the result: the crops were kept.\(kept)"
                 self.reading = false
             }
         }

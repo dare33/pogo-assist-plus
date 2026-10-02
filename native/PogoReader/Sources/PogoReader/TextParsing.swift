@@ -20,8 +20,10 @@ private func isSpace(_ c: Character) -> Bool { c.isWhitespace }
 /// - two digit groups join only as a thousands split, one digit then exactly three ("CP4 262" is 4262,
 ///   "CP2 008" is 2008), the first attached to a CP-like prefix or alone; anything else with two groups
 ///   ("CP1 6", "CP1S 66", "CP1234 5") is no read;
-/// - a letter between digits is no read ("CP1A86"), except a single leading digit that is a misread label
-///   glyph ("5p2641");
+/// - a letter or separator between digits is no read ("1A86", "CP 1A86", "2.641", "CP 2,641", "CP²641"), except
+///   a single leading digit followed by letters that is a misread label glyph, and only when the figure has
+///   three digits or more ("5p2641");
+/// - a result below 10 is no read ("CP0 001"), and a lone O or o token before the figure is no read ("CP O 28");
 /// - more than four digits in one group keep the last four (JS), fewer than two are no read.
 public func parseCp(_ text: String) -> Int? {
     let raw = text.split(whereSeparator: { isSpace($0) }).map { Array($0) }
@@ -34,14 +36,18 @@ public func parseCp(_ text: String) -> Int? {
     let run = Array(last[i...])
     guard !run.isEmpty else { return nil }                 // the last token must end in digits
     let before = Array(last[..<i])
+    // A digit-like character that is not an ASCII digit ("²") next to the figure is a garbled digit, not a label.
+    if before.contains(where: { $0.isNumber && !isAsciiDigit($0) }) { return nil }
     if before.contains(where: isAsciiDigit) {
-        // Digits before the figure are allowed only as one leading digit followed by letters ("5p").
+        // Digits before the figure are allowed only as one leading digit followed by letters ("5p"), and only
+        // for a figure of three digits or more: a short figure after a digit and a letter ("1A86") is junk.
         let lead = before.prefix(while: isAsciiDigit), rest = before.dropFirst(lead.count)
-        if !(lead.count == 1 && !rest.isEmpty && !rest.contains(where: isAsciiDigit)) { return nil }
+        if !(lead.count == 1 && run.count >= 3 && !rest.isEmpty && rest.allSatisfy({ isAsciiLetter($0) })) { return nil }
     }
     var digits = run
     if before.isEmpty, tokens.count >= 2 {                 // the last token is the figure on its own
         let prev = tokens[tokens.count - 2]
+        if !prev.contains(where: isAsciiDigit), prev.allSatisfy({ $0 == "O" || $0 == "o" }) { return nil }   // "CP O 28"
         if prev.contains(where: isAsciiDigit) {
             // A digit group before it: only a thousands split ("4" + "262").
             var j = prev.count
@@ -54,7 +60,8 @@ public func parseCp(_ text: String) -> Int? {
     }
     if digits.count < 2 { return nil }
     if digits.count > 4 { digits = Array(digits.suffix(4)) }
-    return Int(String(digits))
+    guard let value = Int(String(digits)), value >= 10 else { return nil }
+    return value
 }
 
 public struct HP: Codable, Equatable, Hashable {

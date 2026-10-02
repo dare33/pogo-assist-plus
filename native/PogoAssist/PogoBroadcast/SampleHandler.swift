@@ -23,10 +23,12 @@ import PogoReader
 ///
 /// Swipes are seen separately from reading: every kept frame (5 fps), including those dropped because Vision is
 /// busy, gets a cheap luma signature straight from its buffer (`SwipeDetector`, the JS reference's signature
-/// over the CP and name bands). A frame that differs sharply from the last is a swipe; its time goes into a small
-/// lock-guarded list the reader drains before its next frame, and the grouper treats it as a seen swipe. Without
+/// over the CP and name bands). Three frames in a row that differ sharply from their predecessors are a swipe;
+/// its time (the confirming frame's) goes into a small lock-guarded list. The reader drains the list right after
+/// Vision returns, immediately before it adds that frame's reading (and before a skipped frame, and at finish), so
+/// a swipe confirmed while Vision was busy is seen by the grouper before the reading that followed it. Without
 /// this, a busy extension drops the very frames (no CP, no HP) that show a swipe, and two identical Pokémon in a
-/// row would merge.
+/// row would merge. It cannot see every swipe (see the README's swipe table); a swipe it misses is not recovered.
 ///
 /// Allocations are kept small on purpose: the frame goes straight to FrameProcessor (vImage into one
 /// reused buffer), no UIKit images, no CIContext, and nothing large is logged.
@@ -46,7 +48,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var dropped = 0                   // of those, dropped because the previous one was still being handled
     private var ticks = [Double]()            // swipe times seen by the signature, drained by the reader
     private var finished = false              // broadcastFinished has run: later frames are ignored
-    private var detector = SwipeDetector()    // touched in the callback only
+    private var detector = SwipeDetector()    // guarded by `lock` (the callback and broadcastStarted)
     private var ticker = SwipeTicker()        // likewise
 
     private var mode = ReaderMode.accurate
@@ -68,9 +70,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             if !SharedStore.containerAvailable {
                 log.error("app group container unavailable: no state can be shared; check Signing & Capabilities on both targets")
             }
-            lock.lock(); finished = false; ticks.removeAll(); lock.unlock()
-            detector = SwipeDetector()
-            ticker = SwipeTicker()
+            lock.lock(); finished = false; ticks.removeAll(); detector = SwipeDetector(); ticker = SwipeTicker(); lock.unlock()
             memory = MemoryProbe()
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
@@ -110,12 +110,14 @@ class SampleHandler: RPBroadcastSampleHandler {
         // Video only; audio and microphone are ignored.
         guard sampleBufferType == .video else { return }
         let stamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        // A timestamp that is not a number (an invalid CMTime) drops the frame: nothing downstream may be stamped
+        // with a made-up time.
+        guard stamp.isFinite else { return }
         // The whole decision, under one lock. A frame that is not kept, or that arrives while busy, captures
         // nothing: only the counters change, and nothing is enqueued.
         lock.lock()
         if finished { lock.unlock(); return }
-        // A timestamp that is not a number must not block reading: it follows the last kept frame by one period.
-        let pts = stamp.isFinite ? stamp : (lastKept.isFinite ? lastKept + 1.0 / readsPerSecond : 0)
+        let pts = stamp
         guard pts - lastKept >= 1.0 / readsPerSecond - 0.005 else { lock.unlock(); return }
         lastKept = pts
         seen += 1
@@ -127,10 +129,14 @@ class SampleHandler: RPBroadcastSampleHandler {
             if !wasBusy { lock.lock(); busy = false; lock.unlock() }
             return
         }
-        // The swipe signature of every kept frame, read or not (see the class comment).
-        if let start = ticker.feed(diff: detector.feed(pixelBuffer), time: pts) {
-            lock.lock(); if ticks.count < 64 { ticks.append(start) }; lock.unlock()   // one per swipe, stamped with its first frame
+        // The swipe signature of every kept frame, read or not (see the class comment): cheap, and under the lock so
+        // a restart of the detector (broadcastStarted) cannot race it.
+        lock.lock()
+        if let confirmed = ticker.feed(diff: detector.feed(pixelBuffer), time: pts) {
+            if ticks.count >= Tuning.maxPendingTicks { ticks.removeFirst() }   // the oldest goes
+            ticks.append(confirmed)
         }
+        lock.unlock()
         if wasBusy { return }     // nothing captured, nothing queued
         queue.async { [self] in
             autoreleasepool { handle(pixelBuffer, time: pts) }
@@ -157,11 +163,11 @@ class SampleHandler: RPBroadcastSampleHandler {
         guard let processor = processor else { return }
         lock.lock(); let over = finished; lock.unlock()
         if over { return }
-        drainTicks()
         memory.sample()
         if mode == .saveCrops {
             let t0 = DispatchTime.now().uptimeNanoseconds
             var (analysis, crops) = processor.analyse(pixelBuffer, time: time)
+            drainTicks()          // after the frame is analysed, before it is judged: a swipe confirmed meanwhile counts
             var changed = false
             if saver.shouldSave(&analysis), let crops = crops, let archive = archive, archive.save(analysis, crops) {
                 state.savedFrames = archive.frameCount; state.savedFiles = archive.fileCount
@@ -174,6 +180,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         } else if ReadGuard.shouldSkipVision(availableBytes: MemoryProbe.availableBytes()) {
             // Little memory left: skip Vision for this frame and say so, instead of being killed. The
             // skip is not a read: it is not counted in the frames read or the mean time per frame.
+            drainTicks()
             state.skippedLowMemory += 1
             if state.skippedLowMemory == 1 { log.error("low memory: skipping Vision for frames (available below \(Tuning.lowMemoryAvailableBytes / 1_048_576) MB)") }
             write(force: false)
@@ -181,6 +188,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             let t0 = DispatchTime.now().uptimeNanoseconds
             let reading = processor.process(pixelBuffer, time: time)
             msTotal += Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+            drainTicks()          // right after Vision returns, immediately before the reading is added
             state.framesRead += 1
             let changed = grouper.add(reading)
             if changed { state.rows = grouper.rows }

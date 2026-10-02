@@ -160,19 +160,23 @@ func run() throws {
         // The swipe signature of every frame, as the extension computes it in its callback.
         let diff = buffer.map { detector.feed($0) } ?? detector.feed(image!)
         signatureDiffs.append(diff)
-        if let tick = ticker.feed(diff: diff, time: time), !o.noSwipeTicks { grouper.swipe(at: tick); saver.noteSwipe(at: tick) }
+        let tick = o.noSwipeTicks ? nil : ticker.feed(diff: diff, time: time)   // confirmed on this frame; applied after the read, as the extension does
         let t0 = DispatchTime.now().uptimeNanoseconds
         var reading = FrameReading(frame: label, time: time)
         if let archive = archive {
             // The extension's work in "save crops" mode: pixels only, then maybe write the crops.
             var (a, crops) = buffer.map { processor.analyse($0, time: time, frame: label) } ?? processor.analyse(image!, time: time, frame: label)
+            if let tick = tick { saver.noteSwipe(at: tick) }
             if saver.shouldSave(&a), let c = crops { archive.save(a, c); probe.sample() }
             reading.flags = a.flags
         } else if let b = buffer { reading = processor.process(b, time: time, frame: label) }
         else { reading = processor.process(image!, time: time, frame: label) }
         let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
         msTotal += ms; msWorst = max(msWorst, ms)
-        if archive == nil { readings.append(reading); grouper.add(reading) }
+        if archive == nil {
+            if let tick = tick { grouper.swipe(at: tick) }   // right before the reading is added
+            readings.append(reading); grouper.add(reading)
+        }
         if o.verbose {
             FileHandle.standardError.write(Data("\(label) \(String(format: "%.0f", ms)) ms  cp=\(reading.cp.map(String.init) ?? "-") name=\(reading.name ?? "-") (\(reading.nameText) @\(Int(reading.nameConfidence))) hp=\(reading.hp.map { "\($0.current)/\($0.max)" } ?? "-") ivs=\(reading.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "-") \(reading.flags.joined(separator: ","))\n".utf8))
         }

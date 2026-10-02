@@ -173,23 +173,25 @@ public final class CropArchive {
 
 /// The app's half of "save crops" mode: Vision on the saved crops through the same `FrameReader.complete`.
 public enum DeferredRun {
-    /// Read the saved frames in order; each reading comes with its segment number. `removeWhenDone` deletes the
+    /// Read the saved frames in order; each reading comes with its segment number. Frames that cannot be loaded are
+    /// counted in `unreadable` and are not deleted. `removeWhenDone` deletes the
     /// frames that were read (and only those) afterwards; `consumed` lists them for a caller that deletes later.
-    public static func read(archive: CropArchive, reader: FrameReader, removeWhenDone: Bool = true) -> (frames: [(segment: Int?, reading: FrameReading)], consumed: [URL]) {
+    public static func read(archive: CropArchive, reader: FrameReader, removeWhenDone: Bool = true) -> (frames: [(segment: Int?, reading: FrameReading)], consumed: [URL], unreadable: Int) {
         var out = [(segment: Int?, reading: FrameReading)]()
         var consumed = [URL]()
+        var unreadable = 0
         for url in archive.frameURLs() {
             autoreleasepool {
-                if let (a, crops) = archive.load(url) { out.append((a.segment, reader.complete(a, crops))); consumed.append(url) }
+                if let (a, crops) = archive.load(url) { out.append((a.segment, reader.complete(a, crops))); consumed.append(url) } else { unreadable += 1 }
             }
         }
         if removeWhenDone { archive.remove(frames: consumed) }
-        return (out, consumed)
+        return (out, consumed, unreadable)
     }
 
     /// Read, group, return both (and the frames read). The saved frames of different segments had a swipe between
     /// them that was not saved, so the grouper is given a swipe tick between them (and a few empty frames).
-    public static func readAndGroup(archive: CropArchive, reader: FrameReader, species: SpeciesTable?, removeWhenDone: Bool = true) -> (readings: [FrameReading], rows: [LiveRow], consumed: [URL]) {
+    public static func readAndGroup(archive: CropArchive, reader: FrameReader, species: SpeciesTable?, removeWhenDone: Bool = true) -> (readings: [FrameReading], rows: [LiveRow], consumed: [URL], unreadable: Int) {
         let result = read(archive: archive, reader: reader, removeWhenDone: removeWhenDone)
         var g = LiveGrouper(species: species)
         var previous: Int?? = .none
@@ -205,6 +207,6 @@ public enum DeferredRun {
             lastTime = reading.time ?? lastTime + Tuning.framePeriod
         }
         g.finish()
-        return (result.frames.map(\.reading), g.rows, result.consumed)
+        return (result.frames.map(\.reading), g.rows, result.consumed, result.unreadable)
     }
 }

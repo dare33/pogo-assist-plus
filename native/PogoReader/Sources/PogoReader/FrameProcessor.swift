@@ -1,6 +1,7 @@
 import Foundation
 import Accelerate
 import CoreVideo
+import os
 
 /// Wraps a text reader to sample memory after every recognition (the peak is during Vision).
 private final class ProbedTextReader: TextReader {
@@ -135,7 +136,8 @@ public final class FrameProcessor {
     }
 
     private func fill(from pb: CVPixelBuffer) -> Bool {
-        CVPixelBufferLockBaseAddress(pb, .readOnly)
+        // A buffer that cannot be locked is skipped, not read through a null pointer.
+        guard CVPixelBufferLockBaseAddress(pb, .readOnly) == kCVReturnSuccess else { return false }
         defer { CVPixelBufferUnlockBaseAddress(pb, .readOnly) }
         let format = CVPixelBufferGetPixelFormatType(pb)
         switch format {
@@ -144,9 +146,12 @@ public final class FrameProcessor {
         case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
             return fillFrom420(pb, fullRange: format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
         default:
+            if !FrameProcessor.warned { FrameProcessor.warned = true; Logger(subsystem: "com.dare33.pogoreader", category: "frame").error("unsupported pixel format \(format): frames are skipped") }
             return false
         }
     }
+
+    private static var warned = false
 
     private func fillFromBGRA(_ pb: CVPixelBuffer) -> Bool {
         guard let base = CVPixelBufferGetBaseAddress(pb) else { return false }

@@ -59,6 +59,12 @@ public enum Tuning {
     /// covers the HP and the bars still animate).
     public static let strayMaxSeconds = 0.6
 
+    /// At most this many swipe ticks are kept waiting for a reading; the oldest is dropped past it.
+    public static let maxPendingTicks = 64
+
+    /// Readings with only a name belong to one stretch if no more than this lies between them (seconds).
+    public static let nameOnlyGapSeconds = 1.0
+
     /// The luma signature must stay above its threshold for this many consecutive frames to be a swipe (a swipe
     /// gives 3 to 6; a lone jump is a touch dot or an animation and would split one Pokemon in two).
     public static let swipeEventMinFrames = 3

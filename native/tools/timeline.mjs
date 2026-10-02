@@ -17,7 +17,7 @@
 // (The grouper also takes swipe ticks from the extension's luma signature, which this script does not see.)
 // Check those against the frames (a row flagged `long-stay`, a segment flagged MULTI-NAME).
 //
-// A frame is "a card" when it has a CP or an HP read; 3 or more frames in a row without one (swipes,
+// A frame is "a card" when it has a CP or an HP read (or a name alone that has lasted 0.6 s); 3 or more frames in a row without one (swipes,
 // anchor-less frames, a card sliding past) end a segment (--swipe-frames N). Two cards with no
 // swipe between them are one segment (flagged MULTI-NAME when the names differ).
 
@@ -63,11 +63,27 @@ const labelIndex = new Map(readings.map((r, i) => [r.frame, i]));
 // no anchors, a card sliding past with only its name and bars) is a swipe and ends the segment; a
 // shorter gap (a hidden CP, a covered HP) stays inside it. Names are not used to split.
 const SWIPE_FRAMES = Number(opt('swipe-frames', 3));
-const isCard = (r) => r.cp != null || r.hp != null;
+// A reading with a CP or an HP is a card. A name alone is a card only once the same name has lasted 0.6 s (a card
+// sliding past is often read with only its name; shorter than that it is a separator frame, as in LiveGrouper).
+const period = 0.2;
+const timeOf = (r, i) => r.time ?? i * period;
+const cardFlags = (() => {
+  const flags = [];
+  let start = null, name = null, last = -Infinity;
+  readings.forEach((r, i) => {
+    const t = timeOf(r, i);
+    if (r.cp != null || r.hp != null) { flags.push(true); start = null; return; }
+    if (r.name == null) { flags.push(false); start = null; return; }
+    if (start === null || name !== r.name || t - last > 1.0) { start = t; name = r.name; }
+    last = t;
+    flags.push(t - start + period >= 0.6 - 1e-9);
+  });
+  return flags;
+})();
 const segs = [];
 let cur = null, sep = 0;
 readings.forEach((r, i) => {
-  if (!isCard(r)) { sep++; return; }
+  if (!cardFlags[i]) { sep++; return; }
   if (!cur || sep >= SWIPE_FRAMES) { cur = { first: i, last: i, frames: [] }; segs.push(cur); }
   cur.last = i; cur.frames.push(r); sep = 0;
 });
