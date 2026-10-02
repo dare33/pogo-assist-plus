@@ -8,3 +8,5 @@ frames/
 data/rankings/
 scratch/
 out/
+# the owner's Apple team id; copy Config/Signing.local.xcconfig.example
+native/PogoAssist/Config/Signing.local.xcconfig

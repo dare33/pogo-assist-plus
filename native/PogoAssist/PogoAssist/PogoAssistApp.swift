@@ -3,6 +3,6 @@ import SwiftUI
 @main
 struct PogoAssistApp: App {
     var body: some Scene {
-        WindowGroup { ContentView() }
+        WindowGroup { RootView() }
     }
 }

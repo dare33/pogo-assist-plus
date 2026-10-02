@@ -59,8 +59,22 @@ enum SharedStore {
     static var groupID: String { (Bundle.main.object(forInfoDictionaryKey: "AppGroupID") as? String) ?? "group.com.dare33.pogoassist" }
     static var notificationName: String { groupID + ".state-changed" }
 
+    /// The app group's folder. In an unsigned simulator build the group does not exist; there, and only there, the app's
+    /// Documents folder stands in so the whole flow can be driven (the broadcast extension cannot run in the simulator).
+    static var containerURL: URL? {
+        if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID) { return url }
+        #if targetEnvironment(simulator)
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+        let dir = docs.appendingPathComponent("AppGroupFallback", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+        #else
+        return nil
+        #endif
+    }
+
     static var stateURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("state.json")
+        containerURL?.appendingPathComponent("state.json")
     }
 
     private static var encoder: JSONEncoder {
@@ -72,7 +86,7 @@ enum SharedStore {
 
     /// The app group container exists. False when the entitlement or the group is not set up (signing).
     static var containerAvailable: Bool {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID) != nil
+        containerURL != nil
     }
 
     /// Replace the state file atomically and post the notification. Returns false when it could not be written.
@@ -98,16 +112,16 @@ enum SharedStore {
 
     /// Where "save crops" mode writes (and the app reads and then empties).
     static var cropsURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("crops", isDirectory: true)
+        containerURL?.appendingPathComponent("crops", isDirectory: true)
     }
 
     /// The extension's replay log: one JSON line per reading, swipe tick and dropped frame (live modes).
     static var replayURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("replay.jsonl")
+        containerURL?.appendingPathComponent("replay.jsonl")
     }
 
     /// The app's result of reading the saved crops (shareable).
     static var deferredURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("deferred.json")
+        containerURL?.appendingPathComponent("deferred.json")
     }
 }

@@ -1,0 +1,3 @@
+// Copy this file to Signing.local.xcconfig in this folder (that file is git-ignored) and replace the value with your
+// Apple developer team id (Xcode > Settings > Accounts, or developer.apple.com > Membership details).
+DEVELOPMENT_TEAM = YOURTEAMID

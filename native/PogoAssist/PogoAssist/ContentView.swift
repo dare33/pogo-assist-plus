@@ -14,8 +14,13 @@ struct BroadcastPicker: UIViewRepresentable {
 }
 
 struct ContentView: View {
+    /// Set when this is the Diagnostics screen of the app: adds "Load sample scan" and a Done button.
+    var onLoadSample: (() -> Void)?
+    var showsDone = false
+
     @StateObject private var model = StateModel()
     @Environment(\.scenePhase) private var phase
+    @Environment(\.dismiss) private var dismiss
 
     /// The extension's memory limit is about 50 MB; the peak turns red from here.
     private let peakWarnMB = 45.0
@@ -39,6 +44,11 @@ struct ContentView: View {
                         Spacer()
                         BroadcastPicker().frame(width: 64, height: 64)
                     }
+                }
+                if let onLoadSample {
+                    Section {
+                        Button("Load sample scan", action: onLoadSample).disabled(model.live)
+                    } footer: { Text("Copies a bundled device log into the app group as if a broadcast had just finished, then opens the scan result. For use where the broadcast cannot run.") }
                 }
                 Section("Reader (applies when the broadcast starts)") {
                     Picker("Reader", selection: $model.mode) {
@@ -65,8 +75,9 @@ struct ContentView: View {
                     ForEach(model.state.rows, id: \.index) { RowView(row: $0) }
                 }
             }
-            .navigationTitle("Pogo Assist+")
+            .navigationTitle(showsDone ? "Diagnostics" : "Pogo Assist+")
             .toolbar {
+                if showsDone { ToolbarItem(placement: .topBarLeading) { Button("Done") { dismiss() } } }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if model.hasState, let url = SharedStore.stateURL {
                         ShareLink(items: [url] + [SharedStore.deferredURL, SharedStore.replayURL].compactMap { $0 }.filter { FileManager.default.fileExists(atPath: $0.path) }) { Image(systemName: "square.and.arrow.up") }

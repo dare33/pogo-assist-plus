@@ -1,4 +1,4 @@
-# XcodeGen spec for the Pogo Assist+ proof-2 app. Regenerate with `xcodegen generate` in this folder;
+# XcodeGen spec for the Pogo Assist+ app. Regenerate with `xcodegen generate` in this folder;
 # the generated PogoAssist.xcodeproj is committed too. Identifiers live in Config/Identifiers.xcconfig.
 name: PogoAssist
 options:
@@ -31,6 +31,9 @@ targets:
     dependencies:
       - package: PogoReader
         product: PogoReader
+      # The app core (JavaScript engine, box, merge). App target only: the extension must stay small.
+      - package: PogoReader
+        product: PogoBox
       - target: PogoBroadcast
         embed: true
     entitlements:
@@ -77,6 +80,17 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(EXTENSION_BUNDLE_ID)
         GENERATE_INFOPLIST_FILE: NO
+  PogoAssistUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - PogoAssistUITests
+    dependencies:
+      - target: PogoAssist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).uitests
+        GENERATE_INFOPLIST_FILE: YES
 # Run and Profile build Release: the pixel work is about 40 times slower unoptimised (158 ms against 4 ms a
 # frame), which would make a device run say nothing about the real extension. Release keeps debug symbols
 # (dSYM) and os_log output is visible in Console either way.
@@ -91,3 +105,7 @@ schemes:
       config: Release
     archive:
       config: Release
+    test:
+      config: Debug
+      targets:
+        - PogoAssistUITests

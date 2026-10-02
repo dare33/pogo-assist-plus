@@ -6,5 +6,8 @@ BUNDLE_ID_PREFIX = com.dare33
 APP_BUNDLE_ID = $(BUNDLE_ID_PREFIX).pogoassist
 EXTENSION_BUNDLE_ID = $(BUNDLE_ID_PREFIX).pogoassist.broadcast
 APP_GROUP = group.$(BUNDLE_ID_PREFIX).pogoassist
-// Left empty on purpose: the owner picks his team in Xcode (automatic signing).
-DEVELOPMENT_TEAM =
+
+// The signing team is not tracked. Copy Signing.local.xcconfig.example to Signing.local.xcconfig (git-ignored) and put
+// your team id there; Xcode then signs without writing the id into the project file. Without it the project builds
+// unsigned (simulator) and Xcode asks for a team on the first device run.
+#include? "Signing.local.xcconfig"
