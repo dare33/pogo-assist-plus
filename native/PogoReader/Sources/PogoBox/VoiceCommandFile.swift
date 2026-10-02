@@ -21,23 +21,34 @@ public enum VoiceCommandFile {
         /// Seconds one swipe lasts (a tap lasts `tapHold`).
         public var swipeDuration: Double { self == .swipeFast ? 0.6 : 0.85 }
         public var isTap: Bool { self == .tapNormal || self == .tapFast }
+
+        /// The setting's name, used everywhere: the pace list, the button, the "last made" line.
         public var title: String {
-            switch self {
-            case .swipeNormal: return "Swipe, normal (2.1 s)"
-            case .swipeFast: return "Swipe, fast (1.6 s)"
-            case .tapNormal: return "Tap (1.2 s)"
-            case .tapFast: return "Tap (1.0 s)"
-            }
+            switch self { case .tapNormal: return "Scan"; case .tapFast: return "Fast scan"; case .swipeNormal: return "Slow swipe"; case .swipeFast: return "Swipe" }
         }
-        /// For "Get the fast swipe command" and "Last made: fast swipe".
-        public var spokenTitle: String {
-            switch self { case .swipeNormal: return "normal swipe"; case .swipeFast: return "fast swipe"; case .tapNormal: return "tap (1.2 s)"; case .tapFast: return "tap (1.0 s)" }
+        public var spokenTitle: String { title.lowercased() }
+        /// "1.2 s per Pokémon", the secondary text of a row.
+        public var secondsText: String { "\(every) s per Pokémon" }
+        /// What is said to Voice Control, one command per mode so several can be installed together.
+        public var commandName: String { "Pogo " + spokenTitle }
+        /// The name of the mode's batch gesture: words nobody says, none shared with any spoken command or with another gesture's name.
+        public var gestureName: String {
+            switch self { case .tapNormal: return "Amber lantern"; case .tapFast: return "Silver compass"; case .swipeNormal: return "Quiet walnut"; case .swipeFast: return "Velvet marble" }
         }
-        public var shortTitle: String {
-            switch self { case .swipeNormal: return "swipe, normal"; case .swipeFast: return "swipe, fast"; case .tapNormal: return "tap, 1.2 s"; case .tapFast: return "tap, 1.0 s" }
+        /// The number the mode's two command identifiers come from (`Custom.<n>` for the gesture, `Custom.<n+60>` for the command): the
+        /// same every time the mode's file is made, so importing it replaces that mode's commands and no other mode's.
+        public var idBase: Double {
+            switch self { case .tapNormal: return 780_000_000; case .tapFast: return 780_000_200; case .swipeNormal: return 780_000_400; case .swipeFast: return 780_000_600 }
         }
-        /// Only the normal swipe is proven on a full box.
-        public var provenOnFullBox: Bool { self == .swipeNormal }
+        /// The modes a person can choose. Where the tap position has been measured: Scan and Fast scan (both paged by taps). Elsewhere there is no choice, only
+        /// `Swipe` (the 1.6 s swipe, the pace that read every value correctly on the phone). The 2.1 s swipe is still made by the
+        /// generator, as the proven reference timing, but is not offered.
+        public static func offered(tapAvailable: Bool) -> [Pace] { tapAvailable ? [.tapNormal, .tapFast] : [.swipeFast] }
+        public static func defaultMode(tapAvailable: Bool) -> Pace { offered(tapAvailable: tapAvailable)[0] }
+        /// A note shown on the row, or nil.
+        public var note: String? { self == .tapFast ? "misreads seen at this pace" : nil }
+        /// The file the app offers: "Pogo tap 300.voicecontrolcommands".
+        public func fileName(count: Int) -> String { "\(commandName) \(count).voicecontrolcommands" }
     }
 
     // MARK: - tap position: the one place it is kept
@@ -68,8 +79,6 @@ public enum VoiceCommandFile {
     // MARK: - sizing
 
     public static let defaultBatch = 50
-    public static let commandName = "Pogo scan"
-    public static let batchName = "Storage page step"
 
     public struct Sizing: Equatable {
         /// Page steps the scan needs: the storage count less the first Pokémon (already on screen) plus 2%, rounded up; at least 3.
@@ -110,9 +119,10 @@ public enum VoiceCommandFile {
 
     /// The commands file. `count` is the number of page steps to make, as `--count` in the Python (use `sizing(...).steps`);
     /// `batch` the page steps in one gesture. A tap pace needs `tap`, the point in screen points, which must be at or right of
-    /// `minTapXFraction` of `screenWidth`. `now` fixes the time stamps and identifiers (a test passes one; the app passes the time).
-    public static func make(count: Int, pace: Pace, batch: Int = defaultBatch, name: String = commandName, batchName: String = batchName, locale: String = "en_AU",
+    /// `minTapXFraction` of `screenWidth`. `now` fixes the time stamps (a test passes one; the app passes the time). The names and the identifiers come from the pace, so each mode has its own commands.
+    public static func make(count: Int, pace: Pace, batch: Int = defaultBatch, name: String? = nil, batchName: String? = nil, idBase: Double? = nil, locale: String = "en_AU",
                             tap: CGPoint? = nil, screenWidth: Double = 440, now: Date = Date()) throws -> Data {
+        let name = name ?? pace.commandName, batchName = batchName ?? pace.gestureName
         guard count >= 1, batch >= 1 else { throw Failure.badCount }
         var events: [(Double, (Double, Double)?)]
         let ref = now.timeIntervalSinceReferenceDate
@@ -124,7 +134,8 @@ public enum VoiceCommandFile {
             events = swipes(start: ref, count: batch, xFrom: 340, xTo: 75, y: 340, every: pace.every, duration: pace.swipeDuration)
         }
         let repeats = (count + batch - 1) / batch
-        let batchId = "Custom." + String(format: "%.6f", ref), chainId = "Custom." + String(format: "%.6f", ref + 60)
+        let idBase = idBase ?? pace.idBase
+        let batchId = "Custom." + String(format: "%.6f", idBase), chainId = "Custom." + String(format: "%.6f", idBase + 60)
         func base() -> [String: Any] { ["ConfirmationRequired": false, "CustomModifyDate": now, "CustomScope": "com.apple.speech.SystemWideScope"] }
         var batchEntry = base()
         batchEntry["CustomCommands"] = [locale: [batchName]]; batchEntry["CustomType"] = "RunGesture"; batchEntry["CustomGesture"] = gesture(events)

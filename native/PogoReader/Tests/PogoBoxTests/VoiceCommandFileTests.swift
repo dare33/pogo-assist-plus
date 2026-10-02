@@ -119,6 +119,81 @@ final class VoiceCommandFileTests: XCTestCase {
         try assertSame("tap-normal-3-fr_FR", try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, locale: "fr_FR", tap: tap, now: now))
     }
 
+    // MARK: names, identifiers, file names
+
+    private func commands(_ data: Data) throws -> [(id: String, name: String, type: String)] {
+        guard case .dict(let root) = try normalised(data), case .dict(let table)? = root["CommandsTable"] else { return [] }
+        var out = [(String, String, String)]()
+        for (id, v) in table {
+            guard case .dict(let e) = v, case .dict(let names)? = e["CustomCommands"], case .array(let list)? = names.values.first, case .string(let n)? = list.first, case .string(let type)? = e["CustomType"] else { continue }
+            out.append((id, n, type))
+        }
+        return out
+    }
+
+    func testEachModeHasItsOwnNamesAndStableIdentifiers() throws {
+        typealias P = VoiceCommandFile.Pace
+        XCTAssertEqual(P.tapNormal.title, "Scan"); XCTAssertEqual(P.tapNormal.commandName, "Pogo scan")
+        XCTAssertEqual(P.tapFast.title, "Fast scan"); XCTAssertEqual(P.tapFast.commandName, "Pogo fast scan")
+        XCTAssertEqual(P.swipeFast.title, "Swipe"); XCTAssertEqual(P.swipeFast.commandName, "Pogo swipe")
+        XCTAssertEqual(P.tapNormal.secondsText, "1.2 s per Pokémon"); XCTAssertEqual(P.tapFast.secondsText, "1.0 s per Pokémon"); XCTAssertEqual(P.swipeFast.secondsText, "1.6 s per Pokémon")
+        // distinct everywhere
+        XCTAssertEqual(Set(P.allCases.map { $0.commandName }).count, 4)
+        XCTAssertEqual(Set(P.allCases.map { $0.gestureName }).count, 4)
+        XCTAssertEqual(Set(P.allCases.map { $0.idBase }).count, 4)
+        // the gesture names share no word with any spoken command or with each other
+        let spokenWords = Set(P.allCases.flatMap { $0.commandName.lowercased().split(separator: " ").map(String.init) })
+        var seen = Set<String>()
+        for p in P.allCases {
+            for w in p.gestureName.lowercased().split(separator: " ").map(String.init) {
+                XCTAssertFalse(spokenWords.contains(w), "\(w) is also in a spoken command")
+                XCTAssertTrue(seen.insert(w).inserted, "\(w) is in two gesture names")
+            }
+        }
+        // two files of one mode have the same names and identifiers; files of different modes share none
+        var idsByMode = [P: Set<String>]()
+        for p in P.allCases {
+            let a = try commands(try VoiceCommandFile.make(count: 10, pace: p, batch: 10, tap: tap, now: now))
+            let b = try commands(try VoiceCommandFile.make(count: 400, pace: p, batch: 50, tap: tap, now: now.addingTimeInterval(86_400)))
+            XCTAssertEqual(Set(a.map { $0.id }), Set(b.map { $0.id }), "\(p) identifiers must not change between files")
+            XCTAssertEqual(Set(a.map { $0.name }), [p.commandName, p.gestureName])
+            XCTAssertEqual(a.count, 2)
+            idsByMode[p] = Set(a.map { $0.id })
+        }
+        let all = idsByMode.values.reduce(into: [String]()) { $0 += $1 }
+        XCTAssertEqual(Set(all).count, 8, "no two modes share an identifier")
+        XCTAssertEqual(idsByMode[.tapNormal], ["Custom.780000000.000000", "Custom.780000060.000000"])
+    }
+
+    func testFileNames() {
+        XCTAssertEqual(VoiceCommandFile.Pace.tapNormal.fileName(count: 300), "Pogo scan 300.voicecontrolcommands")
+        XCTAssertEqual(VoiceCommandFile.Pace.tapFast.fileName(count: 300), "Pogo fast scan 300.voicecontrolcommands")
+        XCTAssertEqual(VoiceCommandFile.Pace.swipeFast.fileName(count: 300), "Pogo swipe 300.voicecontrolcommands")
+    }
+
+    func testOnlyTapAndFastTapAreOfferedWhereTapIsCheckedElsewhereOnlySwipe() {
+        XCTAssertEqual(VoiceCommandFile.Pace.offered(tapAvailable: true), [.tapNormal, .tapFast])
+        XCTAssertEqual(VoiceCommandFile.Pace.offered(tapAvailable: false), [.swipeFast])
+        XCTAssertEqual(VoiceCommandFile.Pace.defaultMode(tapAvailable: true), .tapNormal)
+        XCTAssertEqual(VoiceCommandFile.Pace.defaultMode(tapAvailable: false), .swipeFast)
+        XCTAssertEqual(VoiceCommandFile.Pace.tapFast.note, "misreads seen at this pace"); XCTAssertNil(VoiceCommandFile.Pace.tapNormal.note)
+        // the 2.1 s swipe is still made by the generator, just not offered
+        XCTAssertNoThrow(try VoiceCommandFile.make(count: 3, pace: .swipeNormal, batch: 3, now: now))
+    }
+
+    func testThePaceCheckNamesTheModeThatRan() {
+        typealias P = VoiceCommandFile.Pace
+        XCTAssertEqual(ScanPace.check(measured: 2.2, chosen: .tapNormal), "This scan ran at about 2.2 s per Pokémon, which is the Slow swipe pace; you had chosen Scan. Voice Control may have heard a different command.")
+        XCTAssertNil(ScanPace.check(measured: 1.25, chosen: .tapNormal), "the chosen mode's own pace")
+        XCTAssertNil(ScanPace.check(measured: 1.1, chosen: .tapNormal), "within 0.15 s of the chosen mode")
+        XCTAssertEqual(ScanPace.check(measured: 1.0, chosen: .tapNormal), "This scan ran at about 1.0 s per Pokémon, which is the Fast scan pace; you had chosen Scan. Voice Control may have heard a different command.")
+        XCTAssertEqual(ScanPace.check(measured: 1.6, chosen: .tapFast)?.contains("which is the Swipe pace; you had chosen Fast scan"), true)
+        XCTAssertNil(ScanPace.check(measured: 3.5, chosen: .tapNormal), "near no mode: paced by hand")
+        XCTAssertNil(ScanPace.check(measured: 1.6, chosen: .swipeFast))
+        XCTAssertEqual(ScanPace.nearestMode(to: 2.2), .swipeNormal)
+        XCTAssertEqual(ScanPace.nearestMode(to: 1.6), .swipeFast)
+    }
+
     func testTheComparisonCanFail() throws {
         // a fast-swipe file is not the normal-swipe reference
         XCTAssertNotEqual(try normalised(try reference("swipe-normal-1427")), try normalised(try VoiceCommandFile.make(count: 1427, pace: .swipeFast, batch: 50, now: now)))

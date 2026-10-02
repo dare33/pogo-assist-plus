@@ -151,6 +151,7 @@ def main():
     p.add_argument("--locale", default="en_AU", help="the phone's Voice Control language")
     p.add_argument("--tap", type=float, nargs=2, metavar=("X", "Y"), help="page by tapping the next-Pokémon arrow at this point (screen points) instead of swiping")
     p.add_argument("--screen-width", type=float, default=440.0, help="width in points of the screen the --tap point was measured on")
+    p.add_argument("--id-base", type=float, help="number the command identifiers come from (Custom.<n> and Custom.<n+60>); give the same one every time for a mode so importing the file replaces that mode's commands and leaves the others alone. Default: the time, so every file is a new pair")
     p.add_argument("--now", help="fix the time stamps and identifiers (UTC, YYYY-MM-DDTHH:MM:SS) so two runs give the same file; for tests")
     args = p.parse_args()
     if args.tap and args.tap[0] < MIN_TAP_X_FRACTION * args.screen_width:
@@ -160,7 +161,8 @@ def main():
 
     now = datetime.datetime.fromisoformat(args.now) if args.now else datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     ref = (now - datetime.datetime(2001, 1, 1)).total_seconds()  # Apple's reference date
-    batch_id, chain_id = "Custom.%.6f" % ref, "Custom.%.6f" % (ref + 60)
+    id_base = args.id_base if args.id_base is not None else ref
+    batch_id, chain_id = "Custom.%.6f" % id_base, "Custom.%.6f" % (id_base + 60)
     repeats = math.ceil(args.count / args.batch)
     args.batch = math.ceil(args.count / repeats)  # 51 steps with --batch 50 is 2 x 26, not 2 x 50
     base = dict(ConfirmationRequired=False, CustomModifyDate=now, CustomScope="com.apple.speech.SystemWideScope")

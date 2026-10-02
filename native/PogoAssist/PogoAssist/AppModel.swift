@@ -58,7 +58,7 @@ final class AppModel: ObservableObject {
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
-    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePace", voice = "voiceLast." }
+    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePaceV2", voice = "voiceLast." }
 
     // MARK: - the Voice Control command
 
@@ -66,17 +66,32 @@ final class AppModel: ObservableObject {
     struct VoiceRecord: Codable, Equatable { var storageCount: Int; var covers: Int; var pace: VoiceCommandFile.Pace; var date: Date }
 
     @Published var pace: VoiceCommandFile.Pace { didSet { UserDefaults.standard.set(pace.rawValue, forKey: Keys.pace) } }
-    @Published var voiceLast: VoiceRecord?
+    /// The last command made for each mode of the selected account: each mode is its own command in Voice Control.
+    @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]
+    var voiceLast: VoiceRecord? { voiceRecords[pace] }
+
+    /// What the Scan screen should warn about for the chosen mode, or nil: no command made for it yet, or one made for fewer
+    /// Pokémon than the typed count needs.
+    var commandWarning: String? {
+        guard let count = storageCount else { return nil }
+        guard let last = voiceRecords[pace] else { return "No \(pace.title) command has been made yet. Get the command and import it, or Voice Control will not know \"\(pace.commandName)\"." }
+        if VoiceCommandFile.steps(storageCount: count) > last.covers { return "Your count is higher than the \(pace.title) command covers. Get the command again and import it, or Voice Control will play the old one." }
+        return nil
+    }
 
     /// Screen size in points, for the tap position check.
     var screenSize: CGSize { UIScreen.main.bounds.size }
+    var offeredPaces: [VoiceCommandFile.Pace] { VoiceCommandFile.Pace.offered(tapAvailable: tapAvailable) }
     var tapAvailable: Bool { VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) != nil }
 
     var storageCount: Int? { Int(storageCountText.trimmingCharacters(in: .whitespaces)).flatMap { $0 >= 1 ? $0 : nil } }
 
     func loadVoiceRecord() {
-        guard let a = account, let data = UserDefaults.standard.data(forKey: Keys.voice + a) else { voiceLast = nil; return }
-        voiceLast = try? JSONDecoder().decode(VoiceRecord.self, from: data)
+        voiceRecords = [:]
+        guard let a = account else { return }
+        for p in VoiceCommandFile.Pace.allCases {
+            if let data = UserDefaults.standard.data(forKey: Keys.voice + a + "." + p.rawValue), let r = try? JSONDecoder().decode(VoiceRecord.self, from: data) { voiceRecords[p] = r }
+        }
     }
 
     /// The device's language for the command, as Voice Control writes it (en_AU).
@@ -88,7 +103,7 @@ final class AppModel: ObservableObject {
     func getCommand() async {
         guard let count = storageCount else { message = "Type how many Pokémon are in your storage first."; return }
         var pace = self.pace
-        if pace.isTap && !tapAvailable { pace = .swipeNormal; self.pace = pace }
+        if !offeredPaces.contains(pace) { pace = offeredPaces[0]; self.pace = pace }
         let size = VoiceCommandFile.sizing(storageCount: count, pace: pace)
         let tap = pace.isTap ? VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) : nil
         let width = Double(screenSize.width), locale = Self.voiceLocale
@@ -99,14 +114,14 @@ final class AppModel: ObservableObject {
                 let data = try VoiceCommandFile.make(count: size.steps, pace: pace, batch: size.batch, locale: locale, tap: tap, screenWidth: width)
                 let dir = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString)", isDirectory: true)
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let url = dir.appendingPathComponent("Pogo scan \(count).voicecontrolcommands")
+                let url = dir.appendingPathComponent(pace.fileName(count: count))
                 try data.write(to: url, options: .atomic)
                 return url
             }
             if let a = account {
                 let rec = VoiceRecord(storageCount: count, covers: size.covers, pace: pace, date: Date())
-                if let d = try? JSONEncoder().encode(rec) { UserDefaults.standard.set(d, forKey: Keys.voice + a) }
-                voiceLast = rec
+                if let d = try? JSONEncoder().encode(rec) { UserDefaults.standard.set(d, forKey: Keys.voice + a + "." + pace.rawValue) }
+                voiceRecords[pace] = rec
             }
             shareURLs = [url]
         } catch { message = "The command could not be made: \(Self.plain(error))" }
@@ -126,7 +141,11 @@ final class AppModel: ObservableObject {
         library = BoxLibrary(root: root)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
         storageCountText = UserDefaults.standard.string(forKey: Keys.count) ?? ""
-        pace = VoiceCommandFile.Pace(rawValue: UserDefaults.standard.string(forKey: Keys.pace) ?? "") ?? .swipeNormal
+        // Tap is the default where it is available (the owner's choice after testing); the setting is stored under a new key so it applies once.
+        let tapOK = VoiceCommandFile.tapPoint(width: Double(UIScreen.main.bounds.width), height: Double(UIScreen.main.bounds.height)) != nil
+        let offered = VoiceCommandFile.Pace.offered(tapAvailable: tapOK)
+        let stored = VoiceCommandFile.Pace(rawValue: UserDefaults.standard.string(forKey: Keys.pace) ?? "")
+        pace = stored.flatMap { offered.contains($0) ? $0 : nil } ?? offered[0]
         account = UserDefaults.standard.string(forKey: Keys.account)
         reloadAccounts()
         loadBox()
@@ -257,8 +276,9 @@ final class AppModel: ObservableObject {
             try await worker.run { _ in try lib.renameAccount(from: old, to: new) }
             let name = new.trimmingCharacters(in: .whitespacesAndNewlines)
             accounts = (try? library.accounts()) ?? accounts
-            if let d = UserDefaults.standard.data(forKey: Keys.voice + old) {
-                UserDefaults.standard.set(d, forKey: Keys.voice + name); UserDefaults.standard.removeObject(forKey: Keys.voice + old)
+            for p in VoiceCommandFile.Pace.allCases {
+                let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
+                if let d = UserDefaults.standard.data(forKey: k(old)) { UserDefaults.standard.set(d, forKey: k(name)); UserDefaults.standard.removeObject(forKey: k(old)) }
             }
             if account == old { account = name; loadBox(); loadVoiceRecord() }
             return nil

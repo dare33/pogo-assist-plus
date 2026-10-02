@@ -56,49 +56,38 @@ struct ScanView: View {
 
     // MARK: - the Voice Control command
 
-    /// The pace and count the last command made were built for differ from what is chosen now.
-    private var choiceChanged: Bool {
-        guard let last = model.voiceLast else { return false }
-        return last.pace != model.pace || (model.storageCount != nil && last.storageCount != model.storageCount)
-    }
-
     private var commandSection: some View {
         Section {
-            stepTitle("1. Choose how to page")
-            ForEach(VoiceCommandFile.Pace.allCases) { p in paceRow(p) }
+            if model.tapAvailable {
+                stepTitle("1. Choose how to page")
+                ForEach(model.offeredPaces) { p in paceRow(p) }
+                Text("Checked on runs of 50 so far.").font(.footnote).foregroundStyle(.secondary)
+            } else {
+                stepTitle("1. How it pages: Swipe")
+                Text("Tap paging has not been checked on this screen size, so this command swipes instead (\(model.pace.secondsText)).").font(.footnote).foregroundStyle(.secondary)
+            }
             if let c = model.storageCount {
                 let size = VoiceCommandFile.sizing(storageCount: c, pace: model.pace)
-                Text("About \(minutes(size.estimatedSeconds)) for \(c.formatted()) Pokémon. The file makes \(size.covers.formatted()) page steps (\(size.repeats) x \(size.batch)).").font(.footnote)
+                Text("\(model.pace.title): about \(minutes(size.estimatedSeconds)) for \(c.formatted()) Pokémon. The file makes \(size.covers.formatted()) page steps (\(size.repeats) x \(size.batch)).").font(.footnote)
             }
             if model.pace.isTap {
                 Text("Taps stay at the right edge, away from Power up and Evolve. Taps past the end close the appraisal and then do nothing (tested on the 440 x 956 iPhone only).").font(.footnote).foregroundStyle(.secondary)
             }
-            if !model.tapAvailable {
-                Text("Tap paging is only available on screens it has been checked on.").font(.footnote).foregroundStyle(.secondary)
-            }
-            if let last = model.voiceLast {
-                Text("Last made: \(last.pace.spokenTitle), for \(last.storageCount.formatted()) Pokémon (\(Fmt.day(last.date))).").font(.footnote.weight(.medium))
-                if choiceChanged {
-                    Label("Your choice has changed. Get the command again and import it, or Voice Control will play the old one.", systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote).foregroundStyle(.orange)
-                } else if let c = model.storageCount, VoiceCommandFile.steps(storageCount: c) > last.covers {
-                    Label("Your count is higher than that command covers. Get the command again.", systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange)
-                }
-            } else {
-                Text("No command made yet.").font(.footnote).foregroundStyle(.secondary)
+            if let warning = model.commandWarning {
+                Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange)
             }
             stepTitle("2. Get the command for this choice")
             Button { Task { await model.getCommand() } } label: { Label("Get the \(model.pace.spokenTitle) command", systemImage: "square.and.arrow.up") }
                 .disabled(model.storageCount == nil)
-            Text("Each speed is its own file. Importing a new one replaces the old command.").font(.footnote).foregroundStyle(.secondary)
+            Text("Each mode is its own command, so you can have several installed. Importing a new file for a mode replaces only that mode's command.").font(.footnote).foregroundStyle(.secondary)
             stepTitle("3. Import it in Voice Control")
             VStack(alignment: .leading, spacing: 4) {
                 Text("a. Choose Save to Files or AirDrop in the sheet that opens.").font(.footnote)
                 Text("b. Settings > Accessibility > Voice Control > Commands > Import Custom Commands, then pick the file.").font(.footnote)
-                Text("c. Do this again whenever you choose a different speed or count.").font(.footnote)
+                Text("c. Do this again for a mode whenever you change its count.").font(.footnote)
             }
             .foregroundStyle(.secondary)
-            stepTitle("4. Say \"Pogo scan\"")
+            stepTitle("4. Say \"\(model.pace.commandName)\"")
             Text("With the first Pokémon's appraisal open.").font(.footnote).foregroundStyle(.secondary)
         } header: { Text("Voice Control command") } footer: { Text("Optional. Without it, swipe through the Pokémon by hand.") }
     }
@@ -111,12 +100,14 @@ struct ScanView: View {
     }
 
     private func paceRow(_ p: VoiceCommandFile.Pace) -> some View {
-        let disabled = p.isTap && !model.tapAvailable
+        let disabled = false
+        let made: String = model.voiceRecords[p].map { "command made for \($0.storageCount.formatted()) Pokémon" } ?? "no command made yet"
         return Button { model.pace = p } label: {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(p.title).foregroundStyle(disabled ? Color.secondary : Color.primary)
-                    if !p.provenOnFullBox { Text("not yet proven on a full box").font(.footnote).foregroundStyle(Color.secondary) }
+                    Text("\(p.secondsText), \(made)").font(.footnote).foregroundStyle(Color.secondary)
+                    if let note = p.note { Text(note).font(.footnote).foregroundStyle(Color.secondary) }
                 }
                 Spacer()
                 if model.pace == p && !disabled { Image(systemName: "checkmark") }

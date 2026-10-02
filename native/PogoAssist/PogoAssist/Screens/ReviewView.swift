@@ -56,8 +56,8 @@ private struct ResultList: View {
     private func scanned(_ i: Int) -> ScanRow { plan.scanned[i] }
     /// The scan ran at a pace unlike the command last made: probably an older command played.
     private var paceWarning: String? {
-        guard let pace = review.outcome.pace, let last = model.voiceLast, abs(pace.secondsPerPokemon - last.pace.every) > 0.3 else { return nil }
-        return "This scan ran at about \(String(format: "%.1f", pace.secondsPerPokemon)) s per Pokémon; the command you last made was \(String(format: "%.1f", last.pace.every)) s. Voice Control may have played an older command."
+        guard let pace = review.outcome.pace else { return nil }
+        return ScanPace.check(measured: pace.secondsPerPokemon, chosen: model.pace)
     }
     private var blocker: String? { model.saveBlocker(review) }
 
