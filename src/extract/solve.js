@@ -26,7 +26,15 @@ export function solve({ species, cp, hp = null, ivs = null }) {
   const fits = [];
   for (const sp of species) {
     for (const c of allCombos()) {
-      for (const level of LEVELS) {
+      // CP never falls as the level rises, so the first level that can give `cp` is found by bisection
+      // and the scan starts there (the levels below it are all under `cp`); this was a scan from level 1.
+      let lo = 0, hi = LEVELS.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (cpAt(sp.baseStats, c, LEVELS[mid]) < cp) lo = mid + 1; else hi = mid;
+      }
+      for (let i = lo; i < LEVELS.length; i++) {
+        const level = LEVELS[i];
         const v = cpAt(sp.baseStats, c, level);
         if (v > cp) break;
         if (v !== cp) continue;
