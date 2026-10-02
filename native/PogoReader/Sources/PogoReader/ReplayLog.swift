@@ -142,12 +142,19 @@ public final class ReplayWriter {
     /// Tests: a writer over any sink (to make a write fail).
     init(sink: @escaping (Data) throws -> Void, maxBytes: Int = Tuning.maxReplayLogBytes) { self.sink = sink; self.maxBytes = maxBytes }
 
+    /// Room kept past the cap for the one end marker line, so a log that hit its cap can still say where the list ended.
+    public static let endReserve = 512
+
     @discardableResult
     public func append(_ line: ReplayLine) -> Outcome {
-        guard let write = sink, !failed, !truncated else { return .disabled }
+        var isEnd = false
+        if case .end = line { isEnd = true }
+        guard let write = sink, !failed, !truncated || isEnd else { return .disabled }
         var data = ReplayLog.encode(line)
         data.append(UInt8(ascii: "\n"))
-        if bytes + data.count > maxBytes { truncated = true; close(); return .truncatedNow }
+        // Streamed: each line goes straight to the file; nothing is buffered. Past the cap only the end marker is still written.
+        if !isEnd, bytes + data.count > maxBytes { truncated = true; return .truncatedNow }   // the file stays open for the end marker
+        if isEnd, bytes + data.count > maxBytes + Self.endReserve { return .disabled }
         do { try write(data) } catch { failed = true; close(); return .failedNow }
         bytes += data.count; lineCount += 1
         return .written

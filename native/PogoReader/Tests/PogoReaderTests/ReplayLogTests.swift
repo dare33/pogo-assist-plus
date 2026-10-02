@@ -81,6 +81,16 @@ final class ReplayLogTests: XCTestCase {
         XCTAssertEqual(ReplayLog.lines(in: url).count, w.lineCount)
     }
 
+    func testAFullLogStillTakesTheEndMarker() throws {
+        let url = tempURL()
+        let w = try XCTUnwrap(ReplayWriter(url: url, maxBytes: 400))
+        for k in 0..<10 { w.append(.reading(ReplayReading(reading(Double(k), cp: 2409), time: Double(k), ms: 1))) }
+        XCTAssertTrue(w.truncated)
+        XCTAssertEqual(w.append(.end(at: 12.5, last: 9)), .written, "the marker has room past the cap")
+        XCTAssertEqual(ReplayLog.lines(in: url).last, .end(at: 12.5, last: 9))
+        XCTAssertEqual(w.append(.tick(14)), .disabled, "ordinary lines stay refused")
+    }
+
     func testAWriteErrorDisablesTheLogOnceAndNeverThrows() throws {
         struct Boom: Error {}
         var writes = 0

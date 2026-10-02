@@ -67,8 +67,12 @@ public enum Tuning {
     /// closer than that a tick is taken to be a jump inside one stay (a touch dot, the iPad leader's animation).
     public static let swipeMinGapSeconds = 0.55
 
-    /// The extension's replay log stops growing at this size (about 10000 readings).
-    public static let maxReplayLogBytes = 3_000_000
+    /// The extension's replay log stops growing at this size. The arithmetic: run9 (tap, 1.2 s) wrote 319,961 bytes for 310 Pokémon, 1,032 bytes
+    /// each; the fast swipe log (1.6 s, more readings per Pokémon) 112,025 bytes for 51, 2,196 bytes each. The largest command pages 5,099
+    /// times, so at most about 5,100 Pokémon: 5,100 x 2,196 = 11.2 MB at the worse rate (5.3 MB at the tap rate). 16 MB leaves 40% margin.
+    /// The writer streams each line to the file (no buffer, so nothing grows in the extension); the app reads the whole file once when the
+    /// scan is processed, a few tens of MB transiently, which the app (not the extension) can afford.
+    public static let maxReplayLogBytes = 16_000_000
 
     /// At most this many swipe ticks are kept waiting for a reading; the oldest is dropped past it.
     public static let maxPendingTicks = 64
