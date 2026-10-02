@@ -25,10 +25,14 @@ public struct LiveRow: Codable, Equatable {
 ///
 /// Every threshold is a DURATION computed from the readings' times, not a frame count, because the
 /// extension drops frames while Vision is busy (a card is then seen in two or three readings, not
-/// seven). A swipe is `Tuning.swipeSeparatorSeconds` of consecutive readings with neither CP nor HP.
-/// What the grouper cannot know from sparse readings it leaves a trace for: `absorbed:<cp>`,
-/// `long-stay` (a row that spans more than `Tuning.longStaySeconds` may be two identical Pokémon whose
-/// swipe was never seen), `no-level-fits`, `name-low-confidence`, `sex-not-read`.
+/// seven). A swipe is seen by either of two things: `Tuning.swipeSeparatorSeconds` of consecutive readings
+/// that are not cards (no CP, no HP, and no name that has lasted `hiddenMinSeconds`), or a swipe tick from the
+/// extension's luma signature (`swipe(at:)`), which sees frames that were never read. The signature is not
+/// reliable everywhere (it misses swipes on the iPad and on hand-tapped paging), so a swipe it or the separators
+/// miss is not seen: two identical neighbours can then merge. What the grouper cannot know it leaves a trace for:
+/// `absorbed:<cp>`, `long-stay` (a row that spans `Tuning.longStaySeconds` or more may be two identical Pokémon
+/// whose swipe was not seen), `same-as-previous` (a run started only by a tick that reads like the row before),
+/// `short-run`, `no-level-fits`, `name-low-confidence`, `sex-not-read`.
 ///
 /// What it leaves to the JS `finish()` (not in this proof): the full CP solver (a small check against
 /// HP and bars stands in for it) and the whole-clip weak-name placement.
@@ -165,6 +169,8 @@ public struct LiveGrouper {
     /// frames that were never read). A tick in (last card, this reading] is a swipe.
     private var lastCardT = -Double.infinity
     private var ticks = [Double]()                 // pending swipe tick times (bounded)
+    private var prevReadingT = -Double.infinity
+    private var gapSinceCard = 0.0                 // the longest silence between readings since the last card
     private var nameOnlyStart: Double?, nameOnlyLast = 0.0, nameOnlyName = ""
 
     public init(species: SpeciesTable?) { table = species }
@@ -229,10 +235,15 @@ public struct LiveGrouper {
         let seenSeparators = sepStart != nil && (sepLast - sepStart! + Tuning.framePeriod) >= Tuning.swipeSeparatorSeconds - 1e-9
         // Ticks older than the last card are used up; any in (last card, t] is a swipe.
         ticks.removeAll { $0 <= lastCardT + 1e-9 }
-        let seenTick = ticks.contains { $0 <= t + 1e-9 }
+        // A tick is evidence only where readings are missing: if every frame since the last card was read (no silence
+        // longer than 1.5 frame periods), the readings already show whether a swipe happened, and a tick there can
+        // only be a false jump (the iPad's leader animation) that would split a Pokémon.
+        if prevReadingT.isFinite { gapSinceCard = max(gapSinceCard, t - prevReadingT) }
+        prevReadingT = t
+        let seenTick = gapSinceCard > 1.5 * Tuning.framePeriod && ticks.contains { $0 <= t + 1e-9 }
         swipe = seenSeparators || seenTick
         tickOnly = seenTick && !seenSeparators
-        if isCard { sepStart = nil; lastCardT = t; if !seenCard { seenCard = true; swipe = true; tickOnly = false } } else { if sepStart == nil { sepStart = t }; sepLast = t }
+        if isCard { sepStart = nil; lastCardT = t; gapSinceCard = 0; if !seenCard { seenCard = true; swipe = true; tickOnly = false } } else { if sepStart == nil { sepStart = t }; sepLast = t }
         guard let name = r.name else {
             if let cp = r.cp { addUnnamed(r, cp: cp, t: t) } else { gap = true }   // mid-swipe, cut off
             return
