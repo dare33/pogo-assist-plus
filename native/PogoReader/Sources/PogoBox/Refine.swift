@@ -21,6 +21,10 @@ import PogoReader
 ///     reading, no 0.55 s gap between card readings) and `LiveGrouper` has no row of its own for the stretch. The row that
 ///     absorbed it gets the flag `absorbed-unread` (so it shows in `review`) and `changes` records it.
 ///
+/// Order of the steps: (1) fragment absorption and the lone-CP-outlier fix on the JavaScript rows (see `absorbFragments`,
+/// `dropCpOutliers`), then (2) the twin split, hidden-CP and duplicate rules above, then (3) the timing split (`splitByTiming`), so a
+/// fragment cannot be taken for a twin half and the twin Staraptor pair is still found by its beat.
+///
 /// Rows are renumbered, `review` is rebuilt from the rows that carry flags, and `changes` says what Refine did. Readings
 /// without frame labels are labelled `r<n>` (by position) and the JavaScript is run again on them, so the rows it returns
 /// carry those labels. `applyTickOnly` is the first, tick-only version (no `LiveGrouper`).
@@ -29,7 +33,7 @@ public enum Refine {
     public static let minSwipeGap = 0.55
 
     public struct Change: Equatable {
-        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit }
+        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit, fragmentAbsorbed, cpOutlierDropped }
         public var kind: Kind
         /// The row's index in the refined result.
         public var rowIndex: Int
@@ -55,11 +59,25 @@ public enum Refine {
     /// Reconcile the JavaScript result with `LiveGrouper` over the same readings and ticks (rules in the type's description).
     public static func apply(to base: ScanResult, readings: [FrameReading], ticks: [Double], engine: CoreEngine, species: SpeciesTable? = try? SpeciesTable.bundled(), paging: PagingHint? = nil) throws -> Refined {
         let live = GrouperDiff.liveRows(readings: readings, ticks: ticks, species: species)
-        var r = try run(base, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
+        var base = base, readings = readings
+        if readings.contains(where: { $0.frame == nil }) {
+            for i in readings.indices where readings[i].frame == nil { readings[i].frame = "r\(i + 1)" }
+            base = try engine.finish(readings: readings)
+        }
+        // step 1: one Pokemon cut into two rows by a single disagreeing frame
+        let fragments = absorbFragments(base)
+        let outliers = try dropCpOutliers(fragments.scan, readings: readings, engine: engine)
+        var r = try run(outliers.scan, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
         // then the timing step (off when the app says the player paged by hand)
         let t = splitByTiming(r.scan, readings: readings, paging: paging)
         r.changes = r.changes.map { var c = $0; c.rowIndex = t.indexMap[c.rowIndex] ?? c.rowIndex; return c } + t.changes
         r.scan = t.scan; r.notices += t.notices
+        // the step-1 actions, found again by the flag they left on the surviving row
+        func place(_ marks: [(flag: String, detail: String)], _ kind: Change.Kind) {
+            for m in marks { r.changes.append(Change(kind: kind, rowIndex: r.scan.rows.first { $0.flags.contains(m.flag) }?.index ?? 0, detail: m.detail)) }
+        }
+        place(fragments.marks, .fragmentAbsorbed); place(outliers.marks, .cpOutlierDropped)
+        r.baseRowCount = base.rows.count
         return r
     }
 
@@ -273,7 +291,8 @@ public enum Refine {
         guard u.reason == "cp-not-read", let name = u.name, !name.isEmpty, let hp = u.hp, let ivs = u.ivs,
               let options = u.cpOptions, options.count == 1, let cp = options.first,
               let frame = u.frame, let start = labelIndex[frame] else { return .keep }
-        let times = stretch(u, name: name, readings: readings, start: start).compactMap { readings[$0].time }
+        let idx = stretch(u, name: name, readings: readings, start: start)
+        let times = idx.compactMap { readings[$0].time }
         guard let t0 = times.min(), let t1 = times.max() else { return .keep }
         // (c) a duplicate of the row beside it: the same Pokemon, settled equal bars, no swipe between, and LiveGrouper
         // has no row of its own for the stretch.
@@ -291,7 +310,11 @@ public enum Refine {
             guard a <= b, !swipeEvidence(from: a, to: b, readings: readings, ticks: ticks) else { continue }
             return .duplicate(of: n, at: tn)
         }
-        // (b) LiveGrouper has a row for the stretch with this CP computed or recovered.
+        // (b) a Pokemon is not made from one frame: at least two readings that agree on HP and on the settled bars
+        let hps = Set(idx.compactMap { readings[$0].hp?.max })
+        let agreeing = idx.filter { readings[$0].ivConfidence >= settledBarsConfidence && readings[$0].ivs == ivs }.count
+        guard idx.count >= 2, hps.count == 1, agreeing >= 2 else { return .keep }
+        // LiveGrouper has a row for the stretch with this CP computed or recovered.
         let hasRow = live.contains { l in
             guard l.name == name, l.cp == cp, let a = l.firstTime, let b = l.lastTime, a <= t1 && b >= t0 else { return false }
             return l.flags.contains { $0.hasPrefix("cp-computed:") || $0.hasPrefix("cp-recovered:") }
