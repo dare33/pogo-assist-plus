@@ -165,7 +165,10 @@ final class AppModel: ObservableObject {
     struct SetRecord: Codable, Equatable { var kind: VoiceCommandFile.SetKind; var date: Date; var screen: String? }
 
     /// The person paged by hand, not with a command: the paging beat means nothing, so twins are not judged from it. Off by default.
-    @Published var pagedByHand: Bool { didSet { UserDefaults.standard.set(pagedByHand, forKey: Keys.hand) } }
+    @Published var pagedByHand: Bool { didSet { UserDefaults.standard.set(pagedByHand, forKey: Keys.hand); refreshReaderSettings() } }
+
+    /// Tell the broadcast extension whether the next scan is paged by a command (it then ends the scan itself at the end of the list) and at what period.
+    func refreshReaderSettings() { ReaderSettings.autoEndPeriod = pagedByHand ? nil : pace.every }
     /// The last command made for each single mode of the selected account (older app versions made one file per scan; still checked for the wrong-screen warning).
     @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]
     @Published var setRecord: SetRecord?
@@ -296,6 +299,7 @@ final class AppModel: ObservableObject {
         reloadAccounts()
         loadBox()
         loadVoiceRecord()
+        refreshReaderSettings()
         refreshBroadcast()
         CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), { _, observer, _, _, _ in
             guard let observer else { return }

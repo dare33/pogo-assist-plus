@@ -64,6 +64,8 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var lastWrite = Date.distantPast
     private var heartbeat: DispatchSourceTimer?
     private var writeFailures = 0
+    private var endDetector: EndOfListDetector?   // only for a scan paged by a command; touched on `queue`
+    private var finishedWork = false              // the finish work (state, log) has been done, by a user stop or by the end of the list
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         queue.sync {
@@ -74,6 +76,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             }
             lock.lock(); finished = false; ticks.removeAll(); droppedTimes.removeAll(); detector = SwipeDetector(); ticker = SwipeTicker(); lock.unlock()
             memory = MemoryProbe()
+            finishedWork = false
+            endDetector = EndOfListDetector.make(pagedByCommand: ReaderSettings.autoEndPeriod != nil, period: ReaderSettings.autoEndPeriod)
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
             let names = table.map(displayNames) ?? []
@@ -157,17 +161,34 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     override func broadcastFinished() {
         lock.lock(); finished = true; lock.unlock()
-        queue.sync {
-            heartbeat?.cancel()
-            heartbeat = nil
-            drainTicks()
-            grouper.finish()
-            state.rows = grouper.rows
-            state.finished = true
-            replay?.close()
-            write(force: true)
-            log.notice("broadcast finished: \(self.state.framesRead) read, \(self.state.framesDropped) dropped, \(self.state.skippedLowMemory) skipped for memory, peak \(self.state.peakFootprintMB, format: .fixed(precision: 1)) MB")
-        }
+        queue.sync { finishWork() }
+    }
+
+    /// On `queue`. The state and log as a user stop leaves them; once only, whether the user stopped or the list ended.
+    private func finishWork() {
+        guard !finishedWork else { return }
+        finishedWork = true
+        heartbeat?.cancel()
+        heartbeat = nil
+        drainTicks()
+        grouper.finish()
+        state.rows = grouper.rows
+        state.finished = true
+        replay?.close()
+        write(force: true)
+        log.notice("broadcast finished: \(self.state.framesRead) read, \(self.state.framesDropped) dropped, \(self.state.skippedLowMemory) skipped for memory, peak \(self.state.peakFootprintMB, format: .fixed(precision: 1)) MB")
+    }
+
+    /// On `queue`. The end of the list was seen: write the end marker (so the app can cut the tail), finish exactly as a user stop does,
+    /// then end the broadcast. `finishBroadcastWithError` is the only way an extension can end one; the message reads as a result.
+    private func endAtListEnd(at: Double, last: Double) {
+        log.notice("end of the list reached: last new Pokémon at \(last, format: .fixed(precision: 1)), ending at \(at, format: .fixed(precision: 1))")
+        record(.end(at: at, last: last))
+        state.endedAtListEnd = true
+        lock.lock(); finished = true; lock.unlock()
+        finishWork()
+        finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0,
+                                         userInfo: [NSLocalizedDescriptionKey: "Scan finished: the end of your Pokémon was reached."]))
     }
 
     /// On `queue`. One accepted frame, in whichever mode.
@@ -207,6 +228,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             let changed = grouper.add(reading)
             if changed { state.rows = grouper.rows }
             write(force: changed)
+            if endDetector?.feed(reading, time: time) == true, let ended = endDetector?.ended { endAtListEnd(at: ended.at, last: ended.last) }
         }
     }
 

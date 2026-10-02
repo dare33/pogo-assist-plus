@@ -8,6 +8,8 @@ public enum ReplayLine: Equatable {
     case reading(ReplayReading)
     case tick(Double)
     case drop(Double)
+    /// The extension ended the scan itself at `at` because the list ended; `last` is when the last new Pokémon appeared (`EndOfListDetector`).
+    case end(at: Double, last: Double)
 }
 
 public struct ReplayReading: Codable, Equatable {
@@ -45,6 +47,7 @@ public struct ReplayReading: Codable, Equatable {
 }
 
 private struct ReplayEvent: Codable { var k: String; var t: Double }
+private struct ReplayEnd: Codable { var k = "e"; var t: Double; var last: Double }
 
 public enum ReplayLog {
     /// One compact JSON object, no newline.
@@ -54,6 +57,7 @@ public enum ReplayLog {
         case .reading(let r): return (try? enc.encode(r)) ?? Data()
         case .tick(let t): return (try? enc.encode(ReplayEvent(k: "t", t: t))) ?? Data()
         case .drop(let t): return (try? enc.encode(ReplayEvent(k: "d", t: t))) ?? Data()
+        case .end(let at, let last): return (try? enc.encode(ReplayEnd(t: at, last: last))) ?? Data()
         }
     }
 
@@ -64,6 +68,7 @@ public enum ReplayLog {
         case "r": return (try? dec.decode(ReplayReading.self, from: data)).map { .reading($0) }
         case "t": return .tick(head.t)
         case "d": return .drop(head.t)
+        case "e": return (try? dec.decode(ReplayEnd.self, from: data)).map { .end(at: $0.t, last: $0.last) }
         default: return nil
         }
     }
@@ -79,9 +84,24 @@ public enum ReplayLog {
         public var readings: Int, ticks: Int, drops: Int
     }
 
+    /// The lines without the tail after the end of the list: with an end marker, readings, ticks and drops later than the last new
+    /// Pokémon plus `EndOfListDetector.keepAfterLast` seconds are cut. Without a marker the lines are returned as they are.
+    public static func trimmed(_ lines: [ReplayLine]) -> [ReplayLine] {
+        guard let last = lines.compactMap({ if case .end(_, let l) = $0 { return l } else { return nil } }).first else { return lines }
+        let limit = last + EndOfListDetector.keepAfterLast
+        return lines.filter {
+            switch $0 {
+            case .reading(let r): return r.t <= limit
+            case .tick(let t), .drop(let t): return t <= limit
+            case .end: return true
+            }
+        }
+    }
+
     /// Feed the lines through a `LiveGrouper` in file order, which is the order the extension gave them to its own
     /// grouper (ticks drained right before the reading that followed them), and return the rows.
     public static func replay(_ lines: [ReplayLine], species: SpeciesTable?) -> Result {
+        let lines = trimmed(lines)
         var g = LiveGrouper(species: species)
         var res = Result(rows: [], readings: 0, ticks: 0, drops: 0)
         for line in lines {
@@ -89,6 +109,7 @@ public enum ReplayLog {
             case .reading(let r): g.add(r.frameReading); res.readings += 1
             case .tick(let t): g.swipe(at: t); res.ticks += 1
             case .drop: res.drops += 1       // a dropped frame carries no reading; it is in the log for the record
+            case .end: break
             }
         }
         g.finish()

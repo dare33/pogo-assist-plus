@@ -38,7 +38,7 @@ public enum ScanPipeline {
         var timings = Timings()
         let t0 = Date()
         var readings = [FrameReading](), ticks = [Double](), drops = 0, times = [Double]()
-        let lines = ReplayLog.lines(in: url)
+        let lines = ReplayLog.trimmed(ReplayLog.lines(in: url))   // the tail after an automatic end is cut
         for line in lines {
             switch line {
             case .reading(let r):
@@ -47,6 +47,7 @@ public enum ScanPipeline {
                 readings.append(f); times.append(r.t)
             case .tick(let t): ticks.append(t); times.append(t)
             case .drop(let t): drops += 1; times.append(t)
+            case .end: break
             }
         }
         if readings.isEmpty {

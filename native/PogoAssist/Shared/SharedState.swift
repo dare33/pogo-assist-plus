@@ -23,6 +23,7 @@ struct BroadcastState: Codable, Equatable {
     var replayLines = 0          // lines in replay.jsonl so far (live modes)
     var replayLogTruncated = false   // the replay log hit its size cap and stopped
     var replayLogFailed = false      // a write to the replay log failed: it was switched off (reading was unaffected)
+    var endedAtListEnd = false       // the extension ended the scan itself because the end of the list was reached
 }
 
 extension BroadcastState {
@@ -50,6 +51,7 @@ extension BroadcastState {
         replayLines = try c.decodeIfPresent(Int.self, forKey: .replayLines) ?? replayLines
         replayLogTruncated = try c.decodeIfPresent(Bool.self, forKey: .replayLogTruncated) ?? replayLogTruncated
         replayLogFailed = try c.decodeIfPresent(Bool.self, forKey: .replayLogFailed) ?? replayLogFailed
+        endedAtListEnd = try c.decodeIfPresent(Bool.self, forKey: .endedAtListEnd) ?? endedAtListEnd
     }
 }
 

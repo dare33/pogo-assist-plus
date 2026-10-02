@@ -61,6 +61,7 @@ public enum ReplayReadings {
         }
         var loaded = Loaded(readings: [])
         var any = false
+        var endLast: Double?
         for lineData in data.split(separator: UInt8(ascii: "\n")) {
             if lineData.allSatisfy({ $0 == 0x20 || $0 == 0x0D || $0 == 0x09 }) { continue }
             any = true
@@ -71,11 +72,17 @@ public enum ReplayReadings {
                 loaded.readings.append(reading)
             case .tick(let t)?: loaded.ticks.append(t)
             case .drop?: loaded.drops += 1
+            case .end(_, let last)?: endLast = last
             case nil:
                 if (try? JSONSerialization.jsonObject(with: lineData)) is [String: Any] { loaded.skippedLines += 1 } else { loaded.malformedLines += 1 }
             }
         }
         if !any { throw Failure.unreadable("\(name): empty") }
+        if let endLast {   // an automatic end: the tail after the last new Pokémon is cut, as `ReplayLog.trimmed` does
+            let limit = endLast + EndOfListDetector.keepAfterLast
+            loaded.readings = loaded.readings.filter { ($0.time ?? 0) <= limit }
+            loaded.ticks = loaded.ticks.filter { $0 <= limit }
+        }
         return loaded
     }
 }
