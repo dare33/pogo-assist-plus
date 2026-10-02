@@ -153,8 +153,11 @@ final class DeviceRunTests: XCTestCase {
         let t = try Refine.applyTickOnly(to: base, readings: l.readings, ticks: l.ticks, engine: sharedEngine)
         XCTAssertNotEqual(t.scan.rows.map(key), Self.refined)
         XCTAssertEqual(r.scan.rows.count, 51)
-        XCTAssertEqual(r.changes.map(\.kind).sorted { $0.rawValue < $1.rawValue }, [.duplicateDropped, .hiddenCP, .twinSplit])
-        XCTAssertTrue(r.scan.unmatched.isEmpty)
+        XCTAssertEqual(r.changes.map(\.kind).sorted { $0.rawValue < $1.rawValue }, [.hiddenCP, .twinSplit])
+        // The Staraptor 1994 entry is the Pokemon on the row before it, but a mid-swipe reading lies between that row's card
+        // reading and the entry (539.7 s), so it is not dropped as a duplicate (swipe evidence); LiveGrouper has no row of its
+        // own for it either, so it is not converted: it stays in `unmatched`, which is where a doubt belongs.
+        XCTAssertEqual(r.scan.unmatched.map { "\($0.name ?? "?") \($0.cpOptions ?? [])" }, ["Staraptor [1994]"])
         XCTAssertTrue(r.disagreements.isEmpty, "\(r.disagreements)")
         let twins = r.scan.rows.filter { $0.display == "Staraptor" && $0.cp == 1986 && $0.hp == 139 }
         XCTAssertEqual(twins.map { $0.flags.contains("same-as-previous") }, [false, true])

@@ -379,12 +379,14 @@ interpreter).
   `mergeIncremental` is a stub that throws `notImplemented` (the matching rule for a later partial scan is undecided).
 - `Refine` is a separate Swift post-pass over the JavaScript result (`CoreEngine.finish` itself stays a pure
   pass-through), reconciled with `LiveGrouper` run over the same readings and ticks. The JavaScript rows are the base for
-  every value. Twin: one JavaScript row whose span covers two or more consecutive `LiveGrouper` rows of the same name, with
-  the same HP and bars as each other and as the row, is split into that many rows (later ones `same-as-previous`); if they
-  disagree nothing is split and `disagreements` says so. Hidden CP: a `cp-not-read` entry with one possible CP becomes a row
-  (`cp-computed:<cp>`) only when `LiveGrouper` computed or recovered that CP for the stretch, and is dropped as a duplicate
-  (`duplicateDropped`) when the same Pokemon is the row beside it. Anything else the two disagree on is not applied; `GrouperDiff`
-  lists it. `Refine.applyTickOnly` is the first, tick-only version.
+  every value. Twin: one JavaScript row that spans two or more consecutive `LiveGrouper` rows of the same name, HP, bars and
+  related CP is cut only where card readings are 0.55 s or more apart AND a reading in the gap is flagged `mid-swipe`
+  (labelled real clips show that ticks and separator frames alone also fire on the menu, the notification centre and a
+  covered CP; see `TwinSplitTests`); a disagreement in HP, bars or CP is recorded in `disagreements`. Hidden CP: a
+  `cp-not-read` entry with one possible CP becomes a row (`cp-computed:<cp>`) when `LiveGrouper` computed or recovered
+  that CP for the stretch; it is dropped as a duplicate only when the row beside it is the same Pokemon with equal settled
+  bars and there is no swipe evidence between them, and that row then carries the flag `absorbed-unread`. Readings with no
+  frame labels are labelled by position (and the JavaScript is re-run). `Refine.applyTickOnly` is the first, tick-only version.
 
 What the app will call after a scan: `let engine = CoreEngine()` (own queue) then
 `engine.finish(readings:)`, `Refine.apply(to:readings:ticks:engine:)`, `BoxStore.save(_:account:source:)`,

@@ -1,24 +1,29 @@
 import Foundation
 import PogoReader
 
-/// A Swift post-pass over the JavaScript `finish()` result. It does not change the JavaScript logic or its
-/// output: `CoreEngine.finish` stays a pass-through, and this layer reads its result and the readings and
-/// adds what the JavaScript grouping cannot know. Two rules:
+/// A Swift post-pass over the JavaScript `finish()` result. It does not change the JavaScript logic or its output:
+/// `CoreEngine.finish` stays a pure pass-through, and this layer reads its result and the readings and adds what the
+/// JavaScript grouping cannot know. `apply` reconciles the result with `LiveGrouper` (run over the same readings and
+/// ticks); the JavaScript rows are the base for every value. Three rules, each needing evidence of a real swipe or of a
+/// real second Pokemon, because `LiveGrouper` cuts one Pokemon in pieces when the menu or the notification centre opens,
+/// the team leader covers the CP or a frame is missing (see TwinSplitTests, cut from real clips):
 ///
-/// (a) Twin split. The JavaScript merges two identical neighbouring Pokémon (same name, CP, HP, bars) into
-///     one row. A swipe tick (the luma signature seen by the extension, see `SwipeTicker`) that lies strictly
-///     inside a row's time span, with card readings of that row on both sides of it at least `minSwipeGap`
-///     (0.55 s: a swipe takes 0.6 s or more, so it fits) apart, means two Pokémon. The row is split at the tick
-///     into rows with the same values; every row after the first is flagged `same-as-previous`. With no ticks
-///     (a readings file without a log) rule (a) does nothing.
-/// (b) Hidden-CP row. An `unmatched` entry with reason `cp-not-read` that has a name, an HP, settled bars and
-///     exactly one value in `cpOptions` becomes a row, placed by its first frame, with that CP and the flag
-///     `cp-computed:<cp>`. Its values (species, level, dust) come from running the JavaScript `finish` over
-///     that Pokémon's own readings with the CP filled in, so the solver is the JavaScript one. Any other
-///     `cp-not-read` entry stays in `unmatched`.
+/// (a) Twin split. ONE JavaScript row whose time span covers two or more consecutive `LiveGrouper` rows of the same name,
+///     the same HP and bars (each other's and the row's) and related CP is cut where the pieces' card readings are at
+///     least `minSwipeGap` (0.55 s, a swipe takes 0.6 s or more) apart AND at least one reading in that gap is flagged
+///     `mid-swipe` (the card sliding sideways). Later pieces are flagged `same-as-previous`. HP, bars or CP that disagree
+///     are recorded in `disagreements` and nothing is split.
+/// (b) Hidden-CP row. An `unmatched` `cp-not-read` entry with a name, an HP, settled bars and exactly one possible CP
+///     becomes a row (`cp-computed:<cp>`, values from the JavaScript `finish` over the entry's own readings) when
+///     `LiveGrouper` has a row for the stretch with that CP computed or recovered.
+/// (c) Duplicate. Such an entry is dropped only when it is the Pokemon on the row beside it: same name and HP, that row's
+///     CP is the option, settled bars equal on both sides, no swipe evidence between the two (no tick, no `mid-swipe`
+///     reading, no 0.55 s gap between card readings) and `LiveGrouper` has no row of its own for the stretch. The row that
+///     absorbed it gets the flag `absorbed-unread` (so it shows in `review`) and `changes` records it.
 ///
-/// Rows are then renumbered, `review` is rebuilt from the rows that carry flags, and `changes` says which
-/// refined rows Refine made.
+/// Rows are renumbered, `review` is rebuilt from the rows that carry flags, and `changes` says what Refine did. Readings
+/// without frame labels are labelled `r<n>` (by position) and the JavaScript is run again on them, so the rows it returns
+/// carry those labels. `applyTickOnly` is the first, tick-only version (no `LiveGrouper`).
 public enum Refine {
     /// A swipe needs at least this long, so card readings closer than this cannot have a swipe between them.
     public static let minSwipeGap = 0.55
@@ -44,26 +49,13 @@ public enum Refine {
 
     private enum Mode {
         case tickOnly([Double])
-        case reconcile([LiveRow])
+        case reconcile([LiveRow], [Double])
     }
 
-    /// Reconcile the JavaScript result with `LiveGrouper` run over the same readings and ticks. The JavaScript rows
-    /// are the base for every value; `LiveGrouper` only says where the JavaScript merged two Pokemon or left one unread:
-    ///
-    /// - Twin: ONE JavaScript row whose time span covers TWO OR MORE consecutive `LiveGrouper` rows of the same name, with
-    ///   equal or unread HP and bars, related CP, and the same HP and bars as the JavaScript row, becomes that many rows
-    ///   (the JavaScript row's values; frames divided between the `LiveGrouper` rows' spans; every later one flagged
-    ///   `same-as-previous`). If the `LiveGrouper` rows differ from each other or from the row in HP, bars or CP, nothing is
-    ///   split and the place is recorded in `disagreements`.
-    /// - Hidden CP: a `cp-not-read` entry (name, HP, settled bars, exactly one possible CP) becomes a row only when
-    ///   `LiveGrouper` has a row for the same stretch and name whose CP is that option and was computed or recovered
-    ///   (`cp-computed:` / `cp-recovered:`) AND no JavaScript row next to it in time is the same Pokemon (same name and HP,
-    ///   bars equal or unread, CP the option). If one is, the entry is a duplicate of it and is dropped (a change of kind
-    ///   `duplicateDropped`). Its values come from the JavaScript `finish`, as before.
-    /// - Everything else `LiveGrouper` has and the JavaScript has not, or the reverse, is not applied (see `GrouperDiff`).
+    /// Reconcile the JavaScript result with `LiveGrouper` over the same readings and ticks (rules in the type's description).
     public static func apply(to base: ScanResult, readings: [FrameReading], ticks: [Double], engine: CoreEngine, species: SpeciesTable? = try? SpeciesTable.bundled()) throws -> Refined {
         let live = GrouperDiff.liveRows(readings: readings, ticks: ticks, species: species)
-        return try run(base, readings: readings, engine: engine, mode: .reconcile(live))
+        return try run(base, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
     }
 
     /// The first version: split at swipe ticks alone (no `LiveGrouper`) and turn every `cp-not-read` entry with one
@@ -73,10 +65,17 @@ public enum Refine {
     }
 
     private static func run(_ base: ScanResult, readings: [FrameReading], engine: CoreEngine, mode: Mode) throws -> Refined {
+        var base = base, readings = readings
+        // Rows and entries find their readings by frame label. Readings with none (ReplayLog.frameReading) get one by
+        // position, and the JavaScript is run again so that its rows and entries carry the labels.
+        if readings.contains(where: { $0.frame == nil }) {
+            for i in readings.indices where readings[i].frame == nil { readings[i].frame = "r\(i + 1)" }
+            base = try engine.finish(readings: readings)
+        }
         var labelIndex = [String: Int]()
         for (i, r) in readings.enumerated() { if let f = r.frame, labelIndex[f] == nil { labelIndex[f] = i } }
 
-        struct Placed { var key: Int; var row: ScanRow; var change: (Change.Kind, String)? }
+        struct Placed { var key: Int; var row: ScanRow; var change: (Change.Kind, String)?; var baseIndex: Int? = nil }
         var placed = [Placed]()
         var disagreements = [String]()
 
@@ -86,14 +85,14 @@ public enum Refine {
             let pieces: [ScanRow], why: String
             switch mode {
             case .tickOnly(let ticks): pieces = ticks.isEmpty ? [row] : split(row, ticks: ticks); why = "at a swipe tick"
-            case .reconcile(let live):
-                let r = reconcileTwins(row, live: live)
+            case .reconcile(let live, _):
+                let r = reconcileTwins(row, live: live, readings: readings)
                 pieces = r.pieces; why = "where LiveGrouper has \(r.pieces.count) rows"
                 if let note = r.disagreement { disagreements.append(note) }
             }
             for (k, piece) in pieces.enumerated() {
                 let key = piece.frames.first?.frame.flatMap { labelIndex[$0] } ?? labelKey(piece, readings: readings) ?? Int.max / 2 + fallback
-                placed.append(Placed(key: key, row: piece, change: k == 0 ? nil : (.twinSplit, "\(row.display) CP \(row.cp): split from the row before \(why)")))
+                placed.append(Placed(key: key, row: piece, change: k == 0 ? nil : (.twinSplit, "\(row.display) CP \(row.cp): split from the row before \(why)"), baseIndex: n))
             }
         }
 
@@ -101,10 +100,16 @@ public enum Refine {
         var unmatched = [Unmatched](), notices = [String]()
         var dropped = [(of: ScanRow, text: String)]()
         for u in base.unmatched {
-            if case .reconcile(let live) = mode {
-                switch hiddenGate(u, readings: readings, labelIndex: labelIndex, live: live, rows: base.rows) {
+            if case .reconcile(let live, let ticks) = mode {
+                switch hiddenGate(u, readings: readings, labelIndex: labelIndex, live: live, ticks: ticks, rows: base.rows) {
                 case .keep: unmatched.append(u); continue
-                case .duplicate(let of): dropped.append((of, "unmatched \(u.name ?? "?") at \(u.frame ?? "?") is the same Pokemon as \(of.display) CP \(of.cp) beside it; dropped")); continue
+                case .duplicate(let n, let at):
+                    let of = base.rows[n]
+                    // the row that absorbed it says so (and so shows in review)
+                    if let k = placed.firstIndex(where: { $0.baseIndex == n && $0.row.frames.contains { $0.time == at } }) ?? placed.firstIndex(where: { $0.baseIndex == n }) {
+                        if !placed[k].row.flags.contains("absorbed-unread") { placed[k].row.flags.append("absorbed-unread") }
+                    }
+                    dropped.append((of, "unmatched \(u.name ?? "?") at \(u.frame ?? "?") is the same Pokemon as \(of.display) CP \(of.cp) beside it; dropped, the row is flagged absorbed-unread")); continue
                 case .convert: break
                 }
             }
@@ -182,8 +187,8 @@ public enum Refine {
         return (a, b)
     }
 
-    /// The row as the pieces `LiveGrouper` shows, or [row] when it does not show two or more.
-    static func reconcileTwins(_ row: ScanRow, live: [LiveRow]) -> (pieces: [ScanRow], disagreement: String?) {
+    /// The row as the pieces `LiveGrouper` shows, cut only where a swipe is evidenced; [row] when it is not cut.
+    static func reconcileTwins(_ row: ScanRow, live: [LiveRow], readings: [FrameReading]) -> (pieces: [ScanRow], disagreement: String?) {
         guard let (first, last) = rowSpan(row), row.frames.allSatisfy({ $0.time != nil }) else { return ([row], nil) }
         // LiveGrouper rows of this name that sit in the row's time span (midpoint inside, a quarter second of slack).
         let inside = live.indices.filter { i in
@@ -200,17 +205,27 @@ public enum Refine {
         for (n, l) in group.enumerated() {
             if !agrees(l.hp, row.hp) { return ([row], "grouper-disagrees: \(label): LiveGrouper row \(n + 1) of \(group.count) has HP \(l.hp.map(String.init) ?? "?"), the JavaScript row \(row.hp.map(String.init) ?? "?")") }
             if !agrees(l.ivs, rowIvs) { return ([row], "grouper-disagrees: \(label): LiveGrouper row \(n + 1) of \(group.count) has different bars") }
+            if !cpRelated(l.cp, row.cp) { return ([row], "grouper-disagrees: \(label): LiveGrouper row \(n + 1) of \(group.count) has CP \(l.cp.map(String.init) ?? "?"), the JavaScript row \(row.cp)") }
             if n > 0 {
                 let p = group[n - 1]
                 if !agrees(p.hp, l.hp) || !agrees(p.ivs, l.ivs) || !cpRelated(p.cp, l.cp) { return ([row], "grouper-disagrees: \(label): the \(group.count) LiveGrouper rows differ from each other in HP, bars or CP") }
             }
         }
-        // Frames go to the LiveGrouper row they fall in; the cut is halfway between one row's end and the next one's start.
-        let cuts = zip(group, group.dropFirst()).map { (($0.lastTime ?? 0) + ($1.firstTime ?? 0)) / 2 }
+        // A cut needs a swipe: card readings of the row at least `minSwipeGap` apart across it AND a mid-swipe reading between them.
         let frames = row.frames.sorted { $0.time! < $1.time! }
-        var parts = [[FrameLabel]](repeating: [], count: group.count)
+        var cuts = [Double]()
+        for (a, b) in zip(group, group.dropFirst()) {
+            let cut = ((a.lastTime ?? 0) + (b.firstTime ?? 0)) / 2
+            guard let before = frames.last(where: { $0.time! < cut }), let after = frames.first(where: { $0.time! >= cut }) else { continue }
+            let (t0, t1) = (before.time!, after.time!)
+            guard t1 - t0 >= minSwipeGap - 1e-9 else { continue }
+            guard readings.contains(where: { ($0.time ?? -1) > t0 && ($0.time ?? -1) < t1 && $0.flags.contains("mid-swipe") }) else { continue }
+            cuts.append(cut)
+        }
+        guard !cuts.isEmpty else { return ([row], nil) }
+        var parts = [[FrameLabel]](repeating: [], count: cuts.count + 1)
         for f in frames { parts[cuts.filter { $0 <= f.time! }.count].append(f) }
-        guard parts.allSatisfy({ !$0.isEmpty }) else { return ([row], "grouper-disagrees: \(label): \(group.count) LiveGrouper rows but a part of the row has no frames") }
+        guard parts.allSatisfy({ !$0.isEmpty }) else { return ([row], "grouper-disagrees: \(label): a part of the cut row would have no frames") }
         return (parts.enumerated().map { k, frames in
             var r = row
             r.frames = frames
@@ -219,36 +234,59 @@ public enum Refine {
         }, nil)
     }
 
-    private enum Gate { case keep, convert, duplicate(of: ScanRow) }
+    private enum Gate { case keep, convert, duplicate(of: Int, at: Double) }
 
-    /// Reconciliation's rule for one `cp-not-read` entry (see `apply`).
-    private static func hiddenGate(_ u: Unmatched, readings: [FrameReading], labelIndex: [String: Int], live: [LiveRow], rows: [ScanRow]) -> Gate {
-        guard u.reason == "cp-not-read", let name = u.name, !name.isEmpty, let hp = u.hp, let ivs = u.ivs,
-              let options = u.cpOptions, options.count == 1, let cp = options.first,
-              let frame = u.frame, let start = labelIndex[frame] else { return .keep }
-        // The stretch: this entry's readings (name, no CP) from its first frame.
-        var times = [Double]()
-        var i = start
-        while i < readings.count {
+    /// The readings of an unmatched entry's stretch: from its first frame, those with its name and no CP, up to the
+    /// `frames` the JavaScript counted for it (so it stops where the JavaScript's stretch stopped, not at a following
+    /// entry of the same species), skipping unreadable frames, up to the next card of anything else.
+    static func stretch(_ u: Unmatched, name: String, readings: [FrameReading], start: Int) -> [Int] {
+        var out = [Int](), i = start
+        let limit = u.frames ?? Int.max
+        while i < readings.count, out.count < limit {
             let r = readings[i]
             if r.cp != nil { break }
             if let n = r.name, n != name { break }
-            if r.name == name, let t = r.time { times.append(t) }
+            if r.name == name { out.append(i) }
             i += 1
         }
+        return out
+    }
+
+    /// Evidence of a swipe between two times: a tick, a `mid-swipe` reading, or card readings (a CP or an HP read)
+    /// at least `minSwipeGap` apart with nothing card-like between them.
+    static func swipeEvidence(from a: Double, to b: Double, readings: [FrameReading], ticks: [Double]) -> Bool {
+        if ticks.contains(where: { $0 > a && $0 <= b }) { return true }
+        let between = readings.filter { ($0.time ?? -1) >= a && ($0.time ?? -1) <= b }
+        if between.contains(where: { $0.flags.contains("mid-swipe") }) { return true }
+        let cardTimes = between.filter { $0.cp != nil || $0.hp != nil }.compactMap(\.time)
+        let edges = [a] + cardTimes + [b]
+        return zip(edges, edges.dropFirst()).contains { $1 - $0 >= minSwipeGap - 1e-9 }
+    }
+
+    /// Reconciliation's rule for one `cp-not-read` entry (see the type's description).
+    private static func hiddenGate(_ u: Unmatched, readings: [FrameReading], labelIndex: [String: Int], live: [LiveRow], ticks: [Double], rows: [ScanRow]) -> Gate {
+        guard u.reason == "cp-not-read", let name = u.name, !name.isEmpty, let hp = u.hp, let ivs = u.ivs,
+              let options = u.cpOptions, options.count == 1, let cp = options.first,
+              let frame = u.frame, let start = labelIndex[frame] else { return .keep }
+        let times = stretch(u, name: name, readings: readings, start: start).compactMap { readings[$0].time }
         guard let t0 = times.min(), let t1 = times.max() else { return .keep }
-        // A JavaScript row beside it in time (the last one starting before the stretch, the first one after it) that is
-        // this Pokemon: same name and HP, bars equal or unread, and the CP is one the entry allows.
-        func isSame(_ r: ScanRow) -> Bool {
-            (r.display == name || r.name == name) && r.hp == hp && agrees(r.ivs ?? r.ivsRead, ivs) && options.contains(r.cp)
+        // (c) a duplicate of the row beside it: the same Pokemon, settled equal bars, no swipe between, and LiveGrouper
+        // has no row of its own for the stretch.
+        func rowStart(_ r: ScanRow) -> Double { r.frames.compactMap(\.time).min() ?? .infinity }
+        let beforeIdx = rows.indices.last { rowStart(rows[$0]) <= t0 }
+        let afterIdx = rows.indices.first { rowStart(rows[$0]) > t0 }
+        for candidate in [(beforeIdx, true), (afterIdx, false)] {
+            guard let n = candidate.0 else { continue }
+            let r = rows[n]
+            let times = r.frames.compactMap(\.time)
+            guard (r.display == name || r.name == name), r.hp == hp, options.contains(r.cp),
+                  let rIvs = r.ivs, rIvs == ivs, !r.flags.contains("bars-unsettled"),
+                  let tn = candidate.1 ? times.filter({ $0 <= t0 }).max() : times.filter({ $0 >= t1 }).min() else { continue }
+            let (a, b) = candidate.1 ? (tn, t0) : (t1, tn)
+            guard a <= b, !swipeEvidence(from: a, to: b, readings: readings, ticks: ticks) else { continue }
+            return .duplicate(of: n, at: tn)
         }
-        let before = rows.last { ($0.frames.compactMap(\.time).min() ?? .infinity) <= t0 }
-        let after = rows.first { ($0.frames.compactMap(\.time).min() ?? -.infinity) > t0 }
-        for r in [before, after].compactMap({ $0 }) where isSame(r) {
-            // beside it: it ends close to the stretch start, or starts close to the stretch end
-            let rs = rowSpan(r)
-            if let rs, (rs.1 >= t0 - 2.5 && rs.0 <= t1 + 2.5) { return .duplicate(of: r) }
-        }
+        // (b) LiveGrouper has a row for the stretch with this CP computed or recovered.
         let hasRow = live.contains { l in
             guard l.name == name, l.cp == cp, let a = l.firstTime, let b = l.lastTime, a <= t1 && b >= t0 else { return false }
             return l.flags.contains { $0.hasPrefix("cp-computed:") || $0.hasPrefix("cp-recovered:") }
@@ -262,16 +300,10 @@ public enum Refine {
         guard u.reason == "cp-not-read", let name = u.name, !name.isEmpty, let hp = u.hp, u.ivs != nil,
               let options = u.cpOptions, options.count == 1, let cp = options.first,
               let frame = u.frame, let start = labelIndex[frame] else { return nil }
-        // The Pokémon's own readings: from its first frame, those with this name and no CP, skipping unreadable
-        // frames, up to the next card of anything else. (The JavaScript's stretch is the same frames.)
-        var own = [FrameReading]()
-        var i = start
-        while i < readings.count {
-            let r = readings[i]
-            if r.cp != nil { break }
-            if let n = r.name, n != name { break }
-            if r.name == name { var c = r; c.cp = cp; c.cpText = String(cp); c.cpReads = nil; own.append(c) }   // no partial reads: the JS would rank those, not the CP
-            i += 1
+        // The Pokémon's own readings: the entry's stretch (as many frames as the JavaScript counted for it).
+        let own: [FrameReading] = stretch(u, name: name, readings: readings, start: start).map { i in
+            var c = readings[i]; c.cp = cp; c.cpText = String(cp); c.cpReads = nil   // no partial reads: the JS would rank those, not the CP
+            return c
         }
         guard !own.isEmpty else { return nil }
         let result = try engine.finish(readings: own)
