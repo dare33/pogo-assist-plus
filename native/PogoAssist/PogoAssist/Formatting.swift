@@ -51,3 +51,8 @@ enum Fmt {
 extension Fmt {
     static func number(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
 }
+
+extension Fmt {
+    /// A saved Pokémon for a choice list: "Staraptor, CP 1982, HP 142, IVs 13/12/15".
+    static func candidate(_ r: ScanRow) -> String { "\(r.title), CP \(r.cp), HP \(r.hp.map(String.init) ?? "not read"), IVs \(ivs(r.ivs))" }
+}

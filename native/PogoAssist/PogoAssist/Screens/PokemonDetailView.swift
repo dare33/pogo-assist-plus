@@ -137,7 +137,7 @@ struct FixValueView: View {
                     field("Stamina", $sta)
                 }
                 Section {
-                    Text("A value you change is marked as corrected by hand, and the check for it is cleared. A later scan will not overwrite it unless the Pokémon has really changed.").font(.footnote).foregroundStyle(.secondary)
+                    Text("A value you change is marked as corrected by hand, and the check for it is cleared. The level and dust are worked out again from the new values. A later scan will not overwrite it unless the Pokémon has really changed.").font(.footnote).foregroundStyle(.secondary)
                     if let error { Text(error).font(.footnote).foregroundStyle(.red) }
                 }
             }
@@ -182,7 +182,10 @@ struct FixValueView: View {
         guard edit != BoxMerge.Edit() else { dismiss(); return }
         saving = true
         Task {
-            if let problem = await model.correct(entry.id, edit) { error = problem; saving = false } else { dismiss() }
+            let result = await model.correct(entry.id, edit)
+            if let problem = result.error { error = problem; saving = false; return }
+            if let notice = result.notice { model.message = notice }
+            dismiss()
         }
     }
 }

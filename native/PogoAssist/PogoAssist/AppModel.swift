@@ -42,6 +42,8 @@ final class AppModel: ObservableObject {
     @Published var history: [BoxSnapshot.Header] = []
     @Published var previous: BoxSnapshot.Header?
     @Published var exportURL: URL?
+    /// Files to hand to the share sheet (a saved scan's log and result).
+    @Published var shareURLs: [URL] = []
     @Published var busy: String?
 
     @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind) } }
@@ -87,7 +89,8 @@ final class AppModel: ObservableObject {
     func createAccount(_ raw: String) {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { message = "Type a name for the account, such as your trainer name."; return }
-        do { try library.createAccount(name) } catch { message = "The account could not be created: \(error.localizedDescription)"; return }
+        if accounts.contains(where: { $0.lowercased() == name.lowercased() }) { message = "There is already an account called \(name). Choose a different name."; return }
+        do { try library.createAccount(name) } catch { message = "The account could not be created: \(Self.plain(error))"; return }
         reloadAccounts()
         select(name)
     }
@@ -112,6 +115,7 @@ final class AppModel: ObservableObject {
             message = "The box for \(a) could not be read: \(error.localizedDescription) Your other versions may still be restorable from Settings."
         }
         loadAdvice()
+        loadScans()
     }
 
     var entries: [BoxEntry] { snapshot?.entries ?? [] }
@@ -148,19 +152,75 @@ final class AppModel: ObservableObject {
 
     // MARK: - hand corrections
 
-    func correct(_ id: String, _ edit: BoxMerge.Edit) async -> String? {
-        guard let a = account, let snap = snapshot, let e = snap.entries.first(where: { $0.id == id }) else { return "That Pokémon is no longer in the box." }
+    /// What a hand correction came to: `error` when it was refused (nothing saved), `notice` when it was saved but the person
+    /// should be told something (no level fits the new values).
+    struct CorrectionResult { var error: String?; var notice: String? }
+
+    func correct(_ id: String, _ edit: BoxMerge.Edit) async -> CorrectionResult {
+        guard let a = account, let snap = snapshot, let e = snap.entries.first(where: { $0.id == id }) else { return CorrectionResult(error: "That Pokémon is no longer in the box.", notice: nil) }
         let lib = library
         do {
-            let new = try await worker.run { _ -> BoxSnapshot in
-                let fixed = try BoxMerge.correct(e, with: edit, gameMaster: try .bundled())
+            let (new, notice) = try await worker.run { engine -> (BoxSnapshot, String?) in
+                var fixed = try BoxMerge.correct(e, with: edit, gameMaster: try .bundled())
+                // The level and dust follow the corrected values: the JavaScript solver is run again for this Pokémon.
+                var notice: String?
+                if edit.ivs != nil || edit.cp != nil || edit.hp != nil || edit.speciesName != nil { (fixed, notice) = LevelSolve.apply(to: fixed, engine: engine) }
                 var entries = snap.entries
                 if let i = entries.firstIndex(where: { $0.id == id }) { entries[i] = fixed }
-                return try lib.commit(account: a, entries: entries, reason: .edit, note: "Corrected \(fixed.row.title)", scanKind: snap.scanKind, scanDate: snap.scanDate)
+                return (try lib.commit(account: a, entries: entries, reason: .edit, note: "Corrected \(fixed.row.title)", scanKind: snap.scanKind, scanDate: snap.scanDate), notice)
             }
             afterCommit(new)
+            return CorrectionResult(error: nil, notice: notice)
+        } catch { return CorrectionResult(error: Self.plain(error), notice: nil) }
+    }
+
+    /// Remove one Pokémon from the box, as a new box version (the earlier version still has it).
+    func deleteEntry(_ id: String) async {
+        guard let a = account, let snap = snapshot, let e = snap.entries.first(where: { $0.id == id }) else { return }
+        let lib = library
+        do {
+            let new = try await worker.run { _ in
+                try lib.commit(account: a, entries: snap.entries.filter { $0.id != id }, reason: .edit, note: "Removed \(e.row.title), CP \(e.row.cp)", scanKind: snap.scanKind, scanDate: snap.scanDate)
+            }
+            afterCommit(new)
+        } catch { message = "The Pokémon could not be removed: \(Self.plain(error))" }
+    }
+
+    // MARK: - rename, saved scans
+
+    /// Returns nil on success, else the reason in plain words.
+    func renameAccount(_ old: String, to new: String) async -> String? {
+        let lib = library
+        do {
+            try await worker.run { _ in try lib.renameAccount(from: old, to: new) }
+            let name = new.trimmingCharacters(in: .whitespacesAndNewlines)
+            accounts = (try? library.accounts()) ?? accounts
+            if account == old { account = name; loadBox() }
             return nil
         } catch { return Self.plain(error) }
+    }
+
+    @Published var scans: [BoxStore.Summary] = []
+
+    func loadScans() {
+        guard let a = account else { scans = []; return }
+        scans = (try? library.store.list(account: a).scans) ?? []
+    }
+
+    /// The saved scan's result file and its replay log, copied to the temporary folder under names that say what they are.
+    func shareFiles(for scan: BoxStore.Summary) -> [URL] {
+        guard let a = account, let f = try? library.store.files(account: a, id: scan.id) else { message = "That scan's files could not be found."; return [] }
+        let tmp = FileManager.default.temporaryDirectory
+        var out = [URL]()
+        let result = tmp.appendingPathComponent("\(scan.id).result.json")
+        try? FileManager.default.removeItem(at: result)
+        if (try? FileManager.default.copyItem(at: f.result, to: result)) != nil { out.append(result) }
+        if let r = f.replay {
+            let log = tmp.appendingPathComponent("\(scan.id).replay.jsonl")
+            try? FileManager.default.removeItem(at: log)
+            if (try? FileManager.default.copyItem(at: r, to: log)) != nil { out.append(log) }
+        }
+        return out
     }
 
     func markChecked(_ id: String) async {
@@ -181,6 +241,7 @@ final class AppModel: ObservableObject {
         history = (try? library.history(account: snap.account)) ?? history
         previous = try? library.previousVersion(account: snap.account)
         loadAdvice()
+        loadScans()
     }
 
     // MARK: - history

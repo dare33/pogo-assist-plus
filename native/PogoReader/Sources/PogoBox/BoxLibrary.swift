@@ -60,6 +60,17 @@ public final class BoxLibrary {
     /// Make an account (an empty folder). Fine to call for one that exists.
     public func createAccount(_ name: String) throws { _ = try store.accountDirectory(name, create: true) }
 
+    /// Rename an account (see `BoxStore.renameAccount`); its box versions follow, with the new name written into each.
+    public func renameAccount(from old: String, to new: String) throws {
+        try store.renameAccount(from: old, to: new)
+        let newName = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        for seq in (try? seqs(newName)) ?? [] {
+            guard let f = try? file(newName, seq), var snap = try? load(account: newName, seq: seq) else { continue }
+            snap.account = newName
+            try? Self.encoder.encode(snap).write(to: f, options: .atomic)
+        }
+    }
+
     // MARK: - versions
 
     public func current(account: String) throws -> BoxSnapshot? {

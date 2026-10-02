@@ -6,6 +6,9 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmPrevious = false
     @State private var restoring: BoxSnapshot.Header?
+    @State private var renaming = false
+    @State private var newName = ""
+    @State private var renameProblem: String?
 
     private func accountLabel(_ name: String) -> some View {
         let selected: Bool = name == model.account
@@ -19,6 +22,19 @@ struct SettingsView: View {
     private var previousFooter: String {
         guard let p = model.previous else { return "There is no earlier box to go back to yet." }
         return "Goes back to version \(p.seq), \(p.note.lowercased()), \(Fmt.date(p.createdAt)). The box as it is now stays in the history."
+    }
+
+    private func scanRow(_ scan: BoxStore.Summary) -> some View {
+        let kind: String = scan.kind == .full ? "Full scan" : "Add and update"
+        return HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Fmt.date(scan.scanDate)).font(.callout)
+                Text("\(kind), \(scan.rows) Pokémon read").font(.footnote).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { model.shareURLs = model.shareFiles(for: scan) } label: { Image(systemName: "square.and.arrow.up") }
+                .buttonStyle(.borderless).accessibilityLabel("Share scan files")
+        }
     }
 
     @ViewBuilder private func historyRow(_ h: BoxSnapshot.Header) -> some View {
@@ -41,6 +57,9 @@ struct SettingsView: View {
                     }
                 }
                 Section {
+                    Button("Rename account") { newName = model.account ?? ""; renaming = true }.disabled(model.account == nil)
+                } footer: { if let p = renameProblem { Text(p).foregroundStyle(.red) } }
+                Section {
                     Button("Restore previous box") { confirmPrevious = true }.disabled(model.previous == nil)
                 } header: { Text("Box for \(model.account ?? "this account")") } footer: {
                     Text(previousFooter)
@@ -49,6 +68,10 @@ struct SettingsView: View {
                     if model.history.isEmpty { Text("No saved versions yet.").foregroundStyle(.secondary) }
                     ForEach(model.history, id: \.seq) { h in historyRow(h) }
                 } header: { Text("History") } footer: { Text("Every scan and every correction is kept as a version. Swipe a version to restore it; the current box stays in the history.") }
+                Section {
+                    if model.scans.isEmpty { Text("No saved scans yet.").foregroundStyle(.secondary) }
+                    ForEach(model.scans, id: \.id) { scan in scanRow(scan) }
+                } header: { Text("Scans") } footer: { Text("Share a scan's replay log and result to send them for diagnosis.") }
                 Section("About") {
                     Text("Reader mode is set to accurate. The mode picker is in Diagnostics.").font(.footnote)
                 }
@@ -56,6 +79,15 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .alert("Rename account", isPresented: $renaming) {
+                TextField("Trainer name", text: $newName).accountNameField()
+                Button("Rename") {
+                    let old = model.account ?? ""
+                    Task { renameProblem = await model.renameAccount(old, to: newName) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("The box, its history and its saved scans move to the new name.") }
+            .onAppear { model.loadScans(); renameProblem = nil }
             .confirmationDialog("Restore the previous box?", isPresented: $confirmPrevious, titleVisibility: .visible) {
                 Button("Restore previous box") { Task { await model.restorePrevious() } }
             } message: { Text("The box as it is now stays in the history, so you can come back to it.") }

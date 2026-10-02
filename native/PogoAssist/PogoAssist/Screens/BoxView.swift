@@ -7,6 +7,7 @@ struct BoxView: View {
     @State private var showToCheck = false
     @State private var search = ""
     @State private var scanning = false
+    @State private var deleting: BoxEntry?
 
     private var toCheckCount: Int { model.entries.filter(\.needsCheck).count }
 
@@ -40,6 +41,9 @@ struct BoxView: View {
             if let url = model.exportURL { ShareSheet(url: url).presentationDetents([.medium, .large]) }
         }
         .safeAreaInset(edge: .bottom) { scanButton }
+        .confirmationDialog(deleting.map { "Delete \($0.row.title), CP \($0.row.cp)?" } ?? "Delete this Pokémon?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button("Delete from box", role: .destructive) { if let d = deleting { Task { await model.deleteEntry(d.id) } }; deleting = nil }
+        } message: { Text("It is removed from the box only, not from the game. The box keeps an earlier version that still has it, which Settings can restore.") }
     }
 
     private var scanButton: some View {
@@ -80,6 +84,9 @@ struct BoxView: View {
             Section {
                 ForEach(visible) { e in
                     NavigationLink(value: e.id) { EntryRow(entry: e) }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) { deleting = e } label: { Label("Delete", systemImage: "trash") }
+                        }
                 }
                 if visible.isEmpty { Text(showToCheck && search.isEmpty ? "Nothing needs a check." : "No Pokémon match.").foregroundStyle(.secondary) }
             }

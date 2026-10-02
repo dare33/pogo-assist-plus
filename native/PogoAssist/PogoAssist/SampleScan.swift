@@ -14,8 +14,9 @@ enum SampleScan {
         }
     }
 
-    static func install() throws {
-        guard let source = Bundle.main.url(forResource: "sample-scan.replay", withExtension: "jsonl") else { throw Failure.missing }
+    /// `partialRead` loads a tiny log whose one Pokémon has a part-read CP (182 for a saved 1982): the merge asks about it.
+    static func install(partialRead: Bool = false) throws {
+        guard let source = Bundle.main.url(forResource: partialRead ? "sample-partial-cp.replay" : "sample-scan.replay", withExtension: "jsonl") else { throw Failure.missing }
         guard let dest = SharedStore.replayURL else { throw Failure.noContainer }
         let data = try Data(contentsOf: source)
         try data.write(to: dest, options: .atomic)

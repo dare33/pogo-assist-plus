@@ -16,13 +16,17 @@ public final class BoxStore {
         /// The file exists but is not a readable scan (truncated, hand-edited, written by a newer app).
         case corrupt(file: String, reason: String)
         case badAccountName
+        case accountExists(String)
+        case noSuchAccount(String)
         case notImplemented(String)
 
         public var errorDescription: String? {
             switch self {
             case .notFound(let a, let i): return "no scan \(i) for account \(a)"
             case .corrupt(let f, let r): return "saved scan \(f) cannot be read: \(r)"
-            case .badAccountName: return "account name is empty"
+            case .badAccountName: return "The account name is empty. Type a name."
+            case .accountExists(let n): return "There is already an account called \(n). Choose a different name."
+            case .noSuchAccount(let n): return "There is no account called \(n)."
             case .notImplemented(let m): return "not implemented: \(m)"
             }
         }
@@ -135,6 +139,43 @@ public final class BoxStore {
         guard fm.fileExists(atPath: file.path) else { throw Failure.notFound(account: account, id: id) }
         try fm.removeItem(at: file)
         try? fm.removeItem(at: file.deletingPathExtension().appendingPathExtension("replay.jsonl"))
+    }
+
+    /// Rename an account: its folder, and the account name written inside each scan file, so the data, the saved scans and their
+    /// replay logs all follow. Refuses an empty name or another account's name (compared ignoring case and surrounding spaces; a
+    /// change of capitals alone on the same account is allowed). The folder is moved in one step; if rewriting a file's name then
+    /// fails, the file keeps the old name inside and still loads (nothing reads that field to find a scan).
+    public func renameAccount(from old: String, to new: String) throws {
+        let newName = new.trimmingCharacters(in: .whitespacesAndNewlines), oldName = old.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty else { throw Failure.badAccountName }
+        let from = try accountDirectory(oldName, create: false)
+        guard fm.fileExists(atPath: from.path) else { throw Failure.noSuchAccount(oldName) }
+        for other in try accounts() where other != oldName && other.lowercased() == newName.lowercased() { throw Failure.accountExists(other) }
+        if newName == oldName { return }
+        let to = try accountDirectory(newName, create: false)
+        if newName.lowercased() == oldName.lowercased() {
+            // Same folder on a case-insensitive disk: go through a temporary name.
+            let temp = root.appendingPathComponent(".rename-\(UUID().uuidString)", isDirectory: true)
+            try fm.moveItem(at: from, to: temp)
+            try fm.moveItem(at: temp, to: to)
+        } else {
+            guard !fm.fileExists(atPath: to.path) else { throw Failure.accountExists(newName) }
+            try fm.moveItem(at: from, to: to)
+        }
+        for name in (try? fm.contentsOfDirectory(atPath: to.path)) ?? [] where name.hasSuffix(".json") {
+            let file = to.appendingPathComponent(name)
+            guard var scan = try? read(file) else { continue }
+            scan.account = newName
+            try? Self.encoder.encode(scan).write(to: file, options: .atomic)
+        }
+    }
+
+    /// Where a saved scan's files are, for sharing: the result file and the replay log (nil if that scan kept none).
+    public func files(account: String, id: String) throws -> (result: URL, replay: URL?) {
+        let dir = try accountDirectory(account, create: false), stem = Self.safeFileStem(id)
+        let result = dir.appendingPathComponent("\(stem).json"), replay = dir.appendingPathComponent("\(stem).replay.jsonl")
+        guard fm.fileExists(atPath: result.path) else { throw Failure.notFound(account: account, id: id) }
+        return (result, fm.fileExists(atPath: replay.path) ? replay : nil)
     }
 
     public func deleteAccount(_ account: String) throws {

@@ -49,7 +49,7 @@ private struct ResultList: View {
     @EnvironmentObject var model: AppModel
     let review: AppModel.Review
     @State private var confirmDiscard = false
-    @State private var open: Set<String> = ["unsure"]
+    @State private var open: Set<String> = []
 
     private var plan: BoxMerge.Plan { review.plan }
     private var saved: [String: BoxEntry] { Dictionary(review.base.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
@@ -69,6 +69,11 @@ private struct ResultList: View {
                 }
                 .pickerStyle(.segmented)
             }
+            if !plan.unsure.isEmpty {
+                Section {
+                    ForEach(plan.unsure, id: \.scanned) { u in UnsureCard(unsure: u, row: scanned(u.scanned), saved: saved) }
+                } header: { Text("Needs your answer (\(plan.unsure.count))") } footer: { Text("These are never guessed. Answer each one, then Save to box is available.") }
+            }
             Section("What saving will do") {
                 group("new", "New", plan.new.count, "plus.circle") {
                     ForEach(plan.new, id: \.self) { i in Text(Fmt.brief(scanned(i))).font(.callout) }
@@ -84,9 +89,7 @@ private struct ResultList: View {
                 group("same", "Same", plan.same.count, "equal.circle") {
                     ForEach(plan.same, id: \.scanned) { p in Text(Fmt.brief(scanned(p.scanned))).font(.callout) }
                 }
-                group("unsure", "Unsure", plan.unsure.count, "questionmark.circle") {
-                    ForEach(plan.unsure, id: \.scanned) { u in UnsureRow(unsure: u, row: scanned(u.scanned), saved: saved) }
-                }
+                HStack { Label("Unsure", systemImage: "questionmark.circle"); Spacer(); Text("\(plan.unsure.count)").foregroundStyle(.secondary).monospacedDigit() }
                 if review.kind == .full {
                     group("gone", "Gone", plan.gone.count, "minus.circle") {
                         ForEach(plan.gone, id: \.self) { id in
@@ -104,7 +107,7 @@ private struct ResultList: View {
                 ForEach(flagged, id: \.self) { i in
                     let r = review.outcome.scan.rows[i]
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(r.title), CP \(r.cp)").font(.callout.weight(.medium))
+                        Text(verbatim: "\(r.title), CP \(r.cp)").font(.callout.weight(.medium))
                         ForEach(r.flags, id: \.self) { f in Text(FlagInfo.explain(f)).font(.footnote).foregroundStyle(.secondary) }
                     }
                 }
@@ -162,38 +165,3 @@ private struct ResultList: View {
     }
 }
 
-/// One unsure Pokémon: choose which saved Pokémon it is, or that it is new.
-private struct UnsureRow: View {
-    @EnvironmentObject var model: AppModel
-    let unsure: BoxMerge.Unsure
-    let row: ScanRow
-    let saved: [String: BoxEntry]
-
-    private var choice: BoxMerge.Resolution? {
-        if case .review(let r) = model.flow { return r.resolutions[unsure.scanned] }
-        return nil
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(Fmt.brief(row)).font(.callout.weight(.medium))
-            Text("It could be one of \(unsure.candidates.count) in your box.").font(.footnote).foregroundStyle(.secondary)
-            Menu {
-                ForEach(unsure.candidates, id: \.self) { id in
-                    if let e = saved[id] { Button("\(e.row.title), CP \(e.row.cp), IVs \(Fmt.ivs(e.row.ivs))") { model.resolve(unsure.scanned, .existing(id)) } }
-                }
-                Button("A new Pokémon") { model.resolve(unsure.scanned, .new) }
-            } label: {
-                HStack { Text(label); Image(systemName: "chevron.up.chevron.down").font(.caption) }
-            }
-        }
-    }
-
-    private var label: String {
-        switch choice {
-        case nil: return "Choose which one"
-        case .new?: return "A new Pokémon"
-        case .existing(let id)?: return saved[id].map { "\($0.row.title), CP \($0.row.cp)" } ?? "Chosen"
-        }
-    }
-}

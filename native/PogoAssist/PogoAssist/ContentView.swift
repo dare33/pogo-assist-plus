@@ -15,7 +15,7 @@ struct BroadcastPicker: UIViewRepresentable {
 
 struct ContentView: View {
     /// Set when this is the Diagnostics screen of the app: adds "Load sample scan" and a Done button.
-    var onLoadSample: (() -> Void)?
+    var onLoadSample: ((_ partialRead: Bool) -> Void)?
     var showsDone = false
 
     @StateObject private var model = StateModel()
@@ -47,8 +47,9 @@ struct ContentView: View {
                 }
                 if let onLoadSample {
                     Section {
-                        Button("Load sample scan", action: onLoadSample).disabled(model.live)
-                    } footer: { Text("Copies a bundled device log into the app group as if a broadcast had just finished, then opens the scan result. For use where the broadcast cannot run.") }
+                        Button("Load sample scan") { onLoadSample(false) }.disabled(model.live)
+                        Button("Load partial-read sample") { onLoadSample(true) }.disabled(model.live)
+                    } footer: { Text("Copies a bundled device log into the app group as if a broadcast had just finished, then opens the scan result. For use where the broadcast cannot run. The partial-read sample is one Staraptor whose CP was read as 182; scan the full sample first and save it, then load this as an add-and-update scan.") }
                 }
                 Section("Reader (applies when the broadcast starts)") {
                     Picker("Reader", selection: $model.mode) {

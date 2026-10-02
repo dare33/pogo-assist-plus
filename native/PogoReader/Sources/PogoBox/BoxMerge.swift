@@ -15,6 +15,11 @@ import PogoReader
 ///  5. Identical twins: matched by count. Two saved and two scanned are two unchanged; a third scanned is new.
 ///  6. Ambiguous: a scanned Pokémon with more than one saved candidate (or the reverse) at the same rule, where the
 ///     candidates are not interchangeable, is never guessed. It is "unsure" and the person picks.
+///  7. Part-read CP: a scanned Pokémon that matched nothing above, whose CP fits no level (`no-level-fits`) or whose IVs were
+///     not read, and whose CP digits are a subsequence of a saved same-species Pokémon's CP digits (182 in 1982) with the same
+///     HP (or HP unread on either side), is unsure with those saved ones as candidates: never New, never matched without the
+///     person. The candidate may already be matched to another scanned row (the real read of it); "It is this one" then only
+///     marks it seen and does not copy the part-read values over it.
 ///
 /// A full scan proposes saved entries matched by nothing as gone; an add-and-update scan removes nothing. Entries that are
 /// candidates in an unsure match are never proposed as gone (they might be one of the unsure Pokémon).
@@ -47,8 +52,11 @@ public enum BoxMerge {
 
     /// A scanned Pokémon that could be more than one saved one. `candidates` are saved ids, never empty.
     public struct Unsure: Equatable {
+        public enum Kind: String, Equatable { case ambiguous, partialRead }
         public var scanned: Int
         public var candidates: [String]
+        public var kind: Kind = .ambiguous
+        public init(scanned: Int, candidates: [String], kind: Kind = .ambiguous) { self.scanned = scanned; self.candidates = candidates; self.kind = kind }
     }
 
     public struct Plan: Equatable {
@@ -69,6 +77,8 @@ public enum BoxMerge {
     public enum Resolution: Equatable {
         case existing(String)
         case new
+        /// A junk row: it is not added and nothing in the box changes.
+        case leaveOut
     }
 
     public enum Failure: Error, LocalizedError, Equatable {
@@ -77,7 +87,7 @@ public enum BoxMerge {
         case chosenTwice(savedId: String)
         public var errorDescription: String? {
             switch self {
-            case .unresolved(let n): return "\(n) unsure Pokémon still need an answer."
+            case .unresolved(let n): return n == 1 ? "1 unsure Pokémon still needs an answer." : "\(n) unsure Pokémon still need an answer."
             case .notACandidate: return "That saved Pokémon is not one of the choices for this one."
             case .chosenTwice: return "Two scanned Pokémon were matched to the same saved one. Pick \"New\" for one of them."
             }
@@ -132,6 +142,16 @@ public enum BoxMerge {
             }
         }
 
+        // Rule 7: a part-read CP is asked about, never added as new.
+        var stillNew = [Int]()
+        for si in sPool {
+            let cands = partialCandidates(rows[si], saved)
+            if cands.isEmpty { stillNew.append(si); continue }
+            plan.unsure.append(Unsure(scanned: si, candidates: cands.map { saved[$0].id }, kind: .partialRead))
+            unsureSaved.formUnion(cands)
+        }
+        sPool = stillNew
+
         plan.new = sPool
         if kind == .full { plan.gone = vPool.filter { !unsureSaved.contains($0) }.map { saved[$0].id } }
         plan.unsure.sort { $0.scanned < $1.scanned }
@@ -141,6 +161,22 @@ public enum BoxMerge {
     }
 
     // MARK: - rule predicates
+
+    private static func partialCandidates(_ s: ScanRow, _ saved: [BoxEntry]) -> [Int] {
+        guard s.flags.contains(where: { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }) || s.ivs == nil else { return [] }
+        let digits = Array(String(s.cp))
+        return saved.indices.filter { vi in
+            let v = saved[vi]
+            guard sameSpecies(s, v), s.cp != v.row.cp, isSubsequence(digits, Array(String(v.row.cp))) else { return false }
+            return s.hp == nil || v.row.hp == nil || sameHP(s, v)
+        }
+    }
+
+    private static func isSubsequence(_ small: [Character], _ big: [Character]) -> Bool {
+        var i = 0
+        for c in big where i < small.count && c == small[i] { i += 1 }
+        return i == small.count
+    }
 
     private static func values<T: Equatable>(_ current: T, _ fix: Fix<T>?) -> [T] { fix?.was.map { [current, $0] } ?? [current] }
 
@@ -208,7 +244,8 @@ public enum BoxMerge {
         for u in plan.unsure {
             if case .existing(let id)? = resolutions[u.scanned] {
                 guard u.candidates.contains(id) else { throw Failure.notACandidate(scanned: u.scanned, savedId: id) }
-                guard chosen.insert(id).inserted else { throw Failure.chosenTwice(savedId: id) }
+                // Several part reads may point at one saved Pokémon; two real candidates for one cannot both be it.
+                if u.kind == .ambiguous { guard chosen.insert(id).inserted else { throw Failure.chosenTwice(savedId: id) } }
             }
         }
     }
@@ -228,7 +265,11 @@ public enum BoxMerge {
         for u in plan.unsure {
             switch resolutions[u.scanned]! {
             case .new: newRows.append(u.scanned)
-            case .existing(let id): if let e = byId[id] { byId[id] = updated(e, with: plan.scanned[u.scanned], date: date) }
+            case .leaveOut: break
+            case .existing(let id):
+                guard let e = byId[id] else { break }
+                // A part-read row only says "seen"; its values are wrong by definition.
+                if u.kind == .partialRead { byId[id]?.lastSeen = max(e.lastSeen, date) } else { byId[id] = updated(e, with: plan.scanned[u.scanned], date: date) }
             }
         }
         for i in newRows.sorted() { added.append(BoxEntry(id: makeID(), row: plan.scanned[i], firstSeen: date, lastSeen: date)) }

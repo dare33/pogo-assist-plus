@@ -54,5 +54,31 @@ final class FlowTests: XCTestCase {
         shot("10-next")
         app.swipeUp(); app.swipeUp()
         shot("11-next-gaps")
+
+        // Round 2: a part-read CP is asked about, and "Fix a value".
+        app.tabBars.buttons["Box"].tap()
+        app.buttons["More"].tap()
+        let diagnostics2 = app.buttons["Diagnostics"]
+        XCTAssertTrue(diagnostics2.waitForExistence(timeout: 5))
+        diagnostics2.tap()
+        let partial = app.buttons["Load partial-read sample"]
+        if !partial.waitForExistence(timeout: 8), diagnostics2.exists { diagnostics2.tap() }
+        XCTAssertTrue(partial.waitForExistence(timeout: 10))
+        partial.tap()
+        let leave = app.buttons["Leave it out of the box"]
+        XCTAssertTrue(leave.waitForExistence(timeout: 60), "the unsure section did not appear")
+        sleep(1)
+        shot("12-review-unsure")
+        leave.tap()
+        sleep(1)
+        shot("12b-review-unsure-answered")
+        app.buttons["Save to box"].tap()
+        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 15))
+        app.cells.element(boundBy: 2).tap()
+        let fix = app.buttons["Fix a value"]
+        XCTAssertTrue(fix.waitForExistence(timeout: 5))
+        fix.tap()
+        sleep(1)
+        shot("13-fix-a-value")
     }
 }

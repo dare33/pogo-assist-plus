@@ -16,13 +16,20 @@ struct RootView: View {
             switch sheet {
             case .settings: SettingsView().environmentObject(model)
             case .diagnostics:
-                ContentView(onLoadSample: {
-                    do { try SampleScan.install(); model.sheet = nil } catch { model.message = "The sample scan could not be loaded: \(error.localizedDescription)" }
+                ContentView(onLoadSample: { partial in
+                    do {
+                        try SampleScan.install(partialRead: partial)
+                        if partial { model.scanKind = .partial }
+                        model.sheet = nil
+                    } catch { model.message = "The sample scan could not be loaded: \(error.localizedDescription)" }
                 }, showsDone: true)
             }
         }
         .background { Color.clear.fullScreenCover(isPresented: .constant(model.accounts.isEmpty)) { WelcomeView().environmentObject(model) } }
         .background { Color.clear.fullScreenCover(isPresented: Binding(get: { model.isReviewing }, set: { _ in })) { ReviewView().environmentObject(model) } }
+        .sheet(isPresented: Binding(get: { !model.shareURLs.isEmpty }, set: { if !$0 { model.shareURLs = [] } })) {
+            ShareSheet(urls: model.shareURLs).presentationDetents([.medium, .large])
+        }
         .alert("Pogo Assist+", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
             Button("OK") { model.message = nil }
         } message: { Text(model.message ?? "") }
@@ -47,7 +54,7 @@ struct WelcomeView: View {
                 }
                 Section("Account name") {
                     TextField("Trainer name", text: $name)
-                        .textInputAutocapitalization(.words)
+                        .accountNameField()
                         .submitLabel(.done)
                         .onSubmit(create)
                 }
@@ -59,6 +66,13 @@ struct WelcomeView: View {
         }
     }
     private func create() { model.createAccount(name) }
+}
+
+extension View {
+    /// An account name is a name the person chose: no autocorrection, no spell checking, no automatic capitals.
+    func accountNameField() -> some View {
+        self.autocorrectionDisabled(true).textInputAutocapitalization(.never).textContentType(.none)
+    }
 }
 
 struct BusyOverlay: View {
@@ -95,7 +109,7 @@ struct AccountMenu: View {
             }
         }
         .alert("New account", isPresented: $asking) {
-            TextField("Trainer name", text: $newName)
+            TextField("Trainer name", text: $newName).accountNameField()
             Button("Create") { model.createAccount(newName) }
             Button("Cancel", role: .cancel) {}
         } message: { Text("Each account has its own box.") }
@@ -115,7 +129,9 @@ struct MoreMenu: View {
 }
 
 struct ShareSheet: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: [url], applicationActivities: nil) }
+    let urls: [URL]
+    init(url: URL) { urls = [url] }
+    init(urls: [URL]) { self.urls = urls }
+    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: urls, applicationActivities: nil) }
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
