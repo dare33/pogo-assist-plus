@@ -22,8 +22,12 @@ const CPM = {
 
 export const LEVELS = Object.keys(CPM).map(Number).sort((a, b) => a - b);
 
+// Lookup by Map: `CPM[12.5]` turns the number into a string key on every call, and the solver calls this
+// millions of times on a large box. Same values, same RangeError for a level that has no multiplier.
+const CPM_BY_LEVEL = new Map(Object.entries(CPM).map(([k, v]) => [Number(k), v]));
+
 export function cpm(level) {
-  const v = CPM[level];
+  const v = CPM_BY_LEVEL.get(level);
   if (v === undefined) throw new RangeError(`no CP multiplier for level ${level}`);
   return v;
 }
