@@ -134,7 +134,10 @@ final class AppModel: ObservableObject {
             case .review: if case .review(var r) = flow { r.reportSentAt = now; r.reportHash = built.contentHash; flow = .review(r) }
             case .saved(let id):
                 // On the library's one queue, like every other write to the scan files.
-                if let a = account { let store = library.store, hash = built.contentHash; _ = try? await worker.run { _ in try store.markReportSent(account: a, id: id, at: now, hash: hash) }; loadScans() }
+                if let a = account { let store = library.store, hash = built.contentHash; 
+                    do { try await worker.run { _ in try store.markReportSent(account: a, id: id, at: now, hash: hash) } }
+                    catch { message = "The report was sent, but the app could not record that it was: \(Self.plain(error)). The same scan may be offered again." }
+                    loadScans() }
             }
             reportState = .sent
         } catch {
