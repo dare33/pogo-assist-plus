@@ -21,6 +21,13 @@ import PogoReader
 /// logs with os_log (subsystem = its bundle id) at start, on the mode chosen, on finish and on any state
 /// write that fails; read it in Console.app (device selected) or `log stream`.
 ///
+/// Swipes are seen separately from reading: every kept frame (5 fps), including those dropped because Vision is
+/// busy, gets a cheap luma signature straight from its buffer (`SwipeDetector`, the JS reference's signature
+/// over the CP and name bands). A frame that differs sharply from the last is a swipe; its time goes into a small
+/// lock-guarded list the reader drains before its next frame, and the grouper treats it as a seen swipe. Without
+/// this, a busy extension drops the very frames (no CP, no HP) that show a swipe, and two identical Pokémon in a
+/// row would merge.
+///
 /// Allocations are kept small on purpose: the frame goes straight to FrameProcessor (vImage into one
 /// reused buffer), no UIKit images, no CIContext, and nothing large is logged.
 class SampleHandler: RPBroadcastSampleHandler {
@@ -37,6 +44,9 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var lastKept = -Double.infinity   // presentation time of the last frame accepted
     private var seen = 0                      // frames offered at the 5 fps rate
     private var dropped = 0                   // of those, dropped because the previous one was still being handled
+    private var ticks = [Double]()            // swipe times seen by the signature, drained by the reader
+    private var finished = false              // broadcastFinished has run: later frames are ignored
+    private var detector = SwipeDetector()    // touched in the callback only
 
     private var mode = ReaderMode.accurate
     private var processor: FrameProcessor?    // touched on `queue` only, below
@@ -53,10 +63,12 @@ class SampleHandler: RPBroadcastSampleHandler {
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         queue.sync {
             mode = ReaderSettings.mode
-            log.info("broadcast started, mode \(self.mode.rawValue, privacy: .public), app group \(SharedStore.groupID, privacy: .public)")
+            log.notice("broadcast started, mode \(self.mode.rawValue, privacy: .public), app group \(SharedStore.groupID, privacy: .public)")
             if !SharedStore.containerAvailable {
                 log.error("app group container unavailable: no state can be shared; check Signing & Capabilities on both targets")
             }
+            lock.lock(); finished = false; ticks.removeAll(); lock.unlock()
+            detector = SwipeDetector()
             memory = MemoryProbe()
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
@@ -95,20 +107,29 @@ class SampleHandler: RPBroadcastSampleHandler {
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         // Video only; audio and microphone are ignored.
         guard sampleBufferType == .video else { return }
-        let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
-        // The whole decision, under one lock. A frame that is not kept, or that arrives while busy,
-        // captures nothing: only the counters change, and nothing is enqueued.
+        let stamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        // The whole decision, under one lock. A frame that is not kept, or that arrives while busy, captures
+        // nothing: only the counters change, and nothing is enqueued.
         lock.lock()
+        if finished { lock.unlock(); return }
+        // A timestamp that is not a number must not block reading: it follows the last kept frame by one period.
+        let pts = stamp.isFinite ? stamp : (lastKept.isFinite ? lastKept + 1.0 / readsPerSecond : 0)
         guard pts - lastKept >= 1.0 / readsPerSecond - 0.005 else { lock.unlock(); return }
         lastKept = pts
         seen += 1
-        if busy { dropped += 1; lock.unlock(); return }
-        busy = true
+        let wasBusy = busy
+        if !wasBusy { busy = true }
+        if wasBusy { dropped += 1 }
         lock.unlock()
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-            lock.lock(); busy = false; lock.unlock()
+            if !wasBusy { lock.lock(); busy = false; lock.unlock() }
             return
         }
+        // The swipe signature of every kept frame, read or not (see the class comment).
+        if let diff = detector.feed(pixelBuffer), diff > SwipeDetector.threshold {
+            lock.lock(); if ticks.count < 64 { ticks.append(pts) }; lock.unlock()
+        }
+        if wasBusy { return }     // nothing captured, nothing queued
         queue.async { [self] in
             autoreleasepool { handle(pixelBuffer, time: pts) }
             lock.lock(); busy = false; lock.unlock()
@@ -116,20 +137,25 @@ class SampleHandler: RPBroadcastSampleHandler {
     }
 
     override func broadcastFinished() {
+        lock.lock(); finished = true; lock.unlock()
         queue.sync {
             heartbeat?.cancel()
             heartbeat = nil
+            drainTicks()
             grouper.finish()
             state.rows = grouper.rows
             state.finished = true
             write(force: true)
-            log.info("broadcast finished: \(self.state.framesRead) read, \(self.state.framesDropped) dropped, \(self.state.skippedLowMemory) skipped for memory, peak \(self.state.peakFootprintMB, format: .fixed(precision: 1)) MB")
+            log.notice("broadcast finished: \(self.state.framesRead) read, \(self.state.framesDropped) dropped, \(self.state.skippedLowMemory) skipped for memory, peak \(self.state.peakFootprintMB, format: .fixed(precision: 1)) MB")
         }
     }
 
     /// On `queue`. One accepted frame, in whichever mode.
     private func handle(_ pixelBuffer: CVPixelBuffer, time: Double) {
         guard let processor = processor else { return }
+        lock.lock(); let over = finished; lock.unlock()
+        if over { return }
+        drainTicks()
         memory.sample()
         if mode == .saveCrops {
             let t0 = DispatchTime.now().uptimeNanoseconds
@@ -158,6 +184,12 @@ class SampleHandler: RPBroadcastSampleHandler {
             if changed { state.rows = grouper.rows }
             write(force: changed)
         }
+    }
+
+    /// On `queue`. Hand the swipes the signature saw to whoever groups (the grouper, or the crop saver).
+    private func drainTicks() {
+        lock.lock(); let seen = ticks; ticks.removeAll(keepingCapacity: true); lock.unlock()
+        for t in seen { if mode == .saveCrops { saver.noteSwipe(at: t) } else { grouper.swipe(at: t) } }
     }
 
     /// On `queue`. Rows (or saved crops) changed: write now. Otherwise at most about once a second.

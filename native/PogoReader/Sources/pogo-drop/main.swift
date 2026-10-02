@@ -3,7 +3,10 @@ import PogoReader
 
 // pogo-drop: how does the live grouper cope when the extension drops frames?
 //
-//   pogo-drop <readings.json> [--json] [--model SLOW/FAST ...]
+//   pogo-drop <readings.json> [--json] [--no-ticks] [--model SLOW/FAST ...]
+//
+// With the readings file's `signatureDiffs` (pogo-read writes them) every frame, read or dropped, delivers a
+// swipe tick to the grouper when its signature jumps, as the extension does; --no-ticks replays without.
 //
 // Replays a full-rate readings file (pogo-read's output) through LiveGrouper twice: at full rate, and with
 // a busy model: frames arrive every 0.2 s; a frame that needs Vision (it has a CP, name or HP text to read)
@@ -19,12 +22,13 @@ import PogoReader
 // Each is split into "flagged" (the row carries any flag: a trace for the user) and "unflagged"; the goal
 // is no unflagged wrong row and no row lost without a flagged trace beside it.
 
-struct File: Decodable { var readings: [FrameReading] }
+struct File: Decodable { var readings: [FrameReading]; var signatureDiffs: [Double?]? }
 
 let args = Array(CommandLine.arguments.dropFirst())
 guard let path = args.first(where: { !$0.hasPrefix("--") }) else {
     FileHandle.standardError.write(Data("usage: pogo-drop <readings.json> [--json] [--model SLOW/FAST ...]\n".utf8)); exit(2)
 }
+let useTicks = !args.contains("--no-ticks")
 var models: [(Double, Double)] = []
 var i = 0
 while i < args.count { if args[i] == "--model", i + 1 < args.count { let p = args[i + 1].split(separator: "/").compactMap { Double($0) }; if p.count == 2 { models.append((p[0], p[1])) }; i += 1 }; i += 1 }
@@ -42,6 +46,8 @@ func replay(slow: Double, fast: Double) -> (rows: [LiveRow], kept: Int) {
     var busyUntil = -1.0, kept = 0
     for (k, r) in file.readings.enumerated() {
         let t = r.time ?? Double(k) * 0.2
+        // The extension looks at EVERY frame for a swipe, read or dropped (the luma signature in its callback).
+        if useTicks, let diffs = file.signatureDiffs, k < diffs.count, let d = diffs[k], d > SwipeDetector.threshold { g.swipe(at: t) }
         if t < busyUntil - 1e-9 { continue }
         busyUntil = t + (needsVision(r) ? slow : fast) / 1000
         kept += 1

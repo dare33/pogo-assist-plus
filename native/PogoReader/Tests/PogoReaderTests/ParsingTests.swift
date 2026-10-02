@@ -16,6 +16,28 @@ final class ParsingTests: XCTestCase {
         XCTAssertNil(parseCp(""))
     }
 
+    /// Strings that junk or a garbled label glued onto a CP: each is no read, or the figure alone.
+    func testParseCpDoesNotGlueJunkOntoTheFigure() {
+        for junk in ["99 O", "66 O", "CP2 OO", "CP1 6", "CP1S 66", "CP1234 5", "CP1A86", "1234dO", "1 2", "CPL", "O", "CP 7"] {
+            XCTAssertNil(parseCp(junk), junk)
+        }
+        // What stays a read.
+        XCTAssertEqual(parseCp("CP4 262"), 4262)
+        XCTAssertEqual(parseCp("CP2 008"), 2008)
+        XCTAssertEqual(parseCp("CP 2 641"), 2641)
+        XCTAssertEqual(parseCp("4 262"), 4262)
+        XCTAssertEqual(parseCp("ap2621"), 2621)
+        XCTAssertEqual(parseCp("5p2641"), 2641)
+        XCTAssertEqual(parseCp("SP2614"), 2614)
+        XCTAssertEqual(parseCp("cI 2000"), 2000)
+        XCTAssertEqual(parseCp("i 5p2641"), 2641)
+        XCTAssertEqual(parseCp("CPL 262"), 262)
+        XCTAssertEqual(parseCp("cp₴641"), 641)
+        XCTAssertEqual(parseCp("cp3O28"), 3028)
+        // The frame reader's shape check agrees: "1234dO" has no figure at its end, so it is no read either way.
+        XCTAssertNil(parseCp("1234dO"))
+    }
+
     func testParseHpReadsCurrentAndMax() {
         XCTAssertEqual(parseHp("145 / 145 HP"), HP(current: 145, max: 145))
         XCTAssertEqual(parseHp("79/79 1"), HP(current: 79, max: 79))

@@ -92,7 +92,7 @@ final class StateModel: ObservableObject {
             if let data = try? JSONEncoder().encode(DeferredResult(rows: result.rows, frames: result.readings.count, seconds: secs, peakFootprintMB: MemoryProbe.megabytes(probe.peakBytes))) {
                 do { try data.write(to: out, options: .atomic); saved = true } catch { saved = false }
             }
-            if saved { archive.removeAll() }
+            if saved { archive.remove(frames: result.consumed) }   // only the frames that were read
             await MainActor.run {
                 self.deferredRows = result.rows
                 self.deferredNote = saved

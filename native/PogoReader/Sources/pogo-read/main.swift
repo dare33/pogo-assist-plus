@@ -24,6 +24,7 @@ struct Options {
     var cpPadding: Double?
     var cpDigitsOnly = false
     var deferred = false
+    var noSwipeTicks = false
     var visionDevice = VisionOptions.Device.system
     var visionMinTextHeight: Float?
     var visionRecreate = false
@@ -59,6 +60,7 @@ func parse() -> Options {
         case "--cp-padding": guard let x = Double(value()) else { usage() }; o.cpPadding = x
         case "--cp-digits-only": o.cpDigitsOnly = true
         case "--deferred": o.deferred = true
+        case "--no-swipe-ticks": o.noSwipeTicks = true
         case "--vision-device": guard let d = VisionOptions.Device(rawValue: value()) else { usage() }; o.visionDevice = d
         case "--vision-min-text-height": guard let h = Float(value()) else { usage() }; o.visionMinTextHeight = h
         case "--vision-recreate": o.visionRecreate = true
@@ -97,6 +99,8 @@ struct Report: Encodable {
         var appReadPeakFootprintMB: Double; var appReadMs: Double
     }
     var deferred: Deferred?
+    /// The swipe signature's difference from the previous frame, per frame (nil for the first). Replayed by pogo-drop.
+    var signatureDiffs: [Double?]
 }
 
 func run() throws {
@@ -112,6 +116,8 @@ func run() throws {
         : FrameProcessor(textReader: o.noVision ? EmptyTextReader() : VisionTextReader(options: vopts), names: names, targetWidth: o.width, memory: probe)
     let archive = o.deferred ? CropArchive(directory: FileManager.default.temporaryDirectory.appendingPathComponent("pogo-deferred-\(getpid())")) : nil
     var saver = CropSaver()
+    var detector = SwipeDetector()
+    var signatureDiffs = [Double?]()
     if let p = o.cpPadding { processor.reader.cpPadding = p }
     if o.cpDigitsOnly { processor.reader.cpIncludesPrefix = false }
     var grouper = LiveGrouper(species: table)
@@ -150,6 +156,10 @@ func run() throws {
             }
         }
         let time = Double(i) / o.fps
+        // The swipe signature of every frame, as the extension computes it in its callback.
+        let diff = buffer.map { detector.feed($0) } ?? detector.feed(image!)
+        signatureDiffs.append(diff)
+        if !o.noSwipeTicks, let d = diff, d > SwipeDetector.threshold { grouper.swipe(at: time); saver.noteSwipe(at: time) }
         let t0 = DispatchTime.now().uptimeNanoseconds
         var reading = FrameReading(frame: label, time: time)
         if let archive = archive {
@@ -187,7 +197,7 @@ func run() throws {
     let final = MemoryProbe.footprintBytes()
     let report = Report(frames: total, width: o.width, viaPixelBuffer: o.viaPixelBuffer, readings: readings, rows: deferredRows ?? grouper.rows,
                         memory: .init(peakFootprintMB: MemoryProbe.megabytes(probe.peakBytes), baselineMB: MemoryProbe.megabytes(baseline), finalFootprintMB: MemoryProbe.megabytes(final)),
-                        msPerFrame: .init(mean: msTotal / Double(total), worst: msWorst), deferred: deferredInfo)
+                        msPerFrame: .init(mean: msTotal / Double(total), worst: msWorst), deferred: deferredInfo, signatureDiffs: signatureDiffs)
     let enc = JSONEncoder()
     enc.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     if let out = o.out { try enc.encode(report).write(to: URL(fileURLWithPath: out)) }

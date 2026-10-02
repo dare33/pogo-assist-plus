@@ -159,6 +159,10 @@ public struct LiveGrouper {
     private var swipe = false
     private var seenCard = false
     private var clock = 0.0
+    /// Time of the last card reading, and of the latest swipe tick (a swipe seen by the cheap luma signature
+    /// on frames that were never read). A tick between the last card and a reading is a swipe.
+    private var lastCardT = -Double.infinity
+    private var lastTick = -Double.infinity
 
     public init(species: SpeciesTable?) { table = species }
 
@@ -182,15 +186,22 @@ public struct LiveGrouper {
         return before != after || finished.count != finishedBefore
     }
 
+    /// A swipe was seen at `time` without reading the frame (the luma signature in the extension's callback, on
+    /// every kept frame even while Vision is busy). The next card reading after it is a new Pokémon, even when
+    /// it reads exactly like the last: two identical neighbours stay two rows however many frames were dropped.
+    public mutating func swipe(at time: Double) {
+        if time.isFinite { lastTick = max(lastTick, time) }
+    }
+
     /// End of the stream: close the last run, then settle what is pending after it (in time order).
     @discardableResult
     public mutating func finish() -> Bool {
         let before = rows
         var none: Run? = nil
         closeCurrent(next: &none)
+        flushUnnamed(next: nil)                    // the same order as when a next Pokémon starts
         resolveHidden(next: nil, gapAfter: true, swipe: true)
         resolveWeak(next: nil)
-        flushUnnamed(next: nil)
         return rows != before
     }
 
@@ -200,9 +211,13 @@ public struct LiveGrouper {
         // Reading time; a reading with none follows the last by one frame period, and time never runs backwards.
         let t = max(r.time ?? (clock + Tuning.framePeriod), clock)
         clock = t
-        let isCard = r.cp != nil || r.hp != nil
-        swipe = sepStart != nil && (sepLast - sepStart! + Tuning.framePeriod) >= Tuning.swipeSeparatorSeconds - 1e-9
-        if isCard { sepStart = nil; if !seenCard { seenCard = true; swipe = true } } else { if sepStart == nil { sepStart = t }; sepLast = t }
+        // A card is a reading of a Pokémon: a CP, an HP or a name. (A name alone is a card whose CP and HP are
+        // hidden, not a swipe.)
+        let isCard = r.cp != nil || r.hp != nil || r.name != nil
+        let seenSeparators = sepStart != nil && (sepLast - sepStart! + Tuning.framePeriod) >= Tuning.swipeSeparatorSeconds - 1e-9
+        let seenTick = lastTick > lastCardT + 1e-9 && lastTick < t - 1e-9
+        swipe = seenSeparators || seenTick
+        if isCard { sepStart = nil; lastCardT = t; if !seenCard { seenCard = true; swipe = true } } else { if sepStart == nil { sepStart = t }; sepLast = t }
         guard let name = r.name else {
             if let cp = r.cp { addUnnamed(r, cp: cp, t: t) } else { gap = true }   // mid-swipe, cut off
             return
@@ -450,7 +465,7 @@ public struct LiveGrouper {
             // Nidoran without the symbol read: the sex whose stats fit the CP, HP and bars, if exactly one does.
             if run.name == "Nidoran", ids.count > 1, let c = cp {
                 let fits = ids.filter { cpFits(t.species(for: [$0]), cp: c, hp: hp, ivs: settledIvs) == true }
-                if fits.count == 1 { ids = fits }
+                if fits.count == 1 { ids = fits; if hp == nil { flags.append("sex-from-stats-no-hp") } }
             }
         }
         if run.weak { flags.append("name-low-confidence") }
@@ -459,7 +474,7 @@ public struct LiveGrouper {
         if ivs == nil { flags.append("no-bars") }
         // A trace for each fold of a stray into this row, and for a stay long enough to be two identical Pokémon.
         for c in run.absorbed { Self.addTrace(&flags, "absorbed:\(c)") }
-        if run.duration > Tuning.longStaySeconds { flags.append("long-stay") }
+        if run.duration >= Tuning.longStaySeconds - 1e-6 { flags.append("long-stay") }
         // Seen for under `shortRunSeconds` (one frame at full rate): too little evidence to leave unmarked.
         if run.duration < Tuning.shortRunSeconds - 1e-9 { flags.append("short-run") }
         return LiveRow(index: index, name: Self.displayName(run.name, ids), cp: cp, hp: hp, ivs: ivs, frames: run.frames, flags: flags,

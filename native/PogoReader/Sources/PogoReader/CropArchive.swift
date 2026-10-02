@@ -54,8 +54,13 @@ public struct CropSaver {
     private var segment = 0
     private var started = false
     private var clock = 0.0
+    private var lastCardT = -Double.infinity
+    private var lastTick = -Double.infinity
 
     public init() {}
+
+    /// A swipe seen by the luma signature at `time` (see `SwipeDetector`): the next settled card starts a new segment.
+    public mutating func noteSwipe(at time: Double) { if time.isFinite { lastTick = max(lastTick, time) } }
 
     /// Decides, and when it says yes stamps the frame's segment number into `a`.
     public mutating func shouldSave(_ a: inout FrameAnalysis) -> Bool {
@@ -67,8 +72,10 @@ public struct CropSaver {
             sepLast = t
             return false
         }
-        let swipe = !started || (sepStart != nil && sepLast - sepStart! + Tuning.framePeriod >= Tuning.swipeSeparatorSeconds - eps)
+        let tick = lastTick > lastCardT + eps && lastTick < t - eps
+        let swipe = !started || tick || (sepStart != nil && sepLast - sepStart! + Tuning.framePeriod >= Tuning.swipeSeparatorSeconds - eps)
         sepStart = nil
+        lastCardT = t
         if swipe { segStart = t; saved = 0; lastSavedT = -Double.infinity; segment += 1; started = true }
         guard saved < Tuning.maxCropFramesPerSegment, t - segStart >= Tuning.framePeriod - eps, t - lastSavedT >= 2 * Tuning.framePeriod - eps else { return false }
         guard a.barsSettled || a.cpOnly || (saved == 0 && t - segStart >= 4 * Tuning.framePeriod - eps) else { return false }
@@ -141,6 +148,22 @@ public final class CropArchive {
         return (a, FrameCrops(cp: crop("cp"), name: crop("name") ?? empty, nameUp: crop("nameup") ?? empty, hp: crop("hp") ?? empty))
     }
 
+    /// Delete the given saved frames (their JSON line and crops) and nothing else: frames written after a read began,
+    /// or ones that could not be read, stay.
+    public func remove(frames jsonURLs: [URL]) {
+        for u in jsonURLs {
+            let id = u.deletingPathExtension().lastPathComponent
+            for suffix in ["cp", "name", "nameup", "hp"] {
+                let f = directory.appendingPathComponent("\(id)-\(suffix).png")
+                if let size = (try? f.resourceValues(forKeys: [.fileSizeKey]))?.fileSize { byteCount -= size; fileCount -= 1 }
+                try? FileManager.default.removeItem(at: f)
+            }
+            if let size = (try? u.resourceValues(forKeys: [.fileSizeKey]))?.fileSize { byteCount -= size; fileCount -= 1 }
+            try? FileManager.default.removeItem(at: u)
+            frameCount = max(0, frameCount - 1)
+        }
+    }
+
     /// Delete everything in the folder.
     public func removeAll() {
         for u in (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [] { try? FileManager.default.removeItem(at: u) }
@@ -150,39 +173,38 @@ public final class CropArchive {
 
 /// The app's half of "save crops" mode: Vision on the saved crops through the same `FrameReader.complete`.
 public enum DeferredRun {
-    /// Read every saved frame in order; `removeWhenDone` empties the archive afterwards. Each reading
-    /// comes with its segment number.
-    public static func read(archive: CropArchive, reader: FrameReader, removeWhenDone: Bool = true) -> [(segment: Int?, reading: FrameReading)] {
+    /// Read the saved frames in order; each reading comes with its segment number. `removeWhenDone` deletes the
+    /// frames that were read (and only those) afterwards; `consumed` lists them for a caller that deletes later.
+    public static func read(archive: CropArchive, reader: FrameReader, removeWhenDone: Bool = true) -> (frames: [(segment: Int?, reading: FrameReading)], consumed: [URL]) {
         var out = [(segment: Int?, reading: FrameReading)]()
+        var consumed = [URL]()
         for url in archive.frameURLs() {
             autoreleasepool {
-                if let (a, crops) = archive.load(url) { out.append((a.segment, reader.complete(a, crops))) }
+                if let (a, crops) = archive.load(url) { out.append((a.segment, reader.complete(a, crops))); consumed.append(url) }
             }
         }
-        if removeWhenDone { archive.removeAll() }
-        return out
+        if removeWhenDone { archive.remove(frames: consumed) }
+        return (out, consumed)
     }
 
-    /// Read, group, return both. The saved frames of different segments had a swipe between them that
-    /// was not saved, so the grouper is given that many empty frames at each change of segment (it
-    /// needs them to tell two identical Pokémon in a row apart).
-    public static func readAndGroup(archive: CropArchive, reader: FrameReader, species: SpeciesTable?, removeWhenDone: Bool = true) -> (readings: [FrameReading], rows: [LiveRow]) {
-        let read = read(archive: archive, reader: reader, removeWhenDone: removeWhenDone)
+    /// Read, group, return both (and the frames read). The saved frames of different segments had a swipe between
+    /// them that was not saved, so the grouper is given a swipe tick between them (and a few empty frames).
+    public static func readAndGroup(archive: CropArchive, reader: FrameReader, species: SpeciesTable?, removeWhenDone: Bool = true) -> (readings: [FrameReading], rows: [LiveRow], consumed: [URL]) {
+        let result = read(archive: archive, reader: reader, removeWhenDone: removeWhenDone)
         var g = LiveGrouper(species: species)
         var previous: Int?? = .none
         var lastTime = 0.0
-        for (segment, reading) in read {
+        for (segment, reading) in result.frames {
             if let p = previous, p != segment {
-                // Readings 0.2 s apart for `swipeSeparatorSeconds`, after the last one given (the real gap was longer).
-                for k in 1...Int((Tuning.swipeSeparatorSeconds / Tuning.framePeriod).rounded(.up)) {
-                    var gap = FrameReading(frame: nil, time: lastTime + Double(k) * Tuning.framePeriod); gap.flags = ["mid-swipe"]; g.add(gap)
-                }
+                // The real gap was at least a swipe long: tell the grouper so, midway between the two readings.
+                g.swipe(at: lastTime + Tuning.framePeriod)
+                var gap = FrameReading(frame: nil, time: lastTime + 2 * Tuning.framePeriod); gap.flags = ["mid-swipe"]; g.add(gap)
             }
             previous = .some(segment)
             g.add(reading)
             lastTime = reading.time ?? lastTime + Tuning.framePeriod
         }
         g.finish()
-        return (read.map(\.reading), g.rows)
+        return (result.frames.map(\.reading), g.rows, result.consumed)
     }
 }

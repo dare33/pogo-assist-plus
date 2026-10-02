@@ -139,6 +139,24 @@ final class CropTests: XCTestCase {
         XCTAssertEqual(r.rows.map(\.frames), [2, 2])
     }
 
+    /// After a deferred read only the frames that were read are deleted: one saved meanwhile (or unreadable) stays.
+    func testADeferredReadDeletesOnlyTheFramesItRead() {
+        let img = cardScreen()
+        let archive = CropArchive(directory: tempDir())
+        let p = FrameProcessor.cropsOnly(names: names, targetWidth: nil)
+        for n in 1...2 { let (a, c) = p.analyse(img, time: Double(n), frame: "f\(n)"); XCTAssertTrue(archive.save(a, c!)) }
+        let reader = FrameReader(text: FakeText(), names: names)
+        let result = DeferredRun.readAndGroup(archive: archive, reader: reader, species: table, removeWhenDone: false)
+        XCTAssertEqual(result.consumed.count, 2)
+        // A frame arrives while the app was reading.
+        let (a3, c3) = p.analyse(img, time: 3, frame: "f3"); XCTAssertTrue(archive.save(a3, c3!))
+        archive.remove(frames: result.consumed)
+        XCTAssertEqual(archive.frameURLs().map { $0.lastPathComponent }, ["000003.json"])
+        XCTAssertEqual(archive.frameCount, 1)
+        XCTAssertEqual(archive.fileCount, 5)
+        XCTAssertEqual(CropArchive(directory: archive.directory).fileCount, 5)
+    }
+
     func testTheLowMemoryGuard() {
         XCTAssertTrue(ReadGuard.shouldSkipVision(availableBytes: 7 * 1_048_576))
         XCTAssertFalse(ReadGuard.shouldSkipVision(availableBytes: 9 * 1_048_576))
