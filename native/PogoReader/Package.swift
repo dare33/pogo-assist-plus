@@ -9,10 +9,12 @@ let package = Package(
     products: [
         .library(name: "PogoReader", targets: ["PogoReader"]),
         .executable(name: "pogo-read", targets: ["pogo-read"]),
+        .executable(name: "pogo-drop", targets: ["pogo-drop"]),
     ],
     targets: [
         .target(name: "PogoReader", resources: [.copy("Resources/species.json")]),
         .executableTarget(name: "pogo-read", dependencies: ["PogoReader"]),
+        .executableTarget(name: "pogo-drop", dependencies: ["PogoReader"]),
         .testTarget(name: "PogoReaderTests", dependencies: ["PogoReader"]),
     ]
 )
