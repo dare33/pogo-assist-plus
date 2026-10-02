@@ -14,6 +14,9 @@ public struct FrameAnalysis: Codable, Equatable {
     public var needsText = false
     /// The CP text was found (a tall model can hide it; the card is then read without CP).
     public var hasCpText = false
+    /// The CP text is there but no HP bar (a special-background or buddy card, a bar the colour test
+    /// misses): only the CP can be read, and the Pokémon is listed unnamed rather than lost.
+    public var cpOnly = false
     public var sharpness = 0.0          // of the usual name crop
     public var sharpnessUp = 0.0        // of the Lucky second-look crop
     public var ivs: IVs?
@@ -89,6 +92,14 @@ public final class FrameReader {
         let regions = regionsFrom(rect, cpText, hpBar, cpPadding: cpPadding, cpIncludesPrefix: cpIncludesPrefix)
         guard let bar = hpBar, let nameRegion = regions.name, let hpRegion = regions.hp, let panel = regions.panelSearch else {
             a.flags.append(cpText == nil ? "no-cp-text" : "no-hp-bar")
+            // Deviation from the JS reader (which stops here): a centred CP with no HP bar is still read, for
+            // the CP alone. On the iPad clip three Pokémon (two with a special background, one Lucky
+            // nicknamed one) show no HP bar at all and were otherwise invisible.
+            if let c = cpText, c.centred {
+                a.needsText = true; a.hasCpText = true; a.cpOnly = true; a.cpRect = regions.cp
+                let empty = RGBAImage(width: 0, height: 0)
+                return (a, FrameCrops(cp: crop(img, regions.cp), name: empty, nameUp: empty, hp: empty))
+            }
             return (a, nil)
         }
         // Mid-swipe: the CP text is there but off-centre (the card is sliding).
@@ -121,6 +132,16 @@ public final class FrameReader {
         var out = FrameReading(frame: a.frame, time: a.time)
         out.flags = a.flags
         guard a.needsText, let crops = crops else { return out }
+        if a.cpOnly {
+            if let cpCrop = crops.cp {
+                let r = text.read(cpCrop, kind: .cp)
+                out.cpText = r.text
+                out.cp = cpReadHasValidShape(r.text) ? parseCp(r.text) : nil
+                out.cpReads = out.cp.map { [$0] } ?? []
+            }
+            if out.cp == nil { out.flags.append("cp-unread") }
+            return out
+        }
         if let cpCrop = crops.cp {
             let r = text.read(cpCrop, kind: .cp)
             out.cpText = r.text

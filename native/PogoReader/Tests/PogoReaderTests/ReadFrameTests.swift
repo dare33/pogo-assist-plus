@@ -63,10 +63,14 @@ final class ReadFrameTests: XCTestCase {
         XCTAssertNil(read(cardScreen(cp: false, barX: 0.1), FakeText()).name)
     }
 
-    func testNoHpBarIsNotAReading() {
+    func testNoHpBarGivesACpOnlyReading() {
         var img = cardScreen()
         img.fill(Rect(x: 0, y: 340, w: 400, h: 60), (250, 250, 245))   // wipe the bar
-        XCTAssertEqual(read(img, FakeText()).flags, ["no-hp-bar"])
+        // Not a named reading, but the centred CP is still read (a card with no HP bar is listed, not lost).
+        let noBar = read(img, FakeText())
+        XCTAssertEqual(noBar.flags, ["no-hp-bar"])
+        XCTAssertNil(noBar.name)
+        XCTAssertEqual(noBar.cp, 1234)
         XCTAssertEqual(read(RGBAImage(width: 400, height: 800), FakeText()).flags, ["no-cp-text"])
     }
 
@@ -101,15 +105,16 @@ final class ReadFrameTests: XCTestCase {
 
     /// Vision once read "66 / 66 HP" rotated 180 degrees as "dH 99 / 99" (v3, Caterpie): that is no read.
     func testAnUpsideDownHpOrCpReadIsNoRead() {
-        let r = read(cardScreen(), FakeText(cp: "dH 1234", hp: "dH 99 / 99"))
+        let r = read(cardScreen(), FakeText(cp: "1234 dH", hp: "dH 99 / 99"))
         XCTAssertNil(r.hp)
         XCTAssertTrue(r.flags.contains("hp-unread"))
         XCTAssertNil(r.cp)
         XCTAssertTrue(r.flags.contains("cp-unread"))
-        for text in ["dH 99 / 99", "H 99 / 99", "99 / 99 dH", "HP", "66 66"] { XCTAssertFalse(hpReadHasValidShape(text), text) }
-        for text in ["145 / 145 HP", "145/145", "79/79 1", "66 / 66 H", "129 / 129 HP"] { XCTAssertTrue(hpReadHasValidShape(text), text) }
-        for text in ["CP1234", "CP 1234", "P2651", "cp3O28", "1234", "C1234"] { XCTAssertTrue(cpReadHasValidShape(text), text) }
-        for text in ["dH1234", "Xd1234", "CPL", "VLO"] { XCTAssertFalse(cpReadHasValidShape(text), text) }
+        for text in ["dH 99 / 99", "H 99 / 99", "HP", "66 66"] { XCTAssertFalse(hpReadHasValidShape(text), text) }
+        // What the iPad's labels come out as is still a read: only the side of the letters matters.
+        for text in ["145 / 145 HP", "145/145", "79/79 1", "66 / 66 H", "165 / 165 HГ", "170 / 170 Hi", "154 / 154 L"] { XCTAssertTrue(hpReadHasValidShape(text), text) }
+        for text in ["CP1234", "CP 1234", "P2651", "cp3O28", "1234", "ap2621", "SP2614", "CA2591", "cI 2000", "iP1989"] { XCTAssertTrue(cpReadHasValidShape(text), text) }
+        for text in ["1234 dH", "1234dO", "CPL"] { XCTAssertFalse(cpReadHasValidShape(text), text) }
     }
 
     func testNoBarsIsFlaggedWhenThePanelIsMissingAndReadWhenPresent() {

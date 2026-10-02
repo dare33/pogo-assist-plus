@@ -40,8 +40,8 @@ final class GrouperTests: XCTestCase {
     }
 
     func testADifferentHpSplitsEvenWithTheSameNameAndCp() {
-        let rows = groupAll([frame(14, hp: 13, ivs: IVs(atk: 12, def: 4, hp: 15), name: "Meltan", n: 1), frame(14, hp: 13, ivs: IVs(atk: 12, def: 4, hp: 15), name: "Meltan", n: 2), frame(14, hp: 13, ivs: IVs(atk: 12, def: 4, hp: 15), name: "Meltan", n: 3),
-                          frame(14, hp: 12, ivs: IVs(atk: 1, def: 1, hp: 1), name: "Meltan", n: 4), frame(14, hp: 12, ivs: IVs(atk: 1, def: 1, hp: 1), name: "Meltan", n: 5), frame(14, hp: 12, ivs: IVs(atk: 1, def: 1, hp: 1), name: "Meltan", n: 6)])
+        let m1 = IVs(atk: 12, def: 4, hp: 15), m2 = IVs(atk: 1, def: 1, hp: 1)
+        let rows = groupAll((1...4).map { frame(14, hp: 13, ivs: m1, name: "Meltan", n: $0) } + (5...8).map { frame(14, hp: 12, ivs: m2, name: "Meltan", n: $0) })
         XCTAssertEqual(rows.count, 2)
     }
 
@@ -159,6 +159,36 @@ final class GrouperTests: XCTestCase {
         // A one-frame card of another name is not absorbed.
         let other = frame(CP, hp: HPV, ivs: nil, name: "Zapdos", n: 5)
         XCTAssertEqual(groupAll([frame(CP, n: 1), frame(CP, n: 2), frame(CP, n: 3), other, frame(CP, n: 6)]).count, 3)
+    }
+
+    /// iPad: the first digits of a CP are read while the model covers the last ("197" of 1971), bars still animating,
+    /// then the tail ("971") once settled; and a hidden-CP stretch after a lost frame is still the same Pokémon.
+    func testAPrefixReadBeforeTheTailIsAbsorbedAndAHiddenStretchWithTheSameKeyIsNotARow() {
+        let prefix = String(CP).prefix(3), tail = CP % 1000
+        let rows = groupAll(swipes() + [frame(Int(prefix), hp: nil, ivs: IVS, n: 1, conf: 0.1), frame(Int(prefix), hp: nil, ivs: IVS, n: 2, conf: 0.1)]
+                            + (3...7).map { frame(tail, n: $0) })
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].cp, CP)
+        XCTAssertEqual(rows[0].frames, 7)
+        // Same name, HP and settled bars as the run before, a frame or two unreadable between: not a new row.
+        let hidden = groupAll((1...4).map { frame(CP, n: $0) } + [swipe(), frame(nil, n: 6), frame(nil, n: 7)])
+        XCTAssertEqual(hidden.count, 1)
+        // But after a swipe it is another Pokémon's hidden card.
+        XCTAssertEqual(groupAll((1...4).map { frame(CP, n: $0) } + swipes() + [frame(nil, n: 6), frame(nil, n: 7)]).count, 2)
+    }
+
+    /// iPad: three cards had no HP bar (special background, Lucky nickname): their CP is read, no name. They are listed.
+    func testACardWithACpAndNoNameIsListedUnnamedAndAMisreadNameFrameIsNot() {
+        func cpOnly(_ cp: Int, n: Int) -> FrameReading { var r = FrameReading(frame: "f\(n)", time: Double(n) / 5); r.cp = cp; r.cpReads = [cp]; r.flags = ["no-hp-bar"]; return r }
+        let rows = groupAll((1...4).map { frame(CP, n: $0) } + swipes() + (5...12).map { cpOnly(1484, n: $0) } + swipes() + (13...16).map { frame(CP - 15, hp: HPV, ivs: IVS, n: $0) })
+        XCTAssertEqual(rows.map(\.cp), [CP, 1484, CP - 15])
+        XCTAssertEqual(rows[1].name, "(name not read)")
+        XCTAssertEqual(rows[1].flags, ["name-not-read"])
+        XCTAssertEqual(rows[1].frames, 8)
+        // A frame of a named Pokémon whose name was misread, or two stray frames, add no row.
+        var misread = cpOnly(CP, n: 3); misread.flags = ["name-unmatched"]
+        XCTAssertEqual(groupAll([frame(CP, n: 1), frame(CP, n: 2), misread, misread, misread, frame(CP, n: 6)]).count, 1)
+        XCTAssertEqual(groupAll([frame(CP, n: 1), frame(CP, n: 2), frame(CP, n: 3)] + swipes() + [cpOnly(1484, n: 8), cpOnly(1484, n: 9)] + swipes() + [frame(CP - 15, hp: HPV, ivs: IVS, n: 14), frame(CP - 15, hp: HPV, ivs: IVS, n: 15), frame(CP - 15, hp: HPV, ivs: IVS, n: 16)]).count, 2)
     }
 
     func testRowsRememberWhereThePokemonWasOnScreen() {

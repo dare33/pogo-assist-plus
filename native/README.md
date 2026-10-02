@@ -13,7 +13,7 @@ here contacts the game or sends input.
   `PogoAssist.xcodeproj` is committed too): the SwiftUI app and the `PogoBroadcast` ReplayKit
   Broadcast Upload Extension.
 - `tools/` - Node scripts (plain ES modules, no dependencies): `build-species.mjs`,
-  `finish-readings.mjs`, `compare-readers.mjs`.
+  `finish-readings.mjs`, `compare-readers.mjs`, `timeline.mjs`.
 
 ## Regenerate the species table
 
@@ -91,3 +91,45 @@ iOS enforces the extension's limit (about 50 MB) on `phys_footprint`. `MemoryPro
   group; the app shows memory now, the peak (red from 45 MB) and the lowest `os_proc_available_memory`.
   The share button exports the state file so a run's numbers can be sent back. Only the phone figure
   settles the proof.
+
+## Which Pokemon were on screen: timeline.mjs
+
+    node native/tools/timeline.mjs <readings.json> [--rows <rows source>] [--json] [--swipe-frames 3] [--split-content]
+
+Works on any readings in the shared shape (pogo-read's output, a `scripts/extract.mjs` review JSON).
+It splits the frames into on-screen segments by frame evidence (a card frame has a CP or an HP read;
+3 or more frames in a row without either, such as mid-swipe or anchor-less frames, end a segment; names
+are not used) and prints per segment: first frame, frame count, name / CP / HP / IVs votes, flags, and the
+row(s) it ended up in, or NONE. The summary gives segments, segments with and without a row, and rows that
+cover 2+ segments. Rows come from `--rows` (a `finish-readings.mjs` output, matched by frame label; a
+pogo-read output or rows array, matched by `firstFrame`/`lastFrame` or time; or a roster CSV, matched by
+name and CP) or from the `rows` inside the readings file (LiveGrouper's). Segments with `MULTI-NAME` held
+two cards with fewer than 3 frames between them (an iPad swipe leaves one or two); `--split-content` also
+splits on a changed HP or settled bars, which over-splits (a bar read can look settled mid-animation).
+
+## Reader modes and the memory insurance (round 2)
+
+The app picks the mode before the broadcast (stored in the app group defaults; the extension reads it at
+`broadcastStarted`):
+
+- **Read live (accurate)**: Vision at its accurate level in the extension (default).
+- **Read live (fast)**: Vision's fast level (smaller and quicker on the Mac, but reads far less).
+- **Save crops, read in app**: no Vision request exists in the extension. It runs the pixel work (anchors,
+  bars, segments) and, for each on-screen segment, saves up to 3 settled frames (frames 2, 4, 6 of the
+  segment) as the CP, name, name-one-line-up (Lucky) and HP crops, gray PNGs, plus one line of JSON (time,
+  bars, flags, crop rects, segment number) per frame, into `crops/` in the app group. Hard caps: 1500 files
+  and 48 MB. When the app comes to the foreground (or "Read saved crops now") and no broadcast is writing,
+  it runs Vision on them through the same `FrameReader.complete`, feeds `LiveGrouper`, shows the rows,
+  writes `deferred.json` (shareable) and deletes the crops. A real 50-swipe run is about 140 frames, 2-3 MB.
+
+In the two live modes the extension reads `os_proc_available_memory()` before every frame; below 8 MB
+(`Tuning.lowMemoryAvailableBytes`) it skips Vision for that frame and counts it (`skippedLowMemory` in the
+state file and the app). It writes the state file on every change and at least once a second; if the
+extension is killed, the app shows the last state and says the broadcast ended without a finish marker (no
+update for 4 s, no `finished`).
+
+`pogo-read --deferred` runs the "save crops" path on frames: the extension half (analyse, save crops into a
+temp folder), then the app's read, and prints the footprint of each half. Vision options for measuring on
+the Mac: `--vision-fast`, `--vision-device cpu|gpu|neuralEngine`, `--vision-min-text-height X`,
+`--vision-recreate` (see `VisionOptions`). None lowered memory without losing reads; Mac figures may not
+transfer to the phone.

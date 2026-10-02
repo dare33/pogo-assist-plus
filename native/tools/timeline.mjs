@@ -66,6 +66,31 @@ readings.forEach((r, i) => {
   cur.last = i; cur.frames.push(r); sep = 0;
 });
 
+// Cards that follow each other with fewer than SWIPE_FRAMES frames between them (an iPad swipe leaves
+// fewer) stay one segment above. Split them on frame evidence: a different max HP, or two settled
+// bar reads in a row that differ from the segment's. --split-content turns this on (off by default: a settled-looking bar read mid-animation splits real cards).
+const keyOf = (f) => (f.ivs && (f.ivConfidence ?? 1) >= 0.7 ? `${f.ivs.atk}/${f.ivs.def}/${f.ivs.hp}` : null);
+function splitByContent(seg) {
+  const parts = [];
+  let part = null, hp = null, iv = null, pending = [];
+  const start = (f, i) => { part = { first: i, last: i, frames: [f] }; parts.push(part); hp = f.hp ? (f.hp.max ?? f.hp) : null; iv = keyOf(f); pending = []; };
+  seg.frames.forEach((f, k) => {
+    const i = seg.first + k;
+    if (!part) return start(f, i);
+    const fhp = f.hp ? (f.hp.max ?? f.hp) : null, fiv = keyOf(f);
+    if (fhp !== null && hp !== null && fhp !== hp) return start(f, i);
+    if (fiv !== null && iv !== null && fiv !== iv) {
+      pending.push([f, i, fiv]);
+      if (pending.length >= 2 && pending.every((p) => p[2] === fiv)) { const [f0, i0] = pending[0]; part.frames.length -= 0; const keep = part.frames.filter((x) => !pending.some((p) => p[0] === x)); part.frames = keep; const prevLast = keep.length; start(f0, i0); for (const [pf, pi] of pending.slice(1)) { part.frames.push(pf); part.last = pi; } return; }
+    } else pending = [];
+    if (fhp !== null && hp === null) hp = fhp;
+    if (fiv !== null && iv === null) iv = fiv;
+    part.frames.push(f); part.last = i;
+  });
+  return parts;
+}
+if (args.includes('--split-content')) { const split = segs.flatMap(splitByContent); segs.length = 0; segs.push(...split); }
+
 const tally = (vals) => { const m = new Map(); for (const v of vals) if (v !== null && v !== undefined) m.set(v, (m.get(v) ?? 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]); };
 const fmt = (t, n = 3) => t.slice(0, n).map(([v, c]) => `${v}x${c}`).join(' ');
 const cpSimilar = (a, b) => {

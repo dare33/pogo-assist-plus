@@ -103,6 +103,14 @@ public struct LiveGrouper {
         }
     }
 
+    private struct Unnamed {
+        var cps = [Int: Int]()
+        var lastCp: Int
+        var frames = 0
+        var firstFrame: String?, lastFrame: String?, firstTime: Double?, lastTime: Double?
+        var topCp: Int { cps.max(by: { $0.value < $1.value })?.key ?? lastCp }
+    }
+
     /// A Pokémon on screen with a name but no CP at all (the model covered it).
     private struct Hidden {
         var name: String
@@ -121,6 +129,9 @@ public struct LiveGrouper {
     private var current: Run?
     private var hidden: Hidden?
     private var weakPending: Run?
+    /// Frames with a CP but no species name (a nickname, a card with no HP bar): a stretch of several
+    /// related CPs is listed as an unnamed row so the Pokémon is not silently missing.
+    private var unnamed: Unnamed?
     /// An unreadable frame (no name) lies between the last Pokémon frame and now.
     private var gap = false
     /// Consecutive frames with neither a CP nor an HP read; `swipe` says this many came right before the
@@ -151,7 +162,7 @@ public struct LiveGrouper {
     @discardableResult
     public mutating func finish() -> Bool {
         let before = rows
-        resolveHidden(next: nil, gapAfter: true)
+        resolveHidden(next: nil, gapAfter: true, swipe: true)
         if let w = weakPending {
             // JS keeps weak-only rows only when the clip has no confident row at all.
             if finished.isEmpty && current == nil { finished.append(makeRow(w, index: finished.count + 1)) }
@@ -159,6 +170,7 @@ public struct LiveGrouper {
         }
         var none: Run? = nil
         closeCurrent(next: &none)
+        flushUnnamed()
         return rows != before
     }
 
@@ -168,7 +180,10 @@ public struct LiveGrouper {
         let isCard = r.cp != nil || r.hp != nil
         swipe = sepRun >= Tuning.swipeSeparatorFrames
         if isCard { sepRun = 0 } else { sepRun += 1 }
-        guard let name = r.name else { gap = true; return }          // mid-swipe, unnamed, cut off
+        guard let name = r.name else {
+            if let cp = r.cp { addUnnamed(r, cp: cp) } else { gap = true }   // mid-swipe, cut off
+            return
+        }
         if r.cp == nil {
             if r.nameWeak == true { gap = true } else { addHidden(r) }
             return
@@ -182,7 +197,7 @@ public struct LiveGrouper {
 
     private mutating func addStrong(_ r: FrameReading) {
         if var c = current, !swipe, c.joins(r) {
-            resolveHidden(next: c, gapAfter: gap)
+            resolveHidden(next: c, gapAfter: gap, swipe: false)
             // A weak frame of another name inside this Pokémon's time on screen is set aside.
             weakPending = nil
             c.add(r)
@@ -193,8 +208,9 @@ public struct LiveGrouper {
         var fresh = Run(r, weak: false)
         fresh.startedAfterSwipe = swipe
         closeCurrent(next: &fresh)
+        flushUnnamed()
         let prevName = finished.last?.name
-        resolveHidden(next: fresh, gapAfter: gap || swipe)
+        resolveHidden(next: fresh, gapAfter: gap, swipe: swipe)
         if let w = weakPending {
             // A weak read between two Pokémon is dropped when it has the name of either (it may be
             // that Pokémon's first or last frame); otherwise nothing confident accounts for it.
@@ -225,7 +241,8 @@ public struct LiveGrouper {
                 finished[finished.count - 1].lastFrame = c.lastFrame; finished[finished.count - 1].lastTime = c.lastTime
                 return
             }
-            if var n = next, !n.startedAfterSwipe, n.name == c.name, Self.cpsRelated(n.topCp, row.cp) {
+            if var n = next, !n.startedAfterSwipe, n.name == c.name,
+               Self.cpsRelated(n.topCp, row.cp) || Self.cpsRelated(makeRow(n, index: 0).cp, row.cp) {   // the next row's CP may be the recovered one (971 is 1971)
                 n.frames += c.frames
                 n.firstFrame = c.firstFrame; n.firstTime = c.firstTime
                 n.startedAfterSwipe = c.startedAfterSwipe
@@ -247,6 +264,28 @@ public struct LiveGrouper {
         return false
     }
 
+    /// A CP with no name. Inside a named Pokémon's time on screen (a frame whose name was misread) it adds
+    /// nothing; otherwise it builds an unnamed stretch.
+    private mutating func addUnnamed(_ r: FrameReading, cp: Int) {
+        if let c = current, !swipe, cpRelated(cp, c.lastCp) || cpRelated(cp, c.topCp) { gap = false; return }
+        if var u = unnamed, !swipe, cpRelated(cp, u.lastCp) || cpRelated(cp, u.topCp) {
+            u.frames += 1; u.lastCp = cp; u.cps[cp, default: 0] += 1; u.lastFrame = r.frame; u.lastTime = r.time
+            unnamed = u
+        } else {
+            flushUnnamed()
+            unnamed = Unnamed(cps: [cp: 1], lastCp: cp, frames: 1, firstFrame: r.frame, lastFrame: r.frame, firstTime: r.time, lastTime: r.time)
+        }
+        gap = true
+    }
+
+    private mutating func flushUnnamed() {
+        guard let u = unnamed else { return }
+        unnamed = nil
+        guard u.frames >= Tuning.unnamedMinFrames else { return }
+        finished.append(LiveRow(index: finished.count + 1, name: "(name not read)", cp: u.topCp, hp: nil, ivs: nil, frames: u.frames, flags: ["name-not-read"],
+                                firstFrame: u.firstFrame, lastFrame: u.lastFrame, firstTime: u.firstTime, lastTime: u.lastTime))
+    }
+
     private mutating func addWeak(_ r: FrameReading) {
         // A weak read of the current Pokémon's own name adds nothing and splits nothing.
         if let c = current, c.name == r.name { return }
@@ -266,12 +305,12 @@ public struct LiveGrouper {
             hidden = h
         } else {
             let hadOther = hidden != nil
-            resolveHidden(next: nil, gapAfter: true)
+            resolveHidden(next: nil, gapAfter: true, swipe: true)
             var h = Hidden(name: r.name ?? "", speciesIds: r.speciesIds ?? [], hp: hpMax, prevBeside: false)
             h.frames = 1
             h.firstFrame = r.frame; h.lastFrame = r.frame; h.firstTime = r.time; h.lastTime = r.time
             if let v = ivs { h.stamp = 1; h.ivTally[v] = Tally(n: 1, first: 1, last: 1) }
-            if let c = current { h.prevBeside = Self.beside(h, c, gapBetween: gap || hadOther || swipe) }
+            if let c = current { h.prevBeside = Self.beside(h, c, gapBetween: gap || hadOther, swipe: swipe) }
             hidden = h
         }
         gap = false
@@ -280,14 +319,18 @@ public struct LiveGrouper {
     /// A hidden stretch right beside a run of the same Pokémon (same name, HP not different, bars not
     /// contradicting, no unreadable frame between) is that Pokémon with its model in front of the CP
     /// for a moment; otherwise it is listed as a row of its own.
-    private static func beside(_ h: Hidden, _ run: Run, gapBetween: Bool) -> Bool {
-        !gapBetween && run.name == h.name && (h.hp == nil || run.hp == nil || run.hp!.max == h.hp) && ivsCompatible(run.ivs, h.settledIvs())
+    /// `swipe`: a swipe lies between them. `gapBetween`: some unreadable frame does. An exact match of HP
+    /// and settled bars survives the second (a frame or two lost) but never the first.
+    private static func beside(_ h: Hidden, _ run: Run, gapBetween: Bool, swipe: Bool = false) -> Bool {
+        guard !swipe, run.name == h.name, h.hp == nil || run.hp == nil || run.hp!.max == h.hp, ivsCompatible(run.ivs, h.settledIvs()) else { return false }
+        if !gapBetween { return true }
+        return h.hp != nil && run.hp?.max == h.hp && run.ivs != nil && run.ivs == h.settledIvs()
     }
 
-    private mutating func resolveHidden(next: Run?, gapAfter: Bool) {
+    private mutating func resolveHidden(next: Run?, gapAfter: Bool, swipe: Bool) {
         guard let h = hidden else { return }
         hidden = nil
-        let nextBeside = next.map { Self.beside(h, $0, gapBetween: gapAfter) } ?? false
+        let nextBeside = next.map { Self.beside(h, $0, gapBetween: gapAfter, swipe: swipe) } ?? false
         // One or two frames with no HP read are a card caught sliding in or out, not a Pokémon to list.
         let substantial = h.hp != nil || h.frames >= 3
         if h.prevBeside || nextBeside || !substantial { return }

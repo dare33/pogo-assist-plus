@@ -48,8 +48,9 @@ public enum Tuning {
 
     /// A run of at most this many frames that has no settled bars or whose CP does not fit its HP
     /// and bars, next to a row of the same Pokemon with a related CP, is a card caught mid-slide:
-    /// it is absorbed into that neighbour (the intent of JS absorbStrays, which takes one frame).
-    public static let strayMaxFrames = 2
+    /// it is absorbed into that neighbour (the intent of JS absorbStrays, which takes one frame; the iPad
+    /// clip has three-frame ones while the team leader covers the HP and the bars still animate).
+    public static let strayMaxFrames = 3
 
     /// "Save crops" mode: at most this many frames are kept per on-screen segment (frames 2, 4, 6 of a
     /// segment whose bars have settled), and the whole archive is capped in files and bytes so a
@@ -66,6 +67,9 @@ public enum Tuning {
     /// The app calls the broadcast dead when no state has been written for this long (seconds); the
     /// extension writes at least once a second.
     public static let staleStateSeconds = 4.0
+
+    /// A stretch of this many frames with a CP but no readable name is listed as an unnamed row.
+    public static let unnamedMinFrames = 3
 
     /// Longest run of frames for which the grouper keeps a hidden-CP or weak-name stretch pending.
     public static let maxPendingFrames = 60
