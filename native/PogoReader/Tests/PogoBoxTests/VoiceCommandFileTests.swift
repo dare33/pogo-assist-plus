@@ -310,7 +310,7 @@ final class VoiceCommandFileTests: XCTestCase {
         XCTAssertEqual(t.count, 26); XCTAssertEqual(chains.count, 13); XCTAssertEqual(gestures.count, 13)
         XCTAssertEqual(Set(chains.values.map(name)), Set(VoiceCommandFile.setSizes.map { "Pogo scan \($0)" }))
         XCTAssertEqual(Set(t.values.map(name)).count, 26, "every name is unique")
-        let base = kind == .tap ? 781_000_000.0 : 781_100_000.0
+        let base = 781_000_000.0
         for (i, size) in VoiceCommandFile.setSizes.enumerated() {
             let sz = VoiceCommandFile.sizing(storageCount: size, pace: pace)
             let gid = String(format: "Custom.%.6f", base + Double(i) * 100), cid = String(format: "Custom.%.6f", base + Double(i) * 100 + 60)
@@ -329,8 +329,9 @@ final class VoiceCommandFileTests: XCTestCase {
                 XCTAssertTrue(pts.allSatisfy { $0.0 == 424 && $0.1 == 775 }, "taps only at the measured point")
             }
         }
-        // 300 pages exactly as today's 300 command does
-        XCTAssertEqual(VoiceCommandFile.sizing(storageCount: 300, pace: pace), VoiceCommandFile.sizing(storageCount: 300, pace: pace))
+        // "Pogo scan 300" pages exactly as the single 300 command does: 7 repeats of 44, 308 page steps for 305 needed
+        let s300 = VoiceCommandFile.sizing(storageCount: 300, pace: pace)
+        XCTAssertEqual([s300.steps, s300.batch, s300.repeats, s300.covers], [305, 44, 7, 308])
     }
 
     func testTheTapSetIsThirteenCommandsAtTheMeasuredPoint() throws { try checkSet(.tap, tapPoint: tap) }
@@ -343,7 +344,8 @@ final class VoiceCommandFileTests: XCTestCase {
         var single = Set<String>()
         for p in P.allCases { single.formUnion([String(format: "Custom.%.6f", p.idBase), String(format: "Custom.%.6f", p.idBase + 60)]) }
         XCTAssertEqual(tapIds.count, 26); XCTAssertEqual(swipeIds.count, 26)
-        XCTAssertTrue(tapIds.isDisjoint(with: swipeIds)); XCTAssertTrue(tapIds.isDisjoint(with: single)); XCTAssertTrue(swipeIds.isDisjoint(with: single))
+        XCTAssertEqual(tapIds, swipeIds, "both kinds use the same identifiers: importing either replaces the other")
+        XCTAssertTrue(tapIds.isDisjoint(with: single))
         // the same ids every time
         XCTAssertEqual(tapIds, Set(try table(try VoiceCommandFile.makeSet(kind: .tap, tap: tap, screenWidth: 440, screenHeight: 956, now: now.addingTimeInterval(86_400))).keys))
         // gesture words: none spoken, none shared between gesture names or with a single mode's

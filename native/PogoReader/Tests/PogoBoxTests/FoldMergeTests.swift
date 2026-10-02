@@ -384,6 +384,17 @@ final class FoldMergeTests: XCTestCase {
         XCTAssertEqual(after.row.cp, 600); XCTAssertTrue(after.row.flags.contains(BoxMerge.ivsRescanFlag))
     }
 
+    // Fourth fold round: E9
+
+    func testAnUntrustedRowPairedAsSameWritesNothingButLastSeen() throws {
+        var e = entry(row("pikachu", cp: 500, hp: 60, ivs: x), "S")
+        e.megaWhenScanned = true
+        let p = plan([fragment("pikachu", cp: 500, hp: 60, ivs: x)], [e])
+        XCTAssertEqual(p.same.count, 1)
+        let out = try BoxMerge.apply(p, to: [e])
+        XCTAssertEqual(out[0].megaWhenScanned, true, "no Mega mark change"); XCTAssertEqual(out[0].lastSeen, date(5))
+        XCTAssertEqual(out[0].row, e.row)
+    }
 }
 
 final class FoldLibraryTests: XCTestCase {

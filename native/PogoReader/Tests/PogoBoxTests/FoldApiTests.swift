@@ -160,13 +160,14 @@ final class FoldApiTests: XCTestCase {
 
     func testNothingRestoresOverANewestVersionFromANewerApp() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-l3r-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
-        let lib = BoxLibrary(root: dir)
-        try lib.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "old", now: date(1))
-        let v2 = try lib.commit(account: "a", entries: [entry(row(cp: 200), "two")], reason: .scan, note: "newer app", now: date(2))
+        let writer = BoxLibrary(root: dir)
+        try writer.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "old", now: date(1))
+        let v2 = try writer.commit(account: "a", entries: [entry(row(cp: 200), "two")], reason: .scan, note: "newer app", now: date(2))
         let file = dir.appendingPathComponent("a").appendingPathComponent("box").appendingPathComponent(String(format: "%06d.json", v2.seq))
         var obj = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
         obj["schema"] = BoxLibrary.schemaVersion + 1
         try JSONSerialization.data(withJSONObject: obj).write(to: file)
+        let lib = BoxLibrary(root: dir)   // a new library: what a newer app wrote since is not in any cache
         XCTAssertThrowsError(try lib.current(account: "a")) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
         XCTAssertThrowsError(try lib.restoreLatestReadable(account: "a")) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
         XCTAssertThrowsError(try lib.restore(account: "a", seq: 1)) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
@@ -183,15 +184,16 @@ final class FoldApiTests: XCTestCase {
 
     func testNewerIsDecidedFromTheSchemaNumberAloneAndForAnyVersion() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-l3s-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
-        let lib = BoxLibrary(root: dir)
+        let writer = BoxLibrary(root: dir)
         func file(_ seq: Int) -> URL { dir.appendingPathComponent("a/box").appendingPathComponent(String(format: "%06d.json", seq)) }
-        try lib.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "old", now: date(1))
-        let v2 = try lib.commit(account: "a", entries: [entry(row(cp: 200), "two")], reason: .scan, note: "newer", now: date(2))
-        let v3 = try lib.commit(account: "a", entries: [], reason: .scan, note: "damaged", now: date(3))
+        try writer.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "old", now: date(1))
+        let v2 = try writer.commit(account: "a", entries: [entry(row(cp: 200), "two")], reason: .scan, note: "newer", now: date(2))
+        let v3 = try writer.commit(account: "a", entries: [], reason: .scan, note: "damaged", now: date(3))
         // P4: a newer app's file with a case this build cannot decode (an unknown reason) is still "newer", not "damaged"
         var obj = try JSONSerialization.jsonObject(with: Data(contentsOf: file(v2.seq))) as! [String: Any]
         obj["schema"] = BoxLibrary.schemaVersion + 1; obj["reason"] = "import"
         try JSONSerialization.data(withJSONObject: obj).write(to: file(v2.seq))
+        let lib = BoxLibrary(root: dir)   // a new library: what a newer app wrote since is not in any cache
         XCTAssertThrowsError(try lib.load(account: "a", seq: v2.seq)) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
         // P5: a damaged file ABOVE the newer one does not open the restore route
         try Data("garbage".utf8).write(to: file(v3.seq))
@@ -211,6 +213,25 @@ final class FoldApiTests: XCTestCase {
         XCTAssertThrowsError(try lib.current(account: "a")) { XCTAssertFalse(BoxLibrary.isNewerVersion($0)) }
         XCTAssertFalse(lib.hasNewerVersion(account: "a"))
         XCTAssertEqual(try lib.restoreLatestReadable(account: "a").restoredFrom, 1)
+    }
+
+    func testTheNewerVersionAnswerSurvivesCommitsAndFollowsARename() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-l3c-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        try lib.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "v1", now: date(1))
+        XCTAssertNil(lib.newerVersion(account: "a"))
+        let v2 = try lib.commit(account: "a", entries: [], reason: .scan, note: "v2", now: date(2))
+        XCTAssertNil(lib.newerVersion(account: "a"), "this build's own commits are not newer")
+        let f = dir.appendingPathComponent("a/box").appendingPathComponent(String(format: "%06d.json", v2.seq))
+        var obj = try JSONSerialization.jsonObject(with: Data(contentsOf: f)) as! [String: Any]
+        obj["schema"] = BoxLibrary.schemaVersion + 1
+        try JSONSerialization.data(withJSONObject: obj).write(to: f)
+        // a version that appears after the check (another install, a restore from backup) is still found: only verified versions are skipped
+        let lib2 = BoxLibrary(root: dir)
+        XCTAssertEqual(lib2.newerVersion(account: "a"), 2)
+        try lib2.renameAccount(from: "a", to: "b")
+        XCTAssertEqual(lib2.newerVersion(account: "b"), 2, "found under the new name")
+        XCTAssertNil(lib2.newerVersion(account: "a"))
     }
 
     // V1, V2

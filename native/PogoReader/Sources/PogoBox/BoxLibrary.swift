@@ -73,6 +73,7 @@ public final class BoxLibrary {
     /// Rename an account (see `BoxStore.renameAccount`); its box versions follow, with the new name written into each.
     public func renameAccount(from old: String, to new: String) throws {
         try store.renameAccount(from: old, to: new)
+        verifiedThrough[old] = nil; verifiedThrough[new.trimmingCharacters(in: .whitespacesAndNewlines)] = nil
         let newName = new.trimmingCharacters(in: .whitespacesAndNewlines)
         for seq in (try? seqs(newName)) ?? [] {
             guard let f = try? file(newName, seq), var snap = try? load(account: newName, seq: seq) else { continue }
@@ -124,6 +125,7 @@ public final class BoxLibrary {
                                scanDate: scanDate, restoredFrom: restoredFrom, entries: entries)
         try fm.createDirectory(at: try boxFolder(account), withIntermediateDirectories: true)
         try Self.encoder.encode(snap).write(to: file(account, next), options: .atomic)
+        if verifiedThrough[account] == (last ?? 0) { verifiedThrough[account] = next }   // this build wrote it: not newer
         return snap
     }
 
@@ -143,17 +145,29 @@ public final class BoxLibrary {
         if let seq = try newerVersionSeq(account) { throw Failure.newerVersion(seq) }
     }
 
+    /// Versions of each account already read and found to be this build's own or older, so the check does not read every file each time. A
+    /// version file is not changed once written, and `commit` extends the count; a rename clears it.
+    private var verifiedThrough = [String: Int]()
+
     /// The first version of the account (any, not only the newest) whose schema number is above this build's, or nil. A file with no
-    /// readable schema number is damaged, not newer.
+    /// readable schema number is damaged, not newer. Only versions not yet verified are read.
     private func newerVersionSeq(_ account: String) throws -> Int? {
-        for seq in try seqs(account) {
-            if let data = try? Data(contentsOf: file(account, seq)), let schema = Self.schema(of: data), schema > Self.schemaVersion { return seq }
+        var verified = verifiedThrough[account] ?? 0, contiguous = true
+        for seq in try seqs(account) where seq > verified {
+            if let data = try? Data(contentsOf: file(account, seq)), let schema = Self.schema(of: data) {
+                if schema > Self.schemaVersion { verifiedThrough[account] = verified; return seq }
+                if contiguous { verified = seq }
+            } else { contiguous = false }
         }
+        verifiedThrough[account] = verified
         return nil
     }
 
+    /// The first version of the account saved by a newer app, or nil.
+    public func newerVersion(account: String) -> Int? { (try? newerVersionSeq(account)) ?? nil }
+
     /// Whether any saved version of the account came from a newer app.
-    public func hasNewerVersion(account: String) -> Bool { ((try? newerVersionSeq(account)) ?? nil) != nil }
+    public func hasNewerVersion(account: String) -> Bool { newerVersion(account: account) != nil }
 
     /// The `schema` number of a version file without decoding the rest.
     private static func schema(of data: Data) -> Int? {

@@ -184,9 +184,10 @@ public enum VoiceCommandFile {
         /// The pace every command of the set pages at: 1.2 s taps, 1.6 s swipes.
         public var pace: Pace { self == .tap ? .tapNormal : .swipeFast }
         public static func forScreen(tapAvailable: Bool) -> SetKind { tapAvailable ? .tap : .swipe }
-        /// The first identifier number: size `i` of the kind uses `Custom.<base + 100 i>` for its gesture and `+60` for its command. Clear of
-        /// the single-mode ids (780,000,000 to 780,000,660) and of the other kind.
-        var idBase: Double { self == .tap ? 781_000_000 : 781_100_000 }
+        /// The first identifier number: size `i` uses `Custom.<base + 100 i>` for its gesture and `+60` for its command. The SAME for both kinds
+        /// (the spoken names are the same too), so importing either set replaces the other instead of leaving two commands for one phrase. Clear of
+        /// the single-mode ids (780,000,000 to 780,000,660).
+        var idBase: Double { 781_000_000 }
         /// Words nobody says, none shared with any spoken command, with another gesture name or with the single modes' gesture names.
         var gestureNames: [String] {
             let (adjectives, nouns) = self == .tap

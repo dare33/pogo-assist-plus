@@ -592,7 +592,8 @@ public enum BoxMerge {
         }
 
         func setMega(_ id: String, _ mega: Bool) { byId[id]?.megaWhenScanned = mega ? true : nil }
-        for p in plan.same { touch(p.savedId); setMega(p.savedId, p.mega) }
+        // An untrusted row paired as Same writes nothing but last-seen (not even the Mega mark).
+        for p in plan.same { touch(p.savedId); if !hasNoLevelFits(plan.scanned[p.scanned]) { setMega(p.savedId, p.mega) } }
         for u in plan.updated { update(u.savedId, plan.scanned[u.scanned]); setMega(u.savedId, false) }
         var newRows = plan.new
         for u in plan.unsure {
