@@ -2,6 +2,7 @@ import SwiftUI
 import PogoBox
 
 struct SettingsView: View {
+    @State private var shareURLs: [URL] = []
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var confirmPrevious = false
@@ -32,7 +33,7 @@ struct SettingsView: View {
                 Text("\(kind), \(scan.rows) Pokémon read").font(.footnote).foregroundStyle(.secondary)
             }
             Spacer()
-            Button { model.shareURLs = model.shareFiles(for: scan) } label: { Image(systemName: "square.and.arrow.up") }
+            Button { shareURLs = model.shareFiles(for: scan) } label: { Image(systemName: "square.and.arrow.up") }
                 .buttonStyle(.borderless).accessibilityLabel("Share scan files")
         }
     }
@@ -79,6 +80,11 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            // Presented from here, not from the root: Settings is itself a sheet, and the root cannot
+            // put a second sheet over it.
+            .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = [] } })) {
+                ShareSheet(urls: shareURLs).presentationDetents([.medium, .large])
+            }
             .alert("Rename account", isPresented: $renaming) {
                 TextField("Trainer name", text: $newName).accountNameField()
                 Button("Rename") {
