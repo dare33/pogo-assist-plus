@@ -1,0 +1,683 @@
+{
+ "rows": [
+  {
+   "index": 1,
+   "name": "Staraptor",
+   "display": "Mega Staraptor",
+   "form": "Mega",
+   "speciesId": "staraptor_mega",
+   "dex": 398,
+   "cp": 3970,
+   "hp": 167,
+   "ivs": {
+    "atk": 15,
+    "def": 15,
+    "hp": 14
+   },
+   "ivsRead": {
+    "atk": 15,
+    "def": 15,
+    "hp": 14
+   },
+   "ivsGuess": null,
+   "level": 40,
+   "levelMax": 40,
+   "dust": 10000,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0001.png",
+     "time": 0,
+     "cp": 3970,
+     "cpText": "3970",
+     "name": "Mega Staraptor",
+     "hp": "167/167",
+     "ivs": "15/15/14",
+     "ivConfidence": 0.9698795180722897,
+     "sharpness": 499.1952367652912
+    },
+    {
+     "frame": "f0002.png",
+     "time": 0.2,
+     "cp": 3970,
+     "cpText": "3970",
+     "name": "Mega Staraptor",
+     "hp": "167/167",
+     "ivs": "15/15/14",
+     "ivConfidence": 0.9698795180722897,
+     "sharpness": 527.4920501775508
+    },
+    {
+     "frame": "f0003.png",
+     "time": 0.4,
+     "cp": 3970,
+     "cpText": "3970",
+     "name": "Mega Staraptor",
+     "hp": "167/167",
+     "ivs": "15/15/14",
+     "ivConfidence": 0.9698795180722897,
+     "sharpness": 585.6488235146267
+    },
+    {
+     "frame": "f0004.png",
+     "time": 0.6,
+     "cp": 3970,
+     "cpText": "3970",
+     "name": "Mega Staraptor",
+     "hp": "167/167",
+     "ivs": "15/15/14",
+     "ivConfidence": 0.9698795180722897,
+     "sharpness": 586.9732530932888
+    },
+    {
+     "frame": "f0005.png",
+     "time": 0.8,
+     "cp": 3970,
+     "cpText": "3970",
+     "name": "Mega Staraptor",
+     "hp": "167/167",
+     "ivs": "15/15/14",
+     "ivConfidence": 0.9698795180722897,
+     "sharpness": 587.0158852887704
+    },
+    {
+     "frame": "f0006.png",
+     "time": 1,
+     "cp": 3970,
+     "cpText": "3970",
+     "name": "Mega Staraptor .",
+     "hp": "167/167",
+     "ivs": "15/15/14",
+     "ivConfidence": 0.9698795180722897,
+     "sharpness": 598.6745051391277
+    },
+    {
+     "frame": "f0007.png",
+     "time": 1.2,
+     "cp": 3970,
+     "cpText": "3970",
+     "name": "Mega Staraptor",
+     "hp": "167/167",
+     "ivs": "15/15/14",
+     "ivConfidence": 0.9698795180722897,
+     "sharpness": 451.2659231986268
+    }
+   ],
+   "merged": 1
+  },
+  {
+   "index": 2,
+   "name": "Lucario",
+   "display": "Lucario",
+   "form": "",
+   "speciesId": "lucario",
+   "dex": 448,
+   "cp": 3000,
+   "hp": 154,
+   "ivs": {
+    "atk": 14,
+    "def": 13,
+    "hp": 12
+   },
+   "ivsRead": {
+    "atk": 14,
+    "def": 13,
+    "hp": 12
+   },
+   "ivsGuess": null,
+   "level": 50,
+   "levelMax": 50,
+   "dust": 0,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0011.png",
+     "time": 2,
+     "cp": 3000,
+     "cpText": "CP3000",
+     "name": "Lucario",
+     "hp": "154/154",
+     "ivs": "14/13/12",
+     "ivConfidence": 0.8142549379202748,
+     "sharpness": 194.86599820111954
+    },
+    {
+     "frame": "f0012.png",
+     "time": 2.2,
+     "cp": 3000,
+     "cpText": "CP3000",
+     "name": "Lucario /",
+     "hp": "154/154",
+     "ivs": "14/13/12",
+     "ivConfidence": 0.8142549379202748,
+     "sharpness": 202.6052927900912
+    },
+    {
+     "frame": "f0013.png",
+     "time": 2.4,
+     "cp": 3000,
+     "cpText": "CP3000",
+     "name": "Lucario /",
+     "hp": "154/154",
+     "ivs": "14/13/12",
+     "ivConfidence": 0.8142549379202748,
+     "sharpness": 230.2947687471647
+    },
+    {
+     "frame": "f0014.png",
+     "time": 2.6,
+     "cp": 3000,
+     "cpText": "cP3000",
+     "name": "Lucario /",
+     "hp": "154/154",
+     "ivs": "14/13/12",
+     "ivConfidence": 0.8142549379202748,
+     "sharpness": 254.80995543593215
+    },
+    {
+     "frame": "f0015.png",
+     "time": 2.8,
+     "cp": 3000,
+     "cpText": "CP3000",
+     "name": "Lucario /",
+     "hp": "154/154",
+     "ivs": "14/13/12",
+     "ivConfidence": 0.8142549379202748,
+     "sharpness": 254.98083189442676
+    },
+    {
+     "frame": "f0016.png",
+     "time": 3,
+     "cp": 3000,
+     "cpText": "CP3000",
+     "name": "Lucario /",
+     "hp": "154/154",
+     "ivs": "14/13/12",
+     "ivConfidence": 0.8407099643753,
+     "sharpness": 262.1388688057064
+    },
+    {
+     "frame": "f0017.png",
+     "time": 3.2,
+     "cp": 3000,
+     "cpText": "CP3000",
+     "name": "Lucario .",
+     "hp": "154/154",
+     "ivs": "14/13/12",
+     "ivConfidence": 0.8407099643753,
+     "sharpness": 262.2744546783566
+    }
+   ],
+   "merged": 1
+  },
+  {
+   "index": 3,
+   "name": "Zamazenta",
+   "display": "Zamazenta",
+   "form": "Hero",
+   "speciesId": "zamazenta_hero",
+   "dex": 889,
+   "cp": 2661,
+   "hp": 135,
+   "ivs": {
+    "atk": 13,
+    "def": 10,
+    "hp": 11
+   },
+   "ivsRead": {
+    "atk": 13,
+    "def": 10,
+    "hp": 11
+   },
+   "ivsGuess": null,
+   "level": 25,
+   "levelMax": 25,
+   "dust": 4000,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0022.png",
+     "time": 4.2,
+     "cp": 2661,
+     "cpText": "CP2661",
+     "name": "Zamazenta",
+     "hp": "135/135",
+     "ivs": "13/10/11",
+     "ivConfidence": 0.7613255678757547,
+     "sharpness": 357.9855367846284
+    },
+    {
+     "frame": "f0023.png",
+     "time": 4.4,
+     "cp": 2661,
+     "cpText": "CP2661",
+     "name": "Zamazenta /",
+     "hp": "135/135",
+     "ivs": "13/10/11",
+     "ivConfidence": 0.7613255678757547,
+     "sharpness": 342.99801796563077
+    },
+    {
+     "frame": "f0024.png",
+     "time": 4.6,
+     "cp": 2661,
+     "cpText": "CP2661",
+     "name": "Zamazenta",
+     "hp": "135/135",
+     "ivs": "13/10/11",
+     "ivConfidence": 0.7613255678757547,
+     "sharpness": 386.90056684543
+    },
+    {
+     "frame": "f0025.png",
+     "time": 4.8,
+     "cp": 2661,
+     "cpText": "CP2661",
+     "name": "Zamazenta",
+     "hp": "135/135",
+     "ivs": "13/10/11",
+     "ivConfidence": 0.7613255678757547,
+     "sharpness": 425.59810827946745
+    },
+    {
+     "frame": "f0026.png",
+     "time": 5,
+     "cp": 2661,
+     "cpText": "CP2661",
+     "name": "Zamazenta",
+     "hp": "135/135",
+     "ivs": "13/10/11",
+     "ivConfidence": 0.7613255678757547,
+     "sharpness": 434.72540368254187
+    },
+    {
+     "frame": "f0027.png",
+     "time": 5.2,
+     "cp": 2661,
+     "cpText": "CP2661",
+     "name": "Zamazenta",
+     "hp": "135/135",
+     "ivs": "13/10/11",
+     "ivConfidence": 0.7613255678757547,
+     "sharpness": 434.6407221698562
+    },
+    {
+     "frame": "f0028.png",
+     "time": 5.4,
+     "cp": 2661,
+     "cpText": "CP2661",
+     "name": "Zamazenta",
+     "hp": "135/135",
+     "ivs": "13/10/11",
+     "ivConfidence": 0.7613255678757547,
+     "sharpness": 434.66885605916696
+    }
+   ],
+   "merged": 1
+  },
+  {
+   "index": 4,
+   "name": "Xerneas",
+   "display": "Xerneas",
+   "form": "",
+   "speciesId": "xerneas",
+   "dex": 716,
+   "cp": 2641,
+   "hp": 172,
+   "ivs": {
+    "atk": 14,
+    "def": 10,
+    "hp": 12
+   },
+   "ivsRead": {
+    "atk": 14,
+    "def": 10,
+    "hp": 12
+   },
+   "ivsGuess": null,
+   "level": 25,
+   "levelMax": 25,
+   "dust": 4000,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0033.png",
+     "time": 6.4,
+     "cp": 2041,
+     "cpText": "cP2041",
+     "name": "Xerneas",
+     "hp": "172/172",
+     "ivs": "14/10/12",
+     "ivConfidence": 0.7913993870002081,
+     "sharpness": 272.95108385995144
+    },
+    {
+     "frame": "f0034.png",
+     "time": 6.6,
+     "cp": 2641,
+     "cpText": "cp2641",
+     "name": "Xerneas /",
+     "hp": "172/172",
+     "ivs": "14/10/12",
+     "ivConfidence": 0.7913993870002081,
+     "sharpness": 250.88556905998422
+    },
+    {
+     "frame": "f0035.png",
+     "time": 6.8,
+     "cp": 641,
+     "cpText": "cp{641",
+     "name": "Xerneas i",
+     "hp": "172/172",
+     "ivs": "14/10/12",
+     "ivConfidence": 0.7913993870002081,
+     "sharpness": 288.89401949344636
+    },
+    {
+     "frame": "f0036.png",
+     "time": 7,
+     "cp": 2641,
+     "cpText": "cp2641",
+     "name": "Xerneas",
+     "hp": "172/172",
+     "ivs": "14/10/12",
+     "ivConfidence": 0.7736850334419643,
+     "sharpness": 324.2156167198778
+    },
+    {
+     "frame": "f0037.png",
+     "time": 7.2,
+     "cp": 2641,
+     "cpText": "гp2641",
+     "name": "Xerneas",
+     "hp": "172/172",
+     "ivs": "14/10/12",
+     "ivConfidence": 0.7736850334419643,
+     "sharpness": 324.27051237551956
+    },
+    {
+     "frame": "f0038.png",
+     "time": 7.4,
+     "cp": 2641,
+     "cpText": "cp2641",
+     "name": "Xerneas",
+     "hp": "172/172",
+     "ivs": "14/10/12",
+     "ivConfidence": 0.7736850334419643,
+     "sharpness": 324.29586097181203
+    },
+    {
+     "frame": "f0039.png",
+     "time": 7.6,
+     "cp": 2641,
+     "cpText": "CP2641",
+     "name": "Xerneas",
+     "hp": "172/172",
+     "ivs": "14/10/12",
+     "ivConfidence": 0.7736850334419643,
+     "sharpness": 324.44682899956973
+    }
+   ],
+   "merged": 1
+  },
+  {
+   "index": 5,
+   "name": "Zapdos",
+   "display": "Zapdos",
+   "form": "",
+   "speciesId": "zapdos",
+   "dex": 145,
+   "cp": 1966,
+   "hp": 130,
+   "ivs": {
+    "atk": 11,
+    "def": 14,
+    "hp": 12
+   },
+   "ivsRead": {
+    "atk": 11,
+    "def": 14,
+    "hp": 12
+   },
+   "ivsGuess": null,
+   "level": 20,
+   "levelMax": 20,
+   "dust": 2500,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0363.png",
+     "time": 72.4,
+     "cp": 196,
+     "cpText": "CP196",
+     "name": "Zapdos /",
+     "hp": "130/130",
+     "ivs": "11/14/12",
+     "ivConfidence": 0.7721293397837243,
+     "sharpness": 243.7425819429888
+    },
+    {
+     "frame": "f0364.png",
+     "time": 72.6,
+     "cp": 1966,
+     "cpText": "1966",
+     "name": "Zapdos /",
+     "hp": "130/130",
+     "ivs": "11/14/12",
+     "ivConfidence": 0.7721293397837243,
+     "sharpness": 252.86480291328255
+    },
+    {
+     "frame": "f0365.png",
+     "time": 72.8,
+     "cp": 1966,
+     "cpText": "P1966",
+     "name": "Zapdos /",
+     "hp": "130/130",
+     "ivs": "11/14/12",
+     "ivConfidence": 0.7721293397837243,
+     "sharpness": 285.37027195794786
+    },
+    {
+     "frame": "f0366.png",
+     "time": 73,
+     "cp": 1966,
+     "cpText": "CP1966",
+     "name": "Zapdos /",
+     "hp": "130/130",
+     "ivs": "11/14/12",
+     "ivConfidence": 0.7863557674065653,
+     "sharpness": 299.983102178678
+    },
+    {
+     "frame": "f0367.png",
+     "time": 73.2,
+     "cp": 1966,
+     "cpText": "CP1966",
+     "name": "Zapdos /",
+     "hp": "130/130",
+     "ivs": "11/14/12",
+     "ivConfidence": 0.7863557674065653,
+     "sharpness": 299.9452071489409
+    },
+    {
+     "frame": "f0368.png",
+     "time": 73.4,
+     "cp": 1966,
+     "cpText": "CR1966",
+     "name": "Zapdos /",
+     "hp": "130/130",
+     "ivs": "11/14/12",
+     "ivConfidence": 0.7863557674065653,
+     "sharpness": 299.9446436243324
+    }
+   ],
+   "merged": 1
+  },
+  {
+   "index": 6,
+   "name": "Moltres",
+   "display": "Moltres",
+   "form": "",
+   "speciesId": "moltres",
+   "dex": 146,
+   "cp": 996,
+   "hp": 131,
+   "ivs": null,
+   "ivsRead": {
+    "atk": 15,
+    "def": 14,
+    "hp": 13
+   },
+   "ivsGuess": null,
+   "level": null,
+   "levelMax": null,
+   "dust": null,
+   "solveStatus": "none",
+   "flags": [
+    "no-level-fits"
+   ],
+   "frames": [
+    {
+     "frame": "f0374.png",
+     "time": 74.6,
+     "cp": 19,
+     "cpText": "CP19",
+     "name": "Moltres i",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9326140938889935,
+     "sharpness": 249.909286899203
+    },
+    {
+     "frame": "f0375.png",
+     "time": 74.8,
+     "cp": 996,
+     "cpText": "996",
+     "name": "Moltres i",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9326140938889935,
+     "sharpness": 244.44086733596885
+    },
+    {
+     "frame": "f0376.png",
+     "time": 75,
+     "cp": 996,
+     "cpText": "996",
+     "name": "Moltres",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9259474272223329,
+     "sharpness": 289.9037502612184
+    },
+    {
+     "frame": "f0379.png",
+     "time": 75.6,
+     "cp": 996,
+     "cpText": "996",
+     "name": "Moltres",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9259474272223329,
+     "sharpness": 302.0932061862204
+    },
+    {
+     "frame": "f0380.png",
+     "time": 75.8,
+     "cp": 99,
+     "cpText": "99",
+     "name": "Moltres /",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9259474272223329,
+     "sharpness": 223.9540729425353
+    }
+   ],
+   "merged": 1
+  }
+ ],
+ "review": [
+  {
+   "index": 6,
+   "name": "Moltres",
+   "cp": 996,
+   "hp": 131,
+   "ivs": null,
+   "ivsRead": {
+    "atk": 15,
+    "def": 14,
+    "hp": 13
+   },
+   "ivsGuess": null,
+   "level": null,
+   "levelMax": null,
+   "flags": [
+    "no-level-fits"
+   ],
+   "frames": [
+    {
+     "frame": "f0374.png",
+     "time": 74.6,
+     "cp": 19,
+     "cpText": "CP19",
+     "name": "Moltres i",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9326140938889935,
+     "sharpness": 249.909286899203
+    },
+    {
+     "frame": "f0375.png",
+     "time": 74.8,
+     "cp": 996,
+     "cpText": "996",
+     "name": "Moltres i",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9326140938889935,
+     "sharpness": 244.44086733596885
+    },
+    {
+     "frame": "f0376.png",
+     "time": 75,
+     "cp": 996,
+     "cpText": "996",
+     "name": "Moltres",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9259474272223329,
+     "sharpness": 289.9037502612184
+    },
+    {
+     "frame": "f0379.png",
+     "time": 75.6,
+     "cp": 996,
+     "cpText": "996",
+     "name": "Moltres",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9259474272223329,
+     "sharpness": 302.0932061862204
+    },
+    {
+     "frame": "f0380.png",
+     "time": 75.8,
+     "cp": 99,
+     "cpText": "99",
+     "name": "Moltres /",
+     "hp": "131/131",
+     "ivs": "15/14/13",
+     "ivConfidence": 0.9259474272223329,
+     "sharpness": 223.9540729425353
+    }
+   ]
+  }
+ ],
+ "unmatched": []
+}
