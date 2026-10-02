@@ -45,6 +45,8 @@ final class FlowTests: XCTestCase {
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()
+        if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }   // the menu can swallow the first tap
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), "Settings did not open")
         let actions = app.buttons["Scan actions"]
         for _ in 0..<6 where !(actions.exists && actions.isHittable) { app.swipeUp() }
         XCTAssertTrue(actions.waitForExistence(timeout: 5))
@@ -54,7 +56,9 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(again.waitForExistence(timeout: 5))
         again.tap()
         let discard = app.buttons["Discard"]
-        XCTAssertTrue(discard.waitForExistence(timeout: 60), "the re-read review did not appear")
+        if !discard.waitForExistence(timeout: 20), again.exists { again.tap() }   // the menu can swallow a tap
+        if !discard.waitForExistence(timeout: 60) { shot("15-debug-reread") }
+        XCTAssertTrue(discard.exists, "the re-read review did not appear")
         sleep(1)
         shot("15b-reread-review")
         discard.tap()
@@ -90,13 +94,17 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(leave.waitForExistence(timeout: 60), "the unsure section did not appear")
         sleep(1)
         shot("12-review-unsure")
+        let screenHeight = app.windows.firstMatch.frame.height
+        for _ in 0..<6 where !(leave.isHittable && leave.frame.maxY < screenHeight - 170) { app.swipeUp() }   // clear of the Save bar at the bottom
         leave.tap()
         sleep(1)
+        XCTAssertTrue(app.buttons["Save to box"].isEnabled, "the answer was not taken")
         shot("12b-review-unsure-answered")
         app.buttons["Save to box"].tap()
         XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 15))
         app.cells.element(boundBy: 2).tap()
         let fix = app.buttons["Fix a value"]
+        for _ in 0..<5 where !(fix.exists && fix.isHittable) { app.swipeUp() }   // the detail is longer now: scroll to the button
         XCTAssertTrue(fix.waitForExistence(timeout: 5))
         fix.tap()
         sleep(1)
