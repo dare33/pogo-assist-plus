@@ -207,6 +207,8 @@ final class FoldMergeTests: XCTestCase {
         let p = plan([partRead], [s, bad])
         XCTAssertEqual(p.unsure.first?.kind, .partialRead); XCTAssertEqual(p.unsure.first?.misread, ["M"])
         XCTAssertEqual(try BoxMerge.apply(p, resolutions: [0: .new], to: [s, bad], makeID: { "n" }).map { $0.id }, ["M", "n"])
+        let kept = try BoxMerge.apply(p, resolutions: [0: .new], to: [s, bad], makeID: { "n" })
+        XCTAssertEqual(kept.first { $0.id == "M" }?.row.cp, 64, "the misread entry is left exactly as it was")
     }
 
     func testChoosingAMisreadCandidateReplacesItsUnreadValuesWhateverTheKind() throws {
@@ -221,6 +223,7 @@ final class FoldMergeTests: XCTestCase {
         let p = plan([partRead], [s, bad])
         let m = try BoxMerge.apply(p, resolutions: [0: .existing("M")], to: [s, bad])
         XCTAssertEqual(m.first { $0.id == "M" }?.row.ivs, IVs(atk: 7, def: 14, hp: 2))
+        XCTAssertEqual(m.first { $0.id == "M" }?.row.cp, 64, "a part read never writes its CP: the unread IVs are filled, the CP stays")
         let seen = try BoxMerge.apply(p, resolutions: [0: .existing("S")], to: [s, bad])
         XCTAssertEqual(seen.first { $0.id == "S" }?.row.cp, 1982)
     }
@@ -231,7 +234,17 @@ final class FoldMergeTests: XCTestCase {
         let p = plan([row(cp: 500, hp: 60, ivs: other)], [a])
         XCTAssertEqual(p.unsure.first?.candidates, ["A"]); XCTAssertTrue(p.new.isEmpty); XCTAssertTrue(p.gone.isEmpty)
         let out = try BoxMerge.apply(p, resolutions: [0: .existing("A")], to: [a])
-        XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].row.ivs, other, "the read values replace the saved ones")
+        XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].row.ivs, x, "IVs never change in the game: neither read is guessed, the saved IVs are kept")
+        XCTAssertEqual(out[0].lastSeen, date(5)); XCTAssertTrue(out[0].row.flags.contains(BoxMerge.ivsRescanFlag))
+        XCTAssertTrue(out[0].row.needsCheck, "and it shows under to check")
+    }
+
+    func testSavedIVsThatWereNotAnExactReadAreReplacedByACleanRead() throws {
+        var shaky = row(cp: 500, hp: 60, ivs: IVs(atk: 15, def: 15, hp: 14), flags: ["bars-unsettled"]); shaky.solveStatus = "corrected"
+        let a = entry(shaky, "A")
+        let p = plan([row(cp: 500, hp: 60, ivs: x)], [a])
+        XCTAssertEqual(p.unsure.first?.candidates, ["A"])
+        XCTAssertEqual(try BoxMerge.apply(p, resolutions: [0: .existing("A")], to: [a])[0].row.ivs, x)
     }
 
     func testSameCPAndHPWithOtherIVsOnAHandCorrectedEntryIsAskedAbout() throws {
@@ -239,7 +252,8 @@ final class FoldMergeTests: XCTestCase {
         let p = plan([row(cp: 500, hp: 60, ivs: IVs(atk: 14, def: 15, hp: 15))], [corrected])
         XCTAssertEqual(p.unsure.first?.candidates, ["A"]); XCTAssertTrue(p.gone.isEmpty)
         let kept = try BoxMerge.apply(p, resolutions: [0: .existing("A")], to: [corrected])
-        XCTAssertEqual(kept[0].row.ivs, IVs(atk: 14, def: 15, hp: 15), "a read that is neither the corrected nor the old read replaces the value and drops the correction")
+        XCTAssertEqual(kept[0].row.ivs, x, "a hand correction is never overwritten by a read that disagrees with it")
+        XCTAssertNotNil(kept[0].corrections.ivs); XCTAssertTrue(kept[0].row.flags.contains(BoxMerge.ivsRescanFlag))
         // a different CP or HP is still something else
         XCTAssertEqual(plan([row(cp: 500, hp: 61, ivs: IVs(atk: 1, def: 1, hp: 1))], [entry(row(cp: 500, hp: 60, ivs: x), "A")]).new, [0])
     }
@@ -253,6 +267,44 @@ final class FoldMergeTests: XCTestCase {
         XCTAssertEqual(plan([row("machoke", cp: 900, hp: 60, ivs: nil)], [machop]).new, [0], "an HP lower than the saved one is not a power-up")
         XCTAssertEqual(plan([row("pikachu", cp: 900, hp: 90, ivs: nil)], [machop]).new, [0], "not an evolution of it")
     }
+
+    // Second fold round: R1, R1b
+
+    private func fragment(_ id: String = "heatmor", cp: Int, hp: Int? = 92, ivs: IVs? = IVs(atk: 7, def: 14, hp: 2)) -> ScanRow {
+        var r = row(id, cp: cp, hp: hp, ivs: ivs, flags: ["no-level-fits"]); r.solveStatus = "none"; return r
+    }
+
+    func testAPartReadChosenForAMisreadEntryNeverWritesItsCP() throws {
+        let bad = entry(misread(cp: 1982), "X")
+        let p = plan([fragment(cp: 182)], [bad])
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("X")], to: [bad])
+        XCTAssertEqual(out[0].row.cp, 1982, "the CP 182 is a fragment, not a read")
+        XCTAssertEqual(out[0].row.ivs, IVs(atk: 7, def: 14, hp: 2), "the unread IVs may be filled from it")
+        XCTAssertNil(out[0].row.level); XCTAssertNil(out[0].row.dust)
+    }
+
+    func testAnEntryAlreadyUpdatedByAnotherRowIsOnlyMarkedSeenByAPartRead() throws {
+        let bad = entry(misread(cp: 1982), "X")
+        let real = row("heatmor", cp: 1982, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)
+        let p = plan([real, fragment(cp: 182)], [bad])
+        XCTAssertEqual(p.updated.first?.reason, .ivsNowRead); XCTAssertEqual(p.unsure.map { $0.scanned }, [1])
+        let out = try BoxMerge.apply(p, resolutions: [1: .existing("X")], to: [bad])
+        XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].row.cp, 1982); XCTAssertEqual(out[0].row.level, 30)
+    }
+
+    func testTwoPartReadsMayShareOneEntryButTwoWritersMayNot() throws {
+        let bad = entry(misread(cp: 1982), "X")
+        let p = plan([fragment(cp: 182), fragment(cp: 198)], [bad])
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("X"), 1: .existing("X")], to: [bad])
+        XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].row.cp, 1982)
+        // two trusted rows that would each write to one entry are refused, with a message that does not steer to a duplicate
+        let s = entry(row(cp: 500, hp: 60, ivs: x), "S")
+        let q = plan([row(cp: 520, hp: 61, ivs: nil), row(cp: 540, hp: 62, ivs: nil)], [s])
+        XCTAssertThrowsError(try BoxMerge.apply(q, resolutions: [0: .existing("S"), 1: .existing("S")], to: [s])) {
+            XCTAssertEqual($0.localizedDescription, "Two scanned Pokémon were matched to the same saved one. Change one of the answers.")
+        }
+    }
+
 }
 
 final class FoldLibraryTests: XCTestCase {

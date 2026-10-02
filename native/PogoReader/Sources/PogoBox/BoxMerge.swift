@@ -22,6 +22,21 @@ import PogoReader
 ///     saved Pokémon's IVs, whatever its CP digits (a read of 281 for a saved 2611). The candidate may already be matched to another scanned row (the real read of it); "It is this one" then only
 ///     marks it seen and does not copy the part-read values over it.
 ///
+///  8. Same CP and HP, other IVs: a row with the IVs read and a saved entry (same species, CP and HP read on both sides) with other IVs is
+///     unsure with that entry as candidate, never New plus Gone. IVs never change in the game, so one of the two reads is wrong and the
+///     merge does not guess: "It is this one" keeps the saved IVs (always when hand-corrected), marks the entry seen and flags it
+///     `ivs-rescan-differs` to check; only saved IVs that were not an exact read, replaced by a clean read, are overwritten.
+///  9. Evolution with unread IVs: a leftover row with no IVs that is a later stage of a saved entry's species (not lower HP) is unsure.
+/// 10. Misread saved entry (M12): a saved entry with no IVs and no level fits, of the same species and HP as a row with IVs read, is
+///     a candidate whatever the CP; "It is new" leaves it in the box whatever other candidates there were.
+/// 11. Leftover rows are all judged against the same saved entries: two rows that could be one entry are both asked, and Save refuses
+///     two rows that would each write values to one entry (part-read rows only mark seen, so any number of them may share one).
+/// 12. Extra twin (rule 5): any scanned row identical to a saved entry already paired is asked about, flagged by the paging beat or not.
+///
+/// A row whose own CP is not trusted (flagged `no-level-fits`, a part read, or a `partialRead` question) never writes its CP, level or
+/// dust onto a saved entry; chosen for a misread entry it only fills the entry's unread IVs and HP. An entry already paired or updated
+/// by another row in the same plan is only marked seen by an unsure answer.
+///
 /// A full scan proposes saved entries matched by nothing as gone; an add-and-update scan removes nothing. Entries that are
 /// candidates in an unsure match are never proposed as gone (they might be one of the unsure Pokémon).
 ///
@@ -59,10 +74,16 @@ public enum BoxMerge {
     /// A scanned Pokémon that could be more than one saved one. `candidates` are saved ids, never empty.
     public struct Unsure: Equatable {
         public enum Kind: String, Equatable {
-            case ambiguous, partialRead, misreadSaved
-            /// The saved entries are misreads (no IVs, no level fits) of what this correctly read row is: "It is this one" replaces their
-            /// unread values with the read ones; "It is new" adds the row and leaves them.
-            /// The scan saw two identical Pokémon in a row (by the paging beat) and the box has one: add a second, or leave it out.
+            /// More than one saved candidate, or a candidate the row only plausibly is (a power-up whose IVs were not read, other IVs at the
+            /// same CP and HP, an evolution with unread IVs).
+            case ambiguous
+            /// The row's CP is a fragment of a saved CP (182 in 1982), or it fits no level: "It is this one" only marks the entry seen.
+            case partialRead
+            /// Every candidate is a misread saved entry (no IVs, no level fits) of what this correctly read row is: "It is this one" replaces
+            /// its unread values with the read ones; "It is new" adds the row and leaves them.
+            case misreadSaved
+            /// A scanned row identical to a saved entry that was already paired with another row (flagged by the paging beat or not): add a
+            /// second one, or leave it out.
             case extraTwin
         }
         public var scanned: Int
@@ -136,7 +157,7 @@ public enum BoxMerge {
             switch self {
             case .unresolved(let n): return n == 1 ? "1 unsure Pokémon still needs an answer." : "\(n) unsure Pokémon still need an answer."
             case .notACandidate: return "That saved Pokémon is not one of the choices for this one."
-            case .chosenTwice: return "Two scanned Pokémon were matched to the same saved one. Pick \"New\" for one of them."
+            case .chosenTwice: return "Two scanned Pokémon were matched to the same saved one. Change one of the answers."
             }
         }
     }
@@ -484,10 +505,39 @@ public enum BoxMerge {
         for u in plan.unsure {
             if case .existing(let id)? = resolutions[u.scanned] {
                 guard u.candidates.contains(id) else { throw Failure.notACandidate(scanned: u.scanned, savedId: id) }
-                // Several part reads may point at one saved Pokémon; two rows that would write their values over one cannot both be it.
-                if u.kind == .ambiguous || u.kind == .misreadSaved || u.misread.contains(id) { guard chosen.insert(id).inserted else { throw Failure.chosenTwice(savedId: id) } }
+                // Several part reads may point at one saved Pokémon (they only mark it seen); two rows that would each write values to one
+                // entry cannot both be it.
+                if writes(u, id, plan) { guard chosen.insert(id).inserted else { throw Failure.chosenTwice(savedId: id) } }
             }
         }
+    }
+
+    /// The flag a saved entry gets when a later scan read other IVs at the same CP and HP and the person kept the saved ones.
+    public static let ivsRescanFlag = "ivs-rescan-differs"
+
+    /// The row's own CP cannot be trusted: it fits no level, or it is a fragment of a saved CP.
+    private static func untrusted(_ u: Unsure, _ r: ScanRow) -> Bool {
+        u.kind == .partialRead || r.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
+    }
+
+    /// Whether choosing saved entry `id` for this unsure row writes the row's values onto it (rather than only marking it seen).
+    private static func writes(_ u: Unsure, _ id: String, _ plan: Plan) -> Bool {
+        if u.kind == .extraTwin { return false }
+        if plan.same.contains(where: { $0.savedId == id }) || plan.updated.contains(where: { $0.savedId == id }) { return false }
+        // A fragment fills only what the entry has none of (the first fills it, a second finds it filled): sharing is safe.
+        return !untrusted(u, plan.scanned[u.scanned])
+    }
+
+    /// Both have IVs, they differ (a hand correction's old read counts as the same), and the CP and HP read are the same.
+    public static func ivsDisagree(_ s: ScanRow, _ v: BoxEntry) -> Bool {
+        guard let a = s.ivs, let b = v.row.ivs, a != b, v.corrections.ivs?.was != a else { return false }
+        return sameCP(s, v) && sameHP(s, v)
+    }
+
+    /// The saved IVs were not an exact read (a guess or an IV flag, no hand correction) and the scan read its own cleanly.
+    public static func ivsReplaceable(_ s: ScanRow, _ v: BoxEntry) -> Bool {
+        func shaky(_ r: ScanRow) -> Bool { r.ivsGuess != nil || r.solveStatus != "exact" || r.flags.contains { FlagInfo.field(of: $0) == .ivs } }
+        return v.corrections.ivs == nil && shaky(v.row) && !shaky(s)
     }
 
     /// The box after the scan is added. `resolutions` answers each unsure Pokémon by its position in `plan.scanned`.
@@ -511,6 +561,14 @@ public enum BoxMerge {
             byId[id] = new
         }
 
+        let paired = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
+        func fillUnread(_ id: String, _ row: ScanRow) {
+            guard var e = byId[id] else { return }
+            e.lastSeen = max(e.lastSeen, date)
+            if e.row.ivs == nil, row.ivs != nil { e.row.ivs = row.ivs; e.row.ivsRead = row.ivsRead ?? row.ivs }
+            if e.row.hp == nil, let hp = row.hp { e.row.hp = hp }
+            byId[id] = e
+        }
         func setMega(_ id: String, _ mega: Bool) { byId[id]?.megaWhenScanned = mega ? true : nil }
         for p in plan.same { touch(p.savedId); setMega(p.savedId, p.mega) }
         for u in plan.updated { update(u.savedId, plan.scanned[u.scanned]); setMega(u.savedId, false) }
@@ -521,9 +579,21 @@ public enum BoxMerge {
             case .leaveOut: break
             case .existing(let id):
                 guard let e = byId[id] else { break }
-                if (u.kind == .partialRead && !u.misread.contains(id)) || u.kind == .extraTwin {
-                    // A part-read row only says "seen"; its values are wrong by definition. So does an extra twin.
+                let r = plan.scanned[u.scanned]
+                if u.kind == .extraTwin || paired.contains(id) || (untrusted(u, r) && !u.misread.contains(id)) {
+                    // A part-read row only says "seen"; its values are wrong by definition. So does an extra twin, and so does an answer for an
+                    // entry another row already paired or updated in this plan (it is never written twice).
                     byId[id]?.lastSeen = max(e.lastSeen, date)
+                } else if untrusted(u, r) {
+                    // A misread entry chosen from a row whose CP is not trusted: only the IVs and HP it has none of are filled in.
+                    fillUnread(id, r)
+                } else if ivsDisagree(r, e) {
+                    // The same Pokémon read twice with other IVs: the IVs never change, so one read is wrong and neither is guessed.
+                    if ivsReplaceable(r, e) { update(id, r); setMega(id, false) }
+                    else {
+                        byId[id]?.lastSeen = max(e.lastSeen, date)
+                        if byId[id]?.row.flags.contains(ivsRescanFlag) == false { byId[id]?.row.flags.append(ivsRescanFlag) }
+                    }
                 } else if plan.megaBases[u.scanned] != nil && Self.megaBase(e.row.speciesId, gm0) == nil {
                     // A Mega row chosen for its base entry: seen, and Mega when scanned; the Mega values are not copied.
                     touch(id); setMega(id, true)

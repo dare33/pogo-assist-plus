@@ -25,6 +25,12 @@ struct UnsureCard: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("In your box").font(.caption).foregroundStyle(.secondary)
                         Text(Fmt.candidate(e.row)).font(.callout)
+                        if BoxMerge.ivsDisagree(row, e) {
+                            Text(BoxMerge.ivsReplaceable(row, e)
+                                 ? "The saved IVs were not an exact read, so choosing this replaces them with the IVs read now."
+                                 : "The scan read other IVs for the same CP and HP. IVs never change, so one read is wrong: choosing this keeps the saved IVs and marks it to check.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
                         answer("It is this one", selected: choice == .existing(id)) { model.resolve(unsure.scanned, .existing(id)) }
                     }
                     .padding(10)
