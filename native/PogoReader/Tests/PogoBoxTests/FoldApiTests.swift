@@ -143,6 +143,21 @@ final class FoldApiTests: XCTestCase {
         XCTAssertThrowsError(try BoxLibrary(root: dir.appendingPathComponent("none")).restoreLatestReadable(account: "z"))
     }
 
+    func testABoxVersionFromANewerSchemaIsRefusedNotMutatedOver() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-l3n-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        let v1 = try lib.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "good", now: date(1))
+        let file = dir.appendingPathComponent("a").appendingPathComponent("box").appendingPathComponent(String(format: "%06d.json", v1.seq))
+        var obj = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
+        obj["schema"] = BoxLibrary.schemaVersion + 1; obj["futureField"] = "keep me"
+        let newer = try JSONSerialization.data(withJSONObject: obj)
+        try newer.write(to: file)
+        XCTAssertThrowsError(try lib.current(account: "a")) { XCTAssertEqual($0 as? BoxLibrary.Failure, .newerVersion(1)); XCTAssertTrue($0.localizedDescription.contains("newer version of the app")) }
+        XCTAssertThrowsError(try lib.mutate(account: "a", reason: .edit, note: "x") { $0 })
+        XCTAssertEqual(try lib.history(account: "a").count, 1, "nothing was written on top of it")
+        XCTAssertEqual(try Data(contentsOf: file), newer, "and the file is untouched")
+    }
+
     // V1, V2
     func testV2TapNeedsAnExactCheckedPointForTheGivenWidthAndHeight() throws {
         func make(_ p: CGPoint?, _ w: Double?, _ h: Double?) throws -> Data { try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: p, screenWidth: w, screenHeight: h, now: date(1)) }

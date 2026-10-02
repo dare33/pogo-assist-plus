@@ -50,12 +50,15 @@ public final class BoxLibrary {
         /// The box changed since this action was prepared.
         case boxChanged
         case nothingReadable
+        /// A version written by a newer build: reading it and writing a successor would drop what this build does not know.
+        case newerVersion(Int)
         public var errorDescription: String? {
             switch self {
             case .noSuchVersion(let n): return "Version \(n) of this box is not on the device."
             case .nothingToRestore: return "There is no earlier box to go back to."
             case .boxChanged: return "The box changed while this was open."
             case .nothingReadable: return "None of the saved versions of this box can be read."
+            case .newerVersion(let n): return "This box was saved by a newer version of the app (version \(n) of the box). Update the app to open it."
             }
         }
     }
@@ -88,8 +91,12 @@ public final class BoxLibrary {
     public func load(account: String, seq: Int) throws -> BoxSnapshot {
         let file = try file(account, seq)
         guard fm.fileExists(atPath: file.path) else { throw Failure.noSuchVersion(seq) }
-        do { return try Self.decoder.decode(BoxSnapshot.self, from: Data(contentsOf: file)) }
+        let snap: BoxSnapshot
+        do { snap = try Self.decoder.decode(BoxSnapshot.self, from: Data(contentsOf: file)) }
         catch { throw BoxStore.Failure.corrupt(file: file.lastPathComponent, reason: "\(error)") }
+        // Decodable is not enough: a later mutate would write an older-schema successor and drop the fields this build does not know.
+        guard snap.schema <= Self.schemaVersion else { throw Failure.newerVersion(seq) }
+        return snap
     }
 
     /// Every version, newest first. A file that cannot be read is left out (it shows in `unreadable` of a fuller listing later).
