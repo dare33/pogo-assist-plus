@@ -59,6 +59,10 @@ public enum Tuning {
     /// covers the HP and the bars still animate).
     public static let strayMaxSeconds = 0.6
 
+    /// The luma signature must stay above its threshold for this many consecutive frames to be a swipe (a swipe
+    /// gives 3 to 6; a lone jump is a touch dot or an animation and would split one Pokemon in two).
+    public static let swipeEventMinFrames = 3
+
     /// A stretch with a CP but no readable name is listed as an unnamed row when it lasted this long
     /// (two frames at full rate, as JS lists it).
     public static let unnamedMinSeconds = 0.4

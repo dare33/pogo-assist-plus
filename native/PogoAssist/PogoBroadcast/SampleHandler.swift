@@ -47,6 +47,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var ticks = [Double]()            // swipe times seen by the signature, drained by the reader
     private var finished = false              // broadcastFinished has run: later frames are ignored
     private var detector = SwipeDetector()    // touched in the callback only
+    private var ticker = SwipeTicker()        // likewise
 
     private var mode = ReaderMode.accurate
     private var processor: FrameProcessor?    // touched on `queue` only, below
@@ -69,6 +70,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             }
             lock.lock(); finished = false; ticks.removeAll(); lock.unlock()
             detector = SwipeDetector()
+            ticker = SwipeTicker()
             memory = MemoryProbe()
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
@@ -126,8 +128,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             return
         }
         // The swipe signature of every kept frame, read or not (see the class comment).
-        if let diff = detector.feed(pixelBuffer), diff > SwipeDetector.threshold {
-            lock.lock(); if ticks.count < 64 { ticks.append(pts) }; lock.unlock()
+        if let start = ticker.feed(diff: detector.feed(pixelBuffer), time: pts) {
+            lock.lock(); if ticks.count < 64 { ticks.append(start) }; lock.unlock()   // one per swipe, stamped with its first frame
         }
         if wasBusy { return }     // nothing captured, nothing queued
         queue.async { [self] in

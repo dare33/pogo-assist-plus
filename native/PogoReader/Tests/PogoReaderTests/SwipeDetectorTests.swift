@@ -37,6 +37,16 @@ final class SwipeDetectorTests: XCTestCase {
         }
     }
 
+    func testATickNeedsAnEventOfSeveralFramesAndCarriesItsFirstFramesTime() {
+        var t = SwipeTicker()
+        var out = [Double]()
+        // A lone jump (a touch dot), a gap, then a real swipe of 5 frames, then a lone jump again.
+        let diffs: [Double?] = [nil, 2, 40, 3, 2, 30, 31, 32, 29, 28, 2, 50, 1]
+        for (k, d) in diffs.enumerated() { if let s = t.feed(diff: d, time: Double(k) * 0.2) { out.append(s) } }
+        XCTAssertEqual(out.count, 1)
+        XCTAssertEqual(out[0], 1.0, accuracy: 1e-9)       // frame 5, where the swipe began
+    }
+
     func testASizeChangeRestartsTheComparison() {
         var d = SwipeDetector()
         _ = d.feed(drawn(.phone))

@@ -80,3 +80,23 @@ public struct SwipeDetector {
         return Double(d) / Double(current.count)
     }
 }
+
+/// Turns the per-frame signature differences into swipe ticks. A real swipe keeps the signature above the
+/// threshold for several consecutive frames (3 to 6 on the Voice Control clips); a single jump comes from a
+/// touch dot or an animation inside one Pokémon's stay and must not split that Pokémon. So a tick is emitted
+/// only once `Tuning.swipeEventMinFrames` consecutive frames are above the threshold, and it carries the time of
+/// the FIRST of them (when the swipe began), once per event.
+public struct SwipeTicker {
+    private var run = 0
+    private var firstTime = 0.0
+    public init() {}
+
+    /// Feed one frame's difference (nil for the first frame) and its time; returns the swipe's start time when
+    /// this frame completes the minimum run, else nil.
+    public mutating func feed(diff: Double?, time: Double) -> Double? {
+        guard let d = diff, d > SwipeDetector.threshold else { run = 0; return nil }
+        if run == 0 { firstTime = time }
+        run += 1
+        return run == Tuning.swipeEventMinFrames ? firstTime : nil
+    }
+}

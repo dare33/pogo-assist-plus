@@ -167,9 +167,15 @@ Reading:
   CP, HP and settled bars is taken when exactly one does; else the row is flagged `sex-not-read`.
 
 `LiveGrouper` (it is a streaming grouper, not JS `finish()`; all its thresholds are durations from reading times):
-- A swipe (0.6 s of readings with neither CP nor HP) ends a run: two identical Pokemon in a row are two rows.
-  If frames were dropped and the swipe was never seen, the merged row spans more than 2.4 s and is flagged
-  `long-stay`.
+- A swipe ends a run, so two identical Pokemon in a row are two rows. A swipe is seen two ways, either is
+  enough: (1) 0.6 s of readings with no CP, no HP and no name; (2) a swipe tick, from the cheap luma signature
+  (`SwipeDetector`, the JS reference's `segment.js` signature over the CP and name bands, threshold 12, which must
+  hold for 3 consecutive frames to be a swipe: `SwipeTicker`) that the
+  extension computes on EVERY kept frame in its callback, including frames dropped because Vision is busy
+  (the extension hands the grouper `swipe(at:)`; `pogo-read` writes per-frame `signatureDiffs` and `pogo-drop`
+  replays them). A row that spans 2.4 s or more is flagged `long-stay` (two identical Pokemon whose swipe was
+  not seen); the signature is validated below in "Swipe signature on the real clips" and is an additional
+  signal only: it can add a swipe, never remove one.
 - A stray of up to 0.6 s with no settled bars, or a CP that does not fit its HP and bars, is absorbed into the
   neighbour of the same Pokemon with a related CP **and an HP that does not differ**; the absorbing row says
   `absorbed:<cp>`. (JS `absorbStrays` takes one frame, and does not look at HP.) A CP that is a tail or
@@ -179,11 +185,34 @@ Reading:
   only a check that some level gives that CP and HP with bars within one unit.
 - A card whose CP is fully hidden: with exactly one fitting level the CP is computed (`cp-computed:<cp>`);
   otherwise it is a row with no CP and `cp-not-read` / `cp-options:...` (JS lists these under `unmatched`, not
-  as rows). It is listed only with an HP read or after 0.6 s. A hidden stretch with the same HP and bars as the
-  row beside it, even after a lost frame, is not a row (`beside`); a swipe in between makes it one.
+  as rows). It is listed only with an HP read or after 0.6 s. A name alone (no CP, no HP) is a card, not a swipe:
+  such a card is listed as `cp-not-read`. A hidden stretch with the same HP and bars as the row beside it, even
+  after a lost frame, is not a row (`beside`); a swipe in between makes it one.
 - A stretch of frames with a CP but no readable name is listed as `(name not read)` after 0.4 s (two frames at
   full rate, as in JS); a stretch inside a named Pokemon's time, or sliding past it, is not.
 - A Pokemon read only with a weak name is kept as a row flagged `name-low-confidence`, including the first and
   last of a broadcast (JS drops those because clips are joined by their last and first rows; live there is no
   join). A weak read of the neighbour's own name and CP, or one with no swipe before it inside a Pokemon's
   time, is set aside.
+
+## Swipe signature on the real clips
+
+All figures from `pogo-read --width 750 --via-pixelbuffer`. "Events" are runs of frames whose signature differs
+from the previous frame by more than 12 (the table counts every run; the extension acts only on runs of 3 or
+more frames, which drops the lone jumps); "separator rule" is 0.6 s of readings with no CP, HP or name. "Covered"
+is the content changes (name or max HP differs between consecutive fully read frames) that have an event on them.
+
+| Clip | Events | Separator-rule swipes | Content changes covered by an event | Events away from any content change |
+|---|---|---|---|---|
+| marathon-phone | 49 | 47 | 39 / 39 | 9 (the genuine twin Staraptor 1986, clip start and end, similar-CP neighbours) |
+| marathon-ipad-mini | 48 | 14 | 28 / 35 | 8 (leader animation, clip start) |
+| v3 | 114 | 108 | 108 / 108 | 1 |
+| pogo-test-fast | 21 | 20 | 20 / 20 | 1 |
+| darentas-01 (hand-tapped) | 414 | 2 | 393 / 436 | 9 |
+
+It is clean on the Voice Control phone clips (events match the swipes; the extras are the twin and the
+beginning and end of the recording) and misses a few on the iPad (the leader's animation hides small
+changes) and on the hand-tapped clip (a swipe between two frames). It fires inside a stay a handful of times on
+the iPad; with ticks on, the iPad rows did not change, and darentas-01 went from 450 to 452 rows, the two
+extra splits being identical neighbours (Staraptor 1986, Fidough 768). The signature is therefore kept as an
+additional signal.

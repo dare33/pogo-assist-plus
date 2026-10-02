@@ -14,6 +14,7 @@
 // NOTE: this segmentation uses the SAME rule as LiveGrouper's swipe detection (a card frame has a CP or
 // an HP read; 0.6 s or 3 frames at 5 fps with neither is a swipe), so it cannot catch a swipe the grouper
 // misses: two identical Pokemon whose swipe left fewer such frames are one segment here and one row there.
+// (The grouper also takes swipe ticks from the extension's luma signature, which this script does not see.)
 // Check those against the frames (a row flagged `long-stay`, a segment flagged MULTI-NAME).
 //
 // A frame is "a card" when it has a CP or an HP read; 3 or more frames in a row without one (swipes,

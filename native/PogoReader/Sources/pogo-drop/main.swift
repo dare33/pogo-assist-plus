@@ -44,10 +44,11 @@ func needsVision(_ r: FrameReading) -> Bool {
 func replay(slow: Double, fast: Double) -> (rows: [LiveRow], kept: Int) {
     var g = LiveGrouper(species: table)
     var busyUntil = -1.0, kept = 0
+    var ticker = SwipeTicker()
     for (k, r) in file.readings.enumerated() {
         let t = r.time ?? Double(k) * 0.2
         // The extension looks at EVERY frame for a swipe, read or dropped (the luma signature in its callback).
-        if useTicks, let diffs = file.signatureDiffs, k < diffs.count, let d = diffs[k], d > SwipeDetector.threshold { g.swipe(at: t) }
+        if let diffs = file.signatureDiffs, k < diffs.count, let tick = ticker.feed(diff: diffs[k], time: t), useTicks { g.swipe(at: tick) }
         if t < busyUntil - 1e-9 { continue }
         busyUntil = t + (needsVision(r) ? slow : fast) / 1000
         kept += 1
@@ -91,7 +92,10 @@ for (slow, fast) in models {
         let hits = named.filter { sameCp($0, b) }
         if hits.isEmpty {
             if named.isEmpty {
-                if run.rows.contains(where: { overlaps($0, b) && !$0.flags.isEmpty }) { o.lostFlaggedTrace += 1 } else { o.lostNoTrace += 1; o.details.append("LOST " + label(b)) }
+                // A trace: a flagged row overlapping it, or one of the same Pokemon (name and CP) within a second (a card seen
+                // in a single reading, the rest dropped, is a short row beside where it was).
+                let near = { (d: LiveRow) -> Bool in sameName(d, b) && sameCp(d, b) && max(span(d).0 - span(b).1, span(b).0 - span(d).1) <= 1.0 }
+                if run.rows.contains(where: { !$0.flags.isEmpty && (overlaps($0, b) || near($0)) }) { o.lostFlaggedTrace += 1 } else { o.lostNoTrace += 1; o.details.append("LOST " + label(b)) }
             } else if named.allSatisfy({ !$0.flags.isEmpty }) { o.wrongCpFlagged += 1 }
             else { o.wrongCpUnflagged += 1; o.details.append("WRONG-CP \(label(b)) -> " + named.map(label).joined(separator: " | ")) }
         } else if hits.count >= 2 {
@@ -105,6 +109,7 @@ for (slow, fast) in models {
         else if eq.count >= 2 { if d.flags.isEmpty { o.mergedUnflagged += 1; o.details.append("MERGED " + label(d) + " <- " + eq.map(label).joined(separator: " | ")) } else { o.mergedFlagged += 1 } }
     }
     outcomes.append(o)
+    if args.contains("--dump") { for r in run.rows { print("   ROW \(r.index) \(label(r)) t \(r.firstTime.map { String(format: "%.1f", $0) } ?? "?")-\(r.lastTime.map { String(format: "%.1f", $0) } ?? "?")") } }
 }
 
 if args.contains("--json") {

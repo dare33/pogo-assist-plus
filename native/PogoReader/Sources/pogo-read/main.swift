@@ -117,6 +117,7 @@ func run() throws {
     let archive = o.deferred ? CropArchive(directory: FileManager.default.temporaryDirectory.appendingPathComponent("pogo-deferred-\(getpid())")) : nil
     var saver = CropSaver()
     var detector = SwipeDetector()
+    var ticker = SwipeTicker()
     var signatureDiffs = [Double?]()
     if let p = o.cpPadding { processor.reader.cpPadding = p }
     if o.cpDigitsOnly { processor.reader.cpIncludesPrefix = false }
@@ -159,7 +160,7 @@ func run() throws {
         // The swipe signature of every frame, as the extension computes it in its callback.
         let diff = buffer.map { detector.feed($0) } ?? detector.feed(image!)
         signatureDiffs.append(diff)
-        if !o.noSwipeTicks, let d = diff, d > SwipeDetector.threshold { grouper.swipe(at: time); saver.noteSwipe(at: time) }
+        if let tick = ticker.feed(diff: diff, time: time), !o.noSwipeTicks { grouper.swipe(at: tick); saver.noteSwipe(at: tick) }
         let t0 = DispatchTime.now().uptimeNanoseconds
         var reading = FrameReading(frame: label, time: time)
         if let archive = archive {
