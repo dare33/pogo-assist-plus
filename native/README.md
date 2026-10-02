@@ -453,3 +453,16 @@ marathon-phone stay at 51, 49 and 47, and darentas-01/02/03, v3, marathon-ipad-m
 Hand-tapped paging cannot be told from a command's by its beat alone (locally it is as regular), and a page that does not take
 (darentas-03: a steady 2.1 s gesture whose finger was shown touching while the card stayed, stays of 3 to 7 periods) looks like a run
 of identical Pokemon: that is why only pairs are split, why the no-hint rule asks for a steady scan, and why the app should pass the hint.
+
+### Fragments and lone CP reads (`RefineFragments.swift`), the first steps of `Refine.apply`
+
+Order: (1) `absorbFragments` and `dropCpOutliers` on the JavaScript rows, (2) twin split / hidden CP / duplicate, (3) timing split.
+A row backed by one reading (or less than half a period) next to a row of the same species, with no paging boundary between them
+(the pair lasts at most 1.4 periods of a regular beat; with no regular beat, readings 0.4 s apart at most), the same or unread HP and
+read bars that are equal, unread, or within one unit while unsettled, is that Pokemon: it is removed and the neighbour is flagged
+`absorbed-fragment:<cp>`. A row whose CP is one read that needed the bars corrected (`ivs-corrected-from`) while its other reads are the
+tail of one number is run through the JavaScript again without that read (`cp-outlier-dropped:<cp>`); this is what fixed the tap-mode
+"Moltres 1910" (true CP 1918: the first frame read `CP1910`, the next `918` and `18`). A hidden-CP entry is converted to a row only
+from two or more readings that agree on HP and on the entry's settled bars. Not built: the row-level "single reading near the same
+species goes to `unmatched`" rule, because tap mode at 1.0 s gives one real reading per Pokemon (Moltres 1927, 1920 and 1918 are
+three real neighbours, the last backed by a single recovered read).

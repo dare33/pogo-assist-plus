@@ -238,7 +238,7 @@ final class TimingSplitTests: XCTestCase {
     func testRealClipsGainNoTimingSplit() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["POGO_PARITY"] == "1", "set POGO_PARITY=1 to run the real-data checks")
         let dir = ProcessInfo.processInfo.environment["POGO_FRAMES_OUT"] ?? "/Users/greg-mb/Developer/personal/pogo-frames/_out"
-        let expected: [(String, Int)] = [("marathon-phone", 47), ("marathon-ipad-mini", 47), ("v3", 109), ("pogo-test-fast", 21), ("darentas-01", 448), ("darentas-02", 770), ("darentas-03", 144), ("screenrec-2149", 886)]
+        let expected: [(String, Int)] = [("marathon-phone", 47), ("marathon-ipad-mini", 46), ("v3", 109), ("pogo-test-fast", 21), ("darentas-01", 448), ("darentas-02", 770), ("darentas-03", 144), ("screenrec-2149", 578)]
         for (name, rows) in expected {
             let url = URL(fileURLWithPath: "\(dir)/\(name).swift.readings.json")
             guard FileManager.default.fileExists(atPath: url.path) else { print("TIMING \(name): SKIPPED"); continue }
