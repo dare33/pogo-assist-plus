@@ -16,21 +16,27 @@ final class StateModel: ObservableObject {
     @Published var groupAvailable = SharedStore.containerAvailable
     private var timer: Timer?
 
+    /// What the Darwin notification callback holds. The callback cannot capture, so something must
+    /// travel as the observer pointer; it must never be the model itself, because a notification can
+    /// arrive after the model has gone (Diagnostics is a sheet that closes) and would then call into
+    /// freed memory. The box is retained for the life of the process (a few bytes per model) and only
+    /// holds the model weakly.
+    private final class ObserverBox { weak var model: StateModel? }
+    private let box = ObserverBox()
+
     init() {
         reload()
-        // The extension posts this after each write; the callback must not capture, so the model
-        // travels as the observer pointer.
-        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), { _, observer, _, _, _ in
+        box.model = self
+        let pointer = Unmanaged.passRetained(box).toOpaque()   // never released: see ObserverBox
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), pointer, { _, observer, _, _, _ in
             guard let observer = observer else { return }
-            let model = Unmanaged<StateModel>.fromOpaque(observer).takeUnretainedValue()
-            DispatchQueue.main.async { model.reload() }
+            let box = Unmanaged<ObserverBox>.fromOpaque(observer).takeUnretainedValue()
+            DispatchQueue.main.async { MainActor.assumeIsolated { box.model?.reload() } }
         }, SharedStore.notificationName as CFString, nil, .deliverImmediately)
     }
 
-    /// The observer above holds this object by pointer, so it must go when the object does: Diagnostics is a sheet now, and a
-    /// notification after it closed (the sample scan posts one) reached a freed model and crashed the app.
     deinit {
-        CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), CFNotificationName(SharedStore.notificationName as CFString), nil)
+        CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(box).toOpaque(), CFNotificationName(SharedStore.notificationName as CFString), nil)
     }
 
     func startTimer() {
