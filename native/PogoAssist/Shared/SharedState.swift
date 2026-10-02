@@ -20,6 +20,9 @@ struct BroadcastState: Codable, Equatable {
     var savedFrames = 0         // "save crops" mode: frames written
     var savedFiles = 0
     var savedMB = 0.0
+    var replayLines = 0          // lines in replay.jsonl so far (live modes)
+    var replayLogTruncated = false   // the replay log hit its size cap and stopped
+    var replayLogFailed = false      // a write to the replay log failed: it was switched off (reading was unaffected)
 }
 
 /// The app group container and the Darwin notification the extension posts after each write.
@@ -62,11 +65,17 @@ enum SharedStore {
 
     static func clear() {
         if let url = stateURL { try? FileManager.default.removeItem(at: url) }
+        if let url = replayURL { try? FileManager.default.removeItem(at: url) }
     }
 
     /// Where "save crops" mode writes (and the app reads and then empties).
     static var cropsURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("crops", isDirectory: true)
+    }
+
+    /// The extension's replay log: one JSON line per reading, swipe tick and dropped frame (live modes).
+    static var replayURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("replay.jsonl")
     }
 
     /// The app's result of reading the saved crops (shareable).

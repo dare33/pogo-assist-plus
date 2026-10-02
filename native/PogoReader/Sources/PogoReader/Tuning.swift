@@ -67,6 +67,9 @@ public enum Tuning {
     /// closer than that a tick is taken to be a jump inside one stay (a touch dot, the iPad leader's animation).
     public static let swipeMinGapSeconds = 0.55
 
+    /// The extension's replay log stops growing at this size (about 10000 readings).
+    public static let maxReplayLogBytes = 3_000_000
+
     /// At most this many swipe ticks are kept waiting for a reading; the oldest is dropped past it.
     public static let maxPendingTicks = 64
 

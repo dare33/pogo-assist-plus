@@ -69,7 +69,7 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if model.hasState, let url = SharedStore.stateURL {
-                        ShareLink(items: [url] + (SharedStore.deferredURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? [$0] : [] } ?? [])) { Image(systemName: "square.and.arrow.up") }
+                        ShareLink(items: [url] + [SharedStore.deferredURL, SharedStore.replayURL].compactMap { $0 }.filter { FileManager.default.fileExists(atPath: $0.path) }) { Image(systemName: "square.and.arrow.up") }
                     }
                     Button("Clear", role: .destructive) { model.clear() }
                 }

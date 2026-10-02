@@ -47,6 +47,8 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var seen = 0                      // frames offered at the 5 fps rate
     private var dropped = 0                   // of those, dropped because the previous one was still being handled
     private var ticks = [Double]()            // swipe times seen by the signature, drained by the reader
+    private var droppedTimes = [Double]()     // times of frames dropped because the reader was busy, drained likewise (bounded)
+    private var replay: ReplayWriter?         // the replay log; touched on `queue` only
     private var finished = false              // broadcastFinished has run: later frames are ignored
     private var detector = SwipeDetector()    // guarded by `lock` (the callback and broadcastStarted)
     private var ticker = SwipeTicker()        // likewise
@@ -70,7 +72,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             if !SharedStore.containerAvailable {
                 log.error("app group container unavailable: no state can be shared; check Signing & Capabilities on both targets")
             }
-            lock.lock(); finished = false; ticks.removeAll(); detector = SwipeDetector(); ticker = SwipeTicker(); lock.unlock()
+            lock.lock(); finished = false; ticks.removeAll(); droppedTimes.removeAll(); detector = SwipeDetector(); ticker = SwipeTicker(); lock.unlock()
             memory = MemoryProbe()
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
@@ -96,6 +98,11 @@ class SampleHandler: RPBroadcastSampleHandler {
             state = BroadcastState()
             state.mode = mode.rawValue
             msTotal = 0
+            replay = nil
+            if mode != .saveCrops, let url = SharedStore.replayURL {
+                replay = ReplayWriter(url: url)      // truncates; nil if it cannot be opened
+                if replay == nil { log.error("replay log could not be opened") }
+            }
             write(force: true)
             // At least one state write a second, whatever the frames are doing.
             let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -123,7 +130,11 @@ class SampleHandler: RPBroadcastSampleHandler {
         seen += 1
         let wasBusy = busy
         if !wasBusy { busy = true }
-        if wasBusy { dropped += 1 }
+        if wasBusy {
+            dropped += 1
+            if droppedTimes.count >= 256 { droppedTimes.removeFirst() }   // bounded: the oldest goes
+            droppedTimes.append(pts)
+        }
         lock.unlock()
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             if !wasBusy { lock.lock(); busy = false; lock.unlock() }
@@ -153,6 +164,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             grouper.finish()
             state.rows = grouper.rows
             state.finished = true
+            replay?.close()
             write(force: true)
             log.notice("broadcast finished: \(self.state.framesRead) read, \(self.state.framesDropped) dropped, \(self.state.skippedLowMemory) skipped for memory, peak \(self.state.peakFootprintMB, format: .fixed(precision: 1)) MB")
         }
@@ -181,6 +193,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             // Little memory left: skip Vision for this frame and say so, instead of being killed. The
             // skip is not a read: it is not counted in the frames read or the mean time per frame.
             drainTicks()
+            record(.drop(time))
             state.skippedLowMemory += 1
             if state.skippedLowMemory == 1 { log.error("low memory: skipping Vision for frames (available below \(Tuning.lowMemoryAvailableBytes / 1_048_576) MB)") }
             write(force: false)
@@ -189,6 +202,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             let reading = processor.process(pixelBuffer, time: time)
             msTotal += Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
             drainTicks()          // right after Vision returns, immediately before the reading is added
+            record(.reading(ReplayReading(reading, time: time, ms: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6)))
             state.framesRead += 1
             let changed = grouper.add(reading)
             if changed { state.rows = grouper.rows }
@@ -196,10 +210,29 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
     }
 
-    /// On `queue`. Hand the swipes the signature saw to whoever groups (the grouper, or the crop saver).
+    /// On `queue`. Hand the swipes the signature saw to whoever groups (the grouper, or the crop saver), and put them, with
+    /// the frames dropped meanwhile, in the replay log in the order the grouper receives them.
     private func drainTicks() {
-        lock.lock(); let seen = ticks; ticks.removeAll(keepingCapacity: true); lock.unlock()
-        for t in seen { if mode == .saveCrops { saver.noteSwipe(at: t) } else { grouper.swipe(at: t) } }
+        lock.lock()
+        let seenTicks = ticks; ticks.removeAll(keepingCapacity: true)
+        let seenDrops = droppedTimes; droppedTimes.removeAll(keepingCapacity: true)
+        lock.unlock()
+        for t in seenDrops { record(.drop(t)) }
+        for t in seenTicks {
+            record(.tick(t))
+            if mode == .saveCrops { saver.noteSwipe(at: t) } else { grouper.swipe(at: t) }
+        }
+    }
+
+    /// On `queue`. One line of the replay log. A failure switches the log off and is logged once; reading is never affected.
+    private func record(_ line: ReplayLine) {
+        guard let writer = replay else { return }
+        switch writer.append(line) {
+        case .written: state.replayLines = writer.lineCount
+        case .truncatedNow: state.replayLogTruncated = true; log.notice("replay log reached its size cap and stopped")
+        case .failedNow: state.replayLogFailed = true; log.error("replay log write failed: the log is switched off, reading continues")
+        case .disabled: break
+        }
     }
 
     /// On `queue`. Rows (or saved crops) changed: write now. Otherwise at most about once a second.

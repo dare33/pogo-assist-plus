@@ -140,6 +140,24 @@ iOS enforces the extension's limit (about 50 MB) on `phys_footprint`. `MemoryPro
   The share button exports the state file so a run's numbers can be sent back. Only the phone figure
   settles the proof.
 
+## Replaying a device run (`replay.jsonl`)
+
+In the two live reader modes the broadcast extension writes `replay.jsonl` into the app group (truncated at each broadcast
+start, written on the reader queue only, nothing buffered beyond one line, capped at 3 MB: `replayLogTruncated` in the state
+file says it stopped, `replayLogFailed` says a write failed and the log was switched off; reading is never affected). One
+JSON line per reading (time, CP and its text, name and its text, weak flag, HP and its text, bars, bar confidence, flags,
+milliseconds the read took, plus the species ids the grouper uses), one per swipe tick (`{"k":"t","t":...}`), one per
+frame dropped because the reader was busy or skipped for memory (`{"k":"d","t":...}`), in the order the extension's own
+grouper received them (ticks drained right before the reading that followed). The app's share button exports it with the
+state file (and `deferred.json` when there is one); Clear deletes it.
+
+To replay it through the current grouper offline:
+
+    swift run -c release --package-path native/PogoReader pogo-drop --replay replay.jsonl [--json]
+
+It prints the rows the grouper makes from that run (`ReplayLog.replay` in the package does the same for a test or another
+grouper). A damaged last line is skipped.
+
 ## Which Pokemon were on screen: timeline.mjs
 
     node native/tools/timeline.mjs <readings.json> [--rows <rows source>] [--json] [--swipe-frames 3] [--split-content]

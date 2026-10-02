@@ -22,6 +22,27 @@ import PogoReader
 // Each is split into "flagged" (the row carries any flag: a trace for the user) and "unflagged"; the goal
 // is no unflagged wrong row and no row lost without a flagged trace beside it.
 
+// pogo-drop --replay <replay.jsonl> [--json]: feed an extension replay log through LiveGrouper exactly as the extension did
+// (readings and swipe ticks in file order) and print the rows. The log is `replay.jsonl` from the app group, exported by
+// the app's share button.
+if let at = CommandLine.arguments.firstIndex(of: "--replay"), at + 1 < CommandLine.arguments.count {
+    let url = URL(fileURLWithPath: CommandLine.arguments[at + 1])
+    let lines = ReplayLog.lines(in: url)
+    guard !lines.isEmpty else { FileHandle.standardError.write(Data("pogo-drop: no replay lines in \(url.path)\n".utf8)); exit(1) }
+    let res = ReplayLog.replay(lines, species: try SpeciesTable.bundled())
+    print("replay: \(res.readings) readings, \(res.ticks) swipe ticks, \(res.drops) dropped frames -> \(res.rows.count) rows")
+    if CommandLine.arguments.contains("--json") {
+        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        print(String(decoding: try enc.encode(res.rows), as: UTF8.self))
+    } else {
+        for r in res.rows {
+            let t = r.firstTime.map { String(format: "%.1f", $0) } ?? "?"
+            print("\(String(r.index).padding(toLength: 4, withPad: " ", startingAt: 0)) \(r.name.padding(toLength: 22, withPad: " ", startingAt: 0)) CP \(r.cp.map(String.init) ?? "?")  HP \(r.hp.map(String.init) ?? "?")  IVs \(r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "?")  frames \(r.frames)  t \(t)  \(r.flags.joined(separator: " "))")
+        }
+    }
+    exit(0)
+}
+
 struct File: Decodable { var readings: [FrameReading]; var signatureDiffs: [Double?]? }
 
 let args = Array(CommandLine.arguments.dropFirst())
