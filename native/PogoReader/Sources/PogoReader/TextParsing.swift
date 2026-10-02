@@ -58,3 +58,29 @@ public func parseHp(_ text: String) -> HP? {
     }
     return nil
 }
+
+// MARK: - read shape checks
+// Vision sometimes reads a crop as if it were rotated 180 degrees ("dH 99 / 99" for "66 / 66 HP"),
+// and there is no request option to stop it considering rotated text. The parsers above would take
+// the digits out of such a read, so the frame reader first checks the SHAPE of the whole text.
+
+/// A real HP read is digits, "/", digits, then at most "HP" (and a stray digit or punctuation): no
+/// letters may come before the first digit. `parseHp` alone would accept "dH 99 / 99".
+public func hpReadHasValidShape(_ text: String) -> Bool {
+    let t = replacingO(text)
+    guard let firstDigit = t.firstIndex(where: isAsciiDigit) else { return false }
+    if t[..<firstDigit].contains(where: isAsciiLetter) { return false }
+    // Whatever follows the figures may only be H / P letters (the "HP" label, any case).
+    guard let slash = t.firstIndex(of: "/") else { return false }
+    var i = slash + 1
+    while i < t.count, isSpace(t[i]) || isAsciiDigit(t[i]) { i += 1 }
+    return t[i...].allSatisfy { "HPhp".contains($0) || isSpace($0) || $0 == "1" || $0 == "." || $0 == "l" || $0 == "I" }
+}
+
+/// A real CP read is the "CP" prefix (or part of it: "P", "C", or nothing) then digits. Letters
+/// other than C and P anywhere before the digits mean a garbled or rotated read.
+public func cpReadHasValidShape(_ text: String) -> Bool {
+    let t = replacingO(text)
+    guard let firstDigit = t.firstIndex(where: isAsciiDigit) else { return false }
+    return t[..<firstDigit].allSatisfy { !isAsciiLetter($0) || "CPcp".contains($0) }
+}

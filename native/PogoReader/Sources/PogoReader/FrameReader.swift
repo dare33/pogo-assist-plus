@@ -44,7 +44,7 @@ public final class FrameReader {
         if cpText != nil {
             let r = text.read(crop(img, regions.cp), kind: .cp)
             out.cpText = r.text
-            out.cp = parseCp(r.text)
+            out.cp = cpReadHasValidShape(r.text) ? parseCp(r.text) : nil
             if let cp = out.cp { out.cpReads = [cp] } else { out.cpReads = [] }
         }
 
@@ -103,7 +103,7 @@ public final class FrameReader {
         if wantHp {
             let r = text.read(crop(img, hpRegion), kind: .hp)
             out.hpText = r.text
-            out.hp = parseHp(r.text)
+            out.hp = hpReadHasValidShape(r.text) ? parseHp(r.text) : nil
             if out.hp == nil { out.flags.append("hp-unread") }
         }
         if wantBars {

@@ -99,6 +99,19 @@ final class ReadFrameTests: XCTestCase {
         XCTAssertNil(read(cardScreen(), FakeText(hp: "139 / 13")).hp)
     }
 
+    /// Vision once read "66 / 66 HP" rotated 180 degrees as "dH 99 / 99" (v3, Caterpie): that is no read.
+    func testAnUpsideDownHpOrCpReadIsNoRead() {
+        let r = read(cardScreen(), FakeText(cp: "dH 1234", hp: "dH 99 / 99"))
+        XCTAssertNil(r.hp)
+        XCTAssertTrue(r.flags.contains("hp-unread"))
+        XCTAssertNil(r.cp)
+        XCTAssertTrue(r.flags.contains("cp-unread"))
+        for text in ["dH 99 / 99", "H 99 / 99", "99 / 99 dH", "HP", "66 66"] { XCTAssertFalse(hpReadHasValidShape(text), text) }
+        for text in ["145 / 145 HP", "145/145", "79/79 1", "66 / 66 H", "129 / 129 HP"] { XCTAssertTrue(hpReadHasValidShape(text), text) }
+        for text in ["CP1234", "CP 1234", "P2651", "cp3O28", "1234", "C1234"] { XCTAssertTrue(cpReadHasValidShape(text), text) }
+        for text in ["dH1234", "Xd1234", "CPL", "VLO"] { XCTAssertFalse(cpReadHasValidShape(text), text) }
+    }
+
     func testNoBarsIsFlaggedWhenThePanelIsMissingAndReadWhenPresent() {
         let reader = FrameReader(text: FakeText(), names: names)
         XCTAssertTrue(reader.read(cardScreen(), wantBars: true).flags.contains("no-bars"))
