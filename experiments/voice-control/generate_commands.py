@@ -17,6 +17,12 @@ of events, each with the finger positions in screen points, forces and a timesta
 with no fingers for each lift. A chain is a CACRecordedUserActionFlow: a list of tasks that each
 name a command identifier. See PLAN.md (phase 3) for what was tested and on which devices.
 
+Tap paging (`--tap X Y --screen-width W --screen-height H`) presses the game's right-hand next-Pokemon arrow. The file holds absolute
+points, so it is made only for a screen in CHECKED_SCREENS and only at that screen's measured point (440 x 956 at 424, 775); anything else
+is refused with a plain message and exit code 2, as are non-finite or non-positive numbers, a --count or --batch below 1, and an --every
+not longer than one touch. The exact command lines that produce the test fixtures are in
+native/PogoReader/Tests/PogoBoxTests/Fixtures/voice/REGENERATE.md; the refusals are tested by test_generate_commands.py in this folder.
+
 Tested on an iPhone (440 x 956 points) and an iPad mini 6: the default positions work on both.
 Start with the appraisal panel open. Do not add a tap: a tap closes the panel.
 """
@@ -27,6 +33,33 @@ import plistlib
 from plistlib import UID
 
 FINGER = 3  # the finger identifier the on-phone recorder used
+
+# The screens a tap point has been measured on: (width, height, tap x, tap y) in points. A tap file holds absolute points, so the
+# generator makes one only for a screen in this table and only for its measured point (the app's `checkedScreens` is the same list).
+CHECKED_SCREENS = [(440.0, 956.0, 424.0, 775.0)]
+TAP_HOLD = 0.06
+SWIPE_HZ = 60
+
+
+def finite_positive(text):
+    """argparse type: a number that is finite and above zero (so nan, inf, 0 and negatives are refused with a plain message)."""
+    try:
+        v = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("%r is not a number" % text)
+    if not math.isfinite(v) or v <= 0:
+        raise argparse.ArgumentTypeError("%r must be a finite number above zero" % text)
+    return v
+
+
+def whole_at_least_one(text):
+    try:
+        v = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("%r is not a whole number" % text)
+    if v < 1:
+        raise argparse.ArgumentTypeError("%r must be 1 or more" % text)
+    return v
 
 
 class Archive:
@@ -105,7 +138,7 @@ def flow(command_id, repeats, locale):
     return a.dumps()
 
 
-def swipes(start, count, x_from, x_to, y, every, duration, hz=60):
+def swipes(start, count, x_from, x_to, y, every, duration, hz=SWIPE_HZ):
     """`count` swipes, one starting every `every` seconds, each lasting `duration`."""
     events = []
     for k in range(count):
@@ -119,7 +152,7 @@ def swipes(start, count, x_from, x_to, y, every, duration, hz=60):
     return events
 
 
-def taps(start, count, x, y, every, hold=0.06):
+def taps(start, count, x, y, every, hold=TAP_HOLD):
     """`count` taps at one fixed point, one starting every `every` seconds: a touch, and the lift `hold` seconds later.
     A tap is a swipe that does not move."""
     events = []
@@ -139,25 +172,38 @@ MIN_TAP_X_FRACTION = 0.95
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("out")
-    p.add_argument("--count", type=int, required=True, help="how many Pokémon to page past (the storage count)")
+    p.add_argument("--count", type=whole_at_least_one, required=True, help="how many Pokémon to page past (the storage count)")
     p.add_argument("--name", default="Pogo scan", help="what to say; keep it unlike any other command")
     p.add_argument("--batch-name", default="Storage page step", help="name of the batch gesture; it must not share words with --name, or Voice Control can run the wrong one")
-    p.add_argument("--batch", type=int, default=20, help="most swipes in one gesture (50 was tested); the batch is then cut to ceil(count / repeats) so the last repeat does not overshoot by almost a batch")
-    p.add_argument("--every", type=float, default=None, help="seconds between swipe starts (default 2.1, or 1.2 with --tap; 2.1 gives 7 frames at 5 fps; 1.6 was tested on a small sample)")
-    p.add_argument("--duration", type=float, default=0.85, help="seconds one swipe lasts (0.6 with --every 1.6)")
+    p.add_argument("--batch", type=whole_at_least_one, default=20, help="most swipes in one gesture (50 was tested); the batch is then cut to ceil(count / repeats) so the last repeat does not overshoot by almost a batch")
+    p.add_argument("--every", type=finite_positive, default=None, help="seconds between swipe starts (default 2.1, or 1.2 with --tap; 2.1 gives 7 frames at 5 fps; 1.6 was tested on a small sample)")
+    p.add_argument("--duration", type=finite_positive, default=0.85, help="seconds one swipe lasts (0.6 with --every 1.6)")
     p.add_argument("--x-from", type=float, default=340.0)
     p.add_argument("--x-to", type=float, default=75.0)
     p.add_argument("--y", type=float, default=340.0)
     p.add_argument("--locale", default="en_AU", help="the phone's Voice Control language")
-    p.add_argument("--tap", type=float, nargs=2, metavar=("X", "Y"), help="page by tapping the next-Pokémon arrow at this point (screen points) instead of swiping")
-    p.add_argument("--screen-width", type=float, default=440.0, help="width in points of the screen the --tap point was measured on")
+    p.add_argument("--tap", type=finite_positive, nargs=2, metavar=("X", "Y"), help="page by tapping the next-Pokémon arrow at this point (screen points) instead of swiping")
+    p.add_argument("--screen-width", type=finite_positive, help="width in points of the screen the --tap point was measured on (with --tap)")
+    p.add_argument("--screen-height", type=finite_positive, help="height in points of that screen (with --tap)")
     p.add_argument("--id-base", type=float, help="number the command identifiers come from (Custom.<n> and Custom.<n+60>); give the same one every time for a mode so importing the file replaces that mode's commands and leaves the others alone. Default: the time, so every file is a new pair")
     p.add_argument("--now", help="fix the time stamps and identifiers (UTC, YYYY-MM-DDTHH:MM:SS) so two runs give the same file; for tests")
     args = p.parse_args()
-    if args.tap and args.tap[0] < MIN_TAP_X_FRACTION * args.screen_width:
-        p.error("--tap x %.1f is left of %.0f%% of the %.0f pt screen width: a tap there could reach Power up or Evolve" % (args.tap[0], MIN_TAP_X_FRACTION * 100, args.screen_width))
+    if args.tap:
+        if args.screen_width is None or args.screen_height is None:
+            p.error("--tap needs --screen-width and --screen-height: a tap file holds absolute points, so it is made for one screen size")
+        match = [c for c in CHECKED_SCREENS if c[0] == args.screen_width and c[1] == args.screen_height]
+        if not match or (match[0][2], match[0][3]) != tuple(args.tap):
+            p.error("tap paging is only available on screens it has been checked on (%s) and at that screen's measured point"
+                    % ", ".join("%gx%g at %g, %g" % c for c in CHECKED_SCREENS))
+        if args.tap[0] < MIN_TAP_X_FRACTION * args.screen_width:
+            p.error("--tap x %.1f is left of %.0f%% of the %.0f pt screen width: a tap there could reach Power up or Evolve" % (args.tap[0], MIN_TAP_X_FRACTION * 100, args.screen_width))
     if args.every is None:
         args.every = 1.2 if args.tap else 2.1
+    touch = TAP_HOLD if args.tap else args.duration + 1.0 / SWIPE_HZ
+    if args.every <= touch:
+        p.error("--every %g must be longer than one touch lasts (%g s): the next must not start before this one is over" % (args.every, touch))
+    if not args.tap and args.duration < 2.0 / SWIPE_HZ:
+        p.error("--duration %g is too short for a swipe (at least %g s)" % (args.duration, 2.0 / SWIPE_HZ))
 
     now = datetime.datetime.fromisoformat(args.now) if args.now else datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     ref = (now - datetime.datetime(2001, 1, 1)).total_seconds()  # Apple's reference date
