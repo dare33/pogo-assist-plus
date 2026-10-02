@@ -121,7 +121,8 @@ private struct ResultList: View {
                 if review.kind == .full {
                     let report = BoxMerge.goneReport(plan, resolutions: review.resolutions)
                     let removing = report.gone.filter { !review.keepGone.contains($0) }.count
-                    group("gone", "Gone", removing, "minus.circle") {
+                    // The list and its toggles stay while any entry is a Gone candidate, kept or not, so a kept one can be un-kept.
+                    group("gone", "Gone", report.gone.count, "minus.circle", detail: removing == report.gone.count ? nil : "\(removing) removed") {
                         ForEach(report.gone, id: \.self) { id in
                             if let e = saved[id] {
                                 Toggle(isOn: Binding(get: { !review.keepGone.contains(id) }, set: { model.setKeep(id, !$0) })) {
@@ -238,12 +239,12 @@ private struct ResultList: View {
         }
     }
 
-    @ViewBuilder private func group<C: View>(_ key: String, _ title: String, _ count: Int, _ icon: String, @ViewBuilder content: @escaping () -> C) -> some View {
+    @ViewBuilder private func group<C: View>(_ key: String, _ title: String, _ count: Int, _ icon: String, detail: String? = nil, @ViewBuilder content: @escaping () -> C) -> some View {
         if count == 0 {
             HStack { Label(title, systemImage: icon); Spacer(); Text("0").foregroundStyle(.secondary) }
         } else {
             DisclosureGroup(isExpanded: Binding(get: { open.contains(key) }, set: { if $0 { open.insert(key) } else { open.remove(key) } })) { content() } label: {
-                HStack { Label(title, systemImage: icon); Spacer(); Text("\(count)").foregroundStyle(.secondary).monospacedDigit() }
+                HStack { Label(title, systemImage: icon); Spacer(); if let detail { Text(detail).font(.footnote).foregroundStyle(.secondary) }; Text("\(count)").foregroundStyle(.secondary).monospacedDigit() }
             }
         }
     }
