@@ -25,18 +25,7 @@ func pngPaths(_ input: String) throws -> [URL] {
 }
 
 func decodePNG(_ url: URL) throws -> RGBAImage {
-    guard let src = CGImageSourceCreateWithURL(url as CFURL, nil), let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
-        throw ToolError.message("cannot decode \(url.path)")
-    }
-    var img = RGBAImage(width: cg.width, height: cg.height)
-    let ok = img.bytes.withUnsafeMutableBytes { raw -> Bool in
-        guard let ctx = CGContext(data: raw.baseAddress, width: cg.width, height: cg.height, bitsPerComponent: 8, bytesPerRow: cg.width * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
-        return true
-    }
-    if !ok { throw ToolError.message("cannot create a bitmap for \(url.path)") }
-    return img
+    do { return try decodeRGBA(contentsOf: url) } catch { throw ToolError.message("\(error)") }
 }
 
 /// Converts RGBA frames into one reused full-size 420 bi-planar pixel buffer, as the extension
