@@ -234,6 +234,20 @@ final class FoldApiTests: XCTestCase {
         XCTAssertNil(lib2.newerVersion(account: "a"))
     }
 
+    func testTheNewerVersionCacheSurvivesConcurrentCallsFromTwoQueues() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-l3q-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        try lib.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "v1", now: date(1))
+        let failures = NSLock(); var count = 0
+        // the main queue's loadBox and the worker queue's commits, many times over at once
+        DispatchQueue.concurrentPerform(iterations: 200) { i in
+            if i % 4 == 0 { do { try lib.mutate(account: "a", reason: .edit, note: "e\(i)") { $0 } } catch { /* a refused stale save is fine; a crash is not */ } }
+            else if lib.newerVersion(account: "a") != nil { failures.lock(); count += 1; failures.unlock() }
+        }
+        XCTAssertEqual(count, 0, "no version of this build is ever reported as newer")
+        XCTAssertGreaterThan(try lib.history(account: "a").count, 1)
+    }
+
     // V1, V2
     func testV2TapNeedsAnExactCheckedPointForTheGivenWidthAndHeight() throws {
         func make(_ p: CGPoint?, _ w: Double?, _ h: Double?) throws -> Data { try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: p, screenWidth: w, screenHeight: h, now: date(1)) }

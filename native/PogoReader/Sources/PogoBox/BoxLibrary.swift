@@ -73,7 +73,7 @@ public final class BoxLibrary {
     /// Rename an account (see `BoxStore.renameAccount`); its box versions follow, with the new name written into each.
     public func renameAccount(from old: String, to new: String) throws {
         try store.renameAccount(from: old, to: new)
-        verifiedThrough[old] = nil; verifiedThrough[new.trimmingCharacters(in: .whitespacesAndNewlines)] = nil
+        setVerified(old, nil); setVerified(new.trimmingCharacters(in: .whitespacesAndNewlines), nil)
         let newName = new.trimmingCharacters(in: .whitespacesAndNewlines)
         for seq in (try? seqs(newName)) ?? [] {
             guard let f = try? file(newName, seq), var snap = try? load(account: newName, seq: seq) else { continue }
@@ -125,7 +125,7 @@ public final class BoxLibrary {
                                scanDate: scanDate, restoredFrom: restoredFrom, entries: entries)
         try fm.createDirectory(at: try boxFolder(account), withIntermediateDirectories: true)
         try Self.encoder.encode(snap).write(to: file(account, next), options: .atomic)
-        if verifiedThrough[account] == (last ?? 0) { verifiedThrough[account] = next }   // this build wrote it: not newer
+        verifiedLock.lock(); if verifiedThrough[account] == (last ?? 0) { verifiedThrough[account] = next }; verifiedLock.unlock()   // this build wrote it: not newer
         return snap
     }
 
@@ -147,19 +147,23 @@ public final class BoxLibrary {
 
     /// Versions of each account already read and found to be this build's own or older, so the check does not read every file each time. A
     /// version file is not changed once written, and `commit` extends the count; a rename clears it.
+    /// Written from the main actor (the app's `loadBox`) and from the worker queue (`commit`), so every access holds `verifiedLock`.
     private var verifiedThrough = [String: Int]()
+    private let verifiedLock = NSLock()
+    private func verified(_ account: String) -> Int { verifiedLock.lock(); defer { verifiedLock.unlock() }; return verifiedThrough[account] ?? 0 }
+    private func setVerified(_ account: String, _ seq: Int?) { verifiedLock.lock(); verifiedThrough[account] = seq; verifiedLock.unlock() }
 
     /// The first version of the account (any, not only the newest) whose schema number is above this build's, or nil. A file with no
     /// readable schema number is damaged, not newer. Only versions not yet verified are read.
     private func newerVersionSeq(_ account: String) throws -> Int? {
-        var verified = verifiedThrough[account] ?? 0, contiguous = true
+        var verified = self.verified(account), contiguous = true
         for seq in try seqs(account) where seq > verified {
             if let data = try? Data(contentsOf: file(account, seq)), let schema = Self.schema(of: data) {
-                if schema > Self.schemaVersion { verifiedThrough[account] = verified; return seq }
+                if schema > Self.schemaVersion { setVerified(account, verified); return seq }
                 if contiguous { verified = seq }
             } else { contiguous = false }
         }
-        verifiedThrough[account] = verified
+        setVerified(account, verified)
         return nil
     }
 
