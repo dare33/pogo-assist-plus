@@ -84,11 +84,12 @@ class SampleHandler: RPBroadcastSampleHandler {
             let names = table.map(displayNames) ?? []
             grouper = LiveGrouper(species: table)
             switch mode {
-            case .accurate, .fast, .accurateFewerPasses:
+            case .accurate, .fast, .accurateReuse, .accurateFewerPasses:
                 var options = VisionOptions()
                 options.fast = mode == .fast
                 processor = FrameProcessor(textReader: VisionTextReader(options: options), names: names, targetWidth: 750, memory: memory)
-                if mode == .accurateFewerPasses { processor?.reader.singlePass = true; processor?.reader.reuseStaticText = true }
+                if mode == .accurateReuse || mode == .accurateFewerPasses { processor?.reader.reuseStaticText = true }
+                if mode == .accurateFewerPasses { processor?.reader.singlePass = true }
             case .saveCrops:
                 // No Vision request is created in this mode.
                 processor = FrameProcessor.cropsOnly(names: names, targetWidth: 750, memory: memory)

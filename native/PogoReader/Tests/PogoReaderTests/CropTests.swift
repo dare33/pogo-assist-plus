@@ -161,6 +161,6 @@ final class CropTests: XCTestCase {
         XCTAssertTrue(ReadGuard.shouldSkipVision(availableBytes: 7 * 1_048_576))
         XCTAssertFalse(ReadGuard.shouldSkipVision(availableBytes: 9 * 1_048_576))
         XCTAssertFalse(ReadGuard.shouldSkipVision(availableBytes: nil))
-        XCTAssertEqual(ReaderMode.allCases.map(\.rawValue), ["accurate", "fast", "saveCrops", "accurateFewerPasses"])
+        XCTAssertEqual(ReaderMode.allCases.map(\.rawValue), ["accurate", "fast", "saveCrops", "accurateReuse", "accurateFewerPasses"])
     }
 }
