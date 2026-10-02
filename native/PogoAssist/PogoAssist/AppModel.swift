@@ -130,7 +130,9 @@ final class AppModel: ObservableObject {
             let now = Date()
             switch target {
             case .review: if case .review(var r) = flow { r.reportSentAt = now; r.reportHash = built.contentHash; flow = .review(r) }
-            case .saved(let id): if let a = account { try? library.store.markReportSent(account: a, id: id, at: now, hash: built.contentHash); loadScans() }
+            case .saved(let id):
+                // On the library's one queue, like every other write to the scan files.
+                if let a = account { let store = library.store, hash = built.contentHash; _ = try? await worker.run { _ in try store.markReportSent(account: a, id: id, at: now, hash: hash) }; loadScans() }
             }
             reportState = .sent
         } catch {
