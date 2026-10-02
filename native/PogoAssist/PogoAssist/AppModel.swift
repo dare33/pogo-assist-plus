@@ -31,6 +31,10 @@ final class AppModel: ObservableObject {
         var reportHash: String?
         /// The current box version this review was prepared against (nil: there was none). A save is refused if the box has moved on.
         var boxSeq: Int?
+        /// The extension ended this scan itself because the end of the list was reached.
+        var endedAtListEnd = false
+        /// Why the review chose Add and update although a full scan was asked for (`ScanKindAdvice`), or nil.
+        var kindNote: String?
     }
 
     enum ScanFlow {
@@ -165,6 +169,8 @@ final class AppModel: ObservableObject {
     struct SetRecord: Codable, Equatable { var kind: VoiceCommandFile.SetKind; var date: Date; var screen: String? }
 
     /// The person paged by hand, not with a command: the paging beat means nothing, so twins are not judged from it. Off by default.
+    /// The choice made BEFORE the scan on the Scan screen: "Page with the voice command" (the default) or "Page by hand". Stored; the extension reads it
+    /// when the broadcast starts (no automatic end for hand paging) and the review reads what the extension was told.
     @Published var pagedByHand: Bool { didSet { UserDefaults.standard.set(pagedByHand, forKey: Keys.hand); refreshReaderSettings() } }
 
     /// Tell the broadcast extension whether the next scan is paged by a command (it then ends the scan itself at the end of the list) and at what period.
@@ -302,6 +308,11 @@ final class AppModel: ObservableObject {
         storageCountText = ""   // read per account by loadVoiceRecord once the account is known
         pagedByHand = UserDefaults.standard.bool(forKey: Keys.hand)
         account = UserDefaults.standard.string(forKey: Keys.account)
+        // Before the count was per account it was one global value: carry it over to the current account, once.
+        if let old = UserDefaults.standard.string(forKey: Keys.count), let a = account {
+            if UserDefaults.standard.string(forKey: Keys.count + "." + a) == nil { UserDefaults.standard.set(old, forKey: Keys.count + "." + a) }
+            UserDefaults.standard.removeObject(forKey: Keys.count)
+        }
         reloadAccounts()
         loadBox()
         loadVoiceRecord()
@@ -343,6 +354,14 @@ final class AppModel: ObservableObject {
     /// Read the selected account's current box (and its cached advice, or start computing it).
     func loadBox() {
         guard let a = account else { snapshot = nil; advice = .none; history = []; previous = nil; boxProblem = nil; boxNeedsNewerApp = false; return }
+        // Always asked, not only when the newest version fails to load: any version from a newer app means nothing may be written on top of it.
+        if let n = library.newerVersion(account: a) {
+            snapshot = nil; history = (try? library.history(account: a)) ?? []; previous = nil
+            boxNeedsNewerApp = true
+            boxProblem = "Version \(n) of the box for \(a) was saved by a newer version of the app, so this version cannot open this box. Update the app. Nothing has been changed, and scanning and saving are paused."
+            loadAdvice(); loadScans()
+            return
+        }
         do {
             snapshot = try library.current(account: a)
             history = try library.history(account: a)
@@ -351,11 +370,8 @@ final class AppModel: ObservableObject {
         } catch {
             // Not an empty box: the newest version is damaged. Nothing is saved on top of it until the person restores a readable one.
             snapshot = nil; history = (try? library.history(account: a)) ?? []; previous = nil
-            let newer = BoxLibrary.isNewerVersion(error) || library.hasNewerVersion(account: a)
-            boxNeedsNewerApp = newer
-            boxProblem = newer
-                ? "The newest saved version of the box for \(a) was saved by a newer version of the app, so this version cannot open it. Update the app. Nothing has been changed, and scanning and saving are paused."
-                : "The newest saved version of the box for \(a) cannot be read (\(Self.plain(error))). Your earlier versions are still on this device."
+            boxNeedsNewerApp = false
+            boxProblem = "The newest saved version of the box for \(a) cannot be read (\(Self.plain(error))). Your earlier versions are still on this device."
         }
         loadAdvice()
         loadScans()
@@ -464,7 +480,12 @@ final class AppModel: ObservableObject {
                 let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
                 if let d = UserDefaults.standard.data(forKey: k(old)) { UserDefaults.standard.set(d, forKey: k(name)); UserDefaults.standard.removeObject(forKey: k(old)) }
             }
-            if account == old { account = name; loadBox(); loadVoiceRecord() }
+            // The one-time set record and the remembered storage count follow the name; the old-name records go, so a stale tap-set record under
+            // the old name cannot keep the wrong-screen warning on.
+            for key in [Keys.set, Keys.count + "."] {
+                if let d = UserDefaults.standard.object(forKey: key + old) { UserDefaults.standard.set(d, forKey: key + name); UserDefaults.standard.removeObject(forKey: key + old) }
+            }
+            if account == old { account = name; loadBox(); loadVoiceRecord() } else { refreshDeviceRecords() }
             return nil
         } catch { return Self.plain(error) }
     }
@@ -587,23 +608,33 @@ final class AppModel: ObservableObject {
     func startReview(signature: String) {
         guard let url = SharedStore.replayURL, let a = account, boxProblem == nil else { return }
         flow = .processing("Reading the scan")
-        let kind = scanKind, date = Date(), lib = library
-        // What the app knows about the paging: a generated command at the chosen mode's pace, or by hand.
-        let paging = pagedByHand ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: pace.every, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
-        let count = kind == .full ? storageCount : nil
+        let asked = scanKind, date = Date(), lib = library
+        // How the scan was paged is what the extension was told when it started (a command at its period, or by hand), not a setting changed since.
+        let period: Double? = { if let b = broadcast { return b.commandPeriod }; return pagedByHand ? nil : pace.every }()
+        let paging = period == nil ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: period, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
+        let ended = broadcast?.endedAtListEnd ?? false, logFull = broadcast?.replayLogTruncated ?? false, pace = self.pace
+        let typed = asked == .full ? storageCount : nil
         Task {
             do {
-                let (outcome, plan, seconds, base, seq) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?) in
+                let (outcome, plan, seconds, base, seq, kind, note) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?) in
                     let outcome = try ScanPipeline.process(replay: url, engine: engine, paging: paging)
+                    // A full scan proposes everything unseen as gone, so it is only the default when the list can be known to have ended.
+                    var kind = asked, note: String?
+                    if asked == .full {
+                        let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, pace: pace)
+                        if !d.fullIsSound { kind = .partial; note = d.reason }
+                    }
                     let current = try lib.current(account: a)   // the box as it is when the plan is made
                     let entries = current?.entries ?? []
                     let t = Date()
                     let plan = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
-                    return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq)
+                    return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note)
                 }
                 let t = outcome.timings
                 NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
-                flow = .review(Review(account: a, kind: kind, outcome: outcome, plan: plan, base: base, storageCount: count, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging), boxSeq: seq))
+                var review = Review(account: a, kind: kind, outcome: outcome, plan: plan, base: base, storageCount: asked == .full ? typed : nil, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging), boxSeq: seq)
+                review.endedAtListEnd = ended; review.kindNote = note
+                flow = .review(review)
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)
             }

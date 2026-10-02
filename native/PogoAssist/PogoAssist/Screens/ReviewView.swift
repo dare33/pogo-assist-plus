@@ -57,11 +57,11 @@ private struct ResultList: View {
     /// The scan ran at a pace unlike the command last made: probably an older command played.
     private var paceWarning: String? {
         guard let pace = review.outcome.pace else { return nil }
-        return (model.pagedByHand || review.reread != nil) ? nil : PaceCheck.check(measured: pace.medianPeriod, chosen: model.pace)
+        return (review.paging?.pagedByCommand != true || review.reread != nil) ? nil : PaceCheck.check(measured: pace.medianPeriod, chosen: model.pace)
     }
     /// The scan ran at a tap pace on a screen tap paging has not been checked on: the command's taps were placed for another screen.
     private var tapWarning: String? {
-        guard review.reread == nil, !model.pagedByHand, !model.tapAvailable, let pace = review.outcome.pace, let ran = PaceCheck.nearestMode(to: pace.medianPeriod), ran.isTap else { return nil }
+        guard review.reread == nil, review.paging?.pagedByCommand == true, !model.tapAvailable, let pace = review.outcome.pace, let ran = PaceCheck.nearestMode(to: pace.medianPeriod), ran.isTap else { return nil }
         return "This scan was paged at a tap pace, but tap paging has not been checked on this screen. A tap command made for another device can press the wrong place in the game. Check your Pokémon in the game."
     }
 
@@ -79,6 +79,8 @@ private struct ResultList: View {
                 if let warning = paceWarning { Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange) }
                 row("Box", review.account)
                 if let plan = review.reread { rereadNotes(plan) }
+                if review.endedAtListEnd { Label("The scan ended by itself at the end of the list.", systemImage: "checkmark.circle").font(.footnote).foregroundStyle(.secondary) }
+                if let note = review.kindNote { Label(note, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary) }
                 if review.reread == nil { Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in Task { await model.setReviewKind(k) } })) {
                     Text("Full scan").tag(BoxStore.Kind.full)
                     Text("Add and update").tag(BoxStore.Kind.partial)

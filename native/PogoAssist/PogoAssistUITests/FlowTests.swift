@@ -114,7 +114,7 @@ final class FlowTests: XCTestCase {
         app.buttons["Create account"].tap()
         XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
         app.buttons["Scan Pokémon"].tap()
-        let count = app.textFields["Required"]
+        let count = app.textFields["Count"]
         XCTAssertTrue(count.waitForExistence(timeout: 5))
         count.tap(); count.typeText("1400")
         app.buttons["Done"].tap()   // dismiss the number pad

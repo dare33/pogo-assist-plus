@@ -18,7 +18,7 @@ struct ScanView: View {
                 }
                 .pickerStyle(.segmented)
                 Text(model.scanKind == .full
-                     ? "Scans the whole storage. Pokémon in your box that the scan does not see are offered as gone, and you choose whether to save that."
+                     ? "Scans the whole storage. When the scan reaches the end of your list, Pokémon in your box that it did not see are offered as gone, and you choose whether to save that. Otherwise it is Add and update."
                      : "Scans part of the storage, such as your newest Pokémon. Nothing is removed from the box.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -33,11 +33,11 @@ struct ScanView: View {
                     HStack {
                         Text("Pokémon in storage")
                         Spacer()
-                        TextField("Required", text: $model.storageCountText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120).focused($countFocused)
+                        TextField("Count", text: $model.storageCountText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120).focused($countFocused)
                     }
                 } footer: {
                     if let problem = model.storageCountProblem { Text(problem).foregroundStyle(.red) }
-                    else { Text("Remembered for this account. It picks which command to say, and is saved with the scan.") }
+                    else { Text("Remembered for this account. It picks which command to say, and is saved with the scan. Without it the scan is Add and update.") }
                 }
             }
             commandSection
@@ -52,7 +52,8 @@ struct ScanView: View {
                         Text("The last broadcast stopped without finishing. Its readings will be offered for review.").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-            } footer: { Text("Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown. Stop it from the red bar when the last Pokémon has been read.") }
+            } footer: { Text(model.pagedByHand ? "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown. Stop it from the red bar when the last Pokémon has been read."
+                                              : "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown and say the command. The scan ends by itself at the end of the list.") }
         }
         .navigationTitle("Scan Pokémon")
         .navigationBarTitleDisplayMode(.inline)
@@ -76,7 +77,7 @@ struct ScanView: View {
                 Text(model.setKind == .tap ? "a. Choose Save to Files on THIS \(deviceKind) and import it here. Do not send it to another device: its taps are placed for this screen only."
                                            : "a. Choose Save to Files on this \(deviceKind) and import it here.").font(.footnote)
                 Text("b. Settings > Accessibility > Voice Control > Commands > Import Custom Commands, then pick the file.").font(.footnote)
-                Text("c. Importing it again replaces these commands and nothing else.").font(.footnote)
+                Text("c. First delete any earlier single commands in Settings > Accessibility > Voice Control > Commands: \"Pogo scan\", \"Pogo fast scan\", \"Pogo swipe\" and \"Pogo slow swipe\". They run at a different pace, the scan ending by itself assumes this set's pace, and \"Pogo scan\" is the start of every phrase here. Importing this set again replaces its own commands and nothing else.").font(.footnote)
                 Text("d. The commands are made for this phone's language (\(AppModel.voiceLocale)). Voice Control's own language must be the same.").font(.footnote)
             }
             .foregroundStyle(.secondary)
@@ -87,9 +88,17 @@ struct ScanView: View {
             if model.scanKind == .full { fullScanCommand } else { partScanCommands }
             Label("Once started, a command cannot be stopped: not by touching the screen, the side button, locking the phone or Siri. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends. It keeps \(model.setKind == .tap ? "tapping" : "swiping") the same place whatever is on screen.",
                   systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
-            Text("The scan ends by itself when the end of your Pokémon is reached (the broadcast stops and the result appears). The command keeps going until it runs out; that is harmless in the box.").font(.footnote).foregroundStyle(.secondary)
-            Toggle("I paged by hand", isOn: $model.pagedByHand)
-            if model.pagedByHand { Text("Twins will not be told apart by the paging beat, and the scan will not end by itself.").font(.footnote).foregroundStyle(.secondary) }
+            if !model.pagedByHand { Text("The scan ends by itself at the end of the list (the broadcast stops and the result appears). The command keeps going until it runs out; that does nothing to your box.").font(.footnote).foregroundStyle(.secondary) }
+            stepTitle("Before you start the broadcast: how will you page?")
+            Picker("Paging", selection: $model.pagedByHand) {
+                Text("Page with the voice command").tag(false)
+                Text("Page by hand").tag(true)
+            }
+            .pickerStyle(.segmented)
+            Text(model.pagedByHand
+                 ? "You swipe from one Pokémon to the next yourself. Twins are not told apart by the paging beat, and the scan does not end by itself: stop the broadcast from the red bar when the last Pokémon has been read."
+                 : "The scan ends by itself when the end of your Pokémon is reached.")
+                .font(.footnote).foregroundStyle(.secondary)
         } header: { Text("Voice Control commands") } footer: { Text("Optional. Without them, swipe through the Pokémon by hand.") }
     }
 
@@ -99,7 +108,7 @@ struct ScanView: View {
             Text("Covers up to \(size.formatted()) Pokémon; about \(minutes(Double(model.estimatedMinutes(size: size)) * 60)).").font(.footnote)
         } else if model.countAboveLargest {
             Text("Say: Pogo scan \(VoiceCommandFile.setSizes.last!)").font(.title3.weight(.semibold))
-            Text("The largest command covers \(VoiceCommandFile.setSizes.last!.formatted()) Pokémon. The rest needs a second scan with Add and update.").font(.footnote).foregroundStyle(.orange)
+            Text("The largest command covers \(VoiceCommandFile.setSizes.last!.formatted()) Pokémon. Scans of a storage this large are Add and update (nothing is proposed as gone): scan the first \(VoiceCommandFile.setSizes.last!.formatted()), then the rest with a second scan.").font(.footnote).foregroundStyle(.orange)
         } else {
             Text("Type how many Pokémon are in your storage above to see which command to say.").font(.footnote).foregroundStyle(.secondary)
         }
@@ -130,7 +139,7 @@ struct ScanView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack { ProgressView(); Text("Scan in progress").font(.headline) }
             Text("\(s?.framesRead ?? 0) frames read, \(s?.rows.count ?? 0) Pokémon so far").monospacedDigit()
-            Text("Stop the broadcast from the red bar when the last Pokémon has been read, then come back here.").font(.footnote).foregroundStyle(.secondary)
+            Text(s?.commandPeriod != nil ? "The scan ends by itself at the end of the list; come back here when the broadcast stops." : "Stop the broadcast from the red bar when the last Pokémon has been read, then come back here.").font(.footnote).foregroundStyle(.secondary)
         }
     }
 }

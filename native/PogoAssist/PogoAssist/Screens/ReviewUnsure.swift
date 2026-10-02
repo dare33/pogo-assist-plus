@@ -53,7 +53,7 @@ struct UnsureCard: View {
         switch BoxMerge.effect(r.plan, unsure, candidate: e, gameMaster: try? GameMaster.bundled()) {
         case .seenOnly: return "Choosing this only marks it as seen. Nothing is changed."
         case .seenAsMega: return "Choosing this marks it as seen and as Mega evolved when scanned. The Mega values are not copied."
-        case .replacesValues: return "Choosing this replaces the values the scan read with these."
+        case .replacesValues: return "Choosing this updates the saved Pokémon with the values read in the scan."
         case .replacesIVs: return "The saved IVs were not an exact read, so choosing this replaces them with the IVs read now."
         case .keepsIVsAndFlags: return "The scan read other IVs for the same CP and HP. IVs never change, so one read is wrong: choosing this keeps the saved IVs and marks it to check."
         }
@@ -64,7 +64,7 @@ struct UnsureCard: View {
         case .partialRead: return "Only part of the CP was read, so this may be a Pokémon already in your box."
         case .misreadSaved: return "A Pokémon in your box was read badly earlier (no IVs). This may be the same Pokémon read properly. The line under each choice says what it does."
         case .extraTwin: return "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
-        case .ambiguous: return "It could be more than one Pokémon already in your box."
+        case .ambiguous: return unsure.candidates.count == 1 ? "It could be this Pokémon already in your box." : "It could be more than one Pokémon already in your box."
         }
     }
 

@@ -77,7 +77,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             lock.lock(); finished = false; ticks.removeAll(); droppedTimes.removeAll(); detector = SwipeDetector(); ticker = SwipeTicker(); lock.unlock()
             memory = MemoryProbe()
             finishedWork = false
-            endDetector = EndOfListDetector.make(pagedByCommand: ReaderSettings.autoEndPeriod != nil, period: ReaderSettings.autoEndPeriod)
+            let period = ReaderSettings.autoEndPeriod
+            endDetector = EndOfListDetector.make(pagedByCommand: period != nil, period: period)
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
             let names = table.map(displayNames) ?? []
@@ -101,6 +102,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             }
             state = BroadcastState()
             state.mode = mode.rawValue
+            state.commandPeriod = period   // what this scan was started with: the app judges it by this, not by a setting changed since
             msTotal = 0
             replay = nil
             if mode != .saveCrops, let url = SharedStore.replayURL {
@@ -187,8 +189,12 @@ class SampleHandler: RPBroadcastSampleHandler {
         state.endedAtListEnd = true
         lock.lock(); finished = true; lock.unlock()
         finishWork()
-        finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0,
-                                         userInfo: [NSLocalizedDescriptionKey: "Scan finished: the end of your Pokémon was reached."]))
+        // After leaving the queue: if ReplayKit answers with broadcastFinished synchronously, its `queue.sync` must not wait on this block.
+        // The state and the log are already written.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0,
+                                                   userInfo: [NSLocalizedDescriptionKey: "Scan finished: the end of your Pokémon was reached."]))
+        }
     }
 
     /// On `queue`. One accepted frame, in whichever mode.
