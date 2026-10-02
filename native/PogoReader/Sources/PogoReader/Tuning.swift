@@ -16,8 +16,11 @@ public enum Tuning {
     public static let luckyNameConfidence = 40.0
 
     /// How far the CP crop extends past the "CP1234" text, in text heights, on each side. Vision does
-    /// better with a little context than with Tesseract's tight digit crop.
-    public static let cpCropPadding = 0.35
+    /// better with a little context than with Tesseract's tight digit crop. Measured on the two
+    /// marathon clips at width 750 (0.1 digits-only, 0.15, 0.35, 0.6): 0.15 gave the fewest unread
+    /// CPs on both (phone 5 against 12 at 0.35; iPad 9 against 11) and, on the iPad clip, the
+    /// 50 rows the 50 swipes should give (48 at the others).
+    public static let cpCropPadding = 0.15
 
     /// Vision wants text at a reasonable size. Crops shorter than these (pixels) are scaled up
     /// before recognition, because the extension works on frames scaled down to 750 px wide. The

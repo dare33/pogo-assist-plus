@@ -21,6 +21,8 @@ struct Options {
     var saveSynthetic: String?
     var fast = false
     var noVision = false
+    var cpPadding: Double?
+    var cpDigitsOnly = false
     var limit: Int?
 }
 
@@ -50,6 +52,8 @@ func parse() -> Options {
         case "--verbose": o.verbose = true
         case "--vision-fast": o.fast = true
         case "--no-vision": o.noVision = true
+        case "--cp-padding": guard let x = Double(value()) else { usage() }; o.cpPadding = x
+        case "--cp-digits-only": o.cpDigitsOnly = true
         case "--limit": guard let n = Int(value()), n > 0 else { usage() }; o.limit = n
         case "--save-synthetic": o.saveSynthetic = value()
         default:
@@ -86,6 +90,8 @@ func run() throws {
     let names = displayNames(table)
     let probe = MemoryProbe()
     let processor = FrameProcessor(textReader: o.noVision ? EmptyTextReader() : VisionTextReader(fast: o.fast), names: names, targetWidth: o.width, memory: probe)
+    if let p = o.cpPadding { processor.reader.cpPadding = p }
+    if o.cpDigitsOnly { processor.reader.cpIncludesPrefix = false }
     var grouper = LiveGrouper(species: table)
     let maker = Pixel420Maker(fullRange: o.fullRangeBuffers)
 
