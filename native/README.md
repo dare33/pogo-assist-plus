@@ -422,10 +422,11 @@ JavaScript's output under Node) is always on. The tests on real readings under `
 - A Pokémon whose CP was never read is listed under `unmatched`, not as a row, unless `Refine` can compute its CP
   (one possible value).
 - Swipe ticks are not used by the JavaScript itself.
-- Speed: `finish` takes seconds on a phone-sized scan and about 35 s on a 3,975-reading, 770-row one (darentas-02) on a Mac with
-  JIT; the cost is almost all `cpm()` in `src/cpm.js` looking a fractional level up in an object (`CPM[12.5]`). An
-  equivalent Map lookup gives identical output about 5 times faster under Node; that change belongs in the JavaScript
-  source and is not made here. iOS runs JavaScriptCore without JIT in an app, which is slower still; unmeasured.
+- Speed (darentas-02, 3,975 readings, 770 rows, a Mac): the committed bundle comes from `extractor-cpm-speed` (a Map lookup in
+  `cpm()`, output byte-identical). With JIT (`jsc`): 4.7 s before, 1.0 s after. Without JIT (`jsc --useJIT=false`, which is what
+  an iOS app gets, and what an unentitled SwiftPM tool such as `pogo-rows` also gets): 34 s before, 29 s after, so the fix
+  mostly helps the JIT case; without JIT the cost is the interpreter running the grouping and solver. These are Mac CPU figures,
+  not iOS ones.
 
 ### First device run through the app core (`Tests/PogoBoxTests/Fixtures/device-run-2026-10-02.replay.jsonl`)
 
