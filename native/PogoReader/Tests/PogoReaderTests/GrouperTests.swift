@@ -390,7 +390,7 @@ final class GrouperTests: XCTestCase {
         XCTAssertEqual(run(tick: 2.0).count, 2)
         // A tick before the last card is used up; one after the reading waits for a later reading.
         XCTAssertEqual(run(tick: 0.4).count, 1)
-        XCTAssertEqual(run(tick: 9.0).count, 1)
+        XCTAssertEqual(run(tick: 9.0).count, 1)       // a tick after every reading is still waiting: it splits nothing here
         XCTAssertEqual(run(tick: .nan).count, 1)
     }
 
@@ -480,15 +480,16 @@ final class GrouperTests: XCTestCase {
         }
     }
 
-    /// A card sliding past is often read with only its name: two such frames are separator frames, not a card.
-    func testATwoFrameNameOnlySlideBetweenIdenticalCardsIsASwipe() {
-        func nameOnly(_ n: Int) -> FrameReading { frame(nil, hp: nil, ivs: nil, name: "Moltres", n: n) }
+    /// A card of ANOTHER species sliding past is often read with only its name: two such frames are separator frames, not
+    /// a card. (A name alone that is the name of the Pokémon on screen is neither: see the neutral-reading tests.)
+    func testATwoFrameNameOnlySlideOfAnotherSpeciesBetweenIdenticalCardsIsASwipe() {
+        func nameOnly(_ n: Int, _ name: String = "Zapdos") -> FrameReading { frame(nil, hp: nil, ivs: nil, name: name, n: n) }
         let a = (1...4).map { frame(CP, n: $0) }, b = (10...13).map { frame(CP, n: $0) }
         let rows = groupAll(a + [swipe(), nameOnly(6), nameOnly(7)] + b)
         XCTAssertEqual(rows.filter { $0.cp == CP }.count, 2)
         XCTAssertFalse(rows.contains { $0.flags.contains("cp-not-read") }, "a two-frame slide is not listed as a card")
-        // The same frames as 5 name-only readings (0.8 s with the same name) are a card.
-        XCTAssertTrue(groupAll(a + swipes() + (6...10).map(nameOnly) + swipes() + b).contains { $0.flags.contains("cp-not-read") })
+        // The same frames as 5 name-only readings (1.0 s with the same name) are a card.
+        XCTAssertTrue(groupAll(a + swipes() + (6...10).map { nameOnly($0) } + swipes() + b).contains { $0.name == "Zapdos" && $0.flags.contains("cp-not-read") })
     }
 
     /// A run started only by a tick that reads like the row before it is marked, so a false split is never unflagged.
@@ -536,6 +537,138 @@ final class GrouperTests: XCTestCase {
         XCTAssertTrue(rows[0].flags.contains("sex-from-stats-no-hp"), "\(rows[0].flags)")
         XCTAssertFalse(rows[0].flags.contains("sex-not-read"))
     }
+
+    // MARK: grouper pass (tick acceptance, carry-over, same-as-previous at close, separator edge cases)
+
+    /// A swipe that leaves only TWO non-card readings at full rate: the first swipe frame still reads the old card (it
+    /// is sliding), the next two are blank, the fourth already reads the new card. 0.6 s between the two cards.
+    private func twoSeparatorStream(pace: Double, cards: [FrameReading]) -> [SimFrame] {
+        var out = [SimFrame]()
+        for reading in cards {
+            for _ in 0..<Int(((pace - 0.6) / 0.2).rounded()) { out.append(SimFrame(image: Self.cardImage, reading: reading, isCard: true)) }
+            out.append(SimFrame(image: Self.slideImage, reading: reading, isCard: true))
+            out.append(SimFrame(image: Self.blanks[1], reading: swipe(), isCard: false))
+            out.append(SimFrame(image: Self.blanks[2], reading: swipe(), isCard: false))
+        }
+        return out
+    }
+
+    func testTwinsWithATwoSeparatorSwipeStayTwoRowsAtFullRateAtEveryPace() {
+        func card(_ cp: Int, hp: Int, _ ivs: IVs) -> FrameReading { frame(cp, hp: hp, ivs: ivs, name: "Moltres") }
+        let c = card(CP + 40, hp: HPV + 5, IVs(atk: 1, def: 2, hp: 3)), a = card(CP, hp: HPV, IVS), d = card(CP - 40, hp: HPV - 5, IVs(atk: 4, def: 5, hp: 6))
+        for pace in [1.4, 1.6, 2.0, 2.4] {
+            for (slow, fast) in [(0.0, 0.0), (250.0, 20.0), (450.0, 200.0), (650.0, 200.0)] {
+                let r = extensionSim(twoSeparatorStream(pace: pace, cards: [c, a, a, d, c]), slow: slow, fast: fast)
+                let label = "pace \(pace) model \(slow)/\(fast): \(r.rows.map { "\($0.cp as Any) \($0.flags)" })"
+                XCTAssertEqual(r.rows.filter { $0.cp == CP }.count, 2, label)
+                XCTAssertEqual(r.rows.count, 5, label)
+            }
+        }
+        // The ticks are what separate them: without the signature the pair merges at full rate.
+        XCTAssertEqual(extensionSim(twoSeparatorStream(pace: 1.6, cards: [c, a, a, d, c]), slow: 0, fast: 0, useTicks: false).rows.filter { $0.cp == CP }.count, 1)
+    }
+
+    /// Two card readings one frame period apart cannot hold a swipe (0.6 s at the least): a tick between them is a jump
+    /// inside one Pokémon's stay and must not split it, at any reading rate that shows every frame.
+    func testATickBetweenCardReadingsOnePeriodApartDoesNotSplit() {
+        func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
+        var g = LiveGrouper(species: table)
+        for k in 0..<10 {
+            if k == 5 { g.swipe(at: 0.9) }                       // confirmed between the readings at 0.8 and 1.0
+            g.add(at(frame(CP, n: k), Double(k) * 0.2))
+        }
+        g.finish()
+        XCTAssertEqual(g.rows.count, 1)
+        // The same tick over a silence long enough for a swipe (0.6 s) does split.
+        var h = LiveGrouper(species: table)
+        for k in 0..<4 { h.add(at(frame(CP, n: k), Double(k) * 0.2)) }
+        h.swipe(at: 1.0)
+        for k in 0..<4 { h.add(at(frame(CP, n: 10 + k), 1.4 + Double(k) * 0.2)) }   // 0.8 s after the last card at 0.6
+        h.finish()
+        XCTAssertEqual(h.rows.count, 2)
+    }
+
+    /// A swipe seen while the next readings are not strong runs (a hidden-CP card, a CP-only unnamed card, a weak name)
+    /// still ends the run at the next strong reading.
+    func testASwipeCarriesOverACardReadingThatStartsNoRun() {
+        func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
+        let hiddenReading = frame(nil, hp: HPV, ivs: IVS, name: "Moltres")
+        var onlyCp = FrameReading(frame: "u", time: 0); onlyCp.cp = CP; onlyCp.cpReads = [CP]
+        let weakReading = frame(CP, hp: HPV, ivs: IVS, name: "Moltres", weak: true)
+        for (label, between) in [("hidden", hiddenReading), ("cp-only", onlyCp), ("weak", weakReading)] {
+            var g = LiveGrouper(species: table)
+            for k in 0..<4 { g.add(at(frame(CP, n: k), Double(k) * 0.2)) }              // the old card, last read at 0.6
+            g.swipe(at: 1.4)
+            g.add(at(between, 1.8))                                                      // the swipe is seen here, on a reading that starts no run
+            g.add(at(frame(CP, n: 20), 2.0))                                              // the next strong reading reads exactly like the old card
+            g.add(at(frame(CP, n: 21), 2.2))
+            g.finish()
+            // Two strong rows at the old card's CP: the old card, and the next card that reads exactly like it (the card reading
+            // between them that started no run is its own listed row or none, never part of the old card).
+            XCTAssertEqual(g.rows.filter { $0.cp == CP && !$0.flags.contains { $0.hasPrefix("cp-") || $0.hasPrefix("name-") } }.count, 2, "\(label): \(g.rows.map { "\($0.cp as Any) \($0.flags)" })")
+        }
+    }
+
+    /// `same-as-previous` is decided from the voted values of both rows when the run closes.
+    func testSameAsPreviousIsDecidedFromTheVotedValuesNotTheFirstReading() {
+        func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
+        func run(firstCp: Int, secondHp: Int, secondCp: Int) -> [LiveRow] {
+            var g = LiveGrouper(species: table)
+            for k in 0..<4 { g.add(at(frame(CP, n: k), Double(k) * 0.2)) }
+            g.swipe(at: 1.4)
+            g.add(at(frame(firstCp, hp: secondHp, ivs: IVS, n: 10), 2.0))           // the first reading of the new run, perhaps garbled
+            for k in 1..<5 { g.add(at(frame(secondCp, hp: secondHp, ivs: IVS, n: 10 + k), 2.0 + Double(k) * 0.2)) }
+            g.finish()
+            return g.rows
+        }
+        // A garbled first read (19 for 2409) of an identical Pokémon: the voted values match the row before, so it is marked.
+        let garbled = run(firstCp: 19, secondHp: HPV, secondCp: CP)
+        XCTAssertEqual(garbled.count, 2)
+        XCTAssertTrue(garbled[1].flags.contains("same-as-previous"), "\(garbled[1].flags)")
+        // The first reads like the row before but the voted HP and CP are another Pokémon's: not marked.
+        let other = run(firstCp: CP, secondHp: HPV + 7, secondCp: CP - 60)
+        XCTAssertEqual(other.count, 2)
+        XCTAssertFalse(other[1].flags.contains("same-as-previous"), "\(other[1].flags)")
+        // A run started by separator frames (no tick) is not marked.
+        var g = LiveGrouper(species: table)
+        for k in 0..<4 { g.add(at(frame(CP, n: k), Double(k) * 0.2)) }
+        for k in 0..<4 { g.add(at(swipe(), 0.8 + Double(k) * 0.2)) }
+        for k in 0..<4 { g.add(at(frame(CP, n: 10 + k), 1.6 + Double(k) * 0.2)) }
+        g.finish()
+        XCTAssertEqual(g.rows.count, 2)
+        XCTAssertFalse(g.rows[1].flags.contains("same-as-previous"))
+    }
+
+    /// A short name-only reading of the Pokémon on screen is no separator evidence: unreadable@0, name-only@0.4, CP@0.8.
+    func testAShortNameOnlyReadingOfTheCurrentPokemonDoesNotChainSeparators() {
+        func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
+        var g = LiveGrouper(species: table)
+        for k in 0..<3 { g.add(at(frame(CP, n: k), Double(k) * 0.4)) }                       // 0, 0.4, 0.8
+        g.add(at(swipe(), 1.2))                                                              // unreadable
+        g.add(at(frame(nil, hp: nil, ivs: nil, name: "Moltres", n: 9), 1.6))                 // name only, the same Pokémon
+        g.add(at(frame(CP, n: 10), 2.0))                                                     // read again
+        g.finish()
+        XCTAssertEqual(g.rows.count, 1, "\(g.rows.map { "\($0.cp as Any) \($0.flags)" })")
+    }
+
+    func testTwoIsolatedNameOnlyReadingsMoreThanASecondApartMakeNoCardRow() {
+        func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
+        var g = LiveGrouper(species: table)
+        for k in 0..<4 { g.add(at(frame(CP, name: "Zapdos", n: k), Double(k) * 0.2)) }
+        g.add(at(frame(nil, hp: nil, ivs: nil, name: "Moltres", n: 9), 3.0))
+        g.add(at(frame(nil, hp: nil, ivs: nil, name: "Moltres", n: 10), 4.6))                // 1.6 s later: another moment, not the same card
+        g.add(at(frame(CP, name: "Zapdos", n: 20), 6.0))
+        g.finish()
+        XCTAssertFalse(g.rows.contains { $0.name == "Moltres" }, "\(g.rows.map { "\($0.name) \($0.flags)" })")
+    }
+
+    /// Name-only frames of the same species on both sides of a swipe are not one 0.6 s "card".
+    func testSameNameSlidingFramesOnBothSidesOfASwipeAreNotACardRow() {
+        func nameOnly(_ n: Int) -> FrameReading { frame(nil, hp: nil, ivs: nil, name: "Moltres", n: n) }
+        let rows = groupAll((1...4).map { frame(CP, n: $0) } + (5...8).map(nameOnly) + (9...12).map { frame(CP, n: $0) })
+        XCTAssertFalse(rows.contains { $0.flags.contains("cp-not-read") }, "\(rows.map { "\($0.cp as Any) \($0.flags)" })")
+    }
+
 
     func testNidorinaRunIsNotInterruptedByANidoranWithALetterStuckToIt() {
         func nidorina(_ n: Int) -> FrameReading { frame(500, hp: 70, ivs: nil, name: "Nidorina", n: n) }

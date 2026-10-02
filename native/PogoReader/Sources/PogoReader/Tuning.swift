@@ -59,6 +59,10 @@ public enum Tuning {
     /// covers the HP and the bars still animate).
     public static let strayMaxSeconds = 0.6
 
+    /// A swipe tick can end a run only between two card readings at least this far apart: a swipe takes 0.6 s or more,
+    /// so two readings one or two frame periods apart cannot have one between them.
+    public static let swipeMinGapSeconds = 0.55
+
     /// At most this many swipe ticks are kept waiting for a reading; the oldest is dropped past it.
     public static let maxPendingTicks = 64
 

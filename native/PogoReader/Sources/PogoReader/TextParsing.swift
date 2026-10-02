@@ -21,9 +21,11 @@ private func isSpace(_ c: Character) -> Bool { c.isWhitespace }
 ///   "CP2 008" is 2008), the first attached to a CP-like prefix or alone; anything else with two groups
 ///   ("CP1 6", "CP1S 66", "CP1234 5") is no read;
 /// - a letter or separator between digits is no read ("1A86", "CP 1A86", "2.641", "CP 2,641", "CP²641"), except
-///   a single leading digit followed by letters that is a misread label glyph, and only when the figure has
-///   three digits or more ("5p2641");
-/// - a result below 10 is no read ("CP0 001"), and a lone O or o token before the figure is no read ("CP O 28");
+///   one leading digit that is a misread C (5, 6 or 8) followed by exactly one letter: "5p2641", "8p2611" (any
+///   letter, figure of three digits or more) and "5p86" (a P, a figure of two digits); "5pX2641" and "1A862" are not;
+/// - a leading zero in the figure is a misread ("CP0123", "CPO28") and so is a figure of more than four digits
+///   ("CP12345", "23028"): no read, the last digits are not kept; a result below 10 is no read ("CP0 001"), and a
+///   lone O or o token before the figure is no read ("CP O 28", "CP o 1500");
 /// - more than four digits in one group keep the last four (JS), fewer than two are no read.
 public func parseCp(_ text: String) -> Int? {
     let raw = text.split(whereSeparator: { isSpace($0) }).map { Array($0) }
@@ -39,10 +41,11 @@ public func parseCp(_ text: String) -> Int? {
     // A digit-like character that is not an ASCII digit ("²") next to the figure is a garbled digit, not a label.
     if before.contains(where: { $0.isNumber && !isAsciiDigit($0) }) { return nil }
     if before.contains(where: isAsciiDigit) {
-        // Digits before the figure are allowed only as one leading digit followed by letters ("5p"), and only
-        // for a figure of three digits or more: a short figure after a digit and a letter ("1A86") is junk.
+        // Digits before the figure are allowed only as one leading digit that a C can be misread as (5, 6, 8) followed
+        // by exactly one letter ("5p"); a short figure needs that letter to be the P of "CP" ("5p86").
         let lead = before.prefix(while: isAsciiDigit), rest = before.dropFirst(lead.count)
-        if !(lead.count == 1 && run.count >= 3 && !rest.isEmpty && rest.allSatisfy({ isAsciiLetter($0) })) { return nil }
+        guard lead.count == 1, "568".contains(lead[lead.startIndex]), rest.count == 1, isAsciiLetter(rest[rest.startIndex]) else { return nil }
+        if run.count < 3 && !"pP".contains(rest[rest.startIndex]) { return nil }
     }
     var digits = run
     if before.isEmpty, tokens.count >= 2 {                 // the last token is the figure on its own
@@ -58,8 +61,7 @@ public func parseCp(_ text: String) -> Int? {
             digits = Array(prevRun) + run
         }
     }
-    if digits.count < 2 { return nil }
-    if digits.count > 4 { digits = Array(digits.suffix(4)) }
+    if digits.count < 2 || digits.count > 4 || digits[0] == "0" { return nil }
     guard let value = Int(String(digits)), value >= 10 else { return nil }
     return value
 }

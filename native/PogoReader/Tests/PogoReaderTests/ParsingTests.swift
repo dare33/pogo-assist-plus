@@ -7,7 +7,6 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(parseCp("CP 3028"), 3028)
         XCTAssertEqual(parseCp("P2651"), 2651)
         XCTAssertEqual(parseCp("cp3O28"), 3028)
-        XCTAssertEqual(parseCp("23028"), 3028)
         XCTAssertEqual(parseCp("711"), 711)
         XCTAssertEqual(parseCp("CP4 262"), 4262)       // Vision puts a space inside the figure
         XCTAssertEqual(parseCp("CP 2 641"), 2641)
@@ -37,6 +36,20 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(parseCp("cp3O28"), 3028)
         // The frame reader's shape check agrees: "1234dO" has no figure at its end, so it is no read either way.
         XCTAssertNil(parseCp("1234dO"))
+    }
+
+    /// Reviewers' findings: more junk that glued onto a figure, and reads that can be taken safely.
+    func testParseCpRound6() {
+        for junk in ["5pX2641", "CP0123", "CPO28", "1A862", "CP12345", "23028", "CP o 1500", "CP 12 345", "2p641", "1p2641"] {
+            XCTAssertNil(parseCp(junk), junk)
+        }
+        // Safe reads: one label digit (5, 6 or 8, a misread C) then a P, with a figure of two digits or more.
+        XCTAssertEqual(parseCp("5p86"), 86)
+        XCTAssertEqual(parseCp("8P150"), 150)
+        XCTAssertEqual(parseCp("5p2641"), 2641)
+        XCTAssertEqual(parseCp("8p2611"), 2611)
+        XCTAssertEqual(parseCp("CP 3028"), 3028)
+        XCTAssertEqual(parseCp("cp3O28"), 3028)
     }
 
     func testParseHpReadsCurrentAndMax() {

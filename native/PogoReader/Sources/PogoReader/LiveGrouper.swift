@@ -54,7 +54,7 @@ public struct LiveGrouper {
         var lastIvConfidence = 0.0
         var stamp = 0
         var startedAfterSwipe = false
-        var sameAsPrevious = false       // started only by a swipe tick yet reads like the row before
+        var tickStarted = false          // began with a swipe tick and no separator evidence
         var absorbed = [Int]()          // CPs of strays folded into this run
         var firstFrame: String?, lastFrame: String?
         var firstT: Double, lastT: Double
@@ -163,14 +163,16 @@ public struct LiveGrouper {
     private var sepLast = 0.0
     private var swipe = false
     private var tickOnly = false          // the swipe was seen only by a tick (no separator frames)
+    private var swipeBetween = false      // a swipe was seen by THIS reading's evidence (not inherited): one lies between pending cards and it
     private var seenCard = false
     private var clock = 0.0
     /// Time of the last card reading, and the pending swipe ticks (a swipe seen by the cheap luma signature on
     /// frames that were never read). A tick in (last card, this reading] is a swipe.
     private var lastCardT = -Double.infinity
     private var ticks = [Double]()                 // pending swipe tick times (bounded)
-    private var prevReadingT = -Double.infinity
-    private var gapSinceCard = 0.0                 // the longest silence between readings since the last card
+    /// A swipe seen on a card reading that starts no run (a hidden-CP card, a CP-only card, a weak name) waits here for
+    /// the next strong reading: 1 = seen by separator frames, 2 = by a tick alone.
+    private var carried = 0
     private var nameOnlyStart: Double?, nameOnlyLast = 0.0, nameOnlyName = ""
 
     public init(species: SpeciesTable?) { table = species }
@@ -223,27 +225,42 @@ public struct LiveGrouper {
         // Reading time; a reading with none follows the last by one frame period, and time never runs backwards.
         let t = max(r.time ?? (clock + Tuning.framePeriod), clock)
         clock = t
-        // A card is a reading of a Pokémon with a CP or an HP. A name alone (CP and HP hidden) is a card only once
-        // the same name has lasted `Tuning.hiddenMinSeconds`: shorter, it is a card sliding past and counts as a
-        // separator frame, like an anchor-less one.
+        // A card is a reading of a Pokémon with a CP or an HP. A name alone (CP and HP hidden) is a card only once the
+        // same name has lasted `Tuning.hiddenMinSeconds`: shorter, it is a card sliding past and counts as a separator
+        // frame, like an anchor-less one. But a name alone that is the name of the Pokémon on screen says nothing
+        // either way (its own sliding frames, or a covered CP): it is neither a separator nor a card.
         var isCard = r.cp != nil || r.hp != nil
+        var neutral = false
         if r.cp == nil && r.hp == nil, let n = r.name {
-            if nameOnlyStart == nil || nameOnlyName != n || t - nameOnlyLast > Tuning.nameOnlyGapSeconds { nameOnlyStart = t; nameOnlyName = n }
-            nameOnlyLast = t
-            if t - nameOnlyStart! + Tuning.framePeriod >= Tuning.hiddenMinSeconds - 1e-9 { isCard = true }
+            if let c = current, c.name == n { neutral = true }
+            else {
+                if nameOnlyStart == nil || nameOnlyName != n || t - nameOnlyLast > Tuning.nameOnlyGapSeconds { nameOnlyStart = t; nameOnlyName = n }
+                nameOnlyLast = t
+                if t - nameOnlyStart! + Tuning.framePeriod >= Tuning.hiddenMinSeconds - 1e-9 { isCard = true }
+            }
         } else { nameOnlyStart = nil }
         let seenSeparators = sepStart != nil && (sepLast - sepStart! + Tuning.framePeriod) >= Tuning.swipeSeparatorSeconds - 1e-9
-        // Ticks older than the last card are used up; any in (last card, t] is a swipe.
+        // Ticks older than the last card are used up; any later one up to now is a candidate. A swipe takes 0.6 s or more
+        // (three frames at 5 fps), so a tick can only be one between two card readings that are at least
+        // `swipeMinGapSeconds` apart: closer than that (one or two frames at full rate) there was no time for a swipe,
+        // and the tick is a jump inside one Pokémon's stay (a touch dot, the iPad leader's animation) that would
+        // split it. Further apart (a swipe fits: two non-card readings between, or frames that were never read) the
+        // tick ends the run even when the two readings are indistinguishable: that is the twin case, and the new
+        // run is marked `same-as-previous` for a check in the game.
         ticks.removeAll { $0 <= lastCardT + 1e-9 }
-        // A tick is evidence only where readings are missing: if every frame since the last card was read (no silence
-        // longer than 1.5 frame periods), the readings already show whether a swipe happened, and a tick there can
-        // only be a false jump (the iPad's leader animation) that would split a Pokémon.
-        if prevReadingT.isFinite { gapSinceCard = max(gapSinceCard, t - prevReadingT) }
-        prevReadingT = t
-        let seenTick = gapSinceCard > 1.5 * Tuning.framePeriod && ticks.contains { $0 <= t + 1e-9 }
-        swipe = seenSeparators || seenTick
-        tickOnly = seenTick && !seenSeparators
-        if isCard { sepStart = nil; lastCardT = t; gapSinceCard = 0; if !seenCard { seenCard = true; swipe = true; tickOnly = false } } else { if sepStart == nil { sepStart = t }; sepLast = t }
+        let seenTick = ticks.contains { $0 <= t + 1e-9 } && (t - lastCardT) >= Tuning.swipeMinGapSeconds - 1e-9
+        let strong = r.name != nil && r.cp != nil && r.nameWeak != true && !(r.name == "Nidoran" && r.nameAttached == true && (current?.name == "Nidorina" || current?.name == "Nidorino"))
+        // What this reading itself shows, and what a strong reading also inherits from a swipe seen earlier on a card
+        // reading that started no run (a hidden-CP card, a CP-only card, a weak name): it waits for the next strong one.
+        let seen = seenSeparators || seenTick
+        let seenTickOnly = seenTick && !seenSeparators
+        swipe = seen || (strong && carried != 0)
+        swipeBetween = seen
+        tickOnly = strong && carried != 0 ? (carried == 2 && !seenSeparators) || (seenTickOnly) : seenTickOnly
+        if neutral { /* no change to the separator or card state */ }
+        else if isCard { sepStart = nil; lastCardT = t; if !seenCard { seenCard = true; swipe = true; tickOnly = false } }
+        else { if sepStart == nil { sepStart = t }; sepLast = t }
+        if strong { carried = 0 } else if isCard && seen { carried = seenTickOnly ? 2 : 1 }
         guard let name = r.name else {
             if let cp = r.cp { addUnnamed(r, cp: cp, t: t) } else { gap = true }   // mid-swipe, cut off
             return
@@ -272,12 +289,11 @@ public struct LiveGrouper {
         var fresh = Run(r, t: t, weak: false)
         fresh.startedAfterSwipe = swipe
         closeCurrent(next: &fresh)
-        // A run started only because a tick said so, that reads like the row before it (same name, HP and settled
-        // bars not different, related CP), is either a genuine twin or a false split: flagged either way.
-        if tickOnly, let p = finished.last, Self.plainName(p.name) == fresh.name, Self.related(p.cp, p.hp, r.cp, r.hp?.max),
-           !(p.ivs != nil && r.ivs != nil && r.ivConfidence >= SETTLED && p.ivs != r.ivs) { fresh.sameAsPrevious = true }
+        // A run that began only because a tick said so is checked when its row is made: if its voted values match the
+        // row before, it is either a genuine twin or a false split, and says so (`same-as-previous`).
+        fresh.tickStarted = tickOnly
         flushUnnamed(next: fresh)
-        resolveHidden(next: fresh, gapAfter: gap, swipe: swipe)
+        resolveHidden(next: fresh, gapAfter: gap, swipe: swipeBetween)
         resolveWeak(next: fresh)
         current = fresh
         gap = false
@@ -396,7 +412,7 @@ public struct LiveGrouper {
     private mutating func addHidden(_ r: FrameReading, t: Double) {
         let ivs = (r.ivs != nil && r.ivConfidence >= SETTLED) ? r.ivs : nil
         let hpMax = r.hp?.max
-        if var h = hidden, h.name == r.name, !swipe, h.hp == nil || hpMax == nil || h.hp == hpMax,
+        if var h = hidden, h.name == r.name, !swipe, t - h.lastT <= Tuning.nameOnlyGapSeconds, h.hp == nil || hpMax == nil || h.hp == hpMax,
            !gap || ivsCompatible(h.settledIvs(), ivs) {
             h.frames += 1
             h.lastFrame = r.frame; h.lastT = t
@@ -498,7 +514,14 @@ public struct LiveGrouper {
                 if fits.count == 1 { ids = fits; if hp == nil { flags.append("sex-from-stats-no-hp") } }
             }
         }
-        if run.sameAsPrevious { flags.append("same-as-previous") }
+        // A tick-started run whose voted values match the row before it (same name, HP and settled bars not different,
+        // related CP) is a genuine twin or a false split: marked either way, from the votes of both rows and not from
+        // the first reading, which may be garbled.
+        if run.tickStarted, let p = finished.last, Self.plainName(p.name) == Self.plainName(Self.displayName(run.name, ids)) || p.name == Self.displayName(run.name, ids),
+           Self.related(p.cp, p.hp, cp, hp) {
+            let pSettled = p.ivs != nil && !p.flags.contains("bars-unsettled"), rSettled = ivs != nil && !flags.contains("bars-unsettled")
+            if !(pSettled && rSettled && p.ivs != ivs) { flags.append("same-as-previous") }
+        }
         if run.weak { flags.append("name-low-confidence") }
         if run.name == "Nidoran" && ids.count != 1 { flags.append("sex-not-read") }
         if hp == nil { flags.append("hp-unread") }
