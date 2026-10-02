@@ -217,13 +217,14 @@ final class FoldMergeTests: XCTestCase {
         let good = row("heatmor", cp: 764, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)
         let out = try BoxMerge.apply(plan([good], [plain, bad]), resolutions: [0: .existing("M")], to: [plain, bad])
         XCTAssertEqual(out.first { $0.id == "M" }?.row.ivs, IVs(atk: 7, def: 14, hp: 2)); XCTAssertEqual(out.first { $0.id == "M" }?.row.cp, 764)
-        // a part read with a misread candidate: choosing the misread one replaces its values, choosing the part-read one only marks it seen
+        // a part read with a misread candidate: whichever is chosen, the untrusted row only marks it seen
         let s = entry(row("heatmor", cp: 1982, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2)), "S")
         var partRead = row("heatmor", cp: 182, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), flags: ["no-level-fits"]); partRead.solveStatus = "none"
         let p = plan([partRead], [s, bad])
         let m = try BoxMerge.apply(p, resolutions: [0: .existing("M")], to: [s, bad])
-        XCTAssertEqual(m.first { $0.id == "M" }?.row.ivs, IVs(atk: 7, def: 14, hp: 2))
-        XCTAssertEqual(m.first { $0.id == "M" }?.row.cp, 64, "a part read never writes its CP: the unread IVs are filled, the CP stays")
+        XCTAssertNil(m.first { $0.id == "M" }?.row.ivs, "an untrusted row writes nothing: it only marks the entry seen")
+        XCTAssertEqual(m.first { $0.id == "M" }?.row.cp, 64, "a part read never writes its CP")
+        XCTAssertEqual(m.first { $0.id == "M" }?.lastSeen, date(5))
         let seen = try BoxMerge.apply(p, resolutions: [0: .existing("S")], to: [s, bad])
         XCTAssertEqual(seen.first { $0.id == "S" }?.row.cp, 1982)
     }
@@ -279,7 +280,7 @@ final class FoldMergeTests: XCTestCase {
         let p = plan([fragment(cp: 182)], [bad])
         let out = try BoxMerge.apply(p, resolutions: [0: .existing("X")], to: [bad])
         XCTAssertEqual(out[0].row.cp, 1982, "the CP 182 is a fragment, not a read")
-        XCTAssertEqual(out[0].row.ivs, IVs(atk: 7, def: 14, hp: 2), "the unread IVs may be filled from it")
+        XCTAssertNil(out[0].row.ivs, "an untrusted row writes nothing, not even the IVs it read"); XCTAssertEqual(out[0].lastSeen, date(5))
         XCTAssertNil(out[0].row.level); XCTAssertNil(out[0].row.dust)
     }
 
@@ -303,6 +304,84 @@ final class FoldMergeTests: XCTestCase {
         XCTAssertThrowsError(try BoxMerge.apply(q, resolutions: [0: .existing("S"), 1: .existing("S")], to: [s])) {
             XCTAssertEqual($0.localizedDescription, "Two scanned Pokémon were matched to the same saved one. Change one of the answers.")
         }
+    }
+
+
+    // Third fold round: T1 to T5
+
+    func testTwoFragmentsWithDifferentIVsGiveTheSameResultInEitherOrder() throws {
+        let bad = entry(misread(cp: 1982), "X")
+        let a = fragment(cp: 182, ivs: IVs(atk: 7, def: 14, hp: 2)), b = fragment(cp: 198, ivs: IVs(atk: 1, def: 2, hp: 3))
+        let o1 = try BoxMerge.apply(plan([a, b], [bad]), resolutions: [0: .existing("X"), 1: .existing("X")], to: [bad])
+        let o2 = try BoxMerge.apply(plan([b, a], [bad]), resolutions: [0: .existing("X"), 1: .existing("X")], to: [bad])
+        XCTAssertEqual(o1, o2); XCTAssertNil(o1[0].row.ivs); XCTAssertEqual(o1[0].row.cp, 1982)
+    }
+
+    func testARowFlaggedNoLevelFitsIsNeverAutoPairedAsAPowerUpAnEvolutionOrIVsNowRead() throws {
+        // powered up: a higher CP with the same IVs
+        let s = entry(row(cp: 500, hp: 60, ivs: x), "S")
+        let p = plan([fragment("pikachu", cp: 900, hp: 70, ivs: x)], [s])
+        XCTAssertTrue(p.updated.isEmpty); XCTAssertEqual(p.unsure.map { $0.candidates }, [["S"]])
+        XCTAssertEqual(try BoxMerge.apply(p, resolutions: [0: .existing("S")], to: [s])[0].row.cp, 500, "seen only")
+        // IVs now read on a saved entry with none
+        let none = entry(misread(cp: 500), "N")
+        let q = plan([fragment(cp: 500, hp: 92, ivs: x)], [none])
+        XCTAssertTrue(q.updated.isEmpty); XCTAssertEqual(q.unsure.map { $0.candidates }, [["N"]])
+        XCTAssertNil(try BoxMerge.apply(q, resolutions: [0: .existing("N")], to: [none])[0].row.ivs)
+        // an evolution
+        let machop = entry(row("machop", cp: 400, hp: 70, ivs: x), "m")
+        let e = plan([fragment("machoke", cp: 900, hp: 90, ivs: x)], [machop])
+        XCTAssertTrue(e.updated.isEmpty); XCTAssertEqual(e.unsure.map { $0.candidates }, [["m"]])
+        // Same (identical values, nothing written) stays automatic
+        XCTAssertEqual(plan([fragment("pikachu", cp: 500, hp: 60, ivs: x)], [s]).same.count, 1)
+    }
+
+    func testTheCardAndApplyAgreeOnWhatAnAnswerDoes() throws {
+        typealias E = BoxMerge.Effect
+        // untrusted row, other IVs at the same CP and HP: seen only (it used to say "keeps the IVs")
+        let s = entry(row(cp: 500, hp: 60, ivs: x), "S")
+        var r = row(cp: 500, hp: 60, ivs: y, flags: ["no-level-fits"]); r.solveStatus = "none"
+        let p = plan([r], [s])
+        XCTAssertEqual(BoxMerge.effect(p, try XCTUnwrap(p.unsure.first), candidate: s, gameMaster: gm), E.seenOnly)
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("S")], to: [s])
+        XCTAssertEqual(out[0].row.ivs, x); XCTAssertFalse(out[0].row.flags.contains(BoxMerge.ivsRescanFlag), "seen only: no flag either")
+        // trusted row, other IVs: keeps and flags
+        let q = plan([row(cp: 500, hp: 60, ivs: y)], [s])
+        XCTAssertEqual(BoxMerge.effect(q, q.unsure[0], candidate: s, gameMaster: gm), E.keepsIVsAndFlags)
+        XCTAssertTrue(try BoxMerge.apply(q, resolutions: [0: .existing("S")], to: [s])[0].row.flags.contains(BoxMerge.ivsRescanFlag))
+        // trusted row, ordinary candidate: writes
+        let t = entry(row(cp: 500, hp: 60, ivs: nil), "T")
+        let u = plan([row(cp: 520, hp: 61, ivs: nil), row(cp: 540, hp: 62, ivs: nil)], [t])
+        XCTAssertEqual(BoxMerge.effect(u, u.unsure[0], candidate: t, gameMaster: gm), E.replacesValues)
+        // an extra twin and a part read: seen only
+        let two = plan([row(cp: 500, hp: 60, ivs: x), row(cp: 500, hp: 60, ivs: x)], [s])
+        XCTAssertEqual(two.unsure.map { $0.kind }, [.extraTwin]); XCTAssertEqual(BoxMerge.effect(two, two.unsure[0], candidate: s, gameMaster: gm), E.seenOnly)
+    }
+
+    func testACleanReadThatReplacedAGuessStopsCountingAsAGuess() throws {
+        var g = row(cp: 500, hp: 60, ivs: y); g.ivsGuess = y; g.solveStatus = "guess"
+        let a = entry(g, "A")
+        let z = IVs(atk: 3, def: 4, hp: 5)
+        let p = plan([row(cp: 500, hp: 60, ivs: x)], [a])
+        XCTAssertEqual(BoxMerge.effect(p, p.unsure[0], candidate: a, gameMaster: gm), .replacesIVs)
+        let o = try BoxMerge.apply(p, resolutions: [0: .existing("A")], to: [a])
+        XCTAssertEqual(o[0].row.ivs, x); XCTAssertNil(o[0].row.ivsGuess)
+        let p2 = plan([row(cp: 500, hp: 60, ivs: z)], [o[0]])
+        XCTAssertEqual(BoxMerge.effect(p2, p2.unsure[0], candidate: o[0], gameMaster: gm), .keepsIVsAndFlags, "a later disagreeing clean read keeps the saved IVs and flags it")
+        XCTAssertEqual(try BoxMerge.apply(p2, resolutions: [0: .existing("A")], to: [o[0]])[0].row.ivs, x)
+    }
+
+    func testTheRescanFlagGoesOnAHandCorrectionAndSurvivesAnAutomaticUpdate() throws {
+        let s = entry(row(cp: 500, hp: 60, ivs: x), "S")
+        let flagged = try BoxMerge.apply(plan([row(cp: 500, hp: 60, ivs: y)], [s]), resolutions: [0: .existing("S")], to: [s])[0]
+        XCTAssertTrue(flagged.row.flags.contains(BoxMerge.ivsRescanFlag))
+        XCTAssertFalse(try BoxMerge.correct(flagged, with: .init(ivs: y), gameMaster: gm).row.flags.contains(BoxMerge.ivsRescanFlag), "a hand correction of the IVs decides them")
+        XCTAssertFalse(BoxMerge.markChecked(flagged).row.flags.contains(BoxMerge.ivsRescanFlag))
+        // a power-up rescan with the saved IVs updates the entry and does not resolve the disagreement
+        let p = plan([row(cp: 600, hp: 65, ivs: x, level: 22)], [flagged])
+        XCTAssertEqual(p.updated.first?.reason, .poweredUp)
+        let after = try BoxMerge.apply(p, to: [flagged])[0]
+        XCTAssertEqual(after.row.cp, 600); XCTAssertTrue(after.row.flags.contains(BoxMerge.ivsRescanFlag))
     }
 
 }

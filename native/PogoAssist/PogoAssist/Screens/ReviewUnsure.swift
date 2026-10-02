@@ -25,12 +25,7 @@ struct UnsureCard: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("In your box").font(.caption).foregroundStyle(.secondary)
                         Text(Fmt.candidate(e.row)).font(.callout)
-                        if BoxMerge.ivsDisagree(row, e) {
-                            Text(BoxMerge.ivsReplaceable(row, e)
-                                 ? "The saved IVs were not an exact read, so choosing this replaces them with the IVs read now."
-                                 : "The scan read other IVs for the same CP and HP. IVs never change, so one read is wrong: choosing this keeps the saved IVs and marks it to check.")
-                                .font(.footnote).foregroundStyle(.secondary)
-                        }
+                        if let text = effectText(for: e) { Text(text).font(.footnote).foregroundStyle(.secondary) }
                         answer("It is this one", selected: choice == .existing(id)) { model.resolve(unsure.scanned, .existing(id)) }
                     }
                     .padding(10)
@@ -52,10 +47,22 @@ struct UnsureCard: View {
         .padding(.vertical, 4)
     }
 
+    /// What "It is this one" will do for this candidate: the same `BoxMerge.effect` that `apply` follows, so the card cannot disagree with the result.
+    private func effectText(for e: BoxEntry) -> String? {
+        guard case .review(let r) = model.flow else { return nil }
+        switch BoxMerge.effect(r.plan, unsure, candidate: e, gameMaster: try? GameMaster.bundled()) {
+        case .seenOnly: return "Choosing this only marks it as seen. Nothing is changed."
+        case .seenAsMega: return "Choosing this marks it as seen and as Mega evolved when scanned. The Mega values are not copied."
+        case .replacesValues: return "Choosing this replaces the values the scan read with these."
+        case .replacesIVs: return "The saved IVs were not an exact read, so choosing this replaces them with the IVs read now."
+        case .keepsIVsAndFlags: return "The scan read other IVs for the same CP and HP. IVs never change, so one read is wrong: choosing this keeps the saved IVs and marks it to check."
+        }
+    }
+
     private var explanation: String {
         switch unsure.kind {
         case .partialRead: return "Only part of the CP was read, so this may be a Pokémon already in your box."
-        case .misreadSaved: return "A Pokémon in your box was read badly earlier (no IVs). This may be the same Pokémon read properly: choosing it replaces the unread values with these."
+        case .misreadSaved: return "A Pokémon in your box was read badly earlier (no IVs). This may be the same Pokémon read properly. The line under each choice says what it does."
         case .extraTwin: return "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
         case .ambiguous: return "It could be more than one Pokémon already in your box."
         }

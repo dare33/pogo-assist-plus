@@ -176,6 +176,10 @@ public enum BoxMerge {
         enum Rule { case unchanged, megaSame, baseOfMega, poweredUp, evolved, noIVs }
         func record(_ rule: Rule, _ si: Int, _ vi: Int) {
             let s = rows[si], v = saved[vi], id = v.id
+            // A row whose CP fits no level is never paired by a rule that would write its values (power-up, evolution, IVs now read, base of a
+            // Mega): it is asked about, and the answer only marks the entry seen. Pairing as Same writes nothing and stays automatic.
+            let writesValues: Bool = { switch rule { case .poweredUp, .evolved, .baseOfMega: return true; case .noIVs: return v.row.ivs == nil && s.ivs != nil; default: return false } }()
+            if writesValues && hasNoLevelFits(s) { ask([si], [vi]); return }
             switch rule {
             case .unchanged: plan.same.append(Pair(scanned: si, savedId: id))
             case .megaSame: plan.same.append(Pair(scanned: si, savedId: id, mega: true))
@@ -515,18 +519,42 @@ public enum BoxMerge {
     /// The flag a saved entry gets when a later scan read other IVs at the same CP and HP and the person kept the saved ones.
     public static let ivsRescanFlag = "ivs-rescan-differs"
 
+    private static func hasNoLevelFits(_ r: ScanRow) -> Bool { r.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") } }
+
     /// The row's own CP cannot be trusted: it fits no level, or it is a fragment of a saved CP.
-    private static func untrusted(_ u: Unsure, _ r: ScanRow) -> Bool {
-        u.kind == .partialRead || r.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
+    private static func untrusted(_ u: Unsure, _ r: ScanRow) -> Bool { u.kind == .partialRead || hasNoLevelFits(r) }
+
+    /// What answering "It is this one" for this candidate does. The ONE decision: `apply` does exactly this and the review card says exactly
+    /// this, so the text cannot disagree with the result.
+    public enum Effect: Equatable {
+        /// Only marks the entry seen; nothing is changed (an untrusted row, an extra twin, an entry another row already paired).
+        case seenOnly
+        /// A Mega row for its base entry: seen, and marked Mega when scanned; the Mega values are not copied.
+        case seenAsMega
+        /// The read values replace the saved ones the scan read (unread values stay).
+        case replacesValues
+        /// Other IVs read at the same CP and HP: the saved IVs were not an exact read, so the clean read replaces them.
+        case replacesIVs
+        /// Other IVs read at the same CP and HP: the saved IVs are kept, the entry is marked seen and flagged to check.
+        case keepsIVsAndFlags
     }
 
-    /// Whether choosing saved entry `id` for this unsure row writes the row's values onto it (rather than only marking it seen).
-    private static func writes(_ u: Unsure, _ id: String, _ plan: Plan) -> Bool {
-        if u.kind == .extraTwin { return false }
-        if plan.same.contains(where: { $0.savedId == id }) || plan.updated.contains(where: { $0.savedId == id }) { return false }
-        // A fragment fills only what the entry has none of (the first fills it, a second finds it filled): sharing is safe.
-        return !untrusted(u, plan.scanned[u.scanned])
+    public static func effect(_ plan: Plan, _ u: Unsure, candidate e: BoxEntry, gameMaster gm: GameMaster?) -> Effect {
+        let r = plan.scanned[u.scanned]
+        if onlyMarksSeen(plan, u, e.id) { return .seenOnly }
+        if ivsDisagree(r, e) { return ivsReplaceable(r, e) ? .replacesIVs : .keepsIVsAndFlags }
+        if let gm, plan.megaBases[u.scanned] != nil, megaBase(e.row.speciesId, gm) == nil { return .seenAsMega }
+        return .replacesValues
     }
+
+    /// An answer for this candidate changes nothing but "seen": an extra twin, a row whose CP is not trusted, or an entry another row already
+    /// paired or updated in this plan (it is never written twice).
+    private static func onlyMarksSeen(_ plan: Plan, _ u: Unsure, _ id: String) -> Bool {
+        u.kind == .extraTwin || untrusted(u, plan.scanned[u.scanned]) || plan.same.contains(where: { $0.savedId == id }) || plan.updated.contains(where: { $0.savedId == id })
+    }
+
+    /// Whether choosing saved entry `id` for this unsure row writes the row's values onto it. Rows that only mark seen may share an entry.
+    private static func writes(_ u: Unsure, _ id: String, _ plan: Plan) -> Bool { !onlyMarksSeen(plan, u, id) }
 
     /// Both have IVs, they differ (a hand correction's old read counts as the same), and the CP and HP read are the same.
     public static func ivsDisagree(_ s: ScanRow, _ v: BoxEntry) -> Bool {
@@ -561,14 +589,6 @@ public enum BoxMerge {
             byId[id] = new
         }
 
-        let paired = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
-        func fillUnread(_ id: String, _ row: ScanRow) {
-            guard var e = byId[id] else { return }
-            e.lastSeen = max(e.lastSeen, date)
-            if e.row.ivs == nil, row.ivs != nil { e.row.ivs = row.ivs; e.row.ivsRead = row.ivsRead ?? row.ivs }
-            if e.row.hp == nil, let hp = row.hp { e.row.hp = hp }
-            byId[id] = e
-        }
         func setMega(_ id: String, _ mega: Bool) { byId[id]?.megaWhenScanned = mega ? true : nil }
         for p in plan.same { touch(p.savedId); setMega(p.savedId, p.mega) }
         for u in plan.updated { update(u.savedId, plan.scanned[u.scanned]); setMega(u.savedId, false) }
@@ -579,25 +599,15 @@ public enum BoxMerge {
             case .leaveOut: break
             case .existing(let id):
                 guard let e = byId[id] else { break }
-                let r = plan.scanned[u.scanned]
-                if u.kind == .extraTwin || paired.contains(id) || (untrusted(u, r) && !u.misread.contains(id)) {
-                    // A part-read row only says "seen"; its values are wrong by definition. So does an extra twin, and so does an answer for an
-                    // entry another row already paired or updated in this plan (it is never written twice).
-                    byId[id]?.lastSeen = max(e.lastSeen, date)
-                } else if untrusted(u, r) {
-                    // A misread entry chosen from a row whose CP is not trusted: only the IVs and HP it has none of are filled in.
-                    fillUnread(id, r)
-                } else if ivsDisagree(r, e) {
+                switch effect(plan, u, candidate: e, gameMaster: gm0) {
+                case .seenOnly: byId[id]?.lastSeen = max(e.lastSeen, date)
+                case .seenAsMega: touch(id); setMega(id, true)
+                case .replacesValues, .replacesIVs: update(id, plan.scanned[u.scanned]); setMega(id, false)
+                case .keepsIVsAndFlags:
                     // The same Pokémon read twice with other IVs: the IVs never change, so one read is wrong and neither is guessed.
-                    if ivsReplaceable(r, e) { update(id, r); setMega(id, false) }
-                    else {
-                        byId[id]?.lastSeen = max(e.lastSeen, date)
-                        if byId[id]?.row.flags.contains(ivsRescanFlag) == false { byId[id]?.row.flags.append(ivsRescanFlag) }
-                    }
-                } else if plan.megaBases[u.scanned] != nil && Self.megaBase(e.row.speciesId, gm0) == nil {
-                    // A Mega row chosen for its base entry: seen, and Mega when scanned; the Mega values are not copied.
-                    touch(id); setMega(id, true)
-                } else { update(id, plan.scanned[u.scanned]); setMega(id, false) }
+                    byId[id]?.lastSeen = max(e.lastSeen, date)
+                    if byId[id]?.row.flags.contains(ivsRescanFlag) == false { byId[id]?.row.flags.append(ivsRescanFlag) }
+                }
             }
         }
         for i in newRows.sorted() {
@@ -639,7 +649,9 @@ public enum BoxMerge {
             if s.ivs == nil || s.ivs == row.ivs || s.ivs == f.was { keepIVs = true } else { fix.ivs = nil; keepIVs = false }
         }
         if !keepIVs {
-            row.ivs = s.ivs ?? row.ivs; row.ivsRead = s.ivsRead ?? row.ivsRead; row.ivsGuess = s.ivsGuess ?? row.ivsGuess
+            row.ivs = s.ivs ?? row.ivs; row.ivsRead = s.ivsRead ?? row.ivsRead
+            // IVs that were read replace a guess: the entry stops counting as one (a stale guess would let a later clean read replace again).
+            row.ivsGuess = s.ivs != nil ? s.ivsGuess : (s.ivsGuess ?? row.ivsGuess)
             row.solveStatus = s.ivs != nil ? s.solveStatus : (row.ivs != nil ? row.solveStatus : s.solveStatus)
             row.level = s.level ?? row.level; row.levelMax = s.levelMax ?? row.levelMax; row.dust = s.dust ?? row.dust
         }
@@ -647,6 +659,8 @@ public enum BoxMerge {
         // The scan's flags about IVs it did not read do not apply to IVs that were kept.
         let scanFlags = keepIVs ? s.flags.filter { FlagInfo.field(of: $0) != .ivs } : s.flags
         row.flags = FlagInfo.remaining(scanFlags, corrected: fix)
+        // A rescan that read other IVs and was answered "keep the saved ones" stays flagged until the IVs are corrected by hand, checked, or replaced.
+        if e.row.flags.contains(BoxMerge.ivsRescanFlag), row.ivs == e.row.ivs, !row.flags.contains(BoxMerge.ivsRescanFlag) { row.flags.append(BoxMerge.ivsRescanFlag) }
         out.row = BoxEntry.stripped(row)
         out.corrections = fix
         return out
@@ -687,6 +701,7 @@ public enum BoxMerge {
             guard [ivs.atk, ivs.def, ivs.hp].allSatisfy({ (0...15).contains($0) }) else { throw EditFailure.badValue("Each IV must be a number from 0 to 15.") }
             if fix.ivs == nil { fix.ivs = Fix(was: row.ivs) }
             row.ivs = ivs; row.ivsGuess = nil; row.solveStatus = "hand"
+            row.flags.removeAll { $0 == ivsRescanFlag }   // the person has decided the IVs
         }
         if let name = edit.speciesName, !name.trimmingCharacters(in: .whitespaces).isEmpty {
             guard let id = gm.speciesId(forName: name), let sp = gm.byId[id] else { throw EditFailure.badValue("\"\(name)\" is not a Pokémon name the app knows. Pick one from the suggestions.") }
