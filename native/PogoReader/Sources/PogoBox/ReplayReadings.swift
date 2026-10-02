@@ -4,14 +4,12 @@ import PogoReader
 /// Frame readings from a file, for running the app core without the extension.
 ///
 /// Two inputs:
-/// - a `pogo-read` output: `{ "readings": [ ... ] }` (also a bare JSON array of readings);
-/// - a replay log, one JSON object per line (JSON lines).
-///
-/// FORMAT ASSUMPTION (the replay log's exact format is defined by `ReplayLog` on another branch; this
-/// loader is tolerant and everything it assumes is in `isReading(line:)` below): a line is a reading if it
-/// has a `"reading"` object (the reading is that object), or if the object itself carries reading fields.
-/// Every other line (ticks, dropped-frame markers, a header) is skipped and counted, not an error. A line that
-/// is not valid JSON, or whose reading does not decode as a `FrameReading`, is counted as malformed.
+/// - a `pogo-read` output: `{ "readings": [ ... ], "signatureDiffs": [ ... ] }` (also a bare JSON array of readings);
+///   swipe ticks are derived from `signatureDiffs` with `SwipeTicker`, as `pogo-read` does;
+/// - the extension's replay log (JSON lines, `k` = "r" reading, "t" tick, "d" drop). The format has ONE source of
+///   truth, `PogoReader.ReplayLog`; this loader only calls `ReplayLog.decode`. A line it does not decode is counted
+///   as skipped (or malformed when it is not a JSON object), never an error. The log's readings carry no frame label,
+///   so each gets `"r<line number>"` (unique labels let the JavaScript place rows and let `Refine` find frames).
 public enum ReplayReadings {
     public struct Loaded {
         public var readings: [FrameReading]
@@ -22,6 +20,8 @@ public enum ReplayReadings {
         /// Swipe ticks: tick lines of a replay log, or ticks derived from a pogo-read output's `signatureDiffs`
         /// with the package's own `SwipeTicker`, exactly as `pogo-read` does. Empty when the input has none.
         public var ticks: [Double] = []
+        /// Replay log only: frames the extension dropped (a count; a drop carries no reading).
+        public var drops = 0
         public var hasTicks: Bool { !ticks.isEmpty }
     }
 
@@ -64,32 +64,18 @@ public enum ReplayReadings {
         for lineData in data.split(separator: UInt8(ascii: "\n")) {
             if lineData.allSatisfy({ $0 == 0x20 || $0 == 0x0D || $0 == 0x09 }) { continue }
             any = true
-            guard let obj = (try? JSONSerialization.jsonObject(with: lineData)) as? [String: Any] else { loaded.malformedLines += 1; continue }
-            if let t = tickTime(line: obj) { loaded.ticks.append(t); continue }
-            guard let payload = readingObject(line: obj) else { loaded.skippedLines += 1; continue }
-            guard let bytes = try? JSONSerialization.data(withJSONObject: payload),
-                  let reading = try? decoder.decode(FrameReading.self, from: bytes) else { loaded.malformedLines += 1; continue }
-            loaded.readings.append(reading)
+            switch ReplayLog.decode(Data(lineData)) {
+            case .reading(let r)?:
+                var reading = r.frameReading
+                reading.frame = "r\(loaded.readings.count + 1)"
+                loaded.readings.append(reading)
+            case .tick(let t)?: loaded.ticks.append(t)
+            case .drop?: loaded.drops += 1
+            case nil:
+                if (try? JSONSerialization.jsonObject(with: lineData)) is [String: Any] { loaded.skippedLines += 1 } else { loaded.malformedLines += 1 }
+            }
         }
         if !any { throw Failure.unreadable("\(name): empty") }
         return loaded
-    }
-
-    /// Keys only a reading carries (a tick or a dropped-frame marker has none of them).
-    static let readingFieldKeys: Set<String> = ["cpText", "nameText", "hpText", "nameConfidence", "ivConfidence", "sharpness", "fills"]
-
-    /// THE format assumption for ticks: a line whose `"kind"` (or `"type"`) is `"tick"`, with the swipe's time in
-    /// seconds as `"time"` (or `"t"`), or a line `{"tick": <seconds>}`. Anything else is not a tick.
-    static func tickTime(line: [String: Any]) -> Double? {
-        if let t = line["tick"] as? Double { return t }
-        guard (line["kind"] as? String) == "tick" || (line["type"] as? String) == "tick" else { return nil }
-        return (line["time"] as? Double) ?? (line["t"] as? Double)
-    }
-
-    /// THE format assumption for readings: the object that is the reading in this line, or nil if the line is not one.
-    static func readingObject(line: [String: Any]) -> [String: Any]? {
-        if let nested = line["reading"] as? [String: Any] { return nested }
-        if !readingFieldKeys.isDisjoint(with: line.keys) { return line }
-        return nil
     }
 }

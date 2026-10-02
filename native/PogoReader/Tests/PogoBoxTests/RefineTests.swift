@@ -148,6 +148,57 @@ final class RefineTests: XCTestCase {
         XCTAssertEqual(try Refine.apply(to: base, readings: readings, ticks: [0.5, 1.0], engine: sharedEngine).scan.rows.count, base.rows.count)
     }
 
+    // MARK: reconciliation with LiveGrouper
+
+    func testReconciliationRefusesToSplitWhenTheGrouperDisagreesOnHp() throws {
+        let readings = try twins(copies: 2, period: 2.0)
+        var base = try sharedEngine.finish(readings: readings)
+        XCTAssertEqual(base.rows.count, 1)
+        let live = GrouperDiff.liveRows(readings: readings, ticks: [1.6])
+        XCTAssertEqual(live.count, 2, "LiveGrouper sees the two Pokemon")
+        base.rows[0].hp = 999
+        let r = try Refine.apply(to: base, readings: readings, ticks: [1.6], engine: sharedEngine)
+        XCTAssertEqual(r.scan.rows.count, 1)
+        XCTAssertEqual(r.disagreements.count, 1)
+        XCTAssertTrue(r.disagreements[0].hasPrefix("grouper-disagrees"))
+        // and the same readings, agreeing, split
+        let ok = try Refine.apply(to: try sharedEngine.finish(readings: readings), readings: readings, ticks: [1.6], engine: sharedEngine)
+        XCTAssertEqual(ok.scan.rows.count, 2)
+        XCTAssertTrue(ok.disagreements.isEmpty)
+    }
+
+    func testReconciliationDoesNotSplitWithoutAnyEvidenceOfASwipe() throws {
+        // two identical Pokemon back to back with readings every 0.2 s and no tick: LiveGrouper sees one stay too
+        let one = Array(try Fixture.readings().prefix(7))
+        var readings = one
+        for r in one { var x = r; x.frame = "b-\(r.frame ?? "")"; x.time = (r.time ?? 0) + 1.4; readings.append(x) }
+        let base = try sharedEngine.finish(readings: readings)
+        let r = try Refine.apply(to: base, readings: readings, ticks: [], engine: sharedEngine)
+        XCTAssertEqual(r.scan.rows.count, base.rows.count)
+    }
+
+    func testTickOnlyRulesStillWork() throws {
+        let readings = try twins(copies: 2, period: 2.0)
+        let base = try sharedEngine.finish(readings: readings)
+        XCTAssertEqual(try Refine.applyTickOnly(to: base, readings: readings, ticks: [1.6], engine: sharedEngine).scan.rows.count, 2)
+        XCTAssertEqual(try Refine.applyTickOnly(to: base, readings: readings, ticks: [], engine: sharedEngine).scan.rows.count, 1)
+    }
+
+    func testAHiddenEntryBesideTheSamePokemonIsDroppedAsADuplicate() throws {
+        let (readings, base) = try hiddenFixture()
+        // make the unmatched Zapdos look like the row before it: put a Zapdos row, same HP and bars and the entry's CP, in front
+        var twin = base.rows[1]
+        twin.display = "Zapdos"; twin.name = "Zapdos"; twin.cp = 1977; twin.hp = 129; twin.ivs = IVs(atk: 15, def: 12, hp: 10)
+        let t0 = readings.first { $0.name == "Zapdos" && $0.cp == nil }!.time!
+        twin.frames = [FrameLabel(frame: nil, time: t0 - 0.4, cp: 1977, cpText: "1977", name: "Zapdos", hp: "129/129", ivs: nil, ivConfidence: nil, sharpness: nil, clip: nil)]
+        var mutated = base
+        mutated.rows.insert(twin, at: 2)
+        let r = try Refine.apply(to: mutated, readings: readings, ticks: [], engine: sharedEngine)
+        XCTAssertEqual(r.scan.rows.count, 5, "no extra row for the entry")
+        XCTAssertTrue(r.scan.unmatched.isEmpty)
+        XCTAssertEqual(r.changes.map(\.kind), [.duplicateDropped])
+    }
+
     // MARK: real data (opt-in)
 
     /// marathon-phone: the JavaScript's 45 rows plus the second Staraptor CP 1986 (a twin the grouping merged,

@@ -369,16 +369,20 @@ interpreter).
   passes readings and results as JSON text. JavaScript exceptions come out as `CoreEngine.Failure.script(message:line:)`.
   Thread-confined: use it from one serial queue. API: `finish(readings:) -> ScanResult` (rows, review, unmatched),
   `csv(rows:scanDate:)`, `mergeClips(_:)`, `advise(rows:)` / `advise(csv:)` / `advise(box:)`, `importPokeGenie(csv:)`.
-- `ReplayReadings.load(url:)` reads a `pogo-read` output (`{readings, signatureDiffs}`) or a JSON-lines replay log
-  (tolerant: reading lines are kept, tick lines become swipe ticks, other kinds are skipped; the assumed log format is in
-  `readingObject(line:)` and `tickTime(line:)`, the only two places to change).
+- `ReplayReadings.load(url:)` reads a `pogo-read` output (`{readings, signatureDiffs}`) or the extension's replay log
+  (JSON lines; decoded by `PogoReader.ReplayLog`, the one source of the format: readings, swipe ticks, drops; log readings get
+  the frame labels `r1`, `r2`, ...).
 - `BoxStore(root:)` keeps a box per account as JSON files (`save`, `list`, `load`, `currentBox`, `exportCSV`, `delete`);
   writes are atomic and an unreadable file is reported, not fatal. The current box is the latest FULL scan.
   `mergeIncremental` is a stub that throws `notImplemented` (the matching rule for a later partial scan is undecided).
 - `Refine` is a separate Swift post-pass over the JavaScript result (`CoreEngine.finish` itself stays a pure
-  pass-through): it splits two identical neighbours at a swipe tick (rows after the first get `same-as-previous`) and
-  turns a `cp-not-read` entry with exactly one possible CP into a row (`cp-computed:<cp>`). `GrouperDiff` runs
-  `LiveGrouper` over the same readings and ticks and lists where it and the refined rows differ (a diagnostic).
+  pass-through), reconciled with `LiveGrouper` run over the same readings and ticks. The JavaScript rows are the base for
+  every value. Twin: one JavaScript row whose span covers two or more consecutive `LiveGrouper` rows of the same name, with
+  the same HP and bars as each other and as the row, is split into that many rows (later ones `same-as-previous`); if they
+  disagree nothing is split and `disagreements` says so. Hidden CP: a `cp-not-read` entry with one possible CP becomes a row
+  (`cp-computed:<cp>`) only when `LiveGrouper` computed or recovered that CP for the stretch, and is dropped as a duplicate
+  (`duplicateDropped`) when the same Pokemon is the row beside it. Anything else the two disagree on is not applied; `GrouperDiff`
+  lists it. `Refine.applyTickOnly` is the first, tick-only version.
 
 What the app will call after a scan: `let engine = CoreEngine()` (own queue) then
 `engine.finish(readings:)`, `Refine.apply(to:readings:ticks:engine:)`, `BoxStore.save(_:account:source:)`,
@@ -422,7 +426,14 @@ JavaScript's output under Node) is always on. The tests on real readings under `
 - A Pokémon whose CP was never read is listed under `unmatched`, not as a row, unless `Refine` can compute its CP
   (one possible value).
 - Swipe ticks are not used by the JavaScript itself.
-- Speed: `finish` takes seconds on a phone-sized scan and about 35 s on a 3,975-reading, 770-row one (darentas-02) on a Mac with
-  JIT; the cost is almost all `cpm()` in `src/cpm.js` looking a fractional level up in an object (`CPM[12.5]`). An
-  equivalent Map lookup gives identical output about 5 times faster under Node; that change belongs in the JavaScript
-  source and is not made here. iOS runs JavaScriptCore without JIT in an app, which is slower still; unmeasured.
+- Speed (darentas-02, 3,975 readings, 770 rows, a Mac, `finish` alone): the committed bundle comes from `extractor-cpm-speed`
+  (a Map lookup in `cpm()` and a faster `solve()`: bisection over levels, the HP read used to find the few (hp IV, level) pairs
+  first; output byte-identical on all ten readings files). `jsc` with JIT: 4.7 s before, 0.05 s after. `jsc --useJIT=false` (what an
+  iOS app gets; `pogo-rows` also runs without JIT): 34 s before, 0.77 s after (0.83 s in `pogo-rows`). Mac CPU figures, not iOS.
+
+### First device run through the app core (`Tests/PogoBoxTests/Fixtures/device-run-2026-10-02.replay.jsonl`)
+
+The phone listed 51 Pokemon. The JavaScript `finish` on the log gives 49 rows and 2 unmatched. `pogo-rows` (refined, reconciled
+with `LiveGrouper`) gives exactly the phone's 51 (name and CP, in order): the twin Staraptor 1986 (HP 139), which no swipe
+tick separates, is split because `LiveGrouper` has two rows there; Zapdos 1977 is computed; the unmatched Staraptor 1994 entry
+is dropped as a duplicate of the row beside it. `DeviceRunTests` pins the three lists.

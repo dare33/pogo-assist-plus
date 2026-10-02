@@ -20,6 +20,11 @@ public struct GrouperDiff {
     /// Run `LiveGrouper` over `readings`, feeding each tick right before the first reading at or after its
     /// time (as `pogo-read` and the extension do), then compare with `refined`.
     public static func compute(refined: [ScanRow], readings: [FrameReading], ticks: [Double], species: SpeciesTable? = try? SpeciesTable.bundled()) -> GrouperDiff {
+        compare(refined: refined, live: liveRows(readings: readings, ticks: ticks, species: species))
+    }
+
+    /// `LiveGrouper`'s rows for these readings and ticks (ticks fed right before the first reading at or after them).
+    public static func liveRows(readings: [FrameReading], ticks: [Double], species: SpeciesTable? = try? SpeciesTable.bundled()) -> [LiveRow] {
         var grouper = LiveGrouper(species: species)
         let sorted = ticks.filter { $0.isFinite }.sorted()
         var next = 0
@@ -28,7 +33,7 @@ public struct GrouperDiff {
             grouper.add(r)
         }
         grouper.finish()
-        return compare(refined: refined, live: grouper.rows)
+        return grouper.rows
     }
 
     static func compare(refined: [ScanRow], live: [LiveRow]) -> GrouperDiff {
