@@ -240,13 +240,13 @@ public struct LiveGrouper {
             }
         } else { nameOnlyStart = nil }
         let seenSeparators = sepStart != nil && (sepLast - sepStart! + Tuning.framePeriod) >= Tuning.swipeSeparatorSeconds - 1e-9
-        // Ticks older than the last card are used up; any later one up to now is a candidate. A swipe takes 0.6 s or more
-        // (three frames at 5 fps), so a tick can only be one between two card readings that are at least
-        // `swipeMinGapSeconds` apart: closer than that (one or two frames at full rate) there was no time for a swipe,
-        // and the tick is a jump inside one Pokémon's stay (a touch dot, the iPad leader's animation) that would
-        // split it. Further apart (a swipe fits: two non-card readings between, or frames that were never read) the
-        // tick ends the run even when the two readings are indistinguishable: that is the twin case, and the new
-        // run is marked `same-as-previous` for a check in the game.
+        // Ticks older than the last card are used up; any later one up to now is a candidate. A tick can end a run only
+        // between two card readings at least `swipeMinGapSeconds` (0.55 s) apart: a swipe takes 0.6 s or more, but its
+        // first and last frames can themselves be readable cards, so the readings bracketing it may be only 0.4 s apart
+        // (one blank between), and that case is not covered (identical neighbours merge). Closer than 0.55 s the tick is
+        // taken for a jump inside one stay (a touch dot, the iPad leader's animation) and ignored. Further apart the
+        // tick ends the run even when the two readings are indistinguishable (the twin case); the new run is marked
+        // `same-as-previous` for a check in the game.
         ticks.removeAll { $0 <= lastCardT + 1e-9 }
         let seenTick = ticks.contains { $0 <= t + 1e-9 } && (t - lastCardT) >= Tuning.swipeMinGapSeconds - 1e-9
         let strong = r.name != nil && r.cp != nil && r.nameWeak != true && !(r.name == "Nidoran" && r.nameAttached == true && (current?.name == "Nidorina" || current?.name == "Nidorino"))
