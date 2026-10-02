@@ -77,6 +77,7 @@ do {
         print("base rows \(r.baseRowCount) / refined rows \(result.rows.count) (\(loaded.ticks.count) swipe ticks)")
         for c in r.changes { print("  refined #\(c.rowIndex) \(c.kind.rawValue): \(c.detail)") }
         for n in r.notices { print("  notice: \(n)") }
+        for n in r.disagreements { print("  \(n)") }
     }
     let peakMB = MemoryProbe.megabytes(probe.peakBytes), baseMB = MemoryProbe.megabytes(baseline)
     print(String(format: "time: load %.2f s, finish %.2f s | footprint: baseline %.1f MB, peak %.1f MB", tLoad, tFinish, baseMB, peakMB))

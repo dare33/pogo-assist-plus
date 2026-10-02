@@ -376,9 +376,13 @@ interpreter).
   writes are atomic and an unreadable file is reported, not fatal. The current box is the latest FULL scan.
   `mergeIncremental` is a stub that throws `notImplemented` (the matching rule for a later partial scan is undecided).
 - `Refine` is a separate Swift post-pass over the JavaScript result (`CoreEngine.finish` itself stays a pure
-  pass-through): it splits two identical neighbours at a swipe tick (rows after the first get `same-as-previous`) and
-  turns a `cp-not-read` entry with exactly one possible CP into a row (`cp-computed:<cp>`). `GrouperDiff` runs
-  `LiveGrouper` over the same readings and ticks and lists where it and the refined rows differ (a diagnostic).
+  pass-through), reconciled with `LiveGrouper` run over the same readings and ticks. The JavaScript rows are the base for
+  every value. Twin: one JavaScript row whose span covers two or more consecutive `LiveGrouper` rows of the same name, with
+  the same HP and bars as each other and as the row, is split into that many rows (later ones `same-as-previous`); if they
+  disagree nothing is split and `disagreements` says so. Hidden CP: a `cp-not-read` entry with one possible CP becomes a row
+  (`cp-computed:<cp>`) only when `LiveGrouper` computed or recovered that CP for the stretch, and is dropped as a duplicate
+  (`duplicateDropped`) when the same Pokemon is the row beside it. Anything else the two disagree on is not applied; `GrouperDiff`
+  lists it. `Refine.applyTickOnly` is the first, tick-only version.
 
 What the app will call after a scan: `let engine = CoreEngine()` (own queue) then
 `engine.finish(readings:)`, `Refine.apply(to:readings:ticks:engine:)`, `BoxStore.save(_:account:source:)`,
@@ -422,17 +426,14 @@ JavaScript's output under Node) is always on. The tests on real readings under `
 - A Pokémon whose CP was never read is listed under `unmatched`, not as a row, unless `Refine` can compute its CP
   (one possible value).
 - Swipe ticks are not used by the JavaScript itself.
-- Speed (darentas-02, 3,975 readings, 770 rows, a Mac): the committed bundle comes from `extractor-cpm-speed` (a Map lookup in
-  `cpm()`, output byte-identical). With JIT (`jsc`): 4.7 s before, 1.0 s after. Without JIT (`jsc --useJIT=false`, which is what
-  an iOS app gets, and what an unentitled SwiftPM tool such as `pogo-rows` also gets): 34 s before, 29 s after, so the fix
-  mostly helps the JIT case; without JIT the cost is the interpreter running the grouping and solver. These are Mac CPU figures,
-  not iOS ones.
+- Speed (darentas-02, 3,975 readings, 770 rows, a Mac, `finish` alone): the committed bundle comes from `extractor-cpm-speed`
+  (a Map lookup in `cpm()` and a faster `solve()`: bisection over levels, the HP read used to find the few (hp IV, level) pairs
+  first; output byte-identical on all ten readings files). `jsc` with JIT: 4.7 s before, 0.05 s after. `jsc --useJIT=false` (what an
+  iOS app gets; `pogo-rows` also runs without JIT): 34 s before, 0.77 s after (0.83 s in `pogo-rows`). Mac CPU figures, not iOS.
 
 ### First device run through the app core (`Tests/PogoBoxTests/Fixtures/device-run-2026-10-02.replay.jsonl`)
 
-The phone listed 51 Pokemon. The JavaScript `finish` on the log gives 49 rows and 2 unmatched; `pogo-rows` (refined) gives 51
-rows, but not the phone's 51. Refine's rule (a) did not split the twin Staraptor 1986 (HP 139): the log has no swipe tick between
-its two Pokemon (ticks at 551.9 s and 556.7 s; the twins' readings run 552.5 to 555.9 s), so only `LiveGrouper`'s separator-frame
-rule separates them. Refine's rule (b) turned the `cp-not-read` Staraptor entry (2 frames, HP 142, bars 12/15/15) into a row, but
-that is the same Pokemon as the one-frame Staraptor 1994 row the JavaScript already lists, so it is listed twice. The row count
-matches by coincidence of the two errors. `DeviceRunTests` pins all three lists.
+The phone listed 51 Pokemon. The JavaScript `finish` on the log gives 49 rows and 2 unmatched. `pogo-rows` (refined, reconciled
+with `LiveGrouper`) gives exactly the phone's 51 (name and CP, in order): the twin Staraptor 1986 (HP 139), which no swipe
+tick separates, is split because `LiveGrouper` has two rows there; Zapdos 1977 is computed; the unmatched Staraptor 1994 entry
+is dropped as a duplicate of the row beside it. `DeviceRunTests` pins the three lists.

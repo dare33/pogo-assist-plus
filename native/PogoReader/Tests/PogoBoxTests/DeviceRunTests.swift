@@ -4,8 +4,9 @@ import XCTest
 import PogoReader
 
 /// The first real device run (2026-10-02, 50 swipes, the owner's phone): the extension's own replay log. The phone listed
-/// 51 Pokémon (LiveGrouper's rows). The JavaScript `finish` gives 49 rows plus 2 unmatched. Refine (tick-only twin split,
-/// hidden-CP rows) gives 51 rows too, but NOT the same 51 as the phone: see `testRefinedRows`.
+/// 51 Pokémon (LiveGrouper's rows). The JavaScript `finish` gives 49 rows plus 2 unmatched; the twin Staraptor 1986 is merged
+/// into one row (no swipe tick between the two) and the hidden-CP Zapdos 1977 is unmatched. Refine, reconciled with
+/// LiveGrouper, gives exactly the phone's 51.
 final class DeviceRunTests: XCTestCase {
     private func load() throws -> ReplayReadings.Loaded { try ReplayReadings.load(url: Fixture.url("device-run-2026-10-02.replay.jsonl")) }
     private func key(_ r: ScanRow) -> String { "\(r.display) \(r.cp)" }
@@ -117,64 +118,8 @@ final class DeviceRunTests: XCTestCase {
         "Oricorio 1844"
     ]
 
-    /// Refine's output today. Compared with `phone` it differs in two places, both documented in the README:
-    /// - no twin split of Staraptor 1986 (HP 139): no swipe tick lies between the two Pokemon (the signature missed that
-    ///   swipe; the log has ticks at 551.9 and 556.7 s only, the twins' readings run 552.5 to 555.9 s), so rule (a) cannot fire;
-    /// - an extra "Staraptor 1994" row: the unmatched entry (2 frames, HP 142, bars 12/15/15) is the same Pokemon as the
-    ///   one-frame row before it, which the JavaScript already lists, so rule (b) lists it twice.
-    static let refined: [String] = [
-        "Rayquaza 4262",
-        "Lucario 3000",
-        "Staraptor 2819",
-        "Zamazenta 2661",
-        "Xerneas 2641",
-        "Xerneas 2611",
-        "Vaporeon 2480",
-        "Blissey 2178",
-        "Xurkitree 2173",
-        "Zamazenta 2145",
-        "Zamazenta 2133",
-        "Scyther 2071",
-        "Charizard 2017",
-        "Lapras 2013",
-        "Staraptor 2008",
-        "Zapdos 2007",
-        "Staraptor 1999",
-        "Staraptor 1995",
-        "Staraptor 1994",
-        "Staraptor 1994",
-        "Staraptor 1994",
-        "Staraptor 1992",
-        "Zapdos 1990",
-        "Staraptor 1987",
-        "Zapdos 1987",
-        "Staraptor 1986",
-        "Staraptor 1986",
-        "Staraptor 1982",
-        "Staraptor 1982",
-        "Pinsir 1978",
-        "Zapdos 1977",
-        "Staraptor 1968",
-        "Zapdos 1968",
-        "Staraptor 1967",
-        "Zapdos 1966",
-        "Moltres 1966",
-        "Zapdos 1965",
-        "Meowscarada 1961",
-        "Moltres 1960",
-        "Zapdos 1957",
-        "Staraptor 1951",
-        "Staraptor 1946",
-        "Moltres 1927",
-        "Heatmor 1920",
-        "Moltres 1920",
-        "Moltres 1918",
-        "Crustle 1913",
-        "Moltres 1901",
-        "Lapras 1885",
-        "Meowscarada 1854",
-        "Oricorio 1844"
-    ]
+    /// Refine's output (reconciled with LiveGrouper): the phone's list.
+    static var refined: [String] { phone }
 
     func testLogLoads() throws {
         let l = try load()
@@ -203,8 +148,20 @@ final class DeviceRunTests: XCTestCase {
         let base = try sharedEngine.finish(readings: l.readings)
         let r = try Refine.apply(to: base, readings: l.readings, ticks: l.ticks, engine: sharedEngine)
         XCTAssertEqual(r.scan.rows.map(key), Self.refined)
+        // the tick-only rules (no LiveGrouper) get the count right but not the list: no tick lies between the twins, and the
+        // unmatched Staraptor 1994 is listed twice
+        let t = try Refine.applyTickOnly(to: base, readings: l.readings, ticks: l.ticks, engine: sharedEngine)
+        XCTAssertNotEqual(t.scan.rows.map(key), Self.refined)
         XCTAssertEqual(r.scan.rows.count, 51)
-        XCTAssertEqual(r.changes.map(\.kind), [.hiddenCP, .hiddenCP])
+        XCTAssertEqual(r.changes.map(\.kind).sorted { $0.rawValue < $1.rawValue }, [.duplicateDropped, .hiddenCP, .twinSplit])
         XCTAssertTrue(r.scan.unmatched.isEmpty)
+        XCTAssertTrue(r.disagreements.isEmpty, "\(r.disagreements)")
+        let twins = r.scan.rows.filter { $0.display == "Staraptor" && $0.cp == 1986 && $0.hp == 139 }
+        XCTAssertEqual(twins.map { $0.flags.contains("same-as-previous") }, [false, true])
+        XCTAssertEqual(twins.map { $0.frames.count }.reduce(0, +), 8, "the 8 frames of the merged row are divided between the two")
+        let z = try XCTUnwrap(r.scan.rows.first { $0.display == "Zapdos" && $0.cp == 1977 })
+        XCTAssertEqual(z.hp, 129)
+        XCTAssertEqual(z.ivs, IVs(atk: 15, def: 12, hp: 10))
+        XCTAssertTrue(z.flags.contains("cp-computed:1977"))
     }
 }
