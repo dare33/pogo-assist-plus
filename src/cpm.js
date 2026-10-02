@@ -27,7 +27,8 @@ export const LEVELS = Object.keys(CPM).map(Number).sort((a, b) => a - b);
 const CPM_BY_LEVEL = new Map(Object.entries(CPM).map(([k, v]) => [Number(k), v]));
 
 export function cpm(level) {
-  const v = CPM_BY_LEVEL.get(level);
+  // A level given as a string worked with the object lookup (`CPM['25']`): keep that, for exactly the strings a key would match.
+  const v = CPM_BY_LEVEL.get(typeof level === 'string' ? (String(Number(level)) === level ? Number(level) : NaN) : level);
   if (v === undefined) throw new RangeError(`no CP multiplier for level ${level}`);
   return v;
 }

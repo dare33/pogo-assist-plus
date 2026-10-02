@@ -64,3 +64,9 @@ test('Great League dust and candy costs in the fixture match the tables for non-
   }
   assert.ok(checked >= 40, `only ${checked} rows checked`);
 });
+
+test('cpm accepts a level given as a string, as the object lookup it replaced did', () => {
+  assert.equal(cpm('25'), 0.667934);
+  assert.equal(cpm('12.5'), cpm(12.5));
+  for (const bad of ['25.3', 'x', '', '025', null, undefined, true, 0, 52, NaN, {}]) assert.throws(() => cpm(bad), RangeError, String(bad));
+});
