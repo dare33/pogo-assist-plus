@@ -101,6 +101,9 @@ public enum VoiceCommandFile {
         public var estimatedSeconds: Double
     }
 
+    /// The most page steps a command makes: the steps for `StorageCount.maximum` Pokémon.
+    public static var maxSteps: Int { steps(storageCount: StorageCount.maximum) }
+
     public static func steps(storageCount: Int) -> Int { max(3, ((min(max(storageCount, 1), StorageCount.maximum) - 1) * 102 + 99) / 100) }
 
     /// At most `defaultBatch` page steps in a gesture, cut to `ceil(steps / repeats)` so the overshoot stays small (51 steps is
@@ -125,7 +128,7 @@ public enum VoiceCommandFile {
             case .needsTapPoint: return "Tap paging is only available on screens it has been checked on."
             case .tapNotChecked: return "Tap paging is only available on screens it has been checked on."
             case .tapTooFarLeft: return "The tap point is too far from the right-hand edge. A tap there could reach Power up or Evolve, so the command is not made."
-            case .badCount: return "The storage count must be at least 1."
+            case .badCount: return "The number of page steps must be from 1 to the steps for 10,000 Pokémon, and a batch from 1 to \(VoiceCommandFile.defaultBatch)."
             }
         }
     }
@@ -136,7 +139,8 @@ public enum VoiceCommandFile {
     public static func make(count: Int, pace: Pace, batch: Int = defaultBatch, name: String? = nil, batchName: String? = nil, idBase: Double? = nil, locale: String = "en_AU",
                             tap: CGPoint? = nil, screenWidth: Double? = nil, screenHeight: Double? = nil, now: Date = Date()) throws -> Data {
         let name = name ?? pace.commandName, batchName = batchName ?? pace.gestureName
-        guard count >= 1, batch >= 1 else { throw Failure.badCount }
+        // Bounded above so no Int can overflow `count + batch - 1`: the most steps the app makes (10,000 Pokémon) and the largest batch.
+        guard (1...maxSteps).contains(count), (1...defaultBatch).contains(batch) else { throw Failure.badCount }
         var events: [(Double, (Double, Double)?)]
         let ref = now.timeIntervalSinceReferenceDate
         if pace.isTap {

@@ -229,6 +229,15 @@ final class VoiceCommandFileTests: XCTestCase {
         XCTAssertEqual([small.steps, small.batch, small.repeats], [10, 10, 1], "a small scan is one short batch, not 50 steps")
     }
 
+    func testCountAndBatchAreBoundedSoNoIntOverflows() throws {
+        for (count, batch) in [(Int.max, 50), (Int.max, Int.max), (50, Int.max), (VoiceCommandFile.maxSteps + 1, 50), (0, 50), (50, 0), (-1, 50), (Int.min, Int.min), (50, VoiceCommandFile.defaultBatch + 1)] {
+            XCTAssertThrowsError(try VoiceCommandFile.make(count: count, pace: .swipeNormal, batch: batch, now: now), "\(count) x \(batch)") { XCTAssertEqual($0 as? VoiceCommandFile.Failure, .badCount) }
+        }
+        XCTAssertEqual(VoiceCommandFile.maxSteps, VoiceCommandFile.steps(storageCount: StorageCount.maximum))
+        let size = VoiceCommandFile.sizing(storageCount: StorageCount.maximum, pace: .swipeNormal)
+        XCTAssertNoThrow(try VoiceCommandFile.make(count: size.steps, pace: .swipeNormal, batch: size.batch, now: now), "the app's own largest command is still made")
+    }
+
     func testTapIsRefusedLeftOfTheRightEdgeAndOnUncheckedScreens() throws {
         // a point that merely passes the 0.95 rule is not the measured point: refused (see FoldApiTests for the full table)
         XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: CGPoint(x: 418, y: 775), screenWidth: 440, screenHeight: 956, now: now)) { XCTAssertEqual($0 as? VoiceCommandFile.Failure, .tapNotChecked) }
