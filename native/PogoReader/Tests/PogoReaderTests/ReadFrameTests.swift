@@ -113,8 +113,8 @@ final class ReadFrameTests: XCTestCase {
         for text in ["dH 99 / 99", "H 99 / 99", "HP", "66 66"] { XCTAssertFalse(hpReadHasValidShape(text), text) }
         // What the iPad's labels come out as is still a read: only the side of the letters matters.
         for text in ["145 / 145 HP", "145/145", "79/79 1", "66 / 66 H", "165 / 165 HГ", "170 / 170 Hi", "154 / 154 L"] { XCTAssertTrue(hpReadHasValidShape(text), text) }
-        for text in ["CP1234", "CP 1234", "P2651", "cp3O28", "1234", "ap2621", "SP2614", "CA2591", "cI 2000", "iP1989"] { XCTAssertTrue(cpReadHasValidShape(text), text) }
-        for text in ["1234 dH", "1234dO", "CPL"] { XCTAssertFalse(cpReadHasValidShape(text), text) }
+        for text in ["CP1234", "CP 1234", "P2651", "cp3O28", "1234", "ap2621", "SP2614", "CA2591", "cI 2000", "iP1989", "5p2641", "CP4 262"] { XCTAssertTrue(cpReadHasValidShape(text), text) }
+        for text in ["1234 dH", "1234 dP", "CPL"] { XCTAssertFalse(cpReadHasValidShape(text), text) }
     }
 
     func testNoBarsIsFlaggedWhenThePanelIsMissingAndReadWhenPresent() {

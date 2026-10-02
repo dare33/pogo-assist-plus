@@ -9,6 +9,9 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(parseCp("cp3O28"), 3028)
         XCTAssertEqual(parseCp("23028"), 3028)
         XCTAssertEqual(parseCp("711"), 711)
+        XCTAssertEqual(parseCp("CP4 262"), 4262)       // Vision puts a space inside the figure
+        XCTAssertEqual(parseCp("CP 2 641"), 2641)
+        XCTAssertEqual(parseCp("5p2641"), 2641)
         XCTAssertNil(parseCp("7"))
         XCTAssertNil(parseCp(""))
     }

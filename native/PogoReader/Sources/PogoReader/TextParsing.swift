@@ -17,6 +17,9 @@ public func parseCp(_ text: String) -> Int? {
     let t = replacingO(text)
     var tail = t[...]
     if let lastLetter = t.lastIndex(where: isAsciiLetter) { tail = t[(lastLetter + 1)...] }
+    // Vision may put a space inside the figure ("CP4 262" for 4262); Tesseract's digit crops never did.
+    // Spaces in the tail are dropped so the digits join (a space is never part of a CP).
+    tail = tail.filter { !isSpace($0) }[...]
     var end = tail.endIndex
     while end > tail.startIndex, isSpace(tail[tail.index(before: end)]) { end = tail.index(before: end) }
     var start = end
@@ -64,7 +67,7 @@ public func parseHp(_ text: String) -> HP? {
 // and there is no request option to stop it considering rotated text. The parsers above would take
 // the digits out of such a read, so the frame reader first checks the SHAPE of the whole text.
 // Rotated, a line's label ends up on the wrong side of the figures: letters before the HP digits,
-// letters after the CP digits. The label itself is often misread (the iPad gives "ap2621", "SP2614",
+// letters after the CP digits (after the LAST one: a garbled label can contain a digit, "5p2641"). The label itself is often misread (the iPad gives "ap2621", "SP2614",
 // "165 / 165 Hi"), so only the SIDE of the letters is checked, never which letters they are.
 
 /// A real HP read has no letters before its first digit and has a "/" after it.
@@ -75,9 +78,10 @@ public func hpReadHasValidShape(_ text: String) -> Bool {
     return t[firstDigit...].contains("/")
 }
 
-/// A real CP read has no letters after its first digit ("CP", or what Vision makes of it, comes first).
+/// A real CP read has no letters after its last digit ("CP", or what Vision makes of it, comes first:
+/// "5p2641", "ap2621"); a rotated one has them after the figures.
 public func cpReadHasValidShape(_ text: String) -> Bool {
     let t = replacingO(text)
-    guard let firstDigit = t.firstIndex(where: isAsciiDigit) else { return false }
-    return !t[firstDigit...].contains(where: isAsciiLetter)
+    guard let lastDigit = t.lastIndex(where: isAsciiDigit) else { return false }
+    return !t[lastDigit...].contains(where: isAsciiLetter)
 }
