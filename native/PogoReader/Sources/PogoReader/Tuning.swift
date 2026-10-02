@@ -40,17 +40,36 @@ public enum Tuning {
     /// sliding in or out, not a settled one (frame.js).
     public static let settledBarLeft = 0.2...0.4
 
-    /// This many consecutive frames with neither a CP nor an HP read (mid-swipe, no anchors, a card
-    /// sliding past) is a swipe: the next card is a new Pokemon, even if it reads the same as the
-    /// last (two identical Staraptor in a row). On the marathon clips every swipe leaves 3 to 7
-    /// such frames and nothing inside a Pokemon's time on screen leaves more than 2.
-    public static let swipeSeparatorFrames = 3
+    /// The extension keeps at most 5 frames a second.
+    public static let framePeriod = 0.2
 
-    /// A run of at most this many frames that has no settled bars or whose CP does not fit its HP
-    /// and bars, next to a row of the same Pokemon with a related CP, is a card caught mid-slide:
-    /// it is absorbed into that neighbour (the intent of JS absorbStrays, which takes one frame; the iPad
-    /// clip has three-frame ones while the team leader covers the HP and the bars still animate).
-    public static let strayMaxFrames = 3
+    /// All the grouper's thresholds are durations, because a busy extension drops frames: a card seen in
+    /// two or three readings must be judged like one seen in seven. They are the old frame counts at 5 fps.
+    ///
+    /// This long of consecutive readings with neither a CP nor an HP read (mid-swipe, no anchors, a card
+    /// sliding past) is a swipe: the next card is a new Pokemon, even if it reads the same as the last
+    /// (two identical Staraptor in a row). On the marathon clips every swipe leaves 3 to 7 such frames
+    /// (0.6 s or more) and nothing inside a Pokemon's time on screen leaves more than 2.
+    public static let swipeSeparatorSeconds = 0.6
+
+    /// A run that lasted at most this long and has no settled bars, or whose CP does not fit its HP and
+    /// bars, next to a row of the same Pokemon with a related CP and an HP that does not differ, is a card
+    /// caught mid-slide: it is absorbed into that neighbour, which says `absorbed:<cp>` (the intent of JS
+    /// absorbStrays, which takes one frame; the iPad clip has three-frame ones while the team leader
+    /// covers the HP and the bars still animate).
+    public static let strayMaxSeconds = 0.6
+
+    /// A stretch with a CP but no readable name is listed as an unnamed row when it lasted this long
+    /// (two frames at full rate, as JS lists it).
+    public static let unnamedMinSeconds = 0.4
+
+    /// A card with its CP hidden and no HP read is listed only if it lasted this long.
+    public static let hiddenMinSeconds = 0.6
+
+    /// A row that spans more than this is flagged `long-stay`: an ordinary card is on screen 1.0 to 1.6 s,
+    /// two identical Pokemon whose swipe was not seen (frames dropped) span 3 s or more. The last card
+    /// of a run, which stays on screen, is flagged too.
+    public static let longStaySeconds = 2.4
 
     /// "Save crops" mode: at most this many frames are kept per on-screen segment (frames 2, 4, 6 of a
     /// segment whose bars have settled), and the whole archive is capped in files and bytes so a
@@ -67,9 +86,6 @@ public enum Tuning {
     /// The app calls the broadcast dead when no state has been written for this long (seconds); the
     /// extension writes at least once a second.
     public static let staleStateSeconds = 4.0
-
-    /// A stretch of this many frames with a CP but no readable name is listed as an unnamed row.
-    public static let unnamedMinFrames = 3
 
     /// Longest run of frames for which the grouper keeps a hidden-CP or weak-name stretch pending.
     public static let maxPendingFrames = 60

@@ -39,29 +39,41 @@ enum GrayPNG {
     }
 }
 
-/// Which frames "save crops" mode keeps: at most `maxCropFramesPerSegment` per on-screen segment,
-/// frames 2, 4, 6 of it, and only once the bars have settled (so the frame is a settled card); a
-/// segment whose bars never settle keeps its fifth frame. A segment ends at a swipe: the same
-/// `swipeSeparatorFrames` rule as the grouper, on the pixel evidence alone (no text).
+/// Which frames "save crops" mode keeps: at most `maxCropFramesPerSegment` per on-screen segment, the
+/// second frame of it and then one every 0.4 s, and only once the bars have settled (so the frame is a
+/// settled card). A card with no HP bar never settles its bars (they are not looked for), so it is kept
+/// on timing alone, as is a segment whose bars never settle (its fifth frame). A segment ends at a swipe:
+/// the grouper's rule (`swipeSeparatorSeconds` of frames with no anchors), on the pixel evidence alone.
+/// All of it is by the frames' times, so a dropped frame does not change which are kept.
 public struct CropSaver {
-    private var sepRun = Tuning.swipeSeparatorFrames
-    private var segFrames = 0
+    private var sepStart: Double?
+    private var sepLast = 0.0
+    private var segStart = 0.0
     private var saved = 0
-    private var lastSavedAt = 0
+    private var lastSavedT = -Double.infinity
     private var segment = 0
+    private var started = false
+    private var clock = 0.0
 
     public init() {}
 
     /// Decides, and when it says yes stamps the frame's segment number into `a`.
     public mutating func shouldSave(_ a: inout FrameAnalysis) -> Bool {
-        if !a.needsText { sepRun += 1; return false }
-        if sepRun >= Tuning.swipeSeparatorFrames { segFrames = 0; saved = 0; lastSavedAt = 0; segment += 1 }
-        sepRun = 0
-        segFrames += 1
-        guard saved < Tuning.maxCropFramesPerSegment, segFrames >= 2, saved == 0 || segFrames - lastSavedAt >= 2 else { return false }
-        guard a.barsSettled || (saved == 0 && segFrames >= 5) else { return false }
+        let t = max(a.time ?? (clock + Tuning.framePeriod), clock)
+        clock = t
+        let eps = 1e-9
+        if !a.needsText {
+            if sepStart == nil { sepStart = t }
+            sepLast = t
+            return false
+        }
+        let swipe = !started || (sepStart != nil && sepLast - sepStart! + Tuning.framePeriod >= Tuning.swipeSeparatorSeconds - eps)
+        sepStart = nil
+        if swipe { segStart = t; saved = 0; lastSavedT = -Double.infinity; segment += 1; started = true }
+        guard saved < Tuning.maxCropFramesPerSegment, t - segStart >= Tuning.framePeriod - eps, t - lastSavedT >= 2 * Tuning.framePeriod - eps else { return false }
+        guard a.barsSettled || a.cpOnly || (saved == 0 && t - segStart >= 4 * Tuning.framePeriod - eps) else { return false }
         saved += 1
-        lastSavedAt = segFrames
+        lastSavedT = t
         a.segment = segment
         return true
     }
@@ -158,12 +170,17 @@ public enum DeferredRun {
         let read = read(archive: archive, reader: reader, removeWhenDone: removeWhenDone)
         var g = LiveGrouper(species: species)
         var previous: Int?? = .none
+        var lastTime = 0.0
         for (segment, reading) in read {
             if let p = previous, p != segment {
-                for _ in 0..<Tuning.swipeSeparatorFrames { var gap = FrameReading(frame: nil, time: reading.time); gap.flags = ["mid-swipe"]; g.add(gap) }
+                // Readings 0.2 s apart for `swipeSeparatorSeconds`, after the last one given (the real gap was longer).
+                for k in 1...Int((Tuning.swipeSeparatorSeconds / Tuning.framePeriod).rounded(.up)) {
+                    var gap = FrameReading(frame: nil, time: lastTime + Double(k) * Tuning.framePeriod); gap.flags = ["mid-swipe"]; g.add(gap)
+                }
             }
             previous = .some(segment)
             g.add(reading)
+            lastTime = reading.time ?? lastTime + Tuning.framePeriod
         }
         g.finish()
         return (read.map(\.reading), g.rows)
