@@ -589,8 +589,12 @@ A tap file holds absolute screen points, so it is only safe on the screen it was
 point (anything else, including NaN, zero or a point that merely passes the 0.95 rule, is refused); the Python generator does the same
 (`--screen-width`, `--screen-height`, one-entry table). The file name carries the screen (`Pogo scan 300 (440x956 iPhone).voicecontrolcommands`)
 and the share step says: save to Files on THIS device and import it there, and do not send it to another device. The app records the screen
-each mode's command was made on and, when the recorded screen is not the current one, hides the tap steps ("This command was made on a
-different screen. Make it again here."). The scan result shows a prominent warning when a scan ran at a tap pace on a screen that is not
+each mode's command was made on and checks EVERY tap command it made (Scan and Fast scan) against the current screen, whatever pace is
+selected, because on an unchecked screen the pace is forced to Swipe and an installed tap command (Display Zoom turned on since, a restore
+onto another phone) would otherwise go unmentioned. When any is for another screen (or none was recorded), the Scan screen, in the Swipe
+view too, shows a red warning naming the command(s), "Pogo scan" and "Pogo fast scan", saying not to say them on this screen and to delete
+them in Settings > Accessibility > Voice Control > Commands (`TapCommandCheck`). For the selected tap pace it also hides the tap steps
+("This command was made on a different screen. Make it again here."). The app cannot see what is installed, only what it made. The scan result shows a prominent warning when a scan ran at a tap pace on a screen that is not
 checked. What cannot be prevented: a file that is imported by hand on another device (AirDrop, Files, a message) still holds the 440 x 956
 point, and on a different screen that point can land on a button in the game. The app can only warn afterwards.
 The command is made for the phone's language (the device locale); Voice Control's own language may differ, and the Scan screen says so.

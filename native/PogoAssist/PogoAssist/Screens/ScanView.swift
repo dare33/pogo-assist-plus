@@ -62,6 +62,9 @@ struct ScanView: View {
 
     private var commandSection: some View {
         Section {
+            if let warning = model.tapCommandWarning {
+                Label(warning, systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
+            }
             if model.tapAvailable {
                 stepTitle("1. Choose how to page")
                 ForEach(model.offeredPaces) { p in paceRow(p) }

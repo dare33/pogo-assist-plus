@@ -187,6 +187,14 @@ final class AppModel: ObservableObject {
         return rec.screen != screenLabel
     }
 
+    /// Every tap command made for this account is checked against the current screen, whatever pace is selected: on an unchecked
+    /// screen the pace is forced to Swipe, but a tap command made earlier (Display Zoom turned on since, a restore onto another phone) is
+    /// still installed in Voice Control.
+    var tapCommandsOnOtherScreens: [VoiceCommandFile.Pace] {
+        TapCommandCheck.onOtherScreens(made: voiceRecords.map { (pace: $0.key, screen: $0.value.screen) }, current: screenLabel)
+    }
+    var tapCommandWarning: String? { TapCommandCheck.warning(for: tapCommandsOnOtherScreens) }
+
     func loadVoiceRecord() {
         voiceRecords = [:]
         guard let a = account else { return }
