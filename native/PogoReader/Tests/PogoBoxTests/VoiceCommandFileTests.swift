@@ -114,9 +114,9 @@ final class VoiceCommandFileTests: XCTestCase {
         try assertSame("swipe-fast-1427", try VoiceCommandFile.make(count: 1427, pace: .swipeFast, batch: 50, now: now))
         try assertSame("swipe-normal-51", try VoiceCommandFile.make(count: 51, pace: .swipeNormal, batch: 26, now: now))   // 2 x 26, not 2 x 50
         try assertSame("swipe-normal-3", try VoiceCommandFile.make(count: 3, pace: .swipeNormal, batch: 3, now: now))
-        try assertSame("tap-normal-1427", try VoiceCommandFile.make(count: 1427, pace: .tapNormal, batch: 50, tap: tap, now: now))
-        try assertSame("tap-fast-51", try VoiceCommandFile.make(count: 51, pace: .tapFast, batch: 26, tap: tap, now: now))
-        try assertSame("tap-normal-3-fr_FR", try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, locale: "fr_FR", tap: tap, now: now))
+        try assertSame("tap-normal-1427", try VoiceCommandFile.make(count: 1427, pace: .tapNormal, batch: 50, tap: tap, screenWidth: 440, screenHeight: 956, now: now))
+        try assertSame("tap-fast-51", try VoiceCommandFile.make(count: 51, pace: .tapFast, batch: 26, tap: tap, screenWidth: 440, screenHeight: 956, now: now))
+        try assertSame("tap-normal-3-fr_FR", try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, locale: "fr_FR", tap: tap, screenWidth: 440, screenHeight: 956, now: now))
     }
 
     // MARK: names, identifiers, file names
@@ -153,8 +153,8 @@ final class VoiceCommandFileTests: XCTestCase {
         // two files of one mode have the same names and identifiers; files of different modes share none
         var idsByMode = [P: Set<String>]()
         for p in P.allCases {
-            let a = try commands(try VoiceCommandFile.make(count: 10, pace: p, batch: 10, tap: tap, now: now))
-            let b = try commands(try VoiceCommandFile.make(count: 400, pace: p, batch: 50, tap: tap, now: now.addingTimeInterval(86_400)))
+            let a = try commands(try VoiceCommandFile.make(count: 10, pace: p, batch: 10, tap: tap, screenWidth: 440, screenHeight: 956, now: now))
+            let b = try commands(try VoiceCommandFile.make(count: 400, pace: p, batch: 50, tap: tap, screenWidth: 440, screenHeight: 956, now: now.addingTimeInterval(86_400)))
             XCTAssertEqual(Set(a.map { $0.id }), Set(b.map { $0.id }), "\(p) identifiers must not change between files")
             XCTAssertEqual(Set(a.map { $0.name }), [p.commandName, p.gestureName])
             XCTAssertEqual(a.count, 2)
@@ -230,27 +230,21 @@ final class VoiceCommandFileTests: XCTestCase {
     }
 
     func testTapIsRefusedLeftOfTheRightEdgeAndOnUncheckedScreens() throws {
-        // 0.95 * 440 = 418: 417.9 is refused, 418 is allowed
-        XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: CGPoint(x: 417.9, y: 775), now: now)) {
-            XCTAssertEqual($0 as? VoiceCommandFile.Failure, .tapTooFarLeft(x: 417.9, limit: 418))
-        }
-        XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: CGPoint(x: 300, y: 775), now: now))
-        XCTAssertNoThrow(try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: CGPoint(x: 418, y: 775), now: now))
-        XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapFast, batch: 3, now: now)) { XCTAssertEqual($0 as? VoiceCommandFile.Failure, .needsTapPoint) }
-        // the limit follows the screen width given
-        XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: tap, screenWidth: 600, now: now))
+        // a point that merely passes the 0.95 rule is not the measured point: refused (see FoldApiTests for the full table)
+        XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: CGPoint(x: 418, y: 775), screenWidth: 440, screenHeight: 956, now: now)) { XCTAssertEqual($0 as? VoiceCommandFile.Failure, .tapNotChecked) }
+        XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: CGPoint(x: 300, y: 775), screenWidth: 440, screenHeight: 956, now: now))
+        XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapFast, batch: 3, screenWidth: 440, screenHeight: 956, now: now)) { XCTAssertEqual($0 as? VoiceCommandFile.Failure, .needsTapPoint) }
+        XCTAssertThrowsError(try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: tap, screenWidth: 600, screenHeight: 956, now: now))
         XCTAssertEqual(VoiceCommandFile.tapPoint(width: 440, height: 956), CGPoint(x: 424, y: 775))
         XCTAssertNil(VoiceCommandFile.tapPoint(width: 402, height: 874))
         // the checked point itself is right of the limit, and agrees with the measured fractions
-        for s in VoiceCommandFile.checkedScreens {
-            XCTAssertGreaterThanOrEqual(s.tapX, VoiceCommandFile.minTapXFraction * s.width)
-        }
+        for s in VoiceCommandFile.checkedScreens { XCTAssertGreaterThanOrEqual(s.tapX, VoiceCommandFile.minTapXFraction * s.width) }
         XCTAssertEqual(424.0 / 440, VoiceCommandFile.measuredTapXFraction, accuracy: 0.002)
         XCTAssertEqual(775.0 / 956, VoiceCommandFile.measuredTapYFraction, accuracy: 0.002)
     }
 
     func testEveryTapIsAtExactlyTheSamePoint() throws {
-        let data = try VoiceCommandFile.make(count: 50, pace: .tapNormal, batch: 50, tap: tap, now: now)
+        let data = try VoiceCommandFile.make(count: 50, pace: .tapNormal, batch: 50, tap: tap, screenWidth: 440, screenHeight: 956, now: now)
         guard case .dict(let root) = try normalised(data), case .dict(let table)? = root["CommandsTable"] else { return XCTFail() }
         var points = Set<String>()
         for case .dict(let entry) in table.values {

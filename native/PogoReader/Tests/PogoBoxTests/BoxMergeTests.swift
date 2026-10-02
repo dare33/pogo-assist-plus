@@ -54,11 +54,12 @@ final class BoxMergeTests: XCTestCase {
         XCTAssertEqual(box[0].firstSeen, date(0)); XCTAssertEqual(box[0].lastSeen, date(10))
     }
 
-    func testLowerCPIsNotAPowerUp() {
+    func testLowerCPIsNotAPowerUpAndIsAskedAbout() {
         let v = entry(row(cp: 300), id: "a")
         let p = plan([row(cp: 250)], [v])
         XCTAssertTrue(p.updated.isEmpty)
-        XCTAssertEqual(p.new, [0]); XCTAssertEqual(p.gone, ["a"])
+        XCTAssertEqual(p.unsure.first?.candidates, ["a"], "same species and IVs, lower CP: asked about, never added and removed silently")
+        XCTAssertTrue(p.new.isEmpty && p.gone.isEmpty)
     }
 
     func testPowerUpNeedsTheSameIVs() {
@@ -165,9 +166,13 @@ final class BoxMergeTests: XCTestCase {
         XCTAssertThrowsError(try BoxMerge.apply(p, to: [a, b]))   // unanswered
         XCTAssertThrowsError(try BoxMerge.apply(p, resolutions: [0: .existing("zzz")], to: [a, b]))   // not a candidate
         let picked = try BoxMerge.apply(p, resolutions: [0: .existing("b")], to: [a, b])
-        XCTAssertEqual(picked.map { $0.id }, ["a", "b"]); XCTAssertEqual(picked[1].row.cp, 500); XCTAssertEqual(picked[0].row.cp, 300)
-        let asNew = try BoxMerge.apply(p, resolutions: [0: .new], to: [a, b], makeID: { "n1" })
+        // in a full scan the candidate that was not chosen was not seen: it is proposed as gone (the review lets the person keep it)
+        XCTAssertEqual(picked.map { $0.id }, ["b"]); XCTAssertEqual(picked[0].row.cp, 500)
+        let kept = try BoxMerge.apply(p, resolutions: [0: .existing("b")], keepGone: ["a"], to: [a, b])
+        XCTAssertEqual(kept.map { $0.id }, ["a", "b"]); XCTAssertEqual(kept[1].row.cp, 500); XCTAssertEqual(kept[0].row.cp, 300)
+        let asNew = try BoxMerge.apply(p, resolutions: [0: .new], keepGone: ["a", "b"], to: [a, b], makeID: { "n1" })
         XCTAssertEqual(asNew.map { $0.id }, ["a", "b", "n1"])
+        XCTAssertEqual(try BoxMerge.apply(p, resolutions: [0: .new], to: [a, b], makeID: { "n1" }).map { $0.id }, ["n1"])
     }
 
     func testTwoUnsureCannotPickTheSameSaved() {

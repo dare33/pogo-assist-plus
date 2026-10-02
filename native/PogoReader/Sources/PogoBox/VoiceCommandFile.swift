@@ -47,8 +47,12 @@ public enum VoiceCommandFile {
         public static func defaultMode(tapAvailable: Bool) -> Pace { offered(tapAvailable: tapAvailable)[0] }
         /// A note shown on the row, or nil.
         public var note: String? { self == .tapFast ? "misreads seen at this pace" : nil }
-        /// The file the app offers: "Pogo tap 300.voicecontrolcommands".
-        public func fileName(count: Int) -> String { "\(commandName) \(count).voicecontrolcommands" }
+        /// The file the app offers: "Pogo scan 300 (440x956 iPhone).voicecontrolcommands". A tap file holds absolute screen points, so its
+        /// name carries the screen it was made for; a swipe file does not need to.
+        public func fileName(count: Int, screen: String? = nil) -> String {
+            let on = (isTap && screen != nil) ? " (\(screen!))" : ""
+            return "\(commandName) \(count)\(on).voicecontrolcommands"
+        }
     }
 
     // MARK: - tap position: the one place it is kept
@@ -70,6 +74,9 @@ public enum VoiceCommandFile {
     public static let checkedScreens: [CheckedScreen] = [
         CheckedScreen(width: 440, height: 956, tapX: 424, tapY: 775),
     ]
+
+    /// "440x956 iPhone": a screen size and kind for a file name and for the record of what a command was made on.
+    public static func screenLabel(width: Double, height: Double, isPad: Bool) -> String { "\(Int(width))x\(Int(height)) \(isPad ? "iPad" : "iPhone")" }
 
     /// The tap point for a screen of this size in points, or nil when the position has not been measured there.
     public static func tapPoint(width: Double, height: Double) -> CGPoint? {
@@ -94,7 +101,7 @@ public enum VoiceCommandFile {
         public var estimatedSeconds: Double
     }
 
-    public static func steps(storageCount: Int) -> Int { max(3, ((max(storageCount, 1) - 1) * 102 + 99) / 100) }
+    public static func steps(storageCount: Int) -> Int { max(3, ((min(max(storageCount, 1), StorageCount.maximum) - 1) * 102 + 99) / 100) }
 
     /// At most `defaultBatch` page steps in a gesture, cut to `ceil(steps / repeats)` so the overshoot stays small (51 steps is
     /// 2 x 26 = 52, not 2 x 50; 1,427 is 29 x 50). The Python does the same.
@@ -110,10 +117,13 @@ public enum VoiceCommandFile {
     public enum Failure: Error, LocalizedError, Equatable {
         case needsTapPoint
         case tapTooFarLeft(x: Double, limit: Double)
+        /// The point is not the measured point of a screen of this width and height (or no screen was given).
+        case tapNotChecked
         case badCount
         public var errorDescription: String? {
             switch self {
             case .needsTapPoint: return "Tap paging is only available on screens it has been checked on."
+            case .tapNotChecked: return "Tap paging is only available on screens it has been checked on."
             case .tapTooFarLeft: return "The tap point is too far from the right-hand edge. A tap there could reach Power up or Evolve, so the command is not made."
             case .badCount: return "The storage count must be at least 1."
             }
@@ -121,17 +131,19 @@ public enum VoiceCommandFile {
     }
 
     /// The commands file. `count` is the number of page steps to make, as `--count` in the Python (use `sizing(...).steps`);
-    /// `batch` the page steps in one gesture. A tap pace needs `tap`, the point in screen points, which must be at or right of
-    /// `minTapXFraction` of `screenWidth`. `now` fixes the time stamps (a test passes one; the app passes the time). The names and the identifiers come from the pace, so each mode has its own commands.
+    /// `batch` the page steps in one gesture. A tap pace needs `tap` and the screen's width and height in points: the point must be the
+    /// measured one of a checked screen of exactly that size (`checkedScreens`), and is still asserted to be at or right of `minTapXFraction` of the width. `now` fixes the time stamps (a test passes one; the app passes the time). The names and the identifiers come from the pace, so each mode has its own commands.
     public static func make(count: Int, pace: Pace, batch: Int = defaultBatch, name: String? = nil, batchName: String? = nil, idBase: Double? = nil, locale: String = "en_AU",
-                            tap: CGPoint? = nil, screenWidth: Double = 440, now: Date = Date()) throws -> Data {
+                            tap: CGPoint? = nil, screenWidth: Double? = nil, screenHeight: Double? = nil, now: Date = Date()) throws -> Data {
         let name = name ?? pace.commandName, batchName = batchName ?? pace.gestureName
         guard count >= 1, batch >= 1 else { throw Failure.badCount }
         var events: [(Double, (Double, Double)?)]
         let ref = now.timeIntervalSinceReferenceDate
         if pace.isTap {
             guard let tap else { throw Failure.needsTapPoint }
-            guard tap.x >= minTapXFraction * screenWidth else { throw Failure.tapTooFarLeft(x: Double(tap.x), limit: minTapXFraction * screenWidth) }
+            // Only the measured point of a checked screen of exactly this width and height (a point that merely passes the edge rule is not enough).
+            guard let w = screenWidth, let h = screenHeight, w.isFinite, h.isFinite, let measured = tapPoint(width: w, height: h), Double(tap.x) == Double(measured.x), Double(tap.y) == Double(measured.y) else { throw Failure.tapNotChecked }
+            guard tap.x >= minTapXFraction * w else { throw Failure.tapTooFarLeft(x: Double(tap.x), limit: minTapXFraction * w) }
             events = taps(start: ref, count: batch, x: Double(tap.x), y: Double(tap.y), every: pace.every)
         } else {
             events = swipes(start: ref, count: batch, xFrom: 340, xTo: 75, y: 340, every: pace.every, duration: pace.swipeDuration)
@@ -341,4 +353,28 @@ enum BinaryPlist {
     private static func header(_ marker: UInt8, _ count: Int) -> [UInt8] {
         count < 15 ? [marker | UInt8(count)] : [marker | 0x0F] + intObject(count)
     }
+}
+
+
+/// The storage count a person types for the command: 1 to 10,000, read without overflow.
+public enum StorageCount {
+    public static let maximum = 10_000
+    /// Above this the app asks whether the count is right before making the command.
+    public static let confirmAbove = 3_000
+
+    public enum Parsed: Equatable { case empty, valid(Int), invalid }
+
+    public static func parse(_ text: String) -> Parsed {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { return .empty }
+        guard t.allSatisfy({ $0.isASCII && $0.isNumber }), t.count <= 6, let n = Int(t), (1...maximum).contains(n) else { return .invalid }
+        return .valid(n)
+    }
+
+    /// A plain sentence when the text is not a usable count, else nil (an empty field is not a problem).
+    public static func problem(for text: String) -> String? {
+        parse(text) == .invalid ? "Type a whole number of Pokémon from 1 to \(maximum.formatted())." : nil
+    }
+
+    public static func needsConfirmation(_ count: Int) -> Bool { count > confirmAbove }
 }

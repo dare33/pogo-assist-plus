@@ -47,10 +47,15 @@ public final class BoxLibrary {
     public enum Failure: Error, LocalizedError, Equatable {
         case noSuchVersion(Int)
         case nothingToRestore
+        /// The box changed since this action was prepared.
+        case boxChanged
+        case nothingReadable
         public var errorDescription: String? {
             switch self {
             case .noSuchVersion(let n): return "Version \(n) of this box is not on the device."
             case .nothingToRestore: return "There is no earlier box to go back to."
+            case .boxChanged: return "The box changed while this was open."
+            case .nothingReadable: return "None of the saved versions of this box can be read."
             }
         }
     }
@@ -101,13 +106,39 @@ public final class BoxLibrary {
 
     @discardableResult
     public func commit(account: String, entries: [BoxEntry], reason: BoxSnapshot.Reason, note: String, scanId: String? = nil, scanKind: BoxStore.Kind? = nil,
-                       scanDate: Date? = nil, restoredFrom: Int? = nil, now: Date = Date()) throws -> BoxSnapshot {
-        let next = (try seqs(account).last ?? 0) + 1
+                       scanDate: Date? = nil, restoredFrom: Int? = nil, expectedCurrentSeq: Int?? = nil, now: Date = Date()) throws -> BoxSnapshot {
+        let last = try seqs(account).last
+        // A save prepared against a box that has since changed is refused, not written over it.
+        if let expected = expectedCurrentSeq, expected != last { throw Failure.boxChanged }
+        let next = (last ?? 0) + 1
         let snap = BoxSnapshot(schema: Self.schemaVersion, seq: next, account: account, createdAt: now, reason: reason, note: note, scanId: scanId, scanKind: scanKind,
                                scanDate: scanDate, restoredFrom: restoredFrom, entries: entries)
         try fm.createDirectory(at: try boxFolder(account), withIntermediateDirectories: true)
         try Self.encoder.encode(snap).write(to: file(account, next), options: .atomic)
         return snap
+    }
+
+    /// Change the box: `transform` is given the CURRENT entries, read here, and what it returns is written as the next version, all in
+    /// one call, so two quick actions each see the other's result and neither drops it. A `transform` that throws writes nothing. Run it
+    /// on the one queue the box is written from.
+    @discardableResult
+    public func mutate(account: String, reason: BoxSnapshot.Reason, note: String, now: Date = Date(), _ transform: ([BoxEntry]) throws -> [BoxEntry]) throws -> BoxSnapshot {
+        let cur = try current(account: account)
+        let entries = try transform(cur?.entries ?? [])
+        return try commit(account: account, entries: entries, reason: reason, note: note, scanKind: cur?.scanKind, scanDate: cur?.scanDate, expectedCurrentSeq: .some(cur?.seq), now: now)
+    }
+
+    /// The newest version that can be read, skipping any that cannot.
+    public func latestReadable(account: String) throws -> BoxSnapshot? {
+        for seq in try seqs(account).reversed() { if let snap = try? load(account: account, seq: seq) { return snap } }
+        return nil
+    }
+
+    /// Make the newest readable version the current box again, as a new version (for when the newest one is damaged).
+    @discardableResult
+    public func restoreLatestReadable(account: String, now: Date = Date()) throws -> BoxSnapshot {
+        guard let snap = try latestReadable(account: account) else { throw Failure.nothingReadable }
+        return try restore(account: account, seq: snap.seq, now: now)
     }
 
     /// Make an older version the current box again, as a new version (so the restore can itself be undone).
@@ -117,12 +148,13 @@ public final class BoxLibrary {
         return try commit(account: account, entries: old.entries, reason: .restore, note: "Restored version \(seq)", scanKind: old.scanKind, scanDate: old.scanDate, restoredFrom: seq, now: now)
     }
 
-    /// The version "Restore previous box" would restore: the one before the current box's own source (for a restore, the one
-    /// before the version it copied), so pressing it twice goes back two steps rather than flipping between two.
+    /// The version "Restore previous box" would restore: the one just before the current version, which holds the content that was current
+    /// before the latest change (after [1 scan, 2 edit, 3 restore of 1, 4 scan] it is 3, which has the content of 1). Pressing it again
+    /// from a restore goes back to what the restore replaced.
     public func previousVersion(account: String) throws -> BoxSnapshot.Header? {
-        guard let cur = try history(account: account).first else { return nil }
-        let base = cur.restoredFrom ?? cur.seq
-        return try history(account: account).first { $0.seq < base && $0.reason != .restore }
+        let all = try history(account: account)
+        guard let cur = all.first else { return nil }
+        return all.first { $0.seq < cur.seq }
     }
 
     @discardableResult

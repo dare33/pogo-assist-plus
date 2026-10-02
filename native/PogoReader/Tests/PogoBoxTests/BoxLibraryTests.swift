@@ -41,7 +41,11 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertEqual(r.seq, 3); XCTAssertEqual(r.reason, .restore); XCTAssertEqual(r.restoredFrom, 1)
         XCTAssertEqual(try lib.current(account: "a")?.entries.count, 1)
         XCTAssertEqual(try lib.load(account: "a", seq: 2).entries.count, 3, "the box that was undone is still there")
-        XCTAssertThrowsError(try lib.restorePrevious(account: "a")) { XCTAssertEqual($0 as? BoxLibrary.Failure, .nothingToRestore) }
+        // pressing it again goes back to what the restore replaced (the content of version 2)
+        XCTAssertEqual(try lib.previousVersion(account: "a")?.seq, 2)
+        XCTAssertEqual(try lib.restorePrevious(account: "a", now: date(3)).entries.count, 3)
+        try lib.commit(account: "solo", entries: entries([1]), reason: .scan, note: "only", now: date(1))
+        XCTAssertThrowsError(try lib.restorePrevious(account: "solo")) { XCTAssertEqual($0 as? BoxLibrary.Failure, .nothingToRestore) }
         // any version can be restored by number, which is how the undone one comes back
         XCTAssertEqual(try lib.restore(account: "a", seq: 2, now: date(4)).entries.count, 3)
         XCTAssertThrowsError(try lib.restore(account: "a", seq: 99)) { XCTAssertEqual($0 as? BoxLibrary.Failure, .noSuchVersion(99)) }
