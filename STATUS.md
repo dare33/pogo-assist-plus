@@ -1,5 +1,14 @@
 # Status — Pogo Assist+
 
+**2 Oct 2026 (evening): proof 2 passed on Greg's iPhone.** Release build of `native-live-read` at
+1a5c041, Xcode 27.0, iOS 27.2 beta: the 50-swipe "Marathon" run listed all 51 Pokémon with name,
+CP, HP and IVs; broadcast finished; phone responsive. 403 of 643 frames read (about 300 ms per
+text-recognition read), extension peak 52.9 MB with 247 MB or more free. Details in `PLAN.md`
+(Phase 3, proof 2 result). The run's `state.json` and `replay.jsonl` are kept outside the repo.
+The live grouper's review gate is still not passed (open findings in `native/README.md`); the
+saved box will be grouped after the scan by the JavaScript pipeline (branch `native-app-core`,
+local, unreviewed).
+
 **2 Oct 2026: proof 2, the live-read prototype (branch `native-live-read`, not merged, not yet run on a phone).**
 `native/` holds a Swift package with the appraisal-screen reader ported from `src/extract/` on
 `extractor-read-faults` (Apple Vision for the text), a live grouper, an Xcode project with the app

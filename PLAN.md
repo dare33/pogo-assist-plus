@@ -201,6 +201,24 @@ sizes with proportional scaling, only if the game's layout proves proportional.
    a 50-swipe run is read, within the extension's memory limit (about 50 MB), with the phone
    staying responsive. Built and run on the Mac; this Windows machine cannot build it.
 
+   **Result, 2 Oct 2026 (Greg's iPhone, iOS 27.2 beta, Xcode 27.0 on macOS 27.0.1, Release build of
+   `native-live-read` at 1a5c041, "Read live (accurate)", the 50-swipe "Marathon" command): passed.**
+   All 51 Pokémon (the starting one and 50 swipes, Rayquaza CP 4262 down to Oricorio CP 1844) were
+   listed with name, CP, HP and IVs; the broadcast finished normally; the phone stayed responsive
+   with no stutter (Greg). 643 frames offered at 5 a second, 403 read, 240 dropped while the reader
+   was busy; a text-recognition read took about 300 ms (median 297, worst 749), 176 ms a frame on
+   average. The extension's peak footprint was 52.9 MB with at least 247 MB reported free by iOS
+   throughout, so on this phone and iOS the limit is well above the 50 MB assumed here; other
+   devices and iOS versions are unmeasured. Twin Staraptor CP 1986 came out as two rows, a Zapdos
+   with its CP fully hidden as CP 1977 (computed, flagged), five Moltres CPs recovered from partial
+   reads. The run's replay log (every reading, swipe tick and dropped frame) replays to the same
+   51 rows on the Mac.
+   **Design consequence (Greg, 2 Oct):** the extension stays a reader that logs readings; the
+   saved box is grouped after the scan, in the app, by the existing JavaScript (`finish`, solver,
+   advisor, run in JavaScriptCore) plus two refinements from the log (split identical neighbours
+   at a swipe tick; list a hidden-CP Pokémon when exactly one CP fits). The Swift live grouper
+   runs alongside as a comparison until device logs show which rules are better.
+
 **Proof 2 build plan (2 Oct 2026, MacBook; branch `native-live-read` from `native-app-plan`).**
 Everything lives in `native/`:
 
