@@ -511,8 +511,11 @@ gesture sized by the same `sizing(storageCount: N)` rule as the single command, 
 On a checked screen (440 x 956 only) the set taps at the measured right-edge point, 1.2 s per Pokémon, through the same checks `make`
 applies (`verifiedTap`, shared); on any other screen the same set swipes at 1.6 s. There are no fast (1.0 s) commands in it. Gesture names
 are two words nobody says, none shared with a spoken command or with the single modes' names; identifiers are `Custom.<n>` (gesture) and
-`Custom.<n+60>` (command) with `n` = 781,000,000 + 100 x size index for tap and 781,100,000 + 100 x index for swipe, so importing the file
-again replaces these commands and nothing else, and no other mode's. The command text is digits ("Pogo scan 300"): the file format does not
+`Custom.<n+60>` (command) with `n` = 781,000,000 + 100 x size index, THE SAME for the tap and the swipe set (their spoken names are the same
+too), so importing either replaces the other and the set's own commands, and nothing else. Every spoken name starts with "Pogo scan", which is
+also the whole phrase of the old single tap command: delete the earlier single commands ("Pogo scan", "Pogo fast scan", "Pogo swipe", "Pogo slow swipe")
+in Settings > Accessibility > Voice Control > Commands before importing the set (a different pace; the automatic end assumes the set's pace). The
+setup steps on the Scan screen say so. The app no longer offers the single commands anywhere; the API and its fixtures remain. The command text is digits ("Pogo scan 300"): the file format does not
 say whether Voice Control matches a spoken "three hundred" to digits, so that has to be tried on a phone. File size: tap set 293,967 bytes,
 swipe set 6,046,576 bytes (the swipe gestures hold many more touch events: 50 swipes of 36 events each in the larger sizes). `pogo-voice --set
 --out file [--screen WxH]` makes it on a Mac. The test is structural (`testTheTapSetIsThirteenCommands...`, `testTheSwipeSet...`): it decodes
@@ -528,18 +531,47 @@ scan lists the sizes and what each takes. The app keeps a record of the set (scr
 Voice Control" were all tried on an iPhone and none stops it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps
 tapping (or swiping) the same place whatever is on screen. That is why the set has fixed sizes: the overshoot past the end of the list is bounded.
 
-**The scan ends by itself** at the end of the list, for a command scan only (the app tells the extension through the app group; paging by hand
-never ends by itself because a person may pause). `EndOfListDetector` (PogoReader, a few stored values) is fed each frame's reading: after at
-least 3 different Pokémon, 6 expected periods in a row with no NEW Pokémon (no card read at all, or the same Pokémon's readings continuing) is the end
-(7.2 s at 1.2 s, 9.6 s at 1.6 s). The extension then writes an end marker line to the replay log (`{"k":"e","t":...,"last":...}`), finishes the
-state and log as a user stop does and ends the broadcast with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reached.")`.
-`ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings later than the last new Pokémon plus 3 s when a marker is present.
-What the device logs showed (`EndOfListTests`): under tap (run7, run9) the last Pokémon's card stays on screen and keeps reading unchanged for 30
-to 38 s after the last new one, then the card goes (run9: 67 readings with the CP, then 11 without); under swipe (run4) the same Pokémon is read
-for 49.8 s. Inside a scan the longest stretch with no new Pokémon on any log was 3.0 periods (6.0 s at the 2.1 s swipe, 3.6 s at the 1.2 s tap),
-including batch joins and dropped frames, so 6 periods leaves a factor of 2. Run8 (tap, 300) stopped 6.6 s after its last new Pokémon, under the 7.2 s,
-and never triggers; run1, run3, run5 and run6 never trigger either. **This path has not run in the broadcast extension on a device**, and
-nor has the set file been imported on a phone: the logs are the only evidence. A premature end only shortens a scan (rescan with Add and update).
+**The scan ends by itself** at the end of the list, for a command scan only. The choice "Page with the voice command" (the default) or "Page by hand" is
+made on the Scan screen BEFORE the scan and stored; the extension reads it when the broadcast starts (no automatic end for hand paging, because a
+person may pause on a Pokémon), records the period it was given in its state (`commandPeriod`), and the review and Refine use that, not a setting
+changed since. `EndOfListDetector` (PogoReader, a few stored values) is fed each frame's reading:
+- Identity does not depend on the CP alone. A reading's key is built from the name, the HP and the appraisal bars; only when none of those was read is
+  the CP the key, and then a CP that is a run of a recent one's digits or differs in one digit (Rayquaza 4262, 1262, 262, 4260, 263) is the same card.
+  A hidden-CP Pokémon still has a key, so a run of them counts as paging.
+- A key is a NEW Pokémon only when stable (two keyed readings in a row; an unkeyed frame between does not break it) and not among the last 6 stable
+  keys, so single-reading OCR variants never count and a card cycling through a few variants does not keep restarting the clock.
+- It is ARMED only once the command is seen paging: at least 5 stable new Pokémon whose last 3 changes were each 0.5 to 2.5 expected periods after
+  the one before. Before that it never ends, however long the wait before the command was said (the old detector counted CP misreads of the first card
+  and ended the scan before paging started on 6 of the 8 logs).
+- Once armed, 6 expected periods with no new stable Pokémon is the end (7.2 s at 1.2 s). A gap of more than 2 s between two processed frames
+  (low-memory skipping, a stretch of dropped frames) does not count toward the 6 periods.
+Arm and end time per log (seconds from the first reading; `testWhereEachLogArmsAndEnds` prints them): run1 (2.1 s) armed +20.0, never ends; run3 (2.1 s)
++13.0, no end; run4 fast swipe (1.6 s) +11.9, ended +99.2 (last new Pokémon +89.2); run4 stretch +7.6, no end; run5 (tap 1.2) +8.8, no end; run6 (tap 1.0)
++7.2, no end; run7 (tap 1.2, phantom) +8.6, ended +71.2 (last new +63.6); run8 (tap 300) +8.2, last new +372.3, log ends +378.9, no end; run9 (tap 300) +8.2,
+ended +379.3 (last new +372.1). With a wait of 0, 2, 5, 8, 12, 20 or 30 s on the first Pokémon inserted before the first page, no log ends early and the
+three that reached the end of the list end at the same Pokémon. Inside a scan the longest stretch with no new stable Pokémon on any log was 3.9 periods,
+so 6 periods leaves a factor of 1.5, thinner than before the redesign (a Pokémon is now counted when stable, which takes a reading more).
+The extension then writes an end marker line to the replay log (`{"k":"e","t":...,"last":...}`, always with room even when the log is full), finishes the
+state and log as a user stop does and, after leaving its serial queue (a synchronous `broadcastFinished` must not meet `queue.sync`), ends the broadcast
+with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reached.")`. `ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings
+later than the last new Pokémon plus 3 s when a marker is present, and the result says the scan ended by itself.
+
+**A full scan is only the default when the list provably ended** (`ScanKindAdvice.decide`): the automatic end fired, the Pokémon read are fewer than the named
+command's reach (`covers` + 1 with the existing sizing), the typed count is not above 5,000, and the replay log did not hit its cap. Otherwise the review
+defaults to Add and update with one plain sentence (the command ran out before the end / storage above 5,000 / the scan was stopped by hand / the log filled
+up / no count entered) and the person can still change the kind. Scans of a storage above 5,000 are Add and update.
+
+**Replay log cap**: 16 MB (`Tuning.maxReplayLogBytes`). Run9 wrote 319,961 bytes for 310 Pokémon (1,032 bytes each, tap 1.2 s); the fast swipe log 112,025 bytes for
+51 (2,196 each, 1.6 s). The largest command pages 5,099 times, so at most about 5,100 Pokémon: 5,100 x 2,196 = 11.2 MB at the worse rate (5.3 MB at the tap
+rate); 16 MB leaves 40%. The writer streams each line to the file (nothing is buffered, so nothing grows in the extension); the app reads the whole file
+once when the scan is processed. When the cap is hit the state says so (`replayLogTruncated`, which the full-scan decision reads) and 512 bytes past
+the cap stay reserved for the end marker.
+
+**Known limit**: identical twins at the very end of the list look like the list ending, so the last of them can be cut. Another: the app judges the end by
+what was read, not by the game, so a list whose last Pokémon were not read looks like an earlier end.
+**Still only a device can answer**: whether the extension survives the extra state write and `finishBroadcastWithError` (and what the system alert says),
+whether Voice Control takes the digits in "Pogo scan 300", whether the 6 MB swipe set imports, and whether the arm time on a real, slower start is as on the logs.
+This path has not run on a device, nor has the set file been imported on a phone.
 
 ### Voice Control command made in the app, the single-command API (`PogoBox/VoiceCommandFile.swift`)
 

@@ -80,6 +80,13 @@ class Refusals(unittest.TestCase):
         r, _ = run("--count", "10", "--y", "896"); self.assertEqual(r.returncode, 0, r.stderr)
         r, _ = run("--count", "10", "--screen-width", "744", "--screen-height", "1133", "--y", "1000", "--x-from", "700"); self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_now_with_z_works_and_a_swipe_at_the_right_edge_is_refused(self):
+        out = os.path.join(tempfile.mkdtemp(), "x")
+        r = subprocess.run([sys.executable, SCRIPT, out, "--count", "10", "--now", "2026-10-02T00:00:00Z"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.refused("--count", "10", "--x-from", "440")                     # equal to the width
+        self.refused("--count", "10", "--x-from", "439", "--x-to", "100", "--screen-width", "439")
+
     def test_now_with_an_offset_is_converted_or_refused_plainly(self):
         out = os.path.join(tempfile.mkdtemp(), "x")
         for text in ("2026-10-02T10:00:00+10:00", "2026-10-02T00:00:00Z"):

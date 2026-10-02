@@ -265,8 +265,8 @@ def main():
     if not args.tap:
         width, height = (args.screen_width or DEFAULT_SCREEN[0]), (args.screen_height or DEFAULT_SCREEN[1])
         for flag, v in (("--x-from", args.x_from), ("--x-to", args.x_to)):
-            if v > width:
-                p.error("%s %g is off the %g pt wide screen" % (flag, v, width))
+            if v >= width:
+                p.error("%s %g is at or beyond the right edge of the %g pt wide screen" % (flag, v, width))
         if not EDGE_MARGIN <= args.y <= height - EDGE_MARGIN:
             p.error("--y %g is within %g points of the top or bottom of the %g pt tall screen: that band holds system gestures" % (args.y, EDGE_MARGIN, height))
         if abs(args.x_to - args.x_from) / args.duration < MIN_SWIPE_SPEED:
@@ -277,7 +277,8 @@ def main():
         p.error("--duration %g is too short for a swipe (at least %g s)" % (args.duration, 2.0 / SWIPE_HZ))
 
     try:
-        fixed = datetime.datetime.fromisoformat(args.now) if args.now else None
+        # Python 3.9's fromisoformat does not read a trailing Z
+        fixed = datetime.datetime.fromisoformat(args.now[:-1] + "+00:00" if args.now and args.now.endswith(("Z", "z")) else args.now) if args.now else None
         if fixed is not None and fixed.tzinfo is not None:
             fixed = fixed.astimezone(datetime.timezone.utc).replace(tzinfo=None)   # an offset is converted to UTC
     except ValueError:
