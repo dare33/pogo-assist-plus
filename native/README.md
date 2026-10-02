@@ -598,3 +598,31 @@ The command is made for the phone's language (the device locale); Voice Control'
 - The swipe fallback's path on small screens is untested.
 - Two or more saved Pokemon with the same species and IVs cannot be told apart without unique ids: when they were powered up since the last scan
   the merge pairs them only if exactly one assignment is consistent, else it asks (`BoxMerge.plan`, M6).
+
+## What this app sends
+
+Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > Scans) and then Send. There is no analytics,
+no background upload and no retry. One tap sends one file, `yyyy-mm/yyyymmddThhmmssZ-<random id>.json.gz`, to a private storage bucket
+(`scan-reports`, write-only for the app: it can add a file, never read, list or overwrite one). The file is a gzip of one JSON document with these
+keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone17,2, system version, screen size in points, language);
+`scan` (full or partial, scan date, Pokémon read, storage count if typed, how it was paged and the command's pace, the measured pace);
+`note` (what you typed, if anything); `replayLog` (the reading log as the extension wrote it: every reading's text, CP, name, HP and bars,
+the swipe ticks and dropped frames; it can include a Pokémon's nickname if one was on screen); `result` (the rows, the review list and the
+unmatched items); `refineChanges`; `review` (what you answered at review); `afterwards` (later hand corrections and removals of Pokémon
+that first came from that scan, as far as the box versions record them) and `notIncluded` (what the report could not include). It never contains
+the account name, any other scan, or any device identifier. A scan already sent and unchanged is not sent twice (the scan keeps when it was sent
+and a hash of what was sent), at most 10 reports go out in 24 hours, and a report above 3.5 MB is refused with the option to share the files.
+A typical 313-Pokémon scan is about 640 KB of JSON and 80 KB compressed.
+
+Setup (the repo is public, so neither value is committed): put `SCAN_REPORT_URL` and `SCAN_REPORT_KEY` in the git-ignored
+`native/PogoAssist/Config/Signing.local.xcconfig` (see `Signing.local.xcconfig.example`). An xcconfig reads `//` as a comment, so the URL is
+written `https:/$()/host`. They reach the app through Info.plist (`ScanReportURL`, `ScanReportKey`). With either missing or a placeholder, the
+button is hidden and nothing else changes. The networking (`ReportSupport.swift`) is in the app target only; the broadcast extension never
+links it. The UI test passes `-uitest-reports-enabled` to show the button; that build's transport refuses every request.
+
+### Merge: a misread saved entry (M12)
+
+A saved entry flagged `no-level-fits` (or with no usable CP) and no IVs, of the same species and HP (or an HP not read) as a correctly read
+row that matched nothing else, is offered as Unsure with the entry as the candidate, whatever the CP: "It is this one" replaces its unread
+values with the row's read values (CP, IVs, level, dust; the id, first seen and hand corrections stay, and the flag clears); "It is new" adds
+the row and leaves the entry, in a full scan too. Only read values are ever copied over a saved one.

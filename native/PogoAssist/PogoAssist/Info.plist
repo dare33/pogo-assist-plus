@@ -24,6 +24,10 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ScanReportKey</key>
+	<string>$(SCAN_REPORT_KEY)</string>
+	<key>ScanReportURL</key>
+	<string>$(SCAN_REPORT_URL)</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

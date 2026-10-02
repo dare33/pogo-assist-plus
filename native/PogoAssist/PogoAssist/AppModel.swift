@@ -26,6 +26,9 @@ final class AppModel: ObservableObject {
         var reread: RereadPlan?
         /// Saved entries to keep although the scan proposes them as gone (the person's per-entry choice).
         var keepGone: Set<String> = []
+        /// When this unsaved scan's report was sent, and what was sent; recorded on the scan when it is saved.
+        var reportSentAt: Date?
+        var reportHash: String?
         /// The current box version this review was prepared against (nil: there was none). A save is refused if the box has moved on.
         var boxSeq: Int?
     }
@@ -69,6 +72,81 @@ final class AppModel: ObservableObject {
     private var timer: Timer?
 
     private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast." }
+
+    // MARK: - "Make scans better"
+
+    /// Which scan a report is about: the one on the review screen (not saved yet), or a saved scan.
+    enum ReportTarget: Identifiable, Equatable {
+        case review
+        case saved(String)
+        var id: String { if case .saved(let s) = self { return s } else { return "review" } }
+    }
+    enum ReportState: Equatable { case idle, sending, sent, failed(String) }
+
+    @Published var reportTarget: ReportTarget? { didSet { reportState = .idle } }
+    @Published var reportState: ReportState = .idle
+    private let ledger = DefaultsLedger()
+
+    /// The button is shown only when the upload store is configured in this build.
+    var reportsEnabled: Bool { ReportSupport.config != nil }
+
+    /// The report's input for a target, with the user's note. Reads files, so call it on the worker's queue or accept a short pause.
+    private func reportInput(_ target: ReportTarget, note: String?) throws -> (input: ScanReportInput, previousHash: String?, previousSentAt: Date?) {
+        let app = ReportSupport.appInfo, device = ReportSupport.deviceInfo
+        switch target {
+        case .review:
+            guard case .review(let r) = flow else { throw BoxStore.Failure.notFound(account: "", id: "review") }
+            let url = r.reread?.replayURL ?? SharedStore.replayURL
+            let log = url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+            let changes = r.outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" }
+            let input = ScanReportInput(replayLog: log, result: r.outcome.scan, kind: r.kind, scanDate: r.plan.scanDate, storageCount: r.storageCount, paging: r.paging, pace: r.outcome.pace,
+                                        refineChanges: changes, review: ScanReportBuilder.reviewLines(plan: r.plan, resolutions: r.resolutions, keepGone: r.keepGone, base: r.base),
+                                        afterwards: [], notIncluded: ["The scan was not saved yet, so nothing is known about what happens after it."], note: note, app: app, device: device)
+            return (input, r.reportHash, r.reportSentAt)
+        case .saved(let id):
+            guard let a = account else { throw BoxStore.Failure.badAccountName }
+            let scan = try library.store.load(account: a, id: id)
+            let files = try library.store.files(account: a, id: id)
+            let log = try files.replay.map { try String(contentsOf: $0, encoding: .utf8) } ?? ""
+            var missing = [String]()
+            if files.replay == nil { missing.append("The replay log was not kept for this scan.") }
+            if scan.reviewActions == nil { missing.append("What was answered at review was not kept for this scan.") }
+            let input = ScanReportInput(replayLog: log, result: ScanResult(rows: scan.rows, review: scan.review, unmatched: scan.unmatched), kind: scan.kind, scanDate: scan.scanDate, storageCount: scan.storageCount,
+                                        paging: scan.paging, pace: ScanPace.measure(rows: scan.rows), refineChanges: scan.refineChanges ?? [], review: scan.reviewActions ?? [],
+                                        afterwards: (try? library.editsAfter(account: a, scanId: id)) ?? [],
+                                        notIncluded: missing + ["Corrections made to Pokémon from earlier scans, and 'These values are right'."], note: note, app: app, device: device)
+            return (input, scan.reportHash, scan.reportSentAt)
+        }
+    }
+
+    func sendReport(_ target: ReportTarget, note: String) async {
+        guard let config = ReportSupport.config else { reportState = .failed(ScanReportUploader.Failure.notConfigured.localizedDescription); return }
+        reportState = .sending
+        do {
+            let (input, previousHash, previousSentAt) = try reportInput(target, note: note)
+            let built = try await worker.run { _ in try ScanReportBuilder.build(input) }
+            let uploader = ScanReportUploader(config: config, transport: ReportSupport.transport, ledger: ledger)
+            _ = try await uploader.send(built, previousHash: previousHash, previousSentAt: previousSentAt)
+            let now = Date()
+            switch target {
+            case .review: if case .review(var r) = flow { r.reportSentAt = now; r.reportHash = built.contentHash; flow = .review(r) }
+            case .saved(let id): if let a = account { try? library.store.markReportSent(account: a, id: id, at: now, hash: built.contentHash); loadScans() }
+            }
+            reportState = .sent
+        } catch {
+            reportState = .failed(Self.plain(error))
+        }
+    }
+
+    /// The files to share instead when sending fails: the saved scan's result and log, or the unsaved scan's log.
+    func reportShareFiles(_ target: ReportTarget) -> [URL] {
+        switch target {
+        case .saved(let id): if let s = scans.first(where: { $0.id == id }) { return shareFiles(for: s) } else { return [] }
+        case .review:
+            guard case .review(let r) = flow, let url = r.reread?.replayURL ?? SharedStore.replayURL else { return [] }
+            return [url]
+        }
+    }
 
     // MARK: - the Voice Control command
 
@@ -524,7 +602,10 @@ final class AppModel: ObservableObject {
                 let log = SharedStore.replayURL.flatMap { try? Data(contentsOf: $0) }
                 let current = try lib.current(account: r.account)
                 guard current?.seq == r.boxSeq else { throw BoxLibrary.Failure.boxChanged }
-                let scan = try lib.store.save(r.outcome.scan, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, storageCount: r.storageCount, replayLog: log, paging: r.paging)
+                let scan = try lib.store.save(r.outcome.scan, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, storageCount: r.storageCount, replayLog: log, paging: r.paging,
+                                           refineChanges: r.outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" },
+                                           reviewActions: ScanReportBuilder.reviewLines(plan: r.plan, resolutions: r.resolutions, keepGone: r.keepGone, base: r.base),
+                                           reportSentAt: r.reportSentAt, reportHash: r.reportHash)
                 let n = r.outcome.scan.rows.count
                 let note = (r.kind == .full ? "Full scan" : "Add and update") + ", \(n) Pokémon"
                 return try lib.commit(account: r.account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: r.kind, scanDate: r.plan.scanDate, expectedCurrentSeq: .some(r.boxSeq))

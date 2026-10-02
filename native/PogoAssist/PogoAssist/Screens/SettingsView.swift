@@ -31,11 +31,13 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Fmt.date(scan.scanDate)).font(.callout)
                 Text("\(kind), \(scan.rows) Pokémon read").font(.footnote).foregroundStyle(.secondary)
+                if let sent = scan.reportSentAt { Text("Sent \(Fmt.day(sent))").font(.footnote).foregroundStyle(.secondary) }
                 if let again = scan.lastReread { Text("Read again \(Fmt.date(again))").font(.footnote).foregroundStyle(.secondary) }
             }
             Spacer()
             Menu {
                 Button { model.rereadScan(scan) } label: { Label("Read again with the latest rules", systemImage: "arrow.triangle.2.circlepath") }
+                if model.reportsEnabled { Button { model.reportTarget = .saved(scan.id) } label: { Label("Make scans better", systemImage: "paperplane") } }
                 Button { shareURLs = model.shareFiles(for: scan) } label: { Label("Share scan files", systemImage: "square.and.arrow.up") }
             } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("Scan actions")
@@ -86,6 +88,7 @@ struct SettingsView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             // Presented from here, not from the root: Settings is itself a sheet, and the root cannot
             // put a second sheet over it.
+            .sheet(item: $model.reportTarget) { MakeScansBetterSheet(target: $0).environmentObject(model) }
             .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = [] } })) {
                 ShareSheet(urls: shareURLs).presentationDetents([.medium, .large])
             }

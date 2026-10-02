@@ -71,6 +71,7 @@ private struct ResultList: View {
         List {
             Section {
                 countsRow
+                if model.reportsEnabled { Button { model.reportTarget = .review } label: { Label("Make scans better", systemImage: "paperplane") } }
                 row("Scan time", Fmt.duration(review.outcome.duration))
                 row("Frames read", "\(review.outcome.readings)")
                 if let pace = review.outcome.pace { row("Pace", "about \(String(format: "%.1f", pace.medianPeriod)) s per Pokémon") }
@@ -170,6 +171,7 @@ private struct ResultList: View {
             }
         }
         .safeAreaInset(edge: .bottom) { actions }
+        .sheet(item: $model.reportTarget) { MakeScansBetterSheet(target: $0).environmentObject(model) }
         .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardReview() }
         } message: { Text("Nothing will be added to the box.") }

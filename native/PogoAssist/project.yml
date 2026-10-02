@@ -49,6 +49,9 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         AppGroupID: $(APP_GROUP)
         BroadcastExtensionID: $(EXTENSION_BUNDLE_ID)
+        # "Make scans better": where reports go. Both come from the git-ignored Config/Signing.local.xcconfig; unset or placeholder hides the button.
+        ScanReportURL: $(SCAN_REPORT_URL)
+        ScanReportKey: $(SCAN_REPORT_KEY)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)

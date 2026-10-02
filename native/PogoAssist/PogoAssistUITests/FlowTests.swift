@@ -129,4 +129,33 @@ final class FlowTests: XCTestCase {
         sleep(3)
         shot(name + "-share")
     }
+
+    /// "Make scans better" opens from the scan result and cancels. The test build can never send: its transport refuses.
+    func testMakeScansBetterSheetOpensAndCancels() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-uitest-reports-enabled"]
+        app.launch()
+        let field = app.textFields["Trainer name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap(); field.typeText("Greg main")
+        app.buttons["Create account"].tap()
+        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
+        app.buttons["More"].tap()
+        let diagnostics = app.buttons["Diagnostics"]
+        XCTAssertTrue(diagnostics.waitForExistence(timeout: 5))
+        diagnostics.tap()
+        let load = app.buttons["Load sample scan"]
+        if !load.waitForExistence(timeout: 8), diagnostics.exists { diagnostics.tap() }
+        XCTAssertTrue(load.waitForExistence(timeout: 10))
+        load.tap()
+        let better = app.buttons["Make scans better"]
+        XCTAssertTrue(better.waitForExistence(timeout: 60), "the button did not appear on the scan result")
+        shot("16a-review-with-button")
+        better.tap()
+        XCTAssertTrue(app.staticTexts["Nothing is sent unless you tap Send."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'does not include your account name'")).firstMatch.exists)
+        shot("16-make-scans-better")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["Save to box"].waitForExistence(timeout: 5), "back on the scan result")
+    }
 }

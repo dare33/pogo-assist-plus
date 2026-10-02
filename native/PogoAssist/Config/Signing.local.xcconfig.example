@@ -1,3 +1,10 @@
-// Copy this file to Signing.local.xcconfig in this folder (that file is git-ignored) and replace the value with your
-// Apple developer team id (Xcode > Settings > Accounts, or developer.apple.com > Membership details).
+// Copy this file to Signing.local.xcconfig in this folder (that file is git-ignored) and replace the values.
+//
+// DEVELOPMENT_TEAM: your Apple developer team id (Xcode > Settings > Accounts, or developer.apple.com > Membership details).
 DEVELOPMENT_TEAM = YOURTEAMID
+
+// The "Make scans better" button sends a scan's reading log to a private upload store. Both values stay out of git (this file is ignored).
+// Without them the button is hidden and nothing else changes. In an xcconfig "//" starts a comment, so write the URL's slashes as
+// https:/$()/host: the empty $() keeps the second slash from being read as a comment.
+SCAN_REPORT_URL = https:/$()/YOUR-PROJECT.supabase.co
+SCAN_REPORT_KEY = YOUR-PUBLISHABLE-KEY
