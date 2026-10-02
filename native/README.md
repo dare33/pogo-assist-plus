@@ -76,6 +76,20 @@ wrong or dropped is a mismatch, not an insert plus a delete) and prints rows in 
 (and how many also match on HP and IVs), the mismatches, rows only in one reader and each side's
 `unmatched` count.
 
+## Which configuration runs
+
+The Xcode scheme's Run, Profile and Archive actions build **Release** (`project.yml`): the pixel work is about
+40 times slower unoptimised (158 ms against 4 ms a frame in Debug), which would make a device run say
+nothing about the real extension. Release keeps debug symbols (a dSYM), and the extension's `os_log` output
+(subsystem = the extension's bundle id) shows in Console.app with the device selected. To debug with
+breakpoints, edit the scheme's Run action to Debug for that session.
+
+`TARGETED_DEVICE_FAMILY` is 1,2 (the iPad mini is a test device). An App Store Connect / TestFlight upload
+needs an app icon first (an `AppIcon` asset in `PogoAssist/`); there is none yet.
+
+If the app group is missing (signing / capabilities not set on both targets) the app shows a red line
+"App group not available"; the extension logs it too.
+
 ## How memory is measured
 
 iOS enforces the extension's limit (about 50 MB) on `phys_footprint`. `MemoryProbe` reads it from
@@ -84,7 +98,13 @@ iOS enforces the extension's limit (about 50 MB) on `phys_footprint`. `MemoryPro
 - On the Mac, `pogo-read` samples the footprint before the first frame (baseline, after its own
   buffers exist) and after every stage of every frame (after scaling, after every Vision call), so the
   peak is during recognition. Run with `--via-pixelbuffer` (or `--synthetic`) for the extension's code
-  path. The tool's own full-size buffers are in the baseline; read the peak and the increase over baseline.
+  path.
+  - With `--synthetic` the tool's own full-size buffers (the drawing canvas and the 420 buffer) exist before
+    the baseline is taken, so the increase over baseline is the reader's.
+  - With PNG input the baseline is taken before the first PNG is decoded, and the decoded frame, the 420
+    conversion and their allocator residue are the tool's own: the reported peak includes them (about 45
+    MB of the 50 MB shown for the pixel half on real frames; the same half measures about +12 MB on drawn
+    frames). Read the peak of a PNG run as an upper bound, and take the pixel half's figure from `--synthetic`.
   **A Mac figure is not the phone's:** Vision loads its recognition models into the process on the
   Mac, and how much of that counts against the extension on iOS is only known by running it.
 - On the phone, the extension samples the same figures while it reads and writes them to the app
@@ -136,11 +156,33 @@ transfer to the phone.
 
 ## Deviations from the JavaScript reader worth knowing
 
-- A frame with a centred CP but no HP bar (a special-background or buddy card, a Lucky nicknamed one: the
-  HP bar is absent or a muted colour) is read for the CP alone (flag `no-hp-bar`, no name); `LiveGrouper`
-  lists a stretch of such frames as `(name not read)` with the CP. The JS reader drops these frames.
-- HP and CP reads whose letters are on the wrong side of the figures (Vision reading a crop upside
-  down: `dH 99 / 99`) are no read.
-- `LiveGrouper` ends a run at a swipe (3+ frames with neither CP nor HP), absorbs 1-3 frame cards that do
-  not fit into the same Pokemon's neighbour, treats a CP that is a tail or digit-subsequence of the row's as
-  the same Pokemon, and computes the CP when a fully hidden card has exactly one fitting level.
+Reading:
+- One Vision read per frame for the CP and one for the HP (JS reads the CP twice, two Tesseract modes, and
+  takes the agreeing one); voting across frames replaces that.
+- A frame with a centred CP but no HP bar (a special-background or buddy card, a Lucky nicknamed one: the HP
+  bar is absent or a muted colour) is read for the CP alone (flag `no-hp-bar`, no name). JS drops these.
+- HP and CP reads whose letters are on the wrong side of the figures (Vision reading a crop upside down:
+  `dH 99 / 99`) are no read.
+- Nidoran: if Vision reads the gender symbol the sex is taken from it; otherwise the sex whose stats fit the
+  CP, HP and settled bars is taken when exactly one does; else the row is flagged `sex-not-read`.
+
+`LiveGrouper` (it is a streaming grouper, not JS `finish()`; all its thresholds are durations from reading times):
+- A swipe (0.6 s of readings with neither CP nor HP) ends a run: two identical Pokemon in a row are two rows.
+  If frames were dropped and the swipe was never seen, the merged row spans more than 2.4 s and is flagged
+  `long-stay`.
+- A stray of up to 0.6 s with no settled bars, or a CP that does not fit its HP and bars, is absorbed into the
+  neighbour of the same Pokemon with a related CP **and an HP that does not differ**; the absorbing row says
+  `absorbed:<cp>`. (JS `absorbStrays` takes one frame, and does not look at HP.) A CP that is a tail or
+  digit-subsequence of the row's is the same Pokemon.
+- A row whose CP fits nothing and cannot be recovered is flagged `no-level-fits`, as in JS; there is no solver,
+  only a check that some level gives that CP and HP with bars within one unit.
+- A card whose CP is fully hidden: with exactly one fitting level the CP is computed (`cp-computed:<cp>`);
+  otherwise it is a row with no CP and `cp-not-read` / `cp-options:...` (JS lists these under `unmatched`, not
+  as rows). It is listed only with an HP read or after 0.6 s. A hidden stretch with the same HP and bars as the
+  row beside it, even after a lost frame, is not a row (`beside`); a swipe in between makes it one.
+- A stretch of frames with a CP but no readable name is listed as `(name not read)` after 0.4 s (two frames at
+  full rate, as in JS); a stretch inside a named Pokemon's time, or sliding past it, is not.
+- A Pokemon read only with a weak name is kept as a row flagged `name-low-confidence`, including the first and
+  last of a broadcast (JS drops those because clips are joined by their last and first rows; live there is no
+  join). A weak read of the neighbour's own name and CP, or one with no swipe before it inside a Pokemon's
+  time, is set aside.

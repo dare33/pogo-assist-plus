@@ -123,8 +123,9 @@ public final class FrameProcessor {
     }
 
     /// Make `scaled` the right size (allocated once, reused) and the scratch buffer big enough.
-    private func prepare(width: Int, height: Int, scratchFor src: (Int, Int)) {
+    private func prepare(width: Int, height: Int, scratchFor src: (Int, Int), argbScratch: Bool = true) {
         if scaled.width != width || scaled.height != height { scaled = RGBAImage(width: width, height: height) }
+        guard argbScratch else { return }   // the 420 path sizes its own scratch for the planar scalings
         let need = Scale.tempSizeARGB(srcWidth: src.0, srcHeight: src.1, dstWidth: width, dstHeight: height)
         if need > tempSize { temp?.deallocate(); temp = UnsafeMutableRawPointer.allocate(byteCount: need, alignment: 64); tempSize = need }
     }
@@ -176,7 +177,7 @@ public final class FrameProcessor {
         let sw = CVPixelBufferGetWidthOfPlane(pb, 0), sh = CVPixelBufferGetHeightOfPlane(pb, 0)
         let yRow = CVPixelBufferGetBytesPerRowOfPlane(pb, 0), cRow = CVPixelBufferGetBytesPerRowOfPlane(pb, 1)
         let (dw, dh) = scaledSize(srcWidth: sw, srcHeight: sh)
-        prepare(width: dw, height: dh, scratchFor: (sw, sh))
+        prepare(width: dw, height: dh, scratchFor: (sw, sh), argbScratch: false)
         let info = conversion(fullRange: fullRange, matrix601: Self.isBT601(pb))
         let flags = vImage_Flags(kvImageNoFlags)
         var infoVar = info

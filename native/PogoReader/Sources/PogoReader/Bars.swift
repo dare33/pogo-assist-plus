@@ -153,8 +153,8 @@ public func findBars(_ img: RGBAImage, _ rect: PixelRect, _ search: Rect) -> [Ba
             joined[joined.count - 1] = prev
         } else { joined.append(b) }
     }
-    let minH = max(2, jsRound(0.003 * Double(rect.h)))
-    return joined.filter { $0.y1 - $0.y0 >= minH }.map { b in
+    let minH = max(2.0, 0.003 * Double(rect.h))   // a float, as in JS: not rounded
+    return joined.filter { Double($0.y1 - $0.y0) >= minH }.map { b in
         // Fill from the middle rows, where the rounded ends do not shorten the span.
         let lo = b.rows.count / 4, hi = Int((Double(b.rows.count) * 3 / 4).rounded(.up))
         let midRows = lo < hi ? Array(b.rows[lo..<min(hi, b.rows.count)]) : []
