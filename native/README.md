@@ -1,7 +1,9 @@
 # native/ - Pogo Assist+ live-read prototype (proof 2)
 
-The Swift side of phase 3 (see `PLAN.md`, "Proof 2 build plan"). It reads the screen only; nothing
-here contacts the game or sends input.
+The Swift side of phase 3 (see `PLAN.md`, "Proof 2 build plan"). It reads the screen; nothing here
+contacts the game. The one thing it does near the game is page through the player's own storage by a Voice Control command the app makes
+(a swipe, or a tap at the measured right-edge arrow point on a checked screen only; see "Tap files belong to one screen" below), which the
+person installs and says themselves. The app itself sends no input.
 
 - `PogoReader/` - Swift package (iOS 17, macOS 14, no third-party dependencies). Library `PogoReader`
   holds all the logic: the pixel routines ported from `src/extract/` (content rectangle, CP text, HP
@@ -617,8 +619,9 @@ keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone1
 `note` (what you typed, if anything); `replayLog` (the reading log as the extension wrote it: every reading's text, CP, name, HP and bars,
 the swipe ticks and dropped frames; it can include a Pokémon's nickname if one was on screen); `result` (the rows, the review list and the
 unmatched items); `refineChanges`; `review` (what you answered at review); `afterwards` (later hand corrections and removals of Pokémon
-that first came from that scan, as far as the box versions record them) and `notIncluded` (what the report could not include). It never contains
-the account name, any other scan, or any device identifier. A scan already sent and unchanged is not sent twice (the scan keeps when it was sent
+that first came from that scan, as far as the box versions record them) and `notIncluded` (what the report could not include). It has no
+account-name field, no device identifier and no other scan, but it carries Pokémon nicknames as read and whatever is typed in the note, so the
+account name appears only if it is one of those. A scan already sent and unchanged is not sent twice (the scan keeps when it was sent
 and a hash of what was sent), at most 10 reports go out in 24 hours, and a report above 3.5 MB is refused with the option to share the files.
 A typical 313-Pokémon scan is about 640 KB of JSON and 80 KB compressed.
 

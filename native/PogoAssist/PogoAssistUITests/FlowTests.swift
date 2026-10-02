@@ -153,7 +153,7 @@ final class FlowTests: XCTestCase {
         shot("16a-review-with-button")
         better.tap()
         XCTAssertTrue(app.staticTexts["Nothing is sent unless you tap Send."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'does not include your account name'")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'no device identifier'")).firstMatch.exists)
         shot("16-make-scans-better")
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["Save to box"].waitForExistence(timeout: 5), "back on the scan result")

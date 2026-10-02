@@ -13,7 +13,7 @@ struct MakeScansBetterSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("This sends this scan's reading log and results to the developer so the reader can be improved. It includes the Pokémon read and any nicknames on screen; it does not include your account name or anything else from your phone.")
+                    Text("This sends this scan's reading log and results to the developer so the reader can be improved. It includes the Pokémon read, any nicknames on screen, your phone model, iOS version, screen size and language, and whatever you type in the note below. The report has no account-name field and no device identifier, so your account name appears only if it is a nickname on screen or you type it in the note.")
                     Text("Nothing is sent unless you tap Send.").font(.footnote).foregroundStyle(.secondary)
                 }
                 switch model.reportState {
