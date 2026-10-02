@@ -271,7 +271,7 @@ on screen was captured (a Pokemon the full-rate run misses is missed in both). R
 | darentas-01 | 451 / 451 | 451 / 451 | 457 / 449 | 431 / 423 |
 
 The phone's twin Staraptor 1986 is two rows at full rate and under every model with ticks (it merges at 450/200 without).
-On the phone no row is wrong, lost or split without a flag. On the iPad, ticks add 3 to 5 rows at 450/200 and 650/200: fragments
+On the phone no row is wrong, lost or split without a flag. On the iPad, ticks add 3 rows at 450/200 and 2 at 650/200: fragments
 of one Pokemon (flagged `short-run` or `same-as-previous`; a fragment can also carry no flag when it is long enough and its
 first reading is not a copy of the row before) and one lost row with a flagged trace at 650/200. On darentas-01 at 650/200 the
 reader sees one frame in four and 21 Pokemon on screen for 1.2 s each are never read, with or without ticks.
@@ -301,7 +301,7 @@ reader sees one frame in four and 21 Pokemon on screen for 1.2 s each are never 
 Fixed (each with a test written first and failing before):
 - The 0.3 s silence guard: replaced by a physical rule (a tick ends a run between two card readings at least 0.55 s
   apart, is ignored closer). Twins with a two-separator swipe at full rate are two rows at 1.4, 1.6, 2.0 and 2.4 s paces.
-  Deleting the rule fails five tests.
+  Deleting the rule fails several tests (the twin pace test, the carry-over test, the tick-only marker test).
 - A tick used up by a card reading that starts no run: the swipe now waits for the next strong reading.
 - `same-as-previous` is decided from the voted values of both rows when the run closes.
 - An unreadable reading followed by a short name-only reading of the Pokemon on screen no longer chains separators; two
