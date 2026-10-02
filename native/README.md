@@ -567,7 +567,7 @@ with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reac
 later than the last reset plus 3 s when a marker is present.
 
 **A full scan is only the default when everything agrees** (`ScanKindAdvice.decide`): the automatic end fired; the replay log is neither truncated nor failed; a
-count was typed and is at most 5,000; and typed - tol <= Pokémon read <= min(typed + tol, reach - 1), tol = max(3, 2% of typed rounded up), reach = the recorded
+count was typed and is at most 5,000; and typed - tol <= Pokémon read <= min(typed + tol, reach - 1), tol = max(3, 1% of typed rounded up), reach = the recorded
 command's `covers` + 1 (the period the extension recorded picks the tap or swipe sizing). Each refusal has its own plain sentence (no count / above 5,000 / log
 incomplete / stopped by hand / stopped short of your count / read more than your count, so the count may be out of date and the command may have run out). The
 review defaults to Add and update with that sentence; switching to Full scan against the advice asks for confirmation with the reason. The result says "The scan
@@ -665,6 +665,17 @@ flagged doubtful row is fine):
   `ivs-disagree` (a gap of 0.4 s is every gap at the tap reading rate). The real Fidough 768 pairs in run8 and run9 still split (they have a beat).
 - A row solved again (`cp-outlier-dropped`, bars split) carries the flags the earlier steps left on it, and each change is recorded against the row that was
   kept (by its frames), not the first row with the same flag text. The timing step no longer force-unwraps frame times.
+Seventh round (supersedes the matching points above): both neighbours of a fragment are examined, and a neighbour with the fragment's own CP (or one it is
+a part read of) is the Pokémon it belongs to, even when the other neighbour is a different, compatible one (Staraptor 1951, a one-reading 1946, the real 1946
+gives two rows, not three). A fragment absorbed with ANY other CP (not the same, not a part read) always leaves the check-level `absorbed-other-cp:<cp>`, with
+or without a tick or beat between; same-CP and part-read fragments stay the note `absorbed-fragment`. On the eight device logs there is none of
+`absorbed-other-cp` or `read-once-beside`, and the rows are identical to the previous round. The automatic end now resets on a SINGLE reading whose CP or bars
+value (either alone) differs from every value read on the card within the last 0.75 periods (OCR variants of a static card recur within a few frames and do not;
+a CP that is a run of the card's digits is the same value; the seen list is bounded), and on a CP-only read of another card after a named card, so eight
+same-species, same-HP cards read once each, or one named card followed by eight CP-only cards, never end it. With a slow reader (one read per 0.6 or 0.8 s) a value
+that recurs after more than the window can reset the clock once more, so the end comes later (run9 at 0.6 s: 20.2 s after the last card began instead of 9.6 s);
+none of the ends on run4, run7 and run9 is missed. The full-scan tolerance is max(3, 1% of typed) and the result label says "N Pokémon read, within T of the M
+you gave" ("exactly the M you gave" only when equal), never "matches".
 On the device logs the row counts are unchanged (run1, run5, run7 51; run3 49; run4 51; run6 50; run8 311; run9 310) and on run8 and run9 the rows' values are
 identical to before (`rows-before-fourth-round-run8.txt` and `-run9.txt`, compared by `testRun8AndRun9RowValuesAreUnchangedByTheFragmentAndBarsFixes`); only
 flags differ (the first Fidough 768 now carries `split-by-bars`; three absorbed fragments now keep the better of their pair). The reviewers' expected
