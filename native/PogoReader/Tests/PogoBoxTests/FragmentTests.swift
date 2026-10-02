@@ -118,23 +118,42 @@ final class FragmentTests: XCTestCase {
         XCTAssertTrue(r.marks.isEmpty)
     }
 
-    func testAPartReadIsAbsorbedAndAnotherCPFoldedInIsACheckOnlyWithABoundary() {
+    func testAPartReadOrSameCPIsANoteAndAnyOtherCPFoldedInIsAlwaysACheck() {
         let t0 = 100 + 6 * 1.2
         let real = row(0, "Moltres", cp: 1982, bars: IVs(atk: 13, def: 10, hp: 10), times: [t0 + 0.4, t0 + 0.7, t0 + 1.0])
+        // a part read of the kept CP (182 in 1982): a note
         let part = row(0, "Moltres", cp: 182, bars: IVs(atk: 13, def: 10, hp: 10), times: [t0 + 0.1], solved: false)
-        // a regular beat: adjacent rows have a boundary between them
-        let a = Refine.absorbFragments(beat(replacing: 6, with: [part, real]))
-        XCTAssertEqual(a.scan.rows[6].flags, ["absorbed-other-cp:182"])
-        XCTAssertEqual(FlagInfo.severity(of: "absorbed-other-cp:182", solveStatus: "exact"), .check)
-        XCTAssertTrue(FlagInfo.explain("absorbed-other-cp:182").contains("CP 182 was folded into this one"))
-        // no beat and no tick between: a note
-        let near = ScanResult(rows: [row(1, "Moltres", cp: 182, bars: IVs(atk: 13, def: 10, hp: 10), times: [10.2], solved: false), row(2, "Moltres", cp: 1982, bars: IVs(atk: 13, def: 10, hp: 10), times: [10.4, 10.6, 10.8])], review: [], unmatched: [])
-        XCTAssertEqual(Refine.absorbFragments(near).scan.rows[0].flags, ["absorbed-fragment:182"])
-        // ... and a check when a page tick lies between the two
-        XCTAssertEqual(Refine.absorbFragments(near, ticks: [10.3]).scan.rows[0].flags, ["absorbed-other-cp:182"])
-        // the same CP stays a note whatever lies between
+        XCTAssertEqual(Refine.absorbFragments(beat(replacing: 6, with: [part, real])).scan.rows[6].flags, ["absorbed-fragment:182"])
+        // another number (1910 beside 1918), on a regular beat, with no beat (irregular) and no tick: a check every time
+        let other = row(0, "Moltres", cp: 1910, bars: IVs(atk: 13, def: 10, hp: 10), times: [t0 + 0.1], solved: false)
+        let real2 = row(0, "Moltres", cp: 1918, bars: IVs(atk: 13, def: 10, hp: 10), times: [t0 + 0.4, t0 + 0.7, t0 + 1.0])
+        XCTAssertEqual(Refine.absorbFragments(beat(replacing: 6, with: [other, real2])).scan.rows[6].flags, ["absorbed-other-cp:1910"])
+        let near = ScanResult(rows: [row(1, "Moltres", cp: 1910, bars: IVs(atk: 13, def: 10, hp: 10), times: [10.2], solved: false), row(2, "Moltres", cp: 1918, bars: IVs(atk: 13, def: 10, hp: 10), times: [10.4, 10.6, 10.8])], review: [], unmatched: [])
+        XCTAssertEqual(Refine.absorbFragments(near).scan.rows[0].flags, ["absorbed-other-cp:1910"], "no tick, no beat: still a check")
+        XCTAssertEqual(FlagInfo.severity(of: "absorbed-other-cp:1910", solveStatus: "exact"), .check)
+        XCTAssertTrue(FlagInfo.explain("absorbed-other-cp:1910").contains("CP 1910 was folded into this one"))
+        // the same CP stays a note
         let same = ScanResult(rows: [row(1, "Moltres", cp: 1982, bars: IVs(atk: 13, def: 10, hp: 10), times: [10.2], solved: false), row(2, "Moltres", cp: 1982, bars: IVs(atk: 13, def: 10, hp: 10), times: [10.4, 10.6, 10.8])], review: [], unmatched: [])
-        XCTAssertEqual(Refine.absorbFragments(same, ticks: [10.3]).scan.rows[0].flags, ["absorbed-fragment:1982"])
+        XCTAssertEqual(Refine.absorbFragments(same).scan.rows[0].flags, ["absorbed-fragment:1982"])
+    }
+
+    /// J1: Staraptor 1951, a one-reading fragment 1946, then the real Staraptor 1946: the fragment belongs to the one AHEAD (same CP), so it is absorbed
+    /// into it, not flagged as a duplicate beside 1951.
+    func testAFragmentBelongsToTheSameCPNeighbourAheadNotTheDifferentOneBehind() {
+        let t0 = 100 + 6 * 1.2
+        let a = row(0, "Staraptor", cp: 1951, hp: 140, bars: IVs(atk: 11, def: 11, hp: 13), times: [t0 + 0.1, t0 + 0.4, t0 + 0.7, t0 + 1.0])
+        let b = row(0, "Staraptor", cp: 1946, hp: 140, bars: IVs(atk: 11, def: 10, hp: 12), times: [t0 + 1.6, t0 + 1.9, t0 + 2.2])
+        for (fbars, conf) in [(IVs(atk: 11, def: 11, hp: 13), 0.4), (IVs(atk: 11, def: 11, hp: 12), 0.4)] {
+            let f = row(0, "Staraptor", cp: 1946, hp: 140, bars: fbars, times: [t0 + 1.3], conf: conf)
+            var s = beat(15, replacing: 6, with: [a, f, b])
+            s.rows.remove(at: 9); for i in s.rows.indices { s.rows[i].index = i + 1 }
+            let r = Refine.absorbFragments(s)
+            let st = r.scan.rows.filter { $0.name == "Staraptor" }
+            XCTAssertEqual(st.map { $0.cp }, [1951, 1946], "two Pokémon, not three rows")
+            XCTAssertFalse(st.contains { $0.flags.contains { $0.hasPrefix("read-once-beside") } })
+            XCTAssertEqual(st[1].frames.count, 4, "the fragment's reading joined the real 1946")
+            XCTAssertEqual(st[1].flags, ["absorbed-fragment:1946"])
+        }
     }
 
     /// A good row (2 readings, exact) beside a 1-reading unsolved fragment: the good row is kept, with the fragment's readings joined to it.

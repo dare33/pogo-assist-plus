@@ -9,10 +9,10 @@ final class ScanKindAdviceTests: XCTestCase {
     func testAFullScanIsSoundOnlyWhenEverythingAgrees() {
         XCTAssertTrue(decide().fullIsSound)
         XCTAssertNil(decide().reason)
-        XCTAssertEqual(ScanKindAdvice.tolerance(300), 6); XCTAssertEqual(ScanKindAdvice.tolerance(25), 3); XCTAssertEqual(ScanKindAdvice.tolerance(5000), 100)
-        // the window around the typed count: 300 +- 6
-        XCTAssertTrue(decide(read: 294).fullIsSound); XCTAssertFalse(decide(read: 293).fullIsSound)
-        XCTAssertTrue(decide(read: 306).fullIsSound); XCTAssertFalse(decide(read: 307).fullIsSound)
+        XCTAssertEqual(ScanKindAdvice.tolerance(300), 3); XCTAssertEqual(ScanKindAdvice.tolerance(25), 3); XCTAssertEqual(ScanKindAdvice.tolerance(1000), 10); XCTAssertEqual(ScanKindAdvice.tolerance(5000), 50)
+        // the window around the typed count: 300 +- 3
+        XCTAssertTrue(decide(read: 297).fullIsSound); XCTAssertFalse(decide(read: 296).fullIsSound)
+        XCTAssertTrue(decide(read: 303).fullIsSound); XCTAssertFalse(decide(read: 304).fullIsSound)
     }
 
     func testAScanCutShortOfTheCountIsNotFull() {
@@ -43,7 +43,8 @@ final class ScanKindAdviceTests: XCTestCase {
     }
 
     func testTheLabelNeverClaimsCompletenessUnlessFullIsSound() {
-        XCTAssertEqual(ScanKindAdvice.endedLabel(pokemonRead: 298, decision: decide()), "The scan ended by itself after 298 Pokémon. That matches the 300 you gave.")
+        XCTAssertEqual(ScanKindAdvice.endedLabel(pokemonRead: 298, decision: decide()), "The scan ended by itself: 298 Pokémon read, within 3 of the 300 you gave.")
+        XCTAssertEqual(ScanKindAdvice.endedLabel(pokemonRead: 300, decision: decide(read: 300)), "The scan ended by itself after 300 Pokémon, exactly the 300 you gave.")
         XCTAssertEqual(ScanKindAdvice.endedLabel(pokemonRead: 100, decision: decide(read: 100)), "The scan ended by itself after 100 Pokémon.")
     }
 

@@ -12,8 +12,8 @@ public enum ScanKindAdvice {
         public var typedCount: Int?
     }
 
-    /// How far the Pokémon read may differ from the typed count: 2% of it, at least 3.
-    public static func tolerance(_ typed: Int) -> Int { max(3, Int((Double(typed) * 0.02).rounded(.up))) }
+    /// How far the Pokémon read may differ from the typed count: 1% of it, at least 3 (the count error seen on the device runs is under 1%).
+    public static func tolerance(_ typed: Int) -> Int { max(3, Int((Double(typed) * 0.01).rounded(.up))) }
 
     /// FULL only when ALL hold:
     /// - the automatic end fired (`endedAtListEnd`);
@@ -52,9 +52,9 @@ public enum ScanKindAdvice {
     /// The line on the result for a scan the extension ended itself. It never claims completeness: it says how many were read, and only
     /// when a full scan is sound that this matches the count.
     public static func endedLabel(pokemonRead: Int, decision: Decision) -> String {
-        var s = "The scan ended by itself after \(pokemonRead.formatted()) Pokémon."
-        if decision.fullIsSound, let typed = decision.typedCount { s += " That matches the \(typed.formatted()) you gave." }
-        return s
+        guard decision.fullIsSound, let typed = decision.typedCount else { return "The scan ended by itself after \(pokemonRead.formatted()) Pokémon." }
+        if pokemonRead == typed { return "The scan ended by itself after \(pokemonRead.formatted()) Pokémon, exactly the \(typed.formatted()) you gave." }
+        return "The scan ended by itself: \(pokemonRead.formatted()) Pokémon read, within \(tolerance(typed).formatted()) of the \(typed.formatted()) you gave."
     }
 
     /// What the extension is told when the scan starts: the command's period when the person chose to page with the voice command AND the

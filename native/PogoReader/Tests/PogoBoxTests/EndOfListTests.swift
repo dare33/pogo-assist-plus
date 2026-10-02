@@ -130,7 +130,11 @@ final class EndOfListTests: XCTestCase {
                 XCTAssertFalse(early(kept, period: period, finalNew: finalNew), "\(name) at one read per \(slow) s")
                 if reached {
                     let e = try XCTUnwrap(run(kept, period: period).ended, "\(name) at one read per \(slow) s never ended")
-                    XCTAssertEqual(e.last, finalNew, accuracy: 3.0, name)
+                    // With a slow reader a value that recurs on the last card can be older than the window and reset the clock once more: the end
+                    // comes later, never earlier and never missed (erring toward not ending).
+                    print("SLOW \(name) one read per \(slow) s: ends at the last card, its clock last reset \(String(format: "%.1f", e.last - finalNew)) s after the card began, ended \(String(format: "%.1f", e.at - finalNew)) s after")
+                    XCTAssertGreaterThanOrEqual(e.last, finalNew - 0.01, name)
+                    XCTAssertLessThan(e.at - finalNew, 30, name)
                 }
             }
         }
@@ -238,6 +242,31 @@ final class EndOfListTests: XCTestCase {
         XCTAssertNil(d.ended, "a card read once on each side of a nine second gap")
         var (e, u) = armed()
         e.feed(last, time: u); u += 9; e.feed(last, time: u)
+        XCTAssertNil(e.ended)
+    }
+
+    /// J3: eight command-paced cards of one species and HP, each with its own CP and bars, each read ONCE: nothing here is a quiet card.
+    func testEightSameSpeciesAndHPCardsReadOnceEachDoNotEndIt() {
+        var (d, t) = armed()
+        for i in 0..<8 { d.feed(card("Pidgey", 300 + 11 * i, hp: 40, bars: i + 1), time: t); t += 1.2 }
+        XCTAssertNil(d.ended)
+        for i in 0..<12 { d.feed(card("Pidgey", 500 + 7 * i, hp: 40, bars: i + 2), time: t); t += 1.2 }
+        XCTAssertNil(d.ended)
+    }
+
+    /// J3: one named card, then eight command-paced CP-only cards with different CPs.
+    func testOneNamedCardThenEightCPOnlyDifferentCardsDoesNotEndIt() {
+        var (d, t) = armed()
+        t = hold(&d, card("Named", 900, hp: 99, bars: 7), from: t, seconds: 1.2)
+        for i in 0..<10 { var r = FrameReading(); r.cp = 100 + 37 * i; t = hold(&d, r, from: t, seconds: 1.2) }
+        XCTAssertNil(d.ended)
+    }
+
+    func testAnAbsurdQuietValueDoesNotCrash() {
+        var d = EndOfListDetector(period: 1e-300)
+        for i in 0..<20 { d.feed(card("A", 100, hp: 50, bars: 1), time: Double(i) * 0.1) }
+        var e = EndOfListDetector(period: .infinity)
+        for i in 0..<20 { e.feed(card("A", 100, hp: 50, bars: 1), time: Double(i) * 0.1) }
         XCTAssertNil(e.ended)
     }
 

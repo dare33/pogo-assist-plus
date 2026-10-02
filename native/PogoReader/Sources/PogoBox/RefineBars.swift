@@ -4,8 +4,6 @@ import PogoReader
 extension Refine {
     /// Each part of a row cut at a change of bars lasts about one period of a regular beat, within this fraction of a period.
     public static let barsSplitPartTolerance = 0.35
-    /// With no regular beat: the two parts are separated by at least this many seconds (or by a non-card or unsettled reading).
-    public static let barsSplitFallbackGapSeconds = 0.4
     /// With no regular beat the split also needs each state held for this fraction of the command's period (when it is known).
     public static let barsSplitFallbackHeldPeriods = 0.6
     /// A state is a bars value held by this many consecutive settled readings. One reading is the previous Pokemon's bars on
@@ -16,7 +14,7 @@ extension Refine {
     /// as one (their bars were `ivs-disagree`). Inside one row, when the settled bars change from one value to another, each value is
     /// held by at least two consecutive settled readings (confidence at or above `settledBarsConfidence`), and the change falls on a
     /// beat boundary, the row is cut at the change. With a regular beat each part lasts about one period (`barsSplitPartTolerance`)
-    /// and the row about two; with no regular beat the parts are separated by an unsettled or non-card reading or by 0.4 s. Each part
+    /// and the row about two; with no regular beat each state must have been held for about 0.6 of the command's period (and with none known the row is not split). Each part
     /// is solved again by the JavaScript on its own readings, so it gets its own bars, level and flags; the second row is flagged
     /// `split-by-bars` (not `same-as-previous`: they are different Pokemon).
     /// A single odd reading never splits a row: the first frame after a page is the previous Pokemon's bars moving to the new ones.
@@ -70,9 +68,8 @@ extension Refine {
     }
 
     /// Where a row's settled bars change from one state to another: the time of the cut (halfway between the last reading of the
-    /// first state and the first of the second), the two values, and whether anything separates them (an unsettled or non-card
-    /// reading between, or at least 0.4 s).
-    private static func barsChange(_ row: ScanRow, readings: [FrameReading], labelIndex: [String: Int]) -> (time: Double, from: String, to: String, separated: Bool, heldA: Double, heldB: Double)? {
+    /// first state and the first of the second), the two values, and how long each state was held.
+    private static func barsChange(_ row: ScanRow, readings: [FrameReading], labelIndex: [String: Int]) -> (time: Double, from: String, to: String, heldA: Double, heldB: Double)? {
         guard row.frames.allSatisfy({ $0.time != nil }) else { return nil }
         let frames = row.frames.sorted { $0.time! < $1.time! }
         let settled = frames.filter { ($0.ivConfidence ?? 0) >= settledBarsConfidence && $0.ivs != nil }
@@ -88,15 +85,8 @@ extension Refine {
         // a run of one reading BEFORE the first state or after the second is the animation or a misread: fine
         let lastA = a.element.items.last!.time!, firstB = b.element.items.first!.time!
         let cut = (lastA + firstB) / 2
-        let between = frames.filter { $0.time! > lastA && $0.time! < firstB }
-        let anyUnsettled = !between.isEmpty
-        var separated = anyUnsettled || firstB - lastA >= barsSplitFallbackGapSeconds - 1e-9
-        if !separated {
-            // a non-card reading (no CP, no HP) in the readings between them
-            separated = readings.contains { r in guard let t = r.time, t > lastA, t < firstB else { return false }; return r.cp == nil && r.hp == nil }
-        }
         // how long each state was held (first to last settled reading)
         let heldA = lastA - a.element.items.first!.time!, heldB = b.element.items.last!.time! - firstB
-        return (cut, a.element.ivs, b.element.ivs, separated, heldA, heldB)
+        return (cut, a.element.ivs, b.element.ivs, heldA, heldB)
     }
 }

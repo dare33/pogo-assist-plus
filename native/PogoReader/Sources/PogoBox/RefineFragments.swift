@@ -35,44 +35,41 @@ extension Refine {
             guard let a = ts.min(), let b = ts.max(), ts.count == f.frames.count else { i += 1; continue }
             let small = f.frames.count == 1 || (period.map { b - a < 0.5 * $0 } ?? false)
             guard small else { i += 1; continue }
-            var absorbedBy: Int?
+            // Both neighbours are examined: the fragment may belong to the one behind it or the one ahead.
+            var candidates = [Int]()
             for j in [i - 1, i + 1] where j >= 0 && j < rows.count {
                 let n = rows[j]
                 guard n.name == f.name else { continue }
                 let nts = n.frames.compactMap(\.time)
-                guard let na = nts.min(), let nb = nts.max(), nts.count == n.frames.count else { continue }
+                guard let na = nts.min(), nts.max() != nil, nts.count == n.frames.count else { continue }
                 // no paging boundary between them
                 var together: Bool
                 if let p = period, let outer = outerSpan(rows, around: min(i, j), and: max(i, j)) {
                     together = outer <= fragmentPairMaxPeriods * p
                 } else {
-                    let gap = j > i ? na - b : a - nb
+                    let gap = j > i ? na - b : a - (nts.max() ?? a)
                     together = gap <= fragmentFallbackGapSeconds + 1e-9
                 }
-                guard together else { continue }
-                guard hpCompatible(f.hp, n.hp), barsCompatible(f, n) else { continue }
+                guard together, hpCompatible(f.hp, n.hp), barsCompatible(f, n) else { continue }
                 // The worse of the two is the fragment: a good row is never folded into a worse one beside it.
                 let qf = quality(f), qn = quality(n)
                 guard qn.0 > qf.0 || (qn.0 == qf.0 && qn.1 >= qf.1) else { continue }
-                // A fragment with its own CP that solved (a level fits), that differs from the neighbour's and is not a part of it, is not folded in: it
-                // may be a different Pokémon. It stays its own row, with a flag that asks for a look.
+                candidates.append(j)
+            }
+            // A neighbour with the fragment's own CP, or that the fragment is a part read of, is the Pokémon it belongs to. Otherwise a fragment with its
+            // own CP that solved (a level fits) is not folded into a different number: it stays its own row and asks for a look.
+            var absorbedBy = candidates.first { rows[$0].cp == f.cp || isPartRead(f.cp, of: rows[$0].cp) }
+            if absorbedBy == nil, let first = candidates.first {
                 let solved = f.cp > 0 && f.level != nil && !f.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
-                if solved && f.cp != n.cp && !isPartRead(f.cp, of: n.cp) {
-                    let flag = "read-once-beside:\(n.cp)"
+                if solved {
+                    let flag = "read-once-beside:\(rows[first].cp)"
                     if !rows[i].flags.contains(flag) { rows[i].flags.append(flag); flaggedOnly = true }
-                    break
-                }
-                absorbedBy = j
-                break
+                } else { absorbedBy = first }
             }
             guard let j = absorbedBy else { i += 1; continue }
             let n = rows[j]
-            // Same CP: a note. Another CP folded in: a check, when a page tick or a beat boundary lies between the two (adjacent rows of a
-            // regular beat always have one).
-            let nts = n.frames.compactMap(\.time)
-            let lo = j > i ? b : (nts.max() ?? b), hi = j > i ? (nts.min() ?? a) : a
-            let tickBetween = ticks.contains { $0 >= lo && $0 <= hi }
-            let flag = (f.cp != n.cp && (tickBetween || period != nil)) ? "absorbed-other-cp:\(f.cp)" : "absorbed-fragment:\(f.cp)"
+            // Same CP, or a part read of the kept CP: a note. Any other CP folded in: always a check (a once-read real Pokémon must not vanish quietly).
+            let flag = (f.cp != n.cp && !isPartRead(f.cp, of: n.cp)) ? "absorbed-other-cp:\(f.cp)" : "absorbed-fragment:\(f.cp)"
             if !rows[j].flags.contains(flag) { rows[j].flags.append(flag) }
             // The fragment's readings join the row they were part of (its values stay as the JavaScript solved them).
             rows[j].frames = (rows[j].frames + f.frames).sorted { ($0.time ?? 0) < ($1.time ?? 0) }

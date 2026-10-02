@@ -6,10 +6,11 @@ import Foundation
 /// The end is declared POSITIVELY: the same card has been read, again and again, for the whole quiet time. "Nothing new was counted" is never
 /// enough, because a reader that is slow, drops frames, or cannot read a card (a fainted Pokémon) counts nothing new either.
 ///
-/// - The CURRENT card is the one on screen since the clock last reset. The quiet clock (`quiet`, seconds) resets on ANY reading whose name or HP
-///   differs from the current card's (one reading is enough; a part that was not read is not a difference), and on a CP or bars value that
-///   differs from the card's current one and is stable (two keyed readings in a row). Twins of one species and HP therefore still reset it
-///   (their CP or bars differ), and the reset is dated at the reading that confirmed it.
+/// - The CURRENT card is the one on screen since the quiet clock last reset. The clock resets on ANY reading whose name or HP differs from the current
+///   card's (one reading is enough; a part that was not read is not a difference), and on a CP value or a bars value (either alone) that differs from
+///   every value read on the card within the last `seenWindowPeriods` periods, again on a SINGLE reading. Values seen a moment ago (OCR variants of a
+///   static card recur within a few frames; a CP that is a run of the card's digits is the same value) do not reset it, so twins of one species and HP,
+///   and a CP-only read of another Pokémon after a named card, still do. The seen values are a bounded list. A reset is dated at that reading.
 /// - `quiet` only grows across consecutive processed frames that both read the current card, at most `gapSeconds` apart. A frame with no card
 ///   read, and a gap between processed frames (low-memory skipping, dropped stretches), add nothing and do not reset it: a run of unread
 ///   cards, however long, can never end the scan. If the appraisal closes and nothing is readable the scan does not end by itself; the person stops it.
@@ -44,8 +45,7 @@ public struct EndOfListDetector {
     public var armed: Bool { armedAt != nil }
 
     // The end: the current card.
-    private var curName: String?, curHP: String?, curCP: String?
-    private var curVariant: String?, lastVariant: String?
+    private var curName: String?, curHP: String?
     private var lastFrame: Double?
     private var thirds = [0, 0, 0]
     /// Seconds the current card has been read since the clock last reset.
@@ -123,34 +123,44 @@ public struct EndOfListDetector {
 
         // The current card and the quiet clock
         let name = r.name, hp = r.hp.map { "\($0.current)/\($0.max)" }, bars = r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }
-        let cpOnly = name == nil && hp == nil && bars == nil
         guard name != nil || hp != nil || bars != nil || r.cp != nil else { lastFrameWasCard = false; return false }   // no card read: adds nothing, resets nothing
         let previous = lastFrame
         var sameCard = true
+        let cpKey = r.cp.map { "cp\($0)" }
         if lastNew == nil {
-            curName = name; curHP = hp; curCP = r.cp.map { "cp\($0)" }
-            reset(at: time); lastVariant = nil; curVariant = Self.variant(r)
+            curName = name; curHP = hp
+            seenCP = []; seenBars = []
+            Self.note(&seenCP, cpKey, time); Self.note(&seenBars, bars, time)
+            reset(at: time)
         } else {
             let nameDiffers = name != nil && curName != nil && name != curName
             let hpDiffers = hp != nil && curHP != nil && hp != curHP
-            let cpDiffers = cpOnly && curName == nil && curHP == nil && curCP != nil && r.cp != nil && !Self.sameCard(curCP!, "cp\(r.cp!)")
-            if nameDiffers || hpDiffers || cpDiffers {
-                curName = name; curHP = hp; curCP = r.cp.map { "cp\($0)" }
-                reset(at: time); lastVariant = Self.variant(r); curVariant = lastVariant; sameCard = false
+            // A CP or bars value that differs from every value seen on this card a moment ago is another Pokémon (of the same species and HP, or a
+            // CP-only read of another one), on a SINGLE reading: erring toward NOT ending. Values seen on the card within `seenWindowPeriods` (OCR
+            // variants of a static card, which recur within a few frames) do not reset it; a twin that comes back a whole beat later does.
+            let newCP = cpKey != nil && !Self.isSeen(seenCP, cpKey!, time, window: Self.seenWindowPeriods * period, same: Self.sameCard)
+            let newBars = bars != nil && !Self.isSeen(seenBars, bars!, time, window: Self.seenWindowPeriods * period, same: { $0 == $1 })
+            if nameDiffers || hpDiffers {
+                curName = name; curHP = hp
+                seenCP = []; seenBars = []
+                Self.note(&seenCP, cpKey, time); Self.note(&seenBars, bars, time)
+                reset(at: time); sameCard = false
+            } else if newCP || newBars {
+                if curName == nil { curName = name }
+                if curHP == nil { curHP = hp }
+                seenCP = []; seenBars = []
+                Self.note(&seenCP, cpKey, time); Self.note(&seenBars, bars, time)
+                reset(at: time); sameCard = false
             } else {
                 if curName == nil { curName = name }
                 if curHP == nil { curHP = hp }
-                if curCP == nil || !cpOnly { curCP = r.cp.map { "cp\($0)" } ?? curCP }
-                // A CP or bars value that differs and is stable (two keyed readings in a row) is another Pokémon of the same species and HP.
-                if let v = Self.variant(r) {
-                    if lastVariant == v, v != curVariant { curVariant = v; reset(at: time); sameCard = false }
-                    lastVariant = v
-                }
+                Self.note(&seenCP, cpKey, time); Self.note(&seenBars, bars, time)
             }
         }
         if sameCard, let p = previous, lastFrameWasCard, time - p <= Self.gapSeconds, time - p >= 0 {
             quiet += time - p
-            let third = min(2, Int(quiet / (Self.quietPeriods * period / 3)))
+            let frac = quiet / (Self.quietPeriods * period / 3)
+            let third = frac.isFinite ? min(2, max(0, Int(min(frac, 1e6)))) : 2
             thirds[third] += 1
         }
         lastFrameWasCard = true
@@ -158,11 +168,20 @@ public struct EndOfListDetector {
         return ended != nil
     }
 
-    private var lastFrameWasCard = false
+    /// Values read on the current card, with when each was last read (a few: the set is bounded).
+    private var seenCP: [(key: String, last: Double)] = []
+    private var seenBars: [(key: String, last: Double)] = []
+    /// A value counts as seen when it was read this recently, in expected periods.
+    public static let seenWindowPeriods = 0.75
+    private static let seenMax = 8
 
-    /// The CP and bars together, when both were read.
-    private static func variant(_ r: FrameReading) -> String? {
-        guard let cp = r.cp, let ivs = r.ivs else { return nil }
-        return "\(cp)|\(ivs.atk)/\(ivs.def)/\(ivs.hp)"
+    private static func isSeen(_ seen: [(key: String, last: Double)], _ key: String, _ time: Double, window: Double, same: (String, String) -> Bool) -> Bool {
+        seen.contains { same($0.key, key) && time - $0.last <= window }
     }
+    private static func note(_ seen: inout [(key: String, last: Double)], _ key: String?, _ time: Double) {
+        guard let key else { return }
+        if let i = seen.firstIndex(where: { $0.key == key }) { seen[i].last = time } else { seen.append((key, time)); if seen.count > seenMax { seen.removeFirst() } }
+    }
+
+    private var lastFrameWasCard = false
 }
