@@ -66,6 +66,31 @@ class Refusals(unittest.TestCase):
         self.refused("--count", "10", "--y", "5000")
         self.refused("--count", "10", "--x-to", "1401", "--x-from", "100")
 
+    def test_a_slow_travel_is_refused(self):
+        self.refused("--count", "10", "--duration", "1.5", "--every", "2", "--x-from", "340", "--x-to", "75")      # 177 pt/s
+        self.refused("--count", "10", "--duration", "0.85", "--x-from", "300", "--x-to", "100")                   # 235 pt/s
+
+    def test_swipes_stay_on_the_screen_and_out_of_the_edge_band(self):
+        self.refused("--count", "10", "--y", "30")
+        self.refused("--count", "10", "--y", "900")                      # within 60 of the bottom of 956
+        self.refused("--count", "10", "--x-from", "500")                 # right of 440
+        self.refused("--count", "10", "--screen-width", "300", "--x-from", "340")
+        self.refused("--count", "10", "--screen-height", "500", "--y", "480")
+        r, _ = run("--count", "10", "--y", "60"); self.assertEqual(r.returncode, 0, r.stderr)
+        r, _ = run("--count", "10", "--y", "896"); self.assertEqual(r.returncode, 0, r.stderr)
+        r, _ = run("--count", "10", "--screen-width", "744", "--screen-height", "1133", "--y", "1000", "--x-from", "700"); self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_now_with_an_offset_is_converted_or_refused_plainly(self):
+        out = os.path.join(tempfile.mkdtemp(), "x")
+        for text in ("2026-10-02T10:00:00+10:00", "2026-10-02T00:00:00Z"):
+            r = subprocess.run([sys.executable, SCRIPT, out, "--count", "10", "--now", text], capture_output=True, text=True)
+            self.assertNotIn("Traceback", r.stderr, text)
+            self.assertIn(r.returncode, (0, 2), text)
+        a = subprocess.run([sys.executable, SCRIPT, out + "a", "--count", "10", "--now", "2026-10-02T10:00:00+10:00"], capture_output=True, text=True)
+        self.assertEqual(a.returncode, 0, a.stderr)
+        b = subprocess.run([sys.executable, SCRIPT, out + "b", "--count", "10", "--now", "2026-10-02T00:00:00"], capture_output=True, text=True)
+        self.assertEqual(open(out + "a", "rb").read(), open(out + "b", "rb").read(), "+10:00 is the same instant as 00:00 UTC")
+
     def test_id_base_now_and_batch(self):
         self.refused("--count", "10", "--id-base", "nan")
         self.refused("--count", "10", "--id-base", "inf")
@@ -92,7 +117,7 @@ class Accepts(unittest.TestCase):
         self.assertTrue(os.path.getsize(out) > 0)
         r, out = run("--count", "10")
         self.assertEqual(r.returncode, 0, r.stderr)
-        r, out = run("--count", "10", "--x-from", "300", "--x-to", "200")                     # exactly 100 points of travel
+        r, out = run("--count", "10", "--x-from", "300", "--x-to", "200", "--duration", "0.4")                     # exactly 100 points of travel
         self.assertEqual(r.returncode, 0, r.stderr)
         r, out = run("--count", "10199")                                                       # the app's most: steps for 10,000 Pokémon
         self.assertEqual(r.returncode, 0, r.stderr)

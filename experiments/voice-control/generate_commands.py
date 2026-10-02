@@ -20,7 +20,7 @@ name a command identifier. See PLAN.md (phase 3) for what was tested and on whic
 Tap paging (`--tap X Y --screen-width W --screen-height H`) presses the game's right-hand next-Pokemon arrow. The file holds absolute
 points, so it is made only for a screen in CHECKED_SCREENS and only at that screen's measured point (440 x 956 at 424, 775); anything else
 is refused with a plain message and exit code 2, as are non-finite or non-positive numbers, a swipe position that is not finite and non-negative or
-travels under MIN_SWIPE_TRAVEL points sideways or lies beyond MAX_COORDINATE, a --duration outside 0.2 to 1.5 s, an --every not longer
+travels under MIN_SWIPE_TRAVEL points sideways or lies beyond MAX_COORDINATE, a --duration outside 0.2 to 1.5 s, a swipe slower than MIN_SWIPE_SPEED points per second, a swipe off the screen (default 440 x 956, or --screen-width/--screen-height) or within EDGE_MARGIN of its top or bottom, an --every not longer
 than the duration plus 0.1 s, a non-finite --id-base, an unreadable --now, a --batch above 50, a --count below 1 or above MAX_COUNT (the app's steps for 10,000 Pokémon), a --batch below 1, and an
 --every not longer than one touch. The exact command lines that produce the test fixtures are in
 native/PogoReader/Tests/PogoBoxTests/Fixtures/voice/REGENERATE.md; the refusals are tested by test_generate_commands.py in this folder.
@@ -48,6 +48,12 @@ MIN_SWIPE_TRAVEL = 100.0
 # A slow swipe is still a press: it holds near its start. A swipe lasts between these, leaves 0.1 s before the next, and stays on a screen.
 MIN_SWIPE_SECONDS, MAX_SWIPE_SECONDS, SWIPE_GAP = 0.2, 1.5, 0.1
 MAX_COORDINATE = 1400.0
+# A swipe must move at a finger's pace: the proven swipes are 265 points in 0.85 s (312 pt/s) and in 0.6 s (442 pt/s).
+MIN_SWIPE_SPEED = 250.0
+# A swipe in the home-indicator band (the top and bottom 60 points) is a system gesture, not a swipe in the game. The screen defaults to the
+# 440 x 956 iPhone the swipes were proven on.
+EDGE_MARGIN = 60.0
+DEFAULT_SCREEN = (440.0, 956.0)
 MAX_BATCH = 50
 MAX_COUNT = ((10_000 - 1) * 102 + 99) // 100
 
@@ -256,6 +262,15 @@ def main():
         p.error("--duration %g must be from %g to %g seconds: a slower swipe is a press" % (args.duration, MIN_SWIPE_SECONDS, MAX_SWIPE_SECONDS))
     if not args.tap and args.every <= args.duration + SWIPE_GAP:
         p.error("--every %g must be longer than --duration %g plus %g s" % (args.every, args.duration, SWIPE_GAP))
+    if not args.tap:
+        width, height = (args.screen_width or DEFAULT_SCREEN[0]), (args.screen_height or DEFAULT_SCREEN[1])
+        for flag, v in (("--x-from", args.x_from), ("--x-to", args.x_to)):
+            if v > width:
+                p.error("%s %g is off the %g pt wide screen" % (flag, v, width))
+        if not EDGE_MARGIN <= args.y <= height - EDGE_MARGIN:
+            p.error("--y %g is within %g points of the top or bottom of the %g pt tall screen: that band holds system gestures" % (args.y, EDGE_MARGIN, height))
+        if abs(args.x_to - args.x_from) / args.duration < MIN_SWIPE_SPEED:
+            p.error("a swipe of %g points in %g s is slower than %g points per second: a slow swipe is a press" % (abs(args.x_to - args.x_from), args.duration, MIN_SWIPE_SPEED))
     if not args.tap and abs(args.x_to - args.x_from) < MIN_SWIPE_TRAVEL:
         p.error("a swipe from x %g to x %g travels under %g points: a swipe that does not move is a tap, and a tap closes the panel or can press a button" % (args.x_from, args.x_to, MIN_SWIPE_TRAVEL))
     if not args.tap and args.duration < 2.0 / SWIPE_HZ:
@@ -263,8 +278,10 @@ def main():
 
     try:
         fixed = datetime.datetime.fromisoformat(args.now) if args.now else None
+        if fixed is not None and fixed.tzinfo is not None:
+            fixed = fixed.astimezone(datetime.timezone.utc).replace(tzinfo=None)   # an offset is converted to UTC
     except ValueError:
-        p.error("--now must be a UTC time like 2026-10-02T00:00:00")
+        p.error("--now must be a time like 2026-10-02T00:00:00 (UTC, or with an offset)")
     now = fixed if fixed else datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     ref = (now - datetime.datetime(2001, 1, 1)).total_seconds()  # Apple's reference date
     id_base = args.id_base if args.id_base is not None else ref
