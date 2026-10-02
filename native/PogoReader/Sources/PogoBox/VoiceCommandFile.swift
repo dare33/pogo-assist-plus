@@ -86,6 +86,8 @@ public enum VoiceCommandFile {
     // MARK: - sizing
 
     public static let defaultBatch = 50
+    /// The swipe set's gesture length (see `SetKind.maxBatch`).
+    public static let swipeSetBatch = 10
     /// Extra seconds the chain adds at each join between two batch gestures (the estimate's 0.8 s; the app tells `Refine` so a batch
     /// join is not mistaken for a repeated Pokémon).
     public static let joinExtraSeconds = 0.8
@@ -113,6 +115,15 @@ public enum VoiceCommandFile {
         let repeats = (steps + defaultBatch - 1) / defaultBatch
         let batch = (steps + repeats - 1) / repeats
         return Sizing(steps: steps, batch: batch, repeats: repeats, estimatedSeconds: Double(repeats) * (Double(batch) * pace.every + joinExtraSeconds))
+    }
+
+    /// The sizing of a command of the set: like `sizing`, with the kind's own gesture length. For the tap set it is `sizing` exactly. Every join
+    /// between two gestures adds `joinExtraSeconds`, which the paging hint passes to `Refine`.
+    public static func setSizing(size: Int, kind: SetKind) -> Sizing {
+        let steps = steps(storageCount: size), cap = kind.maxBatch
+        let repeats = (steps + cap - 1) / cap
+        let batch = (steps + repeats - 1) / repeats
+        return Sizing(steps: steps, batch: batch, repeats: repeats, estimatedSeconds: Double(repeats) * (Double(batch) * kind.pace.every + joinExtraSeconds))
     }
 
     // MARK: - make
@@ -181,6 +192,10 @@ public enum VoiceCommandFile {
     /// Tap on a checked screen; swipe everywhere else. The set has no fast (1.0 s) commands.
     public enum SetKind: String, Codable, CaseIterable {
         case tap, swipe
+        /// The most page steps in one gesture. A tap gesture is small, so the tap set keeps `defaultBatch` (and stays byte-identical to the first
+        /// version of the set); a swipe gesture holds about 38 touch events per swipe, so the swipe set is cut to short gestures, repeated more often,
+        /// to keep the file small.
+        var maxBatch: Int { self == .tap ? defaultBatch : swipeSetBatch }
         /// The pace every command of the set pages at: 1.2 s taps, 1.6 s swipes.
         public var pace: Pace { self == .tap ? .tapNormal : .swipeFast }
         public static func forScreen(tapAvailable: Bool) -> SetKind { tapAvailable ? .tap : .swipe }
@@ -222,7 +237,7 @@ public enum VoiceCommandFile {
         func base() -> [String: Any] { ["ConfirmationRequired": false, "CustomModifyDate": now, "CustomScope": "com.apple.speech.SystemWideScope"] }
         var table = [String: Any]()
         for (i, size) in setSizes.enumerated() {
-            let sizing = sizing(storageCount: size, pace: pace)
+            let sizing = setSizing(size: size, kind: kind)
             let events = point.map { taps(start: ref, count: sizing.batch, x: Double($0.x), y: Double($0.y), every: pace.every) }
                 ?? swipes(start: ref, count: sizing.batch, xFrom: 340, xTo: 75, y: 340, every: pace.every, duration: pace.swipeDuration)
             let idBase = kind.idBase + Double(i) * 100

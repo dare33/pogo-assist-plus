@@ -41,8 +41,8 @@ public enum ScanKindAdvice {
             return no("The scan stopped short of your count: \(pokemonRead.formatted()) Pokémon were read and you said \(typed.formatted()). Add and update is chosen.")
         }
         let size = VoiceCommandFile.setSize(covering: typed) ?? largest
-        let pace: VoiceCommandFile.Pace = (commandPeriod ?? 0) > 1.4 ? .swipeFast : .tapNormal
-        let reach = VoiceCommandFile.sizing(storageCount: size, pace: pace).covers + 1   // the command pages `covers` times from the first Pokémon
+        let kind: VoiceCommandFile.SetKind = (commandPeriod ?? 0) > 1.4 ? .swipe : .tap
+        let reach = VoiceCommandFile.setSizing(size: size, kind: kind).covers + 1   // the command pages `covers` times from the first Pokémon
         if pokemonRead > typed + tol || pokemonRead >= reach {
             return no("The scan read more Pokémon than your count (\(pokemonRead.formatted()) against \(typed.formatted())), so the count may be out of date and the command (Pogo scan \(size)) may have run out. Add and update is chosen.")
         }

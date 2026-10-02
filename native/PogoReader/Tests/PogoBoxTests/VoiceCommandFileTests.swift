@@ -305,6 +305,7 @@ final class VoiceCommandFileTests: XCTestCase {
     private func checkSet(_ kind: VoiceCommandFile.SetKind, tapPoint: CGPoint?) throws {
         let pace = kind.pace
         let data = try VoiceCommandFile.makeSet(kind: kind, tap: tapPoint, screenWidth: 440, screenHeight: 956, now: now)
+        XCTAssertLessThan(data.count, kind == .tap ? 400_000 : 1_500_000, "\(kind) set: \(data.count) bytes")
         let t = try table(data)
         let chains = t.filter { $0.value["CustomType"] == .string("RunUserActionFlow") }, gestures = t.filter { $0.value["CustomType"] == .string("RunGesture") }
         XCTAssertEqual(t.count, 26); XCTAssertEqual(chains.count, 13); XCTAssertEqual(gestures.count, 13)
@@ -312,7 +313,7 @@ final class VoiceCommandFileTests: XCTestCase {
         XCTAssertEqual(Set(t.values.map(name)).count, 26, "every name is unique")
         let base = 781_000_000.0
         for (i, size) in VoiceCommandFile.setSizes.enumerated() {
-            let sz = VoiceCommandFile.sizing(storageCount: size, pace: pace)
+            let sz = VoiceCommandFile.setSizing(size: size, kind: kind)
             let gid = String(format: "Custom.%.6f", base + Double(i) * 100), cid = String(format: "Custom.%.6f", base + Double(i) * 100 + 60)
             let g = try XCTUnwrap(t[gid]), c = try XCTUnwrap(t[cid])
             XCTAssertEqual(name(c), "Pogo scan \(size)")
@@ -330,8 +331,8 @@ final class VoiceCommandFileTests: XCTestCase {
             }
         }
         // "Pogo scan 300" pages exactly as the single 300 command does: 7 repeats of 44, 308 page steps for 305 needed
-        let s300 = VoiceCommandFile.sizing(storageCount: 300, pace: pace)
-        XCTAssertEqual([s300.steps, s300.batch, s300.repeats, s300.covers], [305, 44, 7, 308])
+        let s300 = VoiceCommandFile.setSizing(size: 300, kind: kind)
+        XCTAssertEqual([s300.steps, s300.batch, s300.repeats, s300.covers], kind == .tap ? [305, 44, 7, 308] : [305, 10, 31, 310])
     }
 
     func testTheTapSetIsThirteenCommandsAtTheMeasuredPoint() throws { try checkSet(.tap, tapPoint: tap) }
@@ -373,5 +374,15 @@ final class VoiceCommandFileTests: XCTestCase {
         XCTAssertEqual(VoiceCommandFile.setFileName(kind: .tap, screen: "440x956 iPhone"), "Pogo scan commands (440x956 iPhone).voicecontrolcommands")
         XCTAssertEqual(VoiceCommandFile.setFileName(kind: .swipe, screen: "393x852 iPhone"), "Pogo scan commands.voicecontrolcommands")
         XCTAssertEqual(VoiceCommandFile.SetKind.forScreen(tapAvailable: true), .tap); XCTAssertEqual(VoiceCommandFile.SetKind.forScreen(tapAvailable: false), .swipe)
+    }
+
+    func testTheTapSetSizingIsTheOldSizingAndTheSwipeSetIsCapped() {
+        for size in VoiceCommandFile.setSizes {
+            XCTAssertEqual(VoiceCommandFile.setSizing(size: size, kind: .tap), VoiceCommandFile.sizing(storageCount: size, pace: .tapNormal), "the tap set is unchanged (size \(size))")
+            let sw = VoiceCommandFile.setSizing(size: size, kind: .swipe)
+            XCTAssertLessThanOrEqual(sw.batch, VoiceCommandFile.swipeSetBatch)
+            XCTAssertGreaterThanOrEqual(sw.repeats * sw.batch, sw.steps, "repeats x batch still covers the steps (size \(size))")
+            XCTAssertLessThan(sw.repeats * sw.batch - sw.steps, sw.repeats, "and overshoots by less than a batch per repeat")
+        }
     }
 }

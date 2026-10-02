@@ -191,7 +191,7 @@ final class AppModel: ObservableObject {
     var commandSize: Int? { storageCount.flatMap { VoiceCommandFile.setSize(covering: $0) } }
     var countAboveLargest: Bool { (storageCount ?? 0) > (VoiceCommandFile.setSizes.last ?? 0) }
     /// Minutes the command of this size takes, as the Python's estimate has it.
-    func estimatedMinutes(size: Int) -> Int { Int((VoiceCommandFile.sizing(storageCount: size, pace: pace).estimatedSeconds / 60).rounded()) }
+    func estimatedMinutes(size: Int) -> Int { Int((VoiceCommandFile.setSizing(size: size, kind: setKind).estimatedSeconds / 60).rounded()) }
 
     /// What the Scan screen says about the set, or nil: it has not been made on this phone yet (by any account, for this screen kind).
     var commandWarning: String? {
