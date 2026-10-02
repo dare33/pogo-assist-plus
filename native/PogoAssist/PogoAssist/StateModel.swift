@@ -12,6 +12,8 @@ final class StateModel: ObservableObject {
     @Published var deferredNote: String?
     @Published var reading = false
     @Published var now = Date()
+    /// The app group container exists (false when signing / the group is not set up).
+    @Published var groupAvailable = SharedStore.containerAvailable
     private var timer: Timer?
 
     init() {
@@ -36,6 +38,7 @@ final class StateModel: ObservableObject {
 
     func reload() {
         now = Date()
+        groupAvailable = SharedStore.containerAvailable
         if let s = SharedStore.read() { state = s; hasState = true } else { state = BroadcastState(); hasState = false }
     }
 
@@ -67,29 +70,34 @@ final class StateModel: ObservableObject {
     }
 
     /// Read the saved crops with Vision (the same PogoReader code as the live path), group them, show
-    /// the rows, write them to the app group, and delete the crops. Not while a broadcast is writing them.
-    func readSavedCrops(force: Bool = false) {
-        guard !reading, force || !live, let dir = SharedStore.cropsURL else { return }
+    /// the rows, write them to the app group, and only then delete the crops. Not while a broadcast is
+    /// writing them: there is no way to force it past that.
+    func readSavedCrops() {
+        guard !reading, !live, let dir = SharedStore.cropsURL, let out = SharedStore.deferredURL else { return }
         let archive = CropArchive(directory: dir)
         guard archive.frameCount > 0 else { return }
         reading = true
         deferredNote = "Reading \(archive.frameCount) saved frames..."
-        let out = SharedStore.deferredURL
         Task.detached(priority: .userInitiated) {
             let table = try? SpeciesTable.bundled()
             let probe = MemoryProbe()
             probe.resetPeak()
             let reader = FrameReader(text: VisionTextReader(), names: table.map(displayNames) ?? [])
             let t0 = Date()
-            let result = DeferredRun.readAndGroup(archive: archive, reader: reader, species: table)
+            let result = DeferredRun.readAndGroup(archive: archive, reader: reader, species: table, removeWhenDone: false)
             probe.sample()
             let secs = Date().timeIntervalSince(t0)
-            if let out = out, let data = try? JSONEncoder().encode(DeferredResult(rows: result.rows, frames: result.readings.count, seconds: secs, peakFootprintMB: MemoryProbe.megabytes(probe.peakBytes))) {
-                try? data.write(to: out, options: .atomic)
+            // The crops are the only copy of what was read: delete them only once the result is on disk.
+            var saved = false
+            if let data = try? JSONEncoder().encode(DeferredResult(rows: result.rows, frames: result.readings.count, seconds: secs, peakFootprintMB: MemoryProbe.megabytes(probe.peakBytes))) {
+                do { try data.write(to: out, options: .atomic); saved = true } catch { saved = false }
             }
+            if saved { archive.removeAll() }
             await MainActor.run {
                 self.deferredRows = result.rows
-                self.deferredNote = "Read \(result.readings.count) saved frames in \(String(format: "%.1f", secs)) s; the crops were deleted."
+                self.deferredNote = saved
+                    ? "Read \(result.readings.count) saved frames in \(String(format: "%.1f", secs)) s; the crops were deleted."
+                    : "Read \(result.readings.count) saved frames but could not write the result: the crops were kept."
                 self.reading = false
             }
         }

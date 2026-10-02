@@ -39,10 +39,18 @@ enum SharedStore {
         return e
     }
 
-    static func write(_ state: BroadcastState) {
-        guard let url = stateURL, let data = try? encoder.encode(state) else { return }
-        try? data.write(to: url, options: .atomic)
+    /// The app group container exists. False when the entitlement or the group is not set up (signing).
+    static var containerAvailable: Bool {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID) != nil
+    }
+
+    /// Replace the state file atomically and post the notification. Returns false when it could not be written.
+    @discardableResult
+    static func write(_ state: BroadcastState) -> Bool {
+        guard let url = stateURL, let data = try? encoder.encode(state) else { return false }
+        do { try data.write(to: url, options: .atomic) } catch { return false }
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(notificationName as CFString), nil, nil, true)
+        return true
     }
 
     static func read() -> BroadcastState? {

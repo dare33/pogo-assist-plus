@@ -23,6 +23,12 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
+                if !model.groupAvailable {
+                    Section {
+                        Text("App group not available: check Signing & Capabilities on both targets")
+                            .font(.callout.bold()).foregroundStyle(.red)
+                    }
+                }
                 Section("Before you start") {
                     Label("Voice Control: Show Confirmation and Show Hints off", systemImage: "1.circle")
                     Label("Tap the button below and start the broadcast", systemImage: "2.circle")
@@ -44,7 +50,8 @@ struct ContentView: View {
                 if model.mode == .saveCrops || model.state.savedFrames > 0 || !model.deferredRows.isEmpty || model.savedCropFrames > 0 {
                     Section("Saved crops") {
                         Text("Saved \(model.state.savedFrames) frames (\(model.state.savedFiles) files, \(String(format: "%.1f", model.state.savedMB)) MB)").font(.footnote)
-                        Button(model.reading ? "Reading..." : "Read saved crops now") { model.readSavedCrops(force: true) }.disabled(model.reading)
+                        Button(model.reading ? "Reading..." : "Read saved crops now") { model.readSavedCrops() }.disabled(model.reading || model.live)
+                        if model.live { Text("Available when the broadcast has stopped.").font(.footnote).foregroundStyle(.secondary) }
                         if let n = model.deferredNote { Text(n).font(.footnote).foregroundStyle(.secondary) }
                     }
                 }
@@ -54,7 +61,7 @@ struct ContentView: View {
                     }
                 }
                 Section("Pokémon read live (\(model.state.rows.count))") {
-                    if model.state.rows.isEmpty { Text(model.hasState ? "Nothing read yet." : "No broadcast yet.").foregroundStyle(.secondary) }
+                    if model.state.rows.isEmpty { Text(!model.groupAvailable ? "No shared storage (see the red line above)." : model.hasState ? "Nothing read yet." : "No broadcast yet.").foregroundStyle(.secondary) }
                     ForEach(model.state.rows, id: \.index) { RowView(row: $0) }
                 }
             }

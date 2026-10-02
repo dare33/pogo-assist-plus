@@ -1,12 +1,14 @@
 import ReplayKit
 import CoreMedia
 import CoreVideo
+import os
 import PogoReader
 
 /// The broadcast upload extension. It receives the screen as sample buffers, keeps at most five
-/// frames a second by presentation timestamp, and handles one frame at a time: a frame that arrives
-/// while the previous one is still being handled is dropped, never queued (a queue of sample buffers
-/// is how extensions get killed). Results go to the app through a small JSON file in the app group.
+/// frames a second by presentation timestamp, and handles one frame at a time. A frame that arrives
+/// while the previous one is still being handled is dropped: the callback only bumps a counter and
+/// returns, so the sample buffer is never captured by a closure and never queued (a queue of sample
+/// buffers is how extensions get killed). Results go to the app through a small JSON file in the app group.
 ///
 /// Three reader modes (chosen in the app, read at `broadcastStarted`):
 /// - accurate / fast: Vision runs here. Before each frame the extension asks iOS how much memory is
@@ -15,7 +17,9 @@ import PogoReader
 ///   card are written to the app group and the app reads them when it comes to the foreground.
 ///
 /// The state file is written whenever rows change and at least once a second (a timer), so if the
-/// extension is killed the app still has the last state, and finds no finish marker in it.
+/// extension is killed the app still has the last state, and finds no finish marker in it. The extension
+/// logs with os_log (subsystem = its bundle id) at start, on the mode chosen, on finish and on any state
+/// write that fails; read it in Console.app (device selected) or `log stream`.
 ///
 /// Allocations are kept small on purpose: the frame goes straight to FrameProcessor (vImage into one
 /// reused buffer), no UIKit images, no CIContext, and nothing large is logged.
@@ -23,26 +27,39 @@ class SampleHandler: RPBroadcastSampleHandler {
     /// Frames per second kept, by presentation timestamp.
     private let readsPerSecond = 5.0
 
-    private let queue = DispatchQueue(label: "pogo.read", qos: .utility)
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.dare33.pogoassist.broadcast", category: "broadcast")
+    // `.workItem`: every work item gets its own autorelease pool; the user-initiated class because a
+    // frame must be read before the next one arrives.
+    private let queue = DispatchQueue(label: "pogo.read", qos: .userInitiated, autoreleaseFrequency: .workItem)
     private let lock = NSLock()
-    private var busy = false                  // guarded by lock
+    // Guarded by `lock`: the callback's whole decision is made under it.
+    private var busy = false
     private var lastKept = -Double.infinity   // presentation time of the last frame accepted
+    private var seen = 0                      // frames offered at the 5 fps rate
+    private var dropped = 0                   // of those, dropped because the previous one was still being handled
+
     private var mode = ReaderMode.accurate
-    private var processor: FrameProcessor?    // touched on `queue` only
+    private var processor: FrameProcessor?    // touched on `queue` only, below
     private var archive: CropArchive?
     private var saver = CropSaver()
     private var grouper = LiveGrouper(species: nil)
     private var state = BroadcastState()
     private var memory = MemoryProbe()
-    private var msTotal = 0.0
+    private var msTotal = 0.0                 // time spent on frames that were read (skipped frames excluded)
     private var lastWrite = Date.distantPast
     private var heartbeat: DispatchSourceTimer?
+    private var writeFailures = 0
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         queue.sync {
             mode = ReaderSettings.mode
+            log.info("broadcast started, mode \(self.mode.rawValue, privacy: .public), app group \(SharedStore.groupID, privacy: .public)")
+            if !SharedStore.containerAvailable {
+                log.error("app group container unavailable: no state can be shared; check Signing & Capabilities on both targets")
+            }
             memory = MemoryProbe()
             let table = try? SpeciesTable.bundled()
+            if table == nil { log.error("species table could not be loaded") }
             let names = table.map(displayNames) ?? []
             grouper = LiveGrouper(species: table)
             switch mode {
@@ -57,6 +74,8 @@ class SampleHandler: RPBroadcastSampleHandler {
                     let a = CropArchive(directory: dir)
                     a.removeAll()     // a new broadcast starts a new set of crops
                     archive = a
+                } else {
+                    log.error("crops folder unavailable (no app group): nothing will be saved")
                 }
                 saver = CropSaver()
             }
@@ -75,19 +94,23 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         // Video only; audio and microphone are ignored.
-        guard sampleBufferType == .video, let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        guard sampleBufferType == .video else { return }
         let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
-        guard pts - lastKept >= 1.0 / readsPerSecond - 0.005 else { return }
-        lastKept = pts
+        // The whole decision, under one lock. A frame that is not kept, or that arrives while busy,
+        // captures nothing: only the counters change, and nothing is enqueued.
         lock.lock()
-        let wasBusy = busy
-        if !wasBusy { busy = true }
+        guard pts - lastKept >= 1.0 / readsPerSecond - 0.005 else { lock.unlock(); return }
+        lastKept = pts
+        seen += 1
+        if busy { dropped += 1; lock.unlock(); return }
+        busy = true
         lock.unlock()
-        // Dropped frames only bump a counter; nothing is queued behind a busy frame.
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            lock.lock(); busy = false; lock.unlock()
+            return
+        }
         queue.async { [self] in
-            state.framesSeen += 1
-            if wasBusy { state.framesDropped += 1; return }
-            handle(pixelBuffer, time: pts)
+            autoreleasepool { handle(pixelBuffer, time: pts) }
             lock.lock(); busy = false; lock.unlock()
         }
     }
@@ -100,6 +123,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             state.rows = grouper.rows
             state.finished = true
             write(force: true)
+            log.info("broadcast finished: \(self.state.framesRead) read, \(self.state.framesDropped) dropped, \(self.state.skippedLowMemory) skipped for memory, peak \(self.state.peakFootprintMB, format: .fixed(precision: 1)) MB")
         }
     }
 
@@ -107,29 +131,33 @@ class SampleHandler: RPBroadcastSampleHandler {
     private func handle(_ pixelBuffer: CVPixelBuffer, time: Double) {
         guard let processor = processor else { return }
         memory.sample()
-        let t0 = DispatchTime.now().uptimeNanoseconds
-        var changed = false
         if mode == .saveCrops {
+            let t0 = DispatchTime.now().uptimeNanoseconds
             var (analysis, crops) = processor.analyse(pixelBuffer, time: time)
+            var changed = false
             if saver.shouldSave(&analysis), let crops = crops, let archive = archive, archive.save(analysis, crops) {
                 state.savedFrames = archive.frameCount; state.savedFiles = archive.fileCount
                 state.savedMB = MemoryProbe.megabytes(archive.byteCount)
                 changed = true
             }
-        } else if ReadGuard.shouldSkipVision(availableBytes: MemoryProbe.availableBytes()) {
-            // Little memory left: skip Vision for this frame and say so, instead of being killed.
-            state.skippedLowMemory += 1
             msTotal += Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+            state.framesRead += 1
+            write(force: changed)
+        } else if ReadGuard.shouldSkipVision(availableBytes: MemoryProbe.availableBytes()) {
+            // Little memory left: skip Vision for this frame and say so, instead of being killed. The
+            // skip is not a read: it is not counted in the frames read or the mean time per frame.
+            state.skippedLowMemory += 1
+            if state.skippedLowMemory == 1 { log.error("low memory: skipping Vision for frames (available below \(Tuning.lowMemoryAvailableBytes / 1_048_576) MB)") }
             write(force: false)
-            return
         } else {
+            let t0 = DispatchTime.now().uptimeNanoseconds
             let reading = processor.process(pixelBuffer, time: time)
-            changed = grouper.add(reading)
+            msTotal += Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+            state.framesRead += 1
+            let changed = grouper.add(reading)
             if changed { state.rows = grouper.rows }
+            write(force: changed)
         }
-        msTotal += Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
-        state.framesRead += 1
-        write(force: changed)
     }
 
     /// On `queue`. Rows (or saved crops) changed: write now. Otherwise at most about once a second.
@@ -137,11 +165,15 @@ class SampleHandler: RPBroadcastSampleHandler {
         let now = Date()
         guard force || now.timeIntervalSince(lastWrite) >= 0.9 else { return }
         lastWrite = now
+        lock.lock(); state.framesSeen = seen; state.framesDropped = dropped; lock.unlock()
         state.meanMsPerFrame = state.framesRead > 0 ? msTotal / Double(state.framesRead) : 0
         state.footprintMB = MemoryProbe.megabytes(memory.sample())
         state.peakFootprintMB = MemoryProbe.megabytes(memory.peakBytes)
         state.lowestAvailableMB = memory.lowestAvailableBytes.map(MemoryProbe.megabytes)
         state.updated = now
-        SharedStore.write(state)
+        if !SharedStore.write(state) {
+            writeFailures += 1
+            if writeFailures == 1 || writeFailures % 60 == 0 { log.error("state write failed (\(self.writeFailures) times): app group container unavailable or disk full") }
+        }
     }
 }

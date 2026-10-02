@@ -32,6 +32,26 @@ final class CropTests: XCTestCase {
         XCTAssertEqual(kept, 1)
     }
 
+    /// A card with no HP bar never has its bars read, so they never settle: it is kept on timing alone (3 frames).
+    func testACardWithNoHpBarKeepsThreeFrames() {
+        var saver = CropSaver()
+        var kept = [Int]()
+        for k in 0..<10 {
+            var a = FrameAnalysis(frame: "f\(k)", time: Double(k) / 5)
+            a.needsText = true; a.hasCpText = true; a.cpOnly = true
+            if saver.shouldSave(&a) { kept.append(k) }
+        }
+        XCTAssertEqual(kept, [1, 3, 5])
+        // The saver judges by time: every other frame dropped keeps the same number of frames.
+        var sparse = CropSaver(), n = 0
+        for k in stride(from: 0, to: 20, by: 2) {
+            var a = FrameAnalysis(frame: "f\(k)", time: Double(k) / 5)
+            a.needsText = true; a.cpOnly = true
+            if sparse.shouldSave(&a) { n += 1 }
+        }
+        XCTAssertEqual(n, 3)
+    }
+
     func testArchiveRoundTripsGrayCropsAndHonoursItsCaps() throws {
         var img = RGBAImage(width: 40, height: 12)
         img.fill(Rect(x: 0, y: 0, w: 40, h: 12), (200, 100, 50))
