@@ -369,9 +369,9 @@ interpreter).
   passes readings and results as JSON text. JavaScript exceptions come out as `CoreEngine.Failure.script(message:line:)`.
   Thread-confined: use it from one serial queue. API: `finish(readings:) -> ScanResult` (rows, review, unmatched),
   `csv(rows:scanDate:)`, `mergeClips(_:)`, `advise(rows:)` / `advise(csv:)` / `advise(box:)`, `importPokeGenie(csv:)`.
-- `ReplayReadings.load(url:)` reads a `pogo-read` output (`{readings, signatureDiffs}`) or a JSON-lines replay log
-  (tolerant: reading lines are kept, tick lines become swipe ticks, other kinds are skipped; the assumed log format is in
-  `readingObject(line:)` and `tickTime(line:)`, the only two places to change).
+- `ReplayReadings.load(url:)` reads a `pogo-read` output (`{readings, signatureDiffs}`) or the extension's replay log
+  (JSON lines; decoded by `PogoReader.ReplayLog`, the one source of the format: readings, swipe ticks, drops; log readings get
+  the frame labels `r1`, `r2`, ...).
 - `BoxStore(root:)` keeps a box per account as JSON files (`save`, `list`, `load`, `currentBox`, `exportCSV`, `delete`);
   writes are atomic and an unreadable file is reported, not fatal. The current box is the latest FULL scan.
   `mergeIncremental` is a stub that throws `notImplemented` (the matching rule for a later partial scan is undecided).
@@ -426,3 +426,12 @@ JavaScript's output under Node) is always on. The tests on real readings under `
   JIT; the cost is almost all `cpm()` in `src/cpm.js` looking a fractional level up in an object (`CPM[12.5]`). An
   equivalent Map lookup gives identical output about 5 times faster under Node; that change belongs in the JavaScript
   source and is not made here. iOS runs JavaScriptCore without JIT in an app, which is slower still; unmeasured.
+
+### First device run through the app core (`Tests/PogoBoxTests/Fixtures/device-run-2026-10-02.replay.jsonl`)
+
+The phone listed 51 Pokemon. The JavaScript `finish` on the log gives 49 rows and 2 unmatched; `pogo-rows` (refined) gives 51
+rows, but not the phone's 51. Refine's rule (a) did not split the twin Staraptor 1986 (HP 139): the log has no swipe tick between
+its two Pokemon (ticks at 551.9 s and 556.7 s; the twins' readings run 552.5 to 555.9 s), so only `LiveGrouper`'s separator-frame
+rule separates them. Refine's rule (b) turned the `cp-not-read` Staraptor entry (2 frames, HP 142, bars 12/15/15) into a row, but
+that is the same Pokemon as the one-frame Staraptor 1994 row the JavaScript already lists, so it is listed twice. The row count
+matches by coincidence of the two errors. `DeviceRunTests` pins all three lists.
