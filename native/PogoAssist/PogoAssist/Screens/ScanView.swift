@@ -90,14 +90,15 @@ struct ScanView: View {
                   systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
             if !model.pagedByHand { Text("The scan ends by itself at the end of the list (the broadcast stops and the result appears). The command keeps going until it runs out; that does nothing to your box.").font(.footnote).foregroundStyle(.secondary) }
             stepTitle("Before you start the broadcast: how will you page?")
-            Picker("Paging", selection: $model.pagedByHand) {
+            Picker("Paging", selection: Binding(get: { model.pagedByHand }, set: { model.choosePaging(byHand: $0) })) {
                 Text("Page with the voice command").tag(false)
                 Text("Page by hand").tag(true)
             }
             .pickerStyle(.segmented)
             Text(model.pagedByHand
                  ? "You swipe from one Pokémon to the next yourself. Twins are not told apart by the paging beat, and the scan does not end by itself: stop the broadcast from the red bar when the last Pokémon has been read."
-                 : "The scan ends by itself when the end of your Pokémon is reached.")
+                 : (model.commandSetMade ? "The scan ends by itself when the end of your Pokémon is reached."
+                                         : "The scan ends by itself only with the commands: get them first (above). Until then nothing ends the scan but you, from the red bar."))
                 .font(.footnote).foregroundStyle(.secondary)
         } header: { Text("Voice Control commands") } footer: { Text("Optional. Without them, swipe through the Pokémon by hand.") }
     }

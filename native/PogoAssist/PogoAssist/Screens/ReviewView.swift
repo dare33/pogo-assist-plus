@@ -49,6 +49,7 @@ private struct ResultList: View {
     @EnvironmentObject var model: AppModel
     let review: AppModel.Review
     @State private var confirmDiscard = false
+    @State private var confirmFull: String?
     @State private var open: Set<String> = []
 
     private var plan: BoxMerge.Plan { review.plan }
@@ -79,9 +80,12 @@ private struct ResultList: View {
                 if let warning = paceWarning { Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange) }
                 row("Box", review.account)
                 if let plan = review.reread { rereadNotes(plan) }
-                if review.endedAtListEnd { Label("The scan ended by itself at the end of the list.", systemImage: "checkmark.circle").font(.footnote).foregroundStyle(.secondary) }
+                if review.endedAtListEnd, let advice = review.advice { Label(ScanKindAdvice.endedLabel(pokemonRead: review.outcome.scan.rows.count, decision: advice), systemImage: "checkmark.circle").font(.footnote).foregroundStyle(.secondary) }
                 if let note = review.kindNote { Label(note, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary) }
-                if review.reread == nil { Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in Task { await model.setReviewKind(k) } })) {
+                if review.reread == nil { Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in
+                    // A full scan the advice refused proposes everything unseen as gone: say why, and ask first.
+                    if k == .full, let why = review.advice, !why.fullIsSound, let reason = why.reason { confirmFull = reason } else { Task { await model.setReviewKind(k) } }
+                })) {
                     Text("Full scan").tag(BoxStore.Kind.full)
                     Text("Add and update").tag(BoxStore.Kind.partial)
                 }
@@ -175,6 +179,10 @@ private struct ResultList: View {
         }
         .safeAreaInset(edge: .bottom) { actions }
         .sheet(item: $model.reportTarget) { MakeScansBetterSheet(target: $0).environmentObject(model) }
+        .confirmationDialog("Use Full scan anyway?", isPresented: Binding(get: { confirmFull != nil }, set: { if !$0 { confirmFull = nil } }), titleVisibility: .visible) {
+            Button("Use Full scan", role: .destructive) { Task { await model.setReviewKind(.full) } }
+            Button("Keep Add and update", role: .cancel) {}
+        } message: { Text("\(confirmFull ?? "") A full scan proposes every saved Pokémon this scan did not see as gone (you still choose, on the next screen, what to remove).") }
         .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardReview() }
         } message: { Text("Nothing will be added to the box.") }

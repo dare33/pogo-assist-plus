@@ -89,7 +89,7 @@ class Refusals(unittest.TestCase):
 
     def test_now_with_an_offset_is_converted_or_refused_plainly(self):
         out = os.path.join(tempfile.mkdtemp(), "x")
-        for text in ("2026-10-02T10:00:00+10:00", "2026-10-02T00:00:00Z"):
+        for text in ("2026-10-02T10:00:00+10:00", "2026-10-02T00:00:00Z", "2026-10-02Z", "2026-10-02", "10/02/2026"):
             r = subprocess.run([sys.executable, SCRIPT, out, "--count", "10", "--now", text], capture_output=True, text=True)
             self.assertNotIn("Traceback", r.stderr, text)
             self.assertIn(r.returncode, (0, 2), text)

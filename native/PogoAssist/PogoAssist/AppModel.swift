@@ -35,6 +35,8 @@ final class AppModel: ObservableObject {
         var endedAtListEnd = false
         /// Why the review chose Add and update although a full scan was asked for (`ScanKindAdvice`), or nil.
         var kindNote: String?
+        /// What `ScanKindAdvice` said about a full scan of this result (nil for a saved scan read again).
+        var advice: ScanKindAdvice.Decision?
     }
 
     enum ScanFlow {
@@ -171,10 +173,16 @@ final class AppModel: ObservableObject {
     /// The person paged by hand, not with a command: the paging beat means nothing, so twins are not judged from it. Off by default.
     /// The choice made BEFORE the scan on the Scan screen: "Page with the voice command" (the default) or "Page by hand". Stored; the extension reads it
     /// when the broadcast starts (no automatic end for hand paging) and the review reads what the extension was told.
-    @Published var pagedByHand: Bool { didSet { UserDefaults.standard.set(pagedByHand, forKey: Keys.hand); refreshReaderSettings() } }
+    @Published var pagedByHand: Bool { didSet { refreshReaderSettings() } }
+
+    /// The person's own choice, stored. Until they choose, the paging is by hand while no command set exists on this phone, and by the command once it does.
+    func choosePaging(byHand: Bool) { UserDefaults.standard.set(byHand, forKey: Keys.hand); pagedByHand = byHand }
+    func restorePaging() { pagedByHand = (UserDefaults.standard.object(forKey: Keys.hand) as? Bool) ?? ScanKindAdvice.defaultsToHand(commandSetMade: commandSetMade) }
+    /// The command set was made on this phone (any account) for this screen kind.
+    var commandSetMade: Bool { deviceSetCache.values.joined().contains { $0.kind == setKind && (setKind == .swipe || $0.screen == screenLabel) } }
 
     /// Tell the broadcast extension whether the next scan is paged by a command (it then ends the scan itself at the end of the list) and at what period.
-    func refreshReaderSettings() { ReaderSettings.autoEndPeriod = pagedByHand ? nil : pace.every }
+    func refreshReaderSettings() { ReaderSettings.autoEndPeriod = ScanKindAdvice.autoEndPeriod(wantsCommand: !pagedByHand, commandSetMade: commandSetMade, pace: pace) }
     /// The last command made for each single mode of the selected account (older app versions made one file per scan; still checked for the wrong-screen warning).
     @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]
     @Published var setRecord: SetRecord?
@@ -287,6 +295,7 @@ final class AppModel: ObservableObject {
                 if let d = try? JSONEncoder().encode(rec) { UserDefaults.standard.set(d, forKey: Keys.set + a) }
                 setRecord = rec
                 refreshDeviceRecords()
+                restorePaging()   // the commands now exist: the default choice becomes the command
             }
             shareURLs = [url]
         } catch { message = "The commands could not be made: \(Self.plain(error))" }
@@ -306,17 +315,17 @@ final class AppModel: ObservableObject {
         library = BoxLibrary(root: root)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
         storageCountText = ""   // read per account by loadVoiceRecord once the account is known
-        pagedByHand = UserDefaults.standard.bool(forKey: Keys.hand)
+        pagedByHand = true   // restorePaging() below: by hand until the commands exist, unless the person chose
         account = UserDefaults.standard.string(forKey: Keys.account)
-        // Before the count was per account it was one global value: carry it over to the current account, once.
+        reloadAccounts()
+        // After the account is chosen (reloadAccounts picks the first when none was stored): before the count was per account it was one global value: carry it over to the current account, once.
         if let old = UserDefaults.standard.string(forKey: Keys.count), let a = account {
             if UserDefaults.standard.string(forKey: Keys.count + "." + a) == nil { UserDefaults.standard.set(old, forKey: Keys.count + "." + a) }
             UserDefaults.standard.removeObject(forKey: Keys.count)
         }
-        reloadAccounts()
         loadBox()
         loadVoiceRecord()
-        refreshReaderSettings()
+        restorePaging()
         refreshBroadcast()
         CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), { _, observer, _, _, _ in
             guard let observer else { return }
@@ -612,28 +621,26 @@ final class AppModel: ObservableObject {
         // How the scan was paged is what the extension was told when it started (a command at its period, or by hand), not a setting changed since.
         let period: Double? = { if let b = broadcast { return b.commandPeriod }; return pagedByHand ? nil : pace.every }()
         let paging = period == nil ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: period, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
-        let ended = broadcast?.endedAtListEnd ?? false, logFull = broadcast?.replayLogTruncated ?? false, pace = self.pace
-        let typed = asked == .full ? storageCount : nil
+        let ended = broadcast?.endedAtListEnd ?? false, logFull = broadcast?.replayLogTruncated ?? false, logFailed = broadcast?.replayLogFailed ?? false
+        let typed = storageCount
         Task {
             do {
-                let (outcome, plan, seconds, base, seq, kind, note) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?) in
+                let (outcome, plan, seconds, base, seq, kind, note, advice) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?, ScanKindAdvice.Decision) in
                     let outcome = try ScanPipeline.process(replay: url, engine: engine, paging: paging)
                     // A full scan proposes everything unseen as gone, so it is only the default when the list can be known to have ended.
                     var kind = asked, note: String?
-                    if asked == .full {
-                        let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, pace: pace)
-                        if !d.fullIsSound { kind = .partial; note = d.reason }
-                    }
+                    let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, logFailed: logFailed, commandPeriod: period)
+                    if asked == .full && !d.fullIsSound { kind = .partial; note = d.reason }
                     let current = try lib.current(account: a)   // the box as it is when the plan is made
                     let entries = current?.entries ?? []
                     let t = Date()
                     let plan = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
-                    return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note)
+                    return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note, d)
                 }
                 let t = outcome.timings
                 NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
                 var review = Review(account: a, kind: kind, outcome: outcome, plan: plan, base: base, storageCount: asked == .full ? typed : nil, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging), boxSeq: seq)
-                review.endedAtListEnd = ended; review.kindNote = note
+                review.endedAtListEnd = ended; review.kindNote = note; review.advice = advice
                 flow = .review(review)
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)
