@@ -79,6 +79,9 @@ public enum VoiceCommandFile {
     // MARK: - sizing
 
     public static let defaultBatch = 50
+    /// Extra seconds the chain adds at each join between two batch gestures (the estimate's 0.8 s; the app tells `Refine` so a batch
+    /// join is not mistaken for a repeated Pokémon).
+    public static let joinExtraSeconds = 0.8
 
     public struct Sizing: Equatable {
         /// Page steps the scan needs: the storage count less the first Pokémon (already on screen) plus 2%, rounded up; at least 3.
@@ -87,7 +90,7 @@ public enum VoiceCommandFile {
         public var repeats: Int
         /// Page steps the command makes in all (`repeats * batch`), at least `steps`.
         public var covers: Int { repeats * batch }
-        /// The Python's estimate: repeats x (batch x every + 0.8 s).
+        /// The Python's estimate: repeats x (batch x every + the join).
         public var estimatedSeconds: Double
     }
 
@@ -99,7 +102,7 @@ public enum VoiceCommandFile {
         let steps = steps(storageCount: storageCount)
         let repeats = (steps + defaultBatch - 1) / defaultBatch
         let batch = (steps + repeats - 1) / repeats
-        return Sizing(steps: steps, batch: batch, repeats: repeats, estimatedSeconds: Double(repeats) * (Double(batch) * pace.every + 0.8))
+        return Sizing(steps: steps, batch: batch, repeats: repeats, estimatedSeconds: Double(repeats) * (Double(batch) * pace.every + joinExtraSeconds))
     }
 
     // MARK: - make

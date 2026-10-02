@@ -57,7 +57,7 @@ private struct ResultList: View {
     /// The scan ran at a pace unlike the command last made: probably an older command played.
     private var paceWarning: String? {
         guard let pace = review.outcome.pace else { return nil }
-        return ScanPace.check(measured: pace.secondsPerPokemon, chosen: model.pace)
+        return model.pagedByHand ? nil : PaceCheck.check(measured: pace.medianPeriod, chosen: model.pace)
     }
     private var blocker: String? { model.saveBlocker(review) }
 
@@ -67,7 +67,7 @@ private struct ResultList: View {
                 row("Pokémon read", "\(review.outcome.scan.rows.count)")
                 row("Scan time", Fmt.duration(review.outcome.duration))
                 row("Frames read", "\(review.outcome.readings)")
-                if let pace = review.outcome.pace { row("Pace", "about \(String(format: "%.1f", pace.secondsPerPokemon)) s per Pokémon") }
+                if let pace = review.outcome.pace { row("Pace", "about \(String(format: "%.1f", pace.medianPeriod)) s per Pokémon") }
                 if let warning = paceWarning { Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange) }
                 row("Box", review.account)
                 Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in Task { await model.setReviewKind(k) } })) {

@@ -58,7 +58,7 @@ final class AppModel: ObservableObject {
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
-    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePaceV2", voice = "voiceLast." }
+    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast." }
 
     // MARK: - the Voice Control command
 
@@ -67,6 +67,8 @@ final class AppModel: ObservableObject {
 
     @Published var pace: VoiceCommandFile.Pace { didSet { UserDefaults.standard.set(pace.rawValue, forKey: Keys.pace) } }
     /// The last command made for each mode of the selected account: each mode is its own command in Voice Control.
+    /// The person paged by hand, not with a command: the paging beat means nothing, so twins are not judged from it. Off by default.
+    @Published var pagedByHand: Bool { didSet { UserDefaults.standard.set(pagedByHand, forKey: Keys.hand) } }
     @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]
     var voiceLast: VoiceRecord? { voiceRecords[pace] }
 
@@ -145,6 +147,7 @@ final class AppModel: ObservableObject {
         let tapOK = VoiceCommandFile.tapPoint(width: Double(UIScreen.main.bounds.width), height: Double(UIScreen.main.bounds.height)) != nil
         let offered = VoiceCommandFile.Pace.offered(tapAvailable: tapOK)
         let stored = VoiceCommandFile.Pace(rawValue: UserDefaults.standard.string(forKey: Keys.pace) ?? "")
+        pagedByHand = UserDefaults.standard.bool(forKey: Keys.hand)
         pace = stored.flatMap { offered.contains($0) ? $0 : nil } ?? offered[0]
         account = UserDefaults.standard.string(forKey: Keys.account)
         reloadAccounts()
@@ -405,11 +408,13 @@ final class AppModel: ObservableObject {
         guard let url = SharedStore.replayURL, let a = account else { return }
         flow = .processing("Reading the scan")
         let entries = entries, kind = scanKind, date = Date()
+        // What the app knows about the paging: a generated command at the chosen mode's pace, or by hand.
+        let paging = pagedByHand ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: pace.every, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
         let count = Int(storageCountText.trimmingCharacters(in: .whitespaces))
         Task {
             do {
                 let (outcome, plan, seconds) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double) in
-                    let outcome = try ScanPipeline.process(replay: url, engine: engine)
+                    let outcome = try ScanPipeline.process(replay: url, engine: engine, paging: paging)
                     let t = Date()
                     let plan = BoxMerge.plan(scanned: outcome.scan.rows, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
                     return (outcome, plan, Date().timeIntervalSince(t))

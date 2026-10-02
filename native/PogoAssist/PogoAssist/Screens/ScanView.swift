@@ -76,6 +76,8 @@ struct ScanView: View {
             if let warning = model.commandWarning {
                 Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange)
             }
+            Toggle("I paged by hand", isOn: $model.pagedByHand)
+            if model.pagedByHand { Text("Twins will not be told apart by the paging beat.").font(.footnote).foregroundStyle(.secondary) }
             stepTitle("2. Get the command for this choice")
             Button { Task { await model.getCommand() } } label: { Label("Get the \(model.pace.spokenTitle) command", systemImage: "square.and.arrow.up") }
                 .disabled(model.storageCount == nil)

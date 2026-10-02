@@ -12,6 +12,7 @@ public enum FlagInfo {
         Entry(prefix: "cp-computed", field: .cp) { _ in "The CP was not on screen, so it was worked out from the HP and the bars. Check it in the game." },
         Entry(prefix: "cp-recovered", field: .cp) { _ in "The CP was partly hidden on screen and was worked out from the HP and the bars. Check it in the game." },
         Entry(prefix: "cp-chosen", field: .cp) { _ in "The CP was read two different ways. The one that fits the stats was chosen. Check it in the game." },
+        Entry(prefix: "split-by-timing", field: nil) { _ in "Looked like two identical Pokémon in a row, judged from the paging beat. Check in the game that there are two." },
         Entry(prefix: "same-as-previous", field: nil) { _ in "An identical copy of the Pokémon before it, found by the swipe between them. Check that you own two." },
         Entry(prefix: "ivs-unread", field: .ivs) { _ in "The appraisal bars could not be read, so the IVs are unknown. Open the appraisal and check." },
         Entry(prefix: "ambiguous-ivs", field: .ivs) { _ in "More than one set of IVs fits what was read, so none is saved. Check the appraisal." },

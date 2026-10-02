@@ -387,6 +387,12 @@ interpreter).
   that CP for the stretch; it is dropped as a duplicate only when the row beside it is the same Pokemon with equal settled
   bars and there is no swipe evidence between them, and that row then carries the flag `absorbed-unread`. Readings with no
   frame labels are labelled by position (and the JavaScript is re-run). `Refine.applyTickOnly` is the first, tick-only version.
+  A last step, `Refine.splitByTiming`, splits a row that stayed exactly two periods of a steady beat (a tap leaves no `mid-swipe`; a
+  fast swipe can hide in dropped frames): the later row gets `same-as-previous split-by-timing`. It needs a regular beat on both sides,
+  at most two unreadable frames inside the stay, and pairs only; with no `PagingHint` it also needs the whole scan to be steady
+  (`ScanPace.regularity` 0.07 or less) and a period of 1.0 s or more. A hint with `pagedByCommand: false` turns it off. `ScanPace.measure`
+  gives the measured median period, regularity and periods observed for the app to show. `pogo-rows` prints the pace and takes
+  `--paging command[:period] | hand`.
 
 What the app will call after a scan: `let engine = CoreEngine()` (own queue) then
 `engine.finish(readings:)`, `Refine.apply(to:readings:ticks:engine:)`, `BoxStore.save(_:account:source:)`,
@@ -491,8 +497,16 @@ A Swift port of `experiments/voice-control/generate_commands.py` (which stays th
 on fixtures made by the script with `--now` fixed, archives decoded to plain structures with their UIDs). The file holds a batch gesture
 of at most 50 page steps and a chain `Pogo scan` that repeats it `ceil(steps / 50)` times, the batch cut to `ceil(steps / repeats)` so the
 overshoot stays small (51 steps is 2 x 26; no separate partial gesture). Steps = storage count - 1, plus 2% rounded up, at least 3: 1,400 Pokemon is 1,427 steps, 29 x 50, about 715 KB.
-Modes: swipe normal (2.1 s, default), swipe fast (1.6 s), tap (1.2 s), tap (1.0 s); the three non-default ones are marked not yet proven
-on a full box. `pogo-voice <count> [--fast] [--tap] --out file` makes the same file on a Mac.
+Modes, one spoken command each so several can be installed together: **Scan** (taps every 1.2 s, "Pogo scan", the default), **Fast scan**
+(taps every 1.0 s, "Pogo fast scan"; misreads seen at this pace) and, only on a screen where the tap position has not been measured,
+**Swipe** (every 1.6 s, "Pogo swipe"). The 2.1 s swipe ("Pogo slow swipe") is still made by the generator, as the proven reference
+timing, but is not offered. Each mode has its own batch gesture name ("Amber lantern", "Silver compass", "Velvet marble", "Quiet walnut": no word
+shared with any spoken command or with each other) and its own fixed identifiers (`Custom.<n>` and `Custom.<n+60>` from a per-mode base,
+`--id-base` in the Python), so importing a file replaces only that mode's commands. Files are named like `Pogo scan 300.voicecontrolcommands`.
+The old time-based "Pogo scan" command made by earlier builds has other identifiers: delete it in Voice Control, or two commands answer to the
+same phrase. The app keeps the last command made per mode and warns when the chosen mode has none or one that is too small, and the scan result
+names the mode whose pace the scan ran at when it is not the chosen one (`PaceCheck`). The app passes `Refine` a `PagingHint` (a command at
+the chosen mode's period with a 0.8 s join, or "I paged by hand" from the switch on the Scan screen). `pogo-voice <count> [--fast] [--tap] --out file` makes the same file on a Mac.
 
 Tap mode presses the game's right-hand next-Pokemon arrow (measured at 424, 775 pt on the 440 x 956 pt iPhone: fractions 0.964 and 0.811,
 kept in `VoiceCommandFile`). Safety rule: once the appraisal closes at the end of the list the Pokemon page shows, and its Power up and Evolve
@@ -508,10 +522,10 @@ Merge rule 7 also asks when a row flagged `no-level-fits` (or with no usable CP)
 
 ### Round 3 additions
 
-- Pace: `ScanPace.measure` gives the median seconds between Pokemon in a replay log (from the swipe ticks, else from where the
-  on-screen Pokemon changed; a missed tick does not move the median). The scan result shows it, and warns when a command was
-  last made at a pace more than 0.3 s from it ("Voice Control may have played an older command"). The Scan screen numbers the
-  steps (choose how to page, get the command for that choice, import it, say it) and says which command was last made.
+- Pace: the scan result shows `ScanPace.medianPeriod` (from when the on-screen Pokemon changed, the core branch's `ScanPace`) and `PaceCheck`
+  compares it with the chosen mode: "ran at the Slow swipe pace; you had chosen Scan". The Scan screen numbers the steps (choose how to
+  page, get the command for that choice, import it, say it), warns when the chosen mode has no command or one too small, and has an
+  "I paged by hand" switch (twins are then not judged from the beat).
 - Mega and Primal forms (`<base>_mega`, `_mega_x`, `_mega_y`, `_primal`): after the unchanged rule and before powered up, a Mega row
   matches a saved base entry with the same three IVs as Same: the entry keeps its own species, CP, HP, level and dust (the Mega CP
   is temporary), gets `megaWhenScanned` and a new last-seen date; two different base candidates are Unsure (choosing one still copies
@@ -519,3 +533,11 @@ Merge rule 7 also asks when a row flagged `no-level-fits` (or with no usable CP)
   form. A Mega row that matches nothing is saved as New under the BASE species with the IVs, but CP 0 ("not known"), no HP, level
   or dust, and the flag `mega-when-scanned`; the review says so. Not handled: a Mega row whose base is not saved but an earlier
   stage is (it is saved as New and the earlier stage stays).
+
+### Timing split: what it does and does not do (13 clips and logs, `RefineTiming.swift`)
+
+Without a hint the fast-swipe device log refines to 51 rows (the Staraptor 1986 pair, two periods of 1.70 s), the normal-pace logs and
+marathon-phone stay at 51, 49 and 47, and darentas-01/02/03, v3, marathon-ipad-mini, pogo-test-fast and screenrec-2149 gain nothing.
+Hand-tapped paging cannot be told from a command's by its beat alone (locally it is as regular), and a page that does not take
+(darentas-03: a steady 2.1 s gesture whose finger was shown touching while the card stayed, stays of 3 to 7 periods) looks like a run
+of identical Pokemon: that is why only pairs are split, why the no-hint rule asks for a steady scan, and why the app should pass the hint.

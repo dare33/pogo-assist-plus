@@ -5,7 +5,7 @@ import PogoReader
 // pogo-rows: run the app core on a scan's frame readings, as the app does after a scan.
 //
 //   pogo-rows <readings.json | replay.jsonl> [--csv out.csv] [--json out.json] [--advise]
-//             [--refine | --no-refine] [--diff]
+//             [--refine | --no-refine] [--diff] [--paging command[:period] | hand]
 //
 // Prints the same roster table as scripts/extract.mjs, a summary line, the time taken and the peak
 // physical footprint of this process. --refine (the default when the input has swipe ticks) runs the Swift
@@ -18,7 +18,7 @@ func die(_ message: String, code: Int32 = 2) -> Never {
     exit(code)
 }
 
-var input: String?, csvPath: String?, jsonPath: String?, advise = false, refineFlag: Bool?, diff = false
+var input: String?, csvPath: String?, jsonPath: String?, advise = false, refineFlag: Bool?, diff = false, paging: PagingHint?
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let a = args.removeFirst()
@@ -29,11 +29,18 @@ while !args.isEmpty {
     case "--refine": refineFlag = true
     case "--no-refine": refineFlag = false
     case "--diff": diff = true
+    case "--paging":
+        // command[:period-seconds] | hand : what the app would pass as a PagingHint
+        guard !args.isEmpty else { die("--paging needs command[:period] or hand") }
+        let v = args.removeFirst()
+        if v == "hand" { paging = PagingHint(pagedByCommand: false) }
+        else if v.hasPrefix("command") { paging = PagingHint(pagedByCommand: true, expectedPeriod: v.split(separator: ":").dropFirst().first.flatMap { Double($0) }) }
+        else { die("--paging: command[:period] or hand") }
     case _ where a.hasPrefix("--"): die("unknown option \(a)")
     default: if input == nil { input = a } else { die("one input file only") }
     }
 }
-guard let input else { die("usage: pogo-rows <readings.json | replay.jsonl> [--csv out.csv] [--json out.json] [--advise] [--refine | --no-refine] [--diff]") }
+guard let input else { die("usage: pogo-rows <readings.json | replay.jsonl> [--csv out.csv] [--json out.json] [--advise] [--refine | --no-refine] [--diff] [--paging command[:period] | hand]") }
 
 func err(_ s: String) { FileHandle.standardError.write(Data((s + "\n").utf8)) }
 let probe = MemoryProbe()
@@ -56,7 +63,7 @@ do {
     var refined: Refine.Refined?
     if refineFlag ?? loaded.hasTicks {
         let t = Date()
-        let r = try Refine.apply(to: base, readings: loaded.readings, ticks: loaded.ticks, engine: engine)
+        let r = try Refine.apply(to: base, readings: loaded.readings, ticks: loaded.ticks, engine: engine, paging: paging)
         refined = r; result = r.scan
         err(String(format: "refine: %.2f s%@", Date().timeIntervalSince(t), loaded.hasTicks ? "" : " (no swipe ticks in the input: twin split skipped)"))
     }
@@ -74,6 +81,7 @@ do {
     }
     print("\(result.rows.count) rows from \(loaded.readings.count) readings; \(result.review.count) flagged; \(result.unmatched.count) unmatched")
     if let r = refined {
+        if let pace = ScanPace.measure(rows: result.rows) { print(String(format: "pace: median %.2f s, regularity %.3f (%@), %d single-period stays of %d", pace.medianPeriod, pace.regularity, pace.isRegular ? "regular" : "irregular", pace.periodsObserved, pace.staysMeasured)) }
         print("base rows \(r.baseRowCount) / refined rows \(result.rows.count) (\(loaded.ticks.count) swipe ticks)")
         for c in r.changes { print("  refined #\(c.rowIndex) \(c.kind.rawValue): \(c.detail)") }
         for n in r.notices { print("  notice: \(n)") }

@@ -183,15 +183,15 @@ final class VoiceCommandFileTests: XCTestCase {
 
     func testThePaceCheckNamesTheModeThatRan() {
         typealias P = VoiceCommandFile.Pace
-        XCTAssertEqual(ScanPace.check(measured: 2.2, chosen: .tapNormal), "This scan ran at about 2.2 s per Pokémon, which is the Slow swipe pace; you had chosen Scan. Voice Control may have heard a different command.")
-        XCTAssertNil(ScanPace.check(measured: 1.25, chosen: .tapNormal), "the chosen mode's own pace")
-        XCTAssertNil(ScanPace.check(measured: 1.1, chosen: .tapNormal), "within 0.15 s of the chosen mode")
-        XCTAssertEqual(ScanPace.check(measured: 1.0, chosen: .tapNormal), "This scan ran at about 1.0 s per Pokémon, which is the Fast scan pace; you had chosen Scan. Voice Control may have heard a different command.")
-        XCTAssertEqual(ScanPace.check(measured: 1.6, chosen: .tapFast)?.contains("which is the Swipe pace; you had chosen Fast scan"), true)
-        XCTAssertNil(ScanPace.check(measured: 3.5, chosen: .tapNormal), "near no mode: paced by hand")
-        XCTAssertNil(ScanPace.check(measured: 1.6, chosen: .swipeFast))
-        XCTAssertEqual(ScanPace.nearestMode(to: 2.2), .swipeNormal)
-        XCTAssertEqual(ScanPace.nearestMode(to: 1.6), .swipeFast)
+        XCTAssertEqual(PaceCheck.check(measured: 2.2, chosen: .tapNormal), "This scan ran at about 2.2 s per Pokémon, which is the Slow swipe pace; you had chosen Scan. Voice Control may have heard a different command.")
+        XCTAssertNil(PaceCheck.check(measured: 1.25, chosen: .tapNormal), "the chosen mode's own pace")
+        XCTAssertNil(PaceCheck.check(measured: 1.1, chosen: .tapNormal), "within 0.15 s of the chosen mode")
+        XCTAssertEqual(PaceCheck.check(measured: 1.0, chosen: .tapNormal), "This scan ran at about 1.0 s per Pokémon, which is the Fast scan pace; you had chosen Scan. Voice Control may have heard a different command.")
+        XCTAssertEqual(PaceCheck.check(measured: 1.6, chosen: .tapFast)?.contains("which is the Swipe pace; you had chosen Fast scan"), true)
+        XCTAssertNil(PaceCheck.check(measured: 3.5, chosen: .tapNormal), "near no mode: paced by hand")
+        XCTAssertNil(PaceCheck.check(measured: 1.6, chosen: .swipeFast))
+        XCTAssertEqual(PaceCheck.nearestMode(to: 2.2), .swipeNormal)
+        XCTAssertEqual(PaceCheck.nearestMode(to: 1.6), .swipeFast)
     }
 
     func testTheComparisonCanFail() throws {

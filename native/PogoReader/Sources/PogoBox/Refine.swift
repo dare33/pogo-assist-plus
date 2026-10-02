@@ -29,7 +29,7 @@ public enum Refine {
     public static let minSwipeGap = 0.55
 
     public struct Change: Equatable {
-        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped }
+        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit }
         public var kind: Kind
         /// The row's index in the refined result.
         public var rowIndex: Int
@@ -53,9 +53,14 @@ public enum Refine {
     }
 
     /// Reconcile the JavaScript result with `LiveGrouper` over the same readings and ticks (rules in the type's description).
-    public static func apply(to base: ScanResult, readings: [FrameReading], ticks: [Double], engine: CoreEngine, species: SpeciesTable? = try? SpeciesTable.bundled()) throws -> Refined {
+    public static func apply(to base: ScanResult, readings: [FrameReading], ticks: [Double], engine: CoreEngine, species: SpeciesTable? = try? SpeciesTable.bundled(), paging: PagingHint? = nil) throws -> Refined {
         let live = GrouperDiff.liveRows(readings: readings, ticks: ticks, species: species)
-        return try run(base, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
+        var r = try run(base, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
+        // then the timing step (off when the app says the player paged by hand)
+        let t = splitByTiming(r.scan, readings: readings, paging: paging)
+        r.changes = r.changes.map { var c = $0; c.rowIndex = t.indexMap[c.rowIndex] ?? c.rowIndex; return c } + t.changes
+        r.scan = t.scan; r.notices += t.notices
+        return r
     }
 
     /// The first version: split at swipe ticks alone (no `LiveGrouper`) and turn every `cp-not-read` entry with one

@@ -19,8 +19,8 @@ public enum ScanPipeline {
         public var changes: [Refine.Change]
         public var notices: [String]
         public var timings: Timings
-        /// Median seconds between Pokémon in the log, when there is enough to measure.
-        public var pace: ScanPace.Measured?
+        /// How fast the paging went (`ScanPace`, from when the on-screen Pokémon changed), when there is enough to measure.
+        public var pace: ScanPace?
     }
 
     public struct Timings: Equatable {
@@ -33,7 +33,8 @@ public enum ScanPipeline {
         public var errorDescription: String? { "The scan has no readable Pokémon in it. Scan again with the first Pokémon open and the appraisal showing." }
     }
 
-    public static func process(replay url: URL, engine: CoreEngine) throws -> Outcome {
+    /// `paging` is what the app knows about how the scan was paged (a generated command, or by hand); `Refine` uses it to judge twins by the beat.
+    public static func process(replay url: URL, engine: CoreEngine, paging: PagingHint? = nil) throws -> Outcome {
         var timings = Timings()
         let t0 = Date()
         var readings = [FrameReading](), ticks = [Double](), drops = 0, times = [Double]()
@@ -62,9 +63,9 @@ public enum ScanPipeline {
         let base = try engine.finish(readings: readings)
         timings.finish = Date().timeIntervalSince(t1)
         let t2 = Date()
-        let refined = try Refine.apply(to: base, readings: readings, ticks: ticks, engine: engine)
+        let refined = try Refine.apply(to: base, readings: readings, ticks: ticks, engine: engine, paging: paging)
         timings.refine = Date().timeIntervalSince(t2)
         let span = (times.max() ?? 0) - (times.min() ?? 0)
-        return Outcome(scan: refined.scan, readings: readings.count, ticks: ticks.count, drops: drops, duration: max(0, span), changes: refined.changes, notices: refined.notices, timings: timings, pace: ScanPace.measure(lines))
+        return Outcome(scan: refined.scan, readings: readings.count, ticks: ticks.count, drops: drops, duration: max(0, span), changes: refined.changes, notices: refined.notices, timings: timings, pace: ScanPace.measure(rows: refined.scan.rows))
     }
 }

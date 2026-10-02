@@ -1,73 +1,72 @@
 import Foundation
-import PogoReader
 
-/// How fast a finished scan went through the Pokémon, measured from its replay log: the median time between one Pokémon and
-/// the next. It tells the person which Voice Control command actually ran (a normal-pace command played when a fast one was
-/// meant shows as about 2.1 s, not 1.6 s).
-public enum ScanPace {
-    public struct Measured: Equatable {
-        public enum Basis: String, Equatable { case swipeTicks, readingGaps }
-        public var secondsPerPokemon: Double
-        public var basis: Basis
-        /// How many gaps the median is over.
-        public var samples: Int
+/// How fast a scan paged from one Pokemon to the next, measured from when the Pokemon on screen changed. Pure and
+/// self-contained (spans in, numbers out), so the app can show it and `Refine` can use it.
+///
+/// The change between two consecutive rows happens between the last reading of one and the first reading of the next: its
+/// time is taken as their midpoint (swipe ticks are not used: a tick is stamped on the frame that confirms the swipe, a
+/// fixed lag after the change, which would put a different offset on boundaries that have a tick and those that do not).
+/// A row's stay is the time between its two boundaries, so the first and last rows (one boundary each) have none.
+public struct ScanPace: Equatable {
+    /// Median stay of the interior rows, in seconds: the measured period of the paging.
+    public var medianPeriod: Double
+    /// Median absolute deviation of the stays over the median (0.05 = steady to about 5%). Smaller is steadier.
+    public var regularity: Double
+    /// `regularity` is within `regularityTolerance`.
+    public var isRegular: Bool
+    /// Stays within 35% of the median: the Pokemon that were on screen for exactly one period.
+    public var periodsObserved: Int
+    /// All stays measured.
+    public var staysMeasured: Int
+
+    /// Median absolute deviation over the median at or under which a beat counts as regular. Real paged clips measure about
+    /// 0.05 to 0.07 (reading times jitter by a frame or two); hand-tapped paging with menus opened is above 0.3.
+    public static let regularityTolerance = 0.12
+    /// A stay this close to the median (as a fraction) counts as one period.
+    public static let singlePeriodBand = 0.35
+
+    /// The time each row's Pokemon changed to the next one: `boundaries[i]` is between row i and row i + 1. Nil where
+    /// the rows overlap in time (no clean change).
+    public static func boundaries(spans: [(first: Double, last: Double)]) -> [Double?] {
+        zip(spans, spans.dropFirst()).map { a, b in a.last <= b.first ? (a.last + b.first) / 2 : nil }
     }
 
-    /// Needs at least this many gaps to say anything.
-    public static let minimumSamples = 5
-
-    /// From the swipe ticks when there are enough (one per swipe; a missed tick makes one long gap, which the median ignores);
-    /// else from the times the on-screen Pokémon changed (a Tap-mode scan has no ticks), counting only readings that held for two
-    /// frames in a row so a misread CP does not count as a new Pokémon. nil when neither gives enough to go on.
-    public static func measure(_ lines: [ReplayLine]) -> Measured? {
-        var ticks = [Double](), readings = [ReplayReading]()
-        for line in lines {
-            switch line {
-            case .tick(let t): ticks.append(t)
-            case .reading(let r): readings.append(r)
-            case .drop: break
-            }
+    /// Stay of every row (nil for the first, the last, and rows next to a missing boundary).
+    public static func stays(spans: [(first: Double, last: Double)]) -> [Double?] {
+        let b = boundaries(spans: spans)
+        return spans.indices.map { i in
+            guard i >= 1, i <= spans.count - 2, let a = b[i - 1], let c = b[i] else { return nil }
+            return c - a
         }
-        if let m = median(gaps(ticks.sorted()), .swipeTicks) { return m }
-        // Reading runs: a run is a stretch of readings with the same name and CP; it counts when it lasts two frames or more.
-        var starts = [Double](), runStart: Double?, runKey: String?, runLength = 0
-        func close() { if let s = runStart, runLength >= 2 { starts.append(s) }; runStart = nil; runLength = 0 }
-        for r in readings {
-            guard let name = r.name, !name.isEmpty, let cp = r.cp else { close(); runKey = nil; continue }
-            let key = "\(name)|\(cp)"
-            if key != runKey { close(); runKey = key; runStart = r.t }
-            runLength += 1
+    }
+
+    public static func median(_ xs: [Double]) -> Double? {
+        guard !xs.isEmpty else { return nil }
+        let s = xs.sorted(), n = s.count
+        return n % 2 == 1 ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2
+    }
+
+    /// Median absolute deviation over the median; nil with no values or a zero median.
+    static func relativeMAD(_ xs: [Double]) -> (median: Double, mad: Double)? {
+        guard let m = median(xs), m > 0, let d = median(xs.map { abs($0 - m) }) else { return nil }
+        return (m, d / m)
+    }
+
+    public static func measure(spans: [(first: Double, last: Double)]) -> ScanPace? {
+        let stays = Self.stays(spans: spans).compactMap { $0 }.filter { $0 > 0 }
+        guard stays.count >= 3, let (m, mad) = relativeMAD(stays) else { return nil }
+        return ScanPace(medianPeriod: m, regularity: mad, isRegular: mad <= regularityTolerance,
+                        periodsObserved: stays.filter { abs($0 - m) <= singlePeriodBand * m }.count, staysMeasured: stays.count)
+    }
+
+    public static func measure(rows: [ScanRow]) -> ScanPace? { measure(spans: spans(of: rows).compactMap { $0 }) }
+
+    /// Time span of each row's frames; nil for a row with no frame times.
+    static func spans(of rows: [ScanRow]) -> [(first: Double, last: Double)?] {
+        rows.map { r in
+            let ts = r.frames.compactMap(\.time)
+            guard let a = ts.min(), let b = ts.max() else { return nil }
+            return (a, b)
         }
-        close()
-        return median(gaps(starts), .readingGaps)
-    }
-
-    public static func measure(replay url: URL) -> Measured? { measure(ReplayLog.lines(in: url)) }
-
-    private static func gaps(_ times: [Double]) -> [Double] { zip(times, times.dropFirst()).map { $1 - $0 } }
-
-    private static func median(_ gaps: [Double], _ basis: Measured.Basis) -> Measured? {
-        guard gaps.count >= minimumSamples else { return nil }
-        let s = gaps.sorted(), mid = s.count / 2
-        let m = s.count % 2 == 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2
-        return Measured(secondsPerPokemon: m, basis: basis, samples: gaps.count)
-    }
-}
-
-extension ScanPace {
-    /// The mode whose nominal pace is nearest to a measured one, with the distance, or nil when no mode is within `tolerance`
-    /// seconds (a scan swiped by hand, or paced by something else).
-    public static func nearestMode(to seconds: Double, tolerance: Double = 0.3) -> VoiceCommandFile.Pace? {
-        // Every mode the generator makes, so a 2.1 s run is named too (an older "Pogo scan" command ran at that pace).
-        let best = VoiceCommandFile.Pace.allCases.min { abs($0.every - seconds) < abs($1.every - seconds) }
-        return best.flatMap { abs($0.every - seconds) <= tolerance ? $0 : nil }
-    }
-
-    /// One plain sentence when the scan ran at the pace of a different mode than the one chosen (the wrong command was probably
-    /// heard), else nil. A pace within 0.15 s of the chosen mode's counts as that mode; a pace near none of them says nothing.
-    public static func check(measured seconds: Double, chosen: VoiceCommandFile.Pace) -> String? {
-        if abs(chosen.every - seconds) <= 0.15 { return nil }
-        guard let ran = nearestMode(to: seconds), ran != chosen else { return nil }
-        return "This scan ran at about \(String(format: "%.1f", seconds)) s per Pokémon, which is the \(ran.title) pace; you had chosen \(chosen.title). Voice Control may have heard a different command."
     }
 }
