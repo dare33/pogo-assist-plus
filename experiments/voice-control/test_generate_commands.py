@@ -47,12 +47,31 @@ class Refusals(unittest.TestCase):
         self.refused("--count", "10", "--tap", "424", "775", "--screen-width", "440", "--screen-height", "956", "--every", "0.06")   # not longer than the touch
 
 
+    def test_a_swipe_that_does_not_move_is_a_tap(self):
+        self.refused("--count", "10", "--x-from", "200", "--x-to", "200", "--y", "775")      # presses left of the arrow
+        self.refused("--count", "10", "--x-from", "200", "--x-to", "299")                    # travel under 100
+        self.refused("--count", "10", "--x-from", "299", "--x-to", "200")
+
+    def test_swipe_positions_must_be_finite_and_not_negative(self):
+        for bad in ("nan", "inf", "-inf", "-1", "abc"):
+            for flag in ("--x-from", "--x-to", "--y"):
+                self.refused("--count", "10", flag, bad)
+
+    def test_count_has_the_apps_upper_limit(self):
+        self.refused("--count", "10200")
+        self.refused("--count", "999999999999999999999")
+
+
 class Accepts(unittest.TestCase):
     def test_the_checked_screen_and_the_defaults(self):
         r, out = run("--count", "10", "--tap", "424", "775", "--screen-width", "440", "--screen-height", "956")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.getsize(out) > 0)
         r, out = run("--count", "10")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r, out = run("--count", "10", "--x-from", "300", "--x-to", "200")                     # exactly 100 points of travel
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r, out = run("--count", "10199")                                                       # the app's most: steps for 10,000 Pokémon
         self.assertEqual(r.returncode, 0, r.stderr)
 
 
