@@ -64,7 +64,7 @@ private struct ResultList: View {
     var body: some View {
         List {
             Section {
-                row("Pokémon read", "\(review.outcome.scan.rows.count)")
+                countsRow
                 row("Scan time", Fmt.duration(review.outcome.duration))
                 row("Frames read", "\(review.outcome.readings)")
                 if let pace = review.outcome.pace { row("Pace", "about \(String(format: "%.1f", pace.medianPeriod)) s per Pokémon") }
@@ -120,14 +120,14 @@ private struct ResultList: View {
             if review.kind == .full && !plan.gone.isEmpty {
                 Section { Text("These are in your box but the scan did not see them. If the scan stopped early, choose Add and update above so nothing is removed.").font(.footnote).foregroundStyle(.secondary) }
             }
-            let flagged = review.outcome.scan.rows.indices.filter { !review.outcome.scan.rows[$0].flags.isEmpty }
+            let flagged = review.outcome.scan.rows.indices.filter { review.outcome.scan.rows[$0].needsCheck }
             Section("To check in the game (\(flagged.count))") {
                 if flagged.isEmpty { Text("Nothing needs a check.").foregroundStyle(.secondary) }
                 ForEach(flagged, id: \.self) { i in
                     let r = review.outcome.scan.rows[i]
                     VStack(alignment: .leading, spacing: 4) {
                         Text(verbatim: "\(r.title), CP \(r.cp)").font(.callout.weight(.medium))
-                        ForEach(r.flags, id: \.self) { f in Text(FlagInfo.explain(f)).font(.footnote).foregroundStyle(.secondary) }
+                        ForEach(r.checkFlags, id: \.self) { f in Text(FlagInfo.explain(f)).font(.footnote).foregroundStyle(.secondary) }
                     }
                 }
             }
@@ -157,6 +157,25 @@ private struct ResultList: View {
         }
         .padding(.horizontal).padding(.vertical, 8)
         .background(.bar)
+    }
+
+    /// The three numbers that matter, first: how many were read, how many need a look in the game, how many need an answer here.
+    private var countsRow: some View {
+        let toCheck = review.outcome.scan.rows.filter(\.needsCheck).count
+        return HStack(alignment: .top) {
+            count("\(review.outcome.scan.rows.count)", "read")
+            count("\(toCheck)", "to check")
+            count("\(plan.unsure.count)", "need your answer")
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func count(_ number: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(verbatim: number).font(.title.bold()).monospacedDigit()
+            Text(label).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func row(_ title: String, _ value: String) -> some View {

@@ -40,8 +40,8 @@ public struct BoxEntry: Codable, Equatable, Identifiable {
     }
 
     public var isHandCorrected: Bool { !corrections.isEmpty }
-    /// Flags remain that need a look in the game (a hand correction or "mark as checked" removes them).
-    public var needsCheck: Bool { !row.flags.isEmpty }
+    /// A `check` flag remains that needs a look in the game (a hand correction or "These values are right" removes it). Notes do not count.
+    public var needsCheck: Bool { row.needsCheck }
 
     static func stripped(_ row: ScanRow) -> ScanRow { var r = row; r.frames = []; return r }
 

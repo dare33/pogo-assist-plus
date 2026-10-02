@@ -415,6 +415,6 @@ public enum BoxMerge {
         return out
     }
 
-    /// Clear every flag without changing a value ("I checked it in the game and it is right").
-    public static func markChecked(_ e: BoxEntry) -> BoxEntry { var o = e; o.row.flags = []; return o }
+    /// Clear the `check` flags without changing a value (the notes on how it was read stay) ("I checked it in the game and it is right").
+    public static func markChecked(_ e: BoxEntry) -> BoxEntry { var o = e; o.row.flags = o.row.noteFlags; return o }
 }

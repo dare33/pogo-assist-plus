@@ -89,6 +89,14 @@ public struct ScanRow: Codable, Equatable {
     }
 }
 
+extension ScanRow {
+    /// The flags that ask for a look in the game, and the ones that only record how the row was read (see `FlagInfo.Severity`).
+    public var checkFlags: [String] { FlagInfo.checkFlags(flags, solveStatus: solveStatus) }
+    public var noteFlags: [String] { FlagInfo.noteFlags(flags, solveStatus: solveStatus) }
+    /// The row belongs in "To check": it has at least one `check` flag.
+    public var needsCheck: Bool { !checkFlags.isEmpty }
+}
+
 /// A flagged row, as `finish()` lists them for review (the row's reads without its solver fields).
 public struct ReviewEntry: Codable, Equatable {
     public var index: Int

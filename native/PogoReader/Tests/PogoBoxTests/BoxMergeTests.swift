@@ -262,7 +262,7 @@ final class BoxMergeTests: XCTestCase {
     func testMarkCheckedClearsFlagsOnly() {
         let v = entry(row(flags: ["ivs-unread", "hp-computed"]))
         let c = BoxMerge.markChecked(v)
-        XCTAssertTrue(c.row.flags.isEmpty); XCTAssertFalse(c.isHandCorrected); XCTAssertFalse(c.needsCheck)
+        XCTAssertEqual(c.row.flags, ["hp-computed"], "the note on how the HP was read stays"); XCTAssertFalse(c.isHandCorrected); XCTAssertFalse(c.needsCheck)
     }
 
     // MARK: flags

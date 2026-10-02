@@ -75,11 +75,13 @@ struct BoxView: View {
                     Text("\(model.entries.count) Pokémon").font(.title2.bold())
                     if let d = model.snapshot?.scanDate { Text("Last scan \(Fmt.date(d))").font(.footnote).foregroundStyle(.secondary) }
                 }
-                Picker("Show", selection: $showToCheck) {
-                    Text("All").tag(false)
-                    Text("To check \(toCheckCount)").tag(true)
+                if toCheckCount > 0 {
+                    Picker("Show", selection: $showToCheck) {
+                        Text("All").tag(false)
+                        Text("To check \(toCheckCount)").tag(true)
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
             }
             Section {
                 ForEach(visible) { e in
@@ -92,6 +94,7 @@ struct BoxView: View {
             }
         }
         .searchable(text: $search, prompt: "Search by name or CP")
+        .onChange(of: toCheckCount) { _, n in if n == 0 { showToCheck = false } }
         .listStyle(.insetGrouped)
     }
 }

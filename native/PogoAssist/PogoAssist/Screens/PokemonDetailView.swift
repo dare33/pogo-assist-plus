@@ -25,10 +25,15 @@ struct PokemonDetailView: View {
                     line("First seen", Fmt.day(e.firstSeen))
                     line("Last seen", Fmt.day(e.lastSeen))
                 }
-                if !r.flags.isEmpty {
+                if !r.checkFlags.isEmpty {
                     Section("To check in the game") {
-                        ForEach(r.flags, id: \.self) { Text(FlagInfo.explain($0)).font(.callout) }
+                        ForEach(r.checkFlags, id: \.self) { Text(FlagInfo.explain($0)).font(.callout) }
                         Button("These values are right") { Task { await model.markChecked(id) } }
+                    }
+                }
+                if !r.noteFlags.isEmpty {
+                    Section("How it was read") {
+                        ForEach(r.noteFlags, id: \.self) { Text(FlagInfo.explainNote($0)).font(.footnote).foregroundStyle(.secondary) }
                     }
                 }
                 if e.megaWhenScanned == true {

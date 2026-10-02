@@ -6,6 +6,40 @@ import Foundation
 public enum FlagInfo {
     public enum Field { case cp, hp, ivs, species }
 
+    /// Whether a flag asks the person to look in the game (`check`) or only records how the value was read (`note`).
+    public enum Severity: Equatable { case check, note }
+
+    /// A flag's severity rule: always one or the other, or a note only when the row's solver status is `exact` (CP, HP and bars all fit one
+    /// level, so the vote and the solver settled what the flag is about) and a check on any other row.
+    enum Rule { case check, note, noteWhenExact }
+
+    /// The rules by flag prefix. A flag not listed here is a `check`.
+    static let rules: [String: Rule] = [
+        "ivs-disagree": .noteWhenExact, "bars-unsettled": .noteWhenExact, "cp-chosen": .noteWhenExact, "cp-recovered": .noteWhenExact,
+        "cp-outlier-dropped": .noteWhenExact, "absorbed-fragment": .noteWhenExact, "ivs-corrected": .noteWhenExact, "hp-computed": .noteWhenExact,
+        "form-ambiguous": .note, "level-ambiguous": .note,
+        "no-level-fits": .check, "ivs-unread": .check, "ambiguous-ivs": .check, "cp-computed": .check, "hp-unread": .check, "name-low-confidence": .check,
+        "same-as-previous": .check, "split-by-timing": .check, "split-by-bars": .check, "absorbed-unread": .check, "mega-when-scanned": .check,
+        "sex-from-stats": .check, "sex-not-read": .check, "single-read": .check,
+    ]
+
+    public static func severity(of flag: String, solveStatus: String) -> Severity {
+        switch rules[split(flag).key] ?? .check {
+        case .check: return .check
+        case .note: return .note
+        case .noteWhenExact: return solveStatus == "exact" ? .note : .check
+        }
+    }
+
+    /// The flags of a row that ask for a look, and the ones that only record how it was read.
+    public static func checkFlags(_ flags: [String], solveStatus: String) -> [String] { flags.filter { severity(of: $0, solveStatus: solveStatus) == .check } }
+    public static func noteFlags(_ flags: [String], solveStatus: String) -> [String] { flags.filter { severity(of: $0, solveStatus: solveStatus) == .note } }
+
+    /// The sentence for a note: the same explanation without the request to check in the game.
+    public static func explainNote(_ flag: String) -> String {
+        explain(flag).split(separator: ".").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.hasPrefix("Check") && !$0.isEmpty }.joined(separator: ". ") + "."
+    }
+
     struct Entry { var prefix: String; var field: Field?; var text: (String) -> String }
 
     static let table: [Entry] = [
@@ -16,6 +50,9 @@ public enum FlagInfo {
         Entry(prefix: "cp-outlier-dropped", field: .cp) { _ in "One early reading of the CP disagreed with the rest and was set aside. Check the CP in the game." },
         Entry(prefix: "absorbed-fragment", field: nil) { _ in "A stray first reading of this Pokémon was folded into it. Nothing to do unless the values look wrong." },
         Entry(prefix: "absorbed-unread", field: nil) { _ in "A reading without a CP was treated as this same Pokémon. Check that you do not own a second identical one." },
+        Entry(prefix: "split-by-bars", field: nil) { _ in "Two different Pokémon with the same CP were read one after the other. Check both." },
+        Entry(prefix: "single-read", field: nil) { _ in "Only one frame showed this Pokémon, so a value may be misread. Check it in the game." },
+        Entry(prefix: "sex-not-read", field: .species) { _ in "Nidoran male and female look the same on screen and the sex was not read. Check it in the game." },
         Entry(prefix: "same-as-previous", field: nil) { _ in "An identical copy of the Pokémon before it, found by the swipe between them. Check that you own two." },
         Entry(prefix: "ivs-unread", field: .ivs) { _ in "The appraisal bars could not be read, so the IVs are unknown. Open the appraisal and check." },
         Entry(prefix: "ambiguous-ivs", field: .ivs) { _ in "More than one set of IVs fits what was read, so none is saved. Check the appraisal." },
