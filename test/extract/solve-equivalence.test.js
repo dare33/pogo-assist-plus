@@ -3,8 +3,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { solve } from '../../src/extract/solve.js';
-import { cpAt, hpAt, LEVELS } from '../../src/cpm.js';
+import { cpm, LEVELS } from '../../src/cpm.js';
 import { loadGamemaster } from '../../src/node/load.js';
+
+// The formulas as cpm.js had them before the speed-up, inline so a change to cpm.js is checked against them
+// (the multiplier table itself is read through cpm()).
+function cpAt(base, ivs, level) {
+  const m = cpm(level);
+  return Math.max(10, Math.floor(((base.atk + ivs.atk) * Math.sqrt(base.def + ivs.def) * Math.sqrt(base.hp + ivs.hp) * m * m) / 10));
+}
+function hpAt(base, ivs, level) { return Math.max(10, Math.floor((base.hp + ivs.hp) * cpm(level))); }
 
 function solveOracle({ species, cp, hp = null, ivs = null }) {
   if (!cp || !species?.length) return { status: 'none', solutions: [] };
@@ -94,4 +102,65 @@ test('solve gives the same result as the level-scanning original on random input
   assert.deepEqual(solve({ species: [{ speciesId: 'x', baseStats: all[0].baseStats }], cp: 500 }), solveOracle({ species: [{ speciesId: 'x', baseStats: all[0].baseStats }], cp: 500 }));
   assert.deepEqual(solve({ species: [], cp: 500 }), solveOracle({ species: [], cp: 500 }));
   assert.deepEqual(solve({ species: undefined, cp: 500 }), solveOracle({ species: undefined, cp: 500 }));
+});
+
+// The random test above picks a level uniformly, so CP 10 and HP 10 (the clamps) and flat stretches of CP almost never
+// occur in it. These cases are aimed at them.
+test('solve matches the original on the clamps, flat CP stretches, equal-stat forms and odd inputs', () => {
+  const gm = loadGamemaster();
+  const sp = (id) => { const p = gm.byId.get(id); return { speciesId: p.speciesId, baseStats: p.baseStats, speciesName: p.speciesName }; };
+  const same = (input, label) => assert.deepEqual(solve(structuredClone(input)), solveOracle(structuredClone(input)), `${label}: ${JSON.stringify(input)}`);
+  const ivSets = [{ atk: 0, def: 0, hp: 0 }, { atk: 15, def: 15, hp: 15 }, { atk: 3, def: 14, hp: 1 }, { atk: 3, def: 14, hp: 1 }];
+  const lowCp = ['shedinja', 'shuckle', 'magikarp', 'sunkern'].map(sp);
+  let flat = 0, clampCp = 0, clampHp = 0;
+  for (const s of lowCp) {
+    for (const iv of ivSets.slice(0, 3)) {
+      // the first twelve levels (where the clamps are) and every tenth after
+      for (const level of LEVELS.filter((l, i) => i < 12 || i % 10 === 0)) {
+        const cp = cpAt(s.baseStats, iv, level), hp = hpAt(s.baseStats, iv, level);
+        if (cp === 10) clampCp++;
+        if (hp === 10) clampHp++;
+        for (const h of [null, hp, hp + 1]) for (const b of [null, iv]) same({ species: [s], cp, hp: h, ivs: b }, 'low level');
+        if (level > 1 && cpAt(s.baseStats, iv, LEVELS[LEVELS.indexOf(level) - 1]) === cp) flat++;
+      }
+      same({ species: [s], cp: 10, hp: null, ivs: null }, 'cp 10');
+      same({ species: [s], cp: 10, hp: 10, ivs: iv }, 'cp 10, hp 10');
+    }
+  }
+  assert.ok(clampCp > 10 && clampHp > 10 && flat > 10, `the cases must reach the clamps and flat stretches (${clampCp}, ${clampHp}, ${flat})`);
+  // flat stretches with hp unknown, on ordinary species too, at the extreme IVs
+  const all = [...gm.byId.values()].filter((p) => p.baseStats);
+  const rand = (() => { let x = 7; return () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; }; })();
+  for (let n = 0; n < 80; n++) {
+    const p = all[Math.floor(rand() * all.length)];
+    const s = sp(p.speciesId);
+    for (const iv of [ivSets[0], ivSets[1]]) {
+      const level = LEVELS[Math.floor(rand() * LEVELS.length)];
+      const cp = cpAt(s.baseStats, iv, level);
+      same({ species: [s], cp, hp: null, ivs: null }, 'hp unknown');
+      same({ species: [s], cp, hp: null, ivs: iv }, 'hp unknown, bars');
+    }
+  }
+  // forms with identical stats, in both orders
+  const byStats = new Map();
+  for (const p of all) { const k = JSON.stringify(p.baseStats); if (!byStats.has(k)) byStats.set(k, []); byStats.get(k).push(p.speciesId); }
+  let pairs = 0;
+  for (const ids of byStats.values()) {
+    if (ids.length < 2 || pairs >= 25) continue;
+    pairs++;
+    const [a, b] = [sp(ids[0]), sp(ids[1])];
+    const level = LEVELS[Math.floor(rand() * LEVELS.length)];
+    const cp = cpAt(a.baseStats, ivSets[3], level), hp = hpAt(a.baseStats, ivSets[3], level);
+    for (const order of [[a, b], [b, a], [a, b, a]]) for (const h of [null, hp]) same({ species: order, cp, hp: h, ivs: ivSets[3] }, 'equal-stat forms');
+  }
+  assert.ok(pairs >= 25);
+  // odd inputs
+  const z = sp('zapdos');
+  for (const cp of [0, 9, 10, 10.5, '500', NaN, undefined, 1e9]) {
+    for (const hp of [null, 0, '16', 129]) {
+      for (const ivs of [null, ivSets[1]]) same({ species: [z], cp, hp, ivs }, 'odd input');
+      same({ species: [], cp, hp, ivs: null }, 'no species');
+    }
+  }
+  same({ species: [z], cp: 1977, hp: 129, ivs: { atk: 15, def: 12, hp: 10 } }, 'zapdos');
 });
