@@ -1,0 +1,174 @@
+{"t":13040.335704875,"k":"d"}
+{"cp":782,"nameText":"Rhyhorn","cpText":"CP782","ivs":{"def":7,"hp":4,"atk":11},"hp":{"current":109,"max":109},"t":13040.135686875,"name":"Rhyhorn","hpText":"109 \/ 109 HP","ivConfidence":0.7408132087102608,"speciesIds":["rhyhorn"],"k":"r","nameWeak":false,"ms":234.428083,"flags":[]}
+{"t":13040.735740875,"k":"d"}
+{"cp":782,"nameText":"Rhyhorn","ivs":{"def":7,"hp":4,"atk":11},"cpText":"CP782","hp":{"current":109,"max":109},"t":13040.535722875,"name":"Rhyhorn","hpText":"109 \/ 109 HP","ivConfidence":0.7408132087102608,"speciesIds":["rhyhorn"],"k":"r","nameWeak":false,"ms":314.748625,"flags":[]}
+{"k":"d","t":13041.135776875}
+{"cp":782,"nameText":"Rhyhorn","hp":{"current":109,"max":109},"ivs":{"def":7,"atk":11,"hp":4},"cpText":"CP782","t":13040.935758875,"name":"Rhyhorn","hpText":"109 \/ 109 HP","ivConfidence":0.7408132087102608,"speciesIds":["rhyhorn"],"k":"r","nameWeak":false,"ms":252.318833,"flags":[]}
+{"t":13041.535812875,"k":"d"}
+{"cp":779,"nameText":"Darumaka","cpText":"CP779","hp":{"current":108,"max":108},"ivs":{"def":12,"hp":9,"atk":11},"t":13041.335794875,"name":"Darumaka","hpText":"108 \/ 108 HP","ivConfidence":0.7408132087102608,"speciesIds":["darumaka"],"k":"r","nameWeak":false,"ms":288.698167,"flags":[]}
+{"k":"d","t":13041.935848875}
+{"nameText":"Darumaka","cpText":"CP77.9","ivs":{"def":12,"atk":11,"hp":9},"hp":{"current":108,"max":108},"t":13041.735830875,"name":"Darumaka","hpText":"108 \/ 108 HP","ivConfidence":0.7408132087102608,"speciesIds":["darumaka"],"k":"r","nameWeak":false,"ms":307.93475,"flags":["cp-unread"]}
+{"k":"d","t":13042.335884875}
+{"speciesIds":["darumaka"],"flags":[],"ivs":{"atk":11,"def":12,"hp":9},"hpText":"108 \/ 108 HP","ms":253.688666,"nameWeak":false,"cp":779,"name":"Darumaka","nameText":"Darumaka","ivConfidence":0.7408132087102608,"k":"r","cpText":"CP779","t":13042.135866875,"hp":{"max":108,"current":108}}
+{"t":13042.735920875,"k":"d"}
+{"speciesIds":["corsola"],"flags":[],"ivs":{"def":4,"atk":10,"hp":4},"hpText":"93 \/ 93 HP","ms":261.240584,"nameText":"Corsola","cp":778,"name":"Corsola","hp":{"max":93,"current":93},"ivConfidence":0.8312797321776841,"k":"r","cpText":"CP778","t":13042.535902875,"nameWeak":false}
+{"t":13043.135956875,"k":"d"}
+{"speciesIds":["corsola"],"flags":[],"ivs":{"hp":4,"atk":10,"def":4},"hpText":"93 \/ 93 HP","ms":301.823625,"hp":{"max":93,"current":93},"cp":778,"name":"Corsola","nameText":"Corsola","k":"r","ivConfidence":0.8312797321776841,"cpText":"CP778","t":13042.935938875,"nameWeak":false}
+{"k":"d","t":13043.535992875}
+{"speciesIds":["corsola"],"flags":[],"ivs":{"def":4,"hp":4,"atk":10},"hpText":"93 \/ 93 HP","ms":274.966291,"cp":778,"nameText":"Corsola","name":"Corsola","nameWeak":false,"k":"r","hp":{"current":93,"max":93},"cpText":"CP778","t":13043.335974875,"ivConfidence":0.8312797321776841}
+{"t":13043.936028875,"k":"d"}
+{"speciesIds":["maschiff"],"flags":[],"ivs":{"hp":14,"atk":13,"def":12},"hpText":"100 \/ 100 HP","ms":280.820042,"nameWeak":false,"cp":777,"name":"Maschiff","nameText":"Maschiff","ivConfidence":0.9223638778220469,"k":"r","cpText":"CP777","t":13043.736010875,"hp":{"current":100,"max":100}}
+{"t":13044.336064875,"k":"d"}
+{"speciesIds":["maschiff"],"flags":[],"ivs":{"def":12,"hp":14,"atk":13},"hpText":"100 \/ 100 HP","ms":304.46225,"nameText":"Maschiff","cp":777,"name":"Maschiff","hp":{"current":100,"max":100},"ivConfidence":0.9223638778220469,"k":"r","cpText":"CP777","t":13044.136046875,"nameWeak":false}
+{"k":"d","t":13044.736100875}
+{"speciesIds":["maschiff"],"flags":[],"ivs":{"def":12,"atk":13,"hp":14},"hpText":"100 \/ 100 HP","ms":260.355333,"hp":{"current":100,"max":100},"cp":777,"name":"Maschiff","nameText":"Maschiff","k":"r","ivConfidence":0.9223638778220469,"cpText":"CP777","t":13044.536082875,"nameWeak":false}
+{"k":"d","t":13045.136136875}
+{"speciesIds":["chansey"],"flags":[],"ivs":{"atk":15,"hp":11,"def":12},"hpText":"312 \/ 312 HP","ms":290.458625,"cp":777,"nameText":"Chansey","name":"Chansey","nameWeak":false,"k":"r","hp":{"current":312,"max":312},"cpText":"CP777","t":13044.936118875,"ivConfidence":0.7250996015936266}
+{"t":13045.536172875,"k":"d"}
+{"speciesIds":["chansey"],"flags":[],"ivs":{"hp":11,"atk":15,"def":12},"hpText":"312 \/ 312 HP","ms":286.380791,"nameWeak":false,"cp":777,"name":"Chansey","nameText":"Chansey","ivConfidence":0.7250996015936266,"k":"r","cpText":"CP777","t":13045.336154875,"hp":{"max":312,"current":312}}
+{"t":13045.936208875,"k":"d"}
+{"speciesIds":["chansey"],"flags":[],"ivs":{"hp":11,"atk":15,"def":12},"hpText":"312 \/ 312 HP","ms":257.170333,"nameText":"Chansey","cp":777,"name":"Chansey","hp":{"max":312,"current":312},"ivConfidence":0.7250996015936266,"k":"r","cpText":"CP777","t":13045.736190875,"nameWeak":false}
+{"t":13046.336244875,"k":"d"}
+{"speciesIds":["magmar"],"flags":[],"ivs":{"def":7,"atk":11,"hp":11},"hpText":"80 \/ 80 HP","ms":254.63075,"hp":{"max":80,"current":80},"cp":777,"name":"Magmar","nameText":"Magmar","k":"r","ivConfidence":0.7244460215816879,"cpText":"CP777","t":13046.136226875,"nameWeak":false}
+{"k":"d","t":13046.736280875}
+{"speciesIds":["magmar"],"flags":[],"ivs":{"atk":11,"def":7,"hp":11},"hpText":"80 \/ 80 HP","ms":294.276542,"cp":777,"nameText":"Magmar","name":"Magmar","nameWeak":false,"k":"r","hp":{"max":80,"current":80},"cpText":"CP777","t":13046.536262875,"ivConfidence":0.7250996015936266}
+{"k":"d","t":13047.136316875}
+{"speciesIds":["magmar"],"flags":[],"ivs":{"hp":11,"def":7,"atk":11},"hpText":"80 \/ 80 HP","ms":293.654333,"nameWeak":false,"cp":777,"name":"Magmar","nameText":"Magmar","ivConfidence":0.7250996015936266,"k":"r","cpText":"CP777","t":13046.936298875,"hp":{"max":80,"current":80}}
+{"t":13047.536352875,"k":"d"}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"def":12,"atk":13,"hp":15},"hpText":"85 \/ 85 HP","ms":239.733416,"nameText":"Honedge","cp":776,"name":"Honedge","hp":{"max":85,"current":85},"ivConfidence":0.9467729083665297,"k":"r","cpText":"CP776","t":13047.336334875,"nameWeak":false}
+{"k":"d","t":13047.936388875}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"def":12,"atk":13,"hp":15},"hpText":"85 \/ 85 HP","ms":249.31925,"hp":{"max":85,"current":85},"cp":776,"name":"Honedge","nameText":"Honedge","k":"r","ivConfidence":0.9467729083665297,"cpText":"CP776","t":13047.736370875,"nameWeak":false}
+{"k":"d","t":13048.336424875}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"hp":15,"atk":13,"def":12},"hpText":"85 \/ 85 HP","ms":273.212625,"cp":776,"nameText":"Honedge","name":"Honedge","nameWeak":false,"k":"r","hp":{"current":85,"max":85},"cpText":"CP776","t":13048.136406875,"ivConfidence":0.9467729083665297}
+{"t":13048.736460875,"k":"d"}
+{"speciesIds":["chansey"],"flags":[],"ivs":{"atk":11,"hp":8,"def":15},"hpText":"317 \/ 317 HP","ms":262.869666,"nameWeak":false,"cp":775,"name":"Chansey","nameText":"Chansey","ivConfidence":0.7408132087102608,"k":"r","cpText":"CP775","t":13048.536442875,"hp":{"max":317,"current":317}}
+{"k":"d","t":13049.136496875}
+{"speciesIds":["chansey"],"flags":[],"ivs":{"hp":8,"atk":11,"def":15},"hpText":"317 \/ 317 HP","ms":315.253833,"nameText":"Chansey","cp":775,"name":"Chansey","hp":{"max":317,"current":317},"ivConfidence":0.7408132087102608,"k":"r","cpText":"CP775","t":13048.936478875,"nameWeak":false}
+{"t":13049.536532875,"k":"d"}
+{"speciesIds":["chansey"],"flags":[],"ivs":{"atk":11,"def":15,"hp":8},"hpText":"317 \/ 317 HP","ms":280.875833,"hp":{"max":317,"current":317},"cp":775,"name":"Chansey","nameText":"Chansey","k":"r","ivConfidence":0.7408132087102608,"cpText":"CP775","t":13049.336514875,"nameWeak":false}
+{"k":"d","t":13049.936568875}
+{"speciesIds":["maschiff"],"flags":[],"ivs":{"def":13,"atk":13,"hp":11},"hpText":"99 \/ 99 HP","ms":262.791125,"nameText":"Maschiff","cp":773,"name":"Maschiff","nameWeak":false,"k":"r","hp":{"current":99,"max":99},"cpText":"CP773","t":13049.736550875,"ivConfidence":0.7250996015936266}
+{"k":"d","t":13050.336604875}
+{"speciesIds":["maschiff"],"flags":[],"ivs":{"def":13,"hp":11,"atk":13},"hpText":"99 \/ 99 HP","ms":295.551167,"nameWeak":false,"cp":773,"name":"Maschiff","nameText":"Maschiff","ivConfidence":0.7250996015936266,"k":"r","cpText":"CP773","t":13050.136586875,"hp":{"max":99,"current":99}}
+{"k":"d","t":13050.736640875}
+{"speciesIds":["maschiff"],"flags":[],"ivs":{"def":13,"hp":11,"atk":13},"hpText":"99 \/ 99 HP","ms":270.519291,"nameText":"Maschiff","cp":773,"name":"Maschiff","hp":{"current":99,"max":99},"ivConfidence":0.7250996015936266,"k":"r","cpText":"CP773","t":13050.536622875,"nameWeak":false}
+{"k":"d","t":13051.136676875}
+{"speciesIds":["grookey"],"flags":[],"ivs":{"hp":10,"atk":3,"def":6},"hpText":"105 \/ 105 HP","ms":299.001,"hp":{"current":105,"max":105},"cp":772,"name":"Grookey","nameText":"Grookey","k":"r","ivConfidence":0.8182181278723526,"cpText":"CP772","t":13050.936658791,"nameWeak":false}
+{"k":"d","t":13051.536712875}
+{"speciesIds":["grookey"],"flags":[],"ivs":{"hp":10,"atk":3,"def":6},"hpText":"105 \/ 105 HP","ms":297.914875,"cp":772,"nameText":"Grookey","name":"Grookey","nameWeak":false,"k":"r","hp":{"current":105,"max":105},"cpText":"CP772","t":13051.336694875,"ivConfidence":0.8182181278723526}
+{"t":13051.936781458,"k":"d"}
+{"speciesIds":["grookey"],"flags":[],"ivs":{"def":6,"atk":3,"hp":10},"hpText":"105 \/ 105 HP","ms":292.35575,"nameWeak":false,"cp":772,"name":"Grookey","nameText":"Grookey","ivConfidence":0.8182181278723526,"k":"r","cpText":"CP772","t":13051.736763458,"hp":{"current":105,"max":105}}
+{"t":13052.336817458,"k":"d"}
+{"speciesIds":["quaxly"],"flags":[],"ivs":{"hp":1,"atk":12,"def":12},"hpText":"101 \/ 101 HP","ms":269.095167,"nameText":"Quaxly","cp":772,"name":"Quaxly","nameWeak":false,"k":"r","hp":{"max":101,"current":101},"cpText":"CP772","t":13052.136799458,"ivConfidence":0.9467729083665297}
+{"k":"d","t":13052.736853375}
+{"speciesIds":["quaxly"],"flags":[],"ivs":{"def":12,"hp":0,"atk":14},"hpText":"101 \/ 101 HP","ms":287.561333,"hp":{"max":101,"current":101},"cp":772,"name":"Quaxly","nameText":"Quaxly","k":"r","ivConfidence":0.884753433474291,"cpText":"CP772","t":13052.536835458,"nameWeak":false}
+{"k":"d","t":13053.136889458}
+{"speciesIds":["quaxly"],"flags":[],"ivs":{"atk":14,"def":12,"hp":0},"hpText":"101 \/ 101 HP","ms":316.902208,"nameText":"Quaxly","cp":72,"name":"Quaxly","hp":{"current":101,"max":101},"ivConfidence":0.884753433474291,"k":"r","cpText":"CP\/72","t":13052.936871458,"nameWeak":false}
+{"k":"d","t":13053.536925458}
+{"speciesIds":["eevee"],"flags":[],"ivs":{"def":5,"atk":5,"hp":9},"hpText":"115 \/ 115 HP","ms":251.733083,"nameWeak":false,"cp":771,"name":"Eevee","nameText":"Eevee","ivConfidence":0.9135192563081027,"k":"r","cpText":"CP771","t":13053.336907458,"hp":{"current":115,"max":115}}
+{"k":"d","t":13053.936961458}
+{"speciesIds":["eevee"],"flags":[],"ivs":{"def":5,"hp":14,"atk":4},"hpText":"115 \/ 115 HP","ms":288.267792,"cp":771,"nameText":"Eevee","name":"Eevee","nameWeak":false,"k":"r","hp":{"current":115,"max":115},"cpText":"CP771","t":13053.736943458,"ivConfidence":0.8998278651823526}
+{"t":13054.336997458,"k":"d"}
+{"speciesIds":["eevee"],"flags":[],"ivs":{"atk":4,"def":5,"hp":14},"hpText":"115 \/ 115 HP","ms":281.079833,"hp":{"max":115,"current":115},"cp":771,"name":"Eevee","nameText":"Eevee","k":"r","ivConfidence":0.8998278651823526,"cpText":"CP771","t":13054.136979458,"nameWeak":false}
+{"k":"d","t":13054.737033458}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"hp":5,"atk":13,"def":14},"hpText":"87 \/ 87 HP","ms":245.486625,"nameText":"Charmander","cp":771,"name":"Charmander","hp":{"current":87,"max":87},"ivConfidence":0.9044023904382499,"k":"r","cpText":"CP771","t":13054.537015458,"nameWeak":false}
+{"t":13055.137069458,"k":"d"}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"def":14,"hp":3,"atk":15},"hpText":"87 \/ 87 HP","ms":294.224667,"nameWeak":false,"cp":771,"name":"Charmander","nameText":"Charmander","ivConfidence":0.8264984506418767,"k":"r","cpText":"CP771","t":13054.937051458,"hp":{"max":87,"current":87}}
+{"k":"d","t":13055.537105458}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"atk":15,"hp":3,"def":14},"hpText":"87 \/ 87 HP","ms":249.902959,"cp":771,"nameText":"Charmander","name":"Charmander","nameWeak":false,"k":"r","hp":{"max":87,"current":87},"cpText":"CP771","t":13055.337087458,"ivConfidence":0.8264984506418767}
+{"k":"d","t":13055.937141458}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"hp":10,"def":5,"atk":15},"hpText":"89 \/ 89 HP","ms":256.665917,"hp":{"max":89,"current":89},"cp":68,"name":"Fidough","nameText":"Fidough","k":"r","ivConfidence":0.8182181278723526,"cpText":"CP\/68","t":13055.737123458,"nameWeak":false}
+{"t":13056.337177458,"k":"d"}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"hp":10,"atk":15,"def":4},"hpText":"89 \/ 89 HP","ms":293.786125,"nameText":"Fidough","cp":68,"name":"Fidough","hp":{"current":89,"max":89},"ivConfidence":0.8182181278723526,"k":"r","cpText":"CP\/68","t":13056.137159458,"nameWeak":false}
+{"k":"d","t":13056.737213458}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"atk":15,"def":4,"hp":10},"hpText":"89 \/ 89 HP","ms":285.184458,"nameWeak":false,"cp":68,"name":"Fidough","nameText":"Fidough","ivConfidence":0.8182181278723526,"k":"r","cpText":"CP\/68","t":13056.537195458,"hp":{"max":89,"current":89}}
+{"k":"d","t":13057.137249458}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"def":11,"atk":15,"hp":12},"hpText":"89 \/ 89 HP","ms":259.201875,"cp":68,"nameText":"Fidough","name":"Fidough","nameWeak":false,"k":"r","hp":{"max":89,"current":89},"cpText":"CP\/68","t":13056.937231458,"ivConfidence":0.7250730411686597}
+{"k":"d","t":13057.537285458}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"hp":12,"atk":15,"def":11},"hpText":"89 \/ 89 HP","ms":331.630541,"hp":{"max":89,"current":89},"cp":68,"name":"Fidough","nameText":"Fidough","k":"r","ivConfidence":0.7250730411686597,"cpText":"CP\/68","t":13057.337267458,"nameWeak":false}
+{"k":"d","t":13057.937321458}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"def":11,"atk":15,"hp":12},"hpText":"89 \/ 89 HP","ms":253.73425,"nameText":"Fidough","cp":68,"name":"Fidough","hp":{"current":89,"max":89},"ivConfidence":0.7250730411686597,"k":"r","cpText":"CP\/68","t":13057.737303458,"nameWeak":false}
+{"t":13058.337357458,"k":"d"}
+{"speciesIds":["liepard"],"flags":[],"ivs":{"atk":10,"def":15,"hp":13},"hpText":"90 \/ 90 HP","ms":283.099375,"nameWeak":false,"cp":767,"name":"Liepard","nameText":"Liepard","ivConfidence":0.8312797321776841,"k":"r","cpText":"CP767","t":13058.137339458,"hp":{"max":90,"current":90}}
+{"k":"d","t":13058.770729791}
+{"speciesIds":["liepard"],"flags":[],"ivs":{"hp":13,"atk":10,"def":15},"hpText":"90 \/ 90 HP","ms":296.928917,"cp":767,"nameText":"Liepard","name":"Liepard","nameWeak":false,"k":"r","hp":{"current":90,"max":90},"cpText":"CP767","t":13058.554043625,"ivConfidence":0.8312797321776841}
+{"k":"d","t":13059.170765791}
+{"speciesIds":["liepard"],"flags":[],"ivs":{"atk":10,"def":15,"hp":13},"hpText":"90 \/ 90 HP","ms":285.277459,"hp":{"max":90,"current":90},"cp":767,"name":"Liepard","nameText":"Liepard","k":"r","ivConfidence":0.8312797321776841,"cpText":"CP767","t":13058.970747791,"nameWeak":false}
+{"k":"d","t":13059.570801791}
+{"speciesIds":["sprigatito"],"flags":[],"ivs":{"atk":4,"hp":13,"def":8},"hpText":"97 \/ 97 HP","ms":260.452917,"nameText":"Sprigatito","cp":66,"name":"Sprigatito","hp":{"max":97,"current":97},"ivConfidence":0.8998278651823526,"k":"r","cpText":"CP\/66","t":13059.370783791,"nameWeak":false}
+{"k":"d","t":13059.970837708}
+{"speciesIds":["sprigatito"],"flags":[],"ivs":{"hp":13,"atk":4,"def":8},"hpText":"97 \/ 97 HP","ms":316.452083,"nameWeak":false,"cp":66,"name":"Sprigatito","nameText":"Sprigatito","ivConfidence":0.8998278651823526,"k":"r","cpText":"CP\/66","t":13059.770819791,"hp":{"max":97,"current":97}}
+{"k":"d","t":13060.370873791}
+{"speciesIds":["sprigatito"],"flags":[],"ivs":{"def":8,"atk":4,"hp":13},"hpText":"97 \/ 97 HP","ms":287.276917,"nameText":"Sprigatito","cp":66,"name":"Sprigatito","nameWeak":false,"k":"r","hp":{"current":97,"max":97},"cpText":"CP\/66","t":13060.170855791,"ivConfidence":0.8998278651823526}
+{"t":13060.770909791,"k":"d"}
+{"speciesIds":["heatmor"],"flags":[],"ivs":{"hp":4,"atk":7,"def":14},"hpText":"92 \/ 92 HP","ms":276.6615,"hp":{"current":92,"max":92},"cp":64,"name":"Heatmor","nameText":"Heatmor","k":"r","ivConfidence":0.8676616286178049,"cpText":"CP\/64","t":13060.570891791,"nameWeak":false}
+{"t":13061.204282041,"k":"d"}
+{"speciesIds":["heatmor"],"flags":[],"ivs":{"atk":7,"def":14,"hp":2},"hpText":"92 \/ 92 HP","ms":297.181,"nameText":"Heatmor","cp":764,"name":"Heatmor","hp":{"max":92,"current":92},"ivConfidence":0.9490305444887106,"k":"r","cpText":"CP764","t":13060.987595958,"nameWeak":false}
+{"t":13061.637654458,"k":"d"}
+{"speciesIds":["heatmor"],"flags":[],"ivs":{"hp":2,"atk":7,"def":14},"hpText":"92 \/ 92 HP","ms":262.669542,"nameWeak":false,"cp":764,"name":"Heatmor","nameText":"Heatmor","ivConfidence":0.9490305444887106,"k":"r","cpText":"CP764","t":13061.420968291,"hp":{"max":92,"current":92}}
+{"t":13062.037690458,"k":"d"}
+{"speciesIds":["kecleon"],"flags":[],"ivs":{"def":3,"atk":13,"hp":6},"hpText":"80 \/ 80 HP","ms":237.315833,"cp":764,"nameText":"Kecleon","name":"Kecleon","nameWeak":false,"k":"r","hp":{"max":80,"current":80},"cpText":"CP764","t":13061.837672375,"ivConfidence":0.7986677628111893}
+{"k":"d","t":13062.437726458}
+{"speciesIds":["kecleon"],"flags":[],"ivs":{"def":3,"atk":13,"hp":6},"hpText":"80 \/ 80 HP","ms":292.19125,"hp":{"current":80,"max":80},"cp":764,"name":"Kecleon","nameText":"Kecleon","k":"r","ivConfidence":0.7986677628111893,"cpText":"CP764","t":13062.237708458,"nameWeak":false}
+{"k":"d","t":13062.837762458}
+{"speciesIds":["kecleon"],"flags":[],"ivs":{"atk":13,"def":3,"hp":6},"hpText":"80 \/ 80 HP","ms":272.489041,"nameText":"Kecleon","cp":764,"name":"Kecleon","hp":{"max":80,"current":80},"ivConfidence":0.7986677628111893,"k":"r","cpText":"CP764","t":13062.637744458,"nameWeak":false}
+{"k":"d","t":13063.237798458}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"def":14,"atk":15,"hp":8},"hpText":"86 \/ 86 HP","ms":233.096416,"nameWeak":false,"cp":64,"name":"Fidough","nameText":"Fidough","ivConfidence":0.929030544488711,"k":"r","cpText":"CP\/64","t":13063.037780458,"hp":{"max":86,"current":86}}
+{"k":"d","t":13063.637834458}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"def":14,"hp":8,"atk":15},"hpText":"86 \/ 86 HP","ms":268.977667,"nameText":"Fidough","cp":764,"name":"Fidough","nameWeak":false,"k":"r","hp":{"current":86,"max":86},"cpText":"CP764","t":13063.437816458,"ivConfidence":0.929030544488711}
+{"k":"d","t":13064.037870458}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"atk":15,"def":14,"hp":8},"hpText":"86 \/ 86 HP","ms":253.342875,"hp":{"current":86,"max":86},"cp":764,"name":"Fidough","nameText":"Fidough","k":"r","ivConfidence":0.929030544488711,"cpText":"CP764","t":13063.837852458,"nameWeak":false}
+{"k":"d","t":13064.437906458}
+{"speciesIds":["squawkabilly"],"flags":[],"ivs":{"hp":3,"atk":13,"def":3},"hpText":"101 \/ 101 HP","ms":266.589292,"nameText":"Squawkabilly","cp":763,"name":"Squawkabilly","hp":{"current":101,"max":101},"ivConfidence":0.5893357785788069,"k":"r","cpText":"CP763","t":13064.237888458,"nameWeak":false}
+{"t":13064.837942458,"k":"d"}
+{"speciesIds":["squawkabilly"],"flags":[],"ivs":{"def":1,"atk":13,"hp":3},"hpText":"101 \/ 101 HP","ms":315.178791,"nameWeak":false,"cp":763,"name":"Squawkabilly","nameText":"Squawkabilly","ivConfidence":0.8264984506418767,"k":"r","cpText":"CP763","t":13064.637924458,"hp":{"max":101,"current":101}}
+{"t":13065.237978458,"k":"d"}
+{"speciesIds":["squawkabilly"],"flags":[],"ivs":{"def":1,"atk":13,"hp":3},"hpText":"101 \/ 101 HP","ms":272.879334,"nameText":"Squawkabilly","cp":763,"name":"Squawkabilly","nameWeak":false,"k":"r","hp":{"current":101,"max":101},"cpText":"CP763","t":13065.037960458,"ivConfidence":0.8264984506418767}
+{"k":"d","t":13065.638014458}
+{"speciesIds":["doduo"],"flags":[],"ivs":{"atk":15,"hp":5,"def":1},"hpText":"77 \/ 77 HP","ms":244.648,"hp":{"max":77,"current":77},"cp":761,"name":"Doduo","nameText":"Doduo","k":"r","ivConfidence":0.947350535405711,"cpText":"CP761","t":13065.437996458,"nameWeak":false}
+{"k":"d","t":13066.038050458}
+{"speciesIds":["doduo"],"flags":[],"ivs":{"hp":5,"atk":15,"def":1},"hpText":"77 \/ 77 HP","ms":276.488917,"nameText":"Doduo","cp":761,"name":"Doduo","hp":{"current":77,"max":77},"ivConfidence":0.947350535405711,"k":"r","cpText":"CP761","t":13065.838032458,"nameWeak":false}
+{"k":"d","t":13066.438086458}
+{"speciesIds":["doduo"],"flags":[],"ivs":{"atk":15,"def":1,"hp":5},"hpText":"77 \/ 77 HP","ms":249.950583,"nameWeak":false,"cp":761,"name":"Doduo","nameText":"Doduo","ivConfidence":0.947350535405711,"k":"r","cpText":"CP761","t":13066.238068458,"hp":{"current":77,"max":77}}
+{"k":"d","t":13066.838122458}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"def":11,"hp":13,"atk":11},"hpText":"84 \/ 84 HP","ms":284.4455,"nameText":"Honedge","cp":60,"name":"Honedge","nameWeak":false,"k":"r","hp":{"max":84,"current":84},"cpText":"CP\/60","t":13066.638104458,"ivConfidence":0.7408132087102608}
+{"k":"d","t":13067.238158458}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"def":12,"atk":11,"hp":13},"hpText":"84 \/ 84 HP","ms":302.569292,"hp":{"max":84,"current":84},"cp":60,"name":"Honedge","nameText":"Honedge","k":"r","ivConfidence":0.7408132087102608,"cpText":"CP\/60","t":13067.038140458,"nameWeak":false}
+{"k":"d","t":13067.638194458}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"hp":13,"atk":11,"def":12},"hpText":"84 \/ 84 HP","ms":273.649125,"nameText":"Honedge","cp":760,"name":"Honedge","hp":{"max":84,"current":84},"ivConfidence":0.7408132087102608,"k":"r","cpText":"CP760","t":13067.438176458,"nameWeak":false}
+{"t":13068.038230458,"k":"d"}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"def":14,"atk":10,"hp":9},"hpText":"91 \/ 91 HP","ms":269.086542,"nameWeak":false,"cp":60,"name":"Charmander","nameText":"Charmander","ivConfidence":0.7932390059444181,"k":"r","cpText":"CP\/60","t":13067.838212458,"hp":{"current":91,"max":91}}
+{"t":13068.438266458,"k":"d"}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"def":14,"atk":10,"hp":9},"hpText":"91 \/ 91 HP","ms":286.901417,"nameText":"Charmander","cp":60,"name":"Charmander","nameWeak":false,"k":"r","hp":{"current":91,"max":91},"cpText":"CP\/60","t":13068.238248458,"ivConfidence":0.7932390059444181}
+{"k":"d","t":13068.838302458}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"hp":9,"atk":10,"def":14},"hpText":"91 \/ 91 HP","ms":270.374875,"hp":{"current":91,"max":91},"cp":60,"name":"Charmander","nameText":"Charmander","k":"r","ivConfidence":0.7932390059444181,"cpText":"CP\/60","t":13068.638284458,"nameWeak":false}
+{"k":"d","t":13069.238338458}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"atk":14,"def":11,"hp":5},"hpText":"88 \/ 88 HP","ms":283.491583,"nameText":"Charmander","cp":760,"name":"Charmander","hp":{"current":88,"max":88},"ivConfidence":0.722098273572378,"k":"r","cpText":"CP760","t":13069.038320458,"nameWeak":false}
+{"k":"d","t":13069.638374458}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"atk":14,"def":11,"hp":5},"hpText":"88 \/ 88 HP","ms":298.962292,"nameWeak":false,"cp":760,"name":"Charmander","nameText":"Charmander","ivConfidence":0.722098273572378,"k":"r","cpText":"CP760","t":13069.438356458,"hp":{"max":88,"current":88}}
+{"k":"d","t":13070.038443}
+{"speciesIds":["charmander"],"flags":[],"ivs":{"def":11,"atk":14,"hp":5},"hpText":"88 \/ 88 HP","ms":268.515875,"cp":60,"nameText":"Charmander","name":"Charmander","nameWeak":false,"k":"r","hp":{"max":88,"current":88},"cpText":"CP\/60","t":13069.838425,"ivConfidence":0.722098273572378}
+{"k":"d","t":13070.438479}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"hp":12,"atk":11,"def":8},"hpText":"90 \/ 90 HP","ms":274.010708,"hp":{"max":90,"current":90},"cp":759,"name":"Fidough","nameText":"Fidough","k":"r","ivConfidence":0.7408132087102608,"cpText":"CP759","t":13070.238461,"nameWeak":false}
+{"t":13070.838515,"k":"d"}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"atk":11,"def":8,"hp":12},"hpText":"90 \/ 90 HP","ms":301.27625,"nameText":"Fidough","cp":759,"name":"Fidough","hp":{"max":90,"current":90},"ivConfidence":0.7408132087102608,"k":"r","cpText":"CP759","t":13070.638497,"nameWeak":false}
+{"k":"d","t":13071.238551}
+{"speciesIds":["fidough"],"flags":[],"ivs":{"hp":12,"atk":11,"def":8},"hpText":"90 \/ 90 HP","ms":275.14225,"nameWeak":false,"cp":759,"name":"Fidough","nameText":"Fidough","ivConfidence":0.7408132087102608,"k":"r","cpText":"CP759","t":13071.038533,"hp":{"current":90,"max":90}}
+{"t":13071.638587,"k":"d"}
+{"speciesIds":["fearow"],"flags":[],"ivs":{"atk":3,"def":1,"hp":12},"hpText":"90 \/ 90 HP","ms":259.055292,"nameText":"Fearow","cp":758,"name":"Fearow","nameWeak":false,"k":"r","hp":{"max":90,"current":90},"cpText":"CP758","t":13071.438569,"ivConfidence":0.8571339681117447}
+{"k":"d","t":13072.038623}
+{"speciesIds":["fearow"],"flags":[],"ivs":{"def":1,"hp":12,"atk":3},"hpText":"90 \/ 90 HP","ms":290.461042,"hp":{"max":90,"current":90},"cp":758,"name":"Fearow","nameText":"Fearow","k":"r","ivConfidence":0.8571339681117447,"cpText":"758","t":13071.838605,"nameWeak":false}
+{"k":"d","t":13072.438659}
+{"speciesIds":["fearow"],"flags":[],"ivs":{"hp":12,"def":1,"atk":3},"hpText":"90 \/ 90 HP","ms":224.2745,"nameText":"Fearow","cp":758,"name":"Fearow","hp":{"max":90,"current":90},"ivConfidence":0.8571339681117447,"k":"r","cpText":"CP758","t":13072.238641,"nameWeak":false}
+{"t":13072.838695,"k":"d"}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"def":10,"hp":11,"atk":12},"hpText":"83 \/ 83 HP","ms":231.103417,"nameWeak":false,"cp":755,"name":"Honedge","nameText":"Honedge","ivConfidence":0.7250996015936266,"k":"r","cpText":"CP755","t":13072.638677,"hp":{"current":83,"max":83}}
+{"k":"d","t":13073.238730916}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"hp":11,"atk":12,"def":10},"hpText":"83 \/ 83 HP","ms":327.211042,"cp":755,"nameText":"Honedge","name":"Honedge","nameWeak":false,"k":"r","hp":{"current":83,"max":83},"cpText":"CP755","t":13073.038713,"ivConfidence":0.7250996015936266}
+{"k":"d","t":13073.638767}
+{"speciesIds":["honedge"],"flags":[],"ivs":{"atk":12,"hp":11,"def":10},"hpText":"83 \/ 83 HP","ms":271.178833,"hp":{"max":83,"current":83},"cp":755,"name":"Honedge","nameText":"Honedge","k":"r","ivConfidence":0.7250996015936266,"cpText":"CP755","t":13073.438749,"nameWeak":false}
+{"k":"d","t":13074.038803}
+{"speciesIds":["clodsire"],"flags":[],"ivs":{"atk":9,"def":1,"hp":6},"hpText":"146 \/ 146 HP","ms":246.689167,"nameText":"Clodsire","cp":755,"name":"Clodsire","hp":{"max":146,"current":146},"ivConfidence":0.9200531208499338,"k":"r","cpText":"CP755","t":13073.838785,"nameWeak":false}
+{"k":"d","t":13074.438839}
+{"speciesIds":["clodsire"],"flags":[],"ivs":{"def":1,"hp":6,"atk":9},"hpText":"146 \/ 146 HP","ms":244.377958,"nameWeak":false,"cp":755,"name":"Clodsire","nameText":"Clodsire","ivConfidence":0.9200531208499338,"k":"r","cpText":"CP755","t":13074.238821,"hp":{"max":146,"current":146}}
+{"k":"d","t":13074.838875}
+{"speciesIds":["clodsire"],"flags":[],"ivs":{"hp":6,"def":1,"atk":9},"hpText":"146 \/ 146 HP","ms":271.461667,"cp":755,"nameText":"Clodsire","name":"Clodsire","nameWeak":false,"k":"r","hp":{"max":146,"current":146},"cpText":"CP755","t":13074.638857,"ivConfidence":0.9200531208499338}

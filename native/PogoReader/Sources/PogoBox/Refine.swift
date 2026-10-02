@@ -21,8 +21,8 @@ import PogoReader
 ///     reading, no 0.55 s gap between card readings) and `LiveGrouper` has no row of its own for the stretch. The row that
 ///     absorbed it gets the flag `absorbed-unread` (so it shows in `review`) and `changes` records it.
 ///
-/// Order of the steps: (1) fragment absorption and the lone-CP-outlier fix on the JavaScript rows (see `absorbFragments`,
-/// `dropCpOutliers`), then (2) the twin split, hidden-CP and duplicate rules above, then (3) the timing split (`splitByTiming`), so a
+/// Order of the steps: (1) fragment absorption, the lone-CP-outlier fix and the bars split on the JavaScript rows (see `absorbFragments`,
+/// `dropCpOutliers`, `splitByBars`), then (2) the twin split, hidden-CP and duplicate rules above, then (3) the timing split (`splitByTiming`), so a
 /// fragment cannot be taken for a twin half and the twin Staraptor pair is still found by its beat.
 ///
 /// Rows are renumbered, `review` is rebuilt from the rows that carry flags, and `changes` says what Refine did. Readings
@@ -33,7 +33,7 @@ public enum Refine {
     public static let minSwipeGap = 0.55
 
     public struct Change: Equatable {
-        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit, fragmentAbsorbed, cpOutlierDropped }
+        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit, fragmentAbsorbed, cpOutlierDropped, barsSplit }
         public var kind: Kind
         /// The row's index in the refined result.
         public var rowIndex: Int
@@ -67,7 +67,8 @@ public enum Refine {
         // step 1: one Pokemon cut into two rows by a single disagreeing frame
         let fragments = absorbFragments(base)
         let outliers = try dropCpOutliers(fragments.scan, readings: readings, engine: engine)
-        var r = try run(outliers.scan, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
+        let bars = try splitByBars(outliers.scan, readings: readings, engine: engine)
+        var r = try run(bars.scan, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
         // then the timing step (off when the app says the player paged by hand)
         let t = splitByTiming(r.scan, readings: readings, paging: paging)
         r.changes = r.changes.map { var c = $0; c.rowIndex = t.indexMap[c.rowIndex] ?? c.rowIndex; return c } + t.changes
@@ -77,6 +78,8 @@ public enum Refine {
             for m in marks { r.changes.append(Change(kind: kind, rowIndex: r.scan.rows.first { $0.flags.contains(m.flag) }?.index ?? 0, detail: m.detail)) }
         }
         place(fragments.marks, .fragmentAbsorbed); place(outliers.marks, .cpOutlierDropped)
+        for m in bars.marks { r.changes.append(Change(kind: .barsSplit, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }
+        r.notices += bars.notices
         r.baseRowCount = base.rows.count
         return r
     }
