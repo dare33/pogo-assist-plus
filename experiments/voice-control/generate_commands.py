@@ -20,7 +20,8 @@ name a command identifier. See PLAN.md (phase 3) for what was tested and on whic
 Tap paging (`--tap X Y --screen-width W --screen-height H`) presses the game's right-hand next-Pokemon arrow. The file holds absolute
 points, so it is made only for a screen in CHECKED_SCREENS and only at that screen's measured point (440 x 956 at 424, 775); anything else
 is refused with a plain message and exit code 2, as are non-finite or non-positive numbers, a swipe position that is not finite and non-negative or
-travels under MIN_SWIPE_TRAVEL points sideways, a --count below 1 or above MAX_COUNT (the app's steps for 10,000 Pokémon), a --batch below 1, and an
+travels under MIN_SWIPE_TRAVEL points sideways or lies beyond MAX_COORDINATE, a --duration outside 0.2 to 1.5 s, an --every not longer
+than the duration plus 0.1 s, a non-finite --id-base, an unreadable --now, a --batch above 50, a --count below 1 or above MAX_COUNT (the app's steps for 10,000 Pokémon), a --batch below 1, and an
 --every not longer than one touch. The exact command lines that produce the test fixtures are in
 native/PogoReader/Tests/PogoBoxTests/Fixtures/voice/REGENERATE.md; the refusals are tested by test_generate_commands.py in this folder.
 
@@ -44,6 +45,10 @@ SWIPE_HZ = 60
 # A swipe that does not move is a tap, so a swipe must travel this far sideways. The default travels 265.
 MIN_SWIPE_TRAVEL = 100.0
 # The most steps the app makes: StorageCount.maximum (10,000 Pokémon) through VoiceCommandFile.steps. A larger --count is refused.
+# A slow swipe is still a press: it holds near its start. A swipe lasts between these, leaves 0.1 s before the next, and stays on a screen.
+MIN_SWIPE_SECONDS, MAX_SWIPE_SECONDS, SWIPE_GAP = 0.2, 1.5, 0.1
+MAX_COORDINATE = 1400.0
+MAX_BATCH = 50
 MAX_COUNT = ((10_000 - 1) * 102 + 99) // 100
 
 
@@ -76,6 +81,24 @@ def whole_at_least_one(text):
         raise argparse.ArgumentTypeError("%r is not a whole number" % text)
     if v < 1:
         raise argparse.ArgumentTypeError("%r must be 1 or more" % text)
+    return v
+
+
+def finite_any(text):
+    """argparse type: any finite number (an identifier base)."""
+    try:
+        v = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("%r is not a number" % text)
+    if not math.isfinite(v):
+        raise argparse.ArgumentTypeError("%r must be a finite number" % text)
+    return v
+
+
+def batch_in_range(text):
+    v = whole_at_least_one(text)
+    if v > MAX_BATCH:
+        raise argparse.ArgumentTypeError("%r is more than %d swipes in one gesture (50 was tested)" % (text, MAX_BATCH))
     return v
 
 
@@ -199,7 +222,7 @@ def main():
     p.add_argument("--count", type=count_in_range, required=True, help="how many Pokémon to page past (the storage count)")
     p.add_argument("--name", default="Pogo scan", help="what to say; keep it unlike any other command")
     p.add_argument("--batch-name", default="Storage page step", help="name of the batch gesture; it must not share words with --name, or Voice Control can run the wrong one")
-    p.add_argument("--batch", type=whole_at_least_one, default=20, help="most swipes in one gesture (50 was tested); the batch is then cut to ceil(count / repeats) so the last repeat does not overshoot by almost a batch")
+    p.add_argument("--batch", type=batch_in_range, default=20, help="most swipes in one gesture (50 was tested); the batch is then cut to ceil(count / repeats) so the last repeat does not overshoot by almost a batch")
     p.add_argument("--every", type=finite_positive, default=None, help="seconds between swipe starts (default 2.1, or 1.2 with --tap; 2.1 gives 7 frames at 5 fps; 1.6 was tested on a small sample)")
     p.add_argument("--duration", type=finite_positive, default=0.85, help="seconds one swipe lasts (0.6 with --every 1.6)")
     p.add_argument("--x-from", type=finite_non_negative, default=340.0)
@@ -209,7 +232,7 @@ def main():
     p.add_argument("--tap", type=finite_positive, nargs=2, metavar=("X", "Y"), help="page by tapping the next-Pokémon arrow at this point (screen points) instead of swiping")
     p.add_argument("--screen-width", type=finite_positive, help="width in points of the screen the --tap point was measured on (with --tap)")
     p.add_argument("--screen-height", type=finite_positive, help="height in points of that screen (with --tap)")
-    p.add_argument("--id-base", type=float, help="number the command identifiers come from (Custom.<n> and Custom.<n+60>); give the same one every time for a mode so importing the file replaces that mode's commands and leaves the others alone. Default: the time, so every file is a new pair")
+    p.add_argument("--id-base", type=finite_any, help="number the command identifiers come from (Custom.<n> and Custom.<n+60>); give the same one every time for a mode so importing the file replaces that mode's commands and leaves the others alone. Default: the time, so every file is a new pair")
     p.add_argument("--now", help="fix the time stamps and identifiers (UTC, YYYY-MM-DDTHH:MM:SS) so two runs give the same file; for tests")
     args = p.parse_args()
     if args.tap:
@@ -226,12 +249,23 @@ def main():
     touch = TAP_HOLD if args.tap else args.duration + 1.0 / SWIPE_HZ
     if args.every <= touch:
         p.error("--every %g must be longer than one touch lasts (%g s): the next must not start before this one is over" % (args.every, touch))
+    for flag, v in (("--x-from", args.x_from), ("--x-to", args.x_to), ("--y", args.y)):
+        if not args.tap and v > MAX_COORDINATE:
+            p.error("%s %g is off any screen (at most %g points)" % (flag, v, MAX_COORDINATE))
+    if not args.tap and not MIN_SWIPE_SECONDS <= args.duration <= MAX_SWIPE_SECONDS:
+        p.error("--duration %g must be from %g to %g seconds: a slower swipe is a press" % (args.duration, MIN_SWIPE_SECONDS, MAX_SWIPE_SECONDS))
+    if not args.tap and args.every <= args.duration + SWIPE_GAP:
+        p.error("--every %g must be longer than --duration %g plus %g s" % (args.every, args.duration, SWIPE_GAP))
     if not args.tap and abs(args.x_to - args.x_from) < MIN_SWIPE_TRAVEL:
         p.error("a swipe from x %g to x %g travels under %g points: a swipe that does not move is a tap, and a tap closes the panel or can press a button" % (args.x_from, args.x_to, MIN_SWIPE_TRAVEL))
     if not args.tap and args.duration < 2.0 / SWIPE_HZ:
         p.error("--duration %g is too short for a swipe (at least %g s)" % (args.duration, 2.0 / SWIPE_HZ))
 
-    now = datetime.datetime.fromisoformat(args.now) if args.now else datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    try:
+        fixed = datetime.datetime.fromisoformat(args.now) if args.now else None
+    except ValueError:
+        p.error("--now must be a UTC time like 2026-10-02T00:00:00")
+    now = fixed if fixed else datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     ref = (now - datetime.datetime(2001, 1, 1)).total_seconds()  # Apple's reference date
     id_base = args.id_base if args.id_base is not None else ref
     batch_id, chain_id = "Custom.%.6f" % id_base, "Custom.%.6f" % (id_base + 60)

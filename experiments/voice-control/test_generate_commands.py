@@ -57,12 +57,35 @@ class Refusals(unittest.TestCase):
             for flag in ("--x-from", "--x-to", "--y"):
                 self.refused("--count", "10", flag, bad)
 
+    def test_a_slow_swipe_is_still_a_press_and_positions_stay_on_a_screen(self):
+        self.refused("--count", "10", "--duration", "60", "--every", "61")
+        self.refused("--count", "10", "--duration", "0.1", "--every", "2")
+        self.refused("--count", "10", "--duration", "1.6", "--every", "5")
+        self.refused("--count", "10", "--duration", "0.85", "--every", "0.9")    # under duration + 0.1
+        self.refused("--count", "10", "--x-from", "2000")
+        self.refused("--count", "10", "--y", "5000")
+        self.refused("--count", "10", "--x-to", "1401", "--x-from", "100")
+
+    def test_id_base_now_and_batch(self):
+        self.refused("--count", "10", "--id-base", "nan")
+        self.refused("--count", "10", "--id-base", "inf")
+        r, out = subprocess.run([sys.executable, SCRIPT, os.path.join(tempfile.mkdtemp(), "x"), "--count", "10", "--now", "not-a-time"], capture_output=True, text=True), None
+        self.assertEqual(r.returncode, 2); self.assertNotIn("Traceback", r.stderr)
+        self.refused("--count", "10", "--batch", "51")
+
     def test_count_has_the_apps_upper_limit(self):
         self.refused("--count", "10200")
         self.refused("--count", "999999999999999999999")
 
 
 class Accepts(unittest.TestCase):
+    def test_the_fixture_command_lines_still_work(self):
+        for line in (["--count", "1427", "--batch", "50", "--every", "1.6", "--duration", "0.6", "--name", "Pogo swipe", "--batch-name", "Velvet marble", "--id-base", "780000600"],
+                     ["--count", "51", "--batch", "50", "--name", "Pogo slow swipe", "--batch-name", "Quiet walnut", "--id-base", "780000400"],
+                     ["--count", "51", "--batch", "50", "--tap", "424", "775", "--screen-width", "440", "--screen-height", "956", "--every", "1.0", "--id-base", "780000200"]):
+            r, out = run(*line)
+            self.assertEqual(r.returncode, 0, (line, r.stderr))
+
     def test_the_checked_screen_and_the_defaults(self):
         r, out = run("--count", "10", "--tap", "424", "775", "--screen-width", "440", "--screen-height", "956")
         self.assertEqual(r.returncode, 0, r.stderr)
