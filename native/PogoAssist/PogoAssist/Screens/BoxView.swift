@@ -62,9 +62,11 @@ struct BoxView: View {
     private func problemState(_ text: String) -> some View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle").font(.system(size: 44)).foregroundStyle(.orange)
-            Text("This box could not be read").font(.title3.bold())
+            Text(model.boxNeedsNewerApp ? "This box needs a newer version of the app" : "This box could not be read").font(.title3.bold())
             Text(text).multilineTextAlignment(.center).foregroundStyle(.secondary)
-            Button("Restore the latest readable version") { Task { await model.restoreLatestReadable() } }.buttonStyle(.borderedProminent)
+            if !model.boxNeedsNewerApp {
+                Button("Restore the latest readable version") { Task { await model.restoreLatestReadable() } }.buttonStyle(.borderedProminent)
+            }
             Text("Scanning is paused until this is resolved.").font(.footnote).foregroundStyle(.secondary)
         }
         .padding(32)

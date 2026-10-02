@@ -158,6 +158,29 @@ final class FoldApiTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: file), newer, "and the file is untouched")
     }
 
+    func testNothingRestoresOverANewestVersionFromANewerApp() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-l3r-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        try lib.commit(account: "a", entries: [entry(row(cp: 100), "one")], reason: .scan, note: "old", now: date(1))
+        let v2 = try lib.commit(account: "a", entries: [entry(row(cp: 200), "two")], reason: .scan, note: "newer app", now: date(2))
+        let file = dir.appendingPathComponent("a").appendingPathComponent("box").appendingPathComponent(String(format: "%06d.json", v2.seq))
+        var obj = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
+        obj["schema"] = BoxLibrary.schemaVersion + 1
+        try JSONSerialization.data(withJSONObject: obj).write(to: file)
+        XCTAssertThrowsError(try lib.current(account: "a")) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
+        XCTAssertThrowsError(try lib.restoreLatestReadable(account: "a")) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
+        XCTAssertThrowsError(try lib.restore(account: "a", seq: 1)) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
+        XCTAssertThrowsError(try lib.restorePrevious(account: "a")) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
+        XCTAssertThrowsError(try lib.commit(account: "a", entries: [], reason: .scan, note: "scan")) { XCTAssertTrue(BoxLibrary.isNewerVersion($0)) }
+        XCTAssertEqual(try lib.history(account: "a").count, 2, "nothing was rolled back or written")
+        // a merely damaged newest version keeps its restore, and is not "newer"
+        try Data("not json".utf8).write(to: file)
+        var damaged: Error?
+        do { _ = try lib.current(account: "a") } catch { damaged = error }
+        XCTAssertNotNil(damaged); XCTAssertFalse(BoxLibrary.isNewerVersion(damaged!))
+        XCTAssertEqual(try lib.restoreLatestReadable(account: "a").restoredFrom, 1)
+    }
+
     // V1, V2
     func testV2TapNeedsAnExactCheckedPointForTheGivenWidthAndHeight() throws {
         func make(_ p: CGPoint?, _ w: Double?, _ h: Double?) throws -> Data { try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: p, screenWidth: w, screenHeight: h, now: date(1)) }

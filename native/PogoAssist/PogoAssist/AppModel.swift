@@ -58,6 +58,8 @@ final class AppModel: ObservableObject {
     @Published var busy: String?
     /// The box could not be read: set instead of showing an empty box. Scans cannot be reviewed or saved until it is resolved.
     @Published var boxProblem: String?
+    /// The newest version came from a newer app: no restore is offered (it would roll the box back), only "update the app".
+    @Published var boxNeedsNewerApp = false
 
     @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind) } }
     @Published var storageCountText: String { didSet { UserDefaults.standard.set(storageCountText, forKey: Keys.count) } }
@@ -298,16 +300,19 @@ final class AppModel: ObservableObject {
 
     /// Read the selected account's current box (and its cached advice, or start computing it).
     func loadBox() {
-        guard let a = account else { snapshot = nil; advice = .none; history = []; previous = nil; boxProblem = nil; return }
+        guard let a = account else { snapshot = nil; advice = .none; history = []; previous = nil; boxProblem = nil; boxNeedsNewerApp = false; return }
         do {
             snapshot = try library.current(account: a)
             history = try library.history(account: a)
             previous = try library.previousVersion(account: a)
-            boxProblem = nil
+            boxProblem = nil; boxNeedsNewerApp = false
         } catch {
             // Not an empty box: the newest version is damaged. Nothing is saved on top of it until the person restores a readable one.
             snapshot = nil; history = (try? library.history(account: a)) ?? []; previous = nil
-            boxProblem = "The newest saved version of the box for \(a) cannot be read (\(Self.plain(error))). Your earlier versions are still on this device."
+            boxNeedsNewerApp = BoxLibrary.isNewerVersion(error)
+            boxProblem = BoxLibrary.isNewerVersion(error)
+                ? "The newest saved version of the box for \(a) was saved by a newer version of the app, so this version cannot open it. Update the app. Nothing has been changed, and scanning and saving are paused."
+                : "The newest saved version of the box for \(a) cannot be read (\(Self.plain(error))). Your earlier versions are still on this device."
         }
         loadAdvice()
         loadScans()

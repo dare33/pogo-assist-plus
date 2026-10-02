@@ -115,6 +115,7 @@ public final class BoxLibrary {
     public func commit(account: String, entries: [BoxEntry], reason: BoxSnapshot.Reason, note: String, scanId: String? = nil, scanKind: BoxStore.Kind? = nil,
                        scanDate: Date? = nil, restoredFrom: Int? = nil, expectedCurrentSeq: Int?? = nil, now: Date = Date()) throws -> BoxSnapshot {
         let last = try seqs(account).last
+        try refuseOverNewer(account)
         // A save prepared against a box that has since changed is refused, not written over it.
         if let expected = expectedCurrentSeq, expected != last { throw Failure.boxChanged }
         let next = (last ?? 0) + 1
@@ -135,6 +136,18 @@ public final class BoxLibrary {
         return try commit(account: account, entries: entries, reason: reason, note: note, scanKind: cur?.scanKind, scanDate: cur?.scanDate, expectedCurrentSeq: .some(cur?.seq), now: now)
     }
 
+    /// Nothing is written on top of a newest version saved by a newer app, by any route (a scan, an edit, a restore): a restore would silently
+    /// roll the box back to older content. A newest version that is merely damaged is not refused here; it is what the restore is for.
+    private func refuseOverNewer(_ account: String) throws {
+        guard let seq = try seqs(account).last else { return }
+        do { _ = try load(account: account, seq: seq) } catch let f as Failure { if case .newerVersion = f { throw f } } catch {}
+    }
+
+    /// Whether the newest version was saved by a newer app (so the app says to update, and offers no restore).
+    public static func isNewerVersion(_ error: Error) -> Bool {
+        if case .newerVersion? = error as? Failure { return true } else { return false }
+    }
+
     /// The newest version that can be read, skipping any that cannot.
     public func latestReadable(account: String) throws -> BoxSnapshot? {
         for seq in try seqs(account).reversed() { if let snap = try? load(account: account, seq: seq) { return snap } }
@@ -144,6 +157,7 @@ public final class BoxLibrary {
     /// Make the newest readable version the current box again, as a new version (for when the newest one is damaged).
     @discardableResult
     public func restoreLatestReadable(account: String, now: Date = Date()) throws -> BoxSnapshot {
+        try refuseOverNewer(account)
         guard let snap = try latestReadable(account: account) else { throw Failure.nothingReadable }
         return try restore(account: account, seq: snap.seq, now: now)
     }

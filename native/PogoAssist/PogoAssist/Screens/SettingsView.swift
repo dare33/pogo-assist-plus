@@ -51,7 +51,7 @@ struct SettingsView: View {
             Text(Fmt.date(h.createdAt)).font(.footnote).foregroundStyle(.secondary)
         }
         .swipeActions {
-            if !isCurrent { Button("Restore") { restoring = h }.tint(.blue) }
+            if !isCurrent && !model.boxNeedsNewerApp { Button("Restore") { restoring = h }.tint(.blue) }
         }
     }
 
@@ -67,7 +67,7 @@ struct SettingsView: View {
                     Button("Rename account") { newName = model.account ?? ""; renaming = true }.disabled(model.account == nil)
                 } footer: { if let p = renameProblem { Text(p).foregroundStyle(.red) } }
                 Section {
-                    Button("Restore previous box") { confirmPrevious = true }.disabled(model.previous == nil)
+                    Button("Restore previous box") { confirmPrevious = true }.disabled(model.previous == nil || model.boxNeedsNewerApp)
                 } header: { Text("Box for \(model.account ?? "this account")") } footer: {
                     Text(previousFooter)
                 }
