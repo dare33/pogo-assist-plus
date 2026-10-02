@@ -5,7 +5,7 @@ import PogoReader
 // pogo-read: read Pokémon GO detail-screen frames with the same code the broadcast extension runs.
 //
 //   pogo-read <dir of PNG frames | single PNG> [--width N | --full] [--fps 5] --out readings.json
-//             [--rows rows.json] [--via-pixelbuffer] [--range video|full] [--verbose]
+//             [--rows rows.json] [--via-pixelbuffer] [--range video|full] [--verbose] [--deferred]
 //   pogo-read --synthetic N [same options]      N drawn full-size frames, via pixel buffers
 
 struct Options {
@@ -23,12 +23,16 @@ struct Options {
     var noVision = false
     var cpPadding: Double?
     var cpDigitsOnly = false
+    var deferred = false
+    var visionDevice = VisionOptions.Device.system
+    var visionMinTextHeight: Float?
+    var visionRecreate = false
     var limit: Int?
 }
 
 func usage() -> Never {
     FileHandle.standardError.write(Data("""
-    usage: pogo-read <dir of PNG frames | single PNG> [--width N | --full] [--fps 5] --out readings.json [--rows rows.json] [--via-pixelbuffer] [--range video|full] [--verbose]
+    usage: pogo-read <dir of PNG frames | single PNG> [--width N | --full] [--fps 5] --out readings.json [--rows rows.json] [--via-pixelbuffer] [--range video|full] [--verbose] [--deferred]
            pogo-read --synthetic N [--width N | --full] [--out readings.json] [--rows rows.json] [--verbose] [--save-synthetic DIR]
 
     """.utf8))
@@ -54,6 +58,10 @@ func parse() -> Options {
         case "--no-vision": o.noVision = true
         case "--cp-padding": guard let x = Double(value()) else { usage() }; o.cpPadding = x
         case "--cp-digits-only": o.cpDigitsOnly = true
+        case "--deferred": o.deferred = true
+        case "--vision-device": guard let d = VisionOptions.Device(rawValue: value()) else { usage() }; o.visionDevice = d
+        case "--vision-min-text-height": guard let h = Float(value()) else { usage() }; o.visionMinTextHeight = h
+        case "--vision-recreate": o.visionRecreate = true
         case "--limit": guard let n = Int(value()), n > 0 else { usage() }; o.limit = n
         case "--save-synthetic": o.saveSynthetic = value()
         default:
@@ -82,6 +90,13 @@ struct Report: Encodable {
     var rows: [LiveRow]
     var memory: Memory
     var msPerFrame: Ms
+    /// `--deferred` only: the "save crops" path (extension half, then the app's read).
+    struct Deferred: Encodable {
+        var savedFrames: Int; var files: Int; var bytes: Int
+        var extensionPeakFootprintMB: Double; var extensionBaselineMB: Double
+        var appReadPeakFootprintMB: Double; var appReadMs: Double
+    }
+    var deferred: Deferred?
 }
 
 func run() throws {
@@ -89,7 +104,14 @@ func run() throws {
     let table = try SpeciesTable.bundled()
     let names = displayNames(table)
     let probe = MemoryProbe()
-    let processor = FrameProcessor(textReader: o.noVision ? EmptyTextReader() : VisionTextReader(fast: o.fast), names: names, targetWidth: o.width, memory: probe)
+    var vopts = VisionOptions()
+    vopts.fast = o.fast; vopts.device = o.visionDevice; vopts.minimumTextHeight = o.visionMinTextHeight; vopts.recreateRequestEachRead = o.visionRecreate
+    // --deferred: the extension half only (no Vision request is ever created); Vision runs afterwards.
+    let processor = o.deferred
+        ? FrameProcessor.cropsOnly(names: names, targetWidth: o.width, memory: probe)
+        : FrameProcessor(textReader: o.noVision ? EmptyTextReader() : VisionTextReader(options: vopts), names: names, targetWidth: o.width, memory: probe)
+    let archive = o.deferred ? CropArchive(directory: FileManager.default.temporaryDirectory.appendingPathComponent("pogo-deferred-\(getpid())")) : nil
+    var saver = CropSaver()
     if let p = o.cpPadding { processor.reader.cpPadding = p }
     if o.cpDigitsOnly { processor.reader.cpIncludesPrefix = false }
     var grouper = LiveGrouper(species: table)
@@ -103,6 +125,7 @@ func run() throws {
 
     var readings = [FrameReading]()
     var msTotal = 0.0, msWorst = 0.0
+    var deferredRows: [LiveRow]?
     // Baseline: after the tool's own buffers exist, before the first frame is read.
     if o.synthetic != nil { _ = try maker.make(from: canvas) }
     let baseline = MemoryProbe.footprintBytes()
@@ -128,22 +151,43 @@ func run() throws {
         }
         let time = Double(i) / o.fps
         let t0 = DispatchTime.now().uptimeNanoseconds
-        let reading: FrameReading
-        if let b = buffer { reading = processor.process(b, time: time, frame: label) }
+        var reading = FrameReading(frame: label, time: time)
+        if let archive = archive {
+            // The extension's work in "save crops" mode: pixels only, then maybe write the crops.
+            var (a, crops) = buffer.map { processor.analyse($0, time: time, frame: label) } ?? processor.analyse(image!, time: time, frame: label)
+            if saver.shouldSave(&a), let c = crops { archive.save(a, c); probe.sample() }
+            reading.flags = a.flags
+        } else if let b = buffer { reading = processor.process(b, time: time, frame: label) }
         else { reading = processor.process(image!, time: time, frame: label) }
         let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
         msTotal += ms; msWorst = max(msWorst, ms)
-        readings.append(reading)
-        grouper.add(reading)
+        if archive == nil { readings.append(reading); grouper.add(reading) }
         if o.verbose {
             FileHandle.standardError.write(Data("\(label) \(String(format: "%.0f", ms)) ms  cp=\(reading.cp.map(String.init) ?? "-") name=\(reading.name ?? "-") (\(reading.nameText) @\(Int(reading.nameConfidence))) hp=\(reading.hp.map { "\($0.current)/\($0.max)" } ?? "-") ivs=\(reading.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "-") \(reading.flags.joined(separator: ","))\n".utf8))
         }
     }
+    var deferredInfo: Report.Deferred?
+    if let archive = archive {
+        // The app's half: Vision on the saved crops, then the grouper.
+        let extPeak = probe.peakBytes
+        let files = archive.fileCount, bytes = archive.byteCount, savedFrames = archive.frameCount
+        let appProbe = MemoryProbe()
+        appProbe.resetPeak()
+        let reader = FrameReader(text: VisionTextReader(options: vopts), names: names)
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        let result = DeferredRun.readAndGroup(archive: archive, reader: reader, species: table)
+        appProbe.sample()
+        readings = result.readings
+        deferredRows = result.rows
+        deferredInfo = .init(savedFrames: savedFrames, files: files, bytes: bytes, extensionPeakFootprintMB: MemoryProbe.megabytes(extPeak), extensionBaselineMB: MemoryProbe.megabytes(baseline),
+                             appReadPeakFootprintMB: MemoryProbe.megabytes(appProbe.peakBytes), appReadMs: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6)
+        try? FileManager.default.removeItem(at: archive.directory)
+    }
     grouper.finish()
     let final = MemoryProbe.footprintBytes()
-    let report = Report(frames: total, width: o.width, viaPixelBuffer: o.viaPixelBuffer, readings: readings, rows: grouper.rows,
+    let report = Report(frames: total, width: o.width, viaPixelBuffer: o.viaPixelBuffer, readings: readings, rows: deferredRows ?? grouper.rows,
                         memory: .init(peakFootprintMB: MemoryProbe.megabytes(probe.peakBytes), baselineMB: MemoryProbe.megabytes(baseline), finalFootprintMB: MemoryProbe.megabytes(final)),
-                        msPerFrame: .init(mean: msTotal / Double(total), worst: msWorst))
+                        msPerFrame: .init(mean: msTotal / Double(total), worst: msWorst), deferred: deferredInfo)
     let enc = JSONEncoder()
     enc.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     if let out = o.out { try enc.encode(report).write(to: URL(fileURLWithPath: out)) }
@@ -154,6 +198,9 @@ func run() throws {
     print("frames \(total), name+CP read on \(named), rows \(report.rows.count)")
     print("width \(o.width.map(String.init) ?? "full"), via \(o.viaPixelBuffer ? "pixel buffer (420 \(o.fullRangeBuffers ? "full" : "video") range)" : "RGBA")")
     print("footprint: baseline \(f(report.memory.baselineMB)) MB, peak \(f(report.memory.peakFootprintMB)) MB (+\(f(report.memory.peakFootprintMB - report.memory.baselineMB)) over baseline), final \(f(report.memory.finalFootprintMB)) MB")
+    if let d = report.deferred {
+        print("save-crops: \(d.savedFrames) frames saved (\(d.files) files, \(f(Double(d.bytes) / 1_048_576)) MB); extension half peak \(f(d.extensionPeakFootprintMB)) MB (+\(f(d.extensionPeakFootprintMB - d.extensionBaselineMB)) over baseline); app read peak \(f(d.appReadPeakFootprintMB)) MB in \(f(d.appReadMs / 1000)) s")
+    }
     print("ms per frame: mean \(f(report.msPerFrame.mean)), worst \(f(report.msPerFrame.worst))")
 }
 

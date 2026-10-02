@@ -15,6 +15,11 @@ struct BroadcastState: Codable, Equatable {
     var started = Date()
     var updated = Date()
     var finished = false
+    var mode = ReaderMode.accurate.rawValue   // the reader mode the extension started in
+    var skippedLowMemory = 0    // frames where Vision was skipped because little memory was left
+    var savedFrames = 0         // "save crops" mode: frames written
+    var savedFiles = 0
+    var savedMB = 0.0
 }
 
 /// The app group container and the Darwin notification the extension posts after each write.
@@ -49,5 +54,15 @@ enum SharedStore {
 
     static func clear() {
         if let url = stateURL { try? FileManager.default.removeItem(at: url) }
+    }
+
+    /// Where "save crops" mode writes (and the app reads and then empties).
+    static var cropsURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("crops", isDirectory: true)
+    }
+
+    /// The app's result of reading the saved crops (shareable).
+    static var deferredURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)?.appendingPathComponent("deferred.json")
     }
 }

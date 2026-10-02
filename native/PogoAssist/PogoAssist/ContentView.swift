@@ -34,8 +34,26 @@ struct ContentView: View {
                         BroadcastPicker().frame(width: 64, height: 64)
                     }
                 }
+                Section("Reader (applies when the broadcast starts)") {
+                    Picker("Reader", selection: $model.mode) {
+                        ForEach(ReaderMode.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                }
                 Section("Run") { statusView }
-                Section("Pokémon read (\(model.state.rows.count))") {
+                if model.mode == .saveCrops || model.state.savedFrames > 0 || !model.deferredRows.isEmpty || model.savedCropFrames > 0 {
+                    Section("Saved crops") {
+                        Text("Saved \(model.state.savedFrames) frames (\(model.state.savedFiles) files, \(String(format: "%.1f", model.state.savedMB)) MB)").font(.footnote)
+                        Button(model.reading ? "Reading..." : "Read saved crops now") { model.readSavedCrops(force: true) }.disabled(model.reading)
+                        if let n = model.deferredNote { Text(n).font(.footnote).foregroundStyle(.secondary) }
+                    }
+                }
+                if !model.deferredRows.isEmpty {
+                    Section("Pokémon read from saved crops (\(model.deferredRows.count))") {
+                        ForEach(model.deferredRows, id: \.index) { RowView(row: $0) }
+                    }
+                }
+                Section("Pokémon read live (\(model.state.rows.count))") {
                     if model.state.rows.isEmpty { Text(model.hasState ? "Nothing read yet." : "No broadcast yet.").foregroundStyle(.secondary) }
                     ForEach(model.state.rows, id: \.index) { RowView(row: $0) }
                 }
@@ -43,14 +61,19 @@ struct ContentView: View {
             .navigationTitle("Pogo Assist+")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    if let url = SharedStore.stateURL, model.hasState { ShareLink(item: url) { Image(systemName: "square.and.arrow.up") } }
+                    if model.hasState, let url = SharedStore.stateURL {
+                        ShareLink(items: [url] + (SharedStore.deferredURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? [$0] : [] } ?? [])) { Image(systemName: "square.and.arrow.up") }
+                    }
                     Button("Clear", role: .destructive) { model.clear() }
                 }
             }
         }
-        .onAppear { model.reload(); model.startTimer() }
+        .onAppear { model.reload(); model.startTimer(); model.readSavedCrops() }
         .onDisappear { model.stopTimer() }
-        .onChange(of: phase) { _, p in if p == .active { model.reload(); model.startTimer() } else { model.stopTimer() } }
+        // Coming to the foreground: refresh, and read any crops a finished or dead broadcast left.
+        .onChange(of: phase) { _, p in
+            if p == .active { model.reload(); model.startTimer(); model.readSavedCrops() } else { model.stopTimer() }
+        }
     }
 
     private var statusView: some View {
@@ -63,7 +86,15 @@ struct ContentView: View {
                 Text("lowest free \(s.lowestAvailableMB.map(mb) ?? "n/a")")
             }
             .font(.footnote)
-            if s.finished { Text("Broadcast finished").font(.footnote).foregroundStyle(.secondary) }
+            if s.skippedLowMemory > 0 { Text("Skipped for low memory: \(s.skippedLowMemory) frames").font(.footnote).foregroundStyle(.orange) }
+            if s.finished {
+                Text("Broadcast finished (\(s.mode))").font(.footnote).foregroundStyle(.secondary)
+            } else if model.endedWithoutFinish {
+                Text("The broadcast ended without a finish marker: no update for \(Int(model.secondsSinceUpdate)) s (\(s.mode) mode). The extension may have been killed; this is its last state.")
+                    .font(.footnote).foregroundStyle(.red)
+            } else if model.hasState {
+                Text("Broadcasting (\(s.mode))").font(.footnote).foregroundStyle(.secondary)
+            }
         }
     }
 
