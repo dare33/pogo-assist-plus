@@ -612,11 +612,11 @@ final class GrouperTests: XCTestCase {
     /// `same-as-previous` is decided from the voted values of both rows when the run closes.
     func testSameAsPreviousIsDecidedFromTheVotedValuesNotTheFirstReading() {
         func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
-        func run(firstCp: Int, secondHp: Int, secondCp: Int) -> [LiveRow] {
+        func run(firstCp: Int, firstHp: Int?? = nil, secondHp: Int, secondCp: Int) -> [LiveRow] {
             var g = LiveGrouper(species: table)
             for k in 0..<4 { g.add(at(frame(CP, n: k), Double(k) * 0.2)) }
             g.swipe(at: 1.4)
-            g.add(at(frame(firstCp, hp: secondHp, ivs: IVS, n: 10), 2.0))           // the first reading of the new run, perhaps garbled
+            g.add(at(frame(firstCp, hp: firstHp ?? secondHp, ivs: IVS, n: 10), 2.0))           // the first reading of the new run, perhaps garbled
             for k in 1..<5 { g.add(at(frame(secondCp, hp: secondHp, ivs: IVS, n: 10 + k), 2.0 + Double(k) * 0.2)) }
             g.finish()
             return g.rows
@@ -626,7 +626,8 @@ final class GrouperTests: XCTestCase {
         XCTAssertEqual(garbled.count, 2)
         XCTAssertTrue(garbled[1].flags.contains("same-as-previous"), "\(garbled[1].flags)")
         // The first reads like the row before but the voted HP and CP are another Pokémon's: not marked.
-        let other = run(firstCp: CP, secondHp: HPV + 7, secondCp: CP - 60)
+        // The first reading looks identical to the row before (same CP, HP unread); the later readings vote another HP.
+        let other = run(firstCp: CP, firstHp: .some(nil), secondHp: HPV + 7, secondCp: CP)
         XCTAssertEqual(other.count, 2)
         XCTAssertFalse(other[1].flags.contains("same-as-previous"), "\(other[1].flags)")
         // A run started by separator frames (no tick) is not marked.
@@ -662,11 +663,64 @@ final class GrouperTests: XCTestCase {
         XCTAssertFalse(g.rows.contains { $0.name == "Moltres" }, "\(g.rows.map { "\($0.name) \($0.flags)" })")
     }
 
-    /// Name-only frames of the same species on both sides of a swipe are not one 0.6 s "card".
-    func testSameNameSlidingFramesOnBothSidesOfASwipeAreNotACardRow() {
-        func nameOnly(_ n: Int) -> FrameReading { frame(nil, hp: nil, ivs: nil, name: "Moltres", n: n) }
-        let rows = groupAll((1...4).map { frame(CP, n: $0) } + (5...8).map(nameOnly) + (9...12).map { frame(CP, n: $0) })
-        XCTAssertFalse(rows.contains { $0.flags.contains("cp-not-read") }, "\(rows.map { "\($0.cp as Any) \($0.flags)" })")
+
+
+    // MARK: narrow round (hidden same-species Pokémon, unnamed carry, tests that reach their case)
+
+    /// A Pokémon of the same species as the one before it whose CP and HP are unread for its whole stay: its name-only
+    /// readings are the new Pokémon's, not the old one's, and the stretch is listed (`cp-not-read`).
+    func testASameSpeciesPokemonWithCpAndHpHiddenIsListedAfterBlanksOrATick() {
+        func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
+        let nameOnly = frame(nil, hp: nil, ivs: nil, name: "Moltres")
+        for useTick in [false, true] {
+            var g = LiveGrouper(species: table)
+            for k in 0..<4 { g.add(at(frame(CP, n: k), Double(k) * 0.2)) }                      // Moltres 0 - 0.6
+            if useTick { g.swipe(at: 1.4) } else { for k in 0..<3 { g.add(at(swipe(), 0.8 + Double(k) * 0.2)) } }
+            for k in 0..<6 { g.add(at(nameOnly, 1.4 + Double(k) * 0.2)) }                         // Moltres name only 1.4 - 2.4
+            if !useTick { for k in 0..<3 { g.add(at(swipe(), 2.6 + Double(k) * 0.2)) } } else { g.swipe(at: 2.8) }
+            for k in 0..<4 { g.add(at(frame(CP - 300, hp: HPV + 9, ivs: IVs(atk: 4, def: 5, hp: 6), name: "Zapdos", n: 30 + k), 3.2 + Double(k) * 0.2)) }
+            g.finish()
+            let label = "tick \(useTick): \(g.rows.map { "\($0.name) \($0.cp as Any) \($0.flags)" })"
+            XCTAssertEqual(g.rows.map(\.name), ["Moltres", "Moltres", "Zapdos"], label)
+            XCTAssertTrue(g.rows[1].flags.contains("cp-not-read"), label)
+        }
+    }
+
+    /// The first readings of the new Pokémon have a CP but no name: it is one row, not a row and a "(name not read)" one.
+    func testANewPokemonWhoseFirstReadingsHaveNoNameMakesNoUnnamedRow() {
+        func at(_ r: FrameReading, _ t: Double) -> FrameReading { var x = r; x.time = t; return x }
+        var g = LiveGrouper(species: table)
+        for k in 0..<4 { g.add(at(frame(CP - 800, hp: HPV + 5, ivs: IVs(atk: 1, def: 2, hp: 3), n: k), Double(k) * 0.2)) }   // A (a CP unrelated to B's)
+        for k in 0..<4 { g.add(at(swipe(), 0.8 + Double(k) * 0.2)) }                                                          // swipe
+        for k in 0..<2 { var r = FrameReading(frame: "u\(k)", time: 0); r.cp = CP; r.cpReads = [CP]; g.add(at(r, 1.6 + Double(k) * 0.2)) }  // B, CP only
+        for k in 0..<4 { g.add(at(frame(CP, n: 20 + k), 2.0 + Double(k) * 0.2)) }                                            // B, strong
+        g.finish()
+        XCTAssertEqual(g.rows.count, 2, "\(g.rows.map { "\($0.name) \($0.cp as Any) \($0.flags)" })")
+        XCTAssertFalse(g.rows.contains { $0.name == "(name not read)" }, "\(g.rows.map { "\($0.name) \($0.cp as Any) \($0.flags) f\($0.frames)" })")
+    }
+
+    /// KNOWN LIMIT, not a goal: a swipe that leaves ONE blank reading (the old card still readable on the first changed
+    /// frame, one blank, the new card on the third) is 0.4 s between the bracketing card readings, too short for the tick
+    /// rule and too few separator frames, so two identical Pokémon merge at full rate. The row is flagged `long-stay` only
+    /// when the merged stay reaches 2.4 s: at a 2.1 s pace it is, at a 1.2 s pace it is not and carries no flag.
+    func testKnownLimitOneSeparatorSwipeMergesIdenticalNeighboursAtFullRate() {
+        func card(_ cp: Int, hp: Int, _ ivs: IVs) -> FrameReading { frame(cp, hp: hp, ivs: ivs, name: "Moltres") }
+        let c = card(CP + 40, hp: HPV + 5, IVs(atk: 1, def: 2, hp: 3)), a = card(CP, hp: HPV, IVS), d = card(CP - 40, hp: HPV - 5, IVs(atk: 4, def: 5, hp: 6))
+        func stream(cardFrames n: Int) -> [SimFrame] {
+            var out = [SimFrame]()
+            for reading in [c, a, a, d] {
+                for _ in 0..<n { out.append(SimFrame(image: Self.cardImage, reading: reading, isCard: true)) }
+                out.append(SimFrame(image: Self.slideImage, reading: reading, isCard: true))     // first changed frame, still readable
+                out.append(SimFrame(image: Self.blanks[1], reading: swipe(), isCard: false))     // one blank; the next card is the third frame
+            }
+            return out
+        }
+        for (n, flagged) in [(4, false), (9, true)] {          // 1.2 s and 2.2 s per Pokémon
+            let r = extensionSim(stream(cardFrames: n), slow: 0, fast: 0)
+            let twins = r.rows.filter { $0.cp == CP }
+            XCTAssertEqual(twins.count, 1, "\(n): the twins merge (known limit)")
+            XCTAssertEqual(twins.first?.flags.contains("long-stay"), flagged, "\(n) card frames: \(twins.first?.flags ?? [])")
+        }
     }
 
 

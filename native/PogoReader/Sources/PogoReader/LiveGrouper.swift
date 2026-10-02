@@ -254,13 +254,19 @@ public struct LiveGrouper {
         // reading that started no run (a hidden-CP card, a CP-only card, a weak name): it waits for the next strong one.
         let seen = seenSeparators || seenTick
         let seenTickOnly = seenTick && !seenSeparators
+        // A name alone of the Pokémon on screen is neutral only while no swipe evidence precedes it. After a swipe it is
+        // the NEW Pokémon's first reading (a same-species one whose CP and HP are hidden): it uses the evidence up, and
+        // the readings that follow accumulate as a hidden stretch instead of seeing the swipe again.
+        var consumedByNameOnly = false
+        if neutral && seen { neutral = false; consumedByNameOnly = true }
         swipe = seen || (strong && carried != 0)
         swipeBetween = seen
         tickOnly = strong && carried != 0 ? (carried == 2 && !seenSeparators) || (seenTickOnly) : seenTickOnly
         if neutral { /* no change to the separator or card state */ }
+        else if consumedByNameOnly { sepStart = nil; ticks.removeAll { $0 <= t + 1e-9 } }
         else if isCard { sepStart = nil; lastCardT = t; if !seenCard { seenCard = true; swipe = true; tickOnly = false } }
         else { if sepStart == nil { sepStart = t }; sepLast = t }
-        if strong { carried = 0 } else if isCard && seen { carried = seenTickOnly ? 2 : 1 }
+        if strong { carried = 0 } else if (isCard || consumedByNameOnly) && seen { carried = seenTickOnly ? 2 : 1 }
         guard let name = r.name else {
             if let cp = r.cp { addUnnamed(r, cp: cp, t: t) } else { gap = true }   // mid-swipe, cut off
             return
@@ -292,7 +298,7 @@ public struct LiveGrouper {
         // A run that began only because a tick said so is checked when its row is made: if its voted values match the
         // row before, it is either a genuine twin or a false split, and says so (`same-as-previous`).
         fresh.tickStarted = tickOnly
-        flushUnnamed(next: fresh)
+        flushUnnamed(next: fresh, swipeBeforeNext: swipeBetween)
         resolveHidden(next: fresh, gapAfter: gap, swipe: swipeBetween)
         resolveWeak(next: fresh)
         current = fresh
@@ -367,12 +373,13 @@ public struct LiveGrouper {
 
     /// List the unnamed stretch if it lasted `Tuning.unnamedMinSeconds` (two frames at full rate, as in JS)
     /// and is not just a card sliding past the neighbour it is the CP of.
-    private mutating func flushUnnamed(next: Run?) {
+    /// `swipeBeforeNext`: a swipe was seen between the unnamed stretch and the next run (not one inherited from before the stretch).
+    private mutating func flushUnnamed(next: Run?, swipeBeforeNext: Bool = true) {
         guard let u = unnamed else { return }
         unnamed = nil
         guard u.duration >= Tuning.unnamedMinSeconds - 1e-9 else { return }
         if !u.startedAfterSwipe, let p = finished.last, let pc = p.cp, cpRelated(u.topCp, pc) { return }
-        if let n = next, !n.startedAfterSwipe, cpRelated(u.topCp, n.topCp) || makeRow(n, index: 0).cp.map({ cpRelated(u.topCp, $0) }) == true { return }
+        if let n = next, !swipeBeforeNext, cpRelated(u.topCp, n.topCp) || makeRow(n, index: 0).cp.map({ cpRelated(u.topCp, $0) }) == true { return }
         finished.append(LiveRow(index: finished.count + 1, name: "(name not read)", cp: u.topCp, hp: nil, ivs: nil, frames: u.frames, flags: ["name-not-read"],
                                 firstFrame: u.firstFrame, lastFrame: u.lastFrame, firstTime: u.firstT, lastTime: u.lastT))
     }
