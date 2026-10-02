@@ -46,7 +46,7 @@ final class FormatParityTests: XCTestCase {
     }
 
     func testEveryFormatAndSizeReadsTheSameAsRgba() throws {
-        for style in [SyntheticScreen.Style.phone, .padMuted, .darkSky] {
+        for style in [SyntheticScreen.Style.phone, .padMuted, .darkSky, .darkTopBand] {
             for (w, h) in sizes {
                 var img = RGBAImage(width: w, height: h)
                 SyntheticScreen.draw(into: &img, spec, style: style)

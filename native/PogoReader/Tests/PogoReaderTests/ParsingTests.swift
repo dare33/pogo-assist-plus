@@ -48,6 +48,8 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(parseCp("8P150"), 150)
         XCTAssertEqual(parseCp("5p2641"), 2641)
         XCTAssertEqual(parseCp("8p2611"), 2611)
+        XCTAssertEqual(parseCp("op2614"), 2614)       // the iPad's "op" label: its o is a 0 inside a token with digits
+        XCTAssertEqual(parseCp("0r1999"), 1999)
         XCTAssertEqual(parseCp("CP 3028"), 3028)
         XCTAssertEqual(parseCp("cp3O28"), 3028)
     }

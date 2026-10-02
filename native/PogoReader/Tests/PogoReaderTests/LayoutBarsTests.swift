@@ -119,6 +119,31 @@ final class LayoutBarsTests: XCTestCase {
         XCTAssertEqual(contentRect(img).y, 60)
     }
 
+    /// The bridging limit is 0.5% of the height for rows and of the width for columns (at least 2): exactly at the limit a
+    /// gap is bridged, one more is not. The image is not square, so a width/height mix-up cannot pass.
+    func testContentRectBridgesUpToTheLimitAndNoFurtherInRowsAndColumns() {
+        func screen(darkRows: Range<Int>? = nil, darkCols: Range<Int>? = nil) -> RGBAImage {
+            var img = RGBAImage(width: 400, height: 1000)
+            img.fill(Rect(x: 0, y: 0, w: 400, h: 1000), (200, 200, 200))
+            if let r = darkRows { img.fill(Rect(x: 0, y: Double(r.lowerBound), w: 400, h: Double(r.count)), (10, 10, 10)) }
+            if let c = darkCols { img.fill(Rect(x: Double(c.lowerBound), y: 0, w: Double(c.count), h: 1000), (10, 10, 10)) }
+            return img
+        }
+        let whole = PixelRect(x: 0, y: 0, w: 400, h: 1000)
+        // Rows: the limit is Int(0.005 * 1000) = 5.
+        XCTAssertEqual(contentRect(screen(darkRows: 300..<305)), whole)                           // 5 rows: bridged
+        XCTAssertEqual(contentRect(screen(darkRows: 300..<306)), PixelRect(x: 0, y: 306, w: 400, h: 694))   // 6 rows: a border, the wider side wins
+        // Columns: the limit is max(2, Int(0.005 * 400)) = 2.
+        XCTAssertEqual(contentRect(screen(darkCols: 100..<102)), whole)                          // 2 columns: bridged
+        XCTAssertEqual(contentRect(screen(darkCols: 100..<103)), PixelRect(x: 103, y: 0, w: 297, h: 1000))  // 3 columns: not
+        // An internal band wider than the limit stays unbridged even when it is dark purple rather than black.
+        var band = screen()
+        band.fill(Rect(x: 0, y: 400, w: 400, h: 30), (8, 7, 52))
+        XCTAssertNotEqual(contentRect(band), whole)
+        // Dark gaps at the ends are never bridged (a letterbox).
+        XCTAssertEqual(contentRect(screen(darkRows: 0..<3)).y, 3)
+    }
+
     func testLaplacianVarianceIsLowerForABlurredEdge() {
         var sharp = RGBAImage(width: 40, height: 40), soft = RGBAImage(width: 40, height: 40)
         sharp.fill(Rect(x: 0, y: 0, w: 40, h: 40), (0, 0, 0)); sharp.fill(Rect(x: 20, y: 0, w: 20, h: 40), WHITE)

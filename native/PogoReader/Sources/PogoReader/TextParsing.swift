@@ -21,7 +21,7 @@ private func isSpace(_ c: Character) -> Bool { c.isWhitespace }
 ///   "CP2 008" is 2008), the first attached to a CP-like prefix or alone; anything else with two groups
 ///   ("CP1 6", "CP1S 66", "CP1234 5") is no read;
 /// - a letter or separator between digits is no read ("1A86", "CP 1A86", "2.641", "CP 2,641", "CP²641"), except
-///   one leading digit that is a misread C (5, 6 or 8) followed by exactly one letter: "5p2641", "8p2611" (any
+///   one leading digit that is a misread C or the O of an "op" label (0, 5, 6 or 8) followed by exactly one letter: "5p2641", "8p2611" (any
 ///   letter, figure of three digits or more) and "5p86" (a P, a figure of two digits); "5pX2641" and "1A862" are not;
 /// - a leading zero in the figure is a misread ("CP0123", "CPO28") and so is a figure of more than four digits
 ///   ("CP12345", "23028"): no read, the last digits are not kept; a result below 10 is no read ("CP0 001"), and a
@@ -44,7 +44,7 @@ public func parseCp(_ text: String) -> Int? {
         // Digits before the figure are allowed only as one leading digit that a C can be misread as (5, 6, 8) followed
         // by exactly one letter ("5p"); a short figure needs that letter to be the P of "CP" ("5p86").
         let lead = before.prefix(while: isAsciiDigit), rest = before.dropFirst(lead.count)
-        guard lead.count == 1, "568".contains(lead[lead.startIndex]), rest.count == 1, isAsciiLetter(rest[rest.startIndex]) else { return nil }
+        guard lead.count == 1, "0568".contains(lead[lead.startIndex]), rest.count == 1, isAsciiLetter(rest[rest.startIndex]) else { return nil }
         if run.count < 3 && !"pP".contains(rest[rest.startIndex]) { return nil }
     }
     var digits = run

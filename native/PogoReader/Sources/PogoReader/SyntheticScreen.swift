@@ -13,11 +13,15 @@ public struct SyntheticScreen {
         public var header: (Int, Int, Int), card: (Int, Int, Int), hpBar: (Int, Int, Int)
         /// A thin stroke along the card's top edge (nil: none).
         public var edgeStroke: (Int, Int, Int)?
-        public init(header: (Int, Int, Int), card: (Int, Int, Int), hpBar: (Int, Int, Int), edgeStroke: (Int, Int, Int)? = nil) { self.header = header; self.card = card; self.hpBar = hpBar; self.edgeStroke = edgeStroke }
+        /// A dark band along the very top (1.35% of the height), as the darkest real skies have (darentas-02 f3049: 22 rows
+        /// at 750 px wide averaging under 30); `contentRect` cuts it as a border, which must not matter.
+        public var topBand: (Int, Int, Int)?
+        public init(header: (Int, Int, Int), card: (Int, Int, Int), hpBar: (Int, Int, Int), edgeStroke: (Int, Int, Int)? = nil, topBand: (Int, Int, Int)? = nil) { self.header = header; self.card = card; self.hpBar = hpBar; self.edgeStroke = edgeStroke; self.topBand = topBand }
         public static let phone = Style(header: (60, 80, 100), card: (250, 250, 245), hpBar: (102, 231, 170))
         public static let padMuted = Style(header: (110, 115, 125), card: (218, 149, 149), hpBar: (120, 142, 108))
         /// A Poison- or Ghost-type background: a dark purple sky (about 8,7,52 to 40,20,80) over a white card whose top edge has a
         /// thin dark stroke, as the real screens have. Dark enough that one row (the stroke) averages near the black-border test.
+        public static let darkTopBand = Style(header: (24, 14, 66), card: (252, 252, 250), hpBar: (102, 231, 170), edgeStroke: (33, 31, 36), topBand: (6, 6, 40))
         public static let darkSky = Style(header: (24, 14, 66), card: (252, 252, 250), hpBar: (102, 231, 170), edgeStroke: (33, 31, 36))
     }
 
@@ -64,6 +68,7 @@ public struct SyntheticScreen {
                 ctx.restoreGState()
             }
             rect(style.header, 0, 0, W, H)                                    // header / scene
+            if let band = style.topBand { rect(band, 0, 0, W, 0.0135 * H) }
             rect(style.card, 0, 0.35 * H, W, 0.65 * H)                        // card
             if let stroke = style.edgeStroke { rect(stroke, 0, 0.35 * H - 0.0012 * H, W, 0.0022 * H) }   // the card's dark top edge
             let white = CGColor(red: 1, green: 1, blue: 1, alpha: 1), ink = CGColor(red: 0.12, green: 0.14, blue: 0.16, alpha: 1)
