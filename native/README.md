@@ -133,3 +133,14 @@ temp folder), then the app's read, and prints the footprint of each half. Vision
 the Mac: `--vision-fast`, `--vision-device cpu|gpu|neuralEngine`, `--vision-min-text-height X`,
 `--vision-recreate` (see `VisionOptions`). None lowered memory without losing reads; Mac figures may not
 transfer to the phone.
+
+## Deviations from the JavaScript reader worth knowing
+
+- A frame with a centred CP but no HP bar (a special-background or buddy card, a Lucky nicknamed one: the
+  HP bar is absent or a muted colour) is read for the CP alone (flag `no-hp-bar`, no name); `LiveGrouper`
+  lists a stretch of such frames as `(name not read)` with the CP. The JS reader drops these frames.
+- HP and CP reads whose letters are on the wrong side of the figures (Vision reading a crop upside
+  down: `dH 99 / 99`) are no read.
+- `LiveGrouper` ends a run at a swipe (3+ frames with neither CP nor HP), absorbs 1-3 frame cards that do
+  not fit into the same Pokemon's neighbour, treats a CP that is a tail or digit-subsequence of the row's as
+  the same Pokemon, and computes the CP when a fully hidden card has exactly one fitting level.
