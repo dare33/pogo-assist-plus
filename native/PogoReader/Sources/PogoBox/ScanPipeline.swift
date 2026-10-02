@@ -19,6 +19,8 @@ public enum ScanPipeline {
         public var changes: [Refine.Change]
         public var notices: [String]
         public var timings: Timings
+        /// Median seconds between Pokémon in the log, when there is enough to measure.
+        public var pace: ScanPace.Measured?
     }
 
     public struct Timings: Equatable {
@@ -63,6 +65,6 @@ public enum ScanPipeline {
         let refined = try Refine.apply(to: base, readings: readings, ticks: ticks, engine: engine)
         timings.refine = Date().timeIntervalSince(t2)
         let span = (times.max() ?? 0) - (times.min() ?? 0)
-        return Outcome(scan: refined.scan, readings: readings.count, ticks: ticks.count, drops: drops, duration: max(0, span), changes: refined.changes, notices: refined.notices, timings: timings)
+        return Outcome(scan: refined.scan, readings: readings.count, ticks: ticks.count, drops: drops, duration: max(0, span), changes: refined.changes, notices: refined.notices, timings: timings, pace: ScanPace.measure(lines))
     }
 }

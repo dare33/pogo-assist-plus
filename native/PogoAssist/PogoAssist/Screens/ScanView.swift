@@ -56,8 +56,15 @@ struct ScanView: View {
 
     // MARK: - the Voice Control command
 
+    /// The pace and count the last command made were built for differ from what is chosen now.
+    private var choiceChanged: Bool {
+        guard let last = model.voiceLast else { return false }
+        return last.pace != model.pace || (model.storageCount != nil && last.storageCount != model.storageCount)
+    }
+
     private var commandSection: some View {
         Section {
+            stepTitle("1. Choose how to page")
             ForEach(VoiceCommandFile.Pace.allCases) { p in paceRow(p) }
             if let c = model.storageCount {
                 let size = VoiceCommandFile.sizing(storageCount: c, pace: model.pace)
@@ -70,22 +77,33 @@ struct ScanView: View {
                 Text("Tap paging is only available on screens it has been checked on.").font(.footnote).foregroundStyle(.secondary)
             }
             if let last = model.voiceLast {
-                Text("Last generated for \(last.storageCount.formatted()) Pokémon (\(last.pace.shortTitle)), \(Fmt.day(last.date)).").font(.footnote).foregroundStyle(.secondary)
-                if let c = model.storageCount, VoiceCommandFile.steps(storageCount: c) > last.covers {
-                    Label("Your count is higher than that command covers. Get the command again.", systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.orange)
+                Text("Last made: \(last.pace.spokenTitle), for \(last.storageCount.formatted()) Pokémon (\(Fmt.day(last.date))).").font(.footnote.weight(.medium))
+                if choiceChanged {
+                    Label("Your choice has changed. Get the command again and import it, or Voice Control will play the old one.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote).foregroundStyle(.orange)
+                } else if let c = model.storageCount, VoiceCommandFile.steps(storageCount: c) > last.covers {
+                    Label("Your count is higher than that command covers. Get the command again.", systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange)
                 }
+            } else {
+                Text("No command made yet.").font(.footnote).foregroundStyle(.secondary)
             }
-            Button { Task { await model.getCommand() } } label: { Label("Get the command", systemImage: "square.and.arrow.up") }
+            stepTitle("2. Get the command for this choice")
+            Button { Task { await model.getCommand() } } label: { Label("Get the \(model.pace.spokenTitle) command", systemImage: "square.and.arrow.up") }
                 .disabled(model.storageCount == nil)
+            Text("Each speed is its own file. Importing a new one replaces the old command.").font(.footnote).foregroundStyle(.secondary)
+            stepTitle("3. Import it in Voice Control")
             VStack(alignment: .leading, spacing: 4) {
-                Text("To install it").font(.footnote.weight(.semibold))
-                Text("1. Choose Save to Files or AirDrop in the sheet that opens.").font(.footnote)
-                Text("2. Settings > Accessibility > Voice Control > Commands > Import Custom Commands, then pick the file.").font(.footnote)
-                Text("3. With the first Pokémon's appraisal open, say \"Pogo scan\". A new file replaces the old command.").font(.footnote)
+                Text("a. Choose Save to Files or AirDrop in the sheet that opens.").font(.footnote)
+                Text("b. Settings > Accessibility > Voice Control > Commands > Import Custom Commands, then pick the file.").font(.footnote)
+                Text("c. Do this again whenever you choose a different speed or count.").font(.footnote)
             }
             .foregroundStyle(.secondary)
+            stepTitle("4. Say \"Pogo scan\"")
+            Text("With the first Pokémon's appraisal open.").font(.footnote).foregroundStyle(.secondary)
         } header: { Text("Voice Control command") } footer: { Text("Optional. Without it, swipe through the Pokémon by hand.") }
     }
+
+    private func stepTitle(_ text: String) -> some View { Text(text).font(.subheadline.weight(.semibold)) }
 
     private func minutes(_ seconds: Double) -> String {
         let m = Int((seconds / 60).rounded())

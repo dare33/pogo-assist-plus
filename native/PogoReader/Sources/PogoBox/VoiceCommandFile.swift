@@ -29,6 +29,10 @@ public enum VoiceCommandFile {
             case .tapFast: return "Tap (1.0 s)"
             }
         }
+        /// For "Get the fast swipe command" and "Last made: fast swipe".
+        public var spokenTitle: String {
+            switch self { case .swipeNormal: return "normal swipe"; case .swipeFast: return "fast swipe"; case .tapNormal: return "tap (1.2 s)"; case .tapFast: return "tap (1.0 s)" }
+        }
         public var shortTitle: String {
             switch self { case .swipeNormal: return "swipe, normal"; case .swipeFast: return "swipe, fast"; case .tapNormal: return "tap, 1.2 s"; case .tapFast: return "tap, 1.0 s" }
         }
