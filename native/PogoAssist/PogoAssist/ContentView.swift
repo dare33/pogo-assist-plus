@@ -71,7 +71,8 @@ struct ContentView: View {
                     if model.hasState, let url = SharedStore.stateURL {
                         ShareLink(items: [url] + [SharedStore.deferredURL, SharedStore.replayURL].compactMap { $0 }.filter { FileManager.default.fileExists(atPath: $0.path) }) { Image(systemName: "square.and.arrow.up") }
                     }
-                    Button("Clear", role: .destructive) { model.clear() }
+                    // Not while a broadcast is live: Clear would delete the replay log the extension is still writing.
+                    Button("Clear", role: .destructive) { model.clear() }.disabled(model.live)
                 }
             }
         }
@@ -93,6 +94,10 @@ struct ContentView: View {
                 Text("lowest free \(s.lowestAvailableMB.map(mb) ?? "n/a")")
             }
             .font(.footnote)
+            if s.replayLines > 0 || s.replayLogFailed {
+                Text("Replay log: \(s.replayLines) lines" + (s.replayLogTruncated ? " (stopped at its size cap)" : "") + (s.replayLogFailed ? " (a write failed; logging stopped)" : ""))
+                    .font(.footnote).foregroundStyle(s.replayLogFailed || s.replayLogTruncated ? Color.orange : Color.secondary)
+            }
             if s.skippedLowMemory > 0 { Text("Skipped for low memory: \(s.skippedLowMemory) frames").font(.footnote).foregroundStyle(.orange) }
             if s.finished {
                 Text("Broadcast finished (\(s.mode))").font(.footnote).foregroundStyle(.secondary)

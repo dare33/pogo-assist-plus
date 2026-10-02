@@ -110,7 +110,9 @@ phone on an iOS 27 beta needs the matching Xcode beta).
    the three-second countdown, turn Voice Control on and say "Marathon" (50 swipes, about 105 s).
 7. When it stops, stop the broadcast (red pill at the top), open the app, and note: rows listed,
    frames read and dropped, ms each, memory peak and lowest free, and the status line
-   ("Broadcast finished" or "ended without a finish marker"). Tap share and send the JSON.
+   ("Broadcast finished" or "ended without a finish marker"). Tap share and send every file it
+   offers: the state JSON and `replay.jsonl` (the per-reading log; a new live broadcast overwrites
+   it, so export after each run). Clear is disabled while a broadcast is live.
 8. If it ended without a finish marker (iOS killed the extension, most likely for memory): tap
    Clear, set Reader to "Read live (fast)", repeat 5 to 7; if that dies too, "Save crops, read in
    app", repeat, then open the app and wait for it to read the saved crops.
