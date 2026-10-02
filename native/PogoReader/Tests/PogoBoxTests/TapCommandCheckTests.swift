@@ -14,6 +14,16 @@ final class TapCommandCheckTests: XCTestCase {
         XCTAssertEqual(TapCommandCheck.onOtherScreens(made: made, current: "440x956 iPhone"), [.tapFast])
     }
 
+    func testRecordsUnderAnotherAccountAreChecked() {
+        let accounts: [String: [(pace: VoiceCommandFile.Pace, screen: String?)]] = [
+            "Main": [(.tapNormal, "440x956 iPhone")],
+            "Alt": [(.tapFast, "402x874 iPhone"), (.tapNormal, "440x956 iPhone")],
+        ]
+        XCTAssertEqual(TapCommandCheck.onOtherScreens(accounts: accounts, current: "440x956 iPhone"), [.tapFast], "the selected account is safe, the other account's fast scan is not")
+        XCTAssertEqual(TapCommandCheck.onOtherScreens(accounts: accounts, current: "402x874 iPhone"), [.tapNormal], "the 440 command is unsafe here whichever account made it")
+        XCTAssertEqual(TapCommandCheck.onOtherScreens(accounts: ["Main": [(.tapNormal, "440x956 iPhone")]], current: "440x956 iPhone"), [])
+    }
+
     func testTheWarningNamesEveryCommandAndSaysWhatToDo() throws {
         let both = try XCTUnwrap(TapCommandCheck.warning(for: [.tapNormal, .tapFast]))
         XCTAssertTrue(both.contains("\"Pogo scan\"") && both.contains("\"Pogo fast scan\""))

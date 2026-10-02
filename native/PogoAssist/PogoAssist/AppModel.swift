@@ -195,7 +195,22 @@ final class AppModel: ObservableObject {
     /// screen the pace is forced to Swipe, but a tap command made earlier (Display Zoom turned on since, a restore onto another phone) is
     /// still installed in Voice Control.
     var tapCommandsOnOtherScreens: [VoiceCommandFile.Pace] {
-        TapCommandCheck.onOtherScreens(made: voiceRecords.map { (pace: $0.key, screen: $0.value.screen) }, current: screenLabel)
+        var all = Self.deviceVoiceRecords()
+        // What was just made for the selected account counts even before it is read back.
+        all[account ?? "", default: []].append(contentsOf: voiceRecords.map { (pace: $0.key, screen: $0.value.screen) })
+        return TapCommandCheck.onOtherScreens(accounts: all, current: screenLabel)
+    }
+
+    /// The voice records of every account on this device (Voice Control's commands are device-wide), from the stored keys `voiceLast.<account>.<pace>`.
+    static func deviceVoiceRecords() -> [String: [(pace: VoiceCommandFile.Pace, screen: String?)]] {
+        var out = [String: [(pace: VoiceCommandFile.Pace, screen: String?)]]()
+        for (key, value) in UserDefaults.standard.dictionaryRepresentation() where key.hasPrefix(Keys.voice) {
+            let rest = key.dropFirst(Keys.voice.count)
+            guard let dot = rest.lastIndex(of: "."), let pace = VoiceCommandFile.Pace(rawValue: String(rest[rest.index(after: dot)...])),
+                  let data = value as? Data, let rec = try? JSONDecoder().decode(VoiceRecord.self, from: data) else { continue }
+            out[String(rest[..<dot]), default: []].append((pace: pace, screen: rec.screen))
+        }
+        return out
     }
     var tapCommandWarning: String? { TapCommandCheck.warning(for: tapCommandsOnOtherScreens) }
 

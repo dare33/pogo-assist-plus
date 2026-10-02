@@ -11,6 +11,13 @@ public enum TapCommandCheck {
         return VoiceCommandFile.Pace.allCases.filter { unsafe.contains($0) }   // a fixed order, however the records were listed
     }
 
+    /// The same check over the records of EVERY account on the device. Voice Control's commands are device-wide and share their names
+    /// ("Pogo scan"), so a record under another account says what may be installed just as one under the selected account does. If any
+    /// account's record of a tap pace is for another screen, that command is flagged: which import is the installed one cannot be known.
+    public static func onOtherScreens(accounts: [String: [(pace: VoiceCommandFile.Pace, screen: String?)]], current: String) -> [VoiceCommandFile.Pace] {
+        onOtherScreens(made: accounts.values.flatMap { $0 }, current: current)
+    }
+
     /// What the Scan screen says, or nil when nothing is unsafe. Names every command, says not to say them here and where to delete them.
     public static func warning(for paces: [VoiceCommandFile.Pace]) -> String? {
         guard !paces.isEmpty else { return nil }
