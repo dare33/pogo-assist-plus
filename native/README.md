@@ -477,7 +477,11 @@ count (an extra scanned row identical to a paired entry is asked about, flagged 
 that are not interchangeable is "unsure" and never guessed. What matched nothing is asked about when it could be a saved entry: a part-read
 CP, a power-up whose IVs were not read, a lower CP, the same CP and HP with other IVs (a misread or a hand correction), or an evolution
 whose IVs were not read (the saved precursor is the candidate). Every such row is judged against all the saved entries left, so two rows
-that could be one entry are both asked, and Save refuses one entry chosen for two rows. A full scan proposes unmatched
+that could be one entry are both asked, and Save refuses two rows that would each write values to one entry (any number of part reads
+may share an entry: they only mark it seen). For the same CP and HP with other IVs, "It is this one" keeps the saved IVs (always when
+hand-corrected) and flags the entry `ivs-rescan-differs` so it shows under "to check"; only saved IVs that were not an exact read are
+replaced by a clean read. A row whose own CP is not trusted (a part read, or flagged `no-level-fits`) never writes its CP, level or dust
+onto a saved entry, and an entry another row of the same scan already matched is only marked seen. A full scan proposes unmatched
 saved Pokemon as gone (applied only on Save); add and update removes nothing. Hand corrections remember the value the scan had
 read: a later scan reading that same value, or the corrected one, leaves the correction; any other value replaces it. The box
 is kept as numbered versions (`BoxLibrary`, `<account>/box/NNNNNN.json`); a scan, a correction and a restore each add one and
@@ -637,5 +641,6 @@ A saved entry flagged `no-level-fits` (or with no usable CP) and no IVs, of the 
 row that matched nothing else, is offered as Unsure with the entry as a candidate, whatever the CP. The two promises hold for each such
 candidate, whatever the kind of question (other, plausible candidates or a part-read CP may be in it too). "It is this one" for a misread
 candidate replaces its unread values with the row's read values (CP, IVs, level, dust; the id, first seen and hand corrections stay, and the
-flag clears). "It is new" adds the row and leaves every misread candidate in the box, in a full scan too; the other candidates follow the
+flag clears). When the row's own CP is not trusted (a part read, or `no-level-fits`), only the entry's unread IVs and HP are filled and its
+CP, level and dust are left alone. "It is new" adds the row and leaves every misread candidate in the box, in a full scan too; the other candidates follow the
 usual rule and may go. Only read values are ever copied over a saved one.
