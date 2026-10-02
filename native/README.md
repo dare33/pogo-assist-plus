@@ -385,6 +385,12 @@ interpreter).
   that CP for the stretch; it is dropped as a duplicate only when the row beside it is the same Pokemon with equal settled
   bars and there is no swipe evidence between them, and that row then carries the flag `absorbed-unread`. Readings with no
   frame labels are labelled by position (and the JavaScript is re-run). `Refine.applyTickOnly` is the first, tick-only version.
+  A last step, `Refine.splitByTiming`, splits a row that stayed exactly two periods of a steady beat (a tap leaves no `mid-swipe`; a
+  fast swipe can hide in dropped frames): the later row gets `same-as-previous split-by-timing`. It needs a regular beat on both sides,
+  at most two unreadable frames inside the stay, and pairs only; with no `PagingHint` it also needs the whole scan to be steady
+  (`ScanPace.regularity` 0.07 or less) and a period of 1.0 s or more. A hint with `pagedByCommand: false` turns it off. `ScanPace.measure`
+  gives the measured median period, regularity and periods observed for the app to show. `pogo-rows` prints the pace and takes
+  `--paging command[:period] | hand`.
 
 What the app will call after a scan: `let engine = CoreEngine()` (own queue) then
 `engine.finish(readings:)`, `Refine.apply(to:readings:ticks:engine:)`, `BoxStore.save(_:account:source:)`,
@@ -439,3 +445,11 @@ The phone listed 51 Pokemon. The JavaScript `finish` on the log gives 49 rows an
 with `LiveGrouper`) gives exactly the phone's 51 (name and CP, in order): the twin Staraptor 1986 (HP 139), which no swipe
 tick separates, is split because `LiveGrouper` has two rows there; Zapdos 1977 is computed; the unmatched Staraptor 1994 entry
 is dropped as a duplicate of the row beside it. `DeviceRunTests` pins the three lists.
+
+### Timing split: what it does and does not do (13 clips and logs, `RefineTiming.swift`)
+
+Without a hint the fast-swipe device log refines to 51 rows (the Staraptor 1986 pair, two periods of 1.70 s), the normal-pace logs and
+marathon-phone stay at 51, 49 and 47, and darentas-01/02/03, v3, marathon-ipad-mini, pogo-test-fast and screenrec-2149 gain nothing.
+Hand-tapped paging cannot be told from a command's by its beat alone (locally it is as regular), and a page that does not take
+(darentas-03: a steady 2.1 s gesture whose finger was shown touching while the card stayed, stays of 3 to 7 periods) looks like a run
+of identical Pokemon: that is why only pairs are split, why the no-hint rule asks for a steady scan, and why the app should pass the hint.
