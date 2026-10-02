@@ -40,6 +40,8 @@ public final class BoxStore {
         public var rows: [ScanRow]
         public var review: [ReviewEntry]
         public var unmatched: [Unmatched]
+        /// The storage count the player typed before the scan, if any (kept with the scan; nothing reads it yet).
+        public var storageCount: Int?
     }
 
     public struct Summary: Equatable {
@@ -68,13 +70,22 @@ public final class BoxStore {
     // MARK: - Save / load
 
     @discardableResult
-    public func save(_ result: ScanResult, account: String, scanDate: Date = Date(), source: String, kind: Kind = .full) throws -> Summary {
+    public func save(_ result: ScanResult, account: String, scanDate: Date = Date(), source: String, kind: Kind = .full,
+                     storageCount: Int? = nil, replayLog: Data? = nil) throws -> Summary {
         let dir = try accountDirectory(account, create: true)
         let id = Self.makeID(scanDate)
         let scan = StoredScan(schema: Self.schemaVersion, id: id, account: account, scanDate: scanDate, savedAt: Date(), source: source, kind: kind,
-                              rows: result.rows, review: result.review, unmatched: result.unmatched)
+                              rows: result.rows, review: result.review, unmatched: result.unmatched, storageCount: storageCount)
+        // The replay log goes first: if the scan file is then written, the log it rebuilds from is already there.
+        if let log = replayLog { try log.write(to: dir.appendingPathComponent("\(id).replay.jsonl"), options: .atomic) }
         try Self.encoder.encode(scan).write(to: dir.appendingPathComponent("\(id).json"), options: .atomic)
         return Self.summary(scan)
+    }
+
+    /// The replay log saved beside a scan (`save(replayLog:)`), or nil if that scan has none.
+    public func replayLog(account: String, id: String) throws -> Data? {
+        let file = try accountDirectory(account, create: false).appendingPathComponent("\(Self.safeFileStem(id)).replay.jsonl")
+        return fm.fileExists(atPath: file.path) ? try Data(contentsOf: file) : nil
     }
 
     public func accounts() throws -> [String] {
@@ -123,6 +134,7 @@ public final class BoxStore {
         let file = try accountDirectory(account, create: false).appendingPathComponent("\(Self.safeFileStem(id)).json")
         guard fm.fileExists(atPath: file.path) else { throw Failure.notFound(account: account, id: id) }
         try fm.removeItem(at: file)
+        try? fm.removeItem(at: file.deletingPathExtension().appendingPathExtension("replay.jsonl"))
     }
 
     public func deleteAccount(_ account: String) throws {
@@ -144,7 +156,8 @@ public final class BoxStore {
 
     // MARK: - Files
 
-    private func accountDirectory(_ account: String, create: Bool) throws -> URL {
+    /// The folder of an account (percent-encoded name). Internal: `BoxLibrary` keeps its box versions in a subfolder of it.
+    func accountDirectory(_ account: String, create: Bool) throws -> URL {
         let trimmed = account.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw Failure.badAccountName }
         // Percent-encoding keeps every distinct account name a distinct, safe directory name ("." and ".." included).
