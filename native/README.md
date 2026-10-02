@@ -90,6 +90,34 @@ needs an app icon first (an `AppIcon` asset in `PogoAssist/`); there is none yet
 If the app group is missing (signing / capabilities not set on both targets) the app shows a red line
 "App group not available"; the extension logs it too.
 
+## First device run (the owner's part)
+
+Needs an Xcode that supports the phone's iOS version (Xcode 26.6 has the iOS 26.5 SDK only; a
+phone on an iOS 27 beta needs the matching Xcode beta).
+
+1. Open `native/PogoAssist/PogoAssist.xcodeproj`. In Xcode's Settings > Accounts, sign in.
+2. Select the `PogoAssist` target > Signing & Capabilities > pick the team. Do the same for the
+   `PogoBroadcast` target. Both must show the app group `group.com.dare33.pogoassist` with no
+   error. If an identifier is taken, change `BUNDLE_ID_PREFIX` in `Config/Identifiers.xcconfig`
+   (the only place) and try again.
+3. Plug in the phone, choose it as the run destination, press Run (it builds Release). Trust the
+   developer on the phone if asked (Settings > General > VPN & Device Management).
+4. In the app: Reader = "Read live (accurate)". If a red line says the app group is not
+   available, go back to step 2.
+5. Voice Control: Show Confirmation and Show Hints off. Open Pokémon GO on the first Pokémon
+   with the appraisal open, then come back to the app.
+6. Tap the broadcast button, choose Pogo Assist, Start Broadcast. Switch to Pokémon GO within
+   the three-second countdown, turn Voice Control on and say "Marathon" (50 swipes, about 105 s).
+7. When it stops, stop the broadcast (red pill at the top), open the app, and note: rows listed,
+   frames read and dropped, ms each, memory peak and lowest free, and the status line
+   ("Broadcast finished" or "ended without a finish marker"). Tap share and send the JSON.
+8. If it ended without a finish marker (iOS killed the extension, most likely for memory): tap
+   Clear, set Reader to "Read live (fast)", repeat 5 to 7; if that dies too, "Save crops, read in
+   app", repeat, then open the app and wait for it to read the saved crops.
+
+Pass for proof 2: every Pokémon of the 50-swipe run listed with name and CP, memory peak under
+about 50 MB, the phone staying responsive.
+
 ## How memory is measured
 
 iOS enforces the extension's limit (about 50 MB) on `phys_footprint`. `MemoryProbe` reads it from
