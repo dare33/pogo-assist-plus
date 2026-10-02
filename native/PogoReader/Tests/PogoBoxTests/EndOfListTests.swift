@@ -270,6 +270,88 @@ final class EndOfListTests: XCTestCase {
         XCTAssertNil(e.ended)
     }
 
+    /// K1: how often the end is still FOUND when readings are lost at random, on the three logs that reached the end of the list. At least what the earlier
+    /// rule found (30%: 50, 50, 50 of 50; 50%: 47, 47, 50 of 50). Printed for the report.
+    func testTheEndIsStillFoundWhenReadingsAreLost() throws {
+        let floors: [String: (Int, Int)] = ["device-run4-fast-swipe-2026-10-02.replay.jsonl": (50, 47), "device-run7-tap-1.2-phantom.replay.jsonl": (50, 47), "device-run9-tap-300b.replay.jsonl": (50, 50)]
+        for (name, period, reached) in Self.logs where reached {
+            let rs = try readings(name), finalNew = try XCTUnwrap(run(seq(rs), period: period).lastNew)
+            var found = [Int]()
+            for dropRate in [0.3, 0.5] {
+                var n = 0
+                for seed in 0..<50 {
+                    var x = UInt64(seed * 7919 + 17), kept = Seq()
+                    for r in rs { x = x &* 6364136223846793005 &+ 1442695040888963407; if Double(x >> 11) / Double(1 << 53) >= dropRate { kept.append((r.frameReading, r.t)) } }
+                    if let e = run(kept, period: period).ended, e.at >= finalNew - 0.01 { n += 1 }
+                }
+                found.append(n)
+            }
+            print("FOUND \(name): 30% lost \(found[0])/50, 50% lost \(found[1])/50")
+            let floor = try XCTUnwrap(floors[name])
+            XCTAssertGreaterThanOrEqual(found[0], floor.0, name); XCTAssertGreaterThanOrEqual(found[1], floor.1, name)
+        }
+    }
+
+    /// K1: a static last card read at 0.3 s with noise must still end the scan, within 120 s, in every seed: frames lost, CP or bars unread on some, no
+    /// card read on some, bars or CP misread on some readings.
+    func testAStaticLastCardWithNoiseStillEndsIt() {
+        enum Noise { case lost(Double), cpUnread(Double), barsUnread(Double), nothingRead(Double), barsMisread(Double, Int), cpMisread(Double) }
+        let cases: [(String, Noise)] = [("2 of 10 lost", .lost(0.2)), ("3 of 10 lost", .lost(0.3)), ("CP unread on 3 of 10", .cpUnread(0.3)), ("bars unread on 3 of 10", .barsUnread(0.3)),
+                                        ("no card read on 3 of 10", .nothingRead(0.3)), ("bars misread 5%", .barsMisread(0.05, 1)), ("bars misread 10%", .barsMisread(0.1, 1)),
+                                        ("bars misread 20%", .barsMisread(0.2, 1)), ("bars misread 10% to 3 values", .barsMisread(0.1, 3)), ("CP misread 10%", .cpMisread(0.1))]
+        for cadence in [0.3, 0.6] {
+            for (label, noise) in cases {
+                var notEnded = 0
+                for seed in 0..<40 {
+                    var (d, t) = armed()
+                    let start = t
+                    var x = UInt64(seed * 31 + 7)
+                    func rnd() -> Double { x = x &* 6364136223846793005 &+ 1442695040888963407; return Double(x >> 11) / Double(1 << 53) }
+                    while t < start + 120 && d.ended == nil {
+                        var r = card("Last", 900, hp: 99, bars: 7)
+                        var feed = true
+                        switch noise {
+                        case .lost(let p): feed = rnd() >= p
+                        case .cpUnread(let p): if rnd() < p { r.cp = nil }
+                        case .barsUnread(let p): if rnd() < p { r.ivs = nil }
+                        case .nothingRead(let p): if rnd() < p { r = FrameReading() }
+                        case .barsMisread(let p, let k): if rnd() < p { r.ivs = IVs(atk: 7, def: 8 + Int(rnd() * Double(k)), hp: 4) }
+                        case .cpMisread(let p): if rnd() < p { r.cp = 357 }
+                        }
+                        if feed { d.feed(r, time: t) }
+                        t += cadence
+                    }
+                    if d.ended == nil { notEnded += 1 }
+                }
+                XCTAssertEqual(notEnded, 0, "\(label) at \(cadence) s: \(notEnded) of 40 seeds never ended")
+            }
+        }
+    }
+
+    /// K1, no early end: cards one digit apart in CP with identical bars, 3 readings each (the fuzzy CP match used to let eight of them end it).
+    func testEightCardsWithCPsOneDigitApartAndIdenticalBarsDoNotEndIt() {
+        for cps in [(0..<10).map { 1400 + 10 * $0 }, (0..<10).map { 1499 - $0 }, [1500, 1499, 1498, 1497, 1496, 1495, 1494, 1493, 1492, 1491, 1490, 1489]] {
+            var (d, t) = armed()
+            for cp in cps { for _ in 0..<3 { d.feed(card("Rattata", cp, hp: 40, bars: 10), time: t); t += 0.4 } }
+            d.feed(card("Zubat", 999, hp: 77, bars: 1), time: t)
+            XCTAssertNil(d.ended, "\(cps.first!)...")
+        }
+    }
+
+    /// K1, no early end: alternating twins at two or more readings per card are a stable switch each time, so they never end it. The accepted residual:
+    /// recurring values read ONCE per card (alternating identical twins at one reading per card) look like one static card.
+    func testAlternatingTwinsAtTwoReadingsPerCardDoNotEndItAndOneReadingPerCardIsTheAcceptedResidual() {
+        let a = card("Pidgey", 10, hp: 12, bars: 1), b = card("Pidgey", 10, hp: 12, bars: 4)
+        for per in [2, 3, 4] {
+            var (d, t) = armed()
+            for n in 0..<12 { for _ in 0..<per { d.feed(n % 2 == 0 ? a : b, time: t); t += 1.2 / Double(per) } }
+            XCTAssertNil(d.ended, "\(per) readings per card")
+        }
+        var (d, t) = armed()
+        for n in 0..<24 { d.feed(n % 2 == 0 ? a : b, time: t); t += 1.2 }
+        XCTAssertNotNil(d.ended, "accepted residual: one reading per card for identical twins")
+    }
+
     func testHiddenCPPokemonCountAsPagingAndDoNotEndIt() {
         var d = EndOfListDetector(period: 1.2)
         var t = 0.0
