@@ -34,6 +34,29 @@ export function solve({ species, cp, hp = null, ivs = null }) {
     // rises, so the first level that can give `cp` is found by bisection and the scan starts there (the levels
     // below it are all under `cp`).
     const { atk: A, def: D, hp: S } = sp.baseStats;
+    if (hp !== null) {
+      // With the HP read, few (hp IV, level) pairs reproduce it: find those first, then only the attack and
+      // defence IVs are tried for the CP. The fits are put back in the order the scan above would give
+      // (IV combination, then level), which is what the sort in this function and its callers see.
+      const found = [];
+      for (let h = 0; h <= 15; h++) {
+        for (let i = 0; i < LEVELS.length; i++) {
+          if (Math.max(10, Math.floor((S + h) * LEVEL_CPM[i])) !== hp) continue;
+          const sh = Math.sqrt(S + h);
+          for (let a = 0; a <= 15; a++) {
+            for (let d = 0; d <= 15; d++) {
+              if (cpFast((A + a) * Math.sqrt(D + d) * sh, i) === cp) found.push([a * 256 + d * 16 + h, i]);
+            }
+          }
+        }
+      }
+      found.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+      for (const [k, i] of found) {
+        const c = combos[k];
+        fits.push({ speciesId: sp.speciesId, ivs: c, level: LEVELS[i], hp, tier: ivs ? tierOf(ivs, c) : 3 });
+      }
+      continue;
+    }
     for (let a = 0, k = 0; a <= 15; a++) {
       for (let d = 0; d <= 15; d++) {
         const x = (A + a) * Math.sqrt(D + d);
