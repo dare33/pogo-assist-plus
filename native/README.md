@@ -501,7 +501,47 @@ none is deleted; Settings restores any of them (as a new version). The replay lo
   a hidden-CP row) so level and dust follow the corrected values; when no level fits it keeps the edit, adds `no-level-fits` and says so.
 - Diagnostics has "Load partial-read sample" (one Staraptor read as CP 182) to drive the unsure card in the simulator.
 
-### Voice Control command made in the app (`PogoBox/VoiceCommandFile.swift`)
+### The one-time Voice Control command set (`VoiceCommandFile.makeSet`)
+
+The app makes ONE commands file, once per phone ("Get the commands" on the Scan screen), holding 13 commands, "Pogo scan N" for
+N in 25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000 (`VoiceCommandFile.setSizes`, one table). Each has its own batch
+gesture sized by the same `sizing(storageCount: N)` rule as the single command, so "Pogo scan 300" pages exactly as the old 300 command did.
+On a checked screen (440 x 956 only) the set taps at the measured right-edge point, 1.2 s per Pokémon, through the same checks `make`
+applies (`verifiedTap`, shared); on any other screen the same set swipes at 1.6 s. There are no fast (1.0 s) commands in it. Gesture names
+are two words nobody says, none shared with a spoken command or with the single modes' names; identifiers are `Custom.<n>` (gesture) and
+`Custom.<n+60>` (command) with `n` = 781,000,000 + 100 x size index for tap and 781,100,000 + 100 x index for swipe, so importing the file
+again replaces these commands and nothing else, and no other mode's. The command text is digits ("Pogo scan 300"): the file format does not
+say whether Voice Control matches a spoken "three hundred" to digits, so that has to be tried on a phone. File size: tap set 293,967 bytes,
+swipe set 6,046,576 bytes (the swipe gestures hold many more touch events: 50 swipes of 36 events each in the larger sizes). `pogo-voice --set
+--out file [--screen WxH]` makes it on a Mac. The test is structural (`testTheTapSetIsThirteenCommands...`, `testTheSwipeSet...`): it decodes
+the file, checks 13 commands and 13 gestures, every tap exactly at the measured point, `repeats x batch >= steps`, unique ids and names, and
+that each gesture equals the one `make` produces for the same steps. `generate_commands.py` has no set mode, so the Python is not compared.
+
+For a scan the person picks full or part. A full scan asks the storage count once per account (editable) and shows "Say: Pogo scan N" with N
+the smallest size that covers it (above 5,000 the largest command covers 5,000 and the rest needs a second scan with Add and update). A part
+scan lists the sizes and what each takes. The app keeps a record of the set (screen, date) per account, and the wrong-screen warning
+(`TapCommandCheck`) covers it across every account on the phone.
+
+**Once started, a command cannot be stopped.** Touching the screen, the side-button triple click, locking the phone and "Hey Siri, turn off
+Voice Control" were all tried on an iPhone and none stops it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps
+tapping (or swiping) the same place whatever is on screen. That is why the set has fixed sizes: the overshoot past the end of the list is bounded.
+
+**The scan ends by itself** at the end of the list, for a command scan only (the app tells the extension through the app group; paging by hand
+never ends by itself because a person may pause). `EndOfListDetector` (PogoReader, a few stored values) is fed each frame's reading: after at
+least 3 different Pokémon, 6 expected periods in a row with no NEW Pokémon (no card read at all, or the same Pokémon's readings continuing) is the end
+(7.2 s at 1.2 s, 9.6 s at 1.6 s). The extension then writes an end marker line to the replay log (`{"k":"e","t":...,"last":...}`), finishes the
+state and log as a user stop does and ends the broadcast with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reached.")`.
+`ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings later than the last new Pokémon plus 3 s when a marker is present.
+What the device logs showed (`EndOfListTests`): under tap (run7, run9) the last Pokémon's card stays on screen and keeps reading unchanged for 30
+to 38 s after the last new one, then the card goes (run9: 67 readings with the CP, then 11 without); under swipe (run4) the same Pokémon is read
+for 49.8 s. Inside a scan the longest stretch with no new Pokémon on any log was 3.0 periods (6.0 s at the 2.1 s swipe, 3.6 s at the 1.2 s tap),
+including batch joins and dropped frames, so 6 periods leaves a factor of 2. Run8 (tap, 300) stopped 6.6 s after its last new Pokémon, under the 7.2 s,
+and never triggers; run1, run3, run5 and run6 never trigger either. **This path has not run in the broadcast extension on a device**, and
+nor has the set file been imported on a phone: the logs are the only evidence. A premature end only shortens a scan (rescan with Add and update).
+
+### Voice Control command made in the app, the single-command API (`PogoBox/VoiceCommandFile.swift`)
+
+The app's normal flow now uses the set above; this single-command API, its fixtures and the four modes remain in the code.
 
 A Swift port of `experiments/voice-control/generate_commands.py` (which stays the reference; `VoiceCommandFileTests` compares the two
 on fixtures made by the script with `--now` fixed, archives decoded to plain structures with their UIDs). The file holds a batch gesture
