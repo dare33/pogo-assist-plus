@@ -19,7 +19,7 @@ extension Refine {
     /// (`ivsRead`, before the solver) equal the neighbour's, are unread, or differ by at most one unit on every bar while none
     /// of its frames' bars were settled. It is never absorbed when its own settled bars differ AND its HP differs (another
     /// Pokemon). The fragment is removed; the neighbour keeps its values and gets the flag `absorbed-fragment:<cp>`.
-    static func absorbFragments(_ scan: ScanResult, ticks: [Double] = []) -> (scan: ScanResult, marks: [(flag: String, detail: String, label: String)]) {
+    static func absorbFragments(_ scan: ScanResult) -> (scan: ScanResult, marks: [(flag: String, detail: String, label: String)]) {
         var rows = scan.rows
         guard rows.count >= 2 else { return (scan, []) }
         let pace = ScanPace.measure(rows: rows)
@@ -37,6 +37,7 @@ extension Refine {
             guard small else { i += 1; continue }
             // Both neighbours are examined: the fragment may belong to the one behind it or the one ahead.
             var candidates = [Int]()
+            var byFallback = Set<Int>()   // pairs judged without a regular beat around them (consecutive readings only)
             for j in [i - 1, i + 1] where j >= 0 && j < rows.count {
                 let n = rows[j]
                 guard n.name == f.name else { continue }
@@ -47,6 +48,7 @@ extension Refine {
                 if let p = period, let outer = outerSpan(rows, around: min(i, j), and: max(i, j)) {
                     together = outer <= fragmentPairMaxPeriods * p
                 } else {
+                    byFallback.insert(j)
                     let gap = j > i ? na - b : a - (nts.max() ?? a)
                     together = gap <= fragmentFallbackGapSeconds + 1e-9
                 }
@@ -69,7 +71,12 @@ extension Refine {
             guard let j = absorbedBy else { i += 1; continue }
             let n = rows[j]
             // Same CP, or a part read of the kept CP: a note. Any other CP folded in: always a check (a once-read real Pokémon must not vanish quietly).
-            let flag = (f.cp != n.cp && !isPartRead(f.cp, of: n.cp)) ? "absorbed-other-cp:\(f.cp)" : "absorbed-fragment:\(f.cp)"
+            // A once-read, solved fragment with the SAME CP, folded in with no regular beat to say a boundary lies between, could be a real identical twin.
+            let solvedFragment = f.cp > 0 && f.level != nil && !f.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
+            let flag: String
+            if f.cp != n.cp && !isPartRead(f.cp, of: n.cp) { flag = "absorbed-other-cp:\(f.cp)" }
+            else if f.cp == n.cp && solvedFragment && byFallback.contains(j) { flag = "absorbed-same-cp:\(f.cp)" }
+            else { flag = "absorbed-fragment:\(f.cp)" }
             if !rows[j].flags.contains(flag) { rows[j].flags.append(flag) }
             // The fragment's readings join the row they were part of (its values stay as the JavaScript solved them).
             rows[j].frames = (rows[j].frames + f.frames).sorted { ($0.time ?? 0) < ($1.time ?? 0) }
@@ -81,15 +88,17 @@ extension Refine {
         return (ScanResult(rows: rows, review: rows.filter { !$0.flags.isEmpty }.map(reviewEntry), unmatched: scan.unmatched), marks)
     }
 
-    /// The CP read is a run of the other's digits (182 in 1982): a part read of it, not another number.
+    /// `a` is a part read of `b`: its digits are a run of the KEPT row's CP (182 in 1982). The reverse (1982 beside a better-read 182) is another number.
     private static func isPartRead(_ a: Int, of b: Int) -> Bool {
-        func subsequence(_ small: [Character], _ big: [Character]) -> Bool { var i = 0; for c in big where i < small.count && c == small[i] { i += 1 }; return i == small.count }
         let x = Array(String(a)), y = Array(String(b))
-        return x.count < y.count ? subsequence(x, y) : (y.count < x.count ? subsequence(y, x) : false)
+        guard x.count < y.count else { return false }
+        var i = 0
+        for c in y where i < x.count && c == x[i] { i += 1 }
+        return i == x.count
     }
 
     /// The flags a fragment absorption, a lone-CP-outlier fix or a bars split leave on a row; a row solved again keeps them.
-    static let refineFlagPrefixes = ["absorbed-fragment", "absorbed-other-cp", "read-once-beside", "cp-outlier-dropped", "split-by-bars"]
+    static let refineFlagPrefixes = ["absorbed-fragment", "absorbed-other-cp", "absorbed-same-cp", "read-once-beside", "cp-outlier-dropped", "split-by-bars"]
     static func carriedFlags(_ row: ScanRow) -> [String] { row.flags.filter { f in refineFlagPrefixes.contains { f == $0 || f.hasPrefix($0 + ":") || f.hasPrefix($0 + "-") } } }
 
     /// Time from the change before row `lo` to the change after row `hi` (boundaries are midpoints between neighbouring rows'

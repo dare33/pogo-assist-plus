@@ -537,9 +537,13 @@ extension is only given a period when the command is chosen AND a set record exi
 without the commands (the Scan screen says the end needs them). The extension records the period it was given in its state (`commandPeriod`; nil is hand
 paging) and the review and Refine use that, not a setting changed since. The end is declared POSITIVELY (`EndOfListDetector`, PogoReader, a few stored values):
 the same card has been read, again and again, for the whole quiet time.
-- The CURRENT card is the one on screen since the quiet clock last reset. The clock resets on ANY reading whose name or HP differs from the current card's
-  (one reading is enough; a part that was not read is not a difference), and on a CP or bars value that differs and is stable (two keyed readings in a row),
-  so twins of one species and HP still reset it. A reset is dated at the reading that confirmed it.
+- The CURRENT card is the one on screen since its name or HP last changed. The quiet clock resets on ANY reading whose name or HP differs from the current
+  card's (one reading is enough; a part that was not read is not a difference). A CP value or a bars value (each alone, compared EXACTLY: no one-digit or
+  digit-run fuzziness) that was never read during this stay resets it on a SINGLE reading. A value already read during the stay resets it only on a STABLE
+  SWITCH: read in two readings in a row (a frame that did not read that kind breaks the chain) and different from the value that was stable before it, which is
+  paging between two real cards that recur (alternating twins at two or more readings per card). A recurring value that reappears after unread frames, or a
+  one-reading blip, does not reset it. The values read on the card are remembered for the whole stay, a bounded list (12 per kind; an old one dropped counts as
+  never read, which errs toward not ending). A reset is dated at the reading that caused it.
 - The clock only grows across consecutive processed frames that both read the current card, at most 2 s apart. Frames with no card read, and gaps between
   processed frames, add nothing and reset nothing, so a run of unread cards (fainted Pokémon), however long, never ends the scan; if the appraisal closes and
   nothing is readable the scan does not end by itself and the person stops it from the red bar.
@@ -548,19 +552,24 @@ the same card has been read, again and again, for the whole quiet time.
 - Arming keeps its evidence rule: at least 5 stable new Pokémon (name and HP, two readings in a row; the CP alone when neither was read, with CP misreads of one card
   treated as one) whose last 3 changes were each 0.5 to 2.5 expected periods after the one before: the command is seen paging at its pace. Before that it
   never ends, however long the wait before the command was said. Stability applies to arming only.
-Accepted and documented: a real run of 8 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer than 5 readable Pokémon
-never arm it; persistent flapping of the last card's name, HP, CP or bars read delays or prevents the end; a list whose last Pokémon were not read looks like an
-earlier end.
+Accepted and documented: a real run of 8 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer than 5 readable
+Pokémon never arm it; persistent flapping of the last card's name or HP read delays or prevents the end; a list whose last Pokémon were not read looks like an
+earlier end; and recurring values read ONCE per card (alternating identical twins at one reading per card, for 8 cards) look like one static card and end it.
 Per log, seconds from the first reading (`testWhereEachLogArmsAndEnds` prints them; "in-scan quiet" is the most the clock reached before a later reset, once armed):
-run1 (2.1 s) armed +20.0, no end, in-scan quiet 2.8 s; run3 (2.1) +13.0, no end, 2.4 s; run4 fast swipe (1.6) +11.9, ended +102.4 (last reset +89.2), 1.6 s;
-run4 stretch (1.6) +7.6, no end, 1.6 s; run5 (tap 1.2) +8.8, no end, 2.1 s; run6 (tap 1.0) +7.2, no end, 1.6 s; run7 (tap 1.2, phantom) +8.6, ended +73.2 (last
-reset +63.6), 2.0 s; run8 (tap 300) +8.2, no end (the log stops 6.6 s after its last reset, under the 9.6 s), 2.2 s; run9 (tap 300) +8.2, ended +381.7 (last
-reset +372.1), 2.0 s. The true in-scan maximum is 1.0 to 1.83 periods (3.03 on run6 counted the wait before the first page in the earlier figure), against 8.
-Tests, on every full device log: readings kept at one per 0.6 s and one per 0.8 s, and 30% and 50% of readings dropped at random (50 seeds each), never end
-early (the 50% figure: 0 of 50 seeds ended early on every log), and run4, run7 and run9 still end at their last Pokémon; windows of 4, 5, 6 and 8 periods with no
-card read inserted at every position never end it; a wait of 0 to 30 s before the first page never ends it; and constructed cases: a card held 9 s across a frame
-gap, A,B,A,B twins for 12 cards, 16 hidden-CP Pokémon and a run of unread cards never end it, while 8 identical Pokémon and a static card with single-reading CP
-variants do.
+run1 (2.1 s) armed +20.0, no end, in-scan quiet 1.6 s; run3 (2.1) +13.0, no end, 1.6 s; run4 fast swipe (1.6) +11.9, ended +102.4 (last reset +89.2), 0.8 s;
+run4 stretch (1.6) +7.6, no end, 0.8 s; run5 (tap 1.2) +8.8, no end, 0.8 s; run6 (tap 1.0) +7.2, no end, 0.8 s; run7 (tap 1.2, phantom) +8.6, ended +73.2 (last
+reset +63.6), 1.6 s; run8 (tap 300) +8.2, no end (the log stops 6.6 s after its last reset, under the 9.6 s), 1.6 s; run9 (tap 300) +8.2, ended +381.7 (last
+reset +372.1), 1.2 s. The true in-scan maximum is 0.5 to 1.33 periods, against 8.
+Measured found-end counts (`testTheEndIsStillFoundWhenReadingsAreLost`, 50 seeds of random loss of readings, ended at or after the last card began): 30% lost: run4
+50/50, run7 50/50, run9 50/50; 50% lost: run4 47/50, run7 47/50, run9 50/50. With one read per 0.6 s or 0.8 s all three still end at their last Pokémon (about 10 to
+13 s after it began). No early end in any of these runs. Tests, on every full device log: readings kept at one per 0.6 s and 0.8 s, and 30% and 50% of readings dropped,
+never end early (0 of 50 seeds on every log); windows of 4, 5, 6 and 8 periods with no card read inserted at every position never end it; a wait of 0 to 30 s before
+the first page never ends it. A static last card read every 0.3 s and 0.6 s still ends the scan within 120 s in all 40 seeds when 20% or 30% of frames are lost, CP
+is unread on 30% of them, bars on 30%, no card is read on 30%, bars are misread on 5%, 10% or 20% of readings (to one or three wrong values) or the CP on 10%
+(`testAStaticLastCardWithNoiseStillEndsIt`). Constructed cases that never end it: a card held 9 s across a frame gap; alternating twins at 2, 3 and 4 readings per card
+for 12 cards; 16 hidden-CP Pokémon; a run of unread cards; eight same-species, same-HP cards with different CPs read once each; eight cards with CPs one digit apart and
+identical bars at three readings each; one named card followed by eight CP-only different cards. Cases that end it: 8 identical Pokémon, a static card with single-reading
+CP variants, and (the accepted residual above) alternating identical twins at one reading per card.
 The extension then writes an end marker line to the replay log (`{"k":"e","t":...,"last":...}`, always with room even when the log is full), finishes the
 state and log as a user stop does and, after leaving its serial queue (a synchronous `broadcastFinished` must not meet `queue.sync`), ends the broadcast
 with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reached.")`. `ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings
@@ -651,37 +660,29 @@ from two or more readings that agree on HP and on the entry's settled bars. Not 
 species goes to `unmatched`" rule, because tap mode at 1.0 s gives one real reading per Pokemon (Moltres 1927, 1920 and 1918 are
 three real neighbours, the last backed by a single recovered read).
 
-Fourth review round (the owner's standard: no new wrong row without a flag, no real Pokémon lost without a trace, no duplicate without a flag; a
-flagged doubtful row is fine):
-- A fragment that has its own CP which solved (a level fits), differs from the neighbour's CP and is not a part read of it (its digits are not a run of the
-  other's) is NOT absorbed: it stays its own row with the check-level flag `read-once-beside:<neighbour cp>` ("read only once beside CP N ... check both").
-- A fragment that IS absorbed with a different CP (unsolved, or a part read) leaves `absorbed-other-cp:<cp>` (check-level: "a Pokémon read as CP N was folded
-  into this one, check whether another exists") when a page tick or a beat boundary lies between the two (adjacent rows of a regular beat always have one);
-  the same CP stays the note `absorbed-fragment:<cp>`. The fragment's readings join the kept row.
-- The worse of the two is the fragment: a row that solved exactly is kept, then the one with more readings (a good 2-reading row beside a 1-reading unsolved
-  fragment is no longer replaced by it).
-- Bars split: BOTH parts get `split-by-bars` (check both), and each keeps the refine flags the row had. With no regular beat the split needs evidence: each
-  state held for about 0.6 of the command's period (`barsSplitFallbackHeldPeriods`), and with no period known the row is not split and keeps its
-  `ivs-disagree` (a gap of 0.4 s is every gap at the tap reading rate). The real Fidough 768 pairs in run8 and run9 still split (they have a beat).
-- A row solved again (`cp-outlier-dropped`, bars split) carries the flags the earlier steps left on it, and each change is recorded against the row that was
-  kept (by its frames), not the first row with the same flag text. The timing step no longer force-unwraps frame times.
-Seventh round (supersedes the matching points above): both neighbours of a fragment are examined, and a neighbour with the fragment's own CP (or one it is
-a part read of) is the Pokémon it belongs to, even when the other neighbour is a different, compatible one (Staraptor 1951, a one-reading 1946, the real 1946
-gives two rows, not three). A fragment absorbed with ANY other CP (not the same, not a part read) always leaves the check-level `absorbed-other-cp:<cp>`, with
-or without a tick or beat between; same-CP and part-read fragments stay the note `absorbed-fragment`. On the eight device logs there is none of
-`absorbed-other-cp` or `read-once-beside`, and the rows are identical to the previous round. The automatic end now resets on a SINGLE reading whose CP or bars
-value (either alone) differs from every value read on the card within the last 0.75 periods (OCR variants of a static card recur within a few frames and do not;
-a CP that is a run of the card's digits is the same value; the seen list is bounded), and on a CP-only read of another card after a named card, so eight
-same-species, same-HP cards read once each, or one named card followed by eight CP-only cards, never end it. With a slow reader (one read per 0.6 or 0.8 s) a value
-that recurs after more than the window can reset the clock once more, so the end comes later (run9 at 0.6 s: 20.2 s after the last card began instead of 9.6 s);
-none of the ends on run4, run7 and run9 is missed. The full-scan tolerance is max(3, 1% of typed) and the result label says "N Pokémon read, within T of the M
-you gave" ("exactly the M you gave" only when equal), never "matches".
-On the device logs the row counts are unchanged (run1, run5, run7 51; run3 49; run4 51; run6 50; run8 311; run9 310) and on run8 and run9 the rows' values are
-identical to before (`rows-before-fourth-round-run8.txt` and `-run9.txt`, compared by `testRun8AndRun9RowValuesAreUnchangedByTheFragmentAndBarsFixes`); only
-flags differ (the first Fidough 768 now carries `split-by-bars`; three absorbed fragments now keep the better of their pair). The reviewers' expected
-run6 gain (Staraptor 1946 as a flagged row) does not appear on this fixture: there the 1946 row has two readings and is a row both before and after; what
-run6 lacks compared with the 51 is the second identical Staraptor 1986 and the Moltres read as "19" (documented above). The one-reading case is covered by
-a constructed test (`testAFragmentWithItsOwnSolvedCPIsNotAbsorbedAndAsksForALook`).
+Fragment absorption and bars split, as they now stand (the owner's standard: no new wrong row without a flag, no real Pokémon lost without a trace, no duplicate
+without a flag; a flagged doubtful row is fine):
+- Both neighbours of a fragment are examined. A neighbour with the fragment's own CP, or one the fragment is a part read of, is the Pokémon it belongs to, and the
+  fragment is absorbed into it even when the other neighbour is a different, compatible one (Staraptor 1951, a one-reading 1946, the real 1946 give two rows, not three).
+  A part read is one-directional: the fragment's digits must be a run of the KEPT row's CP (182 in 1982); a once-read 1982 beside a better-read 182 is another number.
+- Otherwise a fragment with its own CP that solved (a level fits) is NOT absorbed: it stays its own row with the check-level flag `read-once-beside:<neighbour cp>`
+  ("read only once beside CP N ... check both"). An unsolved fragment is absorbed.
+- An absorbed fragment with ANY other CP (not the same, not a part read of the kept CP) always leaves the check-level `absorbed-other-cp:<cp>` ("a Pokémon read as CP N
+  was folded into this one, check whether another exists"). A once-read, solved fragment with the SAME CP, folded in where there is no regular beat to say a boundary
+  lies between, leaves the check-level `absorbed-same-cp:<cp>` ("one reading of an identical Pokémon was folded into this one; if you have two, one was missed"). On a
+  regular command beat a same-CP fragment, and any part read, stays the note `absorbed-fragment:<cp>` (run8's Quaxly 772, Honedge 760 and Skarmory 717 stay notes). The
+  fragment's readings join the kept row. On the eight device logs there is none of `absorbed-other-cp`, `absorbed-same-cp` or `read-once-beside`.
+- The worse of the two is the fragment: a row that solved exactly is kept, then the one with more readings.
+- Bars split: BOTH parts get `split-by-bars` (check both), and each keeps the refine flags the row had. With no regular beat the split needs evidence: each state held for
+  about 0.6 of the command's period (`barsSplitFallbackHeldPeriods`), and with no period known the row is not split and keeps its `ivs-disagree` (a gap of 0.4 s is every gap
+  at the tap reading rate). The real Fidough 768 pairs in run8 and run9 still split (they have a beat).
+- A row solved again (`cp-outlier-dropped`, bars split) carries the flags the earlier steps left on it, and each change is recorded against the row that was kept (by its
+  frames), not the first row with the same flag text. The timing step no longer force-unwraps frame times.
+On the device logs the row counts are unchanged (run1, run5, run7 51; run3 49; run4 51; run6 50; run8 311; run9 310) and on run8 and run9 the rows' values are identical to
+before (`rows-before-fourth-round-run8.txt` and `-run9.txt`, compared by `testRun8AndRun9RowValuesAreUnchangedByTheFragmentAndBarsFixes`); only flags differ. The run6 fixture
+has no one-reading Staraptor 1946 (that row has two readings); run6 lacks the second identical Staraptor 1986 and the Moltres read as "19". The one-reading case is covered by
+constructed tests (`testAFragmentWithItsOwnSolvedCPIsNotAbsorbedAndAsksForALook`, `testAFragmentBelongsToTheSameCPNeighbourAheadNotTheDifferentOneBehind`).
+The full-scan tolerance is max(3, 1% of typed) and the result label says "N Pokémon read, within T of the M you gave" ("exactly the M you gave" only when equal), never "matches".
 
 ### To check, and reading a saved scan again
 

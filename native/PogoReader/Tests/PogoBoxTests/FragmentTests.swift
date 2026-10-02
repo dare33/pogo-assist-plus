@@ -137,6 +137,35 @@ final class FragmentTests: XCTestCase {
         XCTAssertEqual(Refine.absorbFragments(same).scan.rows[0].flags, ["absorbed-fragment:1982"])
     }
 
+    /// K2: only a fragment whose CP is a run of the KEPT row's CP is a part read (a note). A once-read 1982 beside a better-read 182 is another number: a check.
+    func testPartReadsAreOneDirectionOnly() {
+        let t0 = 100 + 6 * 1.2
+        let kept182 = row(0, "Moltres", cp: 182, bars: IVs(atk: 13, def: 10, hp: 10), times: [t0 + 0.4, t0 + 0.7, t0 + 1.0])
+        let once1982 = row(0, "Moltres", cp: 1982, bars: IVs(atk: 13, def: 10, hp: 10), times: [t0 + 0.1], solved: false)
+        XCTAssertEqual(Refine.absorbFragments(beat(replacing: 6, with: [once1982, kept182])).scan.rows[6].flags, ["absorbed-other-cp:1982"], "the reverse of a part read is another CP")
+        let kept1982 = row(0, "Moltres", cp: 1982, bars: IVs(atk: 13, def: 10, hp: 10), times: [t0 + 0.4, t0 + 0.7, t0 + 1.0])
+        let part182 = row(0, "Moltres", cp: 182, bars: IVs(atk: 13, def: 10, hp: 10), times: [t0 + 0.1], solved: false)
+        XCTAssertEqual(Refine.absorbFragments(beat(replacing: 6, with: [part182, kept1982])).scan.rows[6].flags, ["absorbed-fragment:182"], "a run of the kept CP's digits is a part read")
+    }
+
+    /// K3: a once-read, SOLVED fragment with the same CP folded in with no regular beat could be a real identical twin: a check. On a regular command beat
+    /// (or when unsolved) it stays the note.
+    func testASolvedSameCPFragmentOnAnIrregularBeatAsksForALook() {
+        let bars = IVs(atk: 13, def: 10, hp: 10)
+        let real = row(2, "Moltres", cp: 1918, bars: bars, times: [10.4, 10.6, 10.8])
+        let once = row(1, "Moltres", cp: 1918, bars: bars, times: [10.2])
+        let irregular = Refine.absorbFragments(ScanResult(rows: [once, real], review: [], unmatched: []))
+        XCTAssertEqual(irregular.scan.rows.count, 1)
+        XCTAssertEqual(irregular.scan.rows[0].flags, ["absorbed-same-cp:1918"])
+        XCTAssertEqual(FlagInfo.severity(of: "absorbed-same-cp:1918", solveStatus: "exact"), .check)
+        XCTAssertTrue(FlagInfo.explain("absorbed-same-cp:1918").contains("If you have two, one was missed"))
+        // a regular beat: the note
+        let t0 = 100 + 6 * 1.2
+        let onceBeat = row(0, "Moltres", cp: 1918, bars: bars, times: [t0 + 0.1])
+        let realBeat = row(0, "Moltres", cp: 1918, bars: bars, times: [t0 + 0.4, t0 + 0.7, t0 + 1.0])
+        XCTAssertEqual(Refine.absorbFragments(beat(replacing: 6, with: [onceBeat, realBeat])).scan.rows[6].flags, ["absorbed-fragment:1918"])
+    }
+
     /// J1: Staraptor 1951, a one-reading fragment 1946, then the real Staraptor 1946: the fragment belongs to the one AHEAD (same CP), so it is absorbed
     /// into it, not flagged as a duplicate beside 1951.
     func testAFragmentBelongsToTheSameCPNeighbourAheadNotTheDifferentOneBehind() {
