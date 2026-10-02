@@ -15,7 +15,7 @@ person installs and says themselves. The app itself sends no input.
   `PogoAssist.xcodeproj` is committed too): the SwiftUI app and the `PogoBroadcast` ReplayKit
   Broadcast Upload Extension.
 - `tools/` - Node scripts (plain ES modules, no dependencies): `build-species.mjs`,
-  `finish-readings.mjs`, `compare-readers.mjs`, `timeline.mjs`.
+  `finish-readings.mjs`, `compare-readers.mjs`, `timeline.mjs`, `run-accuracy.mjs`.
 
 ## Regenerate the species table
 
@@ -65,6 +65,8 @@ Then, the comparison is three commands (from `native/PogoReader`, after `swift b
 - `--verbose` prints one line per frame (text read, confidence, flags). `--limit N` stops after N frames.
   `--no-vision` replaces Vision with a reader that reads nothing (the memory of everything else);
   `--vision-fast` uses Vision's fast level; `--cp-padding X` and `--cp-digits-only` vary the CP crop.
+  `--profile` times the pixel half against the text half and counts and times each kind of Vision pass;
+  `--single-pass` and `--reuse-static` switch on the two ways of making fewer passes (next section but one).
 - Output: `{frames, width, viaPixelBuffer, readings, rows, memory:{peakFootprintMB, baselineMB,
   finalFootprintMB}, msPerFrame:{mean, worst}}`. `readings` are in the JavaScript reading shape field
   for field (`fills` are fractions 0..1), so `finish-readings.mjs` can feed them to the JS `finish()`.
@@ -186,6 +188,8 @@ The app picks the mode before the broadcast (stored in the app group defaults; t
 
 - **Read live (accurate)**: Vision at its accurate level in the extension (default).
 - **Read live (fast)**: Vision's fast level (smaller and quicker on the Mac, but reads far less).
+- **Read live (accurate, skip unchanged text)** and **Read live (accurate, fewest passes)**: the accurate reader with fewer Vision
+  passes per frame, for a phone run to measure (see "Fewer Vision passes per frame"); neither is the default.
 - **Save crops, read in app**: no Vision request exists in the extension. It runs the pixel work (anchors,
   bars, segments) and, for each on-screen segment, saves up to 3 settled frames (frames 2, 4, 6 of the
   segment) as the CP, name, name-one-line-up (Lucky) and HP crops, gray PNGs, plus one line of JSON (time,
@@ -206,6 +210,104 @@ the Mac: `--vision-fast`, `--vision-device cpu|gpu|neuralEngine`, `--vision-min-
 `--vision-recreate` (see `VisionOptions`). None lowered memory without losing reads; Mac figures may not
 transfer to the phone.
 
+## Fewer Vision passes per frame (measured on the Mac; the phone is not measured)
+
+What the reader does to a frame that shows a card (`FrameReader.analyse`, then `complete`): the pixel half (content rectangle, CP text
+and HP bar anchors, appraisal bars, crops) and then one `VNRecognizeTextRequest` pass per crop, each on its own small crop, accurate level,
+language correction off: CP (about 270 x 80 px after upscaling), name (about 800 x 130), HP (about 500 x 90), and a fourth pass over the line
+above the name only when the name did not match (Lucky Pokemon, 1-2% of frames). Mac, `pogo-read --width 750 --via-pixelbuffer --profile`,
+release build, clean machine, per frame that read text:
+
+| Part | Mac ms | Share |
+|---|---|---|
+| Pixel half (420 conversion and scaling are done before it by the tool, so this is anchors, bars, crops) | 4 | 5% |
+| CP pass | 15 | 19% |
+| Name pass | 30 | 37% |
+| HP pass | 30 | 37% |
+| Frame | 80 | |
+
+The phone takes about 280 ms for the same frame (`ms` in `replay.jsonl`, mean over named frames: 275-298 on runs 1-9), so the phone is about 3.5 times
+the Mac and the Vision passes are 95% of the Mac figure; how the phone's 280 ms splits is not known (the replay log has one `ms` per reading).
+A pass costs about the same whatever the crop's size (marathon-phone, a separate run in which the name pass took 27 ms): the name crop at 0.72 of the card's
+width 26.9 ms, at 0.5 26.8 ms, scaled to 100 px high instead of 130 26.6 ms; the HP crop at 0.34 of the width 25.2 ms and 60 px high 24.2 ms against 25.6 ms. So only the NUMBER of passes can be cut.
+
+Two things cut it, both off by default in the library and chosen by the reader mode in the app:
+
+- `FrameReader.singlePass`: the name and HP crops go to Vision as ONE image (`TextReader.readStack`: the two upscaled crops left-aligned in a
+  grey canvas with a gap, the observations given back to the crop their centre lies in). One stacked pass costs about what one name pass
+  does (31-33 ms), so the HP read is free. The CP crop is NOT stacked: with it in the image the CP read got clearly worse (on pogo-test-phone
+  63 of 77 named frames read a CP in the roster against 43-56 depending on how the stack was padded or scaled; on marathon-phone 225 against 207),
+  while name and HP stacked read the same.
+- `FrameReader.reuseStaticText`: when a frame's name (or HP) crop has the same `CropSignature` (mean brightness of each 4 x 4 block, no block more
+  than 12 levels off) as the crop of the last frame that read successfully, that read is used and Vision is not asked. A failed read is never kept.
+  The reader keeps two signatures (about 1 KB each) and two reads. A card is on screen for several frames, so about half the name and HP passes go
+  (name 349 -> 173 passes on marathon-phone, 799 -> 386 on v3). The CP pass is never skipped: it is the read that is repeated for the vote.
+
+Per frame that read text, Mac ms (release, two repetitions each, the first repetition of pogo-test-fast base was a cold start at 265 and is left out):
+
+| Clip (frames that read text) | Plain | Skip unchanged | Name + HP in one pass | Both | Both / plain |
+|---|---|---|---|---|---|
+| pogo-test-fast (141) | 83 | 50 | 54 | 38 | 0.45 |
+| marathon-phone (342) | 81 | 49 | 51 | 35 | 0.43 |
+| v3 (793) | 76 | 47 | 52 | 36 | 0.48 |
+| Passes per frame (v3) | 2.99 | 1.97 | 2.00 | 1.49 | |
+
+What the reader gives, plain against both, on all ten clips (`pogo-read` readings compared frame by frame; `finish-readings.mjs` and
+`compare-readers.mjs` against the JavaScript rosters; live rows from `LiveGrouper`): every CP, name (as a species) and HP parsed identically on
+pogo-test-phone, pogo-test-fast, marathon-phone, pogo-test-tablet and screenrec-2149 (a few frames on the other clips read differently, listed below);
+the rows, the matches with the JavaScript rosters and the live rows are the same on every clip (pogo-test-phone 8 of 10, pogo-test-fast 21 of 21, marathon-phone 39
+of 45, v3 105 of 110, marathon-ipad-mini 39 of 60, pogo-test-tablet 8 of 8, darentas-01 438 of 448, darentas-02 756 of 779, darentas-03 143 of 147, screenrec-2149 78 of 131 name + CP;
+live rows 11, 21, 47, 109, 47, 10, 449, 780, 144, 227). Frames whose name or HP read changed between plain and both, out of all frames: v3 1 of 1,214
+(`Quaxly` read `QuaхІy` next to the other crop on a poor frame), marathon-ipad-mini 1 of 536, darentas-01 3 of 2,783, darentas-02 3 of 3,975 (in the other direction
+too: darentas-02 and darentas-03 gain frames, 3,385 to 3,388 and 1,482 to 1,487 named frames), darentas-03 7 of 2,075. `skip unchanged` alone changed no name, CP or HP on
+any of the six clips it was run on. Frames with a name and a CP, plain / both: pogo-test-phone 77 / 77, v3 787 / 786, ipad 395 / 394, darentas-01 2,479 / 2,476.
+
+Memory (Mac, `peak` of `pogo-read`'s footprint, which is dominated by the PNG decode and Vision's own working set and moves 2-4 MB between identical runs):
+plain 138-142 MB, skip unchanged 137-142, stacked 142-146, both 141-151 (one 151); on darentas-01 and 02 (one run each) plain 144.6 and 148.3, both 152.9 and 156.0.
+So the stacked image costs about 3-8 MB of peak on the Mac and skipping costs nothing; neither grows with the length of the scan (the stacked image is made and
+freed inside one `autoreleasepool` per frame, the signatures are replaced by the next successful read). The phone's `lowestAvailableMB` was 247 on runs 1, 6 and 7, so the room
+is there, but the phone is where it must be checked: the app shows the peak footprint and the lowest available figure for each scan.
+
+**What it is worth on the phone, unmeasured.** If the phone scales like the Mac, 280 ms becomes about 125 ms with both, 170 ms with skip alone and 180 ms with the stack alone. The
+extension keeps a frame every 0.2 s (`Tuning.framePeriod`) and drops a frame that arrives while it is busy, so a frame time under about 200 ms reads every frame and one over reads
+every second: device runs 5 and 6 show it (readings per row: run 5 mean 2.84, 37 of 51 rows have three; run 6, one second faster, mean 2.32, 32 rows have two and seven have one).
+That threshold, not the average time, is what the phone run must show.
+
+### The phone run that decides it
+
+Same 51 Pokemon as runs 5 to 7, the same 1.0 s command as run 6, three scans, each with the first Pokemon open and the appraisal showing, each exported after it ends (a new broadcast overwrites
+`replay.jsonl`): Reader "Read live (accurate)" (the control, to see the phone is as it was), then "Read live (accurate, skip unchanged text)", then "Read live (accurate, fewest passes)". If the
+fewest-passes scan is killed or `lowestAvailableMB` falls below about 100, say so before anything else. Send back, per scan, the state JSON and `replay.jsonl`, and read off the app: rows listed,
+frames read and dropped, mean ms per frame, peak footprint, lowest available memory. What to look for: mean ms per frame under about 200 (below it every 0.2 s frame is read; the target is about 125 for the
+fewest-passes mode), readings per row going from run 6's 2.3 towards 5, and then
+
+    node native/tools/run-accuracy.mjs --truth <run 5 replay>,<run 7 replay> <the three new replays> --verbose
+
+for rows, exact rows, wrong rows (unflagged ones separately), missing rows and readings per row against run 5 and 7. A repeat of the best mode at 1.2 s shows whether it is at least as accurate as today's 1.2 s.
+
+### Two agreeing reads: not adopted
+
+Asked: accept a value only when two readings agree, and flag a Pokemon seen once or with disagreeing readings. Measured with `native/tools/run-accuracy.mjs` and a simulation of the
+rule on each row's frames (rule A: every field the row took needs at least two agreeing reads and no disagreeing read; rule B: at least two agreeing and strictly more than any other value;
+CP, HP max and the settled bars; "flagged" is what the app asks the person to check, `FlagInfo`). Truth for run 6: the rows run 5 and run 7 (the same 51 Pokemon at 1.2 s) agree on, which are
+all 51 of them; run 8 and run 9 (two scans of the same 311) are each other's truth. Current pipeline (`pogo-rows --paging command`), before; the two right-hand columns are the extra rows each rule would flag:
+
+| Log | Rows | Exact | Wrong (flagged / unflagged) | Truth rows missing | Check-flagged rows | Rule A adds | Rule B adds | Wrong rows the rules newly catch |
+|---|---|---|---|---|---|---|---|---|
+| run 5 (1.2 s) | 51 | 51 | 0 | 0 | 2 | 25 | 10 | 0 |
+| run 6 (1.0 s) | 50 | 48 | 2 (2 / 0) | 3 | 4 | 19 | 15 | 0 |
+| run 7 (1.2 s) | 51 | 51 | 0 | 0 | 2 | 27 | 14 | 0 |
+| run 8 (truth run 9) | 311 | 305 | 6 (6 / 0) | 5 | 10 | 94 | 35 | 0 |
+| run 9 (truth run 8) | 310 | 305 | 5 (3 / 2) | 6 | 8 | 62 | 22 | 0 (the 2 unflagged are right: see below) |
+
+Run 6 has no unflagged wrong row today. Its two wrong rows (Charizard 2017 whose bars read 12/13/11, which the solver corrected to 12/14/12 for the true 12/13/13, `ivs-corrected-from`; Moltres `19` for 1960,
+`no-level-fits`) are both flagged, and both have a single reading. Its three truth rows missing are those two and the twin Staraptor 1986 / 139 / 15/13/11, merged with its neighbour: that one is unflagged and is not a
+misread but a missed second identical Pokemon (run 6's beat is irregular, regularity 0.2 against 0.0 on runs 5 and 7, and `Refine.splitByTiming` needs a steady one). The rules would flag 15 to 25 of the rows that are right
+and catch nothing the solver does not already flag: a CP, HP and bars that do not fit one level and IV set are already the cross-check, and every wrong row on these logs fails it. Run 9's two
+"unflagged wrong" rows are Moltres 1966 and 1901 recovered from their visible tails (`cp-recovered`, a note), which run 5 and 7 confirm are right; run 8 got those two wrong and flagged them. So the rule
+was not built into the grouper, `Refine` or the review: it would add 10 to 94 false alarms per log to find none, and it cannot see the one defect that is unflagged (a merged twin).
+What would help run 6 is the other half of the work above: more readings per Pokemon.
+
 ## Deviations from the JavaScript reader worth knowing
 
 Reading:
@@ -214,7 +316,7 @@ Reading:
   under 30 on one row after the 4:2:0 conversion and scaling, and cut the screen in two so that nothing was read on the device path.
   The YCbCr conversion itself is exact (black and white, video and full range, BT.601 and BT.709); the difference was the plane-wise
   scaling, whose edge undershoot differs from RGB scaling's.
-- One Vision read per frame for the CP and one for the HP (JS reads the CP twice, two Tesseract modes, and
+- One Vision read per frame for the CP and one for the HP, and one for the name (JS reads the CP twice, two Tesseract modes, and
   takes the agreeing one); voting across frames replaces that.
 - A frame with a centred CP but no HP bar (a special-background or buddy card, a Lucky nicknamed one: the HP
   bar is absent or a muted colour) is read for the CP alone (flag `no-hp-bar`, no name). JS drops these.
