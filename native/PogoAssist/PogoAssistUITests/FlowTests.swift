@@ -127,11 +127,12 @@ final class FlowTests: XCTestCase {
         count.tap(); count.typeText("1400")
         app.buttons["Done"].tap()   // dismiss the number pad
         sleep(1)
-        XCTAssertTrue(app.staticTexts["Say: Pogo scan 1500"].waitForExistence(timeout: 5), "1,400 Pokémon is covered by the 1,500 command")
         let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
         shot(name + "-top")
         app.swipeUp()
         shot(name)
+        // the command to say, as it is spoken: digits without a thousands separator
+        XCTAssertTrue(app.staticTexts["Say: Pogo scan 1500"].waitForExistence(timeout: 5), "1,400 Pokémon is covered by the 1,500 command")
         let get = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Get the'")).firstMatch
         XCTAssertTrue(get.waitForExistence(timeout: 5))
         get.tap()

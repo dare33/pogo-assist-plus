@@ -517,7 +517,7 @@ also the whole phrase of the old single tap command: delete the earlier single c
 in Settings > Accessibility > Voice Control > Commands before importing the set (a different pace; the automatic end assumes the set's pace). The
 setup steps on the Scan screen say so. The app no longer offers the single commands anywhere; the API and its fixtures remain. The command text is digits ("Pogo scan 300"): the file format does not
 say whether Voice Control matches a spoken "three hundred" to digits, so that has to be tried on a phone. File size: tap set 293,967 bytes,
-swipe set 6,046,576 bytes (the swipe gestures hold many more touch events: 50 swipes of 36 events each in the larger sizes). `pogo-voice --set
+swipe set 1,287,084 bytes (was 6,046,576: a swipe gesture holds about 38 touch events per swipe, so the swipe set's gestures are cut to 10 swipes, `VoiceCommandFile.swipeSetBatch`, and repeated more often; the sizing keeps repeats x batch >= steps and each join adds the 0.8 s Refine already allows for; the tap set is byte-identical to before, checked by building the old version and comparing; a test shows a join every 10 swipes makes no false twin on the fast-swipe log). `pogo-voice --set
 --out file [--screen WxH]` makes it on a Mac. The test is structural (`testTheTapSetIsThirteenCommands...`, `testTheSwipeSet...`): it decodes
 the file, checks 13 commands and 13 gestures, every tap exactly at the measured point, `repeats x batch >= steps`, unique ids and names, and
 that each gesture equals the one `make` produces for the same steps. `generate_commands.py` has no set mode, so the Python is not compared.
@@ -531,35 +531,47 @@ scan lists the sizes and what each takes. The app keeps a record of the set (scr
 Voice Control" were all tried on an iPhone and none stops it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps
 tapping (or swiping) the same place whatever is on screen. That is why the set has fixed sizes: the overshoot past the end of the list is bounded.
 
-**The scan ends by itself** at the end of the list, for a command scan only. The choice "Page with the voice command" (the default) or "Page by hand" is
-made on the Scan screen BEFORE the scan and stored; the extension reads it when the broadcast starts (no automatic end for hand paging, because a
-person may pause on a Pokémon), records the period it was given in its state (`commandPeriod`), and the review and Refine use that, not a setting
-changed since. `EndOfListDetector` (PogoReader, a few stored values) is fed each frame's reading:
-- Identity does not depend on the CP alone. A reading's key is built from the name, the HP and the appraisal bars; only when none of those was read is
-  the CP the key, and then a CP that is a run of a recent one's digits or differs in one digit (Rayquaza 4262, 1262, 262, 4260, 263) is the same card.
-  A hidden-CP Pokémon still has a key, so a run of them counts as paging.
-- A key is a NEW Pokémon only when stable (two keyed readings in a row; an unkeyed frame between does not break it) and not among the last 6 stable
-  keys, so single-reading OCR variants never count and a card cycling through a few variants does not keep restarting the clock.
-- It is ARMED only once the command is seen paging: at least 5 stable new Pokémon whose last 3 changes were each 0.5 to 2.5 expected periods after
-  the one before. Before that it never ends, however long the wait before the command was said (the old detector counted CP misreads of the first card
-  and ended the scan before paging started on 6 of the 8 logs).
-- Once armed, 6 expected periods with no new stable Pokémon is the end (7.2 s at 1.2 s). A gap of more than 2 s between two processed frames
-  (low-memory skipping, a stretch of dropped frames) does not count toward the 6 periods.
-Arm and end time per log (seconds from the first reading; `testWhereEachLogArmsAndEnds` prints them): run1 (2.1 s) armed +20.0, never ends; run3 (2.1 s)
-+13.0, no end; run4 fast swipe (1.6 s) +11.9, ended +99.2 (last new Pokémon +89.2); run4 stretch +7.6, no end; run5 (tap 1.2) +8.8, no end; run6 (tap 1.0)
-+7.2, no end; run7 (tap 1.2, phantom) +8.6, ended +71.2 (last new +63.6); run8 (tap 300) +8.2, last new +372.3, log ends +378.9, no end; run9 (tap 300) +8.2,
-ended +379.3 (last new +372.1). With a wait of 0, 2, 5, 8, 12, 20 or 30 s on the first Pokémon inserted before the first page, no log ends early and the
-three that reached the end of the list end at the same Pokémon. Inside a scan the longest stretch with no new stable Pokémon on any log was 3.9 periods,
-so 6 periods leaves a factor of 1.5, thinner than before the redesign (a Pokémon is now counted when stable, which takes a reading more).
+**The scan ends by itself** at the end of the list, for a command scan only. The choice "Page with the voice command" or "Page by hand" is made on the Scan
+screen BEFORE the scan and stored. Until the person chooses it is by hand while no command set exists on this phone, and the command once it does; and the
+extension is only given a period when the command is chosen AND a set record exists (`ScanKindAdvice.autoEndPeriod`, tested), so there is no automatic end
+without the commands (the Scan screen says the end needs them). The extension records the period it was given in its state (`commandPeriod`; nil is hand
+paging) and the review and Refine use that, not a setting changed since. The end is declared POSITIVELY (`EndOfListDetector`, PogoReader, a few stored values):
+the same card has been read, again and again, for the whole quiet time.
+- The CURRENT card is the one on screen since the quiet clock last reset. The clock resets on ANY reading whose name or HP differs from the current card's
+  (one reading is enough; a part that was not read is not a difference), and on a CP or bars value that differs and is stable (two keyed readings in a row),
+  so twins of one species and HP still reset it. A reset is dated at the reading that confirmed it.
+- The clock only grows across consecutive processed frames that both read the current card, at most 2 s apart. Frames with no card read, and gaps between
+  processed frames, add nothing and reset nothing, so a run of unread cards (fainted Pokémon), however long, never ends the scan; if the appraisal closes and
+  nothing is readable the scan does not end by itself and the person stops it from the red bar.
+- The end needs: armed; 8 expected periods (9.6 s at 1.2 s, 12.8 s at 1.6 s; the owner's decision, it was 6) of that clock; and readings of the current card in each
+  third of that time (the reading that completes it is the last).
+- Arming keeps its evidence rule: at least 5 stable new Pokémon (name and HP, two readings in a row; the CP alone when neither was read, with CP misreads of one card
+  treated as one) whose last 3 changes were each 0.5 to 2.5 expected periods after the one before: the command is seen paging at its pace. Before that it
+  never ends, however long the wait before the command was said. Stability applies to arming only.
+Accepted and documented: a real run of 8 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer than 5 readable Pokémon
+never arm it; persistent flapping of the last card's name, HP, CP or bars read delays or prevents the end; a list whose last Pokémon were not read looks like an
+earlier end.
+Per log, seconds from the first reading (`testWhereEachLogArmsAndEnds` prints them; "in-scan quiet" is the most the clock reached before a later reset, once armed):
+run1 (2.1 s) armed +20.0, no end, in-scan quiet 2.8 s; run3 (2.1) +13.0, no end, 2.4 s; run4 fast swipe (1.6) +11.9, ended +102.4 (last reset +89.2), 1.6 s;
+run4 stretch (1.6) +7.6, no end, 1.6 s; run5 (tap 1.2) +8.8, no end, 2.1 s; run6 (tap 1.0) +7.2, no end, 1.6 s; run7 (tap 1.2, phantom) +8.6, ended +73.2 (last
+reset +63.6), 2.0 s; run8 (tap 300) +8.2, no end (the log stops 6.6 s after its last reset, under the 9.6 s), 2.2 s; run9 (tap 300) +8.2, ended +381.7 (last
+reset +372.1), 2.0 s. The true in-scan maximum is 1.0 to 1.83 periods (3.03 on run6 counted the wait before the first page in the earlier figure), against 8.
+Tests, on every full device log: readings kept at one per 0.6 s and one per 0.8 s, and 30% and 50% of readings dropped at random (50 seeds each), never end
+early (the 50% figure: 0 of 50 seeds ended early on every log), and run4, run7 and run9 still end at their last Pokémon; windows of 4, 5, 6 and 8 periods with no
+card read inserted at every position never end it; a wait of 0 to 30 s before the first page never ends it; and constructed cases: a card held 9 s across a frame
+gap, A,B,A,B twins for 12 cards, 16 hidden-CP Pokémon and a run of unread cards never end it, while 8 identical Pokémon and a static card with single-reading CP
+variants do.
 The extension then writes an end marker line to the replay log (`{"k":"e","t":...,"last":...}`, always with room even when the log is full), finishes the
 state and log as a user stop does and, after leaving its serial queue (a synchronous `broadcastFinished` must not meet `queue.sync`), ends the broadcast
 with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reached.")`. `ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings
-later than the last new Pokémon plus 3 s when a marker is present, and the result says the scan ended by itself.
+later than the last reset plus 3 s when a marker is present.
 
-**A full scan is only the default when the list provably ended** (`ScanKindAdvice.decide`): the automatic end fired, the Pokémon read are fewer than the named
-command's reach (`covers` + 1 with the existing sizing), the typed count is not above 5,000, and the replay log did not hit its cap. Otherwise the review
-defaults to Add and update with one plain sentence (the command ran out before the end / storage above 5,000 / the scan was stopped by hand / the log filled
-up / no count entered) and the person can still change the kind. Scans of a storage above 5,000 are Add and update.
+**A full scan is only the default when everything agrees** (`ScanKindAdvice.decide`): the automatic end fired; the replay log is neither truncated nor failed; a
+count was typed and is at most 5,000; and typed - tol <= Pokémon read <= min(typed + tol, reach - 1), tol = max(3, 2% of typed rounded up), reach = the recorded
+command's `covers` + 1 (the period the extension recorded picks the tap or swipe sizing). Each refusal has its own plain sentence (no count / above 5,000 / log
+incomplete / stopped by hand / stopped short of your count / read more than your count, so the count may be out of date and the command may have run out). The
+review defaults to Add and update with that sentence; switching to Full scan against the advice asks for confirmation with the reason. The result says "The scan
+ended by itself after N Pokémon." and, only when a full scan is sound, that this matches the count. Scans of a storage above 5,000 are Add and update.
 
 **Replay log cap**: 16 MB (`Tuning.maxReplayLogBytes`). Run9 wrote 319,961 bytes for 310 Pokémon (1,032 bytes each, tap 1.2 s); the fast swipe log 112,025 bytes for
 51 (2,196 each, 1.6 s). The largest command pages 5,099 times, so at most about 5,100 Pokémon: 5,100 x 2,196 = 11.2 MB at the worse rate (5.3 MB at the tap

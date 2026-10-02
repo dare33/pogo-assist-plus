@@ -105,10 +105,10 @@ struct ScanView: View {
 
     @ViewBuilder private var fullScanCommand: some View {
         if let size = model.commandSize {
-            Text("Say: Pogo scan \(size)").font(.title3.weight(.semibold))
+            Text(verbatim: "Say: Pogo scan \(size)").font(.title3.weight(.semibold))
             Text("Covers up to \(size.formatted()) Pokémon; about \(minutes(Double(model.estimatedMinutes(size: size)) * 60)).").font(.footnote)
         } else if model.countAboveLargest {
-            Text("Say: Pogo scan \(VoiceCommandFile.setSizes.last!)").font(.title3.weight(.semibold))
+            Text(verbatim: "Say: Pogo scan \(VoiceCommandFile.setSizes.last!)").font(.title3.weight(.semibold))
             Text("The largest command covers \(VoiceCommandFile.setSizes.last!.formatted()) Pokémon. Scans of a storage this large are Add and update (nothing is proposed as gone): scan the first \(VoiceCommandFile.setSizes.last!.formatted()), then the rest with a second scan.").font(.footnote).foregroundStyle(.orange)
         } else {
             Text("Type how many Pokémon are in your storage above to see which command to say.").font(.footnote).foregroundStyle(.secondary)
@@ -119,7 +119,7 @@ struct ScanView: View {
         Text("Say the size that covers the Pokémon you want to scan, counting from the one on screen. A command pages that many; if the list ends first, the scan ends by itself.").font(.footnote).foregroundStyle(.secondary)
         ForEach(VoiceCommandFile.setSizes, id: \.self) { size in
             HStack {
-                Text("Pogo scan \(size)").font(.callout.weight(.medium))
+                Text(verbatim: "Pogo scan \(size)").font(.callout.weight(.medium))
                 Spacer()
                 Text("\(size.formatted()) Pokémon, about \(minutes(Double(model.estimatedMinutes(size: size)) * 60))").font(.footnote).foregroundStyle(.secondary)
             }
