@@ -4,7 +4,7 @@
 `native/` holds a Swift package with the appraisal-screen reader ported from `src/extract/` on
 `extractor-read-faults` (Apple Vision for the text), a live grouper, an Xcode project with the app
 and a ReplayKit broadcast extension, Mac tools and comparison scripts; see `native/README.md`.
-**Verified (MacBook, Xcode 26.6, commit 4898acc):** 101 Swift tests pass; the app and extension
+**Verified (MacBook, Xcode 26.6, commit 52c415d):** 110 Swift tests pass; the app and extension
 compile for the iOS simulator unsigned. Against the JavaScript reader on the same 5 fps frames
 (Swift at 750 px through 420 pixel buffers, both through the JavaScript grouping, measured at
 e4ab948): darentas parts 1 to 3 agree on name and CP for 445 of 448, 767 of 779 and 144 of 147
@@ -13,7 +13,7 @@ JavaScript rows; v3 109 of 110; pogo-test-fast 21 of 21; marathon-phone 42 of 45
 the extension's limit of about 50 MB; whether iOS charges the extension the same is unknown.
 **Review:** three rounds (Opus-tier reviewer and Sol-tier cross-vendor); the last found no
 blocker for a first device run but timing flaws in the swipe detection, folded in 7dfb20a and
-addc6ef, and the dark-screen fix 4898acc, NOT reviewed. **The review gate is not passed.** `npm test` on the Mac: 129 pass,
+addc6ef; a fourth round on 4898acc found the extension sound and the live grouper not; the grouper pass that followed (7b2c7cc, 6a9d29d) is NOT reviewed. **The review gate is not passed.** `npm test` on the Mac: 129 pass,
 4 skipped, 1 fails (a Windows path assertion in `test/node/ffmpeg.test.js`).
 
 **30 Sep 2026: batch mode for a whole box.** `node scripts/extract-box.mjs <folder>` (or drag the
