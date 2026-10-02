@@ -33,4 +33,15 @@ final class TapCommandCheckTests: XCTestCase {
         XCTAssertTrue(one.contains("\"Pogo fast scan\"") && !one.contains("\"Pogo scan\"") && one.contains("Do not say it"))
         XCTAssertNil(TapCommandCheck.warning(for: []))
     }
+
+    func testATapSetMadeForAnotherScreenIsFlaggedOnAnyAccountAndNamedInTheWarning() throws {
+        let records: [(kind: VoiceCommandFile.SetKind, screen: String?)] = [(.tap, "440x956 iPhone"), (.tap, "402x874 iPhone")]
+        XCTAssertTrue(TapCommandCheck.setOnOtherScreens(records: records, current: "440x956 iPhone"), "another account's set made for another screen")
+        XCTAssertFalse(TapCommandCheck.setOnOtherScreens(records: [(.tap, "440x956 iPhone")], current: "440x956 iPhone"))
+        XCTAssertFalse(TapCommandCheck.setOnOtherScreens(records: [(.swipe, "393x852 iPhone")], current: "440x956 iPhone"), "a swipe set presses nothing")
+        XCTAssertTrue(TapCommandCheck.setOnOtherScreens(records: [(.tap, nil)], current: "440x956 iPhone"), "no screen recorded counts as unsafe")
+        let w = try XCTUnwrap(TapCommandCheck.warning(for: [], set: true))
+        XCTAssertTrue(w.contains("\"Pogo scan 25\" to \"Pogo scan 5000\"") && w.contains("Do not say them") && w.contains("Settings > Accessibility > Voice Control > Commands"))
+        XCTAssertNil(TapCommandCheck.warning(for: [], set: false))
+    }
 }

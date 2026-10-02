@@ -62,7 +62,8 @@ final class AppModel: ObservableObject {
     @Published var boxNeedsNewerApp = false
 
     @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind) } }
-    @Published var storageCountText: String { didSet { UserDefaults.standard.set(storageCountText, forKey: Keys.count) } }
+    /// The storage count of a full scan, remembered per account (editable); it picks which command to say.
+    @Published var storageCountText: String { didSet { if let a = account { UserDefaults.standard.set(storageCountText, forKey: Keys.count + "." + a) } } }
 
     // The broadcast, as the extension last reported it.
     @Published var broadcast: BroadcastState?
@@ -73,7 +74,7 @@ final class AppModel: ObservableObject {
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
-    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast." }
+    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
 
     // MARK: - "Make scans better"
 
@@ -160,20 +161,29 @@ final class AppModel: ObservableObject {
     /// What the last command made for an account was built for. The app cannot know whether it was imported on the phone.
     struct VoiceRecord: Codable, Equatable { var storageCount: Int; var covers: Int; var pace: VoiceCommandFile.Pace; var date: Date; var screen: String? }
 
-    @Published var pace: VoiceCommandFile.Pace { didSet { UserDefaults.standard.set(pace.rawValue, forKey: Keys.pace) } }
-    /// The last command made for each mode of the selected account: each mode is its own command in Voice Control.
+    /// What the one-time set was made for on this phone (per account, kept like the single commands' records).
+    struct SetRecord: Codable, Equatable { var kind: VoiceCommandFile.SetKind; var date: Date; var screen: String? }
+
     /// The person paged by hand, not with a command: the paging beat means nothing, so twins are not judged from it. Off by default.
     @Published var pagedByHand: Bool { didSet { UserDefaults.standard.set(pagedByHand, forKey: Keys.hand) } }
+    /// The last command made for each single mode of the selected account (older app versions made one file per scan; still checked for the wrong-screen warning).
     @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]
-    var voiceLast: VoiceRecord? { voiceRecords[pace] }
+    @Published var setRecord: SetRecord?
 
-    /// What the Scan screen should warn about for the chosen mode, or nil: no command made for it yet, or one made for fewer
-    /// Pokémon than the typed count needs.
+    /// Tap on a checked screen, swipe elsewhere: the set's kind, and the pace every command of it pages at (the hint the reader gets).
+    var setKind: VoiceCommandFile.SetKind { .forScreen(tapAvailable: tapAvailable) }
+    var pace: VoiceCommandFile.Pace { setKind.pace }
+
+    /// The command to say for a full scan: the smallest size covering the typed count, nil when no count (or one above 5,000, see `countAboveLargest`).
+    var commandSize: Int? { storageCount.flatMap { VoiceCommandFile.setSize(covering: $0) } }
+    var countAboveLargest: Bool { (storageCount ?? 0) > (VoiceCommandFile.setSizes.last ?? 0) }
+    /// Minutes the command of this size takes, as the Python's estimate has it.
+    func estimatedMinutes(size: Int) -> Int { Int((VoiceCommandFile.sizing(storageCount: size, pace: pace).estimatedSeconds / 60).rounded()) }
+
+    /// What the Scan screen says about the set, or nil: it has not been made on this phone yet (by any account, for this screen kind).
     var commandWarning: String? {
-        guard let count = storageCount else { return nil }
-        guard let last = voiceRecords[pace] else { return "No \(pace.title) command has been made yet. Get the command and import it, or Voice Control will not know \"\(pace.commandName)\"." }
-        if VoiceCommandFile.steps(storageCount: count) > last.covers { return "Your count is higher than the \(pace.title) command covers. Get the command again and import it, or Voice Control will play the old one." }
-        return nil
+        let made = Self.deviceSetRecords().values.joined().contains { $0.kind == setKind && (setKind == .swipe || $0.screen == screenLabel) }
+        return made ? nil : "The command set has not been made on this phone yet. Get the commands and import them, or Voice Control will not know \"Pogo scan 300\" and the others."
     }
 
     /// Screen size in points, for the tap position check.
@@ -187,12 +197,6 @@ final class AppModel: ObservableObject {
 
     /// "440x956 iPhone": the screen this command would be made for.
     var screenLabel: String { VoiceCommandFile.screenLabel(width: Double(screenSize.width), height: Double(screenSize.height), isPad: UIDevice.current.userInterfaceIdiom == .pad) }
-
-    /// A tap command was made on a different screen than this one (or on one that was not recorded): its taps are placed for that screen.
-    var tapCommandOnOtherScreen: Bool {
-        guard pace.isTap, let rec = voiceRecords[pace] else { return false }
-        return rec.screen != screenLabel
-    }
 
     /// Every tap command made for this account is checked against the current screen, whatever pace is selected: on an unchecked
     /// screen the pace is forced to Swipe, but a tap command made earlier (Display Zoom turned on since, a restore onto another phone) is
@@ -215,11 +219,29 @@ final class AppModel: ObservableObject {
         }
         return out
     }
-    var tapCommandWarning: String? { TapCommandCheck.warning(for: tapCommandsOnOtherScreens) }
+    /// A TAP set made for another screen, on any account of this device.
+    var tapSetOnOtherScreen: Bool {
+        var all = Self.deviceSetRecords()
+        if let r = setRecord { all[account ?? "", default: []].append((kind: r.kind, screen: r.screen)) }
+        return TapCommandCheck.setOnOtherScreens(records: all.values.flatMap { $0 }, current: screenLabel)
+    }
+    var tapCommandWarning: String? { TapCommandCheck.warning(for: tapCommandsOnOtherScreens, set: tapSetOnOtherScreen) }
+
+    /// The set records of every account on this device, from the stored keys `voiceSet.<account>`.
+    static func deviceSetRecords() -> [String: [(kind: VoiceCommandFile.SetKind, screen: String?)]] {
+        var out = [String: [(kind: VoiceCommandFile.SetKind, screen: String?)]]()
+        for (key, value) in UserDefaults.standard.dictionaryRepresentation() where key.hasPrefix(Keys.set) {
+            guard let data = value as? Data, let rec = try? JSONDecoder().decode(SetRecord.self, from: data) else { continue }
+            out[String(key.dropFirst(Keys.set.count)), default: []].append((kind: rec.kind, screen: rec.screen))
+        }
+        return out
+    }
 
     func loadVoiceRecord() {
-        voiceRecords = [:]
+        voiceRecords = [:]; setRecord = nil
         guard let a = account else { return }
+        storageCountText = UserDefaults.standard.string(forKey: Keys.count + "." + a) ?? ""
+        setRecord = UserDefaults.standard.data(forKey: Keys.set + a).flatMap { try? JSONDecoder().decode(SetRecord.self, from: $0) }
         for p in VoiceCommandFile.Pace.allCases {
             if let data = UserDefaults.standard.data(forKey: Keys.voice + a + "." + p.rawValue), let r = try? JSONDecoder().decode(VoiceRecord.self, from: data) { voiceRecords[p] = r }
         }
@@ -230,32 +252,29 @@ final class AppModel: ObservableObject {
         Locale.current.identifier.split(separator: "@").first.map { $0.replacingOccurrences(of: "-", with: "_") } ?? "en_AU"
     }
 
-    /// Make the commands file for the typed storage count and hand it to the share sheet (Save to Files, AirDrop).
-    func getCommand() async {
-        guard let count = storageCount else { message = storageCountProblem ?? "Type how many Pokémon are in your storage first."; return }
-        var pace = self.pace
-        if !offeredPaces.contains(pace) { pace = offeredPaces[0]; self.pace = pace }
-        let size = VoiceCommandFile.sizing(storageCount: count, pace: pace)
-        let tap = pace.isTap ? VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) : nil
+    /// Make the one file with the whole set of commands and hand it to the share sheet (Save to Files, AirDrop). Done once per phone.
+    func getCommandSet() async {
+        let kind = setKind
+        let tap = kind == .tap ? VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) : nil
         let width = Double(screenSize.width), height = Double(screenSize.height), locale = Self.voiceLocale, label = screenLabel
-        busy = "Making the command"
+        busy = "Making the commands"
         defer { busy = nil }
         do {
             let url = try await worker.run { _ -> URL in
-                let data = try VoiceCommandFile.make(count: size.steps, pace: pace, batch: size.batch, locale: locale, tap: tap, screenWidth: width, screenHeight: height)
+                let data = try VoiceCommandFile.makeSet(kind: kind, locale: locale, tap: tap, screenWidth: width, screenHeight: height)
                 let dir = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString)", isDirectory: true)
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let url = dir.appendingPathComponent(pace.fileName(count: count, screen: label))
+                let url = dir.appendingPathComponent(VoiceCommandFile.setFileName(kind: kind, screen: label))
                 try data.write(to: url, options: .atomic)
                 return url
             }
             if let a = account {
-                let rec = VoiceRecord(storageCount: count, covers: size.covers, pace: pace, date: Date(), screen: label)
-                if let d = try? JSONEncoder().encode(rec) { UserDefaults.standard.set(d, forKey: Keys.voice + a + "." + pace.rawValue) }
-                voiceRecords[pace] = rec
+                let rec = SetRecord(kind: kind, date: Date(), screen: label)
+                if let d = try? JSONEncoder().encode(rec) { UserDefaults.standard.set(d, forKey: Keys.set + a) }
+                setRecord = rec
             }
             shareURLs = [url]
-        } catch { message = "The command could not be made: \(Self.plain(error))" }
+        } catch { message = "The commands could not be made: \(Self.plain(error))" }
     }
 
     init() {
@@ -271,13 +290,8 @@ final class AppModel: ObservableObject {
         }
         library = BoxLibrary(root: root)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
-        storageCountText = UserDefaults.standard.string(forKey: Keys.count) ?? ""
-        // Tap is the default where it is available (the owner's choice after testing); the setting is stored under a new key so it applies once.
-        let tapOK = VoiceCommandFile.tapPoint(width: Double(UIScreen.main.bounds.width), height: Double(UIScreen.main.bounds.height)) != nil
-        let offered = VoiceCommandFile.Pace.offered(tapAvailable: tapOK)
-        let stored = VoiceCommandFile.Pace(rawValue: UserDefaults.standard.string(forKey: Keys.pace) ?? "")
+        storageCountText = ""   // read per account by loadVoiceRecord once the account is known
         pagedByHand = UserDefaults.standard.bool(forKey: Keys.hand)
-        pace = stored.flatMap { offered.contains($0) ? $0 : nil } ?? offered[0]
         account = UserDefaults.standard.string(forKey: Keys.account)
         reloadAccounts()
         loadBox()
@@ -565,7 +579,7 @@ final class AppModel: ObservableObject {
         let kind = scanKind, date = Date(), lib = library
         // What the app knows about the paging: a generated command at the chosen mode's pace, or by hand.
         let paging = pagedByHand ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: pace.every, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
-        let count = storageCount
+        let count = kind == .full ? storageCount : nil
         Task {
             do {
                 let (outcome, plan, seconds, base, seq) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?) in

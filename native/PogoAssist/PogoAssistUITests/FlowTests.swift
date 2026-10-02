@@ -103,7 +103,7 @@ final class FlowTests: XCTestCase {
         shot("13-fix-a-value")
     }
 
-    /// The Scan screen with a storage count typed: the command estimate and the pace choices.
+    /// The Scan screen with a storage count typed: the command to say and the one-time set file.
     func testScanCommandScreen() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset"]
@@ -114,11 +114,12 @@ final class FlowTests: XCTestCase {
         app.buttons["Create account"].tap()
         XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
         app.buttons["Scan Pokémon"].tap()
-        let count = app.textFields["Optional"]
+        let count = app.textFields["Required"]
         XCTAssertTrue(count.waitForExistence(timeout: 5))
         count.tap(); count.typeText("1400")
         app.buttons["Done"].tap()   // dismiss the number pad
         sleep(1)
+        XCTAssertTrue(app.staticTexts["Say: Pogo scan 1500"].waitForExistence(timeout: 5), "1,400 Pokémon is covered by the 1,500 command")
         let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
         shot(name + "-top")
         app.swipeUp()

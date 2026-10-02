@@ -5,7 +5,6 @@ import PogoReader
 struct ScanView: View {
     @EnvironmentObject var model: AppModel
     @FocusState private var countFocused: Bool
-    @State private var confirmingBigCount = false
 
     var body: some View {
         List {
@@ -24,20 +23,22 @@ struct ScanView: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Before you start") {
-                Label("The Voice Control command is installed", systemImage: "1.circle")
+                Label("The Pogo scan commands are installed (once per phone)", systemImage: "1.circle")
                 Label("Voice Control's Show Confirmation and Show Hints are off", systemImage: "2.circle")
                 Label("Pokémon GO is open on the first Pokémon with the appraisal showing", systemImage: "3.circle")
-                Label("Say the command, or swipe through the Pokémon by hand", systemImage: "4.circle")
+                Label("Say the command named below, or page through the Pokémon by hand", systemImage: "4.circle")
             }
-            Section {
-                HStack {
-                    Text("Pokémon in storage")
-                    Spacer()
-                    TextField("Optional", text: $model.storageCountText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120).focused($countFocused)
+            if model.scanKind == .full {
+                Section {
+                    HStack {
+                        Text("Pokémon in storage")
+                        Spacer()
+                        TextField("Required", text: $model.storageCountText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120).focused($countFocused)
+                    }
+                } footer: {
+                    if let problem = model.storageCountProblem { Text(problem).foregroundStyle(.red) }
+                    else { Text("Remembered for this account. It picks which command to say, and is saved with the scan.") }
                 }
-            } footer: {
-                if let problem = model.storageCountProblem { Text(problem).foregroundStyle(.red) }
-                else { Text("Saved with the scan, and used to size the Voice Control command below.") }
             }
             commandSection
             Section {
@@ -65,81 +66,63 @@ struct ScanView: View {
             if let warning = model.tapCommandWarning {
                 Label(warning, systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
             }
-            if model.tapAvailable {
-                stepTitle("1. Choose how to page")
-                ForEach(model.offeredPaces) { p in paceRow(p) }
-                Text("Checked on runs of 50 so far.").font(.footnote).foregroundStyle(.secondary)
-            } else {
-                stepTitle("1. How it pages: Swipe")
-                Text("Tap paging has not been checked on this screen size, so this command swipes instead (\(model.pace.secondsText)).").font(.footnote).foregroundStyle(.secondary)
+            stepTitle("Once per phone: get the commands")
+            Text(model.setKind == .tap
+                 ? "One file holds all 13 commands (\(VoiceCommandFile.setSizes.first!) to \(VoiceCommandFile.setSizes.last!) Pokémon). They page by tapping the next-Pokémon arrow, \(model.pace.secondsText). Taps stay at the right edge, away from Power up and Evolve."
+                 : "Tap paging has not been checked on this screen size, so the commands swipe instead (\(model.pace.secondsText)). One file holds all 13 commands (\(VoiceCommandFile.setSizes.first!) to \(VoiceCommandFile.setSizes.last!) Pokémon).")
+                .font(.footnote).foregroundStyle(.secondary)
+            Button { Task { await model.getCommandSet() } } label: { Label(model.setRecord == nil ? "Get the commands" : "Get the commands again", systemImage: "square.and.arrow.up") }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(model.setKind == .tap ? "a. Choose Save to Files on THIS \(deviceKind) and import it here. Do not send it to another device: its taps are placed for this screen only."
+                                           : "a. Choose Save to Files on this \(deviceKind) and import it here.").font(.footnote)
+                Text("b. Settings > Accessibility > Voice Control > Commands > Import Custom Commands, then pick the file.").font(.footnote)
+                Text("c. Importing it again replaces these commands and nothing else.").font(.footnote)
+                Text("d. The commands are made for this phone's language (\(AppModel.voiceLocale)). Voice Control's own language must be the same.").font(.footnote)
             }
-            if let c = model.storageCount {
-                let size = VoiceCommandFile.sizing(storageCount: c, pace: model.pace)
-                Text("\(model.pace.title): about \(minutes(size.estimatedSeconds)) for \(c.formatted()) Pokémon. The file makes \(size.covers.formatted()) page steps (\(size.repeats) x \(size.batch)).").font(.footnote)
-            }
-            if model.pace.isTap {
-                Text("Taps stay at the right edge, away from Power up and Evolve. Taps past the end close the appraisal and then do nothing (tested on the 440 x 956 iPhone only).").font(.footnote).foregroundStyle(.secondary)
-            }
+            .foregroundStyle(.secondary)
             if let warning = model.commandWarning {
                 Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange)
             }
+            stepTitle("For each scan: say the command")
+            if model.scanKind == .full { fullScanCommand } else { partScanCommands }
+            Label("Once started, a command cannot be stopped: not by touching the screen, the side button, locking the phone or Siri. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends. It keeps \(model.setKind == .tap ? "tapping" : "swiping") the same place whatever is on screen.",
+                  systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
+            Text("The scan ends by itself when the end of your Pokémon is reached (the broadcast stops and the result appears). The command keeps going until it runs out; that is harmless in the box.").font(.footnote).foregroundStyle(.secondary)
             Toggle("I paged by hand", isOn: $model.pagedByHand)
-            if model.pagedByHand { Text("Twins will not be told apart by the paging beat.").font(.footnote).foregroundStyle(.secondary) }
-            stepTitle("2. Get the command for this choice")
-            Button { if let c = model.storageCount, StorageCount.needsConfirmation(c) { confirmingBigCount = true } else { Task { await model.getCommand() } } } label: { Label("Get the \(model.pace.spokenTitle) command", systemImage: "square.and.arrow.up") }
-                .disabled(model.storageCount == nil)
-                .confirmationDialog(bigCountTitle, isPresented: $confirmingBigCount, titleVisibility: .visible) {
-                    Button("Yes, make the command") { Task { await model.getCommand() } }
-                    Button("Change the count", role: .cancel) {}
-                }
-            Text("Each mode is its own command, so you can have several installed. Importing a new file for a mode replaces only that mode's command.").font(.footnote).foregroundStyle(.secondary)
-            stepTitle("3. Import it in Voice Control")
-            if model.tapCommandOnOtherScreen {
-                Label("This command was made on a different screen. Make it again here.", systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(model.pace.isTap ? "a. Choose Save to Files on THIS \(deviceKind) and import it here. Do not send it to another device: its taps are placed for this screen only."
-                                          : "a. Choose Save to Files on this \(deviceKind) and import it here.").font(.footnote)
-                    Text("b. Settings > Accessibility > Voice Control > Commands > Import Custom Commands, then pick the file.").font(.footnote)
-                    Text("c. Do this again for a mode whenever you change its count.").font(.footnote)
-                    Text("d. The command is made for this phone's language (\(AppModel.voiceLocale)). Voice Control's own language must be the same.").font(.footnote)
-                }
-                .foregroundStyle(.secondary)
-                stepTitle("4. Say \"\(model.pace.commandName)\"")
-                Text("With the first Pokémon's appraisal open.").font(.footnote).foregroundStyle(.secondary)
+            if model.pagedByHand { Text("Twins will not be told apart by the paging beat, and the scan will not end by itself.").font(.footnote).foregroundStyle(.secondary) }
+        } header: { Text("Voice Control commands") } footer: { Text("Optional. Without them, swipe through the Pokémon by hand.") }
+    }
+
+    @ViewBuilder private var fullScanCommand: some View {
+        if let size = model.commandSize {
+            Text("Say: Pogo scan \(size)").font(.title3.weight(.semibold))
+            Text("Covers up to \(size.formatted()) Pokémon; about \(minutes(Double(model.estimatedMinutes(size: size)) * 60)).").font(.footnote)
+        } else if model.countAboveLargest {
+            Text("Say: Pogo scan \(VoiceCommandFile.setSizes.last!)").font(.title3.weight(.semibold))
+            Text("The largest command covers \(VoiceCommandFile.setSizes.last!.formatted()) Pokémon. The rest needs a second scan with Add and update.").font(.footnote).foregroundStyle(.orange)
+        } else {
+            Text("Type how many Pokémon are in your storage above to see which command to say.").font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private var partScanCommands: some View {
+        Text("Say the size that covers the Pokémon you want to scan, counting from the one on screen. A command pages that many; if the list ends first, the scan ends by itself.").font(.footnote).foregroundStyle(.secondary)
+        ForEach(VoiceCommandFile.setSizes, id: \.self) { size in
+            HStack {
+                Text("Pogo scan \(size)").font(.callout.weight(.medium))
+                Spacer()
+                Text("\(size.formatted()) Pokémon, about \(minutes(Double(model.estimatedMinutes(size: size)) * 60))").font(.footnote).foregroundStyle(.secondary)
             }
-        } header: { Text("Voice Control command") } footer: { Text("Optional. Without it, swipe through the Pokémon by hand.") }
+        }
     }
 
     private var deviceKind: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
-
-    private var bigCountTitle: String {
-        guard let c = model.storageCount else { return "Is the count right?" }
-        let size = VoiceCommandFile.sizing(storageCount: c, pace: model.pace)
-        let minutes = Int((size.estimatedSeconds / 60).rounded())
-        return "That is \(c.formatted()) Pokémon and about \(minutes.formatted()) minutes of \(model.pace.isTap ? "taps" : "swiping"). Is the count right?"
-    }
 
     private func stepTitle(_ text: String) -> some View { Text(text).font(.subheadline.weight(.semibold)) }
 
     private func minutes(_ seconds: Double) -> String {
         let m = Int((seconds / 60).rounded())
         return m < 1 ? "under a minute" : m == 1 ? "1 minute" : "\(m) minutes"
-    }
-
-    private func paceRow(_ p: VoiceCommandFile.Pace) -> some View {
-        let made: String = model.voiceRecords[p].map { "command made for \($0.storageCount.formatted()) Pokémon" } ?? "no command made yet"
-        return Button { model.pace = p } label: {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(p.title)
-                    Text("\(p.secondsText), \(made)").font(.footnote).foregroundStyle(Color.secondary)
-                    if let note = p.note { Text(note).font(.footnote).foregroundStyle(Color.secondary) }
-                }
-                Spacer()
-                if model.pace == p { Image(systemName: "checkmark") }
-            }
-        }
     }
 
     @ViewBuilder private var liveStatus: some View {
