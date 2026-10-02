@@ -15,6 +15,8 @@ final class RefineTests: XCTestCase {
         let one = Array(try Fixture.readings().prefix(7))
         var out = [FrameReading]()
         for c in 0..<copies {
+            // the swipe between two Pokemon: one reading of the card sliding sideways, 0.25 s after the last card reading
+            if c > 0 { var m = FrameReading(frame: "swipe\(c)", time: Double(c - 1) * period + 1.2 + 0.25); m.flags = ["mid-swipe"]; out.append(m) }
             for r in one { var x = r; x.frame = "t\(c)-\(r.frame ?? "")"; x.time = (r.time ?? 0) + Double(c) * period; out.append(x) }
         }
         return out
