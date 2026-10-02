@@ -35,7 +35,7 @@ let pace: VoiceCommandFile.Pace = tap ? (fast ? .tapFast : .tapNormal) : (fast ?
 let size = VoiceCommandFile.sizing(storageCount: count, pace: pace)
 do {
     let data = try VoiceCommandFile.make(count: size.steps, pace: pace, batch: size.batch, locale: locale,
-                                         tap: tap ? VoiceCommandFile.tapPoint(width: screen.0, height: screen.1) : nil, screenWidth: screen.0, now: now)
+                                         tap: tap ? VoiceCommandFile.tapPoint(width: screen.0, height: screen.1) : nil, screenWidth: screen.0, screenHeight: screen.1, now: now)
     try data.write(to: URL(fileURLWithPath: out), options: .atomic)
     print("wrote \(out): \(data.count) bytes; \(size.repeats) x \(size.batch) \(pace.isTap ? "taps" : "swipes") for \(count) Pokémon (\(size.steps) steps needed), about \(Int((size.estimatedSeconds / 60).rounded())) min")
 } catch { die(error.localizedDescription) }
