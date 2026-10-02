@@ -59,6 +59,12 @@ private struct ResultList: View {
         guard let pace = review.outcome.pace else { return nil }
         return (model.pagedByHand || review.reread != nil) ? nil : PaceCheck.check(measured: pace.medianPeriod, chosen: model.pace)
     }
+    /// The scan ran at a tap pace on a screen tap paging has not been checked on: the command's taps were placed for another screen.
+    private var tapWarning: String? {
+        guard review.reread == nil, !model.pagedByHand, !model.tapAvailable, let pace = review.outcome.pace, let ran = PaceCheck.nearestMode(to: pace.medianPeriod), ran.isTap else { return nil }
+        return "This scan was paged at a tap pace, but tap paging has not been checked on this screen. A tap command made for another device can press the wrong place in the game. Check your Pokémon in the game."
+    }
+
     private var blocker: String? { model.saveBlocker(review) }
 
     var body: some View {
@@ -68,6 +74,7 @@ private struct ResultList: View {
                 row("Scan time", Fmt.duration(review.outcome.duration))
                 row("Frames read", "\(review.outcome.readings)")
                 if let pace = review.outcome.pace { row("Pace", "about \(String(format: "%.1f", pace.medianPeriod)) s per Pokémon") }
+                if let tapWarning { Label(tapWarning, systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red) }
                 if let warning = paceWarning { Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange) }
                 row("Box", review.account)
                 if let plan = review.reread { rereadNotes(plan) }
@@ -111,15 +118,36 @@ private struct ResultList: View {
                 }
                 HStack { Label("Unsure", systemImage: "questionmark.circle"); Spacer(); Text("\(plan.unsure.count)").foregroundStyle(.secondary).monospacedDigit() }
                 if review.kind == .full {
-                    group("gone", "Gone", plan.gone.count, "minus.circle") {
-                        ForEach(plan.gone, id: \.self) { id in
-                            if let e = saved[id] { Text(Fmt.brief(e.row)).font(.callout) }
+                    let report = BoxMerge.goneReport(plan, resolutions: review.resolutions)
+                    let removing = report.gone.filter { !review.keepGone.contains($0) }.count
+                    group("gone", "Gone", removing, "minus.circle") {
+                        ForEach(report.gone, id: \.self) { id in
+                            if let e = saved[id] {
+                                Toggle(isOn: Binding(get: { !review.keepGone.contains(id) }, set: { model.setKeep(id, !$0) })) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(Fmt.brief(e.row)).font(.callout)
+                                        Text(review.keepGone.contains(id) ? "Kept in the box" : "Removed when you save").font(.footnote).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
                         }
+                        if !report.gone.isEmpty { Button("Keep all") { model.keepAllGone() } }
                     }
                 }
             }
-            if review.kind == .full && !plan.gone.isEmpty {
-                Section { Text("These are in your box but the scan did not see them. If the scan stopped early, choose Add and update above so nothing is removed.").font(.footnote).foregroundStyle(.secondary) }
+            let report = BoxMerge.goneReport(plan, resolutions: review.resolutions)
+            if review.kind == .full && !report.gone.isEmpty {
+                Section { Text("These are in your box but the scan did not see them. Each is removed when you save unless you keep it. If the scan stopped early, choose Add and update above so nothing is removed.").font(.footnote).foregroundStyle(.secondary) }
+            }
+            if review.kind == .full && !report.kept.isEmpty {
+                Section("Not seen clearly, kept (\(report.kept.count))") {
+                    ForEach(report.kept, id: \.savedId) { k in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let e = saved[k.savedId] { Text(Fmt.brief(e.row)).font(.callout) }
+                            Text(k.reason).font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
             let flagged = review.outcome.scan.rows.indices.filter { review.outcome.scan.rows[$0].needsCheck }
             Section("To check in the game (\(flagged.count))") {

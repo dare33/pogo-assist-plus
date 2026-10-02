@@ -18,12 +18,9 @@ struct UnsureCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Read in the scan").font(.caption).foregroundStyle(.secondary)
                 Text(readLine).font(.callout.weight(.medium))
-                Text(unsure.kind == .partialRead
-                     ? "Only part of the CP was read, so this may be a Pokémon already in your box."
-                     : "It could be more than one Pokémon already in your box.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                Text(explanation).font(.footnote).foregroundStyle(.secondary)
             }
-            ForEach(unsure.candidates, id: \.self) { id in
+            ForEach(unsure.kind == .extraTwin ? [] : unsure.candidates, id: \.self) { id in
                 if let e = saved[id] {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("In your box").font(.caption).foregroundStyle(.secondary)
@@ -34,12 +31,27 @@ struct UnsureCard: View {
                     .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 8))
                 }
             }
+            if unsure.kind == .extraTwin {
+                HStack {
+                    answer("Add a second one", selected: choice == .new) { model.resolve(unsure.scanned, .new) }
+                    answer("Leave it out", selected: choice == .leaveOut) { model.resolve(unsure.scanned, .leaveOut) }
+                }
+            } else {
             HStack {
                 answer("It is new", selected: choice == .new) { model.resolve(unsure.scanned, .new) }
                 answer("Leave it out of the box", selected: choice == .leaveOut) { model.resolve(unsure.scanned, .leaveOut) }
             }
+            }
         }
         .padding(.vertical, 4)
+    }
+
+    private var explanation: String {
+        switch unsure.kind {
+        case .partialRead: return "Only part of the CP was read, so this may be a Pokémon already in your box."
+        case .extraTwin: return "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
+        case .ambiguous: return "It could be more than one Pokémon already in your box."
+        }
     }
 
     private var readLine: String {

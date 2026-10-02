@@ -21,7 +21,7 @@ struct BoxView: View {
 
     var body: some View {
         Group {
-            if model.entries.isEmpty { emptyState } else { list }
+            if let problem = model.boxProblem { problemState(problem) } else if model.entries.isEmpty { emptyState } else { list }
         }
         .navigationTitle("Box")
         .navigationBarTitleDisplayMode(.inline)
@@ -52,9 +52,23 @@ struct BoxView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
+        .disabled(model.boxProblem != nil)
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.bar)
+    }
+
+    /// The newest box version cannot be read: not an empty box, and nothing is saved until a readable version is restored.
+    private func problemState(_ text: String) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: "exclamationmark.triangle").font(.system(size: 44)).foregroundStyle(.orange)
+            Text("This box could not be read").font(.title3.bold())
+            Text(text).multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Button("Restore the latest readable version") { Task { await model.restoreLatestReadable() } }.buttonStyle(.borderedProminent)
+            Text("Scanning is paused until this is resolved.").font(.footnote).foregroundStyle(.secondary)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyState: some View {

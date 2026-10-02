@@ -24,6 +24,10 @@ final class AppModel: ObservableObject {
         var paging: StoredPaging?
         /// Set when this is a saved scan being read again: the box is the one before that scan was saved.
         var reread: RereadPlan?
+        /// Saved entries to keep although the scan proposes them as gone (the person's per-entry choice).
+        var keepGone: Set<String> = []
+        /// The current box version this review was prepared against (nil: there was none). A save is refused if the box has moved on.
+        var boxSeq: Int?
     }
 
     enum ScanFlow {
@@ -49,6 +53,8 @@ final class AppModel: ObservableObject {
     /// Files to hand to the share sheet (a saved scan's log and result).
     @Published var shareURLs: [URL] = []
     @Published var busy: String?
+    /// The box could not be read: set instead of showing an empty box. Scans cannot be reviewed or saved until it is resolved.
+    @Published var boxProblem: String?
 
     @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind) } }
     @Published var storageCountText: String { didSet { UserDefaults.standard.set(storageCountText, forKey: Keys.count) } }
@@ -67,7 +73,7 @@ final class AppModel: ObservableObject {
     // MARK: - the Voice Control command
 
     /// What the last command made for an account was built for. The app cannot know whether it was imported on the phone.
-    struct VoiceRecord: Codable, Equatable { var storageCount: Int; var covers: Int; var pace: VoiceCommandFile.Pace; var date: Date }
+    struct VoiceRecord: Codable, Equatable { var storageCount: Int; var covers: Int; var pace: VoiceCommandFile.Pace; var date: Date; var screen: String? }
 
     @Published var pace: VoiceCommandFile.Pace { didSet { UserDefaults.standard.set(pace.rawValue, forKey: Keys.pace) } }
     /// The last command made for each mode of the selected account: each mode is its own command in Voice Control.
@@ -90,7 +96,18 @@ final class AppModel: ObservableObject {
     var offeredPaces: [VoiceCommandFile.Pace] { VoiceCommandFile.Pace.offered(tapAvailable: tapAvailable) }
     var tapAvailable: Bool { VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) != nil }
 
-    var storageCount: Int? { Int(storageCountText.trimmingCharacters(in: .whitespaces)).flatMap { $0 >= 1 ? $0 : nil } }
+    /// The typed storage count, 1 to 10,000, read without overflow; nil when empty or not usable (`storageCountProblem` says why).
+    var storageCount: Int? { if case .valid(let n) = StorageCount.parse(storageCountText) { return n } else { return nil } }
+    var storageCountProblem: String? { StorageCount.problem(for: storageCountText) }
+
+    /// "440x956 iPhone": the screen this command would be made for.
+    var screenLabel: String { VoiceCommandFile.screenLabel(width: Double(screenSize.width), height: Double(screenSize.height), isPad: UIDevice.current.userInterfaceIdiom == .pad) }
+
+    /// A tap command was made on a different screen than this one (or on one that was not recorded): its taps are placed for that screen.
+    var tapCommandOnOtherScreen: Bool {
+        guard pace.isTap, let rec = voiceRecords[pace] else { return false }
+        return rec.screen != screenLabel
+    }
 
     func loadVoiceRecord() {
         voiceRecords = [:]
@@ -107,25 +124,25 @@ final class AppModel: ObservableObject {
 
     /// Make the commands file for the typed storage count and hand it to the share sheet (Save to Files, AirDrop).
     func getCommand() async {
-        guard let count = storageCount else { message = "Type how many Pokémon are in your storage first."; return }
+        guard let count = storageCount else { message = storageCountProblem ?? "Type how many Pokémon are in your storage first."; return }
         var pace = self.pace
         if !offeredPaces.contains(pace) { pace = offeredPaces[0]; self.pace = pace }
         let size = VoiceCommandFile.sizing(storageCount: count, pace: pace)
         let tap = pace.isTap ? VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) : nil
-        let width = Double(screenSize.width), locale = Self.voiceLocale
+        let width = Double(screenSize.width), height = Double(screenSize.height), locale = Self.voiceLocale, label = screenLabel
         busy = "Making the command"
         defer { busy = nil }
         do {
             let url = try await worker.run { _ -> URL in
-                let data = try VoiceCommandFile.make(count: size.steps, pace: pace, batch: size.batch, locale: locale, tap: tap, screenWidth: width)
+                let data = try VoiceCommandFile.make(count: size.steps, pace: pace, batch: size.batch, locale: locale, tap: tap, screenWidth: width, screenHeight: height)
                 let dir = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString)", isDirectory: true)
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let url = dir.appendingPathComponent(pace.fileName(count: count))
+                let url = dir.appendingPathComponent(pace.fileName(count: count, screen: label))
                 try data.write(to: url, options: .atomic)
                 return url
             }
             if let a = account {
-                let rec = VoiceRecord(storageCount: count, covers: size.covers, pace: pace, date: Date())
+                let rec = VoiceRecord(storageCount: count, covers: size.covers, pace: pace, date: Date(), screen: label)
                 if let d = try? JSONEncoder().encode(rec) { UserDefaults.standard.set(d, forKey: Keys.voice + a + "." + pace.rawValue) }
                 voiceRecords[pace] = rec
             }
@@ -193,14 +210,16 @@ final class AppModel: ObservableObject {
 
     /// Read the selected account's current box (and its cached advice, or start computing it).
     func loadBox() {
-        guard let a = account else { snapshot = nil; advice = .none; history = []; previous = nil; return }
+        guard let a = account else { snapshot = nil; advice = .none; history = []; previous = nil; boxProblem = nil; return }
         do {
             snapshot = try library.current(account: a)
             history = try library.history(account: a)
             previous = try library.previousVersion(account: a)
+            boxProblem = nil
         } catch {
-            snapshot = nil; history = []; previous = nil
-            message = "The box for \(a) could not be read: \(error.localizedDescription) Your other versions may still be restorable from Settings."
+            // Not an empty box: the newest version is damaged. Nothing is saved on top of it until the person restores a readable one.
+            snapshot = nil; history = (try? library.history(account: a)) ?? []; previous = nil
+            boxProblem = "The newest saved version of the box for \(a) cannot be read (\(Self.plain(error))). Your earlier versions are still on this device."
         }
         loadAdvice()
         loadScans()
@@ -244,18 +263,23 @@ final class AppModel: ObservableObject {
     /// should be told something (no level fits the new values).
     struct CorrectionResult { var error: String?; var notice: String? }
 
+    /// The three actions below each read the CURRENT box inside the one call on the worker's queue that writes the new version
+    /// (`BoxLibrary.mutate`), never a copy taken before waiting, so two quick actions cannot drop each other.
     func correct(_ id: String, _ edit: BoxMerge.Edit) async -> CorrectionResult {
-        guard let a = account, let snap = snapshot, let e = snap.entries.first(where: { $0.id == id }) else { return CorrectionResult(error: "That Pokémon is no longer in the box.", notice: nil) }
-        let lib = library
+        guard let a = account else { return CorrectionResult(error: "There is no account.", notice: nil) }
+        let lib = library, label = entry(id)?.row.title ?? "a Pokémon"   // the history note only; the values come from the box inside the call
         do {
             let (new, notice) = try await worker.run { engine -> (BoxSnapshot, String?) in
-                var fixed = try BoxMerge.correct(e, with: edit, gameMaster: try .bundled())
-                // The level and dust follow the corrected values: the JavaScript solver is run again for this Pokémon.
                 var notice: String?
-                if edit.ivs != nil || edit.cp != nil || edit.hp != nil || edit.speciesName != nil { (fixed, notice) = LevelSolve.apply(to: fixed, engine: engine) }
-                var entries = snap.entries
-                if let i = entries.firstIndex(where: { $0.id == id }) { entries[i] = fixed }
-                return (try lib.commit(account: a, entries: entries, reason: .edit, note: "Corrected \(fixed.row.title)", scanKind: snap.scanKind, scanDate: snap.scanDate), notice)
+                let snap = try lib.mutate(account: a, reason: .edit, note: "Corrected \(label)") { entries in
+                    guard let i = entries.firstIndex(where: { $0.id == id }) else { throw BoxMerge.EditFailure.badValue("That Pokémon is no longer in the box.") }
+                    var fixed = try BoxMerge.correct(entries[i], with: edit, gameMaster: try .bundled())
+                    // The level and dust follow the corrected values: the JavaScript solver is run again for this Pokémon.
+                    if edit.ivs != nil || edit.cp != nil || edit.hp != nil || edit.speciesName != nil { (fixed, notice) = LevelSolve.apply(to: fixed, engine: engine) }
+                    var out = entries; out[i] = fixed
+                    return out
+                }
+                return (snap, notice)
             }
             afterCommit(new)
             return CorrectionResult(error: nil, notice: notice)
@@ -264,14 +288,31 @@ final class AppModel: ObservableObject {
 
     /// Remove one Pokémon from the box, as a new box version (the earlier version still has it).
     func deleteEntry(_ id: String) async {
-        guard let a = account, let snap = snapshot, let e = snap.entries.first(where: { $0.id == id }) else { return }
-        let lib = library
+        guard let a = account else { return }
+        let lib = library, label = entry(id).map { "\($0.row.title), \(Fmt.cp($0.row.cp))" } ?? "a Pokémon"
         do {
             let new = try await worker.run { _ in
-                try lib.commit(account: a, entries: snap.entries.filter { $0.id != id }, reason: .edit, note: "Removed \(e.row.title), CP \(e.row.cp)", scanKind: snap.scanKind, scanDate: snap.scanDate)
+                try lib.mutate(account: a, reason: .edit, note: "Removed \(label)") { entries in
+                    guard entries.contains(where: { $0.id == id }) else { throw BoxMerge.EditFailure.badValue("That Pokémon is no longer in the box.") }
+                    return entries.filter { $0.id != id }
+                }
             }
             afterCommit(new)
         } catch { message = "The Pokémon could not be removed: \(Self.plain(error))" }
+    }
+
+    func markChecked(_ id: String) async {
+        guard let a = account else { return }
+        let lib = library, label = entry(id)?.row.title ?? "a Pokémon"
+        do {
+            let new = try await worker.run { _ in
+                try lib.mutate(account: a, reason: .edit, note: "Checked \(label)") { entries in
+                    guard let i = entries.firstIndex(where: { $0.id == id }) else { throw BoxMerge.EditFailure.badValue("That Pokémon is no longer in the box.") }
+                    var out = entries; out[i] = BoxMerge.markChecked(entries[i]); return out
+                }
+            }
+            afterCommit(new)
+        } catch { message = Self.plain(error) }
     }
 
     // MARK: - rename, saved scans
@@ -315,19 +356,6 @@ final class AppModel: ObservableObject {
         return out
     }
 
-    func markChecked(_ id: String) async {
-        guard let a = account, let snap = snapshot, let e = snap.entries.first(where: { $0.id == id }) else { return }
-        let lib = library
-        do {
-            let new = try await worker.run { _ -> BoxSnapshot in
-                var entries = snap.entries
-                if let i = entries.firstIndex(where: { $0.id == id }) { entries[i] = BoxMerge.markChecked(e) }
-                return try lib.commit(account: a, entries: entries, reason: .edit, note: "Checked \(e.row.title)", scanKind: snap.scanKind, scanDate: snap.scanDate)
-            }
-            afterCommit(new)
-        } catch { message = Self.plain(error) }
-    }
-
     private func afterCommit(_ snap: BoxSnapshot) {
         snapshot = snap
         history = (try? library.history(account: snap.account)) ?? history
@@ -337,6 +365,18 @@ final class AppModel: ObservableObject {
     }
 
     // MARK: - history
+
+    /// Make the newest version that can be read the current box again (the newest one is damaged).
+    func restoreLatestReadable() async {
+        guard let a = account else { return }
+        let lib = library
+        do {
+            let snap = try await worker.run { _ in try lib.restoreLatestReadable(account: a) }
+            afterCommit(snap)
+            boxProblem = nil
+            message = "Restored version \(snap.restoredFrom ?? 0), the newest one that can be read."
+        } catch { message = "No saved version of this box could be restored: \(Self.plain(error))" }
+    }
 
     func restore(seq: Int) async {
         guard let a = account else { return }
@@ -403,29 +443,31 @@ final class AppModel: ObservableObject {
 
     /// A broadcast has finished (or died without saying so) and its replay log has not been through review yet: read it.
     func checkForFinishedScan() {
-        guard !holdReview, account != nil, !isReviewing, !live, let state = broadcast, state.finished || endedWithoutFinish,
+        guard !holdReview, account != nil, boxProblem == nil, !isReviewing, !live, let state = broadcast, state.finished || endedWithoutFinish,
               let sig = ReplayMarker.unprocessedSignature() else { return }
         startReview(signature: sig)
     }
 
     func startReview(signature: String) {
-        guard let url = SharedStore.replayURL, let a = account else { return }
+        guard let url = SharedStore.replayURL, let a = account, boxProblem == nil else { return }
         flow = .processing("Reading the scan")
-        let entries = entries, kind = scanKind, date = Date()
+        let kind = scanKind, date = Date(), lib = library
         // What the app knows about the paging: a generated command at the chosen mode's pace, or by hand.
         let paging = pagedByHand ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: pace.every, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
-        let count = Int(storageCountText.trimmingCharacters(in: .whitespaces))
+        let count = storageCount
         Task {
             do {
-                let (outcome, plan, seconds) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double) in
+                let (outcome, plan, seconds, base, seq) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?) in
                     let outcome = try ScanPipeline.process(replay: url, engine: engine, paging: paging)
+                    let current = try lib.current(account: a)   // the box as it is when the plan is made
+                    let entries = current?.entries ?? []
                     let t = Date()
-                    let plan = BoxMerge.plan(scanned: outcome.scan.rows, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
-                    return (outcome, plan, Date().timeIntervalSince(t))
+                    let plan = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
+                    return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq)
                 }
                 let t = outcome.timings
                 NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
-                flow = .review(Review(account: a, kind: kind, outcome: outcome, plan: plan, base: entries, storageCount: count, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging)))
+                flow = .review(Review(account: a, kind: kind, outcome: outcome, plan: plan, base: base, storageCount: count, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging), boxSeq: seq))
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)
             }
@@ -437,15 +479,28 @@ final class AppModel: ObservableObject {
         guard case .review(var r) = flow, r.kind != kind else { return }
         scanKind = kind
         let base = r.base, rows = r.outcome.scan.rows, date = r.plan.scanDate
-        let plan = try? await worker.run { _ in BoxMerge.plan(scanned: rows, into: base, kind: kind, scanDate: date, gameMaster: try .bundled()) }
+        let unmatched = r.outcome.scan.unmatched
+        let plan = try? await worker.run { _ in BoxMerge.plan(scanned: rows, unmatched: unmatched, into: base, kind: kind, scanDate: date, gameMaster: try .bundled()) }
         guard let plan, case .review = flow else { return }
-        r.kind = kind; r.plan = plan; r.resolutions = [:]
+        r.kind = kind; r.plan = plan; r.resolutions = [:]; r.keepGone = []
         flow = .review(r)
     }
 
     func resolve(_ scanned: Int, _ resolution: BoxMerge.Resolution?) {
         guard case .review(var r) = flow else { return }
         r.resolutions[scanned] = resolution
+        flow = .review(r)
+    }
+
+    func setKeep(_ id: String, _ keep: Bool) {
+        guard case .review(var r) = flow else { return }
+        if keep { r.keepGone.insert(id) } else { r.keepGone.remove(id) }
+        flow = .review(r)
+    }
+
+    func keepAllGone() {
+        guard case .review(var r) = flow else { return }
+        r.keepGone = Set(BoxMerge.goneReport(r.plan, resolutions: r.resolutions).gone)
         flow = .review(r)
     }
 
@@ -461,22 +516,44 @@ final class AppModel: ObservableObject {
         defer { busy = nil }
         let lib = library
         do {
-            let snap = try await worker.run { _ -> BoxSnapshot in
-                let entries = try BoxMerge.apply(r.plan, resolutions: r.resolutions, to: r.base)
+            let snap = try await worker.run { engine -> BoxSnapshot in
+                // Refused (not written over it) if the box has changed since this review was prepared.
+                let entries = try BoxMerge.apply(r.plan, resolutions: r.resolutions, keepGone: r.keepGone, to: r.base, engine: engine)
                 // A scan read again: a new box version from the earlier box plus the new read; the scan itself is not saved twice.
-                if let plan = r.reread { return try lib.commitReread(plan, entries: entries, account: r.account) }
+                if let plan = r.reread { return try lib.commitReread(plan, entries: entries, account: r.account, expectedCurrentSeq: .some(r.boxSeq)) }
                 let log = SharedStore.replayURL.flatMap { try? Data(contentsOf: $0) }
+                let current = try lib.current(account: r.account)
+                guard current?.seq == r.boxSeq else { throw BoxLibrary.Failure.boxChanged }
                 let scan = try lib.store.save(r.outcome.scan, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, storageCount: r.storageCount, replayLog: log, paging: r.paging)
                 let n = r.outcome.scan.rows.count
                 let note = (r.kind == .full ? "Full scan" : "Add and update") + ", \(n) Pokémon"
-                return try lib.commit(account: r.account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: r.kind, scanDate: r.plan.scanDate)
+                return try lib.commit(account: r.account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: r.kind, scanDate: r.plan.scanDate, expectedCurrentSeq: .some(r.boxSeq))
             }
             if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
             flow = .idle
             if r.account == account { afterCommit(snap) }
+        } catch BoxLibrary.Failure.boxChanged {
+            message = "The box changed while this scan was open, so nothing was saved. The result has been worked out again against the box as it is now: check it and save again."
+            await refreshReview(r)
         } catch {
             message = "The scan could not be saved: \(Self.plain(error)) Nothing in the box has changed. You can try again or discard the scan."
         }
+    }
+
+    /// Work the merge out again against the box as it is now (after the box changed under an open review); the answers start over.
+    private func refreshReview(_ r: Review) async {
+        if let plan = r.reread, let a = account, let scan = scans.first(where: { $0.id == plan.scan.id }) { flow = .idle; _ = a; rereadScan(scan); return }
+        let lib = library, rows = r.outcome.scan.rows, unmatched = r.outcome.scan.unmatched, kind = r.kind, date = r.plan.scanDate, a = r.account
+        do {
+            let (plan, base, seq) = try await worker.run { _ -> (BoxMerge.Plan, [BoxEntry], Int?) in
+                let cur = try lib.current(account: a)
+                let entries = cur?.entries ?? []
+                return (BoxMerge.plan(scanned: rows, unmatched: unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled()), entries, cur?.seq)
+            }
+            var n = r; n.plan = plan; n.base = base; n.boxSeq = seq; n.resolutions = [:]; n.keepGone = []
+            flow = .review(n)
+            if a == account { loadBox() }
+        } catch { message = "The box could not be read again: \(Self.plain(error))" }
     }
 
     func discardReview() {
@@ -493,21 +570,21 @@ final class AppModel: ObservableObject {
     /// Read a saved scan again with the latest rules, against the box as it was before that scan was saved. Opens the normal review
     /// screen; nothing changes until Save, and Discard changes nothing.
     func rereadScan(_ scan: BoxStore.Summary) {
-        guard let a = account, !isReviewing else { return }
+        guard let a = account, !isReviewing, boxProblem == nil else { return }
         sheet = nil
         flow = .processing("Reading the saved scan again")
         let lib = library, signature = Self.rereadPrefix + scan.id
         Task {
             do {
-                let (plan, outcome, merge, seconds) = try await worker.run { engine -> (RereadPlan, ScanPipeline.Outcome, BoxMerge.Plan, Double) in
+                let (plan, outcome, merge, seconds, seq) = try await worker.run { engine -> (RereadPlan, ScanPipeline.Outcome, BoxMerge.Plan, Double, Int?) in
                     let plan = try lib.prepareReread(account: a, scanId: scan.id)
                     let outcome = try ScanPipeline.process(replay: plan.replayURL, engine: engine, paging: plan.paging)
                     let t = Date()
-                    let merge = BoxMerge.plan(scanned: outcome.scan.rows, into: plan.baseEntries, kind: plan.scan.kind, scanDate: plan.scan.scanDate, gameMaster: try .bundled())
-                    return (plan, outcome, merge, Date().timeIntervalSince(t))
+                    let merge = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: plan.baseEntries, kind: plan.scan.kind, scanDate: plan.scan.scanDate, gameMaster: try .bundled())
+                    return (plan, outcome, merge, Date().timeIntervalSince(t), try lib.current(account: a)?.seq)
                 }
                 flow = .review(Review(account: a, kind: plan.scan.kind, outcome: outcome, plan: merge, base: plan.baseEntries, storageCount: plan.scan.storageCount, signature: signature,
-                                      mergeSeconds: seconds, paging: plan.scan.paging, reread: plan))
+                                      mergeSeconds: seconds, paging: plan.scan.paging, reread: plan, boxSeq: seq))
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)
             }

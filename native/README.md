@@ -512,7 +512,7 @@ Tap mode presses the game's right-hand next-Pokemon arrow (measured at 424, 775 
 kept in `VoiceCommandFile`). Safety rule: once the appraisal closes at the end of the list the Pokemon page shows, and its Power up and Evolve
 buttons sit to the left of that arrow. Taps therefore stay at the right edge: the generator refuses a tap point left of 0.95 of the screen
 width (Python and Swift, both tested), every tap in a file is at exactly the same point, and Tap is offered only on screen sizes in
-`VoiceCommandFile.checkedScreens` (today only 440 x 956; on any other the options are shown disabled). Taps past the end of the list close
+`VoiceCommandFile.checkedScreens` (today only 440 x 956; on any other screen no mode list is shown at all, only the Swipe fallback). Taps past the end of the list close
 the appraisal and then do nothing (tested on that iPhone only). `TrailingNoBarsTests` checks that ten barless frames after the last Pokemon
 add no row and change none. Known limit: a tap leaves no sideways slide, so the swipe evidence the app uses to separate identical
 neighbours is absent in Tap mode; to revisit with timing-based boundaries.
@@ -577,3 +577,24 @@ previous Pokemon's bars moving) never splits.
 This changes what the extension reads: the stored replay logs and `_out` readings hold the CP the old build read, so they are not
 affected; of 1,901 distinct CP texts in those logs 13 change number (all `CP/NN`, for example 68 to 768, 10 to 710) and none becomes
 a read or no read.
+
+### Tap files belong to one screen (review fold)
+
+A tap file holds absolute screen points, so it is only safe on the screen it was made for. What the app and the generator do about it:
+`VoiceCommandFile.make` makes a tap file only for a screen whose width AND height are in `checkedScreens` and only at that entry's measured
+point (anything else, including NaN, zero or a point that merely passes the 0.95 rule, is refused); the Python generator does the same
+(`--screen-width`, `--screen-height`, one-entry table). The file name carries the screen (`Pogo scan 300 (440x956 iPhone).voicecontrolcommands`)
+and the share step says: save to Files on THIS device and import it there, and do not send it to another device. The app records the screen
+each mode's command was made on and, when the recorded screen is not the current one, hides the tap steps ("This command was made on a
+different screen. Make it again here."). The scan result shows a prominent warning when a scan ran at a tap pace on a screen that is not
+checked. What cannot be prevented: a file that is imported by hand on another device (AirDrop, Files, a message) still holds the 440 x 956
+point, and on a different screen that point can land on a button in the game. The app can only warn afterwards.
+The command is made for the phone's language (the device locale); Voice Control's own language may differ, and the Scan screen says so.
+
+### Known limits (added in the review fold)
+
+- The end-of-list behaviour of taps (the appraisal closes, then taps do nothing) is checked on one device and one Pokemon page.
+- Pop-ups during a long tap run are untested.
+- The swipe fallback's path on small screens is untested.
+- Two or more saved Pokemon with the same species and IVs cannot be told apart without unique ids: when they were powered up since the last scan
+  the merge pairs them only if exactly one assignment is consistent, else it asks (`BoxMerge.plan`, M6).
