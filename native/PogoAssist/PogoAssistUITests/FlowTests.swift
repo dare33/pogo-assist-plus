@@ -39,9 +39,29 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 15))
         sleep(1)
         shot("06-box")
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch.tap()
-        shot("07-box-to-check")
-        app.buttons.matching(identifier: "All").firstMatch.tap()
+
+        // Read the saved scan again from Settings > Scans: the review opens against the box before it; Discard changes nothing.
+        app.buttons["More"].tap()
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let actions = app.buttons["Scan actions"]
+        for _ in 0..<6 where !(actions.exists && actions.isHittable) { app.swipeUp() }
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        shot("15-settings-scans")
+        actions.tap()
+        let again = app.buttons["Read again with the latest rules"]
+        XCTAssertTrue(again.waitForExistence(timeout: 5))
+        again.tap()
+        let discard = app.buttons["Discard"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 60), "the re-read review did not appear")
+        sleep(1)
+        shot("15b-reread-review")
+        discard.tap()
+        app.buttons["Discard scan"].tap()
+        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 10))
+        let toCheck = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch
+        if toCheck.exists { toCheck.tap(); shot("07-box-to-check"); app.buttons.matching(identifier: "All").firstMatch.tap() }
 
         app.cells.element(boundBy: 2).tap()
         sleep(2)

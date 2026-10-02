@@ -20,6 +20,10 @@ final class AppModel: ObservableObject {
         var storageCount: Int?
         var signature: String
         var mergeSeconds: Double
+        /// How the scan was paged, kept with the saved scan.
+        var paging: StoredPaging?
+        /// Set when this is a saved scan being read again: the box is the one before that scan was saved.
+        var reread: RereadPlan?
     }
 
     enum ScanFlow {
@@ -421,7 +425,7 @@ final class AppModel: ObservableObject {
                 }
                 let t = outcome.timings
                 NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
-                flow = .review(Review(account: a, kind: kind, outcome: outcome, plan: plan, base: entries, storageCount: count, signature: signature, mergeSeconds: seconds))
+                flow = .review(Review(account: a, kind: kind, outcome: outcome, plan: plan, base: entries, storageCount: count, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging)))
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)
             }
@@ -459,13 +463,15 @@ final class AppModel: ObservableObject {
         do {
             let snap = try await worker.run { _ -> BoxSnapshot in
                 let entries = try BoxMerge.apply(r.plan, resolutions: r.resolutions, to: r.base)
+                // A scan read again: a new box version from the earlier box plus the new read; the scan itself is not saved twice.
+                if let plan = r.reread { return try lib.commitReread(plan, entries: entries, account: r.account) }
                 let log = SharedStore.replayURL.flatMap { try? Data(contentsOf: $0) }
-                let scan = try lib.store.save(r.outcome.scan, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, storageCount: r.storageCount, replayLog: log)
+                let scan = try lib.store.save(r.outcome.scan, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, storageCount: r.storageCount, replayLog: log, paging: r.paging)
                 let n = r.outcome.scan.rows.count
                 let note = (r.kind == .full ? "Full scan" : "Add and update") + ", \(n) Pokémon"
                 return try lib.commit(account: r.account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: r.kind, scanDate: r.plan.scanDate)
             }
-            ReplayMarker.markProcessed(r.signature)
+            if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
             flow = .idle
             if r.account == account { afterCommit(snap) }
         } catch {
@@ -475,15 +481,46 @@ final class AppModel: ObservableObject {
 
     func discardReview() {
         switch flow {
-        case .review(let r): ReplayMarker.markProcessed(r.signature)
-        case .failed(_, let sig): ReplayMarker.markProcessed(sig)
+        case .review(let r): if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
+        case .failed(_, let sig): if !sig.hasPrefix(Self.rereadPrefix) { ReplayMarker.markProcessed(sig) }
         default: break
         }
         flow = .idle
     }
 
+    private static let rereadPrefix = "reread:"
+
+    /// Read a saved scan again with the latest rules, against the box as it was before that scan was saved. Opens the normal review
+    /// screen; nothing changes until Save, and Discard changes nothing.
+    func rereadScan(_ scan: BoxStore.Summary) {
+        guard let a = account, !isReviewing else { return }
+        sheet = nil
+        flow = .processing("Reading the saved scan again")
+        let lib = library, signature = Self.rereadPrefix + scan.id
+        Task {
+            do {
+                let (plan, outcome, merge, seconds) = try await worker.run { engine -> (RereadPlan, ScanPipeline.Outcome, BoxMerge.Plan, Double) in
+                    let plan = try lib.prepareReread(account: a, scanId: scan.id)
+                    let outcome = try ScanPipeline.process(replay: plan.replayURL, engine: engine, paging: plan.paging)
+                    let t = Date()
+                    let merge = BoxMerge.plan(scanned: outcome.scan.rows, into: plan.baseEntries, kind: plan.scan.kind, scanDate: plan.scan.scanDate, gameMaster: try .bundled())
+                    return (plan, outcome, merge, Date().timeIntervalSince(t))
+                }
+                flow = .review(Review(account: a, kind: plan.scan.kind, outcome: outcome, plan: merge, base: plan.baseEntries, storageCount: plan.scan.storageCount, signature: signature,
+                                      mergeSeconds: seconds, paging: plan.scan.paging, reread: plan))
+            } catch {
+                flow = .failed(message: Self.plain(error), signature: signature)
+            }
+        }
+    }
+
     func retryReview() {
-        if case .failed(_, let sig) = flow { startReview(signature: sig) }
+        guard case .failed(_, let sig) = flow else { return }
+        if sig.hasPrefix(Self.rereadPrefix) {
+            let id = String(sig.dropFirst(Self.rereadPrefix.count))
+            flow = .idle
+            if let scan = scans.first(where: { $0.id == id }) { rereadScan(scan) }
+        } else { startReview(signature: sig) }
     }
 
     // MARK: - plain errors

@@ -8,6 +8,14 @@ import Foundation
 /// The "current box" is the latest FULL scan of the account by scan date. A second scan is stored as a
 /// new scan; it does not touch the earlier ones. Merging a later partial scan into the box is not built
 /// (`mergeIncremental`).
+/// How a scan was paged, as `PagingHint` says it (kept apart so the stored scan does not depend on the refine code).
+public struct StoredPaging: Codable, Equatable {
+    public var pagedByCommand: Bool
+    public var expectedPeriod: Double?
+    public var joinExtraSeconds: Double?
+    public init(pagedByCommand: Bool, expectedPeriod: Double? = nil, joinExtraSeconds: Double? = nil) { self.pagedByCommand = pagedByCommand; self.expectedPeriod = expectedPeriod; self.joinExtraSeconds = joinExtraSeconds }
+}
+
 public final class BoxStore {
     public enum Kind: String, Codable { case full, partial }
 
@@ -46,6 +54,10 @@ public final class BoxStore {
         public var unmatched: [Unmatched]
         /// The storage count the player typed before the scan, if any (kept with the scan; nothing reads it yet).
         public var storageCount: Int?
+        /// How the scan was paged (a generated command at some pace, or by hand), kept so it can be read again the same way.
+        public var paging: StoredPaging?
+        /// When the scan was last read again with newer rules (`BoxLibrary.commitReread`), if ever.
+        public var lastReread: Date?
     }
 
     public struct Summary: Equatable {
@@ -57,6 +69,7 @@ public final class BoxStore {
         public var rows: Int
         public var flagged: Int
         public var unmatched: Int
+        public var lastReread: Date?
     }
 
     /// `scans` newest first by scan date; `unreadable` the file names that could not be read.
@@ -75,15 +88,23 @@ public final class BoxStore {
 
     @discardableResult
     public func save(_ result: ScanResult, account: String, scanDate: Date = Date(), source: String, kind: Kind = .full,
-                     storageCount: Int? = nil, replayLog: Data? = nil) throws -> Summary {
+                     storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil) throws -> Summary {
         let dir = try accountDirectory(account, create: true)
         let id = Self.makeID(scanDate)
         let scan = StoredScan(schema: Self.schemaVersion, id: id, account: account, scanDate: scanDate, savedAt: Date(), source: source, kind: kind,
-                              rows: result.rows, review: result.review, unmatched: result.unmatched, storageCount: storageCount)
+                              rows: result.rows, review: result.review, unmatched: result.unmatched, storageCount: storageCount, paging: paging, lastReread: nil)
         // The replay log goes first: if the scan file is then written, the log it rebuilds from is already there.
         if let log = replayLog { try log.write(to: dir.appendingPathComponent("\(id).replay.jsonl"), options: .atomic) }
         try Self.encoder.encode(scan).write(to: dir.appendingPathComponent("\(id).json"), options: .atomic)
         return Self.summary(scan)
+    }
+
+    /// Record that a saved scan was read again, now. Rewrites the scan file with only that field changed.
+    public func markReread(account: String, id: String, at date: Date = Date()) throws {
+        var scan = try load(account: account, id: id)
+        scan.lastReread = date
+        let file = try accountDirectory(account, create: false).appendingPathComponent("\(Self.safeFileStem(id)).json")
+        try Self.encoder.encode(scan).write(to: file, options: .atomic)
     }
 
     /// The replay log saved beside a scan (`save(replayLog:)`), or nil if that scan has none.
@@ -219,7 +240,7 @@ public final class BoxStore {
     }
 
     private static func summary(_ s: StoredScan) -> Summary {
-        Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count)
+        Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count, lastReread: s.lastReread)
     }
 
     private static func makeID(_ date: Date) -> String {

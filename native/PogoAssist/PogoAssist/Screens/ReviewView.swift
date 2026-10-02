@@ -57,7 +57,7 @@ private struct ResultList: View {
     /// The scan ran at a pace unlike the command last made: probably an older command played.
     private var paceWarning: String? {
         guard let pace = review.outcome.pace else { return nil }
-        return model.pagedByHand ? nil : PaceCheck.check(measured: pace.medianPeriod, chosen: model.pace)
+        return (model.pagedByHand || review.reread != nil) ? nil : PaceCheck.check(measured: pace.medianPeriod, chosen: model.pace)
     }
     private var blocker: String? { model.saveBlocker(review) }
 
@@ -70,11 +70,12 @@ private struct ResultList: View {
                 if let pace = review.outcome.pace { row("Pace", "about \(String(format: "%.1f", pace.medianPeriod)) s per Pokémon") }
                 if let warning = paceWarning { Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange) }
                 row("Box", review.account)
-                Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in Task { await model.setReviewKind(k) } })) {
+                if let plan = review.reread { rereadNotes(plan) }
+                if review.reread == nil { Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in Task { await model.setReviewKind(k) } })) {
                     Text("Full scan").tag(BoxStore.Kind.full)
                     Text("Add and update").tag(BoxStore.Kind.partial)
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.segmented) }
             }
             if !plan.unsure.isEmpty {
                 Section {
@@ -168,6 +169,20 @@ private struct ResultList: View {
             count("\(plan.unsure.count)", "need your answer")
         }
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private func rereadNotes(_ r: RereadPlan) -> some View {
+        Text("Reading the scan from \(Fmt.date(r.scan.scanDate)) again, against the box as it was before that scan was saved. Nothing changes until you save.").font(.footnote).foregroundStyle(.secondary)
+        if r.hasLaterChanges {
+            Label(laterText(r), systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange)
+        }
+    }
+
+    private func laterText(_ r: RereadPlan) -> String {
+        var parts = [String]()
+        if r.laterScans > 0 { parts.append("Scans saved after this one are not included; read them again too.") }
+        if r.laterEdits > 0 { parts.append("Corrections made after it are not included either.") }
+        return parts.joined(separator: " ") + " Saving makes a new box version from the earlier box; every earlier version stays in Settings."
     }
 
     private func count(_ number: String, _ label: String) -> some View {

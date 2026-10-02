@@ -28,8 +28,10 @@ public struct BoxSnapshot: Codable, Equatable {
         public var reason: Reason
         public var note: String
         public var restoredFrom: Int?
+        /// The scan this version came from, for a version a scan made.
+        public var scanId: String?
     }
-    public var header: Header { Header(seq: seq, createdAt: createdAt, reason: reason, note: note, restoredFrom: restoredFrom) }
+    public var header: Header { Header(seq: seq, createdAt: createdAt, reason: reason, note: note, restoredFrom: restoredFrom, scanId: scanId) }
 }
 
 /// The versioned box of each account, beside the scans `BoxStore` keeps: `<account folder>/box/<seq>.json`. The newest file
@@ -87,11 +89,11 @@ public final class BoxLibrary {
 
     /// Every version, newest first. A file that cannot be read is left out (it shows in `unreadable` of a fuller listing later).
     public func history(account: String) throws -> [BoxSnapshot.Header] {
-        struct HeaderOnly: Decodable { var seq: Int; var createdAt: Date; var reason: BoxSnapshot.Reason; var note: String; var restoredFrom: Int? }
+        struct HeaderOnly: Decodable { var seq: Int; var createdAt: Date; var reason: BoxSnapshot.Reason; var note: String; var restoredFrom: Int?; var scanId: String? }
         var out = [BoxSnapshot.Header]()
         for seq in try seqs(account).reversed() {
             if let data = try? Data(contentsOf: file(account, seq)), let h = try? Self.decoder.decode(HeaderOnly.self, from: data) {
-                out.append(BoxSnapshot.Header(seq: h.seq, createdAt: h.createdAt, reason: h.reason, note: h.note, restoredFrom: h.restoredFrom))
+                out.append(BoxSnapshot.Header(seq: h.seq, createdAt: h.createdAt, reason: h.reason, note: h.note, restoredFrom: h.restoredFrom, scanId: h.scanId))
             }
         }
         return out

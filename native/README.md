@@ -554,3 +554,15 @@ tail of one number is run through the JavaScript again without that read (`cp-ou
 from two or more readings that agree on HP and on the entry's settled bars. Not built: the row-level "single reading near the same
 species goes to `unmatched`" rule, because tap mode at 1.0 s gives one real reading per Pokemon (Moltres 1927, 1920 and 1918 are
 three real neighbours, the last backed by a single recovered read).
+
+### To check, and reading a saved scan again
+
+- Every flag has a severity (`FlagInfo.severity`). A row is in "To check" only with a `check` flag. `ivs-disagree`, `bars-unsettled`, `cp-chosen`,
+  `cp-recovered`, `cp-outlier-dropped`, `absorbed-fragment`, `ivs-corrected` and `hp-computed` are notes when the row's `solveStatus` is `exact` and
+  checks otherwise; `form-ambiguous` and `level-ambiguous` are always notes; everything else, including a flag nobody has seen yet, is a check.
+  Notes show on the Pokemon's detail under "How it was read". On the owner's 313-Pokemon scan (`run8-tap-300`) 72 rows were flagged and 9 remain
+  in "To check". "These values are right" clears the check flags and leaves the notes.
+- Settings > Scans > "Read again with the latest rules" runs the pipeline on a scan's stored `replay.jsonl` with its stored kind and paging hint and
+  opens the normal review screen against the box as it was before that scan was first saved (`BoxLibrary.prepareReread`: the version before the
+  lowest version that names the scan). Save adds one box version (earlier box plus the new read) and records `lastReread` on the scan; the scan's
+  stored result is not rewritten. Scans and corrections saved after it are not re-applied (the screen says so; their versions stay in the history).

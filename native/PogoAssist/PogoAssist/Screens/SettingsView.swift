@@ -31,10 +31,14 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Fmt.date(scan.scanDate)).font(.callout)
                 Text("\(kind), \(scan.rows) Pokémon read").font(.footnote).foregroundStyle(.secondary)
+                if let again = scan.lastReread { Text("Read again \(Fmt.date(again))").font(.footnote).foregroundStyle(.secondary) }
             }
             Spacer()
-            Button { shareURLs = model.shareFiles(for: scan) } label: { Image(systemName: "square.and.arrow.up") }
-                .buttonStyle(.borderless).accessibilityLabel("Share scan files")
+            Menu {
+                Button { model.rereadScan(scan) } label: { Label("Read again with the latest rules", systemImage: "arrow.triangle.2.circlepath") }
+                Button { shareURLs = model.shareFiles(for: scan) } label: { Label("Share scan files", systemImage: "square.and.arrow.up") }
+            } label: { Image(systemName: "ellipsis.circle") }
+                .accessibilityLabel("Scan actions")
         }
     }
 
