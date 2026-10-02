@@ -9,6 +9,10 @@ public enum ReaderMode: String, Codable, CaseIterable, Identifiable {
     case fast
     /// No Vision in the extension: it saves a few small crops per card and the app reads them afterwards.
     case saveCrops
+    /// Vision at its accurate level, live, with fewer recognition passes per frame: the name and HP crops in one pass, and no pass
+    /// for a name or HP crop that has not changed since the last frame (`FrameReader.singlePass`, `reuseStaticText`). The same values
+    /// on every clip on the Mac; not yet measured on a phone, so it is a choice to make before a scan, not the default.
+    case accurateFewerPasses
 
     public var id: String { rawValue }
 
@@ -17,6 +21,7 @@ public enum ReaderMode: String, Codable, CaseIterable, Identifiable {
         case .accurate: return "Read live (accurate)"
         case .fast: return "Read live (fast)"
         case .saveCrops: return "Save crops, read in app"
+        case .accurateFewerPasses: return "Read live (accurate, fewer passes)"
         }
     }
 

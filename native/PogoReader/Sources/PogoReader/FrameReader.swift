@@ -65,6 +65,15 @@ public final class FrameReader {
     public let names: [NameCandidate]
     public var cpPadding = Tuning.cpCropPadding
     public var cpIncludesPrefix = true
+    /// Read the name and HP crops of a frame in ONE recognition pass (`TextReader.readStack`) instead of one pass each. The CP crop
+    /// stays a pass of its own: stacked with the others its read got worse on the clips (the CP is white text on a busy sky and Vision
+    /// misread it more often next to other crops), while name and HP came out the same.
+    public var singlePass = false
+    /// When a frame's name (or HP) crop looks the same as the one the last frame read successfully (`CropSignature`), take that read
+    /// instead of asking Vision again. All the reader keeps between frames is two small signatures and two reads.
+    public var reuseStaticText = false
+    private var lastName: (signature: CropSignature, read: TextRead)?
+    private var lastHp: (signature: CropSignature, read: TextRead)?
 
     public init(text: TextReader, names: [NameCandidate]) { self.text = text; self.names = names }
 
@@ -72,6 +81,8 @@ public final class FrameReader {
         var text: String
         var confidence: Double
         var match: NameMatch?
+        /// What the recogniser gave, kept so the next frame can reuse it (`reuseStaticText`).
+        var raw: TextRead
     }
 
     /// `cp` and `name` are nil when the frame is not a settled Pokémon screen; `flags` say why.
@@ -149,20 +160,43 @@ public final class FrameReader {
             if let cp = out.cp { out.cpReads = [cp] } else { out.cpReads = [] }
         }
 
+        // The name and HP reads: the last frame's when the crop is unchanged (`reuseStaticText`), else Vision's, both crops in one pass
+        // when `singlePass`. The HP is asked for before the name is known, so a frame with no name can have an HP read nobody uses; in
+        // one pass that costs nothing.
+        var nameSignature: CropSignature?, hpSignature: CropSignature?
+        var givenName: TextRead?, givenHp: TextRead?
+        var nameFresh = true, hpFresh = true
+        if reuseStaticText {
+            let s = CropSignature(crops.name)
+            nameSignature = s
+            if let last = lastName, last.signature.matches(s) { givenName = last.read; nameFresh = false }
+            if wantHp {
+                let h = CropSignature(crops.hp)
+                hpSignature = h
+                if let last = lastHp, last.signature.matches(h) { givenHp = last.read; hpFresh = false }
+            }
+        }
+        if singlePass && givenName == nil && wantHp && givenHp == nil {
+            let reads = text.readStack([(crops.name, .name), (crops.hp, .hp)])
+            givenName = reads[0]; givenHp = reads[1]
+        }
+
         // Tesseract reported confidence 0 for a line with anything it could not place, so a read
         // whose whole text is exactly a species name (four letters or more) is taken whatever the
         // confidence; Vision gives a real confidence, but the rule stays: a near miss, or a match
         // that dropped a word, still needs confidence.
-        func readName(_ crop: RGBAImage) -> NameRead {
-            let r = text.read(crop, kind: .name)
+        func readName(_ crop: RGBAImage, given: TextRead? = nil) -> NameRead {
+            let r = given ?? text.read(crop, kind: .name)
             let letterWords = r.words.filter { hasLetterRun($0.text) }
             let confidence = letterWords.isEmpty ? 0 : letterWords.reduce(0) { $0 + $1.confidence } / Double(letterWords.count)
             let found = matchName(r.text, names)
             var ok = false
             if let f = found { ok = confidence >= Tuning.weakNameConfidence || (f.distance == 0 && f.whole && f.text.count >= 4) }
-            return NameRead(text: r.text, confidence: confidence, match: ok ? found : nil)
+            return NameRead(text: r.text, confidence: confidence, match: ok ? found : nil, raw: r)
         }
-        var nameRead = readName(crops.name)
+        var nameRead = readName(crops.name, given: givenName)
+        // Kept for the next frame only when it identified a Pokémon: a failed read is tried again.
+        if reuseStaticText, nameFresh, nameRead.match != nil, let s = nameSignature { lastName = (s, nameRead.raw) }
         out.sharpness = a.sharpness
         // Fault 2: a Lucky Pokémon has a "LUCKY POKÉMON" line between its name and the HP bar, so
         // the name sits higher: when nothing matched, look one line up. That line is the model's
@@ -202,9 +236,10 @@ public final class FrameReader {
         if out.name == nil { return out }
 
         if wantHp {
-            let r = text.read(crops.hp, kind: .hp)
+            let r = givenHp ?? text.read(crops.hp, kind: .hp)
             out.hpText = r.text
             out.hp = hpReadHasValidShape(r.text) ? parseHp(r.text) : nil
+            if reuseStaticText, hpFresh, out.hp != nil, let h = hpSignature { lastHp = (h, r) }
             if out.hp == nil { out.flags.append("hp-unread") }
         }
         if wantBars {

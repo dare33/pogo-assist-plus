@@ -13,6 +13,11 @@ private final class ProbedTextReader: TextReader {
         probe.sample()
         return r
     }
+    func readStack(_ parts: [(image: RGBAImage, kind: TextKind)]) -> [TextRead] {
+        let r = inner.readStack(parts)
+        probe.sample()
+        return r
+    }
 }
 
 /// The one entry point used by both the broadcast extension and the Mac tool: a screen frame in,

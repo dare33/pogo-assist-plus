@@ -29,6 +29,8 @@ public enum Tuning {
     public static let cpCropTargetHeight = 80.0
     public static let nameCropTargetHeight = 130.0
     public static let hpCropTargetHeight = 90.0
+    /// Grey rows between crops read in one pass (`TextReader.readStack`), so no text line can join two crops.
+    public static let stackGapPixels = 24
     /// Never scale a crop up by more than this (a tiny, mis-located crop is not worth blowing up).
     public static let maxUpscale = 4.0
 

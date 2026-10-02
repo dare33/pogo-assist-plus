@@ -30,6 +30,9 @@ struct Options {
     var visionMinTextHeight: Float?
     var visionRecreate = false
     var limit: Int?
+    var profile = false
+    var singlePass = false
+    var reuseStatic = false
 }
 
 func usage() -> Never {
@@ -66,6 +69,9 @@ func parse() -> Options {
         case "--vision-device": guard let d = VisionOptions.Device(rawValue: value()) else { usage() }; o.visionDevice = d
         case "--vision-min-text-height": guard let h = Float(value()) else { usage() }; o.visionMinTextHeight = h
         case "--vision-recreate": o.visionRecreate = true
+        case "--profile": o.profile = true
+        case "--single-pass": o.singlePass = true
+        case "--reuse-static": o.reuseStatic = true
         case "--limit": guard let n = Int(value()), n > 0 else { usage() }; o.limit = n
         case "--save-synthetic": o.saveSynthetic = value()
         default:
@@ -77,6 +83,28 @@ func parse() -> Options {
     if o.input != nil && o.synthetic != nil { usage() }
     if o.synthetic == nil && o.out == nil && o.anchorsPath == nil { usage() }
     return o
+}
+
+/// `--profile`: counts and times every text read by kind, around the real Vision reader.
+final class ProfilingTextReader: TextReader {
+    let inner: TextReader
+    var count = [TextKind: Int](), nanos = [TextKind: UInt64]()
+    init(_ inner: TextReader) { self.inner = inner }
+    func read(_ image: RGBAImage, kind: TextKind) -> TextRead {
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        let r = inner.read(image, kind: kind)
+        nanos[kind, default: 0] += DispatchTime.now().uptimeNanoseconds - t0
+        count[kind, default: 0] += 1
+        return r
+    }
+    var stackPasses = 0, stackNanos = UInt64(0)
+    func readStack(_ parts: [(image: RGBAImage, kind: TextKind)]) -> [TextRead] {
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        let r = inner.readStack(parts)
+        stackNanos += DispatchTime.now().uptimeNanoseconds - t0
+        stackPasses += 1
+        return r
+    }
 }
 
 /// Reads nothing: isolates the memory of scaling and the pixel routines from Vision's.
@@ -113,15 +141,18 @@ func run() throws {
     var vopts = VisionOptions()
     vopts.fast = o.fast; vopts.device = o.visionDevice; vopts.minimumTextHeight = o.visionMinTextHeight; vopts.recreateRequestEachRead = o.visionRecreate
     // --deferred: the extension half only (no Vision request is ever created); Vision runs afterwards.
+    let profiler = o.profile ? ProfilingTextReader(VisionTextReader(options: vopts)) : nil
     let processor = o.deferred
         ? FrameProcessor.cropsOnly(names: names, targetWidth: o.width, memory: probe)
-        : FrameProcessor(textReader: o.noVision ? EmptyTextReader() : VisionTextReader(options: vopts), names: names, targetWidth: o.width, memory: probe)
+        : FrameProcessor(textReader: profiler ?? (o.noVision ? EmptyTextReader() : VisionTextReader(options: vopts)), names: names, targetWidth: o.width, memory: probe)
     let archive = o.deferred ? CropArchive(directory: FileManager.default.temporaryDirectory.appendingPathComponent("pogo-deferred-\(getpid())")) : nil
     var saver = CropSaver()
     var detector = SwipeDetector()
     var ticker = SwipeTicker()
     var signatureDiffs = [Double?]()
     if let p = o.cpPadding { processor.reader.cpPadding = p }
+    processor.reader.singlePass = o.singlePass
+    processor.reader.reuseStaticText = o.reuseStatic
     if o.cpDigitsOnly { processor.reader.cpIncludesPrefix = false }
     var grouper = LiveGrouper(species: table)
     let maker = Pixel420Maker(fullRange: o.fullRangeBuffers)
@@ -136,6 +167,8 @@ func run() throws {
     var anchorRows = [[String: Any]]()
     var msTotal = 0.0, msWorst = 0.0
     var deferredRows: [LiveRow]?
+    // --profile: pixel half (conversion, scaling, anchors, bars, crops) against text half, over frames that read text.
+    var pixelNanos = UInt64(0), textNanos = UInt64(0), textFrames = 0, otherNanos = UInt64(0), otherFrames = 0
     // Baseline: after the tool's own buffers exist, before the first frame is read.
     if o.synthetic != nil { _ = try maker.make(from: canvas) }
     let baseline = MemoryProbe.footprintBytes()
@@ -178,6 +211,13 @@ func run() throws {
             if let tick = tick { saver.noteSwipe(at: tick) }
             if saver.shouldSave(&a), let c = crops { archive.save(a, c); probe.sample() }
             reading.flags = a.flags
+        } else if o.profile {
+            let t1 = DispatchTime.now().uptimeNanoseconds
+            let (a, crops) = buffer.map { processor.analyse($0, time: time, frame: label) } ?? processor.analyse(image!, time: time, frame: label)
+            let t2 = DispatchTime.now().uptimeNanoseconds
+            reading = processor.reader.complete(a, crops)
+            let t3 = DispatchTime.now().uptimeNanoseconds
+            if a.needsText { pixelNanos += t2 - t1; textNanos += t3 - t2; textFrames += 1 } else { otherNanos += t2 - t1; otherFrames += 1 }
         } else if let b = buffer { reading = processor.process(b, time: time, frame: label) }
         else { reading = processor.process(image!, time: time, frame: label) }
         let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
@@ -227,6 +267,15 @@ func run() throws {
         print("save-crops: \(d.savedFrames) frames saved (\(d.files) files, \(f(Double(d.bytes) / 1_048_576)) MB); extension half peak \(f(d.extensionPeakFootprintMB)) MB (+\(f(d.extensionPeakFootprintMB - d.extensionBaselineMB)) over baseline); app read peak \(f(d.appReadPeakFootprintMB)) MB in \(f(d.appReadMs / 1000)) s")
     }
     print("ms per frame: mean \(f(report.msPerFrame.mean)), worst \(f(report.msPerFrame.worst))")
+    if let pr = profiler {
+        func avg(_ n: UInt64, _ c: Int) -> String { c == 0 ? "-" : f(Double(n) / 1e6 / Double(c)) }
+        print("profile: \(textFrames) frames read text (pixel half \(avg(pixelNanos, textFrames)) ms, text half \(avg(textNanos, textFrames)) ms, together \(avg(pixelNanos + textNanos, textFrames)) ms); \(otherFrames) frames stopped early (\(avg(otherNanos, otherFrames)) ms)")
+        print("profile: stacked \(pr.stackPasses) passes, \(avg(pr.stackNanos, pr.stackPasses)) ms each")
+        for k in [TextKind.cp, .name, .hp] {
+            let c = pr.count[k] ?? 0
+            print("profile: \(k) \(c) passes, \(avg(pr.nanos[k] ?? 0, c)) ms each, \(String(format: "%.2f", Double(c) / Double(max(1, textFrames)))) per text frame")
+        }
+    }
 }
 
 do { try run() } catch { FileHandle.standardError.write(Data("pogo-read: \(error)\n".utf8)); exit(1) }
