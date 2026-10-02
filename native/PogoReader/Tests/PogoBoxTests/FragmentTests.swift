@@ -155,7 +155,7 @@ final class FragmentTests: XCTestCase {
     func testRealClipsRowCountsWithFragmentAbsorption() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["POGO_PARITY"] == "1", "set POGO_PARITY=1 to run the real-data checks")
         let dir = ProcessInfo.processInfo.environment["POGO_FRAMES_OUT"] ?? "/Users/greg-mb/Developer/personal/pogo-frames/_out"
-        for (name, rows) in [("marathon-phone", 47), ("v3", 109), ("darentas-01", 448), ("darentas-02", 770), ("darentas-03", 144), ("marathon-ipad-mini", 46)] as [(String, Int)] {
+        for (name, rows) in [("marathon-phone", 47), ("v3", 109), ("darentas-01", 449), ("darentas-02", 771), ("darentas-03", 144), ("marathon-ipad-mini", 46)] as [(String, Int)] {
             let url = URL(fileURLWithPath: "\(dir)/\(name).swift.readings.json")
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
             let l = try ReplayReadings.load(url: url)

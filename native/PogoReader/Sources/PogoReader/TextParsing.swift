@@ -29,6 +29,7 @@ private func isSpace(_ c: Character) -> Bool { c.isWhitespace }
 ///   lone O or o token before the figure is no read ("CP O 28", "CP o 1500");
 /// - fewer than two digits are no read.
 public func parseCp(_ text: String) -> Int? {
+    if let v = slashSevenCp(text) { return v }
     let raw = text.split(whereSeparator: { isSpace($0) }).map { Array($0) }
     let tokens: [[Character]] = raw.map { tok in
         tok.contains(where: isAsciiDigit) ? tok.map { ($0 == "O" || $0 == "o") ? "0" : $0 } : tok
@@ -65,6 +66,23 @@ public func parseCp(_ text: String) -> Int? {
     if digits.count < 2 || digits.count > 4 || digits[0] == "0" { return nil }
     guard let value = Int(String(digits)), value >= 10 else { return nil }
     return value
+}
+
+/// Vision reads a leading 7 of the CP as "/" ("CP/68" for 768, device run 8): the label "CP" (either case), optional spaces, a "/",
+/// optional spaces and one to three digits, and nothing else. The slash is then the digit 7, so the figure has two to four digits.
+/// Only this shape: a slash anywhere else ("12/34", "CP 12/34", "CP1/86", "CP19/") is not a 7, and without the label nothing changes.
+func slashSevenCp(_ text: String) -> Int? {
+    let t = Array(text.trimmingCharacters(in: .whitespaces))
+    var i = 0
+    guard t.count >= 4, "cC".contains(t[0]), "pP".contains(t[1]) else { return nil }
+    i = 2
+    while i < t.count, isSpace(t[i]) { i += 1 }
+    guard i < t.count, t[i] == "/" else { return nil }
+    i += 1
+    while i < t.count, isSpace(t[i]) { i += 1 }
+    let digits = t[i...].map { ($0 == "O" || $0 == "o") ? Character("0") : $0 }
+    guard (1...3).contains(digits.count), digits.allSatisfy(isAsciiDigit) else { return nil }
+    return Int("7" + String(digits))
 }
 
 public struct HP: Codable, Equatable, Hashable {
@@ -118,6 +136,7 @@ public func hpReadHasValidShape(_ text: String) -> Bool {
 /// A real CP read has no letters after its last digit ("CP", or what Vision makes of it, comes first:
 /// "5p2641", "ap2621"); a rotated one has them after the figures.
 public func cpReadHasValidShape(_ text: String) -> Bool {
+    if slashSevenCp(text) != nil { return true }
     let t = replacingO(text)
     guard let lastDigit = t.lastIndex(where: isAsciiDigit) else { return false }
     return !t[lastDigit...].contains(where: isAsciiLetter)

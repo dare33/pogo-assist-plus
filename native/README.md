@@ -466,3 +466,15 @@ tail of one number is run through the JavaScript again without that read (`cp-ou
 from two or more readings that agree on HP and on the entry's settled bars. Not built: the row-level "single reading near the same
 species goes to `unmatched`" rule, because tap mode at 1.0 s gives one real reading per Pokemon (Moltres 1927, 1920 and 1918 are
 three real neighbours, the last backed by a single recovered read).
+
+### Bars split and the slash read (step 1c; `parseCp`)
+
+`Refine.splitByBars`: two different Pokemon with the same name, CP and HP on consecutive beats are one row from the JavaScript
+(`ivs-disagree`). A row is cut when its settled bars change from one value to another, each held by two or more consecutive settled
+readings, and the change is on a beat boundary (each part about one period; with no regular beat: an unsettled or non-card reading
+or 0.4 s between them). Each part is solved again by the JavaScript; the second row is flagged `split-by-bars`. One odd reading (the
+previous Pokemon's bars moving) never splits.
+`parseCp` reads "CP/68" as 768 (Vision reads a leading 7 as "/"): only the label "CP" directly followed by "/" and one to three digits.
+This changes what the extension reads: the stored replay logs and `_out` readings hold the CP the old build read, so they are not
+affected; of 1,901 distinct CP texts in those logs 13 change number (all `CP/NN`, for example 68 to 768, 10 to 710) and none becomes
+a read or no read.
