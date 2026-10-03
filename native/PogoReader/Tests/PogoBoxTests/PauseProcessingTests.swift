@@ -76,14 +76,40 @@ final class PauseProcessingTests: XCTestCase {
         }
     }
 
-    /// Without the pause markers the same joined log gives the same rows, so the markers only describe a gap; WITH them a row touching the pause is never split by the timing rule.
-    func testARowThatTouchesAPauseIsNeverSplitByTheBeatAndItsStayIsNotPartOfIt() throws {
-        let a = try externalLines("stall-scan-20261003T054229Z-b1f94047"), b = try externalLines("stall-scan-20261003T055448Z-6b2b1f4e")
-        let joined = join([a, b], removeGaps: true)
-        let out = try ScanPipeline.process(replay: write(joined), engine: sharedEngine, paging: hint)
-        XCTAssertEqual(out.pauses.count, 1); XCTAssertNotNil(out.pauses[0].resumedAt)
-        XCTAssertEqual(out.scan.rows.filter { $0.display == "Stunfisk" && $0.cp == 902 }.count, 1)
-        XCTAssertFalse(out.scan.rows.contains { $0.display == "Stunfisk" && $0.cp == 902 && $0.flags.contains("split-by-timing") })
+    /// A synthetic command scan on a steady 1.2 s beat: twelve different Pokémon, the seventh held for two beats (the timing rule splits that into twins). `pause` adds a pause marker
+    /// at the long stay (and a resume marker after it when `resume`).
+    private func beatLog(pause: Bool, resume: Bool) -> [ReplayLine] {
+        let names = ["Pidgey", "Rattata", "Zubat", "Weedle", "Caterpie", "Magikarp", "Geodude", "Oddish", "Bellsprout", "Poliwag", "Abra", "Machop"]
+        var lines = [ReplayLine](), t = 0.0, longStart = 0.0, longEnd = 0.0
+        for (k, n) in names.enumerated() {
+            let beats = k == 6 ? 2.0 : 1.0
+            if k == 6 { longStart = t }
+            var u = 0.0
+            while u < beats * 1.2 - 0.01 {
+                var f = FrameReading(); f.name = n; f.baseName = n; f.form = ""; f.speciesIds = [n.lowercased()]; f.cp = 200 + k * 13; f.hp = HP(current: 40 + k, max: 40 + k); f.ivs = IVs(atk: k % 16, def: (k * 3) % 16, hp: (k * 5) % 16); f.ivConfidence = 1
+                lines.append(.reading(ReplayReading(f, time: t + u, ms: 1))); u += 0.3
+            }
+            t += beats * 1.2
+            if k == 6 { longEnd = t }
+        }
+        if pause { lines.append(.pause(at: longEnd + 0.5, last: longStart, read: 7, closed: nil)); if resume { lines.append(.resume(at: longEnd + 1.2)) } }
+        return lines
+    }
+
+    /// The pause markers reach the refine step: the long stay that the timing rule would split into twins is one Pokémon held for a gap when a pause touches it. Checked the way a
+    /// mutation would show it: with the markers removed (or `hint.pauses` not set in `ScanPipeline`) the same log gives the extra twin.
+    func testARowThatTouchesAPauseIsNotSplitIntoTwinsByTheBeat() throws {
+        func rows(_ lines: [ReplayLine]) throws -> ScanPipeline.Outcome { try ScanPipeline.process(replay: write(lines), engine: sharedEngine, paging: hint) }
+        let plain = try rows(beatLog(pause: false, resume: false))
+        XCTAssertEqual(plain.scan.rows.count, 13, "no pause: the two-beat stay is two twins by the timing rule")
+        XCTAssertTrue(plain.scan.rows.contains { $0.flags.contains("split-by-timing") })
+        let paused = try rows(beatLog(pause: true, resume: true))
+        XCTAssertEqual(paused.scan.rows.count, 12, "a pause touches it: one Pokémon held for a gap")
+        XCTAssertFalse(paused.scan.rows.contains { $0.flags.contains("split-by-timing") })
+        XCTAssertEqual(paused.pauses.count, 1); XCTAssertNotNil(paused.pauses[0].resumedAt)
+        // a pause that was never answered (no resume marker) protects the same row, and every later one
+        let open = try rows(beatLog(pause: true, resume: false))
+        XCTAssertEqual(open.scan.rows.count, 12); XCTAssertNil(open.pauses[0].resumedAt)
     }
 
     func testTheMarkersRoundTripAndTheTailAfterAFinishIsStillCut() throws {
@@ -106,10 +132,13 @@ final class PauseProcessingTests: XCTestCase {
         let line = ScanStop.summary(lastName: "Jigglypuff", lastCP: 10, read: out.scan.rows.count, appraisalClosed: false, ranOut: false, commandKnown: true, paused: names)
         XCTAssertTrue(line.contains("after 1,679 Pokémon") && line.contains("It paused 3 times: Stunfisk (CP 902), resumed after"), line)
         XCTAssertTrue(ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, commandKnown: true, paused: ["X (CP 2), resumed after 74 s"]).contains("It paused once, at X (CP 2), resumed after 74 s."))
-        // a pause that never resumed says why the scan ended, and a scan the person finished says so (V7, V3)
-        let last = ScanPipeline.Pause(at: 10, last: 9, read: 3, closed: nil, resumedAt: nil)
-        let row = out.scan.rows[0]
-        _ = row; _ = last
+        // a pause that never resumed says why the scan ended (the timeout, or the person), taken from a real pipeline outcome whose pause has no resume marker (V7, V3)
+        let unresumed = try ScanPipeline.process(replay: write(beatLog(pause: true, resume: false)), engine: sharedEngine, paging: hint)
+        XCTAssertNil(unresumed.pauses[0].resumedAt)
+        let timeoutNames = ScanStop.pauseNames(unresumed.pauses, rows: unresumed.scan.rows)
+        XCTAssertEqual(timeoutNames.count, 1); XCTAssertTrue(timeoutNames[0].hasSuffix(", not resumed: the scan finished at the timeout"), timeoutNames[0])
+        XCTAssertTrue(ScanStop.pauseNames(unresumed.pauses, rows: unresumed.scan.rows, finishedByPerson: true)[0].hasSuffix(", not resumed: you finished it"))
+        XCTAssertFalse(timeoutNames[0].contains("resumed after"))
         let byPerson = ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, commandKnown: true, paused: ["X (CP 2), not resumed: you finished it"], byPerson: true)
         XCTAssertTrue(byPerson.hasPrefix("You finished the scan after 5 Pokémon;") && byPerson.contains("not resumed: you finished it") && !byPerson.contains("ended by itself") && !byPerson.contains("command's size"), byPerson)
     }

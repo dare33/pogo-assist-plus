@@ -135,6 +135,11 @@ final class ScanEndControllerTests: XCTestCase {
         throw XCTSkip("no pause")
     }
 
+    /// The bars the stalled card was read with before its appraisal closed (the card's own bars).
+    private func ownBars(_ rs: [ReplayReading], upTo t: Double) throws -> IVs {
+        try XCTUnwrap(rs.last { $0.t <= t && $0.ivs != nil }?.frameReading.ivs, "the stalled card was read with bars before the appraisal closed")
+    }
+
     /// V1a: after a pause, a card with the same name and HP but another CP is a new card (the detector resets its clock), so it resumes the scan and its row is kept.
     func testAPauseResumesOnASameNameSameHPCardWithAnotherCP() throws {
         var (c, g, rs, p, at) = try pausedAtRun10()
@@ -166,21 +171,93 @@ final class ScanEndControllerTests: XCTestCase {
         XCTAssertEqual(resumes.count, 1, "the first new card resumes it; later cards are just cards")
         let timeout = c.tick(now: t + ScanEndDecision.pauseTimeoutSeconds + 1)
         // whichever way it ends, nothing read after the pause is trimmed
-        var endAt = t, last = t
-        if case .finish(let a, let l) = timeout { endAt = a; last = l }
-        let lines: [ReplayLine] = rs.map { .reading($0) } + added.map { .reading($0) } + [.end(at: endAt, last: last)]
-        for card in added where card.t <= last + EndOfListDetector.keepAfterLast { XCTAssertTrue(readings(ReplayLog.trimmed(lines)).contains { $0.t == card.t }) }
-        XCTAssertGreaterThanOrEqual(last, added.last!.t - 10, "dated at the last new card")
+        XCTAssertEqual(timeout, .none, "the first new card ended the pause, so the timeout has nothing to finish and nothing is cut")
+        XCTAssertNil(c.paused); XCTAssertFalse(c.timedOut)
     }
 
-    /// V1b: even if rows were read after the pause without the detector seeing a new card, a timeout is dated at the last reading, never back at the stall.
-    func testATimeoutAfterRowsWereReadIsNotDatedAtTheStall() throws {
+    /// V1b (P3a): even if rows were read after the pause without the detector seeing a new card, a timeout is dated at the last reading AND its last card is the last reading, so
+    /// nothing read after the pause is trimmed (the detector's own last-new time would cut it).
+    func testATimeoutAfterRowsWereReadKeepsEverythingReadAfterThePause() throws {
         var (c, _, rs, p, at) = try pausedAtRun10()
         let tail = try XCTUnwrap(rs.last)
-        var t = at, out = ScanEndController.Event.none
-        while t < at + 200, !({ if case .finish = out { return true } else { return false } }()) { t += 0.2; out = c.feed(tail.frameReading, time: t, read: p.read + 3) }
-        guard case .finish(let endAt, _) = out else { return XCTFail("\(out)") }
+        let before = rs.filter { $0.t <= at }
+        var t = at, out = ScanEndController.Event.none, added = [ReplayReading]()
+        while t < at + 200, !({ if case .finish = out { return true } else { return false } }()) {
+            t += 0.2; var r = tail.frameReading; r.ivs = nil
+            added.append(ReplayReading(r, time: t, ms: 1)); out = c.feed(r, time: t, read: p.read + 3)
+        }
+        guard case .finish(let endAt, let last) = out else { return XCTFail("\(out)") }
         XCTAssertGreaterThan(endAt, p.at, "dated at the last reading, not the original quiet time")
+        XCTAssertEqual(last, t, accuracy: 0.001, "the last card is the last reading: rows were read since the pause")
+        XCTAssertTrue(c.timedOut)
+        let lines: [ReplayLine] = before.map { .reading($0) } + added.map { .reading($0) } + [.end(at: endAt, last: last)]
+        XCTAssertEqual(readings(ReplayLog.trimmed(lines)).count, before.count + added.count, "nothing read after the pause is cut")
+    }
+
+    /// P3b: "Finish now" after rows were read since the pause keeps them too (it used the stall's last card).
+    func testFinishNowAfterRowsWereReadKeepsEverythingReadAfterThePause() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let tail = try XCTUnwrap(rs.last)
+        let before = rs.filter { $0.t <= at }
+        var t = at, added = [ReplayReading]()
+        for _ in 0..<30 { t += 0.2; var r = tail.frameReading; r.ivs = nil; added.append(ReplayReading(r, time: t, ms: 1)); _ = c.feed(r, time: t, read: p.read + 2) }
+        guard case .finish(let endAt, let last) = c.finishNow(at: t) else { return XCTFail("no finish") }
+        XCTAssertEqual(last, t, accuracy: 0.001); XCTAssertFalse(c.timedOut, "a person's finish is not a timeout")
+        let lines: [ReplayLine] = before.map { .reading($0) } + added.map { .reading($0) } + [.end(at: endAt, last: last)]
+        XCTAssertEqual(readings(ReplayLog.trimmed(lines)).count, before.count + added.count)
+        // and with nothing read since the pause the stall's own last card is used, as before
+        var (c2, _, _, p2, at2) = try pausedAtRun10()
+        guard case .finish(_, let last2) = c2.finishNow(at: at2 + 5) else { return XCTFail("no finish") }
+        XCTAssertEqual(last2, p2.last, accuracy: 0.001)
+    }
+
+    /// P3c: a look-alike next card (same name, HP and CP, other settled bars than the card's own) read during a pause is a new card: it resumes, and its readings are not trimmed.
+    func testALookAlikeCardWithOtherSettledBarsResumesAPauseAndIsNotTrimmed() throws {
+        let rs = readings(ReplayLog.lines(in: try Fixture.url("device-run10-tap-25-autoend.replay.jsonl")))
+        var c = ScanEndController(period: 1.2, storageCount: nil)!
+        var g = LiveGrouper(species: try? SpeciesTable.bundled())
+        var t = 0.0, paused = false
+        for r in rs { g.add(r.frameReading); t = r.t; if case .pause = c.feed(r.frameReading, time: r.t, read: g.rows.count) { paused = true; break } }
+        XCTAssertTrue(paused)
+        // the card's own bars were read during its stay (the appraisal was open before the tap closed it)
+        let stayBars = rs.last { $0.t <= t && $0.ivs != nil }
+        let own = try XCTUnwrap(stayBars?.frameReading.ivs, "the stalled card was read with bars before the appraisal closed")
+        var twin = try XCTUnwrap(rs.last { $0.t <= t }).frameReading
+        twin.ivs = IVs(atk: (own.atk + 7) % 16, def: (own.def + 7) % 16, hp: (own.hp + 7) % 16)
+        t += 0.4
+        XCTAssertEqual(c.feed(twin, time: t, read: g.rows.count), .resume(at: t), "other settled bars: a new card, not a reopened appraisal")
+        XCTAssertNil(c.paused)
+    }
+
+    /// P2: a single reading without bars on an OPEN appraisal (an OCR dropout) followed by bars is not a reopened appraisal and does not restart the 180 s.
+    func testADropoutOnAnOpenAppraisalDoesNotRestartTheWindow() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let tail = try XCTUnwrap(rs.last)
+        var open = tail.frameReading; open.ivs = try ownBars(rs, upTo: at)
+        var bare = open; bare.ivs = nil
+        var t = at
+        for _ in 0..<40 { t += 0.2; _ = c.feed(open, time: t, read: p.read) }       // the appraisal is open (a restart or a resume may happen while it opens)
+        var events = [ScanEndController.Event]()
+        for _ in 0..<3 { t += 0.2; events.append(c.feed(bare, time: t, read: p.read)); t += 0.2; events.append(c.feed(open, time: t, read: p.read)) }
+        XCTAssertTrue(events.allSatisfy { $0 == .none }, "\(events)")
+    }
+
+    /// P2: reopening the appraisal restarts the 180 s, but no number of restarts holds a scan paused past `pauseCapSeconds` without a new Pokémon.
+    func testRestartsCannotHoldAPausePastTheCap() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let tail = try XCTUnwrap(rs.last)
+        var bare = tail.frameReading; bare.ivs = nil
+        var open = bare; open.ivs = try ownBars(rs, upTo: at)
+        var t = at, restarts = 0, finishedAt: Double?
+        search: while t < at + 3 * ScanEndDecision.pauseCapSeconds {
+            for _ in 0..<100 { t += 1; if case .finish = c.feed(bare, time: t, read: p.read) { finishedAt = t; break search } }   // closed for 100 s
+            t += 1
+            switch c.feed(open, time: t, read: p.read) { case .windowRestarted: restarts += 1; case .finish: finishedAt = t; break search; default: break }
+        }
+        XCTAssertGreaterThanOrEqual(restarts, 2, "reopening did restart the window")
+        let end = try XCTUnwrap(finishedAt, "the scan finished")
+        XCTAssertLessThanOrEqual(end - at, ScanEndDecision.pauseCapSeconds + 2)
+        XCTAssertTrue(c.timedOut)
     }
 
     /// V2: the timeout is checked without any reading (the heartbeat), and the finish is dated at the stall when nothing was read since.
@@ -197,7 +274,7 @@ final class ScanEndControllerTests: XCTestCase {
         var (c, _, rs, p, at) = try pausedAtRun10()
         let tail = try XCTUnwrap(rs.last)
         var bare = tail.frameReading; bare.ivs = nil
-        var open = tail.frameReading; open.ivs = IVs(atk: 7, def: 8, hp: 9)
+        var open = tail.frameReading; open.ivs = try ownBars(rs, upTo: at)
         var t = at
         while t < at + 100 { t += 0.2; XCTAssertEqual(c.feed(bare, time: t, read: p.read), .none) }   // the appraisal is closed for 100 s
         t += 0.2

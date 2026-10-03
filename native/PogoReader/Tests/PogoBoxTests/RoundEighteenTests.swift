@@ -31,13 +31,13 @@ final class RoundEighteenTests: XCTestCase {
         }
     }
 
-    func testW3JoiningKeepsOneEntryWithBaseValuesTheMegaMarkAndTheCorrections() throws {
+    func testW3JoiningKeepsOneEntryWithBaseValuesAndTheMegaMark() throws {
         var box = staraptorBox()
         box[1].corrections = Corrections(ivs: Fix(was: IVs(atk: 14, def: 15, hp: 14)))
         let p = plan([row("staraptor_mega", cp: 3970, hp: 167, ivs: sIV)], box)
         let out = try save(p, [0: .existing("base")], box)
         XCTAssertEqual(out.map { $0.id }, ["base"]); XCTAssertEqual(out[0].row.cp, 2819, "base values")
-        XCTAssertEqual(out[0].megaWhenScanned, true); XCTAssertEqual(out[0].corrections.ivs, Fix(was: IVs(atk: 14, def: 15, hp: 14)), "the Mega entry's hand correction is kept")
+        XCTAssertEqual(out[0].megaWhenScanned, true); XCTAssertNil(out[0].corrections.ivs, "round 21: joining never changes the base entry's hand corrections, so the Mega entry's are not copied in")
         // a base-form scan joins and refreshes the base entry, no Mega mark
         let q = plan([row("staraptor", cp: 2819, hp: 167, ivs: sIV)], box)
         let out2 = try save(q, [0: .existing("base")], box)

@@ -91,7 +91,7 @@ extension Refine {
     /// The FIRST card of a scan is on screen while the person starts the broadcast and says the command, and the appraisal is still opening (its bars animate): readings
     /// with no bars, then one or two with unsettled bars, then the settled ones. The grouper makes the unsettled start one row and the settled readings another (run15: Rayquaza
     /// CP 4262 HP 190, "ambiguous-ivs" then 13/12/14, 2.03 s apart). The first two rows are ONE stay when they have the same name, CP and HP (or an HP unread), the first one's
-    /// IVs did not settle and the second's did, the readings are consecutive, no swipe tick lies between, and (with a known period) the first card was held longer than one beat
+    /// IVs did not settle (none read, or none that contradict the second's beyond a notch) and the second's did, the readings are consecutive, no swipe tick lies between, and (with a known period) the first card was held longer than one beat
     /// before the second began (a real pair of twins is one beat apart). The second row keeps the Pokémon; the first one's readings join it.
     static func joinOpeningCard(_ scan: ScanResult, period: Double?, ticks: [Double]) -> (scan: ScanResult, marks: [(flag: String, detail: String, label: String)]) {
         var rows = scan.rows
@@ -101,6 +101,9 @@ extension Refine {
         guard !at.isEmpty, at.count == a.frames.count, !bt.isEmpty, bt.count == b.frames.count,
               let aFirst = at.min(), let aLast = at.max(), let bFirst = bt.min(), aLast <= bFirst else { return (scan, []) }
         guard a.speciesId == b.speciesId, a.cp == b.cp, a.cp > 0, hpCompatible(a.hp, b.hp), a.solveStatus != "exact", b.solveStatus == "exact", b.ivs != nil else { return (scan, []) }
+        // The stated cause is bars that were unsettled or unread on the first row (no settled IVs). A first row with its own settled IVs that differ from the second's beyond a
+        // notch is another Pokémon (Fidough 768/89 15/4/10 then 15/11/12 stay two), whatever its solve status.
+        if let settled = a.ivs, let later = b.ivs, !IVFit.near(IVFit.index(later), settled) { return (scan, []) }
         guard bFirst - aLast <= max(1.5, (period ?? 0) * 1.5) else { return (scan, []) }
         if let p = period, bFirst - aFirst <= 1.4 * p { return (scan, []) }
         if ticks.contains(where: { $0 > aFirst && $0 < bFirst }) { return (scan, []) }

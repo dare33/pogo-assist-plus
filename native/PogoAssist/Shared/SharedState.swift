@@ -39,6 +39,8 @@ struct BroadcastState: Codable, Equatable {
     var scanId = 0
     /// The person ended the scan ("Finish now", the notification action); `endedAtListEnd` is then false, so it is judged like a stop from the red bar.
     var stoppedByPerson = false
+    /// A pause went unanswered and the scan finished at the time limit; `endedAtListEnd` is then false too, so it is never judged Full.
+    var stoppedByTimeout = false
 }
 
 extension BroadcastState {
@@ -79,8 +81,7 @@ extension BroadcastState {
         eventSeq = try c.decodeIfPresent(Int.self, forKey: .eventSeq) ?? 0
         scanId = try c.decodeIfPresent(Int.self, forKey: .scanId) ?? 0
         stoppedByPerson = try c.decodeIfPresent(Bool.self, forKey: .stoppedByPerson) ?? false
-        scanId = try c.decodeIfPresent(Int.self, forKey: .scanId) ?? 0
-        stoppedByPerson = try c.decodeIfPresent(Bool.self, forKey: .stoppedByPerson) ?? false
+        stoppedByTimeout = try c.decodeIfPresent(Bool.self, forKey: .stoppedByTimeout) ?? false
     }
 }
 

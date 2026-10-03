@@ -60,7 +60,10 @@ struct ScanView: View {
                     HStack {
                         Text("Start the broadcast")
                         Spacer()
-                        BroadcastPicker().frame(width: 64, height: 64)
+                        if model.fullScanNeedsCount { Image(systemName: "lock.fill").foregroundStyle(.secondary).frame(width: 64, height: 64) } else { BroadcastPicker().frame(width: 64, height: 64) }
+                    }
+                    if model.fullScanNeedsCount {
+                        Text("Type the number of Pokémon the game shows on its storage screen above before a Full scan. It needs the count to tell the end of your list from a stall.").font(.footnote).foregroundStyle(.orange)
                     }
                     if model.endedWithoutFinish {
                         Text("The last broadcast stopped without finishing. Its readings will be offered for review.").font(.footnote).foregroundStyle(.secondary)
@@ -105,7 +108,7 @@ struct ScanView: View {
             if model.scanKind == .full { fullScanCommand } else { partScanCommands }
             Label("To stop a command, say \"Go to sleep\". It stops when the batch that is playing ends, \(model.setKind.stopDelayText). Then say \"Wake up\". Touching the screen, the side button or locking the phone does not stop it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps \(model.setKind == .tap ? "tapping" : "swiping") the same place whatever is on screen.",
                   systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
-            if !model.pagedByHand { Text("When the scan stops seeing new Pokémon it either finishes (you reached your storage count) or PAUSES and sends a notification: reopen the Pokémon's appraisal and paging carries on in the same scan, or say the command again. The notification is the only signal while it is paused, so Pogo Assist must be allowed through Do Not Disturb. If no new Pokémon is read for \(ScanNotification.pauseLimitText) it finishes by itself (reopening the same Pokémon's appraisal starts the \(ScanNotification.pauseLimitText) over but does not carry the scan on), and \"Finish now\" ends it at once.").font(.footnote).foregroundStyle(.secondary) }
+            if !model.pagedByHand, model.scanKind == .full { Text("When the scan stops seeing new Pokémon it either finishes (you reached your storage count) or PAUSES and sends a notification: reopen the Pokémon's appraisal and paging carries on in the same scan, or say the command again. The notification is the only signal while it is paused, so Pogo Assist must be allowed through Do Not Disturb. If no new Pokémon is read for \(ScanNotification.pauseLimitText) it finishes by itself (reopening the same Pokémon's appraisal starts the \(ScanNotification.pauseLimitText) over but does not carry the scan on), and \"Finish now\" ends it at once.").font(.footnote).foregroundStyle(.secondary) }
             if !model.pagedByHand { Text("The scan usually ends by itself when the list ends or the command runs out (the broadcast stops and the result appears); if the last Pokémon cannot be read it does not, and you stop the broadcast from the red bar. The command keeps going until it runs out; that does nothing to your box.").font(.footnote).foregroundStyle(.secondary) }
             Text("Pogo Assist asks once to send a notification with a sound when a scan ends by itself, so you know without opening the app. It stays on your phone: nothing is sent. Without it the scan still ends and the result waits here.")
                 .font(.footnote).foregroundStyle(.secondary)

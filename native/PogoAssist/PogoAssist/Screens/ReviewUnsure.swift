@@ -71,7 +71,7 @@ struct UnsureCard: View {
         case .seenAsMega: return "Choosing this marks it as seen and as Mega evolved when scanned. The Mega values are not copied."
         case .replacesValues: return "Choosing this updates the saved Pokémon with the values read in the scan."
         case .replacesIVs: return "The saved IVs were not an exact read, so choosing this replaces them with the IVs read now."
-        case .joinsMegaPair: return "Joining keeps this entry with its own values and hand corrections, marks it Mega when scanned if the scan read the Mega form, and removes the other entry."
+        case .joinsMegaPair: return "Joining keeps this entry exactly as saved (values and hand corrections unchanged), marks it Mega when scanned if the scan read the Mega form, and removes the other entry with whatever was saved for it."
         case .keepsIVsAndFlags: return "The scan read other IVs for the same CP and HP. IVs never change, so one read is wrong: choosing this keeps the saved IVs and marks it to check."
         }
     }
@@ -90,7 +90,7 @@ struct UnsureCard: View {
         case .evolved: return "\(ivsPhrase) It may be that Pokémon evolved, or a different one with the same IVs."
         case .megaPair:
             let names = unsure.candidates.compactMap { saved[$0] }
-            if names.count == 2 { return "Your \(names[0].row.name) is saved twice, once as a Mega (CP \(names[1].row.cp)) and once not (CP \(names[0].row.cp)), with the same IVs and HP. Join them? Joining keeps one entry with the normal values and your hand corrections, and removes nothing else." }
+            if names.count == 2 { return "Your \(names[0].row.name) is saved twice, once as a Mega (CP \(names[1].row.cp)) and once not (CP \(names[0].row.cp)), with the same IVs and HP. Join them? Joining keeps the normal entry exactly as saved (its values and hand corrections do not change) and removes the Mega one with whatever was saved for it. Keeping both changes nothing." }
             return "This Pokémon is saved twice, once as a Mega and once not. Join them?"
         case .megaToBase: return "This is the normal form; the saved one was scanned in its Mega form. \(ivsPhrase) It may be that same Pokémon, or a different one with the same IVs."
         case .ambiguous:

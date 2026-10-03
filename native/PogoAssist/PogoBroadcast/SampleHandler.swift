@@ -83,7 +83,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             ReaderSettings.finishRequestedScan = nil
             ScanNotifier.removePauseNotifications()   // a new scan: no earlier scan's pause notification (or its "Finish scan" button) stays
             // The scan kind, the count and the eggs are captured here, like the period: only a Full scan may pause, and an Add-and-update scan neither uses nor remembers the count.
-            let isFull = ReaderSettings.scanIsFull
+            // A Full scan started with no valid count (from Control Centre, past the Scan screen) runs as Add and update: no pause, never judged Full.
+            let isFull = ScanEndDecision.pausesAllowed(isFull: ReaderSettings.scanIsFull, storageCount: ReaderSettings.storageCount)
             endController = ScanEndController(period: period, storageCount: ReaderSettings.storageCount, eggCount: ReaderSettings.eggCount, pausesAllowed: isFull)
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
@@ -209,7 +210,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             let now = lastReadingTime + (ProcessInfo.processInfo.systemUptime - lastReadingUptime)
             let event = c.tick(now: now)
             endController = c
-            if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last, byPerson: false); return }
+            if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last, byPerson: false, timeout: endController?.timedOut ?? false); return }
         }
         write(force: false)
     }
@@ -243,19 +244,20 @@ class SampleHandler: RPBroadcastSampleHandler {
             state.pausedAt = Date()
             write(force: true)
         case .finish(let at, let last):
-            endAtListEnd(at: at, last: last, byPerson: false)
+            endAtListEnd(at: at, last: last, byPerson: false, timeout: endController?.timedOut ?? false)
         }
     }
 
     /// On `queue`. The end of the list was seen: write the end marker (so the app can cut the tail), finish exactly as a user stop does,
     /// then end the broadcast. `finishBroadcastWithError` is the only way an extension can end one; the message reads as a result.
-    private func endAtListEnd(at: Double, last: Double, byPerson: Bool) {
+    private func endAtListEnd(at: Double, last: Double, byPerson: Bool, timeout: Bool = false) {
         log.notice("end of the list reached: last new Pokémon at \(last, format: .fixed(precision: 1)), ending at \(at, format: .fixed(precision: 1))")
         ScanNotifier.removePauseNotifications(scan: state.scanId)
         if byPerson { record(.stoppedByPerson(at: at)) }
+        if timeout { record(.pauseTimedOut(at: at)) }
         record(.end(at: at, last: last))
         // A scan the person finished is judged like a stop from the red bar (never a Full scan), so it does not claim the end of the list was reached.
-        state.endedAtListEnd = !byPerson; state.stoppedByPerson = byPerson; state.paused = false; state.eventSeq += 1
+        state.endedAtListEnd = !byPerson && !timeout; state.stoppedByPerson = byPerson; state.stoppedByTimeout = timeout; state.paused = false; state.eventSeq += 1
         lock.lock(); finished = true; lock.unlock()
         finishWork()
         // The notification is posted FIRST and the broadcast is ended from its completion handler, so the extension cannot be torn down before the request is handed to the

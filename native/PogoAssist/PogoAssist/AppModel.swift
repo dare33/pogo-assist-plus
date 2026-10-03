@@ -247,13 +247,14 @@ final class AppModel: ObservableObject {
     /// delivered or pending. Same identifier, so even a race leaves one; the handled key makes it once per event.
     func postFallbackNotificationIfNeeded(_ s: BroadcastState?) {
         guard let s, s.eventSeq > 0, s.scanId != 0, s.commandPeriod != nil else { return }
-        if !s.paused { ScanNotifier.removePauseNotifications(scan: s.scanId) }   // resumed or finished: no pause notification (or its button) is left behind
+        // Resumed or finished: no pause notification (or its button) is left behind. Done once, on the change from paused to not paused, not on every refresh.
+        if s.paused { pausedScanSeen = s.scanId } else if pausedScanSeen == s.scanId { pausedScanSeen = nil; ScanNotifier.removePauseNotifications(scan: s.scanId) }
         let key = "\(s.scanId)#\(s.eventSeq)"
         guard UserDefaults.standard.string(forKey: Self.handledKey) != key else { return }
         let n: ScanNotification
         if s.paused {
             n = .paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, eggCount: s.eggCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes)
-        } else if s.endedAtListEnd {
+        } else if s.endedAtListEnd || s.stoppedByTimeout {
             let last = s.rows.last
             n = .stopped(scan: s.scanId, event: s.eventSeq, read: s.rows.count, lastName: last?.name, lastCP: last?.cp)
         } else { return }
@@ -261,12 +262,17 @@ final class AppModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.fallbackGraceSeconds) {
             // The state is read again first: a pause notice is only posted if that pause is still the current, unresumed one (the scan may have resumed, finished or been
             // replaced while the app waited); a stop notice only if that scan is still the one that ended.
-            guard let now = SharedStore.read(), now.scanId == s.scanId else { return }
-            if s.paused, !(now.paused && now.eventSeq == s.eventSeq) { return }
-            if !s.paused, !now.endedAtListEnd { return }
-            ScanNotifier.exists(n.identifier) { exists in if !exists { ScanNotifier.post(n) } }
+            // The same test is repeated after the notification lookup, which is asynchronous: the pause may have ended while it ran.
+            func stillCurrent() -> Bool {
+                guard let now = SharedStore.read(), now.scanId == s.scanId else { return false }
+                if s.paused { return now.paused && now.eventSeq == s.eventSeq }
+                return now.endedAtListEnd || now.stoppedByTimeout
+            }
+            guard stillCurrent() else { return }
+            ScanNotifier.exists(n.identifier) { exists in if !exists, stillCurrent() { ScanNotifier.post(n) } }
         }
     }
+    private var pausedScanSeen: Int?
     /// The last command made for each single mode of the selected account (older app versions made one file per scan; still checked for the wrong-screen warning).
     @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]
     @Published var setRecord: SetRecord?
@@ -298,6 +304,8 @@ final class AppModel: ObservableObject {
 
     /// The typed storage count, 1 to 10,000, read without overflow; nil when empty or not usable (`storageCountProblem` says why).
     var storageCount: Int? { if case .valid(let n) = StorageCount.parse(storageCountText) { return n } else { return nil } }
+    /// A Full scan cannot be started until the count the game shows is typed (and usable).
+    var fullScanNeedsCount: Bool { ScanEndDecision.fullScanNeedsCount(isFull: scanKind == .full, storageCount: storageCount) }
     var storageCountProblem: String? { StorageCount.problem(for: storageCountText) }
     /// The typed egg count, 0 to `maxEggSlots`; nil when empty or not usable (`eggProblem` says why).
     var eggCount: Int? { Int(eggText.trimmingCharacters(in: .whitespaces)).flatMap { StorageCountRules.validEggs($0) } }
@@ -714,7 +722,7 @@ final class AppModel: ObservableObject {
         // How the scan was paged is what the extension was told when it started (a command at its period, or by hand), not a setting changed since.
         let period: Double? = { if let b = broadcast { return b.commandPeriod }; return pagedByHand ? nil : pace.every }()
         let paging = period == nil ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: period, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
-        let ended = broadcast?.endedAtListEnd ?? false, byPerson = broadcast?.stoppedByPerson ?? false, logFull = broadcast?.replayLogTruncated ?? false, logFailed = broadcast?.replayLogFailed ?? false
+        let ended = broadcast?.endedAtListEnd ?? false, byPerson = broadcast?.stoppedByPerson ?? false, byTimeout = broadcast?.stoppedByTimeout ?? false, logFull = broadcast?.replayLogTruncated ?? false, logFailed = broadcast?.replayLogFailed ?? false
         // The count the scan was started with (captured in its state), not the field as it reads now: it may have been edited since.
         let typed = broadcast.map { $0.storageCount } ?? storageCount
         let eggs = broadcast.map { $0.eggCount } ?? eggCount
@@ -724,7 +732,7 @@ final class AppModel: ObservableObject {
                     let outcome = try ScanPipeline.process(replay: url, engine: engine, paging: paging)
                     // A full scan lists everything unseen as "Not seen in this scan" (all kept unless marked), but it is only the default when the list can be known to have ended.
                     var kind = asked, note: String?
-                    let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, logFailed: logFailed, commandPeriod: period, eggCount: eggs)
+                    let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, logFailed: logFailed, commandPeriod: period, eggCount: eggs, endedByTimeout: byTimeout)
                     if asked == .full && !d.fullIsSound { kind = .partial; note = d.reason }
                     let current = try lib.current(account: a)   // the box as it is when the plan is made
                     let entries = current?.entries ?? []
@@ -732,14 +740,14 @@ final class AppModel: ObservableObject {
                     let plan = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
                     // Where it stopped: the last Pokémon, how many, whether the appraisal had closed (from the whole log, the tail the end marker cuts included).
                     var stop: String?
-                    if ended || byPerson {
+                    if ended || byPerson || byTimeout {
                         let last = outcome.scan.rows.last
                         let closed = ScanStop.appraisalClosed(lines: ReplayLog.lines(in: url))
                         let ran = ScanStop.ranOut(read: outcome.scan.rows.count, typedCount: typed, full: asked == .full, commandPeriod: period)
                         stop = ScanStop.summary(lastName: last?.display, lastCP: last?.cp, read: outcome.scan.rows.count, appraisalClosed: closed, ranOut: ran,
                                                 commandKnown: asked == .full && typed != nil, nearestSize: ScanStop.nearestSize(read: outcome.scan.rows.count, commandPeriod: period),
                                                 matchSentence: ScanKindAdvice.matchSentence(pokemonRead: outcome.scan.rows.count, decision: d, eggCount: eggs),
-                                                paused: ScanStop.pauseNames(outcome.pauses, rows: outcome.scan.rows, finishedByPerson: byPerson), byPerson: byPerson)
+                                                paused: ScanStop.pauseNames(outcome.pauses, rows: outcome.scan.rows, finishedByPerson: byPerson), byPerson: byPerson, byTimeout: byTimeout)
                     }
                     return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note, d, stop)
                 }

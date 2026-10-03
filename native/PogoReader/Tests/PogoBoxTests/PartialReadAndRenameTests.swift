@@ -54,9 +54,12 @@ final class PartialReadTests: XCTestCase {
         // a clean row with IVs that happens to look like a part read is just a new Pokémon
         let p = plan([row(cp: 182, ivs: IVs(atk: 1, def: 1, hp: 1))], [entry(row(cp: 1982), "a")])
         XCTAssertEqual(p.new, [0])
-        // a row with IVs but the no-level-fits flag, with its HP read as the saved entry's, is resolved by the merge (W1); with the HP unread it is asked about
-        let flagged = row(cp: 182, ivs: IVs(atk: 1, def: 1, hp: 1), flags: ["no-level-fits"])
+        // a row with IVs but the no-level-fits flag, with its HP read as the saved entry's and bars that do not contradict the saved IVs (within a notch), is resolved by the merge (W1);
+        // bars that clearly differ (1/1/1 against 13/12/15) are a real question (round 21); with the HP unread it is asked about
+        let flagged = row(cp: 182, ivs: IVs(atk: 13, def: 12, hp: 14), flags: ["no-level-fits"])
         XCTAssertEqual(plan([flagged], [entry(row(cp: 1982), "a")]).partMatches.count, 1)
+        let contradicting = row(cp: 182, ivs: IVs(atk: 1, def: 1, hp: 1), flags: ["no-level-fits"])
+        XCTAssertEqual(plan([contradicting], [entry(row(cp: 1982), "a")]).partMatches.count, 0); XCTAssertEqual(plan([contradicting], [entry(row(cp: 1982), "a")]).unsure.count, 1)
         var noHP = flagged; noHP.hp = nil
         XCTAssertEqual(plan([noHP], [entry(row(cp: 1982), "a")]).unsure.count, 1)
     }

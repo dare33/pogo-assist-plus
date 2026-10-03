@@ -18,12 +18,12 @@ public enum ScanKindAdvice {
     public static func tolerance(_ typed: Int) -> Int { StorageCountRules.tolerance(typed) }
 
     /// FULL only when ALL hold:
-    /// - the automatic end fired (`endedAtListEnd`);
+    /// - the automatic end fired (`endedAtListEnd`) and was not a pause that timed out (`endedByTimeout`: such a scan never reached the end of the list, however close the count);
     /// - the replay log is neither truncated nor failed;
     /// - a count was typed and is at most the largest command size;
     /// - typed - eggs (the number typed, else 12 egg slots) - tol <= Pokémon read <= min(typed + tol, reach - 1), where reach is what the named command pages (`covers` + 1).
     /// `commandPeriod` is what the extension recorded for the scan (its pace picks the sizing; nil: paged by hand).
-    public static func decide(endedAtListEnd: Bool, pokemonRead: Int, typedCount: Int?, logTruncated: Bool, logFailed: Bool, commandPeriod: Double?, eggCount: Int? = nil) -> Decision {
+    public static func decide(endedAtListEnd: Bool, pokemonRead: Int, typedCount: Int?, logTruncated: Bool, logFailed: Bool, commandPeriod: Double?, eggCount: Int? = nil, endedByTimeout: Bool = false) -> Decision {
         func no(_ why: String) -> Decision { Decision(fullIsSound: false, reason: why, typedCount: typedCount) }
         let largest = VoiceCommandFile.setSizes.last ?? 0
         guard let typed = typedCount else {
@@ -34,6 +34,9 @@ public enum ScanKindAdvice {
         }
         if logTruncated || logFailed {
             return no("The scan's log is incomplete (it \(logFailed ? "could not be written" : "filled up")), so the end of the scan may be missing. Add and update is chosen.")
+        }
+        if endedByTimeout {
+            return no("The scan paused and was not resumed, so it finished at the \(ScanNotification.pauseLimitText) limit, not at the end of your list: it cannot say which Pokémon are gone. Add and update is chosen.")
         }
         if !endedAtListEnd {
             return no("The scan was stopped by hand, not by reaching the end of the list, so it cannot say which Pokémon are gone. Add and update is chosen.")

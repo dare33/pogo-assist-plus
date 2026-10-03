@@ -52,13 +52,15 @@ public enum ScanStop {
 
     /// The one place at the top of the review for a scan the extension ended itself. `commandKnown` is true only when the app itself named the command (a Full scan with a
     /// typed count); for Add and update the command that was said is not known, so a matching size is reported as "about the size of" rather than as fact, with `nearestSize`.
-    public static func summary(lastName: String?, lastCP: Int?, read: Int, appraisalClosed: Bool?, ranOut: Bool, commandKnown: Bool, nearestSize: Int? = nil, matchSentence: String? = nil, paused: [String] = [], byPerson: Bool = false) -> String {
+    public static func summary(lastName: String?, lastCP: Int?, read: Int, appraisalClosed: Bool?, ranOut: Bool, commandKnown: Bool, nearestSize: Int? = nil, matchSentence: String? = nil, paused: [String] = [], byPerson: Bool = false, byTimeout: Bool = false) -> String {
         let last = lastName.map { name in "the last one read was \(name)" + (lastCP.map { " (CP \($0))" } ?? "") } ?? "no Pokémon were named"
         let opened = lastName ?? "the last Pokémon"
-        var s = byPerson ? "You finished the scan after \(read.formatted()) Pokémon; \(last)." : "The scan ended by itself after \(read.formatted()) Pokémon; \(last)."
+        var s = byPerson ? "You finished the scan after \(read.formatted()) Pokémon; \(last)."
+            : byTimeout ? "The scan paused and was not resumed, so it finished after \(ScanNotification.pauseLimitText) with nothing new, at \(read.formatted()) Pokémon; \(last)."
+            : "The scan ended by itself after \(read.formatted()) Pokémon; \(last)."
         if !paused.isEmpty { s += paused.count == 1 ? " It paused once, at \(paused[0])." : " It paused \(paused.count) times: \(paused.joined(separator: "; "))." }
         if let c = appraisalClosed { s += c ? " The appraisal had closed." : " The appraisal was still open." }
-        if byPerson {
+        if byPerson || byTimeout {
             s += " If that was not the end of your list, open \(opened) in Pokémon GO with the appraisal showing and scan again from there (Add and update)."
         } else if !commandKnown, ranOut {
             let which = nearestSize.map { "the \"Pogo scan \($0)\" command" } ?? "one of the commands"

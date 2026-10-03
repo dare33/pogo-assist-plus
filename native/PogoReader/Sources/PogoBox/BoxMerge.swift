@@ -213,7 +213,16 @@ public enum BoxMerge {
         for (mi, m) in saved.enumerated() {
             guard let base = megaBase(m.row.speciesId, gm), let mivs = m.row.ivs, m.row.hp != nil else { continue }
             guard let bi = saved.indices.first(where: { saved[$0].row.speciesId == base && saved[$0].row.ivs == mivs && saved[$0].row.hp == m.row.hp }) else { continue }
-            guard let si = sPool.first(where: { (rows[$0].speciesId == base || rows[$0].speciesId == m.row.speciesId) && rows[$0].ivs == mivs && (rows[$0].hp == nil || rows[$0].hp == m.row.hp) }) else { continue }
+            // The scanned row must BE one of the two entries by the normal rules (the base row agrees with the base entry's CP, the Mega row with the Mega entry's; the HP agrees or
+            // was not read): a row at another CP is a power-up or something new, never a reason to ask about joining. And only when exactly one row is that Pokémon: two identical
+            // rows are two Pokémon (twins), left to the ordinary rules so the second is asked about, never silently added.
+            let matching = sPool.filter { i in
+                let r = rows[i]
+                guard r.ivs == mivs, r.hp == nil || r.hp == m.row.hp else { return false }
+                if r.speciesId == base { return sameCP(r, saved[bi]) }
+                return r.speciesId == m.row.speciesId && sameCP(r, m)
+            }
+            guard matching.count == 1, let si = matching.first else { continue }
             plan.unsure.append(Unsure(scanned: si, candidates: [saved[bi].id, m.id], kind: .megaPair))
             unsureSaved.insert(bi); unsureSaved.insert(mi)
             sPool.removeAll { $0 == si }; vPool.removeAll { $0 == bi || $0 == mi }
@@ -262,8 +271,9 @@ public enum BoxMerge {
         // group. What cannot be known without unique ids: which of two look-alike Pokémon is which, so ids, dates and hand corrections
         // follow the assignment that was chosen, and a wrong guess cannot be told apart afterwards.
         var groups = [String: (saved: [Int], scanned: [Int])]()
-        for (vi, v) in saved.enumerated() { if let iv = v.row.ivs { groups["\(v.speciesKey)|\(iv)", default: ([], [])].saved.append(vi) } }
-        for (si, r) in rows.enumerated() where plan.megaBases[si] == nil { if let iv = r.ivs, groups["\(r.speciesKey)|\(iv)"] != nil { groups["\(r.speciesKey)|\(iv)"]!.scanned.append(si) } }
+        // Only what is still unpaired: a row or an entry the Mega-pair step took carries no second question (a scanned row is in at most one of same / updated / unsure / new).
+        for (vi, v) in saved.enumerated() where vPool.contains(vi) { if let iv = v.row.ivs { groups["\(v.speciesKey)|\(iv)", default: ([], [])].saved.append(vi) } }
+        for (si, r) in rows.enumerated() where plan.megaBases[si] == nil && sPool.contains(si) { if let iv = r.ivs, groups["\(r.speciesKey)|\(iv)"] != nil { groups["\(r.speciesKey)|\(iv)"]!.scanned.append(si) } }
         for key in groups.keys.sorted() {
             let g = groups[key]!
             guard g.saved.count > 1, !g.scanned.isEmpty else { continue }
@@ -339,6 +349,9 @@ public enum BoxMerge {
             let v = saved[vi]
             guard vPool.contains(vi), v.row.cp > 0, let vh = v.row.hp, abs(vh - h) <= 1, !hasNoLevelFits(v.row), v.row.cp != r.cp, isSubsequence(Array(String(r.cp)), Array(String(v.row.cp))) else { return nil }
             guard !leftoverParts.contains(where: { $0.key != si && $0.value.contains(vi) }) else { return nil }
+            // Bars that were read and clearly disagree with the saved IVs (beyond one notch on any stat, the same tolerance the candidate checks use) make this a real question: the
+            // owner's rule is for a part read with no contradicting bars.
+            if let read = originals[si].ivsRead ?? originals[si].ivs, let saw = v.row.ivs, !IVFit.near(IVFit.index(saw), read) { return nil }
             // nothing else may be a candidate for this row (a plausible or misread entry would make it a real question)
             guard !leftoverPool.contains(where: { $0 != vi && (plausibleCandidate(r, saved[$0], gm, fits) || misreadSaved(r, saved[$0])) }) else { return nil }
             return vi
@@ -763,16 +776,12 @@ public enum BoxMerge {
             case .existing(let id):
                 guard let e = byId[id] else { break }
                 if u.kind == .megaPair {
-                    // Join: the base entry (candidates[0]) stays, with its own values and hand corrections (the Mega entry's corrections fill any it lacks), is marked Mega when the scan
-                    // read the Mega form, and the Mega-form entry is removed. Nothing else changes. Any other answer than "this one" keeps both.
+                    // Join: the base entry (candidates[0]) stays, with its own values and hand corrections UNCHANGED (the Mega entry's values and corrections go with it), is marked Mega when the scan
+                    // read the Mega form, and the Mega-form entry is removed. Nothing else changes (the earlier first-seen date is kept). Any other answer than "this one" keeps both.
                     guard id == u.candidates.first, u.candidates.count == 2, let m = byId[u.candidates[1]] else { break }
-                    var c = e.corrections
-                    if c.ivs == nil { c.ivs = m.corrections.ivs }
-                    if c.species == nil { c.species = m.corrections.species }
-                    byId[id]?.corrections = c
                     byId[id]?.firstSeen = min(e.firstSeen, m.firstSeen)
                     touch(id)
-                    if plan.megaBases[u.scanned] != nil { setMega(id, true) } else { update(id, plan.scanned[u.scanned]); setMega(id, false) }
+                    setMega(id, plan.megaBases[u.scanned] != nil)
                     removedByJoin.insert(m.id)
                     break
                 }
