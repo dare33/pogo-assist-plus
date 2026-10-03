@@ -34,13 +34,19 @@ public struct StalledCardNormaliser {
         var tail = [Int]()
         func flush() {
             defer { tail.removeAll() }
-            guard tail.count >= minTail else { return }
+            guard tail.count >= minTail, let anchor = anchorCP else { return }
             var votes = [Int: Int]()
-            if let a = anchorCP { votes[a, default: 0] += 1 }
+            votes[anchor, default: 0] += 1
             for i in tail { if let c = out[i].cp, c > 0 { votes[c, default: 0] += 1 } }
             // the most read CP; the anchor's wins a tie
-            guard let top = votes.max(by: { ($0.value, $0.key == anchorCP ? 1 : 0) < ($1.value, $1.key == anchorCP ? 1 : 0) })?.key else { return }
-            for i in tail { out[i].cp = top; out[i].cpReads = nil }
+            guard let top = votes.max(by: { ($0.value, $0.key == anchor ? 1 : 0) < ($1.value, $1.key == anchor ? 1 : 0) })?.key else { return }
+            // What the stretch is rewritten to. The anchor was read with its bars, so its CP is the card's own when the stretch shows it again (a real next card of the same name and HP,
+            // read once with another CP and then unreadable, is NOT the anchor: nothing in it says so). When the most-read value is the anchor's digits plus more (anchor 262, most read
+            // 4262) the anchor itself was the misread and the most-read value corrects it. Otherwise the stretch is left alone.
+            let anchorShown = tail.contains { out[$0].cp == anchor }
+            let own: Int
+            if top != anchor, Self.isPartRead(anchor, of: top) { own = top } else if anchorShown { own = anchor } else { return }
+            for i in tail { out[i].cp = own; out[i].cpReads = nil }
         }
         for (i, r) in readings.enumerated() {
             guard let name = r.name, let hp = r.hp else { continue }       // an unreadable or partial frame neither continues nor ends the stall
@@ -54,5 +60,14 @@ public struct StalledCardNormaliser {
         }
         flush()
         return out
+    }
+
+    /// `small`'s digits are a run of `big`'s, in order, and shorter (262 in 4262).
+    static func isPartRead(_ small: Int, of big: Int) -> Bool {
+        let x = Array(String(small)), y = Array(String(big))
+        guard x.count < y.count else { return false }
+        var i = 0
+        for c in y where i < x.count && c == x[i] { i += 1 }
+        return i == x.count
     }
 }

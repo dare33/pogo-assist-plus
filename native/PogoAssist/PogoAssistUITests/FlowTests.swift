@@ -135,11 +135,15 @@ final class FlowTests: XCTestCase {
         let attention = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Attention Aware'")).firstMatch
         reveal(attention, up: false)
         XCTAssertTrue(attention.exists, "the setup list names Attention Aware")
+        let sharing = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Screen Sharing'")).firstMatch
+        reveal(sharing, up: false)
+        XCTAssertTrue(sharing.exists, "the setup list names the Screen Sharing notification setting")
         app.swipeUp()
         shot(name)
         // the command to say, as it is spoken: digits without a thousands separator
         reveal(app.staticTexts["Say: Pogo scan 1500"])
         XCTAssertTrue(app.staticTexts["Say: Pogo scan 1500"].waitForExistence(timeout: 5), "1,400 Pokémon is covered by the 1,500 command")
+        reveal(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Go to sleep'")).firstMatch)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Go to sleep'")).firstMatch.waitForExistence(timeout: 5), "the warning says how to stop a command")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'cannot be stopped'")).firstMatch.exists)
         let get = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Get the'")).firstMatch

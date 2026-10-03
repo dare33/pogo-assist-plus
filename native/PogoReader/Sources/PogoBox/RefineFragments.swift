@@ -38,6 +38,7 @@ extension Refine {
             // Both neighbours are examined: the fragment may belong to the one behind it or the one ahead.
             var candidates = [Int]()
             var byFallback = Set<Int>()   // pairs judged without a regular beat around them (consecutive readings only)
+            var byBarsOverride = Set<Int>()   // neighbours accepted only because the fragment is a sliding-in part read: its read bars differed beyond a notch
             for j in [i - 1, i + 1] where j >= 0 && j < rows.count {
                 let n = rows[j]
                 guard n.name == f.name else { continue }
@@ -55,7 +56,9 @@ extension Refine {
                 // A part read of the neighbour's CP that fits no level, with the neighbour's own HP, is that Pokémon as its card slides in (run17: Charizard 632 read once with bars still
                 // animating, then 1632 / 120): its bars are not compared, they are the animation's.
                 let slidingIn = f.frames.count == 1 && f.hp != nil && f.hp == n.hp && isPartRead(f.cp, of: n.cp) && f.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
-                guard together, hpCompatible(f.hp, n.hp), barsCompatible(f, n) || slidingIn else { continue }
+                let barsOK = barsCompatible(f, n)
+                guard together, hpCompatible(f.hp, n.hp), barsOK || slidingIn else { continue }
+                if !barsOK { byBarsOverride.insert(j) }
                 // The worse of the two is the fragment: a good row is never folded into a worse one beside it.
                 let qf = quality(f), qn = quality(n)
                 guard qn.0 > qf.0 || (qn.0 == qf.0 && qn.1 >= qf.1) else { continue }
@@ -79,6 +82,7 @@ extension Refine {
             let flag: String
             if f.cp != n.cp && !isPartRead(f.cp, of: n.cp) { flag = "absorbed-other-cp:\(f.cp)" }
             else if f.cp == n.cp && solvedFragment && byFallback.contains(j) { flag = "absorbed-same-cp:\(f.cp)" }
+            else if byBarsOverride.contains(j) { flag = "folded-first-reading:\(f.cp)" }   // another CP AND other bars folded in: a check, not a note
             else { flag = "absorbed-fragment:\(f.cp)" }
             if !rows[j].flags.contains(flag) { rows[j].flags.append(flag) }
             // The fragment's readings join the row they were part of (its values stay as the JavaScript solved them).
@@ -129,7 +133,7 @@ extension Refine {
     }
 
     /// The flags a fragment absorption, a lone-CP-outlier fix or a bars split leave on a row; a row solved again keeps them.
-    static let refineFlagPrefixes = ["absorbed-fragment", "absorbed-other-cp", "absorbed-same-cp", "read-once-beside", "cp-outlier-dropped", "split-by-bars"]
+    static let refineFlagPrefixes = ["absorbed-fragment", "absorbed-other-cp", "absorbed-same-cp", "read-once-beside", "folded-first-reading", "cp-outlier-dropped", "split-by-bars"]
     static func carriedFlags(_ row: ScanRow) -> [String] { row.flags.filter { f in refineFlagPrefixes.contains { f == $0 || f.hasPrefix($0 + ":") || f.hasPrefix($0 + "-") } } }
 
     /// Time from the change before row `lo` to the change after row `hi` (boundaries are midpoints between neighbouring rows'

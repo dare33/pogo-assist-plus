@@ -106,8 +106,9 @@ public struct EndOfListDetector {
     private mutating func reset(at time: Double) {
         quiet = 0; thirds = [0, 0, 0]; lastNew = time; resets += 1
     }
-    /// How many times the clock has reset for a new card (a name or HP change, or a new CP or bars value by the rules above). The pause logic recognises a resume by this
-    /// counter, so there is ONE criterion for "a new card was read".
+    /// How many times the clock has reset for a new card (a name or HP change, or a new CP or bars value by the rules above). The end logic uses it for "something new is on
+    /// screen". A pause's RESUME is narrower (`ScanEndController.feed`, round 24): only a name or HP change, or other settled bars held by two readings in a row; a new CP value on
+    /// the same name and HP is a tap covering part of the number, not a new card.
     public private(set) var resets = 0
 
     /// One frame's reading at `time`. True once the end has been seen (and on every call after).

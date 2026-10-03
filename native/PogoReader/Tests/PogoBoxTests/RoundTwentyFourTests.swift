@@ -82,7 +82,9 @@ final class RoundTwentyFourTests: XCTestCase {
         let out = try rows(try lines("run17-charizard-open-slide.replay.jsonl"))
         let ch = out.filter { $0.display == "Charizard" }
         XCTAssertEqual(ch.map { $0.cp }, [1632], "\(ch.map { "\($0.cp) \($0.flags)" })")
-        XCTAssertEqual(ch.first?.ivs, IVs(atk: 13, def: 14, hp: 15)); XCTAssertTrue(ch.first?.flags.contains("absorbed-fragment:632") == true)
+        XCTAssertEqual(ch.first?.ivs, IVs(atk: 13, def: 14, hp: 15)); XCTAssertTrue(ch.first?.flags.contains("folded-first-reading:632") == true, "round 25: the folded-in first reading, whose bars differed, is a check")
+        XCTAssertEqual(FlagInfo.severity(of: "folded-first-reading:632", solveStatus: "exact"), .check)
+        XCTAssertTrue(FlagInfo.explain("folded-first-reading:632").contains("one was missed"))
     }
 
     // MARK: the normaliser

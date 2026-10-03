@@ -85,6 +85,13 @@ public struct ScanEndController {
     /// Evidence since the pause that ANOTHER card was shown although the detector saw nothing new and the live row count did not grow: a paging tick, then a card read with the CP hidden, or
     /// bars other than the card's own (beyond a notch) even once. A finish then keeps everything read after the pause (see `finishDating`).
     private var otherCardEvidence = false, swipeSincePause = false, pauseFedAt = 0.0
+    /// The CPs read during the paused card's stay (its own and the misreads of them), the paused card's name and HP, and, since the pause, the run of consecutive readings of that name and
+    /// HP in which none of those CPs appears: a twin with the same name and HP and another CP is such a run (a stalled card keeps showing its own CP between its misreads).
+    private var stayCPs: (resets: Int, cps: Set<Int>)?
+    private var pausedCPs = Set<Int>(), pausedCard: (name: String?, hp: String?)?
+    private var twinLength = 0, twinCounts = [Int: Int]()
+    /// Consecutive readings without the card's own CP, and one other CP read this many times, make a run that is evidence of a twin.
+    static let twinRunLength = 6, twinCPReads = 3
     /// The scan finished because a pause went unanswered (the 180 s, or the cap), not because the list ended.
     public private(set) var timedOut = false
     private var lastRead = 0, lastFeedTime = 0.0
@@ -122,9 +129,17 @@ public struct ScanEndController {
         }
         detector.feed(r, time: time)
         if let ivs = r.ivs { stayBars = (detector.resets, ivs) }
+        if let cp = r.cp { if let s = stayCPs, s.resets == detector.resets { stayCPs?.cps.insert(cp) } else { stayCPs = (detector.resets, [cp]) } }
         lastRead = read; lastFeedTime = time
         if let p = paused {
             if let was = pausedBars, let now = r.ivs, !Self.sameBars(was, now) { otherCardEvidence = true }
+            if let card = pausedCard, r.name != nil || r.cp != nil, r.name == card.name, r.hp.map({ "\($0.current)/\($0.max)" }) == card.hp {
+                if let cp = r.cp, pausedCPs.contains(cp) { twinLength = 0; twinCounts.removeAll() }
+                else {
+                    twinLength += 1; if let cp = r.cp { twinCounts[cp, default: 0] += 1 }
+                    if twinLength >= Self.twinRunLength, twinCounts.values.contains(where: { $0 >= Self.twinCPReads }) { otherCardEvidence = true }
+                }
+            }
             if swipeSincePause, r.cp == nil, r.name != nil || r.hp != nil { otherCardEvidence = true }
             if detector.ended != nil { detector.rearm() }   // a repeated quiet during the pause is not news
             // A RESUME needs a different name or a different HP: the same name and HP is the stalled card, whatever CP a tap leaves readable and with or without bars (run17: a closed
@@ -170,6 +185,7 @@ public struct ScanEndController {
             detector.rearm()
             paused = (pause, time, detector.resets)
             otherCardEvidence = false; swipeSincePause = false; pauseFedAt = time
+            pausedCPs = stayCPs.flatMap { $0.resets == detector.resets ? $0.cps : nil } ?? []; pausedCard = detector.currentCard; twinLength = 0; twinCounts.removeAll()
             pauseBegan = (lastPause?.read == read ? lastPause!.began : time); lastPause = (read, pauseBegan); pausedBars = stayBars.flatMap { $0.resets == detector.resets ? $0.ivs : nil }
             pauseCount += 1
             return .pause(pause)
