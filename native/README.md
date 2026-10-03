@@ -607,7 +607,7 @@ rate); 16 MB leaves 40%. The writer streams each line to the file (nothing is bu
 once when the scan is processed. When the cap is hit the state says so (`replayLogTruncated`, which the full-scan decision reads) and 512 bytes past
 the cap stay reserved for the end marker.
 
-**Known limit**: identical twins at the very end of the list look like the list ending, so the last of them can be cut. Another: the app judges the end by
+**Known limit**: identical twins at the very end of the list look like the list ending once they last six periods, and an end stops the broadcast, so everything after the run goes unread. Another: the app judges the end by
 what was read, not by the game, so a list whose last Pokémon were not read looks like an earlier end.
 **Still only a device can answer**: whether the extension survives the extra state write and `finishBroadcastWithError` (and what the system alert says),
 whether Voice Control takes the digits in "Pogo scan 300", whether the 6 MB swipe set imports, and whether the arm time on a real, slower start is as on the logs.
@@ -685,7 +685,7 @@ each species' own base stats). The test is conservative, so it only vetoes when 
 at level 20 is CP 676, Vibrava at 20.5 is 666), HP within 1 on each side, CP exact on a side whose IVs are read and within 1 on a side whose IVs are unread, each read IV allowed one notch off
 (a hand-corrected value counts as read; its `was` value does not rescue it). Each side is judged on its own: a reading the app already flagged `no-level-fits` fits anything, but an unflagged
 reading on the other side must still fit by itself, else nothing fits and the entry is not a candidate. Measured on the box as it was before run12 (the phone's CSV rows 1-618 with the flags
-of the scan results joined on and the Zubat entry set back to CP 61 with HP and IVs unread), the 106 rows of run12 that matter ask exactly the 29 questions the phone asked with the rule off, and 19
+of the scan results joined on and the Zubat entry set back to CP 61 with HP and IVs unread), run12 asks exactly the 29 questions the phone asked with the rule off, and 19
 with it on (the exact-arithmetic first version of the rule asked 13, by the reviewer's measure, and turned real power-ups into new rows when a reading was misread by one). The Meowth 534 question
 stays because the real saved Meowth CP 65 / HP 29 is flagged `no-level-fits` and is not judged; the Combee ones share 15/15/15 with the saved Combee; the Zubat ones have no saved HP; the Psyduck 166
 stays (the saved Psyduck 40/24 with 2/0/11 and the scanned bars unread are within a notch). (An earlier version of this paragraph said "30 before, 6 after": that test box held an unflagged Meowth CP 65
