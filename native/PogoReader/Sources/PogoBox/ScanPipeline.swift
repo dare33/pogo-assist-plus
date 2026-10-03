@@ -74,12 +74,14 @@ public enum ScanPipeline {
 
         try engine.prepare()
         let t1 = Date()
-        let base = try engine.finish(readings: readings)
+        // A card stalled with its appraisal closed reads with misread CPs and no bars; those readings are the card's own (see `StalledCardNormaliser`).
+        let stalled = StalledCardNormaliser.normalise(readings)
+        let base = try engine.finish(readings: stalled)
         timings.finish = Date().timeIntervalSince(t1)
         let t2 = Date()
         var hint = paging
         if !pauses.isEmpty { hint?.pauses = pauses.map { $0.last...Swift.max($0.last, $0.resumedAt ?? ($0.at + 1_000_000)) } }
-        let refined = try Refine.apply(to: base, readings: readings, ticks: ticks, engine: engine, paging: hint)
+        let refined = try Refine.apply(to: base, readings: stalled, ticks: ticks, engine: engine, paging: hint)
         timings.refine = Date().timeIntervalSince(t2)
         let span = (times.max() ?? 0) - (times.min() ?? 0)
         return Outcome(scan: refined.scan, readings: readings.count, ticks: ticks.count, drops: drops, duration: max(0, span), changes: refined.changes, notices: refined.notices, timings: timings, pace: ScanPace.measure(rows: refined.scan.rows), pauses: pauses)

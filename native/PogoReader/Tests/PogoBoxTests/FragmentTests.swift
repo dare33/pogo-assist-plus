@@ -208,9 +208,9 @@ final class FragmentTests: XCTestCase {
         XCTAssertEqual(Refine.carriedFlags(r), ["absorbed-other-cp:182", "read-once-beside:1951", "cp-outlier-dropped:1910"])
     }
 
-    /// The rows' values on the two 300-Pokémon runs are what they were before the fourth round (counts 311 and 310); only flags may differ.
+    /// The rows' values on the two 300-Pokémon runs are what they were before the fourth round (counts 311 and 310) except the one part-read row of each that round 24 absorbs (Heatmor 64 in run8, Charizard 632 in run9: counts 310 and 309); only flags may differ.
     func testRun8AndRun9RowValuesAreUnchangedByTheFragmentAndBarsFixes() throws {
-        for (log, expected, rows) in [("device-run8-tap-300.replay.jsonl", "rows-before-fourth-round-run8.txt", 311), ("device-run9-tap-300b.replay.jsonl", "rows-before-fourth-round-run9.txt", 310)] {
+        for (log, expected, rows) in [("device-run8-tap-300.replay.jsonl", "rows-before-fourth-round-run8.txt", 310), ("device-run9-tap-300b.replay.jsonl", "rows-before-fourth-round-run9.txt", 309)] {
             let r = try refine(log, paging: PagingHint(pagedByCommand: true))
             let got = r.scan.rows.map { "\($0.display)|\($0.cp)|\($0.hp.map(String.init) ?? "-")|\($0.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "-")|\($0.level.map { String($0) } ?? "-")" }
             let want = try String(contentsOf: Fixture.url(expected), encoding: .utf8).split(separator: "\n").map(String.init)

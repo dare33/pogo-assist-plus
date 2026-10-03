@@ -98,9 +98,9 @@ final class BarsSplitTests: XCTestCase {
     func testTheThreeHundredRunGivesThreeHundredAndEleven() throws {
         let l = try load("device-run8-tap-300.replay.jsonl")
         let r = try refine(l.readings, ticks: l.ticks, paging: PagingHint(pagedByCommand: true, expectedPeriod: 1.2))
-        XCTAssertEqual(r.scan.rows.count, 311)
+        XCTAssertEqual(r.scan.rows.count, 310, "311 until round 24, which also absorbs the Heatmor 64 fragment of 764 (HP 92, fits no level)")
         XCTAssertEqual(r.changes.filter { $0.kind == .barsSplit }.count, 1)
-        XCTAssertEqual(r.changes.filter { $0.kind == .fragmentAbsorbed }.map { $0.detail.prefix(14) }.sorted(), ["Honedge CP 760", "Quaxly CP 772 ", "Skarmory CP 71"])
+        XCTAssertEqual(r.changes.filter { $0.kind == .fragmentAbsorbed }.map { $0.detail.prefix(14) }.sorted(), ["Heatmor CP 64 ", "Honedge CP 760", "Quaxly CP 772 ", "Skarmory CP 71"])
         XCTAssertEqual(fidough(r).count, 2)
         // each change points at the row it is about (by the kept row's frames, not by the first row that has the same flag text)
         for c in r.changes where c.kind == .fragmentAbsorbed || c.kind == .barsSplit {

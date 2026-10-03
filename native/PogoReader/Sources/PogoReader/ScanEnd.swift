@@ -127,17 +127,23 @@ public struct ScanEndController {
             if let was = pausedBars, let now = r.ivs, !Self.sameBars(was, now) { otherCardEvidence = true }
             if swipeSincePause, r.cp == nil, r.name != nil || r.hp != nil { otherCardEvidence = true }
             if detector.ended != nil { detector.rearm() }   // a repeated quiet during the pause is not news
-            // A resume is anything the detector counts as a new card (its clock reset): a name or HP change, or a new CP or bars value by its rules. One criterion.
+            // A RESUME needs a different name or a different HP: the same name and HP is the stalled card, whatever CP a tap leaves readable and with or without bars (run17: a closed
+            // appraisal read Staraptor 1999 as 1299, 1099, 199, 1209, 29 ... for 75 s, and each new CP value used to be taken for a new card; run17's Charizard 1632 read as 63 with its own
+            // bars). The detector's reset is only the question "is anything new", so the same reading without its CP and bars is asked: it moves only for a name or an HP change.
             var barsOnly = false
-            if detector.resets != p.resets, r.ivs != nil {
-                // Would the same reading without its bars have counted as a new card? If not, only the bars did: the person reopened the appraisal on the same card,
-                var probe = before; var bare = r; bare.ivs = nil
+            if detector.resets != p.resets {
+                var probe = before; var bare = r; bare.ivs = nil; bare.cp = nil
                 probe.feed(bare, time: time)
-                barsOnly = probe.resets == before.resets
-            }
-            if detector.resets != p.resets, !barsOnly {
-                paused = nil
-                return .resume(at: time)
+                if probe.resets != before.resets {
+                    paused = nil
+                    return .resume(at: time)
+                }
+                // Not a name or HP change: the CP and/or the bars. Did the bars alone make the detector reset (the person reopened the appraisal on the same card)?
+                if r.ivs != nil {
+                    var probe2 = before; var noBars = r; noBars.ivs = nil
+                    probe2.feed(noBars, time: time)
+                    barsOnly = probe2.resets == before.resets
+                }
             }
             // A look-alike next card (same name, HP and CP) has other bars than the card's own, beyond a notch on a stat, HELD by two card readings in a row (the rule the bars split
             // uses). One such reading is not enough: the appraisal animates when it opens (run15's Rayquaza read 9/9/9, then 13/12/14), so a first reading is at most a window
@@ -148,8 +154,8 @@ public struct ScanEndController {
             }
             if detector.resets != p.resets || barsAppeared {
                 // The detector's reset by bars alone (or bars back after a closed appraisal) is absorbed into the pause either way; it restarts the 180 s only for a closed appraisal.
-                paused = (p.pause, p.since, detector.resets)
-                if wasClosed, time - pauseBegan < ScanEndDecision.pauseCapSeconds {
+                paused = (p.pause, p.since, detector.resets)   // a CP-only reset (a tap covering part of the number) is absorbed and restarts nothing
+                if wasClosed, barsOnly || barsAppeared, time - pauseBegan < ScanEndDecision.pauseCapSeconds {
                     paused = (p.pause, time, detector.resets)
                     return .windowRestarted(at: time)
                 }

@@ -52,7 +52,10 @@ extension Refine {
                     let gap = j > i ? na - b : a - (nts.max() ?? a)
                     together = gap <= fragmentFallbackGapSeconds + 1e-9
                 }
-                guard together, hpCompatible(f.hp, n.hp), barsCompatible(f, n) else { continue }
+                // A part read of the neighbour's CP that fits no level, with the neighbour's own HP, is that Pokémon as its card slides in (run17: Charizard 632 read once with bars still
+                // animating, then 1632 / 120): its bars are not compared, they are the animation's.
+                let slidingIn = f.frames.count == 1 && f.hp != nil && f.hp == n.hp && isPartRead(f.cp, of: n.cp) && f.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
+                guard together, hpCompatible(f.hp, n.hp), barsCompatible(f, n) || slidingIn else { continue }
                 // The worse of the two is the fragment: a good row is never folded into a worse one beside it.
                 let qf = quality(f), qn = quality(n)
                 guard qn.0 > qf.0 || (qn.0 == qf.0 && qn.1 >= qf.1) else { continue }

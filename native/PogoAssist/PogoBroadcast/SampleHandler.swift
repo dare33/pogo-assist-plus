@@ -59,6 +59,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var archive: CropArchive?
     private var saver = CropSaver()
     private var grouper = LiveGrouper(species: nil)
+    private var stalls = StalledCardNormaliser()   // the live grouper sees a stalled card's CP misreads as the card's own CP; the replay log keeps the raw readings
     private var state = BroadcastState()
     private var memory = MemoryProbe()
     private var msTotal = 0.0                 // time spent on frames that were read (skipped frames excluded)
@@ -90,6 +91,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             if table == nil { log.error("species table could not be loaded") }
             let names = table.map(displayNames) ?? []
             grouper = LiveGrouper(species: table)
+            stalls = StalledCardNormaliser()
             switch mode {
             case .accurate, .fast:
                 var options = VisionOptions()
@@ -328,7 +330,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             drainTicks()          // right after Vision returns, immediately before the reading is added
             record(.reading(ReplayReading(reading, time: time, ms: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6)))
             state.framesRead += 1
-            let changed = grouper.add(reading)
+            let changed = grouper.add(stalls.feed(reading))
             if changed { state.rows = grouper.rows }
             write(force: changed)
             state.readCount = state.rows.count

@@ -122,17 +122,23 @@ final class FlowTests: XCTestCase {
         app.buttons["Create account"].tap()
         XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
         app.buttons["Scan Pokémon"].tap()
+        // The lists are lazy: scroll until the element is on screen (the setup list grew in round 24).
+        func reveal(_ e: XCUIElement, up: Bool = true) { var n = 0; while !e.waitForExistence(timeout: 1.5), n < 6 { if up { app.swipeUp() } else { app.swipeDown() }; n += 1 } }
         let count = app.textFields["Count"]
+        reveal(count)
         XCTAssertTrue(count.waitForExistence(timeout: 5))
         count.tap(); count.typeText("1400")
         app.buttons["Done"].tap()   // dismiss the number pad
         sleep(1)
         let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
         shot(name + "-top")
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Attention Aware'")).firstMatch.exists, "the setup list names Attention Aware")
+        let attention = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Attention Aware'")).firstMatch
+        reveal(attention, up: false)
+        XCTAssertTrue(attention.exists, "the setup list names Attention Aware")
         app.swipeUp()
         shot(name)
         // the command to say, as it is spoken: digits without a thousands separator
+        reveal(app.staticTexts["Say: Pogo scan 1500"])
         XCTAssertTrue(app.staticTexts["Say: Pogo scan 1500"].waitForExistence(timeout: 5), "1,400 Pokémon is covered by the 1,500 command")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Go to sleep'")).firstMatch.waitForExistence(timeout: 5), "the warning says how to stop a command")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'cannot be stopped'")).firstMatch.exists)

@@ -26,7 +26,7 @@ struct ScanView: View {
             Section("Before you start") {
                 Label("The Pogo scan commands are installed (once per phone)", systemImage: "1.circle")
                 Label("Voice Control's Show Confirmation, Show Hints and Attention Aware are off (with Attention Aware on, Voice Control goes to sleep when you look away, which stops a command at the end of its batch)", systemImage: "2.circle")
-                Label("Turn on Do Not Disturb (or a Focus) before scanning: a banner over the game blocks the reading. Allow Pogo Assist through it (Settings > Focus > Do Not Disturb > Apps), so you hear when a scan pauses or stops", systemImage: "3.circle")
+                Label("Turn on Do Not Disturb (or a Focus) before scanning: a banner over the game blocks the reading. Allow Pogo Assist through it (Settings > Focus > Do Not Disturb > Apps), so you hear when a scan pauses or stops. Also turn on Settings > Notifications > Screen Sharing > Allow Notifications: iOS hides notification banners while the screen is being broadcast, and without it a pause or a stop only goes quietly to Notification Centre", systemImage: "3.circle")
                 Label("Pokémon GO is open on the first Pokémon with the appraisal showing", systemImage: "4.circle")
                 Label("Say the command named below, or page through the Pokémon by hand", systemImage: "5.circle")
             }

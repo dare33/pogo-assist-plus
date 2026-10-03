@@ -56,14 +56,15 @@ do {
     probe.sample()
     let tLoad = Date().timeIntervalSince(t0)
     let t1 = Date()
-    let base = try engine.finish(readings: loaded.readings)
+    let stalled = StalledCardNormaliser.normalise(loaded.readings)   // as the app's pipeline does
+    let base = try engine.finish(readings: stalled)
     let tFinish = Date().timeIntervalSince(t1)
     probe.sample()
     var result = base
     var refined: Refine.Refined?
     if refineFlag ?? loaded.hasTicks {
         let t = Date()
-        let r = try Refine.apply(to: base, readings: loaded.readings, ticks: loaded.ticks, engine: engine, paging: paging)
+        let r = try Refine.apply(to: base, readings: stalled, ticks: loaded.ticks, engine: engine, paging: paging)
         refined = r; result = r.scan
         err(String(format: "refine: %.2f s%@", Date().timeIntervalSince(t), loaded.hasTicks ? "" : " (no swipe ticks in the input: twin split skipped)"))
     }

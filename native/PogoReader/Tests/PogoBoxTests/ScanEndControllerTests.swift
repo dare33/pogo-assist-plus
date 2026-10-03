@@ -140,22 +140,21 @@ final class ScanEndControllerTests: XCTestCase {
         try XCTUnwrap(rs.last { $0.t <= t && $0.ivs != nil }?.frameReading.ivs, "the stalled card was read with bars before the appraisal closed")
     }
 
-    /// V1a: after a pause, a card with the same name and HP but another CP is a new card (the detector resets its clock), so it resumes the scan and its row is kept.
-    func testAPauseResumesOnASameNameSameHPCardWithAnotherCP() throws {
-        var (c, g, rs, p, at) = try pausedAtRun10()
-        var tail = try XCTUnwrap(rs.last)
+    /// Round 24 (run17): after a pause, the same name and HP with ANOTHER CP and no bars is the stalled card (a tap covering part of the number), never a resume; a different HP is.
+    func testTheSameNameAndHPWithAnotherCPIsNeverAResume() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        var tail = try XCTUnwrap(rs.last).frameReading; tail.ivs = nil
         var t = at, events = [ScanEndController.Event]()
-        tail.cp = (tail.cp ?? 4000) == 1500 ? 1600 : 1500
-        for _ in 0..<20 { t += 0.2; var r = tail; r.t = t; g.add(r.frameReading); let e = c.feed(r.frameReading, time: t, read: g.rows.count); if e != .none { events.append(e) } }
-        guard case .resume? = events.first else { return XCTFail("\(events)") }
-        // it stays on screen until the timeout: a second pause, then the finish dated at THAT card, so the new card's row is not trimmed
-        while t < at + 400, !events.contains(where: { if case .finish = $0 { return true } else { return false } }) {
-            t += 0.2; var r = tail; r.t = t; g.add(r.frameReading); let e = c.feed(r.frameReading, time: t, read: g.rows.count); if e != .none { events.append(e) }
+        for cp in [1299, 1099, 199, 1209, 29, 129, 1129, 1199, 63, 4262, 3000] {
+            tail.cp = cp
+            for _ in 0..<3 { t += 0.4; let e = c.feed(tail, time: t, read: p.read); if e != .none { events.append(e) } }
         }
-        guard case .finish(let endAt, let last)? = events.last else { return XCTFail("\(events)") }
-        XCTAssertGreaterThan(last, p.last, "the end is dated at the new card, not the original stall")
-        let lines: [ReplayLine] = (rs.map { .reading($0) }) + [ReplayLine.reading(ReplayReading(tail.frameReading, time: at + 1, ms: 1))] + [.end(at: endAt, last: last)]
-        XCTAssertTrue(readings(ReplayLog.trimmed(lines)).contains { $0.cp == tail.cp && $0.t == at + 1 }, "the card read after the pause is kept")
+        tail.cp = nil; t += 0.4; _ = c.feed(tail, time: t, read: p.read)
+        XCTAssertTrue(events.allSatisfy { if case .windowRestarted = $0 { return false } else { return true } } && events.isEmpty, "\(events)")
+        XCTAssertNotNil(c.paused); XCTAssertEqual(c.pauseCount, 1)
+        var other = tail; other.hp = HP(current: (tail.hp?.current ?? 50) + 3, max: (tail.hp?.max ?? 50) + 3); other.cp = 1995
+        t += 0.4
+        XCTAssertEqual(c.feed(other, time: t, read: p.read), .resume(at: t), "another HP is another card")
     }
 
     /// V1a: three new cards after a pause, then the timeout: all three are kept.
