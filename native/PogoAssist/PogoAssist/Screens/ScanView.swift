@@ -89,6 +89,8 @@ struct ScanView: View {
             Label("To stop a command, say \"Go to sleep\". It stops when the batch that is playing ends, \(model.setKind.stopDelayText). Then say \"Wake up\". Touching the screen, the side button or locking the phone does not stop it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps \(model.setKind == .tap ? "tapping" : "swiping") the same place whatever is on screen.",
                   systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
             if !model.pagedByHand { Text("The scan usually ends by itself when the list ends or the command runs out (the broadcast stops and the result appears); if the last Pokémon cannot be read it does not, and you stop the broadcast from the red bar. The command keeps going until it runs out; that does nothing to your box.").font(.footnote).foregroundStyle(.secondary) }
+            Text("Pogo Assist asks once to send a notification with a sound when a scan ends by itself, so you know without opening the app. It stays on your phone: nothing is sent. Without it the scan still ends and the result waits here.")
+                .font(.footnote).foregroundStyle(.secondary)
             stepTitle("Before you start the broadcast: how will you page?")
             Picker("Paging", selection: Binding(get: { model.pagedByHand }, set: { model.choosePaging(byHand: $0) })) {
                 Text("Page with the voice command").tag(false)

@@ -598,6 +598,8 @@ state and log as a user stop does and, after leaving its serial queue (a synchro
 with `finishBroadcastWithError("Scan finished.")` (neutral: the same end fires when the list ends and when the command runs out mid-list, as it did on run12; iOS adds its own "has stopped due to:"). `ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings
 later than the last reset plus 3 s when a marker is present.
 
+**The notification.** When the extension ends a command scan by itself it posts a local notification with sound (`ScanEndNotification`: title "Scan stopped", body "<N> Pokémon read, last: <name> CP <cp>. Say "Go to sleep" to stop the command, then continue from that Pokémon."; with no name "last: CP <cp>"). A broadcast upload extension may add a notification request itself: it shares the containing app's notification permission, no extra entitlement is needed, and with no permission the system shows nothing. The app asks for the permission once, when the person first chooses "Page with the voice command" or makes the commands (not at launch), and says why in one line on the Scan screen; a refusal changes nothing else. The text builder is unit tested; whether the extension's notification appears and sounds while Pokémon GO is in the foreground, and whether the system accepts a request from the extension on this iOS, can only be seen on a device (if it did not, the fallback would be for the app to post it on seeing the finished state, which only works while the app is alive in the background; that fallback is not built). No network is used.
+
 **A full scan is only the default when everything agrees** (`ScanKindAdvice.decide`): the automatic end fired; the replay log is neither truncated nor failed; a
 count was typed and is at most 5,000; and typed - tol <= Pokémon read <= min(typed + tol, reach - 1), tol = max(3, 1% of typed rounded up), reach = the recorded
 command's `covers` + 1 (the period the extension recorded picks the tap or swipe sizing). Each refusal has its own plain sentence (no count / above 5,000 / log
@@ -771,6 +773,8 @@ The command is made for the phone's language (the device locale); Voice Control'
   the merge pairs them only if exactly one assignment is consistent, else it asks (`BoxMerge.plan`, M6).
 
 ## What this app sends
+
+A local notification (below, "Scan stopped") is posted by the app's own broadcast extension on the phone and sends nothing anywhere.
 
 Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > Scans) and then Send. There is no analytics,
 no background upload and no retry. One tap sends one file, `yyyy-mm/yyyymmddThhmmssZ-<random id>.json.gz`, to a private storage bucket

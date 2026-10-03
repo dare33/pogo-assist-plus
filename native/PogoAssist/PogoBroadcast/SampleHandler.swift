@@ -3,6 +3,7 @@ import CoreMedia
 import CoreVideo
 import os
 import PogoReader
+import UserNotifications
 
 /// The broadcast upload extension. It receives the screen as sample buffers, keeps at most five
 /// frames a second by presentation timestamp, and handles one frame at a time. A frame that arrives
@@ -189,11 +190,26 @@ class SampleHandler: RPBroadcastSampleHandler {
         state.endedAtListEnd = true
         lock.lock(); finished = true; lock.unlock()
         finishWork()
+        postStoppedNotification()
         // After leaving the queue: if ReplayKit answers with broadcastFinished synchronously, its `queue.sync` must not wait on this block.
         // The state and the log are already written.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0,
                                                    userInfo: [NSLocalizedDescriptionKey: "Scan finished."]))
+        }
+    }
+
+    /// A local notification with sound, so the person learns the scan ended without opening the app. A broadcast upload extension may add a notification request itself: it
+    /// shares the app's notification permission (the app asks for it; nothing extra in the entitlements), and with no permission the system simply shows nothing. Nothing is
+    /// sent anywhere. Whether it appears while Pokémon GO is in the foreground is only known on a device.
+    private func postStoppedNotification() {
+        let last = state.rows.last
+        let content = UNMutableNotificationContent()
+        content.title = ScanEndNotification.title
+        content.body = ScanEndNotification.body(read: state.rows.count, lastName: last?.name, lastCP: last?.cp)
+        content.sound = .default
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "pogo.scan.stopped", content: content, trigger: nil)) { [log] error in
+            if let error { log.error("notification could not be posted: \(error.localizedDescription, privacy: .public)") }
         }
     }
 

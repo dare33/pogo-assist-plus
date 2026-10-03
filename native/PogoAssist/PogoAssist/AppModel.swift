@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import PogoBox
 import PogoReader
 
@@ -181,7 +182,18 @@ final class AppModel: ObservableObject {
     @Published var pagedByHand: Bool { didSet { refreshReaderSettings() } }
 
     /// The person's own choice, stored. Until they choose, the paging is by hand while no command set exists on this phone, and by the command once it does.
-    func choosePaging(byHand: Bool) { UserDefaults.standard.set(byHand, forKey: Keys.hand); pagedByHand = byHand }
+    func choosePaging(byHand: Bool) {
+        UserDefaults.standard.set(byHand, forKey: Keys.hand); pagedByHand = byHand
+        if !byHand { askForNotificationsOnce() }
+    }
+
+    /// Asked once, when the person first chooses to page with the voice command or makes the commands (not at launch): the broadcast extension posts a local notification with
+    /// sound when it ends a scan by itself. A refusal changes nothing else: the scan still ends and the result is waiting in the app. Nothing is sent anywhere.
+    func askForNotificationsOnce() {
+        guard !UserDefaults.standard.bool(forKey: "askedForNotifications") else { return }
+        UserDefaults.standard.set(true, forKey: "askedForNotifications")
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
     func restorePaging() { pagedByHand = (UserDefaults.standard.object(forKey: Keys.hand) as? Bool) ?? ScanKindAdvice.defaultsToHand(commandSetMade: commandSetMade) }
     /// The command set was made on this phone (any account) for this screen kind.
     var commandSetMade: Bool { deviceSetCache.values.joined().contains { $0.kind == setKind && (setKind == .swipe || $0.screen == screenLabel) } }
@@ -281,6 +293,7 @@ final class AppModel: ObservableObject {
 
     /// Make the one file with the whole set of commands and hand it to the share sheet (Save to Files, AirDrop). Done once per phone.
     func getCommandSet() async {
+        askForNotificationsOnce()
         let kind = setKind
         let tap = kind == .tap ? VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) : nil
         let width = Double(screenSize.width), height = Double(screenSize.height), locale = Self.voiceLocale, label = screenLabel
