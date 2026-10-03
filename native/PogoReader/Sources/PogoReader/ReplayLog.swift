@@ -10,6 +10,11 @@ public enum ReplayLine: Equatable {
     case drop(Double)
     /// The extension ended the scan itself at `at` because the list ended; `last` is when the last new Pokémon appeared (`EndOfListDetector`).
     case end(at: Double, last: Double)
+    /// The scan is clearly not at its end, so the extension PAUSED instead of ending it: the quiet time was reached at `at` on the card that began at `last`, `read` Pokémon
+    /// are read so far, and `closed` says whether the appraisal looked closed (the last card read with no bars).
+    case pause(at: Double, last: Double, read: Int, closed: Bool?)
+    /// A new card was read after a pause: the scan carries on as one scan.
+    case resume(at: Double)
 }
 
 public struct ReplayReading: Codable, Equatable {
@@ -48,6 +53,7 @@ public struct ReplayReading: Codable, Equatable {
 
 private struct ReplayEvent: Codable { var k: String; var t: Double }
 private struct ReplayEnd: Codable { var k = "e"; var t: Double; var last: Double }
+private struct ReplayPause: Codable { var k = "p"; var t: Double; var last: Double; var read: Int; var closed: Bool? }
 
 public enum ReplayLog {
     /// One compact JSON object, no newline.
@@ -58,6 +64,8 @@ public enum ReplayLog {
         case .tick(let t): return (try? enc.encode(ReplayEvent(k: "t", t: t))) ?? Data()
         case .drop(let t): return (try? enc.encode(ReplayEvent(k: "d", t: t))) ?? Data()
         case .end(let at, let last): return (try? enc.encode(ReplayEnd(t: at, last: last))) ?? Data()
+        case .pause(let at, let last, let read, let closed): return (try? enc.encode(ReplayPause(t: at, last: last, read: read, closed: closed))) ?? Data()
+        case .resume(let at): return (try? enc.encode(ReplayEvent(k: "u", t: at))) ?? Data()
         }
     }
 
@@ -69,6 +77,8 @@ public enum ReplayLog {
         case "t": return .tick(head.t)
         case "d": return .drop(head.t)
         case "e": return (try? dec.decode(ReplayEnd.self, from: data)).map { .end(at: $0.t, last: $0.last) }
+        case "p": return (try? dec.decode(ReplayPause.self, from: data)).map { .pause(at: $0.t, last: $0.last, read: $0.read, closed: $0.closed) }
+        case "u": return .resume(at: head.t)
         default: return nil
         }
     }
@@ -93,7 +103,7 @@ public enum ReplayLog {
             switch $0 {
             case .reading(let r): return r.t <= limit
             case .tick(let t), .drop(let t): return t <= limit
-            case .end: return true
+            case .end, .pause, .resume: return true
             }
         }
     }
@@ -109,7 +119,7 @@ public enum ReplayLog {
             case .reading(let r): g.add(r.frameReading); res.readings += 1
             case .tick(let t): g.swipe(at: t); res.ticks += 1
             case .drop: res.drops += 1       // a dropped frame carries no reading; it is in the log for the record
-            case .end: break
+            case .end, .pause, .resume: break
             }
         }
         g.finish()

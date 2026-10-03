@@ -208,6 +208,12 @@ public struct EndOfListDetector {
         return x.suffix(3) == y.suffix(3)
     }
 
+    /// The card the clock is counting: its name and HP as last read.
+    public var currentCard: (name: String?, hp: String?) { (curName, curHP) }
+
+    /// After a pause: the latched end is cleared and the quiet clock starts again on the same card, with the arming evidence kept, so the detector can end (or pause) again later.
+    public mutating func rearm() { ended = nil; quiet = 0; thirds = [0, 0, 0] }
+
     private var lastFrameWasCard = false
 }
 

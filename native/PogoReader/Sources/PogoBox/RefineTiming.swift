@@ -10,9 +10,12 @@ public struct PagingHint: Equatable {
     public var expectedPeriod: Double?
     /// Extra seconds a chain of batches adds at each join (about 0.8). Nil means that default; 0 means there are no joins.
     public var joinExtraSeconds: Double?
+    /// Stretches of the scan where the extension PAUSED (from when the stalled card began to when a new card was read): a known gap, not paging. A row that touches one is one
+    /// Pokémon whatever its stay, and its stay is not part of the beat the timing rule measures.
+    public var pauses: [ClosedRange<Double>]
 
-    public init(pagedByCommand: Bool = true, expectedPeriod: Double? = nil, joinExtraSeconds: Double? = nil) {
-        self.pagedByCommand = pagedByCommand; self.expectedPeriod = expectedPeriod; self.joinExtraSeconds = joinExtraSeconds
+    public init(pagedByCommand: Bool = true, expectedPeriod: Double? = nil, joinExtraSeconds: Double? = nil, pauses: [ClosedRange<Double>] = []) {
+        self.pagedByCommand = pagedByCommand; self.expectedPeriod = expectedPeriod; self.joinExtraSeconds = joinExtraSeconds; self.pauses = pauses
     }
 }
 
@@ -72,10 +75,13 @@ extension Refine {
 
         var out = [ScanRow](), changes = [Change](), notices = [String]()
         var placed = [(row: ScanRow, change: String?)]()
+        // Rows that touch a pause are one Pokémon held for a gap, not a beat: they are never split and their stays are left out of the beat.
+        let inPause: [Bool] = spans.map { s in (paging?.pauses ?? []).contains { $0.lowerBound <= s.last && $0.upperBound >= s.first } }
+        func beat(_ range: Range<Int>) -> [Double] { range.filter { !inPause[$0] }.compactMap { stays[$0] } }
         for (i, row) in rows.enumerated() {
-            guard let stay = stays[i], i >= 1, i <= rows.count - 2, let startB = boundaries[i - 1] else { placed.append((row, nil)); continue }
-            let left = stays[max(1, i - 6)..<i].compactMap { $0 }
-            let right = i + 1 <= rows.count - 2 ? stays[(i + 1)...min(rows.count - 2, i + 6)].compactMap { $0 } : []
+            guard !inPause[i], let stay = stays[i], i >= 1, i <= rows.count - 2, let startB = boundaries[i - 1] else { placed.append((row, nil)); continue }
+            let left = beat(max(1, i - 6)..<i)
+            let right = i + 1 <= rows.count - 2 ? beat((i + 1)..<(min(rows.count - 2, i + 6) + 1)) : []
             guard left.count >= 3, right.count >= 3, let all = ScanPace.relativeMAD(left + right), all.mad <= ScanPace.regularityTolerance,
                   let lm = ScanPace.median(left), let rm = ScanPace.median(right),
                   abs(lm - all.median) <= timingSideTolerance * all.median, abs(rm - all.median) <= timingSideTolerance * all.median
