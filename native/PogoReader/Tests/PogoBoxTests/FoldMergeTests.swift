@@ -50,27 +50,30 @@ final class FoldMergeTests: XCTestCase {
     // M4
     func testM4ThePlausibleCandidatesAreAskedAboutNotAddedAndRemoved() {
         // powered up, IVs unread this time
-        let machamp = entry(row("machamp", cp: 2500, hp: 150, ivs: x), "m")
-        let p1 = plan([row("machamp", cp: 2600, hp: 155, ivs: nil)], [machamp])
+        let machamp = entry(real("machamp", level: 30, ivs: x), "m")
+        let p1 = plan([real("machamp", level: 31, ivs: x, read: false)], [machamp])
         XCTAssertEqual(p1.unsure.first?.candidates, ["m"]); XCTAssertTrue(p1.new.isEmpty && p1.gone.isEmpty)
         // the reverse: the saved one has no IVs, the scan has them and the CP differs
-        let noIVs = entry(row("machamp", cp: 2500, hp: 150, ivs: nil), "n")
-        let p2 = plan([row("machamp", cp: 2600, hp: 155, ivs: x)], [noIVs])
+        let noIVs = entry(real("machamp", level: 30, ivs: x, read: false), "n")
+        let p2 = plan([real("machamp", level: 31, ivs: x)], [noIVs])
         XCTAssertEqual(p2.unsure.first?.candidates, ["n"]); XCTAssertTrue(p2.new.isEmpty && p2.gone.isEmpty)
         // a LOWER CP with the same IVs
-        let p3 = plan([row("machamp", cp: 2400, hp: 150, ivs: x)], [machamp])
+        let p3 = plan([real("machamp", level: 29, ivs: x)], [machamp])
         XCTAssertEqual(p3.unsure.first?.candidates, ["m"]); XCTAssertTrue(p3.new.isEmpty && p3.gone.isEmpty)
     }
 
     // M5
     func testM5APowerUpNeverLowersHPOrLevel() {
-        let saved = entry(row("machamp", cp: 1532, hp: 120, ivs: x), "m")
-        let lowerHP = plan([row("machamp", cp: 1582, hp: 110, ivs: x)], [saved])
-        XCTAssertTrue(lowerHP.updated.isEmpty); XCTAssertEqual(lowerHP.unsure.first?.candidates, ["m"]); XCTAssertTrue(lowerHP.new.isEmpty)
-        let lowerLevel = plan([row("machamp", cp: 1582, hp: 125, ivs: x, level: 18)], [saved])
+        let saved = entry(real("machamp", level: 20, ivs: x), "m")
+        var lowerHPRow = real("machamp", level: 21, ivs: x); lowerHPRow.hp = lowerHPRow.hp! - 10
+        let lowerHP = plan([lowerHPRow], [saved])
+        // a CP and an HP that no level gives for these IVs are not the saved Pokémon powered up: it is a new row, not a question
+        XCTAssertTrue(lowerHP.updated.isEmpty); XCTAssertTrue(lowerHP.unsure.isEmpty); XCTAssertEqual(lowerHP.new, [0])
+        var lowerLevelRow = real("machamp", level: 21, ivs: x); lowerLevelRow.level = 18; lowerLevelRow.levelMax = 18
+        let lowerLevel = plan([lowerLevelRow], [saved])
         XCTAssertTrue(lowerLevel.updated.isEmpty); XCTAssertEqual(lowerLevel.unsure.count, 1)
         // a consistent power-up is still a power-up
-        XCTAssertEqual(plan([row("machamp", cp: 1582, hp: 125, ivs: x, level: 21)], [saved]).updated.first?.reason, .poweredUp)
+        XCTAssertEqual(plan([real("machamp", level: 21, ivs: x)], [saved]).updated.first?.reason, .poweredUp)
     }
 
     // M6
@@ -104,6 +107,13 @@ final class FoldMergeTests: XCTestCase {
             XCTAssertEqual(try BoxMerge.apply(p, to: order).map { $0.id }, ["fixed"])
         }
         XCTAssertTrue(plan([row(cp: 1000, ivs: x)], [plain, fixed], .partial).gone.isEmpty)
+    }
+
+    /// A row whose CP and HP are what the game gives for these IVs at this level.
+    private func real(_ id: String, level: Double, ivs: IVs, read: Bool = true) -> ScanRow {
+        let b = gm.byId[id]!.baseStats!
+        var r = row(id, cp: cpAt(b, ivs, level), hp: hpAt(b, ivs, level), ivs: read ? ivs : nil, level: level); r.levelMax = level
+        return r
     }
 
     // M12: a saved entry that was misread (no IVs, no level fits) meets a correctly read row of the same Pokémon
@@ -183,17 +193,23 @@ final class FoldMergeTests: XCTestCase {
     }
 
     func testAPartReadAndAPowerUpOfOneSavedEntryAreBothAsked() throws {
-        let s = entry(row(cp: 1982, hp: 100, ivs: x), "S")
-        let p = plan([row(cp: 182, hp: 100, ivs: nil), row(cp: 2000, hp: 101, ivs: nil)], [s])
+        let b = gm.byId["pikachu"]!.baseStats!
+        let ivsS = IVs(atk: 15, def: 14, hp: 15)
+        let s = entry(real("pikachu", level: 30, ivs: ivsS), "S")
+        let up = real("pikachu", level: 31, ivs: ivsS, read: false)
+        let part = Int(String(s.row.cp).dropFirst())!   // a run of the saved CP's digits
+        let p = plan([row(cp: part, hp: s.row.hp, ivs: nil), up], [s])
+        _ = b
         XCTAssertEqual(p.unsure.map { $0.scanned }, [0, 1]); XCTAssertEqual(p.unsure.map { $0.candidates }, [["S"], ["S"]]); XCTAssertTrue(p.new.isEmpty)
         let out = try BoxMerge.apply(p, resolutions: [0: .existing("S"), 1: .existing("S")], to: [s])
-        XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].row.cp, 2000, "the part read only marks it seen; the real read updates it")
+        XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].row.cp, up.cp, "the part read only marks it seen; the real read updates it")
     }
 
     func testItIsNewLeavesAMisreadCandidateWhenOtherCandidatesWerePresent() throws {
-        let plain = entry(row("heatmor", cp: 900, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2)), "P")
-        let bad = entry(misread(), "M")
-        let good = row("heatmor", cp: 764, hp: 92, ivs: IVs(atk: 7, def: 14, hp: 2), level: 30, dust: 5000)
+        let iv = IVs(atk: 7, def: 14, hp: 2)
+        let plain = entry(real("heatmor", level: 30, ivs: iv), "P")
+        let good = real("heatmor", level: 25, ivs: iv)
+        let bad = entry(misread(hp: good.hp), "M")
         let p = plan([good], [plain, bad])
         XCTAssertEqual(p.unsure.first?.kind, .ambiguous); XCTAssertEqual(p.unsure.first?.candidates.sorted(), ["M", "P"])
         let out = try BoxMerge.apply(p, resolutions: [0: .new], to: [plain, bad], makeID: { "n" })
@@ -260,13 +276,15 @@ final class FoldMergeTests: XCTestCase {
     }
 
     func testAnEvolutionWithUnreadIVsIsAskedAboutItsPrecursor() throws {
-        let machop = entry(row("machop", cp: 400, hp: 70, ivs: x), "m")
-        let p = plan([row("machoke", cp: 900, hp: 90, ivs: nil)], [machop])
+        let machop = entry(real("machop", level: 15, ivs: x), "m")
+        let machoke = real("machoke", level: 20, ivs: x, read: false)
+        let p = plan([machoke], [machop])
         XCTAssertEqual(p.unsure.first?.candidates, ["m"]); XCTAssertTrue(p.new.isEmpty); XCTAssertTrue(p.gone.isEmpty)
         let out = try BoxMerge.apply(p, resolutions: [0: .existing("m")], to: [machop])
         XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].row.speciesId, "machoke"); XCTAssertEqual(out[0].row.ivs, x, "unread IVs keep the saved ones")
-        XCTAssertEqual(plan([row("machoke", cp: 900, hp: 60, ivs: nil)], [machop]).new, [0], "an HP lower than the saved one is not a power-up")
-        XCTAssertEqual(plan([row("pikachu", cp: 900, hp: 90, ivs: nil)], [machop]).new, [0], "not an evolution of it")
+        var lowHP = machoke; lowHP.hp = machop.row.hp! - 5
+        XCTAssertEqual(plan([lowHP], [machop]).new, [0], "an HP lower than the saved one is not a power-up")
+        XCTAssertEqual(plan([real("pikachu", level: 20, ivs: x, read: false)], [machop]).new, [0], "not an evolution of it")
     }
 
     // Second fold round: R1, R1b

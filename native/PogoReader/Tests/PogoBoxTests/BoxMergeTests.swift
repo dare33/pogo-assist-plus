@@ -20,6 +20,13 @@ final class BoxMergeTests: XCTestCase {
         BoxMerge.plan(scanned: scanned, into: saved, kind: kind, scanDate: date(10), gameMaster: gm)
     }
 
+    /// A row whose CP and HP are what the game gives for these IVs at this level (the merge asks whether ONE IV triple explains two readings).
+    private func real(_ speciesId: String = "pidgey", level: Double, ivs: IVs = IVs(atk: 10, def: 11, hp: 12), read: Bool = true) -> ScanRow {
+        let b = gm.byId[speciesId]!.baseStats!
+        var r = row(speciesId, cp: cpAt(b, ivs, level), ivs: read ? ivs : nil, hp: hpAt(b, ivs, level)); r.level = level; r.levelMax = level
+        return r
+    }
+
     // MARK: rule 1 unchanged
 
     func testUnchangedMatchesOnSpeciesIVsAndCP() {
@@ -55,8 +62,8 @@ final class BoxMergeTests: XCTestCase {
     }
 
     func testLowerCPIsNotAPowerUpAndIsAskedAbout() {
-        let v = entry(row(cp: 300), id: "a")
-        let p = plan([row(cp: 250)], [v])
+        let v = entry(real(level: 20), id: "a")
+        let p = plan([real(level: 15)], [v])
         XCTAssertTrue(p.updated.isEmpty)
         XCTAssertEqual(p.unsure.first?.candidates, ["a"], "same species and IVs, lower CP: asked about, never added and removed silently")
         XCTAssertTrue(p.new.isEmpty && p.gone.isEmpty)
