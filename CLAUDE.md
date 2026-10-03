@@ -15,10 +15,10 @@ is up to. Read both before working.
 - Nothing in this repo may contact the game, intercept its traffic, or play it. Inputs are CSV
   exports and the user's own screen recordings (or the live screen, read on the device).
   One exception, decided by Greg on 1 Oct 2026: paging through the player's own storage so it can
-  be read, by an iOS Voice Control gesture that only swipes from one Pokémon to the next
-  (`experiments/voice-control/`). It reads and changes nothing in the game. Anything that taps,
-  catches, battles, trades, transfers or otherwise acts in the game stays forbidden. Players are
-  told that Niantic's terms discourage automation before they use it.
+  be read, by an iOS Voice Control gesture that only taps or swipes to move from one Pokémon to
+  the next (`experiments/voice-control/`). It reads and changes nothing in the game. Anything
+  beyond that paging gesture that taps, catches, battles, trades, transfers or otherwise acts in
+  the game stays forbidden. Players are told that Niantic's terms discourage automation before they use it.
 - Never commit API keys. The optional Claude fallback takes a key at runtime only.
 - Fixtures in `fixtures/` are real exports from the owner's account; they contain no personal
   data beyond a Pokémon inventory. Do not add other people's exports without asking them.
