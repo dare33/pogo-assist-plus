@@ -579,7 +579,7 @@ The first real automatic end (run10, "Pogo scan 25", 11 Pokémon, `device-run10-
 first read; cut 5.5 s after it began it does not end; the trimmed log (end marker written) gives the same eleven rows as the full log.
 The extension then writes an end marker line to the replay log (`{"k":"e","t":...,"last":...}`, always with room even when the log is full), finishes the
 state and log as a user stop does and, after leaving its serial queue (a synchronous `broadcastFinished` must not meet `queue.sync`), ends the broadcast
-with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reached.")`. `ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings
+with `finishBroadcastWithError("Scan finished.")` (neutral: the same end fires when the list ends and when the command runs out mid-list, as it did on run12; iOS adds its own "has stopped due to:"). `ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings
 later than the last reset plus 3 s when a marker is present.
 
 **A full scan is only the default when everything agrees** (`ScanKindAdvice.decide`): the automatic end fired; the replay log is neither truncated nor failed; a
@@ -666,6 +666,18 @@ tail of one number is run through the JavaScript again without that read (`cp-ou
 from two or more readings that agree on HP and on the entry's settled bars. Not built: the row-level "single reading near the same
 species goes to `unmatched`" rule, because tap mode at 1.0 s gives one real reading per Pokemon (Moltres 1927, 1920 and 1918 are
 three real neighbours, the last backed by a single recovered read).
+
+Merge: when is a saved entry offered as "the same Pokémon, powered up"? A scanned row that matched nothing is offered a saved entry of its species (or the precursor of its species, with its IVs unread)
+as a possible power-up, evolution or earlier read only if ONE IV triple explains both readings (`BoxMerge.sharesAnIVTriple`, with `IVFit` using PogoReader's `cpAt`, `hpAt` and
+level table and each species' own base stats): the saved entry's CP and HP (HP ignored when unread) at some level L1, and the scanned row's at some level L2 >= L1 (for a lower CP,
+L2 <= L1), with any IVs read on either side fixed to their read values (a hand-corrected value counts as read; its `was` value does not rescue it). A reading the app already flagged
+`no-level-fits` is not judged; one that is merely impossible without the flag has no fit and is not a candidate. It only removes impossible candidates. The first long scan (run12:
+1,552 rows, 29 questions, 25 of them "ambiguous" against one low-CP saved entry of Zubat, Meowth, Combee or Psyduck; the owner answered "new" to 24): on a box rebuilt from the saved
+low-CP entries of those four species the same rows ask 30 questions before the rule and 6 after (Combee 367, Combee 296, Zubat 219, 218, 201, and Zubat 97 which is an artefact of the rebuilt
+box): the Meowths and Psyduck are gone, the Combee ones share 15/15/15 with the saved Combee and the Zubat ones have no saved HP to rule them out. Run9 merged into the run8 box is
+unchanged: 306 the same, 4 unsure. A question about a single saved candidate with the same read IVs and a lower CP now says "Same IVs as this saved one: is it that Pokémon powered up?".
+Run12, the first long scan on the phone: 31 min 12 s, 4,694 readings, read time p50 0.26 s and p99 0.32 s, 1,480 of the 1,552 rows backed by three readings, ended by itself when the
+1500 command ran out (1,694 in storage), the end marker 9.7 s after the last Pokémon.
 
 Fragment absorption and bars split, as they now stand (the owner's standard: no new wrong row without a flag, no real Pokémon lost without a trace, no duplicate
 without a flag; a flagged doubtful row is fine):

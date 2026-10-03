@@ -193,7 +193,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         // The state and the log are already written.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0,
-                                                   userInfo: [NSLocalizedDescriptionKey: "Scan finished: the end of your Pokémon was reached."]))
+                                                   userInfo: [NSLocalizedDescriptionKey: "Scan finished."]))
         }
     }
 

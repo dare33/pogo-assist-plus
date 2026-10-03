@@ -64,7 +64,9 @@ struct UnsureCard: View {
         case .partialRead: return "Only part of the CP was read, so this may be a Pokémon already in your box."
         case .misreadSaved: return "A Pokémon in your box was read badly earlier (no IVs). This may be the same Pokémon read properly. The line under each choice says what it does."
         case .extraTwin: return "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
-        case .ambiguous: return unsure.candidates.count == 1 ? "It could be this Pokémon already in your box." : "It could be more than one Pokémon already in your box."
+        case .ambiguous:
+            if unsure.candidates.count == 1, let e = saved[unsure.candidates[0]], let ivs = row.ivs, e.row.ivs == ivs, e.row.cp < row.cp { return "Same IVs as this saved one: is it that Pokémon powered up?" }
+            return unsure.candidates.count == 1 ? "It could be this Pokémon already in your box." : "It could be more than one Pokémon already in your box."
         }
     }
 
