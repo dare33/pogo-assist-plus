@@ -61,10 +61,12 @@ public struct ScanNotification: Equatable {
 
     /// The scan paused at a card that is not clearly the end: "Paused at <name> CP <cp>: <N> of <M> read. Reopen its appraisal to carry on, or say "Pogo scan <size>" if the taps have
     /// stopped. It finishes by itself in 3 minutes if no new Pokémon is read." (size: the smallest covering M - N). With no count: "…<N> read. If that was not your last Pokémon, reopen its appraisal…".
-    public static func paused(scan: Int, event: Int, read: Int, storageCount: Int?, lastName: String?, lastCP: Int?, sizes: [Int]) -> ScanNotification {
+    public static func paused(scan: Int, event: Int, read: Int, storageCount: Int?, eggCount: Int? = nil, lastName: String?, lastCP: Int?, sizes: [Int]) -> ScanNotification {
         let at = Self.last(lastName, lastCP).map { "Paused at \($0): " } ?? "Paused: "
         let body: String
-        if let m = storageCount, m > 0 {
+        if let shown = storageCount, shown > 0 {
+            // M: the Pokémon expected, the game's count less the eggs the person typed; with no egg count, the count as shown.
+            let m = StorageCountRules.expected(count: shown, eggs: eggCount) ?? shown
             let command = commandName(covering: max(1, m - read), sizes: sizes).map { "say \"\($0)\"" } ?? "say the command again"
             body = "\(at)\(read) of about \(m) read. Reopen its appraisal to carry on, or \(command) if the taps have stopped. It finishes by itself in \(pauseLimitText) if no new Pokémon is read."
         } else {

@@ -82,7 +82,9 @@ class SampleHandler: RPBroadcastSampleHandler {
             let period = ReaderSettings.autoEndPeriod
             ReaderSettings.finishRequestedScan = nil
             ScanNotifier.removePauseNotifications()   // a new scan: no earlier scan's pause notification (or its "Finish scan" button) stays
-            endController = ScanEndController(period: period, storageCount: ReaderSettings.storageCount)
+            // The scan kind, the count and the eggs are captured here, like the period: only a Full scan may pause, and an Add-and-update scan neither uses nor remembers the count.
+            let isFull = ReaderSettings.scanIsFull
+            endController = ScanEndController(period: period, storageCount: ReaderSettings.storageCount, eggCount: ReaderSettings.eggCount, pausesAllowed: isFull)
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
             let names = table.map(displayNames) ?? []
@@ -106,7 +108,9 @@ class SampleHandler: RPBroadcastSampleHandler {
             }
             state = BroadcastState()
             state.mode = mode.rawValue
-            state.storageCount = ReaderSettings.storageCount
+            state.pausesAllowed = isFull
+            state.storageCount = isFull ? ReaderSettings.storageCount : nil
+            state.eggCount = isFull ? ReaderSettings.eggCount : nil
             state.scanId = Int(state.started.timeIntervalSince1970)
             state.commandPeriod = period   // what this scan was started with: the app judges it by this, not by a setting changed since
             msTotal = 0
@@ -225,7 +229,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             state.paused = true; state.pauseCount += 1; state.pausedAt = Date(); state.eventSeq += 1
             state.pausedCard = [p.name, p.cp.map { "CP \($0)" }].compactMap { $0 }.joined(separator: " ")
             write(force: true)
-            ScanNotifier.post(ScanNotification.paused(scan: state.scanId, event: state.eventSeq, read: p.read, storageCount: state.storageCount, lastName: p.name, lastCP: p.cp, sizes: ReaderSettings.commandSizes)) { [log] error in
+            ScanNotifier.post(ScanNotification.paused(scan: state.scanId, event: state.eventSeq, read: p.read, storageCount: state.storageCount, eggCount: state.eggCount, lastName: p.name, lastCP: p.cp, sizes: ReaderSettings.commandSizes)) { [log] error in
                 if let error { log.error("notification could not be posted: \(error.localizedDescription, privacy: .public)") }
             }
         case .resume(let at):

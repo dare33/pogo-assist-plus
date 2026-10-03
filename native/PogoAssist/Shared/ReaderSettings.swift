@@ -18,6 +18,16 @@ enum ReaderSettings {
         get { (defaults?.object(forKey: "storageCount") as? Int).flatMap { $0 > 0 ? $0 : nil } }
         set { if let newValue { defaults?.set(newValue, forKey: "storageCount") } else { defaults?.removeObject(forKey: "storageCount") } }
     }
+    /// The eggs the person typed for a Full scan (nil: none, the flat allowance applies). Captured by the extension at broadcast start with the count.
+    static var eggCount: Int? {
+        get { (defaults?.object(forKey: "eggCount") as? Int).flatMap { StorageCountRules.validEggs($0) } }
+        set { if let newValue { defaults?.set(newValue, forKey: "eggCount") } else { defaults?.removeObject(forKey: "eggCount") } }
+    }
+    /// Whether the next scan is a Full scan (the only kind that may pause). Absent means not full: a scan then ends exactly as it did before the pause existed.
+    static var scanIsFull: Bool {
+        get { defaults?.bool(forKey: "scanIsFull") ?? false }
+        set { defaults?.set(newValue, forKey: "scanIsFull") }
+    }
     /// The command sizes ("Pogo scan N"), from the app's one table, for the pause notification's suggested command.
     static var commandSizes: [Int] {
         get { (defaults?.array(forKey: "commandSizes") as? [Int]) ?? [] }

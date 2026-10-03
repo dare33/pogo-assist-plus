@@ -93,9 +93,12 @@ final class AppModel: ObservableObject {
     /// The newest version came from a newer app: no restore is offered (it would roll the box back), only "update the app".
     @Published var boxNeedsNewerApp = false
 
-    @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind) } }
+    @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind); refreshReaderSettings() } }
     /// The storage count of a full scan, remembered per account (editable); it picks which command to say.
     @Published var storageCountText: String { didSet { if let a = account { UserDefaults.standard.set(storageCountText, forKey: Keys.count + "." + a) }; refreshReaderSettings() } }
+
+    /// The eggs shown in the game's storage, typed for a Full scan (0 to `StorageCountRules.maxEggSlots`), remembered per account; empty means the flat allowance.
+    @Published var eggText: String { didSet { if let a = account { UserDefaults.standard.set(eggText, forKey: Keys.eggs + "." + a) }; refreshReaderSettings() } }
 
     // The broadcast, as the extension last reported it.
     @Published var broadcast: BroadcastState?
@@ -106,7 +109,7 @@ final class AppModel: ObservableObject {
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
-    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
+    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", eggs = "eggCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
 
     // MARK: - "Make scans better"
 
@@ -221,7 +224,10 @@ final class AppModel: ObservableObject {
     /// Tell the broadcast extension whether the next scan is paged by a command (it then ends the scan itself at the end of the list) and at what period.
     func refreshReaderSettings() {
         ReaderSettings.autoEndPeriod = ScanKindAdvice.autoEndPeriod(wantsCommand: !pagedByHand, commandSetMade: commandSetMade, pace: pace)
-        ReaderSettings.storageCount = storageCount          // for every scan (progress, and when a command scan finishes or pauses)
+        // Only a Full scan uses the count and the eggs, and only a Full scan may pause; an Add-and-update scan ends at the end wait and remembers neither.
+        ReaderSettings.scanIsFull = scanKind == .full
+        ReaderSettings.storageCount = scanKind == .full ? storageCount : nil
+        ReaderSettings.eggCount = scanKind == .full ? eggCount : nil
         ReaderSettings.commandSizes = VoiceCommandFile.setSizes
     }
 
@@ -246,7 +252,7 @@ final class AppModel: ObservableObject {
         guard UserDefaults.standard.string(forKey: Self.handledKey) != key else { return }
         let n: ScanNotification
         if s.paused {
-            n = .paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes)
+            n = .paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, eggCount: s.eggCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes)
         } else if s.endedAtListEnd {
             let last = s.rows.last
             n = .stopped(scan: s.scanId, event: s.eventSeq, read: s.rows.count, lastName: last?.name, lastCP: last?.cp)
@@ -293,6 +299,12 @@ final class AppModel: ObservableObject {
     /// The typed storage count, 1 to 10,000, read without overflow; nil when empty or not usable (`storageCountProblem` says why).
     var storageCount: Int? { if case .valid(let n) = StorageCount.parse(storageCountText) { return n } else { return nil } }
     var storageCountProblem: String? { StorageCount.problem(for: storageCountText) }
+    /// The typed egg count, 0 to `maxEggSlots`; nil when empty or not usable (`eggProblem` says why).
+    var eggCount: Int? { Int(eggText.trimmingCharacters(in: .whitespaces)).flatMap { StorageCountRules.validEggs($0) } }
+    var eggProblem: String? {
+        let t = eggText.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty || eggCount != nil ? nil : "Type a whole number of eggs from 0 to \(StorageCountRules.maxEggSlots)."
+    }
 
     /// "440x956 iPhone": the screen this command would be made for.
     var screenLabel: String { VoiceCommandFile.screenLabel(width: Double(screenSize.width), height: Double(screenSize.height), isPad: UIDevice.current.userInterfaceIdiom == .pad) }
@@ -340,6 +352,7 @@ final class AppModel: ObservableObject {
         voiceRecords = [:]; setRecord = nil
         defer { refreshDeviceRecords() }
         guard let a = account else { return }
+        eggText = UserDefaults.standard.string(forKey: Keys.eggs + "." + a) ?? ""
         storageCountText = UserDefaults.standard.string(forKey: Keys.count + "." + a) ?? ""
         setRecord = UserDefaults.standard.data(forKey: Keys.set + a).flatMap { try? JSONDecoder().decode(SetRecord.self, from: $0) }
         for p in VoiceCommandFile.Pace.allCases {
@@ -392,6 +405,7 @@ final class AppModel: ObservableObject {
         }
         library = BoxLibrary(root: root)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
+        eggText = ""
         storageCountText = ""   // read per account by loadVoiceRecord once the account is known
         pagedByHand = true   // restorePaging() below: by hand until the commands exist, unless the person chose
         account = UserDefaults.standard.string(forKey: Keys.account)
@@ -703,13 +717,14 @@ final class AppModel: ObservableObject {
         let ended = broadcast?.endedAtListEnd ?? false, byPerson = broadcast?.stoppedByPerson ?? false, logFull = broadcast?.replayLogTruncated ?? false, logFailed = broadcast?.replayLogFailed ?? false
         // The count the scan was started with (captured in its state), not the field as it reads now: it may have been edited since.
         let typed = broadcast.map { $0.storageCount } ?? storageCount
+        let eggs = broadcast.map { $0.eggCount } ?? eggCount
         Task {
             do {
                 let (outcome, plan, seconds, base, seq, kind, note, advice, stop) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?, ScanKindAdvice.Decision, String?) in
                     let outcome = try ScanPipeline.process(replay: url, engine: engine, paging: paging)
                     // A full scan lists everything unseen as "Not seen in this scan" (all kept unless marked), but it is only the default when the list can be known to have ended.
                     var kind = asked, note: String?
-                    let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, logFailed: logFailed, commandPeriod: period)
+                    let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, logFailed: logFailed, commandPeriod: period, eggCount: eggs)
                     if asked == .full && !d.fullIsSound { kind = .partial; note = d.reason }
                     let current = try lib.current(account: a)   // the box as it is when the plan is made
                     let entries = current?.entries ?? []
@@ -723,7 +738,7 @@ final class AppModel: ObservableObject {
                         let ran = ScanStop.ranOut(read: outcome.scan.rows.count, typedCount: typed, full: asked == .full, commandPeriod: period)
                         stop = ScanStop.summary(lastName: last?.display, lastCP: last?.cp, read: outcome.scan.rows.count, appraisalClosed: closed, ranOut: ran,
                                                 commandKnown: asked == .full && typed != nil, nearestSize: ScanStop.nearestSize(read: outcome.scan.rows.count, commandPeriod: period),
-                                                matchSentence: ScanKindAdvice.matchSentence(pokemonRead: outcome.scan.rows.count, decision: d),
+                                                matchSentence: ScanKindAdvice.matchSentence(pokemonRead: outcome.scan.rows.count, decision: d, eggCount: eggs),
                                                 paused: ScanStop.pauseNames(outcome.pauses, rows: outcome.scan.rows, finishedByPerson: byPerson), byPerson: byPerson)
                     }
                     return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note, d, stop)

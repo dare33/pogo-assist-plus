@@ -30,7 +30,9 @@ struct BroadcastState: Codable, Equatable {
     var pausedCard: String?          // "Name CP n" of the card it paused at
     var pausedAt: Date?
     var readCount = 0                // Pokémon read so far (the live grouper's rows), for the progress line
-    var storageCount: Int?           // the count the scan was started with (nil: none known)
+    var storageCount: Int?           // the count the scan was started with (nil: none known, or not a Full scan)
+    var eggCount: Int?               // the eggs typed for it (nil: none, the flat allowance applies)
+    var pausesAllowed = false        // the scan was started as a Full scan, the only kind that pauses
     /// Counts each pause and each end of a command scan; the notification's identifier carries it, so the extension's notification and the app's fallback are the same one.
     var eventSeq = 0
     /// This scan's id: its start time in whole seconds. Notification identifiers and the finish request carry it.
@@ -72,6 +74,8 @@ extension BroadcastState {
         pausedAt = try c.decodeIfPresent(Date.self, forKey: .pausedAt)
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
         storageCount = try c.decodeIfPresent(Int.self, forKey: .storageCount)
+        eggCount = try c.decodeIfPresent(Int.self, forKey: .eggCount)
+        pausesAllowed = try c.decodeIfPresent(Bool.self, forKey: .pausesAllowed) ?? false
         eventSeq = try c.decodeIfPresent(Int.self, forKey: .eventSeq) ?? 0
         scanId = try c.decodeIfPresent(Int.self, forKey: .scanId) ?? 0
         stoppedByPerson = try c.decodeIfPresent(Bool.self, forKey: .stoppedByPerson) ?? false

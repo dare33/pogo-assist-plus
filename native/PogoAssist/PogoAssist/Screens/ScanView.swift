@@ -5,6 +5,7 @@ import PogoReader
 struct ScanView: View {
     @EnvironmentObject var model: AppModel
     @FocusState private var countFocused: Bool
+    @FocusState private var eggsFocused: Bool
 
     var body: some View {
         List {
@@ -29,16 +30,28 @@ struct ScanView: View {
                 Label("Pokémon GO is open on the first Pokémon with the appraisal showing", systemImage: "4.circle")
                 Label("Say the command named below, or page through the Pokémon by hand", systemImage: "5.circle")
             }
-            do {
+            if model.scanKind == .full {
                 Section {
                     HStack {
                         Text("Pokémon in storage, as shown in the game")
                         Spacer()
                         TextField("Count", text: $model.storageCountText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120).focused($countFocused)
                     }
+                    HStack {
+                        Text("Eggs you have")
+                        Spacer()
+                        TextField("Eggs", text: $model.eggText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120).focused($eggsFocused)
+                    }
                 } footer: {
-                    if let problem = model.storageCountProblem { Text(problem).foregroundStyle(.red) }
-                    else { Text("Type the number the game shows on its storage screen (it includes eggs; the scan allows for that). Remembered for this account, for every scan. A full scan uses it to pick the command and is saved with it; without it a full scan is Add and update. For Add and update it only tells the scan when it has read everything: it finishes at once at your count, and otherwise pauses (and tells you) when it stops seeing new Pokémon.") }
+                    if let problem = model.storageCountProblem ?? model.eggProblem { Text(problem).foregroundStyle(.red) }
+                    else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Type the number the game shows on its storage screen (it includes eggs). Remembered for this account. A full scan uses it to pick the command and is saved with it; without it a full scan is Add and update. It also tells the scan when it has read everything: it finishes at once when the Pokémon read reach your count less your eggs, and otherwise pauses (and tells you) when it stops seeing new Pokémon. An Add and update scan has no count and no pause: it ends by itself when it stops seeing new Pokémon.")
+                            Text(model.eggCount == nil
+                                 ? "No egg count typed: the scan allows for up to \(StorageCountRules.maxEggSlots) eggs. Type your eggs (0 to \(StorageCountRules.maxEggSlots)) for a tighter check."
+                                 : "Expected Pokémon: the game's count less \(model.eggCount ?? 0) eggs.")
+                        }
+                    }
                 }
             }
             commandSection
@@ -61,7 +74,7 @@ struct ScanView: View {
         .onAppear { if !model.pagedByHand, model.commandSetMade, model.shareURLs.isEmpty { model.askForNotificationsOnce() } }
         .navigationTitle("Scan Pokémon")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { countFocused = false } } }
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { countFocused = false; eggsFocused = false } } }
     }
 
     // MARK: - the Voice Control command
@@ -146,9 +159,9 @@ struct ScanView: View {
         let s = model.broadcast
         VStack(alignment: .leading, spacing: 6) {
             HStack { ProgressView(); Text("Scan in progress").font(.headline) }
-            Text("\(s?.framesRead ?? 0) frames read, \(s?.rows.count ?? 0) Pokémon so far" + (s?.storageCount.map { " of about \($0.formatted())" } ?? "")).monospacedDigit()
+            Text("\(s?.framesRead ?? 0) frames read, \(s?.rows.count ?? 0) Pokémon so far" + (s?.storageCount.map { " of about \((StorageCountRules.expected(count: $0, eggs: s?.eggCount) ?? $0).formatted())" } ?? "")).monospacedDigit()
             if let s, s.paused {
-                Label(ScanNotification.paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes).body, systemImage: "pause.circle.fill").font(.callout.weight(.semibold)).foregroundStyle(.orange)
+                Label(ScanNotification.paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, eggCount: s.eggCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes).body, systemImage: "pause.circle.fill").font(.callout.weight(.semibold)).foregroundStyle(.orange)
                 Button("Finish now", role: .destructive) { model.finishPausedScanNow() }
             }
             Text(s?.commandPeriod != nil ? "The scan usually ends by itself when the list ends or the command runs out; if it does not, stop the broadcast from the red bar. Come back here when the broadcast stops." : "Stop the broadcast from the red bar when the last Pokémon has been read, then come back here.").font(.footnote).foregroundStyle(.secondary)

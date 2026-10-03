@@ -212,4 +212,35 @@ final class ScanEndControllerTests: XCTestCase {
         XCTAssertEqual(c2.feed(other, time: at2 + 1, read: p2.read), .resume(at: at2 + 1))
         XCTAssertNil(c2.paused)
     }
+
+    /// M5: only a Full scan pauses. The same stalled log finishes at once as an Add-and-update scan (no pause, no count), and still pauses as a Full scan short of its count.
+    func testAPartScanFarBelowAnyCountFinishesAndAFullScanShortOfItsCountPauses() throws {
+        let rs = readings(ReplayLog.lines(in: try Fixture.url("device-run10-tap-25-autoend.replay.jsonl")))
+        let part = drive(rs, count: nil, controller: ScanEndController(period: 1.2, storageCount: 1000, eggCount: 5, pausesAllowed: false))
+        guard case .finish? = part.events.last?.1 else { return XCTFail("\(part.events)") }
+        XCTAssertFalse(part.events.contains { if case .pause = $0.1 { return true } else { return false } }, "a part scan never pauses")
+        XCTAssertNil(ScanEndController(period: 1.2, storageCount: 1000, eggCount: 5, pausesAllowed: false)!.storageCount, "and does not keep the count")
+        let full = drive(rs, count: nil, controller: ScanEndController(period: 1.2, storageCount: 1000, eggCount: 5, pausesAllowed: true))
+        guard case .pause? = full.events.first?.1 else { return XCTFail("\(full.events)") }
+    }
+
+    /// M4: expected Pokémon = the game's count less the eggs typed; no egg count falls back to the flat 12. run15: 1,698 shown, 8 eggs, 1,685 read.
+    func testTheEggCountReplacesTheFlatAllowance() {
+        XCTAssertEqual(StorageCountRules.lowestRead(1698, eggs: 8), 1698 - 8 - 17)
+        XCTAssertEqual(StorageCountRules.lowestRead(1698), 1698 - 12 - 17, "no egg count: the flat allowance")
+        XCTAssertEqual(StorageCountRules.lowestRead(1698, eggs: 99), 1698 - 12 - 17, "out of range counts as none")
+        XCTAssertEqual(StorageCountRules.expected(count: 1698, eggs: 8), 1690); XCTAssertNil(StorageCountRules.expected(count: 1698, eggs: nil))
+        XCTAssertEqual(ScanEndDecision.decide(read: 1685, storageCount: 1698, eggs: 8), .finish, "run15 with 8 eggs: 5 below the 1,690 expected, tolerance 17")
+        XCTAssertEqual(ScanEndDecision.decide(read: 1672, storageCount: 1698, eggs: 8), .pause); XCTAssertEqual(ScanEndDecision.decide(read: 1673, storageCount: 1698, eggs: 8), .finish)
+        XCTAssertEqual(ScanEndDecision.decide(read: 1676, storageCount: 1698, eggs: 0), .pause, "0 eggs is tighter than the flat 12")
+        XCTAssertEqual(ScanEndDecision.decide(read: 1676, storageCount: 1698), .finish)
+        let d = ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 1685, typedCount: 1698, logTruncated: false, logFailed: false, commandPeriod: 1.2, eggCount: 8)
+        XCTAssertTrue(d.fullIsSound, d.reason ?? "")
+        XCTAssertTrue(ScanKindAdvice.matchSentence(pokemonRead: 1685, decision: d, eggCount: 8)!.contains("the 8 eggs you typed"))
+        let short = ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 1676, typedCount: 1698, logTruncated: false, logFailed: false, commandPeriod: 1.2, eggCount: 0)
+        XCTAssertFalse(short.fullIsSound); XCTAssertTrue(short.reason!.contains("you typed 0"))
+        // the pause notification counts what is expected
+        XCTAssertTrue(ScanNotification.paused(scan: 1, event: 1, read: 170, storageCount: 1698, eggCount: 8, lastName: "A", lastCP: 1, sizes: [2000]).body.contains("170 of about 1690 read"))
+        XCTAssertTrue(ScanNotification.paused(scan: 1, event: 1, read: 170, storageCount: 1698, lastName: "A", lastCP: 1, sizes: [2000]).body.contains("170 of about 1698 read"))
+    }
 }

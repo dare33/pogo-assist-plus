@@ -2,15 +2,21 @@ import Foundation
 
 /// What to do when a command scan's quiet time is reached: FINISH (the list has ended) or PAUSE (the scan is clearly not at its end, a tap or the command stalled), and the state
 /// machine around it that the broadcast extension drives. Pure, so it is tested on the device logs.
-/// How a typed storage count is compared with the Pokémon read. The count is what the game's storage screen shows, which includes eggs; eggs are not paged, so the read
-/// total may be up to `maxEggSlots` below it IN ADDITION to the 1% (at least 3) tolerance, and at most the tolerance above it. The one place these numbers live.
+/// How a typed storage count is compared with the Pokémon read. The count is what the game's storage screen shows, which includes eggs; eggs are not paged. The Pokémon
+/// expected are the count less the eggs the person typed (0 to `maxEggSlots`); with no egg count typed the flat allowance of `maxEggSlots` is used. The read total may be
+/// that far below the count IN ADDITION to the 1% (at least 3) tolerance, and at most the tolerance above it. The one place these numbers live.
 public enum StorageCountRules {
-    /// The game's maximum number of egg slots (the owner: 1,698 shown, about 1,688 pageable; 8 eggs and 2 unexplained).
+    /// The game's maximum number of egg slots (the owner: 1,698 shown, 8 eggs, 1,685 read on run15: 5 unexplained). The flat allowance when no egg count was typed.
     public static let maxEggSlots = 12
+    /// The egg count made usable: 0 to `maxEggSlots`; nil when none was typed or it is out of range.
+    public static func validEggs(_ eggs: Int?) -> Int? { eggs.flatMap { (0...maxEggSlots).contains($0) ? $0 : nil } }
+    /// The Pokémon the game's count holds, less the eggs typed; nil when no usable egg count was typed.
+    public static func expected(count: Int, eggs: Int?) -> Int? { validEggs(eggs).map { max(0, count - $0) } }
     /// 1% of the count, at least 3.
     public static func tolerance(_ count: Int) -> Int { max(3, Int((Double(count) * 0.01).rounded(.up))) }
     /// The fewest Pokémon read that still count as having reached the count.
-    public static func lowestRead(_ count: Int) -> Int { count - maxEggSlots - tolerance(count) }
+    /// With the person's egg count: count - eggs - tolerance; without one: count - 12 - tolerance.
+    public static func lowestRead(_ count: Int, eggs: Int? = nil) -> Int { count - (validEggs(eggs) ?? maxEggSlots) - tolerance(count) }
     /// The most read that is still the count (a little above it: a Pokémon counted twice).
     public static func highestRead(_ count: Int) -> Int { count + tolerance(count) }
 }
@@ -25,10 +31,10 @@ public enum ScanEndDecision {
     public static func tolerance(_ count: Int) -> Int { StorageCountRules.tolerance(count) }
 
     /// FINISH at once when a storage count is known and the Pokémon read so far are within the eggs allowance and tolerance of it (or above): read >= count - 12 - tolerance;
-    /// otherwise PAUSE, and with no count known: PAUSE.
-    public static func decide(read: Int, storageCount: Int?) -> Verdict {
+    /// otherwise PAUSE, and with no count known: PAUSE (a Full scan only: the controller never asks for any other kind).
+    public static func decide(read: Int, storageCount: Int?, eggs: Int? = nil) -> Verdict {
         guard let count = storageCount, count > 0 else { return .pause }
-        return read >= StorageCountRules.lowestRead(count) ? .finish : .pause
+        return read >= StorageCountRules.lowestRead(count, eggs: eggs) ? .finish : .pause
     }
 }
 
@@ -53,6 +59,10 @@ public struct ScanEndController {
 
     public private(set) var detector: EndOfListDetector
     public var storageCount: Int?
+    /// The eggs the person typed for a Full scan (nil: none, the flat allowance applies).
+    public var eggCount: Int?
+    /// Only a Full scan may pause. An Add-and-update scan finishes at the end wait exactly as it always did: no pause, no count.
+    public let pausesAllowed: Bool
     /// The pause in progress, if any.
     public private(set) var paused: (pause: Pause, since: Double, resets: Int)?
     private var lastRead = 0, lastFeedTime = 0.0
@@ -60,9 +70,9 @@ public struct ScanEndController {
     public private(set) var pauseCount = 0
     private var recentBars = [Bool]()   // for each of the last card readings: were the bars read
 
-    public init?(period: Double?, storageCount: Int?) {
+    public init?(period: Double?, storageCount: Int?, eggCount: Int? = nil, pausesAllowed: Bool = true) {
         guard let d = EndOfListDetector.make(pagedByCommand: period != nil, period: period) else { return nil }
-        detector = d; self.storageCount = storageCount
+        detector = d; self.storageCount = pausesAllowed ? storageCount : nil; self.eggCount = pausesAllowed ? eggCount : nil; self.pausesAllowed = pausesAllowed
     }
 
     /// Whether the appraisal looked closed: of the last 8 card readings, at least 6 had no bars (closed) or at least 6 had them (open); nil otherwise.
@@ -107,7 +117,7 @@ public struct ScanEndController {
             return timeoutEvent(now: time)
         }
         guard let e = detector.ended else { return .none }
-        switch ScanEndDecision.decide(read: read, storageCount: storageCount) {
+        switch pausesAllowed ? ScanEndDecision.decide(read: read, storageCount: storageCount, eggs: eggCount) : .finish {
         case .finish: return .finish(at: e.at, last: e.last)
         case .pause:
             let pause = Pause(at: e.at, last: e.last, read: read, closed: appraisalClosed(), name: lastName, cp: lastCP)
