@@ -101,8 +101,8 @@ final class PauseProcessingTests: XCTestCase {
         let out = try ScanPipeline.process(replay: write(join(real.map { try externalLines($0) }, removeGaps: true)), engine: sharedEngine, paging: hint)
         let names = ScanStop.pauseNames(out.pauses, rows: out.scan.rows)
         XCTAssertEqual(names, ["Stunfisk (CP 902)", "Abra (CP 799)", "Horsea (CP 134)"])
-        let line = ScanStop.summary(lastName: "Jigglypuff", lastCP: 10, read: out.scan.rows.count, appraisalClosed: false, ranOut: false, paused: names)
+        let line = ScanStop.summary(lastName: "Jigglypuff", lastCP: 10, read: out.scan.rows.count, appraisalClosed: false, ranOut: false, commandKnown: true, paused: names)
         XCTAssertTrue(line.contains("after 1,679 Pokémon") && line.contains("It paused 3 times, at Stunfisk (CP 902), Abra (CP 799) and Horsea (CP 134), and carried on."), line)
-        XCTAssertTrue(ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, paused: ["X (CP 2)"]).contains("It paused once, at X (CP 2), and carried on."))
+        XCTAssertTrue(ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, commandKnown: true, paused: ["X (CP 2)"]).contains("It paused once, at X (CP 2), and carried on."))
     }
 }

@@ -271,7 +271,12 @@ public enum BoxMerge {
                     // asked about whether or not the paging beat flagged it, never silently added.
                     if rule == .unchanged, ss.count > ordered.count, let last = paired.last {
                         let extra = ss.dropFirst(ordered.count).filter { rows[$0].hp == nil || saved[last.1].row.hp == nil || sameHP(rows[$0], saved[last.1]) }
-                        for si in extra { plan.unsure.append(Unsure(scanned: si, candidates: [saved[last.1].id], kind: .extraTwin)); sPool.removeAll { $0 == si } }
+                        // Another saved entry of the species with the SAME CP and HP and other IVs that is still unpaired (the owner's two Fidough CP 768 HP 89, 15/4/10 and
+                        // 15/11/12, both read as 15/4/10) may be the very Pokémon the surplus row is: it is offered too (candidates after the first), so it is never listed as
+                        // not seen on a wrong "add a second".
+                        let others = vPool.filter { $0 != last.1 && sameSpecies(rows[ss[0]], saved[$0]) && saved[$0].row.cp == saved[last.1].row.cp && saved[$0].row.hp == saved[last.1].row.hp && saved[$0].row.hp != nil }
+                        for si in extra { plan.unsure.append(Unsure(scanned: si, candidates: [saved[last.1].id] + others.map { saved[$0].id }, kind: .extraTwin)); sPool.removeAll { $0 == si } }
+                        if !extra.isEmpty { for vi in others { unsureSaved.insert(vi) }; vPool.removeAll { others.contains($0) } }
                     }
                 } else {
                     // Never guessed: each row is asked about its own candidates.
@@ -335,7 +340,9 @@ public enum BoxMerge {
             case nil: pending.formUnion(u.candidates)
             case .existing(let id)?: seen.insert(id)
             case .leaveOut?:
-                break   // the candidates are listed as not seen like any other (see `leftOutLine`)
+                // The candidates are listed as not seen like any other (see `leftOutLine`), except those of an extra twin: a same-CP-and-HP entry offered there may be the
+                // Pokémon that was read, and leaving the row out must not put it up for removal.
+                if u.kind == .extraTwin { seen.formUnion(u.candidates) }
             case .new?:
                 // Answering "new" to a row that a misread saved entry might have been leaves that entry alone, in a full scan too, whatever
                 // the kind: the other, plausible candidates still follow M9.
@@ -362,7 +369,12 @@ public enum BoxMerge {
     public static func unreadLine(_ plan: Plan) -> String? {
         let items = plan.unmatchedItems.filter { $0.reason != "absorbed" }
         guard !items.isEmpty else { return nil }
-        let names = items.map { ($0.name?.isEmpty == false) ? $0.name! : "unknown" }
+        // What was read of each, so the person can match it to an entry in the list: a name, or the start of one with an ellipsis, and the CP when read.
+        let names: [String] = items.map { u in
+            var label = (u.name?.isEmpty == false) ? u.name! : ((u.nameText?.isEmpty == false) ? u.nameText! + "…" : "unknown")
+            if let cp = u.cp { label += " CP \(cp)" }
+            return label
+        }
         var seen = Set<String>(), unique = [String]()
         for n in names where seen.insert(n.lowercased()).inserted { unique.append(n) }
         let n = items.count
@@ -598,7 +610,7 @@ public enum BoxMerge {
     /// What answering "It is this one" for this candidate does. The ONE decision: `apply` does exactly this and the review card says exactly
     /// this, so the text cannot disagree with the result.
     public enum Effect: Equatable {
-        /// Only marks the entry seen; nothing is changed (an untrusted row, an extra twin, an entry another row already paired).
+        /// Only marks the entry seen; nothing is changed (an untrusted row, an extra twin's own entry, an entry another row already paired).
         case seenOnly
         /// A Mega row for its base entry: seen, and marked Mega when scanned; the Mega values are not copied.
         case seenAsMega
@@ -621,7 +633,7 @@ public enum BoxMerge {
     /// An answer for this candidate changes nothing but "seen": an extra twin, a row whose CP is not trusted, or an entry another row already
     /// paired or updated in this plan (it is never written twice).
     private static func onlyMarksSeen(_ plan: Plan, _ u: Unsure, _ id: String) -> Bool {
-        u.kind == .extraTwin || untrusted(u, plan.scanned[u.scanned]) || plan.same.contains(where: { $0.savedId == id }) || plan.updated.contains(where: { $0.savedId == id })
+        (u.kind == .extraTwin && u.candidates.first == id) || untrusted(u, plan.scanned[u.scanned]) || plan.same.contains(where: { $0.savedId == id }) || plan.updated.contains(where: { $0.savedId == id })
     }
 
     /// Whether choosing saved entry `id` for this unsure row writes the row's values onto it. Rows that only mark seen may share an entry.

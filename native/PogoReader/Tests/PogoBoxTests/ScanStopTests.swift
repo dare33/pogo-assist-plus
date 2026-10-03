@@ -30,14 +30,14 @@ final class ScanStopTests: XCTestCase {
     }
 
     func testTheSummarySaysWhereItStoppedWhatToDoAndNeverWhy() {
-        let ranOut = ScanStop.summary(lastName: "Psyduck", lastCP: 68, read: 1552, appraisalClosed: false, ranOut: true)
+        let ranOut = ScanStop.summary(lastName: "Psyduck", lastCP: 68, read: 1552, appraisalClosed: false, ranOut: true, commandKnown: true)
         XCTAssertTrue(ranOut.contains("after 1,552 Pokémon") && ranOut.contains("Psyduck (CP 68)") && ranOut.contains("The appraisal was still open."))
         XCTAssertTrue(ranOut.contains("This is the size of the command the app named for your count: it ran out. To scan the rest, open Psyduck"))
-        let short = ScanStop.summary(lastName: "Abra", lastCP: 799, read: 51, appraisalClosed: false, ranOut: false)
+        let short = ScanStop.summary(lastName: "Abra", lastCP: 799, read: 51, appraisalClosed: false, ranOut: false, commandKnown: true)
         XCTAssertTrue(short.contains("It stopped after 51, short of the command's size. If that was not the end of your list, open Abra in Pokémon GO with the appraisal showing and scan again from there (Add and update)."))
-        XCTAssertTrue(ScanStop.summary(lastName: "Rayquaza", lastCP: 4262, read: 11, appraisalClosed: true, ranOut: false).contains("The appraisal had closed."))
+        XCTAssertTrue(ScanStop.summary(lastName: "Rayquaza", lastCP: 4262, read: 11, appraisalClosed: true, ranOut: false, commandKnown: true).contains("The appraisal had closed."))
         XCTAssertFalse(short.lowercased().contains("because"), "no claim about why")
-        XCTAssertFalse(ScanStop.summary(lastName: nil, lastCP: nil, read: 3, appraisalClosed: nil, ranOut: false).contains("appraisal had"))
+        XCTAssertFalse(ScanStop.summary(lastName: nil, lastCP: nil, read: 3, appraisalClosed: nil, ranOut: false, commandKnown: true).contains("appraisal had"))
         // a sound full scan adds the count comparison to the same line
         let d = ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 298, typedCount: 300, logTruncated: false, logFailed: false, commandPeriod: 1.2)
         XCTAssertEqual(ScanKindAdvice.matchSentence(pokemonRead: 298, decision: d), "298 Pokémon read against the 300 the game shows (that count includes any eggs, which are not scanned).")

@@ -234,24 +234,30 @@ class SampleHandler: RPBroadcastSampleHandler {
         state.endedAtListEnd = true; state.paused = false; state.eventSeq += 1
         lock.lock(); finished = true; lock.unlock()
         finishWork()
-        // After leaving the queue: if ReplayKit answers with broadcastFinished synchronously, its `queue.sync` must not wait on this block.
-        // The state and the log are already written. The broadcast is ended FIRST; the notification is posted from its own hop afterwards, so a slow or refused
-        // notification can never hold up the finish.
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0,
-                                                   userInfo: [NSLocalizedDescriptionKey: "Scan finished."]))
+        // The notification is posted FIRST and the broadcast is ended from its completion handler, so the extension cannot be torn down before the request is handed to the
+        // system; a 0.5 s timer ends it whether or not the completion fired, so a slow or refused notification cannot hang the finish. Whichever comes first ends it, once.
+        // Both run off the queue: if ReplayKit answers with broadcastFinished synchronously, its `queue.sync` must not wait on this block. The state and the log are written.
+        let last = state.rows.last
+        let note = ScanNotification.stopped(event: state.eventSeq, read: state.rows.count, lastName: last?.name, lastCP: last?.cp)
+        let once = OnceGate()
+        let finish: () -> Void = { [weak self] in
+            guard once.pass() else { return }
+            self?.finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0, userInfo: [NSLocalizedDescriptionKey: "Scan finished."]))
         }
-        DispatchQueue.global(qos: .utility).async { [weak self] in self?.postStoppedNotification() }
+        DispatchQueue.global(qos: .userInitiated).async { [log] in
+            ScanNotifier.post(note) { error in
+                if let error { log.error("notification could not be posted: \(error.localizedDescription, privacy: .public)") }
+                finish()
+            }
+        }
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.5, execute: finish)
     }
 
-    /// A local notification with sound, so the person learns the scan ended without opening the app (the same builder and posting path as the pause's). A broadcast upload
-    /// extension may add a notification request itself: it shares the app's notification permission, and with no permission the system shows nothing. If the system does not
-    /// show it, the app posts the same one (same identifier) when it sees the finished state. Nothing is sent anywhere.
-    private func postStoppedNotification() {
-        let last = state.rows.last
-        ScanNotifier.post(ScanNotification.stopped(event: state.eventSeq, read: state.rows.count, lastName: last?.name, lastCP: last?.cp)) { [log] error in
-            if let error { log.error("notification could not be posted: \(error.localizedDescription, privacy: .public)") }
-        }
+    /// Lets the first caller through and no other.
+    private final class OnceGate {
+        private let lock = NSLock()
+        private var passed = false
+        func pass() -> Bool { lock.lock(); defer { lock.unlock() }; if passed { return false }; passed = true; return true }
     }
 
     /// On `queue`. One accepted frame, in whichever mode.

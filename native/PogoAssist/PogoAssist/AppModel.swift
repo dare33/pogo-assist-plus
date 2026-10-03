@@ -77,7 +77,8 @@ final class AppModel: ObservableObject {
     @Published var previous: BoxSnapshot.Header?
     @Published var exportURL: URL?
     /// Files to hand to the share sheet (a saved scan's log and result).
-    @Published var shareURLs: [URL] = []
+    /// What the share sheet is offering; the notification permission is asked when it is dismissed (never over the sheet).
+    @Published var shareURLs: [URL] = [] { didSet { if !oldValue.isEmpty, shareURLs.isEmpty, !pagedByHand, commandSetMade { askForNotificationsOnce() } } }
     @Published var busy: String?
     /// The box could not be read: set instead of showing an empty box. Scans cannot be reviewed or saved until it is resolved.
     @Published var boxProblem: String?
@@ -339,7 +340,6 @@ final class AppModel: ObservableObject {
 
     /// Make the one file with the whole set of commands and hand it to the share sheet (Save to Files, AirDrop). Done once per phone.
     func getCommandSet() async {
-        askForNotificationsOnce()
         let kind = setKind
         let tap = kind == .tap ? VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) : nil
         let width = Double(screenSize.width), height = Double(screenSize.height), locale = Self.voiceLocale, label = screenLabel

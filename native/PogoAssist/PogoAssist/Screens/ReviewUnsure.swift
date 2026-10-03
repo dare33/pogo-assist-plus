@@ -20,7 +20,7 @@ struct UnsureCard: View {
                 Text(readLine).font(.callout.weight(.medium))
                 Text(explanation).font(.footnote).foregroundStyle(.secondary)
             }
-            ForEach(unsure.kind == .extraTwin ? [] : unsure.candidates, id: \.self) { id in
+            ForEach(unsure.kind == .extraTwin ? Array(unsure.candidates.dropFirst()) : unsure.candidates, id: \.self) { id in
                 if let e = saved[id] {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("In your box").font(.caption).foregroundStyle(.secondary)
@@ -68,7 +68,7 @@ struct UnsureCard: View {
         switch unsure.kind {
         case .partialRead: return "Only part of the CP was read, so this may be a Pokémon already in your box."
         case .misreadSaved: return "A Pokémon in your box was read badly earlier (no IVs). This may be the same Pokémon read properly. The line under each choice says what it does."
-        case .extraTwin: return "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
+        case .extraTwin: return unsure.candidates.count > 1 ? "The scan saw two identical Pokémon in a row and the box has one like it. A saved Pokémon with the same CP and HP but other IVs is shown below: it may be this one, read with the wrong IVs. Otherwise add a second?" : "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
         case .poweredUp: return "\(ivsPhrase) It may be that Pokémon powered up, or a different one with the same IVs."
         case .evolved: return "\(ivsPhrase) It may be that Pokémon evolved, or a different one with the same IVs."
         case .megaToBase: return "This is the normal form; the saved one was scanned in its Mega form. \(ivsPhrase) It may be that same Pokémon, or a different one with the same IVs."

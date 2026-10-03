@@ -50,7 +50,7 @@ public enum ScanStop {
 
     /// The one place at the top of the review for a scan the extension ended itself. `commandKnown` is true only when the app itself named the command (a Full scan with a
     /// typed count); for Add and update the command that was said is not known, so a matching size is reported as "about the size of" rather than as fact, with `nearestSize`.
-    public static func summary(lastName: String?, lastCP: Int?, read: Int, appraisalClosed: Bool?, ranOut: Bool, commandKnown: Bool = true, nearestSize: Int? = nil, matchSentence: String? = nil, paused: [String] = []) -> String {
+    public static func summary(lastName: String?, lastCP: Int?, read: Int, appraisalClosed: Bool?, ranOut: Bool, commandKnown: Bool, nearestSize: Int? = nil, matchSentence: String? = nil, paused: [String] = []) -> String {
         let last = lastName.map { name in "the last one read was \(name)" + (lastCP.map { " (CP \($0))" } ?? "") } ?? "no Pokémon were named"
         let opened = lastName ?? "the last Pokémon"
         var s = "The scan ended by itself after \(read.formatted()) Pokémon; \(last)."
