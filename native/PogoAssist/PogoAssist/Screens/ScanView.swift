@@ -53,7 +53,7 @@ struct ScanView: View {
                     }
                 }
             } footer: { Text(model.pagedByHand ? "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown. Stop it from the red bar when the last Pokémon has been read."
-                                              : "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown and say the command. The scan ends by itself when the list ends or the command runs out.") }
+                                              : "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown and say the command. The scan usually ends by itself when the list ends or the command runs out. If it does not, stop the broadcast from the red bar.") }
         }
         .navigationTitle("Scan Pokémon")
         .navigationBarTitleDisplayMode(.inline)
@@ -88,7 +88,7 @@ struct ScanView: View {
             if model.scanKind == .full { fullScanCommand } else { partScanCommands }
             Label("To stop a command, say \"Go to sleep\". It stops when the batch that is playing ends, \(model.setKind.stopDelayText). Then say \"Wake up\". Touching the screen, the side button or locking the phone does not stop it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps \(model.setKind == .tap ? "tapping" : "swiping") the same place whatever is on screen.",
                   systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
-            if !model.pagedByHand { Text("The scan ends by itself when the list ends or the command runs out (the broadcast stops and the result appears). The command keeps going until it runs out; that does nothing to your box.").font(.footnote).foregroundStyle(.secondary) }
+            if !model.pagedByHand { Text("The scan usually ends by itself when the list ends or the command runs out (the broadcast stops and the result appears); if the last Pokémon cannot be read it does not, and you stop the broadcast from the red bar. The command keeps going until it runs out; that does nothing to your box.").font(.footnote).foregroundStyle(.secondary) }
             stepTitle("Before you start the broadcast: how will you page?")
             Picker("Paging", selection: Binding(get: { model.pagedByHand }, set: { model.choosePaging(byHand: $0) })) {
                 Text("Page with the voice command").tag(false)
@@ -97,7 +97,7 @@ struct ScanView: View {
             .pickerStyle(.segmented)
             Text(model.pagedByHand
                  ? "You swipe from one Pokémon to the next yourself. Twins are not told apart by the paging beat, and the scan does not end by itself: stop the broadcast from the red bar when the last Pokémon has been read."
-                 : (model.commandSetMade ? "The scan ends by itself when the list ends or the command runs out."
+                 : (model.commandSetMade ? "The scan usually ends by itself when the list ends or the command runs out. If it does not, stop the broadcast from the red bar."
                                          : "The scan ends by itself only with the commands: get them first (above). Until then nothing ends the scan but you, from the red bar."))
                 .font(.footnote).foregroundStyle(.secondary)
         } header: { Text("Voice Control commands") } footer: { Text("Optional. Without them, swipe through the Pokémon by hand.") }
@@ -116,7 +116,7 @@ struct ScanView: View {
     }
 
     @ViewBuilder private var partScanCommands: some View {
-        Text("Say the size that covers the Pokémon you want to scan, counting from the one on screen. A command pages that many; if the list ends first, the scan ends by itself.").font(.footnote).foregroundStyle(.secondary)
+        Text("Say the size that covers the Pokémon you want to scan, counting from the one on screen. A command pages that many; if the list ends first, the scan usually ends by itself.").font(.footnote).foregroundStyle(.secondary)
         ForEach(VoiceCommandFile.setSizes, id: \.self) { size in
             HStack {
                 Text(verbatim: "Pogo scan \(size)").font(.callout.weight(.medium))
@@ -140,7 +140,7 @@ struct ScanView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack { ProgressView(); Text("Scan in progress").font(.headline) }
             Text("\(s?.framesRead ?? 0) frames read, \(s?.rows.count ?? 0) Pokémon so far").monospacedDigit()
-            Text(s?.commandPeriod != nil ? "The scan ends by itself when the list ends or the command runs out; come back here when the broadcast stops." : "Stop the broadcast from the red bar when the last Pokémon has been read, then come back here.").font(.footnote).foregroundStyle(.secondary)
+            Text(s?.commandPeriod != nil ? "The scan usually ends by itself when the list ends or the command runs out; if it does not, stop the broadcast from the red bar. Come back here when the broadcast stops." : "Stop the broadcast from the red bar when the last Pokémon has been read, then come back here.").font(.footnote).foregroundStyle(.secondary)
         }
     }
 }

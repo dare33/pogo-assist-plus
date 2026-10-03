@@ -424,28 +424,38 @@ public enum BoxMerge {
         return s.hp == nil || v.row.hp == nil || sameHP(s, v)
     }
 
-    /// ONE IV triple must explain both readings, or the saved entry cannot be this Pokémon powered up (or evolved, or read earlier): the saved entry's CP and
-    /// HP at some level L1 and the scanned row's CP and HP at some level L2 >= L1, with any IVs READ on either side fixed to their read values (a hand
-    /// correction counts as read; its `was` value does not rescue it). HP is ignored when unread, a CP that is not usable fits any level. Each side uses its
-    /// own species' base stats (an evolution has other ones). When the stats are unknown it cannot say no. Only ever removes impossible candidates.
+    /// A saved entry is not offered as "the same Pokémon" (powered up, evolved, read earlier) when NO IV triple explains both readings, judged conservatively: it only
+    /// vetoes when the mismatch is beyond what a small misread explains, and otherwise asks.
+    /// - No level direction: the triple may sit at ANY two levels (this also covers an evolution, whose CP can fall as the species changes, and a lower CP).
+    /// - HP within 1 on each side; CP exact on a side whose IVs are read and within 1 on a side whose IVs are unread; each READ IV may be one notch off (the triple is
+    ///   within 1 of the read values per stat). A hand correction counts as read; its `was` value does not rescue it.
+    /// - Each side is judged on its own: a reading the app already flagged `no-level-fits` (or with no usable CP) fits anything, but an unflagged reading on the other side
+    ///   must still fit by itself with these tolerances, else nothing fits and the entry is not a candidate.
+    /// Each side uses its own species' base stats. When the stats are unknown it cannot say no.
     static func sharesAnIVTriple(_ s: ScanRow, _ v: BoxEntry, _ gm: GameMaster, _ fits: IVFit) -> Bool {
         guard fits.enabled, let bs = gm.byId[s.speciesId]?.baseStats, let bv = gm.byId[v.row.speciesId]?.baseStats else { return true }
         if let a = s.ivs, let b = v.row.ivs, a != b { return true }   // different IVs read on both sides: other rules decide
-        let fixed = v.row.ivs ?? s.ivs
-        let saved = v.row.cp > 0 ? fits.ranges(bv, cp: v.row.cp, hp: v.row.hp) : nil
-        let scanned = s.cp > 0 ? fits.ranges(bs, cp: s.cp, hp: s.hp) : nil
-        // A reading the app already flagged as misread (`no-level-fits`) cannot veto anything. One that is merely impossible without the flag does: nothing fits, so
-        // the entry is not a candidate.
-        func flagged(_ r: ScanRow) -> Bool { r.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") } }
-        if flagged(s) || flagged(v.row) { return true }
-        let all = 1.0...51.0
-        for t in fixed.map({ [IVFit.index($0)] }) ?? Array(0..<4096) {
-            let l1 = saved == nil ? all : saved![t]
-            let l2 = scanned == nil ? all : scanned![t]
-            // a power-up or evolution (higher CP): the scanned level is not below the saved one; a lower CP is the same Pokémon read earlier: not above it
-            if let l1, let l2, s.cp >= v.row.cp ? l2.upperBound >= l1.lowerBound : l1.upperBound >= l2.lowerBound { return true }
+        func flagged(_ r: ScanRow) -> Bool { r.cp <= 0 || r.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") } }
+        // the triples a side allows: nil means "anything"
+        func allowed(_ r: ScanRow, _ base: BaseStats) -> Set<Int>? {
+            if flagged(r) { return nil }
+            let all = fits.triples(base, cp: r.cp, hp: r.hp, exactCP: r.ivs != nil)
+            guard let read = r.ivs else { return all }
+            return all.filter { IVFit.near($0, read) }
         }
-        return false
+        let fromSaved = allowed(v.row, bv), fromScanned = allowed(s, bs)
+        // the IVs one side read bound the other side too (a triple within a notch of what was read)
+        func bound(_ set: Set<Int>?, by read: IVs?) -> Set<Int>? {
+            guard let read else { return set }
+            return set.map { $0.filter { IVFit.near($0, read) } } ?? Set((0..<4096).filter { IVFit.near($0, read) })
+        }
+        let a = bound(fromSaved, by: s.ivs), b = bound(fromScanned, by: v.row.ivs)
+        switch (a, b) {
+        case (nil, nil): return true
+        case (let x?, nil): return !x.isEmpty
+        case (nil, let y?): return !y.isEmpty
+        case (let x?, let y?): return !x.isDisjoint(with: y)
+        }
     }
 
     private static func plausibleCandidate(_ s: ScanRow, _ v: BoxEntry, _ gm: GameMaster, _ fits: IVFit) -> Bool {
@@ -760,25 +770,28 @@ public enum BoxMerge {
 /// For a species' base stats, a CP and an HP: every IV triple (index atk * 256 + def * 16 + hp) that gives them at some level, with the lowest and highest such
 /// level. Memoised for the lifetime of one `BoxMerge.plan` call. The formulas and the multiplier table are PogoReader's (`cpAt`, `hpAt`, `levels`).
 final class IVFit {
-    private var memo = [String: [Int: ClosedRange<Double>]]()
+    private var memo = [String: Set<Int>]()
     /// False: the test is off (a comparison in the tests of what the merge asked before it existed).
     let enabled: Bool
     init(enabled: Bool = true) { self.enabled = enabled }
     static func index(_ i: IVs) -> Int { i.atk * 256 + i.def * 16 + i.hp }
+    /// Whether the triple with this index is within one notch of `read` on every stat.
+    static func near(_ index: Int, _ read: IVs) -> Bool { abs(index / 256 - read.atk) <= 1 && abs((index / 16) % 16 - read.def) <= 1 && abs(index % 16 - read.hp) <= 1 }
 
-    func ranges(_ base: BaseStats, cp: Int, hp: Int?) -> [Int: ClosedRange<Double>] {
-        let key = "\(base.atk)/\(base.def)/\(base.hp)|\(cp)|\(hp.map(String.init) ?? "-")"
+    /// Every IV triple (index atk * 256 + def * 16 + hp) that gives about this CP and HP at SOME level: HP within 1 (when read), CP exact or, when `exactCP` is false (the
+    /// IVs of that reading were not read), within 1. Memoised for the lifetime of one `BoxMerge.plan` call; the formulas and level table are PogoReader's.
+    func triples(_ base: BaseStats, cp: Int, hp: Int?, exactCP: Bool) -> Set<Int> {
+        let key = "\(base.atk)/\(base.def)/\(base.hp)|\(cp)|\(hp.map(String.init) ?? "-")|\(exactCP)"
         if let m = memo[key] { return m }
-        var out = [Int: ClosedRange<Double>]()
+        var out = Set<Int>()
+        let slack = exactCP ? 0 : 1
         for a in 0...15 { for d in 0...15 { for h in 0...15 {
             let ivs = IVs(atk: a, def: d, hp: h)
-            var lo: Double?, hi: Double?
             for level in levels {
                 let c = cpAt(base, ivs, level)
-                if c > cp { break }
-                if c == cp, hp == nil || hpAt(base, ivs, level) == hp { if lo == nil { lo = level }; hi = level }
+                if c > cp + slack { break }
+                if abs(c - cp) <= slack, hp == nil || abs(hpAt(base, ivs, level) - hp!) <= 1 { out.insert(a * 256 + d * 16 + h); break }
             }
-            if let lo, let hi { out[a * 256 + d * 16 + h] = lo...hi }
         } } }
         memo[key] = out
         return out

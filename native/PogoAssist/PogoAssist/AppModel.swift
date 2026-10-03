@@ -24,7 +24,6 @@ final class AppModel: ObservableObject {
         var paging: StoredPaging?
         /// Set when this is a saved scan being read again: the box is the one before that scan was saved.
         var reread: RereadPlan?
-        /// Saved entries to keep although the scan proposes them as gone (the person's per-entry choice).
         /// Saved Pokémon the scan did not see that the person marked for removal. Nothing is marked at first: they are all kept (the owner's rule: nothing is
         /// removed without the person choosing it).
         var markedForRemoval: Set<String> = []
@@ -633,7 +632,7 @@ final class AppModel: ObservableObject {
             do {
                 let (outcome, plan, seconds, base, seq, kind, note, advice, stop) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?, ScanKindAdvice.Decision, String?) in
                     let outcome = try ScanPipeline.process(replay: url, engine: engine, paging: paging)
-                    // A full scan proposes everything unseen as gone, so it is only the default when the list can be known to have ended.
+                    // A full scan lists everything unseen as "Not seen in this scan" (all kept unless marked), but it is only the default when the list can be known to have ended.
                     var kind = asked, note: String?
                     let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, logFailed: logFailed, commandPeriod: period)
                     if asked == .full && !d.fullIsSound { kind = .partial; note = d.reason }

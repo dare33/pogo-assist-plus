@@ -73,9 +73,11 @@ final class ScanReportTests: XCTestCase {
         let plan = BoxMerge.plan(scanned: [row("staraptor", cp: 182, hp: 142, flags: ["no-level-fits"])], into: saved, kind: .full, scanDate: Date(), gameMaster: gm)
         let lines = ScanReportBuilder.reviewLines(plan: plan, resolutions: [0: .leaveOut], keepGone: [], base: saved)
         XCTAssertTrue(lines.contains { $0.contains("left it out of the box") })
-        XCTAssertTrue(lines.contains { $0.hasPrefix("Removed because the scan did not see it: Pidgey") })
+        XCTAssertTrue(lines.contains { $0.hasPrefix("Removed because the scan did not see it, as the person marked: Pidgey") })
         XCTAssertTrue(lines.contains { $0.hasPrefix("Kept (not seen clearly): Staraptor") })
-        XCTAssertTrue(ScanReportBuilder.reviewLines(plan: plan, resolutions: [0: .new], keepGone: ["s", "g"], base: saved).contains { $0.hasPrefix("Kept in the box although") })
+        let untouched = ScanReportBuilder.reviewLines(plan: plan, resolutions: [0: .new], keepGone: ["s", "g"], base: saved)
+        XCTAssertTrue(untouched.contains("2 saved Pokémon the scan did not see were kept in the box."), "one summary line with the count, not a line per entry")
+        XCTAssertFalse(untouched.contains { $0.hasPrefix("Kept in the box although") || $0.hasPrefix("Removed because") })
     }
 
     func testConfigIsAbsentForMissingOrPlaceholderValues() {

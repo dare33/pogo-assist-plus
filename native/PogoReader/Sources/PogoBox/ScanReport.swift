@@ -90,7 +90,7 @@ public enum ScanReportBuilder {
         return Built(gzip: try Gzip.compress(json), jsonBytes: json.count, contentHash: hash)
     }
 
-    /// What the person did at review, one line each: answers to the unsure rows, and the entries kept from or removed as "gone".
+    /// What the person did at review, one line each: answers to the unsure rows, and the entries the scan did not see (kept: one summary line; removed: one line each).
     public static func reviewLines(plan: BoxMerge.Plan, resolutions: [Int: BoxMerge.Resolution], keepGone: Set<String>, base: [BoxEntry]) -> [String] {
         func brief(_ r: ScanRow) -> String { "\(r.title), CP \(r.cp)" }
         let byId = Dictionary(base.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -105,7 +105,11 @@ public enum ScanReportBuilder {
             }
         }
         let report = BoxMerge.goneReport(plan, resolutions: resolutions)
-        for id in report.gone { lines.append(keepGone.contains(id) ? "Kept in the box although the scan did not see it: \(byId[id].map { brief($0.row) } ?? id)." : "Removed because the scan did not see it: \(byId[id].map { brief($0.row) } ?? id).") }
+        // One line with the count for what was kept (an untouched Full scan keeps every entry it did not see: one line per entry would be 1,500 lines); a line each only for what the
+        // person marked for removal.
+        let kept = report.gone.filter { keepGone.contains($0) }
+        if !kept.isEmpty { lines.append("\(kept.count) saved Pokémon the scan did not see were kept in the box.") }
+        for id in report.gone where !keepGone.contains(id) { lines.append("Removed because the scan did not see it, as the person marked: \(byId[id].map { brief($0.row) } ?? id).") }
         for k in report.kept { lines.append("Kept (not seen clearly): \(byId[k.savedId].map { brief($0.row) } ?? k.savedId). \(k.reason)") }
         return lines
     }

@@ -563,10 +563,13 @@ the same card has been read, again and again, for the whole quiet time.
 - Arming keeps its evidence rule: at least 5 stable new Pokémon (name and HP, two readings in a row; the CP alone when neither was read, with CP misreads of one card
   treated as one) whose last 3 changes were each 0.5 to 2.5 expected periods after the one before: the command is seen paging at its pace. Before that it
   never ends, however long the wait before the command was said. Stability applies to arming only.
-Accepted and documented: a real run of 6 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer than 5 readable
+Accepted and documented: a real run of identical Pokémon (same name, HP, CP, bars) ends it once it lasts six periods (six cards, or five slower ones); an end stops the broadcast, so everything after the run goes unread; fewer than 5 readable
 Pokémon never arm it; persistent flapping of the last card's name or HP read delays or prevents the end; a list whose last Pokémon were not read looks like an
-earlier end; recurring values read ONCE per card (alternating identical twins at one reading per card, for 6 cards) look like one static card and end it; and so do six or more consecutive cards
-with the same name, HP and bars (or bars unread) whose CPs are digit-variants of each other.
+earlier end; recurring values read ONCE per card (alternating identical twins at one reading per card, for 6 cards) look like one static card and end it; and so do six periods of consecutive cards
+with the same name, HP and bars (or bars unread) whose CPs are digit-variants of each other. The digit relation between CPs (4262, 1262, 262, 4260) applies only to a reading that also carries the card's name or
+HP; a reading of the CP alone is compared exactly and, against the card's established CP, by its last three digits, so close neighbours of a CP-sorted list (218, 219; 10, 11) are different cards.
+Injected windows of 6, 8 and 12 periods where only the CP (or only the name and CP) is read give no avoidable early end on run4, run7, run9, run10, run12, run13 or the stall logs; an end after six periods in which one CP and nothing else was read
+(run12 at CP 561 and 473, run13's CP 10 and 13 tail) cannot be told from a card held that long and is not counted.
 Per log, seconds from the first reading (`testWhereEachLogArmsAndEnds` prints them; "in-scan quiet" is the most the clock reached before a later reset, once armed), with the
 6-period threshold: run1 (2.1 s) armed +20.0, no end, in-scan quiet 2.8 s (1.35 periods); run3 (2.1) +13.0, no end, 2.4 s (1.14); run4 fast swipe (1.6) +11.9, ended +99.2 (last
 reset +89.2, 10.0 s after), 1.6 s (1.00); run4 stretch (1.6) +7.6, no end, 1.6 s (1.00); run5 (tap 1.2) +8.8, no end, 2.1 s (1.72); run6 (tap 1.0) +7.2, no end, 0.8 s (0.80);
@@ -676,15 +679,18 @@ from two or more readings that agree on HP and on the entry's settled bars. Not 
 species goes to `unmatched`" rule, because tap mode at 1.0 s gives one real reading per Pokemon (Moltres 1927, 1920 and 1918 are
 three real neighbours, the last backed by a single recovered read).
 
-Merge: when is a saved entry offered as "the same Pokémon, powered up"? A scanned row that matched nothing is offered a saved entry of its species (or the precursor of its species, with its IVs unread)
-as a possible power-up, evolution or earlier read only if ONE IV triple explains both readings (`BoxMerge.sharesAnIVTriple`, with `IVFit` using PogoReader's `cpAt`, `hpAt` and
-level table and each species' own base stats): the saved entry's CP and HP (HP ignored when unread) at some level L1, and the scanned row's at some level L2 >= L1 (for a lower CP,
-L2 <= L1), with any IVs read on either side fixed to their read values (a hand-corrected value counts as read; its `was` value does not rescue it). A reading the app already flagged
-`no-level-fits` is not judged; one that is merely impossible without the flag has no fit and is not a candidate. It only removes impossible candidates. The first long scan (run12:
-1,552 rows, 29 questions, 25 of them "ambiguous" against one low-CP saved entry of Zubat, Meowth, Combee or Psyduck; the owner answered "new" to 24): on a box rebuilt from the saved
-low-CP entries of those four species the same rows ask 30 questions before the rule and 6 after (Combee 367, Combee 296, Zubat 219, 218, 201, and Zubat 97 which is an artefact of the rebuilt
-box): the Meowths and Psyduck are gone, the Combee ones share 15/15/15 with the saved Combee and the Zubat ones have no saved HP to rule them out. Run9 merged into the run8 box is
-unchanged: 306 the same, 4 unsure. A question about a single saved candidate with the same read IVs and a lower CP now says "Same IVs as this saved one: is it that Pokémon powered up?".
+Merge: when is a saved entry offered as "the same Pokémon, powered up"? A scanned row that matched nothing is offered a saved entry of its species (or the precursor of its species, with its
+IVs unread) as a possible power-up, evolution or earlier read unless NO IV triple could explain both readings (`BoxMerge.sharesAnIVTriple`, `IVFit`, PogoReader's `cpAt`, `hpAt` and level table,
+each species' own base stats). The test is conservative, so it only vetoes when the mismatch is beyond what a small misread explains: any two levels (an evolution can lower the CP: Trapinch
+at level 20 is CP 676, Vibrava at 20.5 is 666), HP within 1 on each side, CP exact on a side whose IVs are read and within 1 on a side whose IVs are unread, each read IV allowed one notch off
+(a hand-corrected value counts as read; its `was` value does not rescue it). Each side is judged on its own: a reading the app already flagged `no-level-fits` fits anything, but an unflagged
+reading on the other side must still fit by itself, else nothing fits and the entry is not a candidate. Measured on the box as it was before run12 (the phone's CSV rows 1-618 with the flags
+of the scan results joined on and the Zubat entry set back to CP 61 with HP and IVs unread), the 106 rows of run12 that matter ask exactly the 29 questions the phone asked with the rule off, and 19
+with it on (the exact-arithmetic first version of the rule asked 13, by the reviewer's measure, and turned real power-ups into new rows when a reading was misread by one). The Meowth 534 question
+stays because the real saved Meowth CP 65 / HP 29 is flagged `no-level-fits` and is not judged; the Combee ones share 15/15/15 with the saved Combee; the Zubat ones have no saved HP; the Psyduck 166
+stays (the saved Psyduck 40/24 with 2/0/11 and the scanned bars unread are within a notch). (An earlier version of this paragraph said "30 before, 6 after": that test box held an unflagged Meowth CP 65
+/ HP 29, which cannot occur.) Run9 merged into the run8 box is unchanged (306 the same, 4 unsure), and so are run13, the two stalled scans, the Horsea scan and run14 merged into the phone's box.
+A question about a single saved candidate with the same read IVs and a lower CP says "Same IVs as this saved one. It may be that Pokémon powered up, or a different one with the same IVs."
 Run12, the first long scan on the phone: 31 min 12 s, 4,694 readings, read time p50 0.26 s and p99 0.32 s, 1,480 of the 1,552 rows backed by three readings, ended by itself when the
 1500 command ran out (1,694 in storage), the end marker 9.7 s after the last Pokémon.
 

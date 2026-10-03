@@ -389,6 +389,74 @@ final class EndOfListTests: XCTestCase {
         XCTAssertNotNil(d.ended, "accepted residual: one reading per card for identical twins")
     }
 
+    /// The CP values read in a window, collapsed by their last three digits (a tall model's 4262, 1262, 262 are one): how many different CPs the window shows.
+    private func distinctCPs(_ rs: [ReplayReading], from: Double, to: Double) -> Int {
+        var groups = [String]()
+        for c in rs where c.t >= from && c.t < to { if let cp = c.cp { let k = String(String(cp).suffix(3)); if !groups.contains(k) { groups.append(k) } } }
+        return groups.count
+    }
+
+    /// Q3: windows where only the CP is read (name, HP and bars unread, or only name and CP) injected into the logs that reached the end of the list: nothing ends early. The
+    /// digit relation between CPs of a CP-sorted list must not chain from one neighbour to the next.
+    func testInjectedCPOnlyWindowsNeverEndEarly() throws {
+        var table = [String]()
+        for (name, period, reached) in Self.logs where reached {
+            let rs = try readings(name), t0 = rs[0].t
+            let base = run(seq(rs), period: period), finalNew = try XCTUnwrap(base.lastNew)
+            for mode in ["cpOnly", "nameCp"] {
+                for w in [6.0, 8.0, 12.0] {
+                    var earlyEnds = 0, tries = 0
+                    var start = (base.armedAt ?? t0) + 1
+                    while start + w * period < finalNew - 2 {
+                        tries += 1
+                        let s: Seq = rs.map { r in
+                            guard r.t >= start && r.t < start + w * period else { return (r.frameReading, r.t) }
+                            var x = r.frameReading; x.hp = nil; x.ivs = nil; if mode == "cpOnly" { x.name = nil }; return (x, r.t)
+                        }
+                        // an end after six periods in which ONE CP (and nothing else) was read cannot be told from a card held that long: not counted
+                        if let e = run(s, period: period).ended, e.at < finalNew - 0.01, distinctCPs(rs, from: e.at - 6 * period - 0.2, to: e.at + 0.01) > 1 { earlyEnds += 1 }
+                        start += period * 0.5
+                    }
+                    table.append("\(name.replacingOccurrences(of: ".replay.jsonl", with: "")) \(mode) \(Int(w))p: \(earlyEnds)/\(tries)")
+                    XCTAssertEqual(earlyEnds, 0, "\(name) \(mode) \(Int(w)) periods")
+                }
+            }
+        }
+        print("INJECTED " + table.joined(separator: "; "))
+    }
+
+    /// The same windows on the logs from the phone that are too big to keep as fixtures (run12 is the 1,552-Pokémon scan: a CP-sorted list). Skipped where they are not.
+    func testInjectedCPOnlyWindowsNeverEndEarlyOnTheBigPhoneLogs() throws {
+        let dev = NSString(string: "~/Developer/personal/pogo-frames/device-runs").expandingTildeInPath
+        var table = [String]()
+        for dir in ["run12-tap-1500", "run13-tap-200-tail", "stall-scan-20261003T054229Z-b1f94047", "stall-scan-20261003T055448Z-6b2b1f4e"] {
+            guard let f = (try? FileManager.default.contentsOfDirectory(atPath: dev + "/" + dir))?.filter({ $0.hasSuffix(".replay.jsonl") && !$0.contains(" 2") }).sorted().first else { continue }
+            let rs = ReplayLog.lines(in: URL(fileURLWithPath: dev + "/" + dir + "/" + f)).compactMap { l -> ReplayReading? in if case .reading(let r) = l { return r } else { return nil } }.sorted { $0.t < $1.t }
+            let base = run(seq(rs), period: 1.2), finalNew = try XCTUnwrap(base.lastNew), t0 = rs[0].t
+            let step = rs.count > 3000 ? 3.0 : 0.6
+            for mode in ["cpOnly", "nameCp"] {
+                for w in [6.0, 8.0, 12.0] {
+                    var earlyEnds = 0, rawEarly = 0, tries = 0
+                    var start = (base.armedAt ?? t0) + 1
+                    while start + w * 1.2 < finalNew - 2 {
+                        tries += 1
+                        let s: Seq = rs.map { r in
+                            guard r.t >= start && r.t < start + w * 1.2 else { return (r.frameReading, r.t) }
+                            var x = r.frameReading; x.hp = nil; x.ivs = nil; if mode == "cpOnly" { x.name = nil }; return (x, r.t)
+                        }
+                        var raw = 0
+                        if let e = run(s, period: 1.2).ended, e.at < finalNew - 0.01 { raw = 1; if distinctCPs(rs, from: e.at - 6 * 1.2 - 0.2, to: e.at + 0.01) > 1 { earlyEnds += 1 } }
+                        rawEarly += raw
+                        start += step
+                    }
+                    table.append("\(dir.prefix(24)) \(mode) \(Int(w))p: \(earlyEnds)/\(tries) avoidable, \(rawEarly) with a one-CP window")
+                    XCTAssertEqual(earlyEnds, 0, "\(dir) \(mode) \(Int(w)) periods")
+                }
+            }
+        }
+        print("INJECTEDBIG " + table.joined(separator: "; "))
+    }
+
     func testHiddenCPPokemonCountAsPagingAndDoNotEndIt() {
         var d = EndOfListDetector(period: 1.2)
         var t = 0.0
