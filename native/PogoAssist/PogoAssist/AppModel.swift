@@ -253,7 +253,7 @@ final class AppModel: ObservableObject {
         guard UserDefaults.standard.string(forKey: Self.handledKey) != key else { return }
         let n: ScanNotification
         if s.paused {
-            n = .paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, eggCount: s.eggCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes)
+            n = .paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, eggCount: s.eggCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes, limitSeconds: s.pauseLimitSeconds)
         } else if s.endedAtListEnd || s.stoppedByTimeout {
             let last = s.rows.last
             n = .stopped(scan: s.scanId, event: s.eventSeq, read: s.rows.count, lastName: last?.name, lastCP: last?.cp)

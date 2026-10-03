@@ -178,7 +178,7 @@ final class RoundTwentyOneTests: XCTestCase {
         XCTAssertFalse(timed.fullIsSound); XCTAssertTrue((timed.reason ?? "").contains("not resumed"), timed.reason ?? "")
         XCTAssertNil(ScanKindAdvice.matchSentence(pokemonRead: 298, decision: timed))
         let line = ScanStop.summary(lastName: "A", lastCP: 1, read: 298, appraisalClosed: nil, ranOut: false, commandKnown: true, paused: ["A (CP 1), not resumed: the scan finished at the timeout"], byTimeout: true)
-        XCTAssertTrue(line.hasPrefix("The scan paused and was not resumed, so it finished after 3 minutes"), line)
+        XCTAssertTrue(line.hasPrefix("The scan paused and was not resumed, so it finished when its time limit ran out"), line)
         XCTAssertFalse(line.contains("ended by itself")); XCTAssertFalse(line.contains("You finished")); XCTAssertTrue(line.contains("not resumed: the scan finished at the timeout"))
     }
 
@@ -245,5 +245,18 @@ final class RoundTwentyTwoMergeTests: XCTestCase {
         XCTAssertTrue(b.new.isEmpty, "the second Mega row is asked about: \(b.unsure.map { $0.kind })")
         let c = plan([row("staraptor_mega", cp: 4100, hp: 170)]); assertBothHalvesAccountedFor(c, "mega at another CP")
         XCTAssertTrue(c.new.isEmpty)
+    }
+
+    /// Round 23: the other half of a saved pair is kept off Not seen only when the scan IDENTIFIED the pair's Pokémon (a row paired / updated, or an answer that picks an entry).
+    func testTheOtherHalfIsOffNotSeenOnlyWhenTheAnswerPicksAnEntry() {
+        let p = plan([row("staraptor", cp: 2950, hp: 170)])
+        XCTAssertEqual(p.unsure[0].candidates, ["base"])
+        XCTAssertTrue(BoxMerge.goneReport(p, resolutions: [:]).gone.isEmpty, "waiting for the answer: nothing listed yet")
+        XCTAssertTrue(BoxMerge.goneReport(p, resolutions: [0: .existing("base")]).gone.isEmpty, "picked: both seen")
+        for r in [BoxMerge.Resolution.new, .leaveOut] {
+            XCTAssertEqual(Set(BoxMerge.goneReport(p, resolutions: [0: r]).gone), ["base", "mega"], "\(r): not picked, both halves are alike not seen")
+        }
+        // a partial scan never lists anything
+        XCTAssertTrue(BoxMerge.goneReport(BoxMerge.plan(scanned: [row("staraptor", cp: 2950, hp: 170)], into: box, kind: .partial, scanDate: date(5), gameMaster: gm), resolutions: [0: .new]).gone.isEmpty)
     }
 }

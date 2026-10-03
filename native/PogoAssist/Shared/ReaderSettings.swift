@@ -34,7 +34,7 @@ enum ReaderSettings {
         set { defaults?.set(newValue, forKey: "commandSizes") }
     }
     /// Set by the app ("Finish now", the notification's "Finish scan" action) to the id of the scan the person means (`BroadcastState.scanId`); the extension checks it on its
-    /// one-second heartbeat and honours it only for the running scan while it is paused. Cleared at broadcast start, and by the extension whenever it is not honoured.
+    /// one-second heartbeat and honours it for the running scan while it is paused, and keeps it up to `ScanNotification.finishRequestGraceSeconds` while the scan is not paused (see `finishRequestVerdict`); another scan's or an older request is dropped. Cleared at broadcast start and when honoured or dropped.
     static var finishRequestedScan: Int? {
         get { (defaults?.object(forKey: "finishRequestedScan") as? Int).flatMap { $0 != 0 ? $0 : nil } }
         set { if let newValue { defaults?.set(newValue, forKey: "finishRequestedScan") } else { defaults?.removeObject(forKey: "finishRequestedScan") } }

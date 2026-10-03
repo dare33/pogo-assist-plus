@@ -36,7 +36,7 @@ public enum ScanKindAdvice {
             return no("The scan's log is incomplete (it \(logFailed ? "could not be written" : "filled up")), so the end of the scan may be missing. Add and update is chosen.")
         }
         if endedByTimeout {
-            return no("The scan paused and was not resumed, so it finished at the \(ScanNotification.pauseLimitText) limit, not at the end of your list: it cannot say which Pokémon are gone. Add and update is chosen.")
+            return no("The scan paused and was not resumed, so it finished when its time limit ran out, not at the end of your list: it cannot say which Pokémon are gone. Add and update is chosen.")
         }
         if !endedAtListEnd {
             return no("The scan was stopped by hand, not by reaching the end of the list, so it cannot say which Pokémon are gone. Add and update is chosen.")

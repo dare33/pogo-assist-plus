@@ -82,6 +82,9 @@ public struct ScanEndController {
     private var lastCardBars: IVs?
     /// The previous pause's read count and cap clock: a new pause with no Pokémon read since continues the same cap, so a resume that read nothing cannot start the cap over.
     private var lastPause: (read: Int, began: Double)?
+    /// Evidence since the pause that ANOTHER card was shown although the detector saw nothing new and the live row count did not grow: a paging tick, then a card read with the CP hidden, or
+    /// bars other than the card's own (beyond a notch) even once. A finish then keeps everything read after the pause (see `finishDating`).
+    private var otherCardEvidence = false, swipeSincePause = false, pauseFedAt = 0.0
     /// The scan finished because a pause went unanswered (the 180 s, or the cap), not because the list ended.
     public private(set) var timedOut = false
     private var lastRead = 0, lastFeedTime = 0.0
@@ -121,6 +124,8 @@ public struct ScanEndController {
         if let ivs = r.ivs { stayBars = (detector.resets, ivs) }
         lastRead = read; lastFeedTime = time
         if let p = paused {
+            if let was = pausedBars, let now = r.ivs, !Self.sameBars(was, now) { otherCardEvidence = true }
+            if swipeSincePause, r.cp == nil, r.name != nil || r.hp != nil { otherCardEvidence = true }
             if detector.ended != nil { detector.rearm() }   // a repeated quiet during the pause is not news
             // A resume is anything the detector counts as a new card (its clock reset): a name or HP change, or a new CP or bars value by its rules. One criterion.
             var barsOnly = false
@@ -158,10 +163,20 @@ public struct ScanEndController {
             let pause = Pause(at: e.at, last: e.last, read: read, closed: appraisalClosed(), name: lastName, cp: lastCP)
             detector.rearm()
             paused = (pause, time, detector.resets)
+            otherCardEvidence = false; swipeSincePause = false; pauseFedAt = time
             pauseBegan = (lastPause?.read == read ? lastPause!.began : time); lastPause = (read, pauseBegan); pausedBars = stayBars.flatMap { $0.resets == detector.resets ? $0.ivs : nil }
             pauseCount += 1
             return .pause(pause)
         }
+    }
+
+    /// A paging tick (a swipe seen by the cheap signature) at `time`. While paused, one after the pause began is evidence that another card may have been shown.
+    public mutating func noteSwipe(at time: Double) { if paused != nil, time > pauseFedAt { swipeSincePause = true } }
+
+    /// Seconds left before this pause finishes the scan if nothing new is read at `now`: the 180 s window or what is left of the 600 s cap, whichever is less (nil when not paused).
+    public func remainingPauseSeconds(now: Double) -> Double? {
+        guard let p = paused else { return nil }
+        return max(0, min(ScanEndDecision.pauseTimeoutSeconds - (now - p.since), ScanEndDecision.pauseCapSeconds - (now - pauseBegan)))
     }
 
     /// The 180 s timeout (and the cap on restarts), checked from the one-second heartbeat as well as on every reading (a paused broadcast with no frames, or with Vision skipped,
@@ -180,7 +195,7 @@ public struct ScanEndController {
     /// pause, then the marker is the stall's (the repeated card is trimmed); any read since, the marker is at the last reading with the last reading as the last card.
     private mutating func finishDating(_ pause: Pause, at time: Double?) -> Event {
         paused = nil
-        if lastRead > pause.read { return .finish(at: time ?? lastFeedTime, last: lastFeedTime) }
+        if lastRead > pause.read || otherCardEvidence { return .finish(at: time ?? lastFeedTime, last: lastFeedTime) }
         return .finish(at: time ?? pause.at, last: pause.last)
     }
 

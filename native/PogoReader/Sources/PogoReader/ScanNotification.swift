@@ -24,10 +24,7 @@ public struct ScanNotification: Equatable {
         return identifier.hasPrefix("\(pausedIdentifierPrefix)\(scan).")
     }
 
-    /// Whether a "Finish scan" request is honoured: only when it names the scan that is running and that scan is paused. A request for an old scan, or one made when the scan
-    /// is not paused, does nothing (the caller clears it either way).
-    public static func finishRequestHonoured(asked: Int, runningScan: Int, paused: Bool) -> Bool { paused && asked == runningScan }
-
+    /// (A "Finish scan" request is judged by `finishRequestVerdict` below: this scan's and paused, honoured; this scan's and not paused, kept for a short grace; anything else dropped.)
     public enum FinishRequestVerdict: Equatable { case honour, keep, drop }
     /// How long a request for the running scan waits when the scan is momentarily not paused (a pause that resumed and paused again on the same stall within the end wait must not lose the
     /// tap). Longer than the end wait (6 periods), far shorter than a pause.
@@ -38,6 +35,14 @@ public struct ScanNotification: Equatable {
         guard asked == runningScan else { return .drop }
         if paused { return .honour }
         return ageSeconds >= 0 && ageSeconds <= finishRequestGraceSeconds ? .keep : .drop
+    }
+
+    /// The remaining time as the notification says it: whole minutes rounded up ("3 minutes"), or "less than a minute"; nil means the full 180 s window.
+    public static func limitText(seconds: Double?) -> String {
+        guard let s = seconds else { return pauseLimitText }
+        if s < 60 { return "less than a minute" }
+        let m = Int((s / 60).rounded(.up))
+        return m == 1 ? "1 minute" : "\(m) minutes"
     }
 
     /// How the time limit reads in the notification and on the Scan screen ("3 minutes"), from the one constant.
@@ -73,16 +78,16 @@ public struct ScanNotification: Equatable {
 
     /// The scan paused at a card that is not clearly the end: "Paused at <name> CP <cp>: <N> of <M> read. Reopen its appraisal to carry on, or say "Pogo scan <size>" if the taps have
     /// stopped. It finishes by itself in 3 minutes if no new Pokémon is read." (size: the smallest covering M - N). With no count: "…<N> read. If that was not your last Pokémon, reopen its appraisal…".
-    public static func paused(scan: Int, event: Int, read: Int, storageCount: Int?, eggCount: Int? = nil, lastName: String?, lastCP: Int?, sizes: [Int]) -> ScanNotification {
+    public static func paused(scan: Int, event: Int, read: Int, storageCount: Int?, eggCount: Int? = nil, lastName: String?, lastCP: Int?, sizes: [Int], limitSeconds: Double? = nil) -> ScanNotification {
         let at = Self.last(lastName, lastCP).map { "Paused at \($0): " } ?? "Paused: "
         let body: String
         if let shown = storageCount, shown > 0 {
             // M: the Pokémon expected, the game's count less the eggs the person typed; with no egg count, the count as shown.
             let m = StorageCountRules.expected(count: shown, eggs: eggCount) ?? shown
             let command = commandName(covering: max(1, m - read), sizes: sizes).map { "say \"\($0)\"" } ?? "say the command again"
-            body = "\(at)\(read) of about \(m) read. Reopen its appraisal to carry on, or \(command) if the taps have stopped. It finishes by itself in \(pauseLimitText) if no new Pokémon is read."
+            body = "\(at)\(read) of about \(m) read. Reopen its appraisal to carry on, or \(command) if the taps have stopped. It finishes by itself in \(limitText(seconds: limitSeconds)) if no new Pokémon is read."
         } else {
-            body = "\(at)\(read) read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped. It finishes by itself in \(pauseLimitText) if no new Pokémon is read."
+            body = "\(at)\(read) read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped. It finishes by itself in \(limitText(seconds: limitSeconds)) if no new Pokémon is read."
         }
         return ScanNotification(identifier: "\(pausedIdentifierPrefix)\(scan).\(event)", scanId: scan, title: "Scan paused", body: body, offersFinish: true)
     }

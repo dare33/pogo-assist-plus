@@ -346,17 +346,22 @@ final class ScanEndControllerTests: XCTestCase {
     func testTheCapHoldsAcrossAResumeThatReadNothingNew() throws {
         var (c, _, rs, p, at) = try pausedAtRun10()
         let tail = try XCTUnwrap(rs.last).frameReading
-        var t = at, resumes = 0, pauses = 1, finishedAt: Double?
+        var t = at, resumes = 0, pauses = 1, finishedAt: Double?, minRemaining = 999.0
         search: for cycle in 0..<30 {
             // a different card for 100 s (nothing is paged: the same read count): it resumes, then pauses on its own stall
             var card = tail; card.name = cycle % 2 == 0 ? "Mewtwo" : "Lugia"; card.hp = HP(current: 100 + cycle, max: 100 + cycle); card.cp = 3000 + cycle; card.ivs = nil
             for _ in 0..<250 {
                 t += 0.4
-                switch c.feed(card, time: t, read: p.read) { case .resume: resumes += 1; case .pause: pauses += 1; case .finish: finishedAt = t; break search; default: break }
+                switch c.feed(card, time: t, read: p.read) { case .resume: resumes += 1; case .pause: pauses += 1; minRemaining = min(minRemaining, c.remainingPauseSeconds(now: t) ?? 999); case .finish: finishedAt = t; break search; default: break }
             }
         }
         XCTAssertGreaterThanOrEqual(resumes, 2); XCTAssertGreaterThanOrEqual(pauses, 2)
         let end = try XCTUnwrap(finishedAt, "the scan finished"); XCTAssertLessThanOrEqual(end - at, ScanEndDecision.pauseCapSeconds + 2); XCTAssertTrue(c.timedOut)
+        // a later pause of the same stall reports what is really left, not the full window (the notification says it)
+        XCTAssertLessThan(minRemaining, ScanEndDecision.pauseTimeoutSeconds - 1, "a pause that continues the cap has less than 180 s left")
+        XCTAssertEqual(ScanNotification.limitText(seconds: nil), "3 minutes"); XCTAssertEqual(ScanNotification.limitText(seconds: 150), "3 minutes")
+        XCTAssertEqual(ScanNotification.limitText(seconds: 61), "2 minutes"); XCTAssertEqual(ScanNotification.limitText(seconds: 59), "less than a minute"); XCTAssertEqual(ScanNotification.limitText(seconds: 0), "less than a minute")
+        XCTAssertTrue(ScanNotification.paused(scan: 1, event: 2, read: 5, storageCount: 100, lastName: "A", lastCP: 1, sizes: [100], limitSeconds: 30).body.contains("in less than a minute"))
     }
 
     /// The pending-row question: a card the grouper would add only at its `finish()` (a name-only or hidden-CP run, LiveGrouper.swift ~180-219) cannot be read during a pause without
@@ -369,5 +374,55 @@ final class ScanEndControllerTests: XCTestCase {
         var (c2, _, _, p2, at2) = try pausedAtRun10()
         var hpOnly = tail; hpOnly.hp = HP(current: (tail.hp?.current ?? 50) + 7, max: (tail.hp?.max ?? 50) + 7); hpOnly.cp = nil; hpOnly.ivs = nil
         XCTAssertEqual(c2.feed(hpOnly, time: at2 + 1, read: p2.read), .resume(at: at2 + 1), "a different HP, CP hidden: a resume")
+    }
+
+    /// Round 23 (R1): a same-name, same-HP card with the CP hidden is shown after a paging tick during a pause: nothing resumes and the live count does not grow (the grouper adds the row
+    /// only at `finish()`). A timeout must not date the end at the pause, or `ReplayLog.trimmed` cuts the card. Through the pipeline: the row survives (12, not 11).
+    func testACardShownAfterATickDuringAPauseSurvivesATimeout() throws {
+        let rs = readings(ReplayLog.lines(in: try Fixture.url("device-run10-tap-25-autoend.replay.jsonl")))
+        var c = ScanEndController(period: 1.2, storageCount: nil)!
+        var g = LiveGrouper(species: try? SpeciesTable.bundled())
+        var lines = [ReplayLine](), pause: ScanEndController.Pause?, at = 0.0
+        for r in rs { lines.append(.reading(r)); g.add(r.frameReading); if case .pause(let q) = c.feed(r.frameReading, time: r.t, read: g.rows.count) { pause = q; at = r.t; break } }
+        let q = try XCTUnwrap(pause); lines.append(.pause(at: q.at, last: q.last, read: q.read, closed: q.closed))
+        let tail = try XCTUnwrap(rs.last).frameReading
+        var t = at + 5
+        lines.append(.tick(t)); g.swipe(at: t); c.noteSwipe(at: t); t += 0.7
+        var twin = FrameReading(); twin.name = tail.name; twin.baseName = tail.baseName; twin.speciesIds = tail.speciesIds; twin.hp = tail.hp
+        for _ in 0..<30 { twin.time = t; lines.append(.reading(ReplayReading(twin, time: t, ms: 1))); g.add(twin); XCTAssertEqual(c.feed(twin, time: t, read: g.rows.count), .none); t += 0.4 }
+        XCTAssertEqual(g.rows.count, q.read, "the live count did not grow: the row is added at finish()")
+        var fin = ScanEndController.Event.none
+        while t < at + 400, fin == .none { t += 1; fin = c.tick(now: t) }
+        guard case .finish(let endAt, let last) = fin else { return XCTFail("\(fin)") }
+        XCTAssertGreaterThan(last, q.last + 20, "dated at the last reading, not the stall")
+        lines += [.pauseTimedOut(at: endAt), .end(at: endAt, last: last)]
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("r1-\(UUID().uuidString).jsonl")
+        try (lines.map { String(decoding: ReplayLog.encode($0), as: UTF8.self) }.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        var g2 = g; g2.finish()
+        XCTAssertEqual(g2.rows.count, q.read + 1, "the live grouper adds the card's row at finish()")
+        // The end marker must not cut the card's readings. (The pipeline's own grouper keeps a same-name, same-HP card with the CP hidden in the stalled card's row, so the final row count is
+        // 11 either way; what is lost without the fix is the readings, which a different reading shape could turn into a row.)
+        let kept = readings(ReplayLog.trimmed(lines)).filter { $0.t > at + 5 }.count
+        XCTAssertEqual(kept, 30, "all 30 readings of the card shown after the tick are kept")
+        let base = try ScanPipeline.process(replay: Fixture.url("device-run10-tap-25-autoend.replay.jsonl"), engine: sharedEngine, paging: PagingHint(pagedByCommand: true, expectedPeriod: 1.2, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds))
+        let out = try ScanPipeline.process(replay: url, engine: sharedEngine, paging: PagingHint(pagedByCommand: true, expectedPeriod: 1.2, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds))
+        XCTAssertEqual(base.scan.rows.count, 11); XCTAssertEqual(out.scan.rows.count, 11, "no row is created from the kept tail of the same stalled card")
+        // the SAME stalled card read for the whole window, with no tick and no other bars, still dates at the stall (the repeated card is trimmed)
+        var (c2, _, _, p2, at2) = try pausedAtRun10()
+        guard case .finish(_, let last2) = c2.tick(now: at2 + ScanEndDecision.pauseTimeoutSeconds + 1) else { return XCTFail("no finish") }
+        XCTAssertEqual(last2, p2.last, accuracy: 0.001)
+    }
+
+    /// Round 23 (cross-vendor variant): the same card with other bars (beyond a notch) read ONCE, then name and HP without bars: evidence of another card, so a timeout keeps the tail.
+    func testOtherBarsReadOnceDuringAPauseKeepTheTailAtATimeout() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let own = try ownBars(rs, upTo: at)
+        var other = try XCTUnwrap(rs.last).frameReading; other.ivs = IVs(atk: (own.atk + 7) % 16, def: (own.def + 7) % 16, hp: (own.hp + 7) % 16)
+        var bare = other; bare.ivs = nil
+        var t = at + 1
+        _ = c.feed(other, time: t, read: p.read)
+        for _ in 0..<40 { t += 0.4; _ = c.feed(bare, time: t, read: p.read) }
+        guard case .finish(_, let last) = c.tick(now: at + ScanEndDecision.pauseTimeoutSeconds + 1) else { return XCTFail("no finish") }
+        XCTAssertGreaterThan(last, p.last + 10, "the tail read after the other bars is kept")
     }
 }

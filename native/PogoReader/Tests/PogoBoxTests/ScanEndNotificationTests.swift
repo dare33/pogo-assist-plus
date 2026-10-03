@@ -44,9 +44,6 @@ extension ScanEndNotificationTests {
         XCTAssertTrue(ScanNotification.isPause(a)); XCTAssertTrue(ScanNotification.isPause(a, scan: 77))
         XCTAssertFalse(ScanNotification.isPause(a, scan: 7), "scan 7 is not scan 77")
         XCTAssertFalse(ScanNotification.isPause(a, scan: 78)); XCTAssertFalse(ScanNotification.isPause(stopped)); XCTAssertFalse(ScanNotification.isPause("pogo.scan.paused.770.1", scan: 77))
-        XCTAssertTrue(ScanNotification.finishRequestHonoured(asked: 77, runningScan: 77, paused: true))
-        XCTAssertFalse(ScanNotification.finishRequestHonoured(asked: 76, runningScan: 77, paused: true), "an old scan's notification")
-        XCTAssertFalse(ScanNotification.finishRequestHonoured(asked: 77, runningScan: 77, paused: false), "not paused: a scan that carried on is not ended")
     }
 
     /// N1c: a finish request is kept for a short grace while the scan is momentarily not paused (a false resume and a second pause on the same stall), and still scoped to the scan.

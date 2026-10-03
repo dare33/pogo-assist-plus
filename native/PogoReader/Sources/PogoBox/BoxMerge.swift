@@ -137,6 +137,8 @@ public enum BoxMerge {
         /// Scanned positions whose species is a Mega or Primal form, with the base species id. A Mega row never writes its own
         /// values into the box: it matches its base entry as "same", or is saved as New under the base species with no CP, HP or level.
         public var megaBases: [Int: String] = [:]
+        /// Saved Mega pairs (base entry id, Mega entry id): one Pokémon saved twice. `goneReport` lists neither as not seen once the scan identified the Pokémon through either.
+        public var savedPairs: [[String]] = []
 
         public var isUnresolvedFree: Bool { unsure.isEmpty }
     }
@@ -399,14 +401,8 @@ public enum BoxMerge {
         let pairedIds = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
         for i in plan.unsure.indices where plan.unsure[i].kind == .extraTwin { plan.unsure[i].candidates = Array(plan.unsure[i].candidates.prefix(1)) + plan.unsure[i].candidates.dropFirst().filter { !pairedIds.contains($0) } }
         unsureSaved = unsureSaved.filter { !pairedIds.contains(saved[$0].id) }
-        // One half of a saved Mega pair was paired, asked about or updated by a row: the Pokémon was seen, so the other half is not "not seen".
-        let touchedIds = pairedIds.union(plan.unsure.flatMap { $0.candidates })
-        var halvesSeen = Set<Int>()
-        for pr in savedPairs {
-            if touchedIds.contains(saved[pr.base].id) { halvesSeen.insert(pr.mega) }
-            if touchedIds.contains(saved[pr.mega].id) { halvesSeen.insert(pr.base) }
-        }
-        plan.unpaired = (vPool + unsureSaved.sorted()).filter { !halvesSeen.contains($0) || touchedIds.contains(saved[$0].id) }.map { Unpaired(id: saved[$0].id, speciesKey: saved[$0].speciesKey, name: saved[$0].row.name, display: saved[$0].row.display, title: saved[$0].row.title) }
+        plan.savedPairs = savedPairs.map { [saved[$0.base].id, saved[$0.mega].id] }
+        plan.unpaired = (vPool + unsureSaved.sorted()).map { Unpaired(id: saved[$0].id, speciesKey: saved[$0].speciesKey, name: saved[$0].row.name, display: saved[$0].row.display, title: saved[$0].row.title) }
         let report = goneReport(plan, resolutions: [:])
         plan.gone = report.gone
         plan.kept = report.kept
@@ -438,6 +434,16 @@ public enum BoxMerge {
                 // the kind: the other, plausible candidates still follow M9.
                 seen.formUnion(u.misread)
             }
+        }
+        // A saved Mega pair is one Pokémon: once the scan IDENTIFIED it through one half (a row paired as Same or updated, or an answer that picked that entry) the other half was seen
+        // too; while a half is still waiting for its answer so is the other. An answer that does not pick it (new, left out) treats both halves alike.
+        let paired = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
+        for pr in plan.savedPairs where pr.count == 2 {
+            let a = pr[0], b = pr[1]
+            if paired.contains(a) || seen.contains(a) { seen.insert(b) }
+            if paired.contains(b) || seen.contains(b) { seen.insert(a) }
+            if pending.contains(a) { pending.insert(b) }
+            if pending.contains(b) { pending.insert(a) }
         }
         let kept = [Kept](); var gone = [String]()
         // Items on screen that were not read no longer protect anything: every Pokémon the scan did not pair is listed as "not seen" (kept unless the person marks it), and

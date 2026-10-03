@@ -235,9 +235,10 @@ class SampleHandler: RPBroadcastSampleHandler {
             log.notice("paused at \(p.name ?? "?", privacy: .public) CP \(p.cp ?? 0): \(p.read) read")
             record(.pause(at: p.at, last: p.last, read: p.read, closed: p.closed))
             state.paused = true; state.pauseCount += 1; state.pausedAt = Date(); state.eventSeq += 1
+            state.pauseLimitSeconds = c.remainingPauseSeconds(now: time)
             state.pausedCard = [p.name, p.cp.map { "CP \($0)" }].compactMap { $0 }.joined(separator: " ")
             write(force: true)
-            ScanNotifier.post(ScanNotification.paused(scan: state.scanId, event: state.eventSeq, read: p.read, storageCount: state.storageCount, eggCount: state.eggCount, lastName: p.name, lastCP: p.cp, sizes: ReaderSettings.commandSizes)) { [log] error in
+            ScanNotifier.post(ScanNotification.paused(scan: state.scanId, event: state.eventSeq, read: p.read, storageCount: state.storageCount, eggCount: state.eggCount, lastName: p.name, lastCP: p.cp, sizes: ReaderSettings.commandSizes, limitSeconds: state.pauseLimitSeconds)) { [log] error in
                 if let error { log.error("notification could not be posted: \(error.localizedDescription, privacy: .public)") }
             }
         case .resume(let at):
@@ -346,6 +347,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         for t in seenTicks {
             record(.tick(t))
             if mode == .saveCrops { saver.noteSwipe(at: t) } else { grouper.swipe(at: t) }
+            if var c = endController { c.noteSwipe(at: t); endController = c }
         }
     }
 

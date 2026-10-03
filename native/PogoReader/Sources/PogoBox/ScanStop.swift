@@ -56,7 +56,7 @@ public enum ScanStop {
         let last = lastName.map { name in "the last one read was \(name)" + (lastCP.map { " (CP \($0))" } ?? "") } ?? "no Pokémon were named"
         let opened = lastName ?? "the last Pokémon"
         var s = byPerson ? "You finished the scan after \(read.formatted()) Pokémon; \(last)."
-            : byTimeout ? "The scan paused and was not resumed, so it finished after \(ScanNotification.pauseLimitText) with nothing new, at \(read.formatted()) Pokémon; \(last)."
+            : byTimeout ? "The scan paused and was not resumed, so it finished when its time limit ran out with nothing new, at \(read.formatted()) Pokémon; \(last)."
             : "The scan ended by itself after \(read.formatted()) Pokémon; \(last)."
         if !paused.isEmpty { s += paused.count == 1 ? " It paused once, at \(paused[0])." : " It paused \(paused.count) times: \(paused.joined(separator: "; "))." }
         if let c = appraisalClosed { s += c ? " The appraisal had closed." : " The appraisal was still open." }
