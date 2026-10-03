@@ -55,6 +55,9 @@ struct ScanView: View {
             } footer: { Text(model.pagedByHand ? "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown. Stop it from the red bar when the last Pokémon has been read."
                                               : "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown and say the command. The scan usually ends by itself when the list ends or the command runs out. If it does not, stop the broadcast from the red bar.") }
         }
+        // The permission is asked when the paging choice changes or the commands are made; a phone that already has both would never be asked, so ask once here too
+        // (not while a share sheet is up).
+        .onAppear { if !model.pagedByHand, model.commandSetMade, model.shareURLs.isEmpty { model.askForNotificationsOnce() } }
         .navigationTitle("Scan Pokémon")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { countFocused = false } } }

@@ -1,5 +1,5 @@
 import XCTest
-import PogoReader
+@testable import PogoReader
 
 final class ScanEndNotificationTests: XCTestCase {
     private let sizes = [25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000]
@@ -7,9 +7,9 @@ final class ScanEndNotificationTests: XCTestCase {
     func testTheStoppedTextNamesTheCountAndTheLastPokemon() {
         let n = ScanNotification.stopped(event: 4, read: 1552, lastName: "Psyduck", lastCP: 68)
         XCTAssertEqual(n.title, "Scan stopped"); XCTAssertEqual(n.identifier, "pogo.scan.stopped.4"); XCTAssertFalse(n.offersFinish)
-        XCTAssertEqual(n.body, "1552 Pokémon read, last: Psyduck CP 68. Say \"Go to sleep\" to stop the command, then continue from that Pokémon.")
-        XCTAssertEqual(ScanNotification.stopped(event: 1, read: 11, lastName: nil, lastCP: 4262).body, "11 Pokémon read, last: CP 4262. Say \"Go to sleep\" to stop the command, then continue from that Pokémon.")
-        XCTAssertEqual(ScanNotification.stopped(event: 1, read: 3, lastName: "", lastCP: nil).body, "3 Pokémon read. Say \"Go to sleep\" to stop the command, then continue from that Pokémon.")
+        XCTAssertEqual(n.body, "1552 read, last Psyduck CP 68. If the command is still tapping, say \"Go to sleep\". Open Pogo Assist for what to do next.")
+        XCTAssertEqual(ScanNotification.stopped(event: 1, read: 11, lastName: nil, lastCP: 4262).body, "11 read, last CP 4262. If the command is still tapping, say \"Go to sleep\". Open Pogo Assist for what to do next.")
+        XCTAssertEqual(ScanNotification.stopped(event: 1, read: 3, lastName: "", lastCP: nil).body, "3 read. If the command is still tapping, say \"Go to sleep\". Open Pogo Assist for what to do next.")
     }
 
     func testThePausedTextSaysWhereAndWhatToDoWithAndWithoutACount() {

@@ -22,21 +22,19 @@ final class FoldApiTests: XCTestCase {
         Unmatched(frame: "f1", cp: nil, name: name, nameText: name, hp: nil, ivs: nil, cpOptions: nil, frames: 3, reason: reason, into: nil, clip: nil)
     }
 
-    // M2
-    func testM2AnUnreadPokemonProtectsSameSpeciesEntriesFromGone() throws {
+    // M2 (round 16: an unread item no longer protects anything; every unpaired entry is listed as not seen, kept unless marked)
+    func testM2AnUnreadPokemonNoLongerProtectsEntriesFromTheNotSeenList() throws {
         let staraptor = entry(row(cp: 1982), "s"), pidgey = entry(row("pidgey", cp: 100, hp: 40), "p")
         let p = plan([], unmatched: [item(name: "Staraptor")], [staraptor, pidgey])
-        XCTAssertEqual(p.gone, ["p"], "only the other species is proposed as gone")
-        XCTAssertEqual(p.kept.map { $0.savedId }, ["s"]); XCTAssertTrue(p.kept[0].reason.contains("Staraptor"))
-        // an unread item with no name protects every entry
+        XCTAssertEqual(Set(p.gone), ["s", "p"], "both are listed as not seen"); XCTAssertTrue(p.kept.isEmpty)
         let anon = plan([], unmatched: [item(name: nil, reason: "name-not-read")], [staraptor, pidgey])
-        XCTAssertTrue(anon.gone.isEmpty); XCTAssertEqual(Set(anon.kept.map { $0.savedId }), ["s", "p"])
-        // a fragment folded into its neighbour was seen, so it protects nothing
+        XCTAssertEqual(Set(anon.gone), ["s", "p"]); XCTAssertTrue(anon.kept.isEmpty)
         XCTAssertEqual(plan([], unmatched: [item(name: nil, reason: "absorbed")], [staraptor, pidgey]).gone.sorted(), ["p", "s"])
         // add-and-update never proposes gone at all
         XCTAssertTrue(plan([], unmatched: [item(name: "Staraptor")], [staraptor], .partial).gone.isEmpty)
-        // kept entries survive Save
-        XCTAssertEqual(try BoxMerge.apply(p, to: [staraptor, pidgey]).map { $0.id }, ["s"])
+        // an untouched save removes nothing
+        XCTAssertEqual(try BoxMerge.apply(p, keepGone: BoxMerge.keepSet(plan: p, resolutions: [:], markedForRemoval: []), to: [staraptor, pidgey]).map { $0.id }, ["s", "p"])
+        XCTAssertEqual(try BoxMerge.apply(p, keepGone: BoxMerge.keepSet(plan: p, resolutions: [:], markedForRemoval: ["p"]), to: [staraptor, pidgey]).map { $0.id }, ["s"])
     }
 
     func testM2GoneIsPerEntryWithKeepAll() throws {

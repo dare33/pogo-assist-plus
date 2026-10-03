@@ -78,7 +78,7 @@ public struct EndOfListDetector {
         return "\(r.name ?? "?")|\(hp ?? "-")|\(bars ?? "-")"
     }
 
-    /// The arming identity: name and HP (bars vary between reads of one card while they settle), the CP alone when neither was read.
+    /// The arming identity: name and HP (bars vary between reads of one card while they settle), the CP alone when neither was read (by `sameTail`).
     private func armKey(_ r: FrameReading) -> String? {
         let hp = r.hp.map { "\($0.current)/\($0.max)" }
         if r.name == nil && hp == nil {
@@ -88,10 +88,10 @@ public struct EndOfListDetector {
         return "\(r.name ?? "?")|\(hp ?? "-")"
     }
 
-    /// A key made from the CP alone is the same card as a recent one whose digits it matches the way a CP misread does: one is a run of the
-    /// other's digits (262 in 4262) or they differ in one digit (4260 and 4262, 263 and 262).
+    /// A CP-only key is the same card as a recent one only by `sameTail` (the same number, or the same last three digits: 4262, 1262, 262), the comparison the stay's own CP
+    /// tracking uses for a CP read alone. Close neighbours of a CP-sorted list (218, 219) are different cards.
     private func canonical(_ key: String) -> String {
-        for known in recent + (pending.map { [$0.key] } ?? []) where known.hasPrefix("cp") && Self.sameCard(known, key) { return known }
+        for known in recent + (pending.map { [$0.key] } ?? []) where known.hasPrefix("cp") && Self.sameTail(String(known.dropFirst(2)), String(key.dropFirst(2))) { return known }
         return key
     }
     static func sameCard(_ a: String, _ b: String) -> Bool {

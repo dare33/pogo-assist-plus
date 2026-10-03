@@ -92,8 +92,10 @@ public enum BoxMerge {
             /// One saved entry of the species and IVs, one scanned row of the same IVs and a higher CP: it may be that Pokémon powered up, or a different one with the same
             /// IVs. NEVER applied automatically ("It is this one" does what the automatic update did; "It is new" adds the row and leaves the saved entry).
             case poweredUp
-            /// The same for a scanned row that is a later stage of the saved species (an evolution), or a base form scanned for an entry first saved as a Mega.
+            /// The same for a scanned row that is a later stage of the saved species (an evolution).
             case evolved
+            /// A base form scanned for an entry first saved in its Mega form, same IVs: the same Pokémon (the Mega values were temporary) or a different one.
+            case megaToBase
         }
         public var scanned: Int
         public var candidates: [String]
@@ -191,17 +193,19 @@ public enum BoxMerge {
             // Combee). It is a question with the saved entry as the candidate; "It is this one" does what the automatic update did.
             switch rule {
             case .poweredUp: ask([si], [vi], kind: .poweredUp); return
-            case .evolved, .baseOfMega: ask([si], [vi], kind: .evolved); return
+            case .evolved: ask([si], [vi], kind: .evolved); return
+            case .baseOfMega: ask([si], [vi], kind: .megaToBase); return
             default: break
             }
             // A row whose CP fits no level never writes by the IVs-now-read rule either: it is asked about, and the answer only marks the entry seen.
             if rule == .noIVs, v.row.ivs == nil, s.ivs != nil, hasNoLevelFits(s) { ask([si], [vi]); return }
+            // The IVs-now-read path writes the IVs, level, dust, flags, shadow and solve status over the saved entry, so it is automatic only for an entry with no hand
+            // corrections whose CP and HP equal their CURRENT values (a match through a correction's old value, or an HP one point off, is asked about).
+            if rule == .noIVs, v.row.ivs == nil, s.ivs != nil, v.isHandCorrected || s.cp != v.row.cp || s.hp != v.row.hp { ask([si], [vi]); return }
             switch rule {
             case .unchanged: plan.same.append(Pair(scanned: si, savedId: id))
             case .megaSame: plan.same.append(Pair(scanned: si, savedId: id, mega: true))
-            case .baseOfMega: plan.updated.append(Update(scanned: si, savedId: id, reason: .megaToBase))
-            case .poweredUp: plan.updated.append(Update(scanned: si, savedId: id, reason: .poweredUp))
-            case .evolved: plan.updated.append(Update(scanned: si, savedId: id, reason: .evolved))
+            case .baseOfMega, .poweredUp, .evolved: break   // asked above, never reached
             case .noIVs:
                 if v.row.ivs == nil && s.ivs != nil { plan.updated.append(Update(scanned: si, savedId: id, reason: .ivsNowRead)) }
                 else { plan.same.append(Pair(scanned: si, savedId: id)) }
@@ -341,20 +345,27 @@ public enum BoxMerge {
                 seen.formUnion(u.misread)
             }
         }
-        let items = plan.unmatchedItems.filter { $0.reason != "absorbed" }
         var kept = [Kept](), gone = [String]()
+        // Items on screen that were not read no longer protect anything: every Pokémon the scan did not pair is listed as "not seen" (kept unless the person marks it), and
+        // `unreadLine` tells the person some of them may be those items.
         for e in plan.unpaired where !seen.contains(e.id) && !pending.contains(e.id) {
             var reason: String?
-            for item in items {
-                if let name = item.name, !name.isEmpty {
-                    if e.name.lowercased() == name.lowercased() || e.display.lowercased() == name.lowercased() { reason = "\(name) was on screen but not read clearly."; break }
-                } else { reason = "A Pokémon was on screen but its name was not read."; break }
-            }
             if reason == nil, let left = leftOutRows.first(where: { $0.speciesKey == e.speciesKey }) { reason = "You left out a \(left.title) row, so the \(e.title) stays." }
             if reason == nil, leftOutCandidates.contains(e.id) { reason = "You left out a row that may have been this Pokémon." }
             if let r = reason { kept.append(Kept(savedId: e.id, reason: r)) } else { gone.append(e.id) }
         }
         return GoneReport(gone: gone, kept: kept)
+    }
+
+    /// The one line shown above the "Not seen in this scan" list when items on screen could not be read (they absorbed into another row are not counted), else nil.
+    public static func unreadLine(_ plan: Plan) -> String? {
+        let items = plan.unmatchedItems.filter { $0.reason != "absorbed" }
+        guard !items.isEmpty else { return nil }
+        let names = items.map { ($0.name?.isEmpty == false) ? $0.name! : "unknown" }
+        var seen = Set<String>(), unique = [String]()
+        for n in names where seen.insert(n.lowercased()).inserted { unique.append(n) }
+        let n = items.count
+        return "\(n) Pokémon on screen could not be read (names: \(unique.joined(separator: ", "))). Some of the entries below may be those."
     }
 
     // MARK: - rule predicates
@@ -396,9 +407,9 @@ public enum BoxMerge {
         }
     }
 
-    /// A power-up never lowers the HP or the level.
+    /// A power-up never lowers the HP or the level; an HP one point lower is within a misread, so it is not "lowered" (the pair is asked about, never paired or New).
     private static func lowers(_ s: ScanRow, _ old: ScanRow) -> Bool {
-        if let a = s.hp, let b = old.hp, a < b { return true }
+        if let a = s.hp, let b = old.hp, a < b - 1 { return true }
         if let a = s.level, let b = old.level, a < b { return true }
         return false
     }
@@ -475,11 +486,11 @@ public enum BoxMerge {
     private static func plausibleCandidate(_ s: ScanRow, _ v: BoxEntry, _ gm: GameMaster, _ fits: IVFit) -> Bool {
         // An evolution whose IVs were not read: the later stage of a saved species (the rule the automatic match uses), HP not lower.
         if s.ivs == nil, megaBase(s.speciesId, gm) == nil, evolved(s, from: v, gm) {
-            if let a = s.hp, let b = v.row.hp, a < b { return false }
+            if let a = s.hp, let b = v.row.hp, a < b - 1 { return false }
             return sharesAnIVTriple(s, v, gm, fits)
         }
         guard sameSpecies(s, v) else { return false }
-        if let a = s.hp, let b = v.row.hp, a < b, s.ivs == nil || v.row.ivs == nil { return false }   // a power-up never lowers the HP
+        if let a = s.hp, let b = v.row.hp, a < b - 1, s.ivs == nil || v.row.ivs == nil { return false }   // a power-up never lowers the HP (one point is a misread)
         // equal IVs: any CP or HP (a power-up that is not consistent, or a lower CP). Different IVs with the same CP and the same HP
         // read are one Pokémon whose bars were misread (or whose IVs were corrected by hand), so asked about, never New plus Gone.
         if let a = s.ivs, let b = v.row.ivs {

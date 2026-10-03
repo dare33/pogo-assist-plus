@@ -29,11 +29,12 @@ public struct ScanNotification: Equatable {
         return "Pogo scan \(size)"
     }
 
-    /// The scan ended by itself: "<N> Pokémon read, last: <name> CP <cp>. Say "Go to sleep" to stop the command, then continue from that Pokémon."
+    /// The scan ended by itself: "<N> read, last <name> CP <cp>. If the command is still tapping, say "Go to sleep". Open Pogo Assist for what to do next." It does not claim to know
+    /// where to continue from: the app's review says that.
     public static func stopped(event: Int, read: Int, lastName: String?, lastCP: Int?) -> ScanNotification {
-        let last = Self.last(lastName, lastCP).map { ", last: \($0)" } ?? ""
+        let last = Self.last(lastName, lastCP).map { ", last \($0)" } ?? ""
         return ScanNotification(identifier: "pogo.scan.stopped.\(event)", title: "Scan stopped",
-                                body: "\(read) Pokémon read\(last). Say \"Go to sleep\" to stop the command, then continue from that Pokémon.", offersFinish: false)
+                                body: "\(read) read\(last). If the command is still tapping, say \"Go to sleep\". Open Pogo Assist for what to do next.", offersFinish: false)
     }
 
     /// The scan paused at a card that is not clearly the end: "Paused at <name> CP <cp>: <N> of <M> read. Reopen its appraisal to carry on, or say "Pogo scan <size>" if the taps have

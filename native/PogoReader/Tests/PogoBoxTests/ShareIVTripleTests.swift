@@ -135,6 +135,7 @@ final class ShareIVTripleTests: XCTestCase {
         print("PRE12 rule off: \(counts(off)); rule on: \(counts(on))")
         for u in on.unsure { print("PRE12 remains \(u.kind) \(rows[u.scanned].name) CP \(rows[u.scanned].cp) HP \(rows[u.scanned].hp.map(String.init) ?? "-") IVs \(iv(rows[u.scanned].ivs)) vs \(u.candidates.map { "CP \(byId[$0]!.row.cp) HP \(byId[$0]!.row.hp.map(String.init) ?? "-") IVs \(iv(byId[$0]!.row.ivs))" })") }
         XCTAssertEqual(off.unsure.count, 29, "the phone asked 29")
+        XCTAssertEqual(on.unsure.count, 19, "with the rule on")
         XCTAssertLessThan(on.unsure.count, off.unsure.count)
         // every question that is kept still has its candidate; the ones the owner answered "new" for impossible pairs are what goes
         XCTAssertTrue(on.unsure.allSatisfy { !$0.candidates.isEmpty })

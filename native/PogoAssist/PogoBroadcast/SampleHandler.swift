@@ -234,13 +234,14 @@ class SampleHandler: RPBroadcastSampleHandler {
         state.endedAtListEnd = true; state.paused = false; state.eventSeq += 1
         lock.lock(); finished = true; lock.unlock()
         finishWork()
-        postStoppedNotification()
         // After leaving the queue: if ReplayKit answers with broadcastFinished synchronously, its `queue.sync` must not wait on this block.
-        // The state and the log are already written.
+        // The state and the log are already written. The broadcast is ended FIRST; the notification is posted from its own hop afterwards, so a slow or refused
+        // notification can never hold up the finish.
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0,
                                                    userInfo: [NSLocalizedDescriptionKey: "Scan finished."]))
         }
+        DispatchQueue.global(qos: .utility).async { [weak self] in self?.postStoppedNotification() }
     }
 
     /// A local notification with sound, so the person learns the scan ended without opening the app (the same builder and posting path as the pause's). A broadcast upload

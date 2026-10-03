@@ -128,6 +128,7 @@ private struct ResultList: View {
                     let report = BoxMerge.goneReport(plan, resolutions: review.resolutions)
                     let marked = report.gone.filter { review.markedForRemoval.contains($0) }.count
                     // Nothing is removed unless the person marks it: every Pokémon the scan did not see starts as kept.
+                    if let line = BoxMerge.unreadLine(plan) { Text(line).font(.footnote).foregroundStyle(.orange) }
                     group("gone", "Not seen in this scan", report.gone.count, "eye.slash", detail: marked == 0 ? "all kept" : "\(marked) to remove") {
                         ForEach(report.gone, id: \.self) { id in
                             if let e = saved[id] {

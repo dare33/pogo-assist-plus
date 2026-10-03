@@ -32,7 +32,7 @@ final class ScanStopTests: XCTestCase {
     func testTheSummarySaysWhereItStoppedWhatToDoAndNeverWhy() {
         let ranOut = ScanStop.summary(lastName: "Psyduck", lastCP: 68, read: 1552, appraisalClosed: false, ranOut: true)
         XCTAssertTrue(ranOut.contains("after 1,552 Pokémon") && ranOut.contains("Psyduck (CP 68)") && ranOut.contains("The appraisal was still open."))
-        XCTAssertTrue(ranOut.contains("This is the size of the command you said: it ran out. To scan the rest, open Psyduck"))
+        XCTAssertTrue(ranOut.contains("This is the size of the command the app named for your count: it ran out. To scan the rest, open Psyduck"))
         let short = ScanStop.summary(lastName: "Abra", lastCP: 799, read: 51, appraisalClosed: false, ranOut: false)
         XCTAssertTrue(short.contains("It stopped after 51, short of the command's size. If that was not the end of your list, open Abra in Pokémon GO with the appraisal showing and scan again from there (Add and update)."))
         XCTAssertTrue(ScanStop.summary(lastName: "Rayquaza", lastCP: 4262, read: 11, appraisalClosed: true, ranOut: false).contains("The appraisal had closed."))
