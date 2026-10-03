@@ -6,13 +6,14 @@ import Foundation
 /// The end is declared POSITIVELY: the same card has been read, again and again, for the whole quiet time. "Nothing new was counted" is never
 /// enough, because a reader that is slow, drops frames, or cannot read a card (a fainted Pokémon) counts nothing new either.
 ///
-/// - The CURRENT card is the one on screen since the name or HP last changed. The quiet clock resets on ANY reading whose name or HP differs from the
-///   current card's (one reading is enough; a part that was not read is not a difference). A CP value or a bars value (each alone, compared EXACTLY, no
-///   digit fuzziness) that was never read during this stay resets it on a SINGLE reading. A value already read during the stay resets it only on a STABLE
-///   SWITCH: read in two readings in a row (a frame that did not read that kind breaks the chain) and different from the value that was stable before
-///   it, which is paging between two real cards that recur (alternating twins at two or more readings per card). A recurring value that reappears after
-///   unread frames, or a one-reading blip, does not reset it. The seen values are a bounded list (12 per kind; an old one dropped counts as never read,
-///   which errs toward not ending). A reset is dated at that reading.
+/// - The CURRENT card is the one on screen since its name or HP last changed. The quiet clock resets on ANY reading whose name or HP differs from the current
+///   card's (one reading is enough; a part that was not read is not a difference). A bars value (compared exactly) or a CP value that was never read during
+///   this stay resets it on a SINGLE reading. A value already read resets it only on a STABLE SWITCH: read in two readings in a row (a frame that did not
+///   read that kind breaks the chain) and different from the value that was stable before it, which is paging between two real cards that recur (alternating
+///   twins at two or more readings per card). A recurring value that reappears after unread frames, or a one-reading blip, does not reset it. CP values that
+///   are the same card by the digit relation (one is a run of the other's digits, or they differ in one digit: 4262, 1262, 262, 4260 of a tall model's
+///   misreads) are ONE value, so neither a first reading nor a switch between them resets it. The values read on the card are remembered for the whole stay,
+///   a bounded list (12 per kind; an old one dropped counts as never read, which errs toward not ending). A reset is dated at the reading that caused it.
 /// - `quiet` only grows across consecutive processed frames that both read the current card, at most `gapSeconds` apart. A frame with no card
 ///   read, and a gap between processed frames (low-memory skipping, dropped stretches), add nothing and do not reset it: a run of unread
 ///   cards, however long, can never end the scan. If the appraisal closes and nothing is readable the scan does not end by itself; the person stops it.
@@ -22,8 +23,9 @@ import Foundation
 ///   command is seen paging at its pace. Until then it never ends, however long the wait before the command was said.
 ///
 /// Accepted limits, documented: a real run of 8 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer
-/// than 5 readable Pokémon never arm it; persistent flapping of the last card's name or HP read delays or prevents the end; and recurring values read
-/// ONCE per card (alternating identical twins, one reading per card, for 8 cards) look like one static card and end it.
+/// than 5 readable Pokémon never arm it; persistent flapping of the last card's name or HP read delays or prevents the end; recurring values read
+/// ONCE per card (alternating identical twins, one reading per card, for 8 cards) look like one static card and end it; and so do eight or more
+/// consecutive cards with the same name, the same HP, the same bars (or bars unread) and CPs that are digit-variants of each other.
 ///
 /// Only for a scan paged by a command: `make(pagedByCommand:period:)` returns nil for a person paging by hand, who may pause on a Pokémon.
 public struct EndOfListDetector {
@@ -132,7 +134,7 @@ public struct EndOfListDetector {
         let cp = r.cp.map(String.init)
         if lastNew == nil {
             curName = name; curHP = hp
-            cpTrack = ValueTrack(); barsTrack = ValueTrack()
+            cpTrack = ValueTrack(same: Self.sameCPValue); barsTrack = ValueTrack()
             _ = cpTrack.read(cp); _ = barsTrack.read(bars)
             reset(at: time)
         } else {
@@ -140,7 +142,7 @@ public struct EndOfListDetector {
             let hpDiffers = hp != nil && curHP != nil && hp != curHP
             if nameDiffers || hpDiffers {
                 curName = name; curHP = hp
-                cpTrack = ValueTrack(); barsTrack = ValueTrack()
+                cpTrack = ValueTrack(same: Self.sameCPValue); barsTrack = ValueTrack()
                 _ = cpTrack.read(cp); _ = barsTrack.read(bars)
                 reset(at: time); sameCard = false
             } else {
@@ -167,6 +169,8 @@ public struct EndOfListDetector {
 
     /// What has been read of one kind of value (the CP, or the bars) during the current stay. Bounded.
     private struct ValueTrack {
+        /// Whether two values are the same value: equal text, or for the CP the same card by `sameCard` (4262, 1262 and 262 of a tall model's misreads).
+        var same: (String, String) -> Bool = { $0 == $1 }
         var seen: [String] = []
         var last: String?        // the value of the previous frame, nil when that frame did not read this kind
         var stable: String?      // the value that was read twice in a row most recently
@@ -177,18 +181,19 @@ public struct EndOfListDetector {
             defer { last = value }
             guard let value else { return false }
             var resets = false
-            if !seen.contains(value) {
+            if !seen.contains(where: { same($0, value) }) {
                 seen.append(value); if seen.count > Self.maxSeen { seen.removeFirst() }
                 resets = true
             }
-            if value == last {                                   // two readings in a row
-                if let s = stable, s != value { resets = true }  // a stable switch
+            if let l = last, same(l, value) {                    // two readings in a row
+                if let s = stable, !same(s, value) { resets = true }  // a stable switch
                 stable = value
             }
             return resets
         }
     }
-    private var cpTrack = ValueTrack(), barsTrack = ValueTrack()
+    private var cpTrack = ValueTrack(same: EndOfListDetector.sameCPValue), barsTrack = ValueTrack()
+    private static func sameCPValue(_ a: String, _ b: String) -> Bool { sameCard("cp" + a, "cp" + b) }
 
     private var lastFrameWasCard = false
 }

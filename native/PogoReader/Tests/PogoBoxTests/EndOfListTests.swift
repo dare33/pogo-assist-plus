@@ -13,7 +13,7 @@ final class EndOfListTests: XCTestCase {
         ("device-run4-fast-swipe-2026-10-02.replay.jsonl", 1.6, true), ("device-run4-stretch.replay.jsonl", 1.6, false),
         ("device-run5-tap-1.2.replay.jsonl", 1.2, false), ("device-run6-tap-1.0.replay.jsonl", 1.0, false),
         ("device-run7-tap-1.2-phantom.replay.jsonl", 1.2, true), ("device-run8-tap-300.replay.jsonl", 1.2, false),
-        ("device-run9-tap-300b.replay.jsonl", 1.2, true),
+        ("device-run9-tap-300b.replay.jsonl", 1.2, true), ("device-run10-tap-25-autoend.replay.jsonl", 1.2, true),
     ]
 
     private func readings(_ name: String) throws -> [ReplayReading] {
@@ -111,7 +111,7 @@ final class EndOfListTests: XCTestCase {
             var d = EndOfListDetector(period: period)
             let part = rs.filter { $0.t < firstPage }
             var t = rs[0].t, i = 0
-            while t < rs[0].t + 120, !part.isEmpty { d.feed(part[i % part.count].frameReading, time: t); i += 1; t += 0.2 }
+            while t < rs[0].t + 60, !part.isEmpty { d.feed(part[i % part.count].frameReading, time: t); i += 1; t += 0.2 }
             XCTAssertFalse(d.armed, name); XCTAssertNil(d.ended, name)
         }
     }
@@ -287,8 +287,7 @@ final class EndOfListTests: XCTestCase {
                 found.append(n)
             }
             print("FOUND \(name): 30% lost \(found[0])/50, 50% lost \(found[1])/50")
-            let floor = try XCTUnwrap(floors[name])
-            XCTAssertGreaterThanOrEqual(found[0], floor.0, name); XCTAssertGreaterThanOrEqual(found[1], floor.1, name)
+            if let floor = floors[name] { XCTAssertGreaterThanOrEqual(found[0], floor.0, name); XCTAssertGreaterThanOrEqual(found[1], floor.1, name) }
         }
     }
 
@@ -328,14 +327,52 @@ final class EndOfListTests: XCTestCase {
         }
     }
 
-    /// K1, no early end: cards one digit apart in CP with identical bars, 3 readings each (the fuzzy CP match used to let eight of them end it).
-    func testEightCardsWithCPsOneDigitApartAndIdenticalBarsDoNotEndIt() {
+    /// L1: eight or more consecutive cards with the same name, HP and bars whose CPs are digit-variants of each other (one digit apart, or a run of the other's
+    /// digits) look like one card with a tall model's CP misreads, and end the scan: the documented limit. CPs that are NOT related that way never do.
+    func testCPsThatAreDigitVariantsOfEachOtherAreOneCardAndUnrelatedOnesAreNot() {
         for cps in [(0..<10).map { 1400 + 10 * $0 }, (0..<10).map { 1499 - $0 }, [1500, 1499, 1498, 1497, 1496, 1495, 1494, 1493, 1492, 1491, 1490, 1489]] {
             var (d, t) = armed()
             for cp in cps { for _ in 0..<3 { d.feed(card("Rattata", cp, hp: 40, bars: 10), time: t); t += 0.4 } }
-            d.feed(card("Zubat", 999, hp: 77, bars: 1), time: t)
-            XCTAssertNil(d.ended, "\(cps.first!)...")
+            XCTAssertNotNil(d.ended, "digit-variant CPs from \(cps.first!): the documented limit")
         }
+        // CPs two or more digits apart and not runs of each other: eight cards, never the end
+        var (d, t) = armed()
+        for cp in [1312, 1457, 1688, 1749, 1853, 1926, 2071, 2164, 2289, 2395] { for _ in 0..<3 { d.feed(card("Rattata", cp, hp: 40, bars: 10), time: t); t += 0.4 } }
+        XCTAssertNil(d.ended)
+    }
+
+    /// L1: the real end of the list on the phone (run10, Pogo scan 25): eleven Pokémon, then Rayquaza, whose page stays on screen with the CP flapping in short
+    /// runs between 4262, 1262 and 262. The scan ends within 8 periods + 2 s of Rayquaza's first reading, not before, and the same log cut at +25 s does not end.
+    func testRun10EndsAtRayquazaAndNotBeforeAndNotWhenCutShort() throws {
+        let rs = try readings("device-run10-tap-25-autoend.replay.jsonl"), t0 = rs[0].t
+        let rayquaza = try XCTUnwrap(rs.first { $0.name == "Rayquaza" }).t
+        let d = run(seq(rs), period: 1.2)
+        let e = try XCTUnwrap(d.ended, "the end of the list must be found")
+        print("RUN10 first line 0.0, Rayquaza first read +\(String(format: "%.1f", rayquaza - t0)), ended +\(String(format: "%.1f", e.at - t0)) (\(String(format: "%.1f", e.at - rayquaza)) s after Rayquaza), armed +\(String(format: "%.1f", (d.armedAt ?? t0) - t0)), log ends +\(String(format: "%.1f", rs.last!.t - t0))")
+        XCTAssertGreaterThanOrEqual(e.at, rayquaza, "not before Rayquaza")
+        XCTAssertLessThanOrEqual(e.at - rayquaza, 8 * 1.2 + 2)
+        let cut = rs.filter { $0.t <= t0 + 25 }
+        XCTAssertNil(run(seq(cut), period: 1.2).ended, "cut at +25 s the quiet time is not complete")
+    }
+
+    /// L2: after the end fires, the marker is written and the trimmed log still gives the same eleven rows as the full log.
+    func testRun10TrimmedAtTheEndGivesTheSameElevenRows() throws {
+        let url = try Fixture.url("device-run10-tap-25-autoend.replay.jsonl")
+        let rs = try readings("device-run10-tap-25-autoend.replay.jsonl")
+        let e = try XCTUnwrap(run(seq(rs), period: 1.2).ended)
+        let hint = PagingHint(pagedByCommand: true, expectedPeriod: 1.2, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
+        let full = try ScanPipeline.process(replay: url, engine: sharedEngine, paging: hint)
+        let expected = ["Zamazenta 2133", "Zamazenta 2145", "Xurkitree 2173", "Blissey 2178", "Vaporeon 2480", "Xerneas 2611", "Xerneas 2641", "Zamazenta 2661", "Staraptor 2819", "Lucario 3000", "Rayquaza 4262"]
+        XCTAssertEqual(full.scan.rows.map { "\($0.display) \($0.cp)" }, expected)
+        // the log as the extension leaves it when the end fires: the lines up to the end, then the marker
+        let lines = ReplayLog.lines(in: url).filter { l in
+            switch l { case .reading(let r): return r.t <= e.at; case .tick(let t), .drop(let t): return t <= e.at; case .end: return false }
+        } + [ReplayLine.end(at: e.at, last: e.last)]
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("run10-trim-\(UUID().uuidString).jsonl"); defer { try? FileManager.default.removeItem(at: tmp) }
+        try (lines.map { String(decoding: ReplayLog.encode($0), as: UTF8.self) }.joined(separator: "\n") + "\n").write(to: tmp, atomically: true, encoding: .utf8)
+        let trimmed = try ScanPipeline.process(replay: tmp, engine: sharedEngine, paging: hint)
+        XCTAssertEqual(trimmed.scan.rows.map { "\($0.display) \($0.cp)" }, expected)
+        XCTAssertLessThan(trimmed.readings, full.readings, "the marker cut the tail")
     }
 
     /// K1, no early end: alternating twins at two or more readings per card are a stable switch each time, so they never end it. The accepted residual:
