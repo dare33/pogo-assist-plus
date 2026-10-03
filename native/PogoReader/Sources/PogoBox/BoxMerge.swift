@@ -8,8 +8,10 @@ import PogoReader
 /// evolution does not change. In this order, each rule on what the earlier rules left over:
 ///
 ///  1. Unchanged: same species and form, same three IVs, same CP.
-///  2. Powered up: same species and form, same IVs, higher CP.
-///  3. Evolved: the scanned species is a later stage of the saved species (game master family data), same IVs.
+///  2. Powered up: same species and form, same IVs, higher CP. NEVER applied automatically: an Unsure question (kind `poweredUp`) with the saved entry as the candidate.
+///  3. Evolved: the scanned species is a later stage of the saved species (game master family data), same IVs. Likewise a question (kind `evolved`), as is a base form
+///     scanned for an entry first saved as a Mega. "It is this one" does what the automatic update did; "It is new" adds the row and leaves the saved entry (in a Full scan it
+///     then appears under "Not seen", kept by default). The owner has four genuinely different 15/15/15 Combee: the same IVs do not prove the same Pokémon.
 ///  4. IVs unread: when either side has no IVs, same species and form, same CP and same HP. (Decision: "no IVs on either
 ///     side" is read as "at least one side", because a Pokémon whose bars failed to read this time is the common case.)
 ///  5. Identical twins: matched by count. Two saved and two scanned are two unchanged; a third scanned is new.
@@ -87,6 +89,11 @@ public enum BoxMerge {
             /// A scanned row identical to a saved entry that was already paired with another row (flagged by the paging beat or not): add a
             /// second one, or leave it out.
             case extraTwin
+            /// One saved entry of the species and IVs, one scanned row of the same IVs and a higher CP: it may be that Pokémon powered up, or a different one with the same
+            /// IVs. NEVER applied automatically ("It is this one" does what the automatic update did; "It is new" adds the row and leaves the saved entry).
+            case poweredUp
+            /// The same for a scanned row that is a later stage of the saved species (an evolution), or a base form scanned for an entry first saved as a Mega.
+            case evolved
         }
         public var scanned: Int
         public var candidates: [String]
@@ -180,8 +187,15 @@ public enum BoxMerge {
             let s = rows[si], v = saved[vi], id = v.id
             // A row whose CP fits no level is never paired by a rule that would write its values (power-up, evolution, IVs now read, base of a
             // Mega): it is asked about, and the answer only marks the entry seen. Pairing as Same writes nothing and stays automatic.
-            let writesValues: Bool = { switch rule { case .poweredUp, .evolved, .baseOfMega: return true; case .noIVs: return v.row.ivs == nil && s.ivs != nil; default: return false } }()
-            if writesValues && hasNoLevelFits(s) { ask([si], [vi]); return }
+            // An apparent power-up or evolution is NEVER applied automatically: it may be a different Pokémon with the same IVs (the owner has four genuinely different 15/15/15
+            // Combee). It is a question with the saved entry as the candidate; "It is this one" does what the automatic update did.
+            switch rule {
+            case .poweredUp: ask([si], [vi], kind: .poweredUp); return
+            case .evolved, .baseOfMega: ask([si], [vi], kind: .evolved); return
+            default: break
+            }
+            // A row whose CP fits no level never writes by the IVs-now-read rule either: it is asked about, and the answer only marks the entry seen.
+            if rule == .noIVs, v.row.ivs == nil, s.ivs != nil, hasNoLevelFits(s) { ask([si], [vi]); return }
             switch rule {
             case .unchanged: plan.same.append(Pair(scanned: si, savedId: id))
             case .megaSame: plan.same.append(Pair(scanned: si, savedId: id, mega: true))

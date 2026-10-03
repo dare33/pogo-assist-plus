@@ -50,8 +50,8 @@ final class MegaMergeTests: XCTestCase {
     func testTheReverseABaseScanUpdatesAnEntryFirstSavedAsMega() throws {
         let megaEntry = entry(row("staraptor_mega", cp: 3970, hp: 190), "m")
         let p = plan([row("staraptor", cp: 2819)], [megaEntry])
-        XCTAssertEqual(p.updated, [BoxMerge.Update(scanned: 0, savedId: "m", reason: .megaToBase)])
-        let out = try BoxMerge.apply(p, to: [megaEntry])
+        XCTAssertEqual(p.unsure, [BoxMerge.Unsure(scanned: 0, candidates: ["m"], kind: .evolved)], "never applied automatically")
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("m")], to: [megaEntry])
         XCTAssertEqual(out[0].row.speciesId, "staraptor"); XCTAssertEqual(out[0].row.cp, 2819); XCTAssertEqual(out[0].row.hp, 167)
         XCTAssertTrue(plan([row("staraptor", cp: 2819, ivs: IVs(atk: 0, def: 0, hp: 0))], [megaEntry]).updated.isEmpty, "different IVs")
     }
@@ -83,7 +83,9 @@ final class MegaMergeTests: XCTestCase {
         XCTAssertEqual(r.flags, ["mega-when-scanned"]); XCTAssertEqual(out[0].megaWhenScanned, true)
         XCTAssertTrue(FlagInfo.explain("mega-when-scanned").contains("Mega evolved"))
         // an ordinary scan of it later fills the values in (a power-up from the unknown CP 0)
-        let later = try BoxMerge.apply(plan([row("staraptor", cp: 2819)], out), to: out)
+        let laterPlan = plan([row("staraptor", cp: 2819)], out)
+        XCTAssertEqual(laterPlan.unsure.first?.kind, .poweredUp, "asked, like every apparent power-up")
+        let later = try BoxMerge.apply(laterPlan, resolutions: [0: .existing("n")], to: out)
         XCTAssertEqual(later.count, 1); XCTAssertEqual(later[0].row.cp, 2819); XCTAssertEqual(later[0].row.hp, 167); XCTAssertFalse(later[0].row.flags.contains("mega-when-scanned"))
         // the engine still advises on a box that holds such a row
         let rows = out.enumerated().map { i, e -> ScanRow in var r = e.row; r.index = i + 1; return r }

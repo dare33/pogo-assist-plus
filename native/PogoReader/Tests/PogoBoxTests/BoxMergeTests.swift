@@ -27,6 +27,9 @@ final class BoxMergeTests: XCTestCase {
         return r
     }
 
+    /// "It is this one" for every question (the first candidate): what the automatic update used to do.
+    private func accept(_ p: BoxMerge.Plan) -> [Int: BoxMerge.Resolution] { Dictionary(uniqueKeysWithValues: p.unsure.map { ($0.scanned, BoxMerge.Resolution.existing($0.candidates[0])) }) }
+
     // MARK: rule 1 unchanged
 
     func testUnchangedMatchesOnSpeciesIVsAndCP() {
@@ -52,9 +55,13 @@ final class BoxMergeTests: XCTestCase {
     func testPoweredUpUpdatesTheSavedEntry() {
         let v = entry(row(cp: 300), id: "a")
         let p = plan([row(cp: 450)], [v])
-        XCTAssertEqual(p.updated, [BoxMerge.Update(scanned: 0, savedId: "a", reason: .poweredUp)])
-        XCTAssertTrue(p.new.isEmpty && p.gone.isEmpty)
-        let box = try! BoxMerge.apply(p, to: [v])
+        // never applied automatically: a question with the saved entry as the candidate
+        XCTAssertEqual(p.unsure, [BoxMerge.Unsure(scanned: 0, candidates: ["a"], kind: .poweredUp)])
+        XCTAssertTrue(p.updated.isEmpty && p.new.isEmpty && p.gone.isEmpty)
+        // "It is new" adds the row and leaves the saved entry untouched
+        let asNew = try! BoxMerge.apply(p, resolutions: [0: .new], keepGone: BoxMerge.keepSet(plan: p, resolutions: [0: .new], markedForRemoval: []), to: [v], makeID: { "n" })
+        XCTAssertEqual(asNew.map { $0.id }, ["a", "n"]); XCTAssertEqual(asNew[0].row.cp, 300)
+        let box = try! BoxMerge.apply(p, resolutions: accept(p), to: [v])
         XCTAssertEqual(box.count, 1)
         XCTAssertEqual(box[0].id, "a")
         XCTAssertEqual(box[0].row.cp, 450)
@@ -76,14 +83,24 @@ final class BoxMergeTests: XCTestCase {
         XCTAssertEqual(p.new, [0])
     }
 
+    /// A hand-corrected entry is never updated automatically by a different Pokémon that reads the OLD wrong IVs (the correction's `was`): a question like any power-up.
+    func testACorrectionsOldIVsNeverLetAScannedRowUpdateTheEntryAutomatically() throws {
+        let wrong = IVs(atk: 1, def: 2, hp: 3), right = IVs(atk: 10, def: 11, hp: 12)
+        let corrected = try BoxMerge.correct(entry(row(cp: 300, ivs: wrong), id: "a"), with: BoxMerge.Edit(ivs: right), gameMaster: gm)
+        let p = plan([row(cp: 450, ivs: wrong)], [corrected])
+        XCTAssertTrue(p.updated.isEmpty); XCTAssertEqual(p.unsure.first?.kind, .poweredUp)
+        XCTAssertEqual(try BoxMerge.apply(p, resolutions: [0: .new], keepGone: ["a"], to: [corrected], makeID: { "n" })[0].row.cp, 300, "answered new: the corrected entry is untouched")
+    }
+
     // MARK: rule 3 evolved
 
     func testEvolvedMatchesADescendantWithTheSameIVs() {
         let v = entry(row("pidgey", cp: 300), id: "a")
         for target in ["pidgeotto", "pidgeot"] {
             let p = plan([row(target, cp: 900)], [v])
-            XCTAssertEqual(p.updated, [BoxMerge.Update(scanned: 0, savedId: "a", reason: .evolved)], target)
-            let box = try! BoxMerge.apply(p, to: [v])
+            XCTAssertEqual(p.unsure, [BoxMerge.Unsure(scanned: 0, candidates: ["a"], kind: .evolved)], target)
+            XCTAssertTrue(p.updated.isEmpty, "an evolution is never applied automatically")
+            let box = try! BoxMerge.apply(p, resolutions: accept(p), to: [v])
             XCTAssertEqual(box[0].row.speciesId, target); XCTAssertEqual(box[0].row.name, gm.byId[target]!.name); XCTAssertEqual(box[0].id, "a")
         }
     }
@@ -145,10 +162,10 @@ final class BoxMergeTests: XCTestCase {
     func testPoweredUpTwinsPairByCountAndLeftoverCopyIsNew() {
         let a = entry(row(cp: 300), id: "a"), b = entry(row(cp: 300), id: "b")
         let p = plan([row(cp: 400), row(cp: 400)], [a, b])
-        XCTAssertEqual(p.updated.count, 2); XCTAssertTrue(p.unsure.isEmpty && p.new.isEmpty)
-        // one twin powered up, the other not: the unchanged one is rule 1, the other is rule 2
+        XCTAssertEqual(p.unsure.count, 2); XCTAssertTrue(p.updated.isEmpty && p.new.isEmpty)
+        // one twin powered up, the other not: the unchanged one is rule 1, the other is a power-up question
         let q = plan([row(cp: 300), row(cp: 400)], [a, b])
-        XCTAssertEqual(q.same.count, 1); XCTAssertEqual(q.updated.count, 1); XCTAssertTrue(q.unsure.isEmpty)
+        XCTAssertEqual(q.same.count, 1); XCTAssertEqual(q.unsure.count, 1); XCTAssertTrue(q.updated.isEmpty)
     }
 
     // MARK: rule 6 ambiguity
@@ -268,7 +285,7 @@ final class BoxMergeTests: XCTestCase {
         XCTAssertEqual(BoxMerge.updated(fixed, with: row("rattata", cp: 300), date: date(11)).row.speciesId, "pidgey")
         // a real evolution of the corrected species is taken
         let q = plan([row("pidgeotto", cp: 800)], [fixed])
-        XCTAssertEqual(q.updated.first?.reason, .evolved)
+        XCTAssertEqual(q.unsure.first?.kind, .evolved); XCTAssertTrue(q.updated.isEmpty)
         XCTAssertNil(BoxMerge.updated(fixed, with: row("pidgeotto", cp: 800), date: date(11)).corrections.species)
     }
 

@@ -471,7 +471,11 @@ In the unsigned simulator build the app group does not exist; `SharedStore.conta
 
 ### Box merge rules (`PogoBox/BoxMerge.swift`)
 
-A scanned Pokemon is matched to a saved one, in order: unchanged (species and form, three IVs, CP), powered up (same, higher
+An apparent power-up or evolution is NEVER applied automatically (the owner has four different 15/15/15 Combee): it is an Unsure question of kind `poweredUp` or `evolved` with the saved entry as the
+candidate (a base form scanned for an entry first saved as a Mega likewise); "It is this one" does what the automatic update did, "It is new" adds the row and leaves the saved entry (kept under "Not seen" in a
+Full scan). What stays automatic: Same (identical values) and filling in IVs on an entry whose CP and HP match exactly and that has none (the weak spot: two different Pokémon with the same CP and HP, one read
+without bars, would be joined; it needs the same species, CP and HP, which is rare, and only the IVs and level are filled in). Re-merging run9 into run8, run13, the stalls, Horsea and run14 into the phone's
+box gives the same counts as before (no new questions: those scans contain no power-ups). The order of the rules below still describes how a row is matched: unchanged (species and form, three IVs, CP), powered up (same, higher
 CP), evolved (a later stage in the game master's family data, same IVs), IVs unread on either side (species, CP, HP), twins by
 count (an extra scanned row identical to a paired entry is asked about, flagged by the paging beat or not); more than one candidate
 that are not interchangeable is "unsure" and never guessed. What matched nothing is asked about when it could be a saved entry: a part-read

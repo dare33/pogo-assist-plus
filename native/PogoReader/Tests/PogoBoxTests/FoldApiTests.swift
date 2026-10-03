@@ -96,14 +96,14 @@ final class FoldApiTests: XCTestCase {
         let saved = BoxEntry(id: "s", row: savedRow, firstSeen: date(0), lastSeen: date(0), corrections: Corrections(ivs: Fix(was: wrong)))
         var scanned = real; scanned.ivs = wrong; scanned.ivsRead = wrong
         let p = BoxMerge.plan(scanned: [scanned], into: [saved], kind: .partial, scanDate: date(5), gameMaster: gm)
-        XCTAssertEqual(p.updated.first?.reason, .poweredUp)
-        let box = try BoxMerge.apply(p, to: [saved], engine: engine)
+        XCTAssertEqual(p.unsure.first?.kind, .poweredUp, "a power-up is asked about")
+        let box = try BoxMerge.apply(p, resolutions: [0: .existing("s")], to: [saved], engine: engine)
         XCTAssertEqual(box[0].row.ivs, real.ivs, "the correction is kept"); XCTAssertEqual(box[0].row.cp, real.cp)
         XCTAssertEqual(box[0].row.level, real.level, "level follows the corrected IVs and the new CP"); XCTAssertEqual(box[0].row.dust, real.dust)
         // nothing fits: the old values stay and the row is flagged
         var bad = scanned; bad.cp = 10
         let pb = BoxMerge.plan(scanned: [bad], into: [BoxEntry(id: "s", row: { var r = savedRow; r.cp = 5; return r }(), firstSeen: date(0), lastSeen: date(0), corrections: Corrections(ivs: Fix(was: wrong)))], kind: .partial, scanDate: date(5), gameMaster: gm)
-        let boxBad = try BoxMerge.apply(pb, to: [BoxEntry(id: "s", row: { var r = savedRow; r.cp = 5; return r }(), firstSeen: date(0), lastSeen: date(0), corrections: Corrections(ivs: Fix(was: wrong)))], engine: engine)
+        let boxBad = try BoxMerge.apply(pb, resolutions: [0: .existing("s")], to: [BoxEntry(id: "s", row: { var r = savedRow; r.cp = 5; return r }(), firstSeen: date(0), lastSeen: date(0), corrections: Corrections(ivs: Fix(was: wrong)))], engine: engine)
         XCTAssertTrue(boxBad[0].row.flags.contains("no-level-fits"))
     }
 

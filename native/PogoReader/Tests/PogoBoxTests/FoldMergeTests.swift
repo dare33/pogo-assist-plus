@@ -33,8 +33,8 @@ final class FoldMergeTests: XCTestCase {
         let saved = entry(row("machamp", cp: 2500, hp: 150, ivs: x), "m")
         var s = row("machamp", cp: 2600, hp: nil, ivs: x); s.level = nil; s.dust = nil
         let p = plan([s], [saved])
-        XCTAssertEqual(p.updated.first?.reason, .poweredUp)
-        let out = try BoxMerge.apply(p, to: [saved])
+        XCTAssertEqual(p.unsure.first?.kind, .poweredUp); XCTAssertTrue(p.updated.isEmpty)
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("m")], to: [saved])
         XCTAssertEqual(out[0].row.cp, 2600); XCTAssertEqual(out[0].row.hp, 150); XCTAssertEqual(out[0].row.level, 20); XCTAssertEqual(out[0].row.dust, 1000)
     }
 
@@ -73,7 +73,7 @@ final class FoldMergeTests: XCTestCase {
         let lowerLevel = plan([lowerLevelRow], [saved])
         XCTAssertTrue(lowerLevel.updated.isEmpty); XCTAssertEqual(lowerLevel.unsure.count, 1)
         // a consistent power-up is still a power-up
-        XCTAssertEqual(plan([real("machamp", level: 21, ivs: x)], [saved]).updated.first?.reason, .poweredUp)
+        XCTAssertEqual(plan([real("machamp", level: 21, ivs: x)], [saved]).unsure.first?.kind, .poweredUp, "a consistent power-up is a question (kind poweredUp), never automatic")
     }
 
     // M6
@@ -92,8 +92,8 @@ final class FoldMergeTests: XCTestCase {
         XCTAssertEqual(ex.same.count, 2)
         // one consistent assignment only (300 -> 350, 400 -> 500): paired
         let u = plan([row(cp: 350, hp: 55, ivs: x), row(cp: 500, hp: 70, ivs: x)], [a, b])
-        XCTAssertEqual(u.updated.count, 2); XCTAssertTrue(u.unsure.isEmpty)
-        XCTAssertEqual(u.updated.first { $0.savedId == "a" }.map { u.scanned[$0.scanned].cp }, 350)
+        XCTAssertEqual(u.unsure.count, 2); XCTAssertTrue(u.updated.isEmpty, "never applied automatically, even when only one assignment is consistent")
+        XCTAssertEqual(u.unsure.first { $0.candidates == ["a"] }.map { u.scanned[$0.scanned].cp }, 350)
     }
 
     // M7
@@ -398,8 +398,8 @@ final class FoldMergeTests: XCTestCase {
         XCTAssertFalse(BoxMerge.markChecked(flagged).row.flags.contains(BoxMerge.ivsRescanFlag))
         // a power-up rescan with the saved IVs updates the entry and does not resolve the disagreement
         let p = plan([row(cp: 600, hp: 65, ivs: x, level: 22)], [flagged])
-        XCTAssertEqual(p.updated.first?.reason, .poweredUp)
-        let after = try BoxMerge.apply(p, to: [flagged])[0]
+        XCTAssertEqual(p.unsure.first?.kind, .poweredUp)
+        let after = try BoxMerge.apply(p, resolutions: [0: .existing("S")], to: [flagged])[0]
         XCTAssertEqual(after.row.cp, 600); XCTAssertTrue(after.row.flags.contains(BoxMerge.ivsRescanFlag))
     }
 
