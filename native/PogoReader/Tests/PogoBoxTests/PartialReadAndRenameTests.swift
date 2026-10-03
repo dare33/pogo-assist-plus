@@ -204,7 +204,7 @@ final class PartialReadByBarsTests: XCTestCase {
         var species = scanned; species.speciesId = "yveltal"; species.name = "Yveltal"
         XCTAssertEqual(plan(species, [saved]).new, [0], "different species")
         var fits = scanned; fits.flags = []; fits.ivs = scanned.ivsRead
-        XCTAssertEqual(plan(fits, [saved]).unsure.count, 1, "the same IVs and a lower CP: asked about (M4), never silently added")
+        XCTAssertEqual(plan(fits, [saved]).new, [0], "the same IVs but no level gives this CP and HP for them: not the saved Pokémon (it is a new row, never silently dropped)")
         var fresh = fits; fresh.ivs = IVs(atk: 1, def: 2, hp: 3); fresh.ivsRead = fresh.ivs
         XCTAssertEqual(plan(fresh, [saved]).new, [0], "a clean row with other IVs is just a new Pokémon")
     }

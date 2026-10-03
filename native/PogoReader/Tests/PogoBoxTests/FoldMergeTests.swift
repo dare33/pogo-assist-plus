@@ -182,8 +182,8 @@ final class FoldMergeTests: XCTestCase {
     // Review fold 2: leftover rows, M12 per candidate, same CP and HP with other IVs, evolutions with unread IVs
 
     func testTwoLeftoverRowsThatCouldBeOneSavedEntryAreBothAsked() throws {
-        let s = entry(row(cp: 500, hp: 60, ivs: x), "S")
-        let p = plan([row(cp: 520, hp: 61, ivs: nil), row(cp: 540, hp: 62, ivs: nil)], [s])
+        let s = entry(real("pikachu", level: 20, ivs: x), "S")
+        let p = plan([real("pikachu", level: 21, ivs: x, read: false), real("pikachu", level: 22, ivs: x, read: false)], [s])
         XCTAssertEqual(p.unsure.map { $0.candidates }, [["S"], ["S"]]); XCTAssertTrue(p.new.isEmpty)
         XCTAssertThrowsError(try BoxMerge.apply(p, resolutions: [0: .existing("S"), 1: .existing("S")], to: [s]), "one saved entry cannot be taken by two rows") {
             XCTAssertEqual($0 as? BoxMerge.Failure, .chosenTwice(savedId: "S"))
@@ -318,7 +318,7 @@ final class FoldMergeTests: XCTestCase {
         XCTAssertEqual(out.count, 1); XCTAssertEqual(out[0].row.cp, 1982)
         // two trusted rows that would each write to one entry are refused, with a message that does not steer to a duplicate
         let s = entry(row(cp: 500, hp: 60, ivs: x), "S")
-        let q = plan([row(cp: 520, hp: 61, ivs: nil), row(cp: 540, hp: 62, ivs: nil)], [s])
+        let q = plan([real("pikachu", level: 21, ivs: x, read: false), real("pikachu", level: 22, ivs: x, read: false)], [entry(real("pikachu", level: 20, ivs: x), "S")])
         XCTAssertThrowsError(try BoxMerge.apply(q, resolutions: [0: .existing("S"), 1: .existing("S")], to: [s])) {
             XCTAssertEqual($0.localizedDescription, "Two scanned Pokémon were matched to the same saved one. Change one of the answers.")
         }
@@ -368,8 +368,9 @@ final class FoldMergeTests: XCTestCase {
         XCTAssertEqual(BoxMerge.effect(q, q.unsure[0], candidate: s, gameMaster: gm), E.keepsIVsAndFlags)
         XCTAssertTrue(try BoxMerge.apply(q, resolutions: [0: .existing("S")], to: [s])[0].row.flags.contains(BoxMerge.ivsRescanFlag))
         // trusted row, ordinary candidate: writes
-        let t = entry(row(cp: 500, hp: 60, ivs: nil), "T")
-        let u = plan([row(cp: 520, hp: 61, ivs: nil), row(cp: 540, hp: 62, ivs: nil)], [t])
+        let hidden = IVs(atk: 9, def: 10, hp: 11)
+        let t = entry(real("pikachu", level: 20, ivs: hidden, read: false), "T")
+        let u = plan([real("pikachu", level: 21, ivs: hidden, read: false), real("pikachu", level: 22, ivs: hidden, read: false)], [t])
         XCTAssertEqual(BoxMerge.effect(u, u.unsure[0], candidate: t, gameMaster: gm), E.replacesValues)
         // an extra twin and a part read: seen only
         let two = plan([row(cp: 500, hp: 60, ivs: x), row(cp: 500, hp: 60, ivs: x)], [s])
