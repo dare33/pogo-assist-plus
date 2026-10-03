@@ -549,33 +549,34 @@ the same card has been read, again and again, for the whole quiet time.
 - The clock only grows across consecutive processed frames that both read the current card, at most 2 s apart. Frames with no card read, and gaps between
   processed frames, add nothing and reset nothing, so a run of unread cards (fainted Pokémon), however long, never ends the scan; if the appraisal closes and
   nothing is readable the scan does not end by itself and the person stops it from the red bar.
-- The end needs: armed; 8 expected periods (9.6 s at 1.2 s, 12.8 s at 1.6 s; the owner's decision, it was 6) of that clock; and readings of the current card in each
+- The end needs: armed; 6 expected periods (7.2 s at 1.2 s, 9.6 s at 1.6 s; the owner shortened it from 8 after the first device run) of that clock; and readings of the current card in each
   third of that time (the reading that completes it is the last).
 - Arming keeps its evidence rule: at least 5 stable new Pokémon (name and HP, two readings in a row; the CP alone when neither was read, with CP misreads of one card
   treated as one) whose last 3 changes were each 0.5 to 2.5 expected periods after the one before: the command is seen paging at its pace. Before that it
   never ends, however long the wait before the command was said. Stability applies to arming only.
-Accepted and documented: a real run of 8 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer than 5 readable
+Accepted and documented: a real run of 6 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer than 5 readable
 Pokémon never arm it; persistent flapping of the last card's name or HP read delays or prevents the end; a list whose last Pokémon were not read looks like an
-earlier end; recurring values read ONCE per card (alternating identical twins at one reading per card, for 8 cards) look like one static card and end it; and so do eight or more consecutive cards
+earlier end; recurring values read ONCE per card (alternating identical twins at one reading per card, for 6 cards) look like one static card and end it; and so do six or more consecutive cards
 with the same name, HP and bars (or bars unread) whose CPs are digit-variants of each other.
-Per log, seconds from the first reading (`testWhereEachLogArmsAndEnds` prints them; "in-scan quiet" is the most the clock reached before a later reset, once armed):
-run1 (2.1 s) armed +20.0, no end, in-scan quiet 1.6 s; run3 (2.1) +13.0, no end, 1.6 s; run4 fast swipe (1.6) +11.9, ended +102.4 (last reset +89.2), 0.8 s;
-run4 stretch (1.6) +7.6, no end, 0.8 s; run5 (tap 1.2) +8.8, no end, 0.8 s; run6 (tap 1.0) +7.2, no end, 0.8 s; run7 (tap 1.2, phantom) +8.6, ended +73.2 (last
-reset +63.6), 1.6 s; run8 (tap 300) +8.2, no end (the log stops 6.6 s after its last reset, under the 9.6 s), 1.6 s; run9 (tap 300) +8.2, ended +381.7 (last
-reset +372.1), 1.2 s. The true in-scan maximum is 0.5 to 1.33 periods, against 8.
-Measured found-end counts (`testTheEndIsStillFoundWhenReadingsAreLost`, 50 seeds of random loss of readings, ended at or after the last card began): 30% lost: run4
-50/50, run7 50/50, run9 50/50; 50% lost: run4 47/50, run7 47/50, run9 50/50. With one read per 0.6 s or 0.8 s all three still end at their last Pokémon (about 10 to
-13 s after it began). No early end in any of these runs. Tests, on every full device log: readings kept at one per 0.6 s and 0.8 s, and 30% and 50% of readings dropped,
-never end early (0 of 50 seeds on every log); windows of 4, 5, 6 and 8 periods with no card read inserted at every position never end it; a wait of 0 to 30 s before
-the first page never ends it. A static last card read every 0.3 s and 0.6 s still ends the scan within 120 s in all 40 seeds when 20% or 30% of frames are lost, CP
-is unread on 30% of them, bars on 30%, no card is read on 30%, bars are misread on 5%, 10% or 20% of readings (to one or three wrong values) or the CP on 10%
-(`testAStaticLastCardWithNoiseStillEndsIt`). Constructed cases that never end it: a card held 9 s across a frame gap; alternating twins at 2, 3 and 4 readings per card
-for 12 cards; 16 hidden-CP Pokémon; a run of unread cards; eight same-species, same-HP cards with different CPs read once each; eight cards with CPs two or more digits apart and
-identical bars at three readings each; one named card followed by eight CP-only different cards. Cases that end it: 8 identical Pokémon, a static card with single-reading
-CP variants, digit-variant CPs of one name, HP and bars for eight cards, and (the accepted residual above) alternating identical twins at one reading per card.
+Per log, seconds from the first reading (`testWhereEachLogArmsAndEnds` prints them; "in-scan quiet" is the most the clock reached before a later reset, once armed), with the
+6-period threshold: run1 (2.1 s) armed +20.0, no end, in-scan quiet 2.8 s (1.35 periods); run3 (2.1) +13.0, no end, 2.4 s (1.14); run4 fast swipe (1.6) +11.9, ended +99.2 (last
+reset +89.2, 10.0 s after), 1.6 s (1.00); run4 stretch (1.6) +7.6, no end, 1.6 s (1.00); run5 (tap 1.2) +8.8, no end, 2.1 s (1.72); run6 (tap 1.0) +7.2, no end, 0.8 s (0.80);
+run7 (tap 1.2, phantom) +8.6, ended +71.2 (last reset +63.6, 7.6 s after), 2.0 s (1.67); run8 (tap 300) +8.2, no end (the log stops 6.6 s after its last reset, under the 7.2 s),
+2.2 s (1.83); run9 (tap 300) +8.2, ended +379.3 (last reset +372.1, 7.2 s after), 1.6 s (1.36); run10 (tap 25, the phone) +9.1, ended +23.6 (last reset +16.3, 7.3 s after), 0.8 s (0.67).
+The true in-scan maximum is 0.67 to 1.83 periods, against 6: a margin of 3.3 at worst.
+Measured found-end counts (`testTheEndIsStillFoundWhenReadingsAreLost`, 50 seeds of random loss of readings, ended at or after the last card began): 30% lost: run4 50/50, run7 50/50,
+run9 50/50, run10 46/50; 50% lost: run4 47/50, run7 47/50, run9 50/50, run10 23/50 (its quiet tail is only 21 s). With one read per 0.6 s or 0.8 s all four still end at their last
+Pokémon (7.2 to 10.0 s after it began). No early end in any of these runs. Tests, on every full device log: readings kept at one per 0.6 s and 0.8 s, and 30% and 50% of readings
+dropped, never end early (0 of 50 seeds on every log); windows of 4, 5, 6, 8 and 10 periods with no card read inserted at every position never end it; a wait of 0 to 30 s before the first
+page never ends it. A static last card read every 0.3 s and 0.6 s still ends the scan within 120 s in all 40 seeds when 20% or 30% of frames are lost, CP is unread on 30% of them,
+bars on 30%, no card is read on 30%, bars are misread on 5%, 10% or 20% of readings (to one or three wrong values) or the CP on 10% (`testAStaticLastCardWithNoiseStillEndsIt`).
+Constructed cases that never end it: a card held 9 s across a frame gap; alternating twins at 2, 3 and 4 readings per card for 12 cards; 16 hidden-CP Pokémon; a run of unread cards;
+fourteen same-species, same-HP cards with different CPs read once each; ten cards with CPs two or more digits apart and identical bars at three readings each; one named card followed
+by ten CP-only different cards; five identical Pokémon. Cases that end it: six or more identical Pokémon, a static card with single-reading CP variants, digit-variant CPs of one name,
+HP and bars for six or more cards, and (the accepted residual above) alternating identical twins at one reading per card.
 The first real automatic end (run10, "Pogo scan 25", 11 Pokémon, `device-run10-tap-25-autoend.replay.jsonl`): the tap closed the appraisal after Rayquaza and its page was read unchanged for
-21 s with the CP flapping between 4262, 1262 and 262. Armed +9.1 s, Rayquaza first read +16.3 s, the end is found at +26.0 s (9.7 s after it); the same log cut at +25 s does not end;
-the trimmed log (end marker written) gives the same eleven rows as the full log. Under 30% / 50% loss of readings it ends in 46 / 20 of 50 seeds (its quiet tail is only 21 s).
+21 s with the CP flapping between 4262, 1262 and 262. At 8 periods the phone ended 12 to 15 s after the last Pokémon (the owner's count); at 6 the same log ends 7.3 s after Rayquaza
+first read; cut 5.5 s after it began it does not end; the trimmed log (end marker written) gives the same eleven rows as the full log.
 The extension then writes an end marker line to the replay log (`{"k":"e","t":...,"last":...}`, always with room even when the log is full), finishes the
 state and log as a user stop does and, after leaving its serial queue (a synchronous `broadcastFinished` must not meet `queue.sync`), ends the broadcast
 with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reached.")`. `ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings

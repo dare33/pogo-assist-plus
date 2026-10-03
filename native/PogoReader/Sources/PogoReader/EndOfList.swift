@@ -22,14 +22,14 @@ import Foundation
 ///   readings in a row) whose last `armChanges` changes were each `armMinPeriods` to `armMaxPeriods` expected periods after the one before: the
 ///   command is seen paging at its pace. Until then it never ends, however long the wait before the command was said.
 ///
-/// Accepted limits, documented: a real run of 8 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer
+/// Accepted limits, documented: a real run of 6 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer
 /// than 5 readable Pokémon never arm it; persistent flapping of the last card's name or HP read delays or prevents the end; recurring values read
-/// ONCE per card (alternating identical twins, one reading per card, for 8 cards) look like one static card and end it; and so do eight or more
+/// ONCE per card (alternating identical twins, one reading per card, for 6 cards) look like one static card and end it; and so do six or more
 /// consecutive cards with the same name, the same HP, the same bars (or bars unread) and CPs that are digit-variants of each other.
 ///
 /// Only for a scan paged by a command: `make(pagedByCommand:period:)` returns nil for a person paging by hand, who may pause on a Pokémon.
 public struct EndOfListDetector {
-    public static let quietPeriods = 8.0
+    public static let quietPeriods = 6.0
     public static let armCount = 5
     public static let armChanges = 3
     public static let armMinPeriods = 0.5, armMaxPeriods = 2.5

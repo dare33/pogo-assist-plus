@@ -166,7 +166,7 @@ final class EndOfListTests: XCTestCase {
         for (name, period, _) in Self.logs {
             let rs = try readings(name), t0 = rs[0].t
             let base = run(seq(rs), period: period), finalNew = try XCTUnwrap(base.lastNew)
-            for w in [4.0, 5.0, 6.0, 8.0] {
+            for w in [4.0, 5.0, 6.0, 8.0, 10.0] {
                 var start = (base.armedAt ?? t0) + 1
                 while start + w * period < finalNew - 2 {
                     let s: Seq = rs.map { ($0.t >= start && $0.t < start + w * period) ? (FrameReading(), $0.t) : ($0.frameReading, $0.t) }
@@ -200,21 +200,21 @@ final class EndOfListTests: XCTestCase {
         return (d, t)
     }
 
-    func testTheSameCardReadForEightPeriodsEndsItOnceArmed() {
+    func testTheSameCardReadForSixPeriodsEndsItOnceArmed() {
         var (d, t) = armed()
-        t = hold(&d, card("Last", 900, hp: 99, bars: 7), from: t, seconds: 8 * 1.2 - 0.3)
+        t = hold(&d, card("Last", 900, hp: 99, bars: 7), from: t, seconds: 6 * 1.2 - 0.3)
         XCTAssertNil(d.ended)
         hold(&d, card("Last", 900, hp: 99, bars: 7), from: t, seconds: 2)
         XCTAssertNotNil(d.ended)
     }
 
-    func testIdenticalTwinsOfEightOrMoreEndItAndFewerDoNot() {
+    func testIdenticalTwinsOfSixOrMoreEndItAndFewerDoNot() {
         var (d, t) = armed()
         let twin = card("Pidgey", 10, hp: 12, bars: 5)
-        for _ in 0..<7 { t = hold(&d, twin, from: t, seconds: 1.2) }       // 7 twins: 8.4 s
-        XCTAssertNil(d.ended, "seven identical Pokémon: under 8 periods of the same card... ")
+        for _ in 0..<5 { t = hold(&d, twin, from: t, seconds: 1.2) }       // 5 twins: 6.0 s
+        XCTAssertNil(d.ended, "five identical Pokémon: under 6 periods of the same card")
         for _ in 0..<2 { t = hold(&d, twin, from: t, seconds: 1.2) }
-        XCTAssertNotNil(d.ended, "a real run of 8+ identical Pokémon ends it (documented limit)")
+        XCTAssertNotNil(d.ended, "a real run of 6+ identical Pokémon ends it (documented limit)")
     }
 
     func testAlternatingTwinsAreNotTheEnd() {
@@ -245,10 +245,10 @@ final class EndOfListTests: XCTestCase {
         XCTAssertNil(e.ended)
     }
 
-    /// J3: eight command-paced cards of one species and HP, each with its own CP and bars, each read ONCE: nothing here is a quiet card.
+    /// J3: fourteen command-paced cards of one species and HP (well above the 6-period threshold), each with its own CP and bars, each read ONCE: nothing here is a quiet card.
     func testEightSameSpeciesAndHPCardsReadOnceEachDoNotEndIt() {
         var (d, t) = armed()
-        for i in 0..<8 { d.feed(card("Pidgey", 300 + 11 * i, hp: 40, bars: i + 1), time: t); t += 1.2 }
+        for i in 0..<14 { d.feed(card("Pidgey", 300 + 11 * i, hp: 40, bars: i + 1), time: t); t += 1.2 }
         XCTAssertNil(d.ended)
         for i in 0..<12 { d.feed(card("Pidgey", 500 + 7 * i, hp: 40, bars: i + 2), time: t); t += 1.2 }
         XCTAssertNil(d.ended)
@@ -327,7 +327,7 @@ final class EndOfListTests: XCTestCase {
         }
     }
 
-    /// L1: eight or more consecutive cards with the same name, HP and bars whose CPs are digit-variants of each other (one digit apart, or a run of the other's
+    /// L1: six or more consecutive cards with the same name, HP and bars whose CPs are digit-variants of each other (one digit apart, or a run of the other's
     /// digits) look like one card with a tall model's CP misreads, and end the scan: the documented limit. CPs that are NOT related that way never do.
     func testCPsThatAreDigitVariantsOfEachOtherAreOneCardAndUnrelatedOnesAreNot() {
         for cps in [(0..<10).map { 1400 + 10 * $0 }, (0..<10).map { 1499 - $0 }, [1500, 1499, 1498, 1497, 1496, 1495, 1494, 1493, 1492, 1491, 1490, 1489]] {
@@ -335,14 +335,14 @@ final class EndOfListTests: XCTestCase {
             for cp in cps { for _ in 0..<3 { d.feed(card("Rattata", cp, hp: 40, bars: 10), time: t); t += 0.4 } }
             XCTAssertNotNil(d.ended, "digit-variant CPs from \(cps.first!): the documented limit")
         }
-        // CPs two or more digits apart and not runs of each other: eight cards, never the end
+        // CPs two or more digits apart and not runs of each other: ten cards, never the end
         var (d, t) = armed()
         for cp in [1312, 1457, 1688, 1749, 1853, 1926, 2071, 2164, 2289, 2395] { for _ in 0..<3 { d.feed(card("Rattata", cp, hp: 40, bars: 10), time: t); t += 0.4 } }
         XCTAssertNil(d.ended)
     }
 
     /// L1: the real end of the list on the phone (run10, Pogo scan 25): eleven Pokémon, then Rayquaza, whose page stays on screen with the CP flapping in short
-    /// runs between 4262, 1262 and 262. The scan ends within 8 periods + 2 s of Rayquaza's first reading, not before, and the same log cut at +25 s does not end.
+    /// runs between 4262, 1262 and 262. The scan ends within 6 periods + 2 s of Rayquaza's first reading, not before, and the same log cut 5.5 s after Rayquaza began does not end.
     func testRun10EndsAtRayquazaAndNotBeforeAndNotWhenCutShort() throws {
         let rs = try readings("device-run10-tap-25-autoend.replay.jsonl"), t0 = rs[0].t
         let rayquaza = try XCTUnwrap(rs.first { $0.name == "Rayquaza" }).t
@@ -350,9 +350,9 @@ final class EndOfListTests: XCTestCase {
         let e = try XCTUnwrap(d.ended, "the end of the list must be found")
         print("RUN10 first line 0.0, Rayquaza first read +\(String(format: "%.1f", rayquaza - t0)), ended +\(String(format: "%.1f", e.at - t0)) (\(String(format: "%.1f", e.at - rayquaza)) s after Rayquaza), armed +\(String(format: "%.1f", (d.armedAt ?? t0) - t0)), log ends +\(String(format: "%.1f", rs.last!.t - t0))")
         XCTAssertGreaterThanOrEqual(e.at, rayquaza, "not before Rayquaza")
-        XCTAssertLessThanOrEqual(e.at - rayquaza, 8 * 1.2 + 2)
-        let cut = rs.filter { $0.t <= t0 + 25 }
-        XCTAssertNil(run(seq(cut), period: 1.2).ended, "cut at +25 s the quiet time is not complete")
+        XCTAssertLessThanOrEqual(e.at - rayquaza, 6 * 1.2 + 2)
+        let cut = rs.filter { $0.t <= rayquaza + 5.5 }
+        XCTAssertNil(run(seq(cut), period: 1.2).ended, "cut 5.5 s after Rayquaza began the quiet time (7.2 s) is not complete")
     }
 
     /// L2: after the end fires, the marker is written and the trimmed log still gives the same eleven rows as the full log.
