@@ -41,6 +41,8 @@ final class AppModel: ObservableObject {
         var kindNote: String?
         /// What `ScanKindAdvice` said about a full scan of this result (nil for a saved scan read again).
         var advice: ScanKindAdvice.Decision?
+        /// Where a scan the extension ended itself stopped and what to do (`ScanStop.summary`), shown once at the top of the review.
+        var stopSummary: String?
     }
 
     enum ScanFlow {
@@ -629,7 +631,7 @@ final class AppModel: ObservableObject {
         let typed = storageCount
         Task {
             do {
-                let (outcome, plan, seconds, base, seq, kind, note, advice) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?, ScanKindAdvice.Decision) in
+                let (outcome, plan, seconds, base, seq, kind, note, advice, stop) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?, ScanKindAdvice.Decision, String?) in
                     let outcome = try ScanPipeline.process(replay: url, engine: engine, paging: paging)
                     // A full scan proposes everything unseen as gone, so it is only the default when the list can be known to have ended.
                     var kind = asked, note: String?
@@ -639,12 +641,21 @@ final class AppModel: ObservableObject {
                     let entries = current?.entries ?? []
                     let t = Date()
                     let plan = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
-                    return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note, d)
+                    // Where it stopped: the last Pokémon, how many, whether the appraisal had closed (from the whole log, the tail the end marker cuts included).
+                    var stop: String?
+                    if ended {
+                        let last = outcome.scan.rows.last
+                        let closed = ScanStop.appraisalClosed(lines: ReplayLog.lines(in: url))
+                        let ran = ScanStop.ranOut(read: outcome.scan.rows.count, typedCount: typed, full: asked == .full, commandPeriod: period)
+                        stop = ScanStop.summary(lastName: last?.display, lastCP: last?.cp, read: outcome.scan.rows.count, appraisalClosed: closed, ranOut: ran,
+                                                matchSentence: ScanKindAdvice.matchSentence(pokemonRead: outcome.scan.rows.count, decision: d))
+                    }
+                    return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note, d, stop)
                 }
                 let t = outcome.timings
                 NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
                 var review = Review(account: a, kind: kind, outcome: outcome, plan: plan, base: base, storageCount: asked == .full ? typed : nil, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging), boxSeq: seq)
-                review.endedAtListEnd = ended; review.kindNote = note; review.advice = advice
+                review.endedAtListEnd = ended; review.kindNote = note; review.advice = advice; review.stopSummary = stop
                 flow = .review(review)
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)

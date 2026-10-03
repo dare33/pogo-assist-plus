@@ -528,9 +528,18 @@ the smallest size that covers it (above 5,000 the largest command covers 5,000 a
 scan lists the sizes and what each takes. The app keeps a record of the set (screen, date) per account, and the wrong-screen warning
 (`TapCommandCheck`) covers it across every account on the phone.
 
-**Once started, a command cannot be stopped.** Touching the screen, the side-button triple click, locking the phone and "Hey Siri, turn off
-Voice Control" were all tried on an iPhone and none stops it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps
-tapping (or swiping) the same place whatever is on screen. That is why the set has fixed sizes: the overshoot past the end of the list is bounded.
+**Stopping a command.** Touching the screen, the side-button triple click, locking the phone and "Hey Siri, turn off Voice Control" do not stop a running command; saying
+"Go to sleep" does (found on the phone): it stops at the end of the batch that is playing, because the chain's next step does not start, so up to 50 x 1.2 s = a minute for the tap
+set (10 x 1.6 s plus the join for the swipe set; `SetKind.stopDelayText` derives the text). "Wake up" turns Voice Control back on. Voice Control's Attention Aware must be OFF: with it
+on, Voice Control goes to sleep when the person looks away, which stops a command at the end of its batch (the setup list on the Scan screen says so). Stay on the Pokémon's
+appraisal screen in Pokémon GO until the command ends: it keeps tapping (or swiping) the same place whatever is on screen. The fixed sizes bound the overshoot past the end of the list.
+Two scans stopped short on the phone and are known device behaviour: in one a tap (about one in 2,100) closed the appraisal at the 168th page, mid-batch (bars were read for 0.8 s on
+Stunfisk CP 902, then name, CP and HP with no bars for 10 s, and the automatic end fired correctly); in the other the command stopped exactly at the end of its first batch of 50 with
+the appraisal still open on Abra CP 799 and the taps never resumed (cause unknown). Each cost one manual restart. The result says where a command scan stopped and what to do
+(`ScanStop`): the last Pokémon read (name and CP), how many were read, whether the appraisal had closed (the last card's final readings have no bars: run10 and the first stall
+closed, the second stall and run12 open) and one of two lines, without claiming a cause: "This is the size of the command you said: it ran out. To scan the rest, open <last>..." when
+the count is within max(3, 1% of the reach) of the named command's reach (a full scan: the smallest command covering the typed count; a part scan: any set size), or "It stopped after N,
+short of the command's size. If that was not the end of your list, open <last> in Pokémon GO with the appraisal showing and scan again from there (Add and update)."
 
 **The scan ends by itself** at the end of the list, for a command scan only. The choice "Page with the voice command" or "Page by hand" is made on the Scan
 screen BEFORE the scan and stored. Until the person chooses it is by hand while no command set exists on this phone, and the command once it does; and the

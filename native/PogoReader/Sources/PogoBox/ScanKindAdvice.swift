@@ -51,6 +51,13 @@ public enum ScanKindAdvice {
 
     /// The line on the result for a scan the extension ended itself. It never claims completeness: it says how many were read, and only
     /// when a full scan is sound that this matches the count.
+    /// Only when a full scan is sound: how the Pokémon read compare with the typed count. Never "matches".
+    public static func matchSentence(pokemonRead: Int, decision: Decision) -> String? {
+        guard decision.fullIsSound, let typed = decision.typedCount else { return nil }
+        if pokemonRead == typed { return "Exactly the \(typed.formatted()) you gave." }
+        return "\(pokemonRead.formatted()) Pokémon read, within \(tolerance(typed).formatted()) of the \(typed.formatted()) you gave."
+    }
+
     public static func endedLabel(pokemonRead: Int, decision: Decision) -> String {
         guard decision.fullIsSound, let typed = decision.typedCount else { return "The scan ended by itself after \(pokemonRead.formatted()) Pokémon." }
         if pokemonRead == typed { return "The scan ended by itself after \(pokemonRead.formatted()) Pokémon, exactly the \(typed.formatted()) you gave." }

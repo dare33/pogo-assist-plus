@@ -80,7 +80,7 @@ private struct ResultList: View {
                 if let warning = paceWarning { Label(warning, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange) }
                 row("Box", review.account)
                 if let plan = review.reread { rereadNotes(plan) }
-                if review.endedAtListEnd, let advice = review.advice { Label(ScanKindAdvice.endedLabel(pokemonRead: review.outcome.scan.rows.count, decision: advice), systemImage: "checkmark.circle").font(.footnote).foregroundStyle(.secondary) }
+                if let stop = review.stopSummary { Label(stop, systemImage: "flag.checkered").font(.callout) }
                 if let note = review.kindNote { Label(note, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary) }
                 if review.reread == nil { Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in
                     // A full scan the advice refused: say why, and ask first.

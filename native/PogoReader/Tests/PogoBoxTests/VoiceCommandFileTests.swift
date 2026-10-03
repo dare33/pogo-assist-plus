@@ -386,3 +386,10 @@ final class VoiceCommandFileTests: XCTestCase {
         }
     }
 }
+
+final class StopDelayTextTests: XCTestCase {
+    func testTheStopDelayIsDerivedFromTheBatchAndThePaceOfTheKind() {
+        XCTAssertEqual(VoiceCommandFile.SetKind.tap.stopDelayText, "up to a minute", "50 taps x 1.2 s")
+        XCTAssertEqual(VoiceCommandFile.SetKind.swipe.stopDelayText, "up to 17 seconds", "10 swipes x 1.6 s plus the join")
+    }
+}

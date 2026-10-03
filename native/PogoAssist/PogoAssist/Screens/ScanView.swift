@@ -24,7 +24,7 @@ struct ScanView: View {
             }
             Section("Before you start") {
                 Label("The Pogo scan commands are installed (once per phone)", systemImage: "1.circle")
-                Label("Voice Control's Show Confirmation and Show Hints are off", systemImage: "2.circle")
+                Label("Voice Control's Show Confirmation, Show Hints and Attention Aware are off (with Attention Aware on, Voice Control goes to sleep when you look away, which stops a command at the end of its batch)", systemImage: "2.circle")
                 Label("Pokémon GO is open on the first Pokémon with the appraisal showing", systemImage: "3.circle")
                 Label("Say the command named below, or page through the Pokémon by hand", systemImage: "4.circle")
             }
@@ -86,7 +86,7 @@ struct ScanView: View {
             }
             stepTitle("For each scan: say the command")
             if model.scanKind == .full { fullScanCommand } else { partScanCommands }
-            Label("Once started, a command cannot be stopped: not by touching the screen, the side button, locking the phone or Siri. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends. It keeps \(model.setKind == .tap ? "tapping" : "swiping") the same place whatever is on screen.",
+            Label("To stop a command, say \"Go to sleep\". It stops when the batch that is playing ends, \(model.setKind.stopDelayText). Then say \"Wake up\". Touching the screen, the side button or locking the phone does not stop it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps \(model.setKind == .tap ? "tapping" : "swiping") the same place whatever is on screen.",
                   systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
             if !model.pagedByHand { Text("The scan ends by itself when the list ends or the command runs out (the broadcast stops and the result appears). The command keeps going until it runs out; that does nothing to your box.").font(.footnote).foregroundStyle(.secondary) }
             stepTitle("Before you start the broadcast: how will you page?")

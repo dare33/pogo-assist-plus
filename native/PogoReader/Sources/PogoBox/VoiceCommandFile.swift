@@ -196,6 +196,12 @@ public enum VoiceCommandFile {
         /// version of the set); a swipe gesture holds about 38 touch events per swipe, so the swipe set is cut to short gestures, repeated more often,
         /// to keep the file small.
         var maxBatch: Int { self == .tap ? defaultBatch : swipeSetBatch }
+        /// How long "Go to sleep" takes to stop a command: it stops at the end of the batch that is playing, so up to the gesture's length (50 taps x 1.2 s is a
+        /// minute; 10 swipes x 1.6 s is 16 seconds), plus the join.
+        public var stopDelayText: String {
+            let seconds = Double(maxBatch) * pace.every + joinExtraSeconds
+            return seconds >= 55 ? "up to a minute" : "up to \(Int(seconds.rounded(.up))) seconds"
+        }
         /// The pace every command of the set pages at: 1.2 s taps, 1.6 s swipes.
         public var pace: Pace { self == .tap ? .tapNormal : .swipeFast }
         public static func forScreen(tapAvailable: Bool) -> SetKind { tapAvailable ? .tap : .swipe }
