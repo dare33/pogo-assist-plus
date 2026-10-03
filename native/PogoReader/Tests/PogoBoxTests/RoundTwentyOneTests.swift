@@ -37,9 +37,9 @@ final class RoundTwentyOneTests: XCTestCase {
             XCTAssertFalse(p.unsure.contains { $0.kind == .megaPair }, "CP \(s.cp)")
             assertOneHome(p, "CP \(s.cp)")
         }
-        // the ordinary rules decide a higher CP: a question of their own kind (here the base-of-Mega rule), never the Mega-pair join
+        // the ordinary rules decide a higher CP: a power-up question on the BASE entry (round 22), never the Mega-pair join
         let up = plan([row("staraptor", cp: 2950, hp: 167, ivs: sIV)], box)
-        XCTAssertEqual(up.unsure.map { $0.kind }, [.megaToBase])
+        XCTAssertEqual(up.unsure.map { $0.kind }, [.poweredUp]); XCTAssertEqual(up.unsure[0].candidates, ["base"])
     }
 
     func testS1JoinKeepsTheBaseEntryExactlyAsSavedAndDropsTheMegaEntryWithItsCorrections() throws {
@@ -116,6 +116,9 @@ final class RoundTwentyOneTests: XCTestCase {
         let box = try Self.csvBox(csv, gm: gm, date: date(0), supply: [rows12, rows15])
         let p = plan(rows15, box)
         assertOneHome(p, "run15 into run12 csv box")
+        let p12 = plan(rows12, box)
+        assertOneHome(p12, "run12 into run12 csv box")
+        print("R12 MERGE box \(box.count): same \(p12.same.count) updated \(p12.updated.count) unsure \(p12.unsure.count) new \(p12.new.count) gone \(p12.gone.count) \(p12.unsure.map { "\($0.kind)" })")
         print("R15 MERGE box \(box.count): same \(p.same.count) updated \(p.updated.count) unsure \(p.unsure.count) new \(p.new.count) gone \(p.gone.count) \(p.unsure.map { "\($0.kind)" })")
     }
 
@@ -201,5 +204,46 @@ extension RoundTwentyOneTests {
         guard case .finish? = events.first else { return XCTFail("\(events)") }
         // and "no count -> never Full" stays
         XCTAssertFalse(ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 11, typedCount: nil, logTruncated: false, logFailed: false, commandPeriod: 1.2).fullIsSound)
+    }
+}
+
+/// Round 22: the Mega pair when the question is not raised.
+final class RoundTwentyTwoMergeTests: XCTestCase {
+    let gm = try! GameMaster.bundled()
+    func date(_ d: Int) -> Date { Date(timeIntervalSince1970: 1_790_000_000 + Double(d) * 86_400) }
+    let sIV = IVs(atk: 15, def: 15, hp: 14)
+    func row(_ id: String, cp: Int, hp: Int?) -> ScanRow {
+        let nf = GameMaster.nameAndForm(gm.byId[id]?.name ?? id)
+        return ScanRow(index: 1, name: nf.name, display: nf.name, form: nf.form, speciesId: id, dex: gm.byId[id]?.dex, cp: cp, hp: hp, ivs: sIV, ivsRead: sIV, ivsGuess: nil, level: 20, levelMax: 20, dust: 1000, solveStatus: "exact", flags: [], frames: [])
+    }
+    func entry(_ r: ScanRow, _ id: String) -> BoxEntry { BoxEntry(id: id, row: r, firstSeen: date(0), lastSeen: date(0)) }
+    var box: [BoxEntry] { [entry(row("staraptor", cp: 2819, hp: 167), "base"), entry(row("staraptor_mega", cp: 3970, hp: 167), "mega")] }
+    func plan(_ s: [ScanRow]) -> BoxMerge.Plan { BoxMerge.plan(scanned: s, into: box, kind: .full, scanDate: date(5), gameMaster: gm) }
+    func touched(_ p: BoxMerge.Plan) -> Set<String> { Set(p.same.map { $0.savedId } + p.updated.map { $0.savedId } + p.unsure.flatMap { $0.candidates }) }
+
+    /// Where BOTH saved entries end up: seen (paired, asked about) or not seen. A saved Mega pair is one Pokémon: once a row has paired or asked about one half the other is never "not seen".
+    func assertBothHalvesAccountedFor(_ p: BoxMerge.Plan, _ label: String) {
+        let notSeen = Set(p.gone)
+        XCTAssertTrue(notSeen.isEmpty, "\(label): not seen \(notSeen)")
+        XCTAssertFalse(touched(p).isEmpty, label)
+    }
+
+    func testABaseRowAtAnotherCPIsOfferedTheBaseEntryAsAPowerUp() {
+        let p = plan([row("staraptor", cp: 2950, hp: 170)])
+        XCTAssertEqual(p.unsure.map { $0.kind }, [.poweredUp]); XCTAssertEqual(p.unsure[0].candidates, ["base"], "the real entry is the candidate, not the Mega one")
+        assertBothHalvesAccountedFor(p, "powered-up base")
+        let res: [Int: BoxMerge.Resolution] = [0: .existing("base")]
+        let out = try! BoxMerge.apply(p, resolutions: res, keepGone: BoxMerge.keepSet(plan: p, resolutions: res, markedForRemoval: []), to: box)
+        XCTAssertEqual(out.map { "\($0.id) \($0.row.cp)" }, ["base 2950", "mega 3970"], "base updated, the Mega entry untouched, no duplicate")
+    }
+
+    func testTwoBaseTwinsTwoMegaTwinsAndAMegaRowAtAnotherCP() {
+        let base = row("staraptor", cp: 2819, hp: 167), mega = row("staraptor_mega", cp: 3970, hp: 167)
+        let a = plan([base, base]); assertBothHalvesAccountedFor(a, "base twins")
+        XCTAssertTrue(a.same.contains { $0.savedId == "base" }); XCTAssertTrue(a.unsure.contains { $0.kind == .extraTwin }); XCTAssertTrue(a.new.isEmpty)
+        let b = plan([mega, mega]); assertBothHalvesAccountedFor(b, "mega twins")
+        XCTAssertTrue(b.new.isEmpty, "the second Mega row is asked about: \(b.unsure.map { $0.kind })")
+        let c = plan([row("staraptor_mega", cp: 4100, hp: 170)]); assertBothHalvesAccountedFor(c, "mega at another CP")
+        XCTAssertTrue(c.new.isEmpty)
     }
 }

@@ -78,6 +78,10 @@ public struct ScanEndController {
     /// The bars of the card the pause is on (read during its stay), if any: other settled bars on the same name, HP and CP are another card.
     private var pausedBars: IVs?
     private var stayBars: (resets: Int, ivs: IVs)?
+    /// The bars of the previous card reading (nil when it read none): two card readings in a row with the same other bars are what settles a look-alike next card.
+    private var lastCardBars: IVs?
+    /// The previous pause's read count and cap clock: a new pause with no Pokémon read since continues the same cap, so a resume that read nothing cannot start the cap over.
+    private var lastPause: (read: Int, began: Double)?
     /// The scan finished because a pause went unanswered (the 180 s, or the cap), not because the list ended.
     public private(set) var timedOut = false
     private var lastRead = 0, lastFeedTime = 0.0
@@ -103,6 +107,7 @@ public struct ScanEndController {
 
     public mutating func feed(_ r: FrameReading, time: Double, read: Int) -> Event {
         let before = detector
+        let prevBars = lastCardBars
         // The appraisal must have LOOKED closed (see `appraisalClosed`) before bars coming back count as reopening it: one dropped reading on an open appraisal is not.
         let wasClosed = appraisalClosed() == true
         var barsAppeared = false   // a card reading with bars straight after one without
@@ -110,6 +115,7 @@ public struct ScanEndController {
             barsAppeared = r.ivs != nil && recentBars.last == false && wasClosed
             recentBars.append(r.ivs != nil); if recentBars.count > 8 { recentBars.removeFirst() }
             if r.name != nil { lastName = r.name }; if r.cp != nil { lastCP = r.cp }
+            lastCardBars = r.ivs
         }
         detector.feed(r, time: time)
         if let ivs = r.ivs { stayBars = (detector.resets, ivs) }
@@ -120,13 +126,18 @@ public struct ScanEndController {
             var barsOnly = false
             if detector.resets != p.resets, r.ivs != nil {
                 // Would the same reading without its bars have counted as a new card? If not, only the bars did: the person reopened the appraisal on the same card,
-                // unless the card's own bars (read during its stay) are another settled triple, beyond a notch on a stat: then it is a look-alike next card.
                 var probe = before; var bare = r; bare.ivs = nil
                 probe.feed(bare, time: time)
                 barsOnly = probe.resets == before.resets
-                if barsOnly, let was = pausedBars, let now = r.ivs, !Self.sameBars(was, now) { barsOnly = false }
             }
             if detector.resets != p.resets, !barsOnly {
+                paused = nil
+                return .resume(at: time)
+            }
+            // A look-alike next card (same name, HP and CP) has other bars than the card's own, beyond a notch on a stat, HELD by two card readings in a row (the rule the bars split
+            // uses). One such reading is not enough: the appraisal animates when it opens (run15's Rayquaza read 9/9/9, then 13/12/14), so a first reading is at most a window
+            // restart (below, for a closed appraisal).
+            if let was = pausedBars, let now = r.ivs, !Self.sameBars(was, now), let prev = prevBars, Self.sameBars(prev, now) {
                 paused = nil
                 return .resume(at: time)
             }
@@ -147,7 +158,7 @@ public struct ScanEndController {
             let pause = Pause(at: e.at, last: e.last, read: read, closed: appraisalClosed(), name: lastName, cp: lastCP)
             detector.rearm()
             paused = (pause, time, detector.resets)
-            pauseBegan = time; pausedBars = stayBars.flatMap { $0.resets == detector.resets ? $0.ivs : nil }
+            pauseBegan = (lastPause?.read == read ? lastPause!.began : time); lastPause = (read, pauseBegan); pausedBars = stayBars.flatMap { $0.resets == detector.resets ? $0.ivs : nil }
             pauseCount += 1
             return .pause(pause)
         }

@@ -210,9 +210,17 @@ public enum BoxMerge {
 
         // One Pokémon saved twice across its Mega state (a base entry and a Mega-form entry with the same IVs and HP): the next scan that reads either asks once whether to
         // join them, instead of pairing the row with one entry and listing the other as not seen.
+        // Every saved Mega pair, whether or not this scan raises the question: the two halves are one Pokémon, so the Mega half is never offered to a base row as "the base of a Mega"
+        // (the base entry is the candidate then), and once one half is paired, asked about or updated the other is not listed as not seen.
+        var savedPairs = [(base: Int, mega: Int)]()
         for (mi, m) in saved.enumerated() {
             guard let base = megaBase(m.row.speciesId, gm), let mivs = m.row.ivs, m.row.hp != nil else { continue }
-            guard let bi = saved.indices.first(where: { saved[$0].row.speciesId == base && saved[$0].row.ivs == mivs && saved[$0].row.hp == m.row.hp }) else { continue }
+            if let bi = saved.indices.first(where: { saved[$0].row.speciesId == base && saved[$0].row.ivs == mivs && saved[$0].row.hp == m.row.hp }) { savedPairs.append((bi, mi)) }
+        }
+        let pairedMegaIds = Set(savedPairs.map { saved[$0.mega].id })
+        for (mi, m) in saved.enumerated() {
+            guard let base = megaBase(m.row.speciesId, gm), let mivs = m.row.ivs, m.row.hp != nil else { continue }
+            guard let bi = savedPairs.first(where: { $0.mega == mi })?.base else { continue }
             // The scanned row must BE one of the two entries by the normal rules (the base row agrees with the base entry's CP, the Mega row with the Mega entry's; the HP agrees or
             // was not read): a row at another CP is a power-up or something new, never a reason to ask about joining. And only when exactly one row is that Pokémon: two identical
             // rows are two Pokémon (twins), left to the ordinary rules so the second is asked about, never silently added.
@@ -292,7 +300,7 @@ public enum BoxMerge {
             // A Mega row against its base entry (the base is the saved species), same three IVs.
             (.megaSame, { i, s, v in megaBases[i].map { $0 == v.speciesKey || v.corrections.species?.was == $0 } == true && sameIVs(s, v) }),
             // A base row against an entry first saved in its Mega form.
-            (.baseOfMega, { i, s, v in megaBases[i] == nil && megaBase(v.row.speciesId, gm) == s.speciesId && sameIVs(s, v) }),
+            (.baseOfMega, { i, s, v in megaBases[i] == nil && megaBase(v.row.speciesId, gm) == s.speciesId && sameIVs(s, v) && !pairedMegaIds.contains(v.id) }),
             // A power-up never lowers the HP or the level: a higher CP with either lower is something else, and is asked about below.
             (.poweredUp, { _, s, v in sameSpecies(s, v) && sameIVs(s, v) && s.cp > v.row.cp && !lowers(s, v.row) }),
             (.evolved, { i, s, v in megaBases[i] == nil && sameIVs(s, v) && evolved(s, from: v, gm) }),
@@ -391,7 +399,14 @@ public enum BoxMerge {
         let pairedIds = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
         for i in plan.unsure.indices where plan.unsure[i].kind == .extraTwin { plan.unsure[i].candidates = Array(plan.unsure[i].candidates.prefix(1)) + plan.unsure[i].candidates.dropFirst().filter { !pairedIds.contains($0) } }
         unsureSaved = unsureSaved.filter { !pairedIds.contains(saved[$0].id) }
-        plan.unpaired = (vPool + unsureSaved.sorted()).map { Unpaired(id: saved[$0].id, speciesKey: saved[$0].speciesKey, name: saved[$0].row.name, display: saved[$0].row.display, title: saved[$0].row.title) }
+        // One half of a saved Mega pair was paired, asked about or updated by a row: the Pokémon was seen, so the other half is not "not seen".
+        let touchedIds = pairedIds.union(plan.unsure.flatMap { $0.candidates })
+        var halvesSeen = Set<Int>()
+        for pr in savedPairs {
+            if touchedIds.contains(saved[pr.base].id) { halvesSeen.insert(pr.mega) }
+            if touchedIds.contains(saved[pr.mega].id) { halvesSeen.insert(pr.base) }
+        }
+        plan.unpaired = (vPool + unsureSaved.sorted()).filter { !halvesSeen.contains($0) || touchedIds.contains(saved[$0].id) }.map { Unpaired(id: saved[$0].id, speciesKey: saved[$0].speciesKey, name: saved[$0].row.name, display: saved[$0].row.display, title: saved[$0].row.title) }
         let report = goneReport(plan, resolutions: [:])
         plan.gone = report.gone
         plan.kept = report.kept

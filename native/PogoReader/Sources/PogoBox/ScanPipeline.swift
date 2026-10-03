@@ -55,7 +55,10 @@ public enum ScanPipeline {
                 readings.append(f); times.append(r.t)
             case .tick(let t): ticks.append(t); times.append(t)
             case .drop(let t): drops += 1; times.append(t)
-            case .pause(let at, let last, let read, let closed): pauses.append(Pause(at: at, last: last, read: read, closed: closed))
+            case .pause(let at, let last, let read, let closed):
+                // A pause with no Pokémon read since the one before (the same read count) is the same stall: the resume between them read nothing new (a reopened appraisal, a card
+                // that was not a new Pokémon), so the earlier pause is not "resumed" and the two share one entry.
+                if let i = pauses.indices.last, pauses[i].read == read, pauses[i].resumedAt != nil { pauses[i].resumedAt = nil } else { pauses.append(Pause(at: at, last: last, read: read, closed: closed)) }
             case .resume(let at): if let i = pauses.indices.last, pauses[i].resumedAt == nil { pauses[i].resumedAt = at }
             case .end, .stoppedByPerson, .pauseTimedOut: break
             }

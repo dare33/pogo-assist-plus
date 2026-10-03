@@ -225,7 +225,9 @@ final class ScanEndControllerTests: XCTestCase {
         var twin = try XCTUnwrap(rs.last { $0.t <= t }).frameReading
         twin.ivs = IVs(atk: (own.atk + 7) % 16, def: (own.def + 7) % 16, hp: (own.hp + 7) % 16)
         t += 0.4
-        XCTAssertEqual(c.feed(twin, time: t, read: g.rows.count), .resume(at: t), "other settled bars: a new card, not a reopened appraisal")
+        XCTAssertNotEqual(c.feed(twin, time: t, read: g.rows.count), .resume(at: t), "ONE reading with other bars is not settled (the appraisal animates when it opens)")
+        t += 0.4
+        XCTAssertEqual(c.feed(twin, time: t, read: g.rows.count), .resume(at: t), "the same other bars in two card readings in a row: a new card, not a reopened appraisal")
         XCTAssertNil(c.paused)
     }
 
@@ -319,5 +321,53 @@ final class ScanEndControllerTests: XCTestCase {
         // the pause notification counts what is expected
         XCTAssertTrue(ScanNotification.paused(scan: 1, event: 1, read: 170, storageCount: 1698, eggCount: 8, lastName: "A", lastCP: 1, sizes: [2000]).body.contains("170 of about 1690 read"))
         XCTAssertTrue(ScanNotification.paused(scan: 1, event: 1, read: 170, storageCount: 1698, lastName: "A", lastCP: 1, sizes: [2000]).body.contains("170 of about 1698 read"))
+    }
+
+    /// N1a: the appraisal reopened on the SAME stalled card animates (run15's Rayquaza read 9/9/9 at 0.94 before 13/12/14): one differing reading, then the card's own bars. A single
+    /// window restart, no resume, no second pause.
+    func testAnAnimatedReopenOnTheSameCardIsOneRestartAndNoResume() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let own = try ownBars(rs, upTo: at)
+        var bare = try XCTUnwrap(rs.last).frameReading; bare.ivs = nil
+        var anim = bare; anim.ivs = IVs(atk: max(0, own.atk - 4), def: max(0, own.def - 4), hp: max(0, own.hp - 4)); anim.ivConfidence = 0.94
+        var open = bare; open.ivs = own
+        var t = at, events = [ScanEndController.Event]()
+        func feed(_ r: FrameReading) { t += 0.4; let e = c.feed(r, time: t, read: p.read); if e != .none { events.append(e) } }
+        for _ in 0..<150 { feed(bare) }   // closed for 60 s
+        feed(anim)
+        for _ in 0..<300 { feed(open) }   // reopened and settled, nothing pages for two minutes
+        XCTAssertEqual(events.count, 1, "\(events)")
+        guard case .windowRestarted? = events.first else { return XCTFail("\(events)") }
+        XCTAssertEqual(c.pauseCount, 1); XCTAssertNotNil(c.paused)
+    }
+
+    /// N1b: a resume that read no new Pokémon (here a different card shown for a moment) and a second pause on the same stall do not start the cap over: from the first pause to the
+    /// finish no more than `pauseCapSeconds`, however the cycles fall.
+    func testTheCapHoldsAcrossAResumeThatReadNothingNew() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let tail = try XCTUnwrap(rs.last).frameReading
+        var t = at, resumes = 0, pauses = 1, finishedAt: Double?
+        search: for cycle in 0..<30 {
+            // a different card for 100 s (nothing is paged: the same read count): it resumes, then pauses on its own stall
+            var card = tail; card.name = cycle % 2 == 0 ? "Mewtwo" : "Lugia"; card.hp = HP(current: 100 + cycle, max: 100 + cycle); card.cp = 3000 + cycle; card.ivs = nil
+            for _ in 0..<250 {
+                t += 0.4
+                switch c.feed(card, time: t, read: p.read) { case .resume: resumes += 1; case .pause: pauses += 1; case .finish: finishedAt = t; break search; default: break }
+            }
+        }
+        XCTAssertGreaterThanOrEqual(resumes, 2); XCTAssertGreaterThanOrEqual(pauses, 2)
+        let end = try XCTUnwrap(finishedAt, "the scan finished"); XCTAssertLessThanOrEqual(end - at, ScanEndDecision.pauseCapSeconds + 2); XCTAssertTrue(c.timedOut)
+    }
+
+    /// The pending-row question: a card the grouper would add only at its `finish()` (a name-only or hidden-CP run, LiveGrouper.swift ~180-219) cannot be read during a pause without
+    /// ending it, because the controller resumes on any different name or HP (the detector resets), so a finish while paused never trims such a row. Pinned here.
+    func testAnyOtherNameOrHPReadDuringAPauseEndsItEvenWhenTheCountDoesNotGrow() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let tail = try XCTUnwrap(rs.last).frameReading
+        var nameOnly = FrameReading(); nameOnly.name = "Pidgey"; nameOnly.baseName = "Pidgey"
+        XCTAssertEqual(c.feed(nameOnly, time: at + 1, read: p.read), .resume(at: at + 1), "a name-only card (CP and HP hidden) is a different name: a resume")
+        var (c2, _, _, p2, at2) = try pausedAtRun10()
+        var hpOnly = tail; hpOnly.hp = HP(current: (tail.hp?.current ?? 50) + 7, max: (tail.hp?.max ?? 50) + 7); hpOnly.cp = nil; hpOnly.ivs = nil
+        XCTAssertEqual(c2.feed(hpOnly, time: at2 + 1, read: p2.read), .resume(at: at2 + 1), "a different HP, CP hidden: a resume")
     }
 }

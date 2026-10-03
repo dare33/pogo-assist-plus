@@ -47,6 +47,15 @@ enum ReaderSettings {
         set { defaults?.set(Array(newValue.suffix(8)), forKey: "postedNotifications") }
     }
 
+    /// When the finish request was made (seconds since 1970), so a request for a scan that is not paused at that moment can wait a short while for the next pause.
+    static var finishRequestedAt: Double? {
+        get { defaults?.object(forKey: "finishRequestedAt") as? Double }
+        set { if let newValue { defaults?.set(newValue, forKey: "finishRequestedAt") } else { defaults?.removeObject(forKey: "finishRequestedAt") } }
+    }
+    /// The one way to ask: the scan and the moment.
+    static func requestFinish(scan: Int) { finishRequestedAt = Date().timeIntervalSince1970; finishRequestedScan = scan }
+    static func clearFinishRequest() { finishRequestedScan = nil; finishRequestedAt = nil }
+
     static var autoEndPeriod: Double? {
         get { defaults?.object(forKey: "autoEndPeriod") as? Double }
         set { if let newValue { defaults?.set(newValue, forKey: "autoEndPeriod") } else { defaults?.removeObject(forKey: "autoEndPeriod") } }

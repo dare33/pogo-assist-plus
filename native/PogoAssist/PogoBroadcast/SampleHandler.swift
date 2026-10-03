@@ -80,7 +80,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             memory = MemoryProbe()
             finishedWork = false
             let period = ReaderSettings.autoEndPeriod
-            ReaderSettings.finishRequestedScan = nil
+            ReaderSettings.clearFinishRequest()
             ScanNotifier.removePauseNotifications()   // a new scan: no earlier scan's pause notification (or its "Finish scan" button) stays
             // The scan kind, the count and the eggs are captured here, like the period: only a Full scan may pause, and an Add-and-update scan neither uses nor remembers the count.
             // A Full scan started with no valid count (from Control Centre, past the Scan screen) runs as Add and update: no pause, never judged Full.
@@ -197,12 +197,19 @@ class SampleHandler: RPBroadcastSampleHandler {
     private func beat() {
         guard !finishedWork else { return }
         if let asked = ReaderSettings.finishRequestedScan {
-            ReaderSettings.finishRequestedScan = nil   // consumed whether or not it is honoured: a stale request must never wait for a later pause
-            // Honoured only for THIS scan and only while it is paused (an old notification's "Finish scan" does nothing to a later scan or to one that carried on).
-            if ScanNotification.finishRequestHonoured(asked: asked, runningScan: state.scanId, paused: state.paused), var c = endController {
-                let event = c.finishNow(at: lastReadingTime)
-                endController = c
-                if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last, byPerson: true); return }
+            // Scoped to THIS scan. Not paused at this moment: the request waits up to `finishRequestGraceSeconds` for the scan to pause again (a false resume and a second pause on the same
+            // stall must not swallow the tap); another scan's request, or an old one, is dropped, so an old notification never ends a later pause.
+            let age = Date().timeIntervalSince1970 - (ReaderSettings.finishRequestedAt ?? 0)
+            switch ScanNotification.finishRequestVerdict(asked: asked, runningScan: state.scanId, paused: state.paused, ageSeconds: age) {
+            case .keep: break
+            case .drop: ReaderSettings.clearFinishRequest()
+            case .honour:
+                ReaderSettings.clearFinishRequest()
+                if var c = endController {
+                    let event = c.finishNow(at: lastReadingTime)
+                    endController = c
+                    if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last, byPerson: true); return }
+                }
             }
         }
         // The pause timeout is also checked here, so a paused broadcast with no frames (or with Vision skipped under memory pressure) still finishes.

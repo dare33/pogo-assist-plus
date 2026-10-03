@@ -28,6 +28,18 @@ public struct ScanNotification: Equatable {
     /// is not paused, does nothing (the caller clears it either way).
     public static func finishRequestHonoured(asked: Int, runningScan: Int, paused: Bool) -> Bool { paused && asked == runningScan }
 
+    public enum FinishRequestVerdict: Equatable { case honour, keep, drop }
+    /// How long a request for the running scan waits when the scan is momentarily not paused (a pause that resumed and paused again on the same stall within the end wait must not lose the
+    /// tap). Longer than the end wait (6 periods), far shorter than a pause.
+    public static let finishRequestGraceSeconds = 20.0
+    /// What the extension does with a pending request: `honour` (this scan, paused), `keep` (this scan, not paused right now, and the request is younger than the grace), or `drop` (another
+    /// scan's, or too old: an old notification's tap never ends a later pause).
+    public static func finishRequestVerdict(asked: Int, runningScan: Int, paused: Bool, ageSeconds: Double) -> FinishRequestVerdict {
+        guard asked == runningScan else { return .drop }
+        if paused { return .honour }
+        return ageSeconds >= 0 && ageSeconds <= finishRequestGraceSeconds ? .keep : .drop
+    }
+
     /// How the time limit reads in the notification and on the Scan screen ("3 minutes"), from the one constant.
     public static var pauseLimitText: String {
         let m = Int((ScanEndDecision.pauseTimeoutSeconds / 60).rounded())

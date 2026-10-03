@@ -48,4 +48,15 @@ extension ScanEndNotificationTests {
         XCTAssertFalse(ScanNotification.finishRequestHonoured(asked: 76, runningScan: 77, paused: true), "an old scan's notification")
         XCTAssertFalse(ScanNotification.finishRequestHonoured(asked: 77, runningScan: 77, paused: false), "not paused: a scan that carried on is not ended")
     }
+
+    /// N1c: a finish request is kept for a short grace while the scan is momentarily not paused (a false resume and a second pause on the same stall), and still scoped to the scan.
+    func testAFinishRequestWaitsBrieflyForTheNextPauseOfTheSameScan() {
+        typealias V = ScanNotification.FinishRequestVerdict
+        XCTAssertEqual(ScanNotification.finishRequestVerdict(asked: 77, runningScan: 77, paused: true, ageSeconds: 500), V.honour, "paused: honoured however old (it is the same scan)")
+        XCTAssertEqual(ScanNotification.finishRequestVerdict(asked: 77, runningScan: 77, paused: false, ageSeconds: 3), V.keep)
+        XCTAssertEqual(ScanNotification.finishRequestVerdict(asked: 77, runningScan: 77, paused: false, ageSeconds: ScanNotification.finishRequestGraceSeconds + 1), V.drop, "old and not paused: an old tap never ends a later pause")
+        XCTAssertEqual(ScanNotification.finishRequestVerdict(asked: 76, runningScan: 77, paused: false, ageSeconds: 1), V.drop, "another scan's")
+        XCTAssertEqual(ScanNotification.finishRequestVerdict(asked: 76, runningScan: 77, paused: true, ageSeconds: 1), V.drop)
+        XCTAssertGreaterThan(ScanNotification.finishRequestGraceSeconds, 6 * 1.2 * 2, "longer than the end wait")
+    }
 }

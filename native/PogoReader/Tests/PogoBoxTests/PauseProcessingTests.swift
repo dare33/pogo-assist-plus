@@ -43,7 +43,7 @@ final class PauseProcessingTests: XCTestCase {
                 let rs = lines.compactMap { l -> ReplayReading? in if case .reading(let r) = l { return r } else { return nil } }
                 var stalledFrom = rs.last?.t ?? 0, k = rs.count - 1
                 while k >= 0, rs[k].name == rs.last?.name || rs[k].name == nil { stalledFrom = rs[k].t; k -= 1 }   // the final run of one card
-                out.append(.pause(at: prevEnd!, last: stalledFrom + shift, read: 0, closed: nil))
+                out.append(.pause(at: prevEnd!, last: stalledFrom + shift, read: (i + 1) * 1000, closed: nil))   // distinct counts, as in real logs: Pokémon were read between the pauses
             }
         }
         return out
@@ -110,6 +110,17 @@ final class PauseProcessingTests: XCTestCase {
         // a pause that was never answered (no resume marker) protects the same row, and every later one
         let open = try rows(beatLog(pause: true, resume: false))
         XCTAssertEqual(open.scan.rows.count, 12); XCTAssertNil(open.pauses[0].resumedAt)
+    }
+
+    /// N1b: a pause with no Pokémon read since the one before (the same read count) is the same stall, so the earlier pause is not reported as resumed.
+    func testASecondPauseWithNothingReadSinceIsTheSameStall() throws {
+        let base = beatLog(pause: true, resume: true)
+        let again = base + [.pause(at: 40, last: 8.4, read: 7, closed: nil)]
+        let same = try ScanPipeline.process(replay: write(again), engine: sharedEngine, paging: hint)
+        XCTAssertEqual(same.pauses.count, 1); XCTAssertNil(same.pauses[0].resumedAt, "it did not resume: the resume read nothing")
+        let more = base + [.pause(at: 40, last: 8.4, read: 9, closed: nil)]
+        let other = try ScanPipeline.process(replay: write(more), engine: sharedEngine, paging: hint)
+        XCTAssertEqual(other.pauses.count, 2); XCTAssertNotNil(other.pauses[0].resumedAt, "Pokémon were read since: a real resume")
     }
 
     func testTheMarkersRoundTripAndTheTailAfterAFinishIsStillCut() throws {

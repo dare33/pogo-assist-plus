@@ -14,7 +14,7 @@ final class NotificationActions: NSObject, UNUserNotificationCenterDelegate {
     }
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         // Scoped to the scan the notification was about: an old notification's action does nothing to a later scan.
-        if response.actionIdentifier == ScanNotification.finishActionID, let scan = response.notification.request.content.userInfo["scan"] as? Int { ReaderSettings.finishRequestedScan = scan }
+        if response.actionIdentifier == ScanNotification.finishActionID, let scan = response.notification.request.content.userInfo["scan"] as? Int { ReaderSettings.requestFinish(scan: scan) }
         completionHandler()
     }
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
@@ -232,7 +232,7 @@ final class AppModel: ObservableObject {
     }
 
     /// "Finish now" while a scan is paused: the extension ends it on its next heartbeat.
-    func finishPausedScanNow() { if let id = broadcast?.scanId, id != 0 { ReaderSettings.finishRequestedScan = id } }
+    func finishPausedScanNow() { if let id = broadcast?.scanId, id != 0 { ReaderSettings.requestFinish(scan: id) } }
 
     // MARK: - notifications the extension may not get shown
 
