@@ -25,6 +25,14 @@ struct BroadcastState: Codable, Equatable {
     var replayLogFailed = false      // a write to the replay log failed: it was switched off (reading was unaffected)
     var endedAtListEnd = false       // the extension ended the scan itself because the end of the list was reached
     var commandPeriod: Double?       // the command's period the scan was started with (nil: paged by hand); what Refine and the review use afterwards
+    var paused = false               // the scan is paused at a card that was not clearly the end: reading goes on, the person was told
+    var pauseCount = 0               // pauses so far in this scan
+    var pausedCard: String?          // "Name CP n" of the card it paused at
+    var pausedAt: Date?
+    var readCount = 0                // Pokémon read so far (the live grouper's rows), for the progress line
+    var storageCount: Int?           // the count the scan was started with (nil: none known)
+    /// Counts each pause and each end of a command scan; the notification's identifier carries it, so the extension's notification and the app's fallback are the same one.
+    var eventSeq = 0
 }
 
 extension BroadcastState {
@@ -54,6 +62,13 @@ extension BroadcastState {
         replayLogFailed = try c.decodeIfPresent(Bool.self, forKey: .replayLogFailed) ?? replayLogFailed
         endedAtListEnd = try c.decodeIfPresent(Bool.self, forKey: .endedAtListEnd) ?? endedAtListEnd
         commandPeriod = try c.decodeIfPresent(Double.self, forKey: .commandPeriod)
+        paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
+        pauseCount = try c.decodeIfPresent(Int.self, forKey: .pauseCount) ?? 0
+        pausedCard = try c.decodeIfPresent(String.self, forKey: .pausedCard)
+        pausedAt = try c.decodeIfPresent(Date.self, forKey: .pausedAt)
+        readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
+        storageCount = try c.decodeIfPresent(Int.self, forKey: .storageCount)
+        eventSeq = try c.decodeIfPresent(Int.self, forKey: .eventSeq) ?? 0
     }
 }
 

@@ -724,6 +724,21 @@ has no one-reading Staraptor 1946 (that row has two readings); run6 lacks the se
 constructed tests (`testAFragmentWithItsOwnSolvedCPIsNotAbsorbedAndAsksForALook`, `testAFragmentBelongsToTheSameCPNeighbourAheadNotTheDifferentOneBehind`).
 The full-scan tolerance is max(3, 1% of typed) and the result label says "N Pokémon read, within T of the M you gave" ("exactly the M you gave" only when equal), never "matches".
 
+### A stall pauses the scan instead of ending it (round 15)
+
+A command scan that goes quiet used to end the broadcast, so a tap that closed the appraisal, or a command that stopped at a batch boundary, ended a scan with most of the list unread. Now the extension decides at the detector's quiet time (`ScanEndDecision`, `PogoReader/ScanEnd.swift`):
+
+- **Finish** when a storage count is known and the Pokemon read are within tolerance of it (or above): tolerance is 1% of the count, at least 3. Run10 finishes this way.
+- **Pause** otherwise, including when no count is known. The count ("Pokémon in storage (not counting eggs)") is asked once on the Scan screen for every scan kind, remembered per account, and passed to the extension in the app group with the other reader settings.
+
+A pause writes a `p` marker (time, last card, read so far, appraisal closed or not), keeps the broadcast and the reader running, posts a notification ("Paused at <name> CP <cp>: N of M read. Reopen its appraisal to carry on, or say "Pogo scan <size>" ..."), and sets `paused` in the shared state. A new card (name or HP different from the paused one) writes a `u` marker, re-arms the end detector, and the scan carries on as one scan in one log; it can pause again and finish at the real end. With nothing new for three minutes (`ScanEndDecision.pauseTimeoutSeconds`) it finishes exactly as before, with the end marker dated at the original quiet time so the tail is trimmed. "Finish scan" on the notification, or "Finish now" in the app's live status, sets a flag in the app group that the extension checks on its heartbeat.
+
+After the scan, a pause is a known gap, not paging: `ScanPipeline.Outcome.pauses` carries each pause and its resume, `Refine` never splits a row that touches a pause by timing and leaves its stay out of the beat, and the stop summary says how many pauses there were and where. Joining the four real logs of 3 Oct (Stunfisk stall, its continuation, Horsea, run14 tail) gives 1,679 rows: 170 + 51 + 1,194 + 267 less the three overlaps, each overlap Pokemon once (`PauseProcessingTests`).
+
+Notifications: the pause and the final "Scan stopped" one share one builder (`ScanNotification`) and one posting path (`ScanNotifier`). The extension posts its own; whether iOS shows a notification posted by a broadcast extension is unproven, so the app, when it sees the event in the shared state, checks whether a notification with that identifier is delivered or pending and posts the same one only if not. Same identifier, so never two for one event.
+
+**Untested on a device: all of it.** The pause and resume in the extension, the notifications (from the extension and the fallback), the "Finish scan" action, "Finish now", and the three-minute timeout have only run in unit tests on the real logs and in a simulator build. Nothing here contacts the game or sends anything off the phone.
+
 ### To check, and reading a saved scan again
 
 - Every flag has a severity (`FlagInfo.severity`). A row is in "To check" only with a `check` flag. `ivs-disagree`, `bars-unsettled`, `cp-chosen`,

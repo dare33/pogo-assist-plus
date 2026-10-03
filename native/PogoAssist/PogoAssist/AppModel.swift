@@ -3,6 +3,17 @@ import UserNotifications
 import PogoBox
 import PogoReader
 
+/// Receives the pause notification's "Finish scan" action (the app is woken for it) and lets notifications show while the app is open.
+final class NotificationActions: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        if response.actionIdentifier == ScanNotification.finishActionID { ReaderSettings.finishRequested = true }
+        completionHandler()
+    }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
+    }
+}
+
 /// Everything the screens share: the accounts, the selected account's box and its advice, the scan in progress and the
 /// scan waiting for review. All heavy work (JavaScript, merge, advice, file writes) runs on `worker`'s one queue; this class
 /// only holds results and starts that work.
@@ -75,7 +86,7 @@ final class AppModel: ObservableObject {
 
     @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind) } }
     /// The storage count of a full scan, remembered per account (editable); it picks which command to say.
-    @Published var storageCountText: String { didSet { if let a = account { UserDefaults.standard.set(storageCountText, forKey: Keys.count + "." + a) } } }
+    @Published var storageCountText: String { didSet { if let a = account { UserDefaults.standard.set(storageCountText, forKey: Keys.count + "." + a) }; refreshReaderSettings() } }
 
     // The broadcast, as the extension last reported it.
     @Published var broadcast: BroadcastState?
@@ -199,7 +210,34 @@ final class AppModel: ObservableObject {
     var commandSetMade: Bool { deviceSetCache.values.joined().contains { $0.kind == setKind && (setKind == .swipe || $0.screen == screenLabel) } }
 
     /// Tell the broadcast extension whether the next scan is paged by a command (it then ends the scan itself at the end of the list) and at what period.
-    func refreshReaderSettings() { ReaderSettings.autoEndPeriod = ScanKindAdvice.autoEndPeriod(wantsCommand: !pagedByHand, commandSetMade: commandSetMade, pace: pace) }
+    func refreshReaderSettings() {
+        ReaderSettings.autoEndPeriod = ScanKindAdvice.autoEndPeriod(wantsCommand: !pagedByHand, commandSetMade: commandSetMade, pace: pace)
+        ReaderSettings.storageCount = storageCount          // for every scan (progress, and when a command scan finishes or pauses)
+        ReaderSettings.commandSizes = VoiceCommandFile.setSizes
+    }
+
+    /// "Finish now" while a scan is paused: the extension ends it on its next heartbeat.
+    func finishPausedScanNow() { ReaderSettings.finishRequested = true }
+
+    // MARK: - notifications the extension may not get shown
+
+    private var handledEvent = 0
+
+    /// The extension posts its own notification at a pause or an end. Whether iOS shows a notification posted by an extension is not proven, so when the app sees the event (it is
+    /// alive in the background, or the person opens it) and no notification with that identifier is delivered or pending, it posts the same one itself. Same identifier, so the two
+    /// can never leave two.
+    func postFallbackNotificationIfNeeded(_ s: BroadcastState?) {
+        guard let s, s.eventSeq > handledEvent, s.commandPeriod != nil else { return }
+        handledEvent = s.eventSeq
+        let n: ScanNotification
+        if s.paused {
+            n = .paused(event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes)
+        } else if s.endedAtListEnd {
+            let last = s.rows.last
+            n = .stopped(event: s.eventSeq, read: s.rows.count, lastName: last?.name, lastCP: last?.cp)
+        } else { return }
+        ScanNotifier.exists(n.identifier) { exists in if !exists { ScanNotifier.post(n) } }
+    }
     /// The last command made for each single mode of the selected account (older app versions made one file per scan; still checked for the wrong-screen warning).
     @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]
     @Published var setRecord: SetRecord?
@@ -319,7 +357,11 @@ final class AppModel: ObservableObject {
         } catch { message = "The commands could not be made: \(Self.plain(error))" }
     }
 
+    private let notificationActions = NotificationActions()
+
     init() {
+        UNUserNotificationCenter.current().delegate = notificationActions
+        ScanNotifier.registerCategories()
         let root = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))?
             .appendingPathComponent("PogoAssist", isDirectory: true).appendingPathComponent("boxes", isDirectory: true)
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("boxes", isDirectory: true)
@@ -614,6 +656,7 @@ final class AppModel: ObservableObject {
         now = Date()
         let s = SharedStore.read()
         if s != broadcast { broadcast = s }
+        postFallbackNotificationIfNeeded(s)
         checkForFinishedScan()
     }
 
@@ -660,7 +703,8 @@ final class AppModel: ObservableObject {
                         let closed = ScanStop.appraisalClosed(lines: ReplayLog.lines(in: url))
                         let ran = ScanStop.ranOut(read: outcome.scan.rows.count, typedCount: typed, full: asked == .full, commandPeriod: period)
                         stop = ScanStop.summary(lastName: last?.display, lastCP: last?.cp, read: outcome.scan.rows.count, appraisalClosed: closed, ranOut: ran,
-                                                matchSentence: ScanKindAdvice.matchSentence(pokemonRead: outcome.scan.rows.count, decision: d))
+                                                matchSentence: ScanKindAdvice.matchSentence(pokemonRead: outcome.scan.rows.count, decision: d),
+                                                paused: ScanStop.pauseNames(outcome.pauses, rows: outcome.scan.rows))
                     }
                     return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note, d, stop)
                 }

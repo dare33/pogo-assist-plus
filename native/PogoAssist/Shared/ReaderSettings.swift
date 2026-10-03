@@ -13,6 +13,22 @@ enum ReaderSettings {
 
     /// The command's period in seconds when the next scan is paged by a Pogo scan command, else nil (paging by hand): the extension ends such
     /// a scan by itself when the list ends (`EndOfListDetector`). Never set for hand paging, because a person may pause on a Pokémon.
+    /// The storage count the person gave (nil: none): the extension finishes at once when the Pokémon read reach it, and otherwise pauses.
+    static var storageCount: Int? {
+        get { (defaults?.object(forKey: "storageCount") as? Int).flatMap { $0 > 0 ? $0 : nil } }
+        set { if let newValue { defaults?.set(newValue, forKey: "storageCount") } else { defaults?.removeObject(forKey: "storageCount") } }
+    }
+    /// The command sizes ("Pogo scan N"), from the app's one table, for the pause notification's suggested command.
+    static var commandSizes: [Int] {
+        get { (defaults?.array(forKey: "commandSizes") as? [Int]) ?? [] }
+        set { defaults?.set(newValue, forKey: "commandSizes") }
+    }
+    /// Set by the app ("Finish now", the notification's "Finish scan" action); the extension checks it on its one-second heartbeat and clears it.
+    static var finishRequested: Bool {
+        get { defaults?.bool(forKey: "finishRequested") ?? false }
+        set { defaults?.set(newValue, forKey: "finishRequested") }
+    }
+
     static var autoEndPeriod: Double? {
         get { defaults?.object(forKey: "autoEndPeriod") as? Double }
         set { if let newValue { defaults?.set(newValue, forKey: "autoEndPeriod") } else { defaults?.removeObject(forKey: "autoEndPeriod") } }

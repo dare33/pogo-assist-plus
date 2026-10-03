@@ -216,22 +216,3 @@ public struct EndOfListDetector {
 
     private var lastFrameWasCard = false
 }
-
-/// The local notification the broadcast extension posts when it ends a command scan by itself, so the person learns it without opening the app. Plain text, in the package so it
-/// can be tested; posting is the extension's job (it is not testable off a device).
-public enum ScanEndNotification {
-    public static let title = "Scan stopped"
-
-    /// "<N> Pokémon read, last: <name> CP <cp>. Say "Go to sleep" to stop the command, then continue from that Pokémon." With no name read: "last: CP <cp>"; with no CP either, no "last".
-    public static func body(read: Int, lastName: String?, lastCP: Int?) -> String {
-        let name = (lastName?.isEmpty == false) ? lastName : nil
-        var last = ""
-        switch (name, lastCP) {
-        case let (n?, c?): last = ", last: \(n) CP \(c)"
-        case let (n?, nil): last = ", last: \(n)"
-        case let (nil, c?): last = ", last: CP \(c)"
-        default: break
-        }
-        return "\(read) Pokémon read\(last). Say \"Go to sleep\" to stop the command, then continue from that Pokémon."
-    }
-}

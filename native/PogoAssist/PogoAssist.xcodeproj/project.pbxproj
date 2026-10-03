@@ -28,8 +28,10 @@
 		979478DD306DC7F1C90E9131 /* PogoBox in Frameworks */ = {isa = PBXBuildFile; productRef = 2E478313CE5E32E23930E4C8 /* PogoBox */; };
 		9975DFDD41FE07B384C77B88 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1222BDC1C6F45E94BECD7F63 /* ScanView.swift */; };
 		A0129EF312F80693A11F6889 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7BBE6B4B350600CD9DBB146 /* ContentView.swift */; };
+		A0A130F029BD88C97D55D93B /* ScanNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */; };
 		AF7D163058C2BCD0E1E66334 /* NextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55460A514386DA8E46320B36 /* NextView.swift */; };
 		B097AAC5F43E6BBBD3CF938B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF799334CCB9D208123457E5 /* SettingsView.swift */; };
+		B23E335C55433BBEBD9E3DA2 /* ScanNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */; };
 		B71EB8981CA7EF438CDCB67F /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF23F6FB7C812B78963625C3 /* RootView.swift */; };
 		C875980798B1206FF0A644E8 /* BoxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17BAAA30DB1A885E5BC14BF /* BoxView.swift */; };
 		CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
@@ -97,6 +99,7 @@
 		C6F031A6C112AFF16F56C17A /* PogoReader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PogoReader; path = ../PogoReader; sourceTree = SOURCE_ROOT; };
 		CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoBroadcast.entitlements; sourceTree = "<group>"; };
 		D7EAA375CD0561890BDC48B2 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
+		E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanNotifier.swift; sourceTree = "<group>"; };
 		F17BAAA30DB1A885E5BC14BF /* BoxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxView.swift; sourceTree = "<group>"; };
 		F391C1A79CF135A501834207 /* PogoAssist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PogoAssist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF799334CCB9D208123457E5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -145,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */,
+				E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */,
 				9DD3B9B348BAD6411BC1C01A /* SharedState.swift */,
 			);
 			path = Shared;
@@ -379,6 +383,7 @@
 				767B78A46C867ABB726341EE /* ReviewView.swift in Sources */,
 				B71EB8981CA7EF438CDCB67F /* RootView.swift in Sources */,
 				6DB5DFC73A34D88596B2949B /* SampleScan.swift in Sources */,
+				A0A130F029BD88C97D55D93B /* ScanNotifier.swift in Sources */,
 				9975DFDD41FE07B384C77B88 /* ScanView.swift in Sources */,
 				B097AAC5F43E6BBBD3CF938B /* SettingsView.swift in Sources */,
 				CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */,
@@ -392,6 +397,7 @@
 			files = (
 				1DF267CCE4D1096881873210 /* ReaderSettings.swift in Sources */,
 				010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */,
+				B23E335C55433BBEBD9E3DA2 /* ScanNotifier.swift in Sources */,
 				6C36CD15ECE70F69B86AD66A /* SharedState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

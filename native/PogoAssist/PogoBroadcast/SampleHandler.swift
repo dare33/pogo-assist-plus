@@ -65,7 +65,8 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var lastWrite = Date.distantPast
     private var heartbeat: DispatchSourceTimer?
     private var writeFailures = 0
-    private var endDetector: EndOfListDetector?   // only for a scan paged by a command; touched on `queue`
+    private var endController: ScanEndController?   // only for a scan paged by a command; touched on `queue`
+    private var lastReadingTime = 0.0
     private var finishedWork = false              // the finish work (state, log) has been done, by a user stop or by the end of the list
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
@@ -79,7 +80,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             memory = MemoryProbe()
             finishedWork = false
             let period = ReaderSettings.autoEndPeriod
-            endDetector = EndOfListDetector.make(pagedByCommand: period != nil, period: period)
+            ReaderSettings.finishRequested = false
+            endController = ScanEndController(period: period, storageCount: ReaderSettings.storageCount)
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
             let names = table.map(displayNames) ?? []
@@ -103,6 +105,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             }
             state = BroadcastState()
             state.mode = mode.rawValue
+            state.storageCount = ReaderSettings.storageCount
             state.commandPeriod = period   // what this scan was started with: the app judges it by this, not by a setting changed since
             msTotal = 0
             replay = nil
@@ -114,7 +117,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             // At least one state write a second, whatever the frames are doing.
             let timer = DispatchSource.makeTimerSource(queue: queue)
             timer.schedule(deadline: .now() + 1, repeating: 1)
-            timer.setEventHandler { [weak self] in self?.write(force: false) }
+            timer.setEventHandler { [weak self] in self?.beat() }
             timer.resume()
             heartbeat = timer
         }
@@ -182,12 +185,53 @@ class SampleHandler: RPBroadcastSampleHandler {
         log.notice("broadcast finished: \(self.state.framesRead) read, \(self.state.framesDropped) dropped, \(self.state.skippedLowMemory) skipped for memory, peak \(self.state.peakFootprintMB, format: .fixed(precision: 1)) MB")
     }
 
+    /// On `queue`, once a second: the state write, and the person's "Finish now" (the app sets a flag in the app group).
+    private func beat() {
+        if ReaderSettings.finishRequested, !finishedWork {
+            ReaderSettings.finishRequested = false
+            if var c = endController {
+                let event = c.finishNow(at: lastReadingTime)
+                endController = c
+                if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last); return }
+            }
+        }
+        write(force: false)
+    }
+
+    /// On `queue`. The controller's verdict on one reading: nothing, a PAUSE (the quiet time was reached on a card that is not clearly the end: keep reading, tell the person),
+    /// a RESUME (a new card was read) or a FINISH (the list ended, or a pause timed out).
+    private func handleEnd(_ reading: FrameReading, time: Double) {
+        guard var c = endController else { return }
+        lastReadingTime = time
+        let event = c.feed(reading, time: time, read: state.rows.count)
+        endController = c
+        switch event {
+        case .none: break
+        case .pause(let p):
+            log.notice("paused at \(p.name ?? "?", privacy: .public) CP \(p.cp ?? 0): \(p.read) read")
+            record(.pause(at: p.at, last: p.last, read: p.read, closed: p.closed))
+            state.paused = true; state.pauseCount += 1; state.pausedAt = Date(); state.eventSeq += 1
+            state.pausedCard = [p.name, p.cp.map { "CP \($0)" }].compactMap { $0 }.joined(separator: " ")
+            write(force: true)
+            ScanNotifier.post(ScanNotification.paused(event: state.eventSeq, read: p.read, storageCount: state.storageCount, lastName: p.name, lastCP: p.cp, sizes: ReaderSettings.commandSizes)) { [log] error in
+                if let error { log.error("notification could not be posted: \(error.localizedDescription, privacy: .public)") }
+            }
+        case .resume(let at):
+            log.notice("resumed: a new card was read")
+            record(.resume(at: at))
+            state.paused = false; state.pausedAt = nil
+            write(force: true)
+        case .finish(let at, let last):
+            endAtListEnd(at: at, last: last)
+        }
+    }
+
     /// On `queue`. The end of the list was seen: write the end marker (so the app can cut the tail), finish exactly as a user stop does,
     /// then end the broadcast. `finishBroadcastWithError` is the only way an extension can end one; the message reads as a result.
     private func endAtListEnd(at: Double, last: Double) {
         log.notice("end of the list reached: last new Pokémon at \(last, format: .fixed(precision: 1)), ending at \(at, format: .fixed(precision: 1))")
         record(.end(at: at, last: last))
-        state.endedAtListEnd = true
+        state.endedAtListEnd = true; state.paused = false; state.eventSeq += 1
         lock.lock(); finished = true; lock.unlock()
         finishWork()
         postStoppedNotification()
@@ -199,16 +243,12 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
     }
 
-    /// A local notification with sound, so the person learns the scan ended without opening the app. A broadcast upload extension may add a notification request itself: it
-    /// shares the app's notification permission (the app asks for it; nothing extra in the entitlements), and with no permission the system simply shows nothing. Nothing is
-    /// sent anywhere. Whether it appears while Pokémon GO is in the foreground is only known on a device.
+    /// A local notification with sound, so the person learns the scan ended without opening the app (the same builder and posting path as the pause's). A broadcast upload
+    /// extension may add a notification request itself: it shares the app's notification permission, and with no permission the system shows nothing. If the system does not
+    /// show it, the app posts the same one (same identifier) when it sees the finished state. Nothing is sent anywhere.
     private func postStoppedNotification() {
         let last = state.rows.last
-        let content = UNMutableNotificationContent()
-        content.title = ScanEndNotification.title
-        content.body = ScanEndNotification.body(read: state.rows.count, lastName: last?.name, lastCP: last?.cp)
-        content.sound = .default
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "pogo.scan.stopped", content: content, trigger: nil)) { [log] error in
+        ScanNotifier.post(ScanNotification.stopped(event: state.eventSeq, read: state.rows.count, lastName: last?.name, lastCP: last?.cp)) { [log] error in
             if let error { log.error("notification could not be posted: \(error.localizedDescription, privacy: .public)") }
         }
     }
@@ -250,7 +290,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             let changed = grouper.add(reading)
             if changed { state.rows = grouper.rows }
             write(force: changed)
-            if endDetector?.feed(reading, time: time) == true, let ended = endDetector?.ended { endAtListEnd(at: ended.at, last: ended.last) }
+            state.readCount = state.rows.count
+            handleEnd(reading, time: time)
         }
     }
 

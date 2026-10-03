@@ -33,10 +33,20 @@ public enum ScanStop {
     }
 
     /// The one place at the top of the review for a scan the extension ended itself.
-    public static func summary(lastName: String?, lastCP: Int?, read: Int, appraisalClosed: Bool?, ranOut: Bool, matchSentence: String? = nil) -> String {
+    /// Where the scan paused (a card that was not the end of the list), by the row whose card was on screen when each pause began: "Stunfisk (CP 902)".
+    public static func pauseNames(_ pauses: [ScanPipeline.Pause], rows: [ScanRow]) -> [String] {
+        pauses.compactMap { p in
+            let starts: [(ScanRow, Double)] = rows.compactMap { r in r.frames.compactMap(\.time).min().map { (r, $0) } }
+            guard let hit = starts.filter({ $0.1 <= p.last + 1 }).max(by: { $0.1 < $1.1 }) else { return nil }
+            return "\(hit.0.display) (CP \(hit.0.cp))"
+        }
+    }
+
+    public static func summary(lastName: String?, lastCP: Int?, read: Int, appraisalClosed: Bool?, ranOut: Bool, matchSentence: String? = nil, paused: [String] = []) -> String {
         let last = lastName.map { name in "the last one read was \(name)" + (lastCP.map { " (CP \($0))" } ?? "") } ?? "no Pokémon were named"
         let opened = lastName ?? "the last Pokémon"
         var s = "The scan ended by itself after \(read.formatted()) Pokémon; \(last)."
+        if !paused.isEmpty { s += paused.count == 1 ? " It paused once, at \(paused[0]), and carried on." : " It paused \(paused.count) times, at \(paused.dropLast().joined(separator: ", ")) and \(paused.last!), and carried on." }
         if let c = appraisalClosed { s += c ? " The appraisal had closed." : " The appraisal was still open." }
         if ranOut {
             s += " This is the size of the command you said: it ran out. To scan the rest, open \(opened) in Pokémon GO with the appraisal showing and say a command for what is left (Add and update)."
