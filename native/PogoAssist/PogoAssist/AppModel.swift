@@ -25,7 +25,11 @@ final class AppModel: ObservableObject {
         /// Set when this is a saved scan being read again: the box is the one before that scan was saved.
         var reread: RereadPlan?
         /// Saved entries to keep although the scan proposes them as gone (the person's per-entry choice).
-        var keepGone: Set<String> = []
+        /// Saved Pokémon the scan did not see that the person marked for removal. Nothing is marked at first: they are all kept (the owner's rule: nothing is
+        /// removed without the person choosing it).
+        var markedForRemoval: Set<String> = []
+        /// What `BoxMerge.apply` is given: every not-seen Pokémon that is not marked.
+        var keepGone: Set<String> { BoxMerge.keepSet(plan: plan, resolutions: resolutions, markedForRemoval: markedForRemoval) }
         /// When this unsaved scan's report was sent, and what was sent; recorded on the scan when it is saved.
         var reportSentAt: Date?
         var reportHash: String?
@@ -656,7 +660,7 @@ final class AppModel: ObservableObject {
         let unmatched = r.outcome.scan.unmatched
         let plan = try? await worker.run { _ in BoxMerge.plan(scanned: rows, unmatched: unmatched, into: base, kind: kind, scanDate: date, gameMaster: try .bundled()) }
         guard let plan, case .review = flow else { return }
-        r.kind = kind; r.plan = plan; r.resolutions = [:]; r.keepGone = []
+        r.kind = kind; r.plan = plan; r.resolutions = [:]; r.markedForRemoval = []
         flow = .review(r)
     }
 
@@ -666,15 +670,22 @@ final class AppModel: ObservableObject {
         flow = .review(r)
     }
 
-    func setKeep(_ id: String, _ keep: Bool) {
+    func setRemove(_ id: String, _ remove: Bool) {
         guard case .review(var r) = flow else { return }
-        if keep { r.keepGone.insert(id) } else { r.keepGone.remove(id) }
+        if remove { r.markedForRemoval.insert(id) } else { r.markedForRemoval.remove(id) }
         flow = .review(r)
     }
 
-    func keepAllGone() {
+    /// Mark every Pokémon the scan did not see for removal (the person chose "Remove all not seen").
+    func removeAllNotSeen() {
         guard case .review(var r) = flow else { return }
-        r.keepGone = Set(BoxMerge.goneReport(r.plan, resolutions: r.resolutions).gone)
+        r.markedForRemoval = Set(BoxMerge.goneReport(r.plan, resolutions: r.resolutions).gone)
+        flow = .review(r)
+    }
+
+    func keepAllNotSeen() {
+        guard case .review(var r) = flow else { return }
+        r.markedForRemoval = []
         flow = .review(r)
     }
 
@@ -727,7 +738,7 @@ final class AppModel: ObservableObject {
                 let entries = cur?.entries ?? []
                 return (BoxMerge.plan(scanned: rows, unmatched: unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled()), entries, cur?.seq)
             }
-            var n = r; n.plan = plan; n.base = base; n.boxSeq = seq; n.resolutions = [:]; n.keepGone = []
+            var n = r; n.plan = plan; n.base = base; n.boxSeq = seq; n.resolutions = [:]; n.markedForRemoval = []
             flow = .review(n)
             if a == account { loadBox() }
         } catch { message = "The box could not be read again: \(Self.plain(error))" }

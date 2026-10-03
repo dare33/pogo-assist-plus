@@ -570,6 +570,12 @@ public enum BoxMerge {
         return v.corrections.ivs == nil && shaky(v.row) && !shaky(s)
     }
 
+    /// Nothing is removed unless the person chooses it: of the entries a full scan did not see, only those marked for removal go. This is the `keepGone`
+    /// to hand to `apply` (and `ScanReportBuilder.reviewLines`) when the review starts with every not-seen entry kept and the person marks some.
+    public static func keepSet(plan: Plan, resolutions: [Int: Resolution], markedForRemoval: Set<String>) -> Set<String> {
+        Set(goneReport(plan, resolutions: resolutions).gone).subtracting(markedForRemoval)
+    }
+
     /// The box after the scan is added. `resolutions` answers each unsure Pokémon by its position in `plan.scanned`.
     /// Entries keep their order; new ones follow, in scan order. Gone entries (`goneReport`, less any in `keepGone`) are removed.
     /// With an `engine`, an entry whose IVs were kept (a hand correction, or a scan that read none) and whose CP or HP changed gets its

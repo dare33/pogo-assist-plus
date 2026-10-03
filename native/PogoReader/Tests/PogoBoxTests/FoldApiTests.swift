@@ -248,6 +248,29 @@ final class FoldApiTests: XCTestCase {
         XCTAssertGreaterThan(try lib.history(account: "a").count, 1)
     }
 
+    // The owner's rule: nothing is removed unless the person chooses it.
+    func testAFullScanSavedWithoutTouchingAnythingRemovesNothing() throws {
+        let seen = entry(row(cp: 1000), "seen"), unseenA = entry(row("pikachu", cp: 500, hp: 40, ivs: IVs(atk: 1, def: 2, hp: 3)), "a"), unseenB = entry(row("pidgey", cp: 300, hp: 30, ivs: IVs(atk: 4, def: 5, hp: 6)), "b")
+        let p = plan([row(cp: 1000)], [seen, unseenA, unseenB], .full)
+        XCTAssertEqual(Set(p.gone), ["a", "b"], "the scan did not see them")
+        // the review starts with nothing marked: every not-seen entry is kept
+        let keep = BoxMerge.keepSet(plan: p, resolutions: [:], markedForRemoval: [])
+        XCTAssertEqual(keep, ["a", "b"])
+        XCTAssertEqual(try BoxMerge.apply(p, keepGone: keep, to: [seen, unseenA, unseenB]).map { $0.id }, ["seen", "a", "b"])
+    }
+
+    func testOnlyWhatIsMarkedForRemovalIsRemovedAndRemoveAllRemovesEveryNotSeenOne() throws {
+        let seen = entry(row(cp: 1000), "seen"), unseenA = entry(row("pikachu", cp: 500, hp: 40, ivs: IVs(atk: 1, def: 2, hp: 3)), "a"), unseenB = entry(row("pidgey", cp: 300, hp: 30, ivs: IVs(atk: 4, def: 5, hp: 6)), "b")
+        let p = plan([row(cp: 1000)], [seen, unseenA, unseenB], .full)
+        let one = BoxMerge.keepSet(plan: p, resolutions: [:], markedForRemoval: ["a"])
+        XCTAssertEqual(try BoxMerge.apply(p, keepGone: one, to: [seen, unseenA, unseenB]).map { $0.id }, ["seen", "b"])
+        let all = BoxMerge.keepSet(plan: p, resolutions: [:], markedForRemoval: Set(p.gone))   // "Remove all not seen"
+        XCTAssertTrue(all.isEmpty)
+        XCTAssertEqual(try BoxMerge.apply(p, keepGone: all, to: [seen, unseenA, unseenB]).map { $0.id }, ["seen"])
+        // an add-and-update scan has no not-seen list at all
+        XCTAssertTrue(BoxMerge.keepSet(plan: plan([row(cp: 1000)], [seen, unseenA], .partial), resolutions: [:], markedForRemoval: []).isEmpty)
+    }
+
     // V1, V2
     func testV2TapNeedsAnExactCheckedPointForTheGivenWidthAndHeight() throws {
         func make(_ p: CGPoint?, _ w: Double?, _ h: Double?) throws -> Data { try VoiceCommandFile.make(count: 3, pace: .tapNormal, batch: 3, tap: p, screenWidth: w, screenHeight: h, now: date(1)) }

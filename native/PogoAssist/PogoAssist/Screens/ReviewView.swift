@@ -83,7 +83,7 @@ private struct ResultList: View {
                 if review.endedAtListEnd, let advice = review.advice { Label(ScanKindAdvice.endedLabel(pokemonRead: review.outcome.scan.rows.count, decision: advice), systemImage: "checkmark.circle").font(.footnote).foregroundStyle(.secondary) }
                 if let note = review.kindNote { Label(note, systemImage: "info.circle").font(.footnote).foregroundStyle(.secondary) }
                 if review.reread == nil { Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in
-                    // A full scan the advice refused proposes everything unseen as gone: say why, and ask first.
+                    // A full scan the advice refused: say why, and ask first.
                     if k == .full, let why = review.advice, !why.fullIsSound, let reason = why.reason { confirmFull = reason } else { Task { await model.setReviewKind(k) } }
                 })) {
                     Text("Full scan").tag(BoxStore.Kind.full)
@@ -126,26 +126,29 @@ private struct ResultList: View {
                 HStack { Label("Unsure", systemImage: "questionmark.circle"); Spacer(); Text("\(plan.unsure.count)").foregroundStyle(.secondary).monospacedDigit() }
                 if review.kind == .full {
                     let report = BoxMerge.goneReport(plan, resolutions: review.resolutions)
-                    let removing = report.gone.filter { !review.keepGone.contains($0) }.count
-                    // The list and its toggles stay while any entry is a Gone candidate, kept or not, so a kept one can be un-kept.
-                    group("gone", "Gone", report.gone.count, "minus.circle", detail: removing == report.gone.count ? nil : "\(removing) removed") {
+                    let marked = report.gone.filter { review.markedForRemoval.contains($0) }.count
+                    // Nothing is removed unless the person marks it: every Pokémon the scan did not see starts as kept.
+                    group("gone", "Not seen in this scan", report.gone.count, "eye.slash", detail: marked == 0 ? "all kept" : "\(marked) to remove") {
                         ForEach(report.gone, id: \.self) { id in
                             if let e = saved[id] {
-                                Toggle(isOn: Binding(get: { !review.keepGone.contains(id) }, set: { model.setKeep(id, !$0) })) {
+                                Toggle(isOn: Binding(get: { review.markedForRemoval.contains(id) }, set: { model.setRemove(id, $0) })) {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(Fmt.brief(e.row)).font(.callout)
-                                        Text(review.keepGone.contains(id) ? "Kept in the box" : "Removed when you save").font(.footnote).foregroundStyle(.secondary)
+                                        Text(review.markedForRemoval.contains(id) ? "Marked: removed when you save" : "Kept in the box").font(.footnote).foregroundStyle(.secondary)
                                     }
                                 }
                             }
                         }
-                        if !report.gone.isEmpty { Button("Keep all") { model.keepAllGone() } }
+                        if !report.gone.isEmpty {
+                            Button("Remove all not seen (\(report.gone.count))", role: .destructive) { model.removeAllNotSeen() }
+                            if marked > 0 { Button("Keep all") { model.keepAllNotSeen() } }
+                        }
                     }
                 }
             }
             let report = BoxMerge.goneReport(plan, resolutions: review.resolutions)
             if review.kind == .full && !report.gone.isEmpty {
-                Section { Text("These are in your box but the scan did not see them. Each is removed when you save unless you keep it. If the scan stopped early, choose Add and update above so nothing is removed.").font(.footnote).foregroundStyle(.secondary) }
+                Section { Text("These are in your box but the scan did not see them. They are all kept. Nothing is removed unless you mark it for removal above.").font(.footnote).foregroundStyle(.secondary) }
             }
             if review.kind == .full && !report.kept.isEmpty {
                 Section("Not seen clearly, kept (\(report.kept.count))") {
@@ -182,7 +185,7 @@ private struct ResultList: View {
         .confirmationDialog("Use Full scan anyway?", isPresented: Binding(get: { confirmFull != nil }, set: { if !$0 { confirmFull = nil } }), titleVisibility: .visible) {
             Button("Use Full scan", role: .destructive) { Task { await model.setReviewKind(.full) } }
             Button("Keep Add and update", role: .cancel) {}
-        } message: { Text("\(confirmFull ?? "") A full scan proposes every saved Pokémon this scan did not see as gone (you still choose, on the next screen, what to remove).") }
+        } message: { Text("\(confirmFull ?? "") A full scan lists every saved Pokémon this scan did not see, as \"Not seen in this scan\". They are all kept; nothing is removed unless you mark it.") }
         .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardReview() }
         } message: { Text("Nothing will be added to the box.") }

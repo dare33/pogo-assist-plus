@@ -18,7 +18,7 @@ struct ScanView: View {
                 }
                 .pickerStyle(.segmented)
                 Text(model.scanKind == .full
-                     ? "Scans the whole storage. When the scan reaches the end of your list, Pokémon in your box that it did not see are offered as gone, and you choose whether to save that. Otherwise it is Add and update."
+                     ? "Scans the whole storage. When the scan reaches the end of your list, Pokémon in your box that it did not see are listed as \"Not seen in this scan\" and kept; you choose whether to remove any. Otherwise it is Add and update."
                      : "Scans part of the storage, such as your newest Pokémon. Nothing is removed from the box.")
                     .font(.footnote).foregroundStyle(.secondary)
             }

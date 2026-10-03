@@ -483,8 +483,9 @@ hand-corrected) and flags the entry `ivs-rescan-differs` so it shows under "to c
 replaced by a clean read. A row whose own CP is not trusted (a part read, or flagged `no-level-fits`) never writes its CP, level or dust
 onto a saved entry, and an entry another row of the same scan already matched is only marked seen. More simply, a row whose CP is not trusted writes
 nothing at all: its answer only marks the entry seen, and the automatic rules never pair it as powered up, evolved, base of a Mega or IVs now read
-(it is asked about instead); `BoxMerge.effect` is the one decision that `apply` and the review card both follow. A full scan proposes unmatched
-saved Pokemon as gone (applied only on Save); add and update removes nothing. Hand corrections remember the value the scan had
+(it is asked about instead); `BoxMerge.effect` is the one decision that `apply` and the review card both follow. A full scan lists unmatched
+saved Pokemon as "Not seen in this scan" and KEEPS them all: each has a control to mark it for removal, "Remove all not seen (N)" marks them all and "Keep all" is its
+reverse, and Save removes only what is marked (`BoxMerge.keepSet`; nothing is removed without the person choosing it); add and update removes nothing. Hand corrections remember the value the scan had
 read: a later scan reading that same value, or the corrected one, leaves the correction; any other value replaces it. The box
 is kept as numbered versions (`BoxLibrary`, `<account>/box/NNNNNN.json`); a scan, a correction and a restore each add one and
 none is deleted; Settings restores any of them (as a new version). The replay log is kept beside the saved scan in `BoxStore`.
@@ -538,12 +539,13 @@ without the commands (the Scan screen says the end needs them). The extension re
 paging) and the review and Refine use that, not a setting changed since. The end is declared POSITIVELY (`EndOfListDetector`, PogoReader, a few stored values):
 the same card has been read, again and again, for the whole quiet time.
 - The CURRENT card is the one on screen since its name or HP last changed. The quiet clock resets on ANY reading whose name or HP differs from the current
-  card's (one reading is enough; a part that was not read is not a difference). A CP value or a bars value (each alone, compared EXACTLY: no one-digit or
-  digit-run fuzziness) that was never read during this stay resets it on a SINGLE reading. A value already read during the stay resets it only on a STABLE
-  SWITCH: read in two readings in a row (a frame that did not read that kind breaks the chain) and different from the value that was stable before it, which is
-  paging between two real cards that recur (alternating twins at two or more readings per card). A recurring value that reappears after unread frames, or a
-  one-reading blip, does not reset it. The values read on the card are remembered for the whole stay, a bounded list (12 per kind; an old one dropped counts as
-  never read, which errs toward not ending). A reset is dated at the reading that caused it.
+  card's (one reading is enough; a part that was not read is not a difference). A bars value (compared exactly) or a CP value that was never read during this stay
+  resets it on a SINGLE reading. A value already read resets it only on a STABLE SWITCH: read in two readings in a row (a frame that did not read that kind breaks
+  the chain) and different from the value that was stable before it, which is paging between two real cards that recur (alternating twins at two or more readings
+  per card). A recurring value that reappears after unread frames, or a one-reading blip, does not reset it. CP values that are the same card by the digit relation
+  (one is a run of the other's digits, or they differ in one digit: 4262, 1262, 262, 4260 of a tall model's misreads, as on the real end of list in run10) are ONE
+  value, so neither a first reading nor a switch between them resets it. The values read on the card are remembered for the whole stay, a bounded list (12 per kind; an
+  old one dropped counts as never read, which errs toward not ending). A reset is dated at the reading that caused it.
 - The clock only grows across consecutive processed frames that both read the current card, at most 2 s apart. Frames with no card read, and gaps between
   processed frames, add nothing and reset nothing, so a run of unread cards (fainted Pokémon), however long, never ends the scan; if the appraisal closes and
   nothing is readable the scan does not end by itself and the person stops it from the red bar.
@@ -554,7 +556,8 @@ the same card has been read, again and again, for the whole quiet time.
   never ends, however long the wait before the command was said. Stability applies to arming only.
 Accepted and documented: a real run of 8 or more identical Pokémon (same name, HP, CP, bars) ends it, so the last of them can be cut; fewer than 5 readable
 Pokémon never arm it; persistent flapping of the last card's name or HP read delays or prevents the end; a list whose last Pokémon were not read looks like an
-earlier end; and recurring values read ONCE per card (alternating identical twins at one reading per card, for 8 cards) look like one static card and end it.
+earlier end; recurring values read ONCE per card (alternating identical twins at one reading per card, for 8 cards) look like one static card and end it; and so do eight or more consecutive cards
+with the same name, HP and bars (or bars unread) whose CPs are digit-variants of each other.
 Per log, seconds from the first reading (`testWhereEachLogArmsAndEnds` prints them; "in-scan quiet" is the most the clock reached before a later reset, once armed):
 run1 (2.1 s) armed +20.0, no end, in-scan quiet 1.6 s; run3 (2.1) +13.0, no end, 1.6 s; run4 fast swipe (1.6) +11.9, ended +102.4 (last reset +89.2), 0.8 s;
 run4 stretch (1.6) +7.6, no end, 0.8 s; run5 (tap 1.2) +8.8, no end, 0.8 s; run6 (tap 1.0) +7.2, no end, 0.8 s; run7 (tap 1.2, phantom) +8.6, ended +73.2 (last
@@ -567,9 +570,12 @@ never end early (0 of 50 seeds on every log); windows of 4, 5, 6 and 8 periods w
 the first page never ends it. A static last card read every 0.3 s and 0.6 s still ends the scan within 120 s in all 40 seeds when 20% or 30% of frames are lost, CP
 is unread on 30% of them, bars on 30%, no card is read on 30%, bars are misread on 5%, 10% or 20% of readings (to one or three wrong values) or the CP on 10%
 (`testAStaticLastCardWithNoiseStillEndsIt`). Constructed cases that never end it: a card held 9 s across a frame gap; alternating twins at 2, 3 and 4 readings per card
-for 12 cards; 16 hidden-CP Pokémon; a run of unread cards; eight same-species, same-HP cards with different CPs read once each; eight cards with CPs one digit apart and
+for 12 cards; 16 hidden-CP Pokémon; a run of unread cards; eight same-species, same-HP cards with different CPs read once each; eight cards with CPs two or more digits apart and
 identical bars at three readings each; one named card followed by eight CP-only different cards. Cases that end it: 8 identical Pokémon, a static card with single-reading
-CP variants, and (the accepted residual above) alternating identical twins at one reading per card.
+CP variants, digit-variant CPs of one name, HP and bars for eight cards, and (the accepted residual above) alternating identical twins at one reading per card.
+The first real automatic end (run10, "Pogo scan 25", 11 Pokémon, `device-run10-tap-25-autoend.replay.jsonl`): the tap closed the appraisal after Rayquaza and its page was read unchanged for
+21 s with the CP flapping between 4262, 1262 and 262. Armed +9.1 s, Rayquaza first read +16.3 s, the end is found at +26.0 s (9.7 s after it); the same log cut at +25 s does not end;
+the trimmed log (end marker written) gives the same eleven rows as the full log. Under 30% / 50% loss of readings it ends in 46 / 20 of 50 seeds (its quiet tail is only 21 s).
 The extension then writes an end marker line to the replay log (`{"k":"e","t":...,"last":...}`, always with room even when the log is full), finishes the
 state and log as a user stop does and, after leaving its serial queue (a synchronous `broadcastFinished` must not meet `queue.sync`), ends the broadcast
 with `finishBroadcastWithError("Scan finished: the end of your Pokémon was reached.")`. `ReplayLog.trimmed`, `ReplayReadings` and `ScanPipeline` cut readings
