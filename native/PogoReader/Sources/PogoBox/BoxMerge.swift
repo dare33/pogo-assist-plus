@@ -373,6 +373,11 @@ public enum BoxMerge {
         sPool = stillNew
         plan.new = sPool
 
+        // An entry that a later component of the same rule paired (as Same, or updated) may already have been offered as an extra twin's other candidate: it was seen, so it is
+        // neither listed as not seen nor offered.
+        let pairedIds = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
+        for i in plan.unsure.indices where plan.unsure[i].kind == .extraTwin { plan.unsure[i].candidates = Array(plan.unsure[i].candidates.prefix(1)) + plan.unsure[i].candidates.dropFirst().filter { !pairedIds.contains($0) } }
+        unsureSaved = unsureSaved.filter { !pairedIds.contains(saved[$0].id) }
         plan.unpaired = (vPool + unsureSaved.sorted()).map { Unpaired(id: saved[$0].id, speciesKey: saved[$0].speciesKey, name: saved[$0].row.name, display: saved[$0].row.display, title: saved[$0].row.title) }
         let report = goneReport(plan, resolutions: [:])
         plan.gone = report.gone
@@ -691,7 +696,8 @@ public enum BoxMerge {
         let r = plan.scanned[u.scanned]
         if u.kind == .megaPair { return u.candidates.first == e.id ? .joinsMegaPair : .seenOnly }
         if onlyMarksSeen(plan, u, e.id) { return .seenOnly }
-        if ivsDisagree(r, e) { return ivsReplaceable(r, e) ? .replacesIVs : .keepsIVsAndFlags }
+        // An extra twin's other candidate is never overwritten, however shaky its saved IVs: the row is a second read of a Pokémon already paired, so the saved IVs are kept and flagged.
+        if ivsDisagree(r, e) { return ivsReplaceable(r, e) && u.kind != .extraTwin ? .replacesIVs : .keepsIVsAndFlags }
         if let gm, plan.megaBases[u.scanned] != nil, megaBase(e.row.speciesId, gm) == nil { return .seenAsMega }
         return .replacesValues
     }

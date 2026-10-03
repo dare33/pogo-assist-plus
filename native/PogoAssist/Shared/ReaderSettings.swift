@@ -30,6 +30,13 @@ enum ReaderSettings {
         set { if let newValue { defaults?.set(newValue, forKey: "finishRequestedScan") } else { defaults?.removeObject(forKey: "finishRequestedScan") } }
     }
 
+    /// The identifiers of the last few notifications that were handed to the system (by the extension or the app). The app's fallback does not post one of these again: a
+    /// notification the person has swiped away is no longer delivered, but it was posted.
+    static var postedNotifications: [String] {
+        get { (defaults?.array(forKey: "postedNotifications") as? [String]) ?? [] }
+        set { defaults?.set(Array(newValue.suffix(8)), forKey: "postedNotifications") }
+    }
+
     static var autoEndPeriod: Double? {
         get { defaults?.object(forKey: "autoEndPeriod") as? Double }
         set { if let newValue { defaults?.set(newValue, forKey: "autoEndPeriod") } else { defaults?.removeObject(forKey: "autoEndPeriod") } }

@@ -81,6 +81,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             finishedWork = false
             let period = ReaderSettings.autoEndPeriod
             ReaderSettings.finishRequestedScan = nil
+            ScanNotifier.removePauseNotifications()   // a new scan: no earlier scan's pause notification (or its "Finish scan" button) stays
             endController = ScanEndController(period: period, storageCount: ReaderSettings.storageCount)
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
@@ -181,6 +182,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         grouper.finish()
         state.rows = grouper.rows
         state.finished = true
+        state.paused = false; state.pausedAt = nil   // a stop from the red bar while paused must not leave the scan looking paused (the app's fallback would post a stale "paused")
         replay?.close()
         write(force: true)
         log.notice("broadcast finished: \(self.state.framesRead) read, \(self.state.framesDropped) dropped, \(self.state.skippedLowMemory) skipped for memory, peak \(self.state.peakFootprintMB, format: .fixed(precision: 1)) MB")
@@ -192,7 +194,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         if let asked = ReaderSettings.finishRequestedScan {
             ReaderSettings.finishRequestedScan = nil   // consumed whether or not it is honoured: a stale request must never wait for a later pause
             // Honoured only for THIS scan and only while it is paused (an old notification's "Finish scan" does nothing to a later scan or to one that carried on).
-            if asked == state.scanId, state.paused, var c = endController {
+            if ScanNotification.finishRequestHonoured(asked: asked, runningScan: state.scanId, paused: state.paused), var c = endController {
                 let event = c.finishNow(at: lastReadingTime)
                 endController = c
                 if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last, byPerson: true); return }
@@ -231,6 +233,11 @@ class SampleHandler: RPBroadcastSampleHandler {
             record(.resume(at: at))
             state.paused = false; state.pausedAt = nil
             write(force: true)
+            ScanNotifier.removePauseNotifications(scan: state.scanId)
+        case .windowRestarted:
+            log.notice("appraisal reopened on the paused card: the \(Int(ScanEndDecision.pauseTimeoutSeconds)) s window starts over")
+            state.pausedAt = Date()
+            write(force: true)
         case .finish(let at, let last):
             endAtListEnd(at: at, last: last, byPerson: false)
         }
@@ -240,6 +247,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     /// then end the broadcast. `finishBroadcastWithError` is the only way an extension can end one; the message reads as a result.
     private func endAtListEnd(at: Double, last: Double, byPerson: Bool) {
         log.notice("end of the list reached: last new Pokémon at \(last, format: .fixed(precision: 1)), ending at \(at, format: .fixed(precision: 1))")
+        ScanNotifier.removePauseNotifications(scan: state.scanId)
         if byPerson { record(.stoppedByPerson(at: at)) }
         record(.end(at: at, last: last))
         // A scan the person finished is judged like a stop from the red bar (never a Full scan), so it does not claim the end of the list was reached.

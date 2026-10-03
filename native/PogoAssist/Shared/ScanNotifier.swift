@@ -18,11 +18,28 @@ enum ScanNotifier {
         content.sound = .default
         content.userInfo = ["scan": n.scanId]
         if n.offersFinish { content.categoryIdentifier = ScanNotification.pausedCategoryID }
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: n.identifier, content: content, trigger: nil)) { completion?($0) }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: n.identifier, content: content, trigger: nil)) { error in
+            if error == nil { ReaderSettings.postedNotifications += [n.identifier] }
+            completion?(error)
+        }
     }
 
-    /// For the app's fallback: whether a notification with this identifier is already delivered or pending.
+    /// Removes the delivered and the pending pause notifications of `scan` (of every scan when nil): when the scan resumes or finishes and when a new scan starts, so an old
+    /// "Finish scan" button is never left on the lock screen.
+    static func removePauseNotifications(scan: Int? = nil) {
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { delivered in
+            center.removeDeliveredNotifications(withIdentifiers: delivered.map { $0.request.identifier }.filter { ScanNotification.isPause($0, scan: scan) })
+        }
+        center.getPendingNotificationRequests { pending in
+            center.removePendingNotificationRequests(withIdentifiers: pending.map { $0.identifier }.filter { ScanNotification.isPause($0, scan: scan) })
+        }
+    }
+
+    /// For the app's fallback: whether a notification with this identifier was already posted: recorded as handed to the system (so one the person swiped away still counts),
+    /// or delivered, or pending.
     static func exists(_ identifier: String, _ answer: @escaping (Bool) -> Void) {
+        if ReaderSettings.postedNotifications.contains(identifier) { answer(true); return }
         let center = UNUserNotificationCenter.current()
         center.getDeliveredNotifications { delivered in
             if delivered.contains(where: { $0.request.identifier == identifier }) { answer(true); return }

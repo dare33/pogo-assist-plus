@@ -102,8 +102,10 @@ final class ScanEndControllerTests: XCTestCase {
             joined += rs; prevEnd = joined.last?.t
         }
         let out = drive(joined, count: 1684)
-        let kinds = out.events.map { e -> String in switch e.1 { case .pause: return "pause"; case .resume: return "resume"; case .finish: return "finish"; case .none: return "-" } }
-        XCTAssertEqual(kinds, ["pause", "resume", "pause", "resume", "pause", "resume", "finish"], "\(kinds)")
+        let kinds = out.events.map { e -> String in switch e.1 { case .pause: return "pause"; case .resume: return "resume"; case .finish: return "finish"; case .windowRestarted: return "restart"; case .none: return "-" } }
+        // In the real stalls the appraisal was reopened (bars on the paused card) before paging went on: those restart the window and are not resumes.
+        XCTAssertEqual(kinds.filter { $0 != "restart" }, ["pause", "resume", "pause", "resume", "pause", "resume", "finish"], "\(kinds)")
+        XCTAssertTrue(kinds.contains("restart"), "the reopened appraisals of the real stalls are seen")
         XCTAssertGreaterThanOrEqual(out.read, 1684 - ScanEndDecision.tolerance(1684))
     }
 
@@ -115,7 +117,7 @@ final class ScanEndControllerTests: XCTestCase {
         var next = tail; next.name = "Pidgey"; next.hp = HP(current: 40, max: 40); next.cp = 300; next.ivs = nil
         while t < tail.t + 62 { t += 0.2; var r = next; r.t = t; rs.append(r) }       // then a new card appears: paging carried on
         let out = drive(rs, count: nil)
-        let kinds = out.events.map { e -> String in switch e.1 { case .pause: return "pause"; case .resume: return "resume"; case .finish: return "finish"; case .none: return "-" } }
+        let kinds = out.events.map { e -> String in switch e.1 { case .pause: return "pause"; case .resume: return "resume"; case .finish: return "finish"; case .windowRestarted: return "restart"; case .none: return "-" } }
         XCTAssertEqual(kinds, ["pause", "resume"], "one pause for the whole stall, then the resume when the new card was read")
     }
 
@@ -188,5 +190,26 @@ final class ScanEndControllerTests: XCTestCase {
         guard case .finish(let endAt, let last) = c.tick(now: at + ScanEndDecision.pauseTimeoutSeconds + 0.5) else { return XCTFail("no finish") }
         XCTAssertEqual(endAt, p.at, accuracy: 0.001); XCTAssertEqual(last, p.last, accuracy: 0.001)
         XCTAssertEqual(c.tick(now: at + 1000), .none, "once")
+    }
+
+    /// M3: bars appearing again on the paused card (the appraisal reopened) start the 180 s window over, and are not a resume; a different card still resumes.
+    func testReopeningTheAppraisalOnThePausedCardRestartsTheWindowWithoutResuming() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let tail = try XCTUnwrap(rs.last)
+        var bare = tail.frameReading; bare.ivs = nil
+        var open = tail.frameReading; open.ivs = IVs(atk: 7, def: 8, hp: 9)
+        var t = at
+        while t < at + 100 { t += 0.2; XCTAssertEqual(c.feed(bare, time: t, read: p.read), .none) }   // the appraisal is closed for 100 s
+        t += 0.2
+        XCTAssertEqual(c.feed(open, time: t, read: p.read), .windowRestarted(at: t), "bars on the same card: a restart, not a resume")
+        XCTAssertNotNil(c.paused, "still paused")
+        let reopened = t
+        XCTAssertEqual(c.tick(now: reopened + ScanEndDecision.pauseTimeoutSeconds - 1), .none, "a full window from the reopening, not from the pause")
+        XCTAssertNotEqual(c.tick(now: reopened + ScanEndDecision.pauseTimeoutSeconds + 0.5), .none)
+        // the same reading with a different name and HP is a new card, a resume
+        var (c2, _, _, p2, at2) = try pausedAtRun10()
+        var other = open; other.name = "Pidgey"; other.hp = HP(current: 40, max: 40); other.cp = 300
+        XCTAssertEqual(c2.feed(other, time: at2 + 1, read: p2.read), .resume(at: at2 + 1))
+        XCTAssertNil(c2.paused)
     }
 }

@@ -5,6 +5,13 @@ import PogoReader
 
 /// Receives the pause notification's "Finish scan" action (the app is woken for it) and lets notifications show while the app is open.
 final class NotificationActions: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = NotificationActions()
+    /// Set at launch (the app delegate), never from a view-owned object: when the system launches the app only to deliver the "Finish scan" action, no screen exists yet, and the
+    /// delegate must already be in place for the response to be delivered.
+    static func install() {
+        UNUserNotificationCenter.current().delegate = shared
+        ScanNotifier.registerCategories()
+    }
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         // Scoped to the scan the notification was about: an old notification's action does nothing to a later scan.
         if response.actionIdentifier == ScanNotification.finishActionID, let scan = response.notification.request.content.userInfo["scan"] as? Int { ReaderSettings.finishRequestedScan = scan }
@@ -234,6 +241,7 @@ final class AppModel: ObservableObject {
     /// delivered or pending. Same identifier, so even a race leaves one; the handled key makes it once per event.
     func postFallbackNotificationIfNeeded(_ s: BroadcastState?) {
         guard let s, s.eventSeq > 0, s.scanId != 0, s.commandPeriod != nil else { return }
+        if !s.paused { ScanNotifier.removePauseNotifications(scan: s.scanId) }   // resumed or finished: no pause notification (or its button) is left behind
         let key = "\(s.scanId)#\(s.eventSeq)"
         guard UserDefaults.standard.string(forKey: Self.handledKey) != key else { return }
         let n: ScanNotification
@@ -371,11 +379,7 @@ final class AppModel: ObservableObject {
         } catch { message = "The commands could not be made: \(Self.plain(error))" }
     }
 
-    private let notificationActions = NotificationActions()
-
     init() {
-        UNUserNotificationCenter.current().delegate = notificationActions
-        ScanNotifier.registerCategories()
         let root = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))?
             .appendingPathComponent("PogoAssist", isDirectory: true).appendingPathComponent("boxes", isDirectory: true)
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("boxes", isDirectory: true)

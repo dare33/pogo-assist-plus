@@ -14,6 +14,25 @@ public struct ScanNotification: Equatable {
 
     public static let finishActionID = "pogo.finish"
     public static let pausedCategoryID = "pogo.scan.paused"
+    /// Every pause notification's identifier starts with this (`paused`), so they can be found and removed.
+    public static let pausedIdentifierPrefix = "pogo.scan.paused."
+
+    /// Whether a delivered or pending notification is a pause notification of `scan` (of any scan when nil): the ones removed when the scan resumes or finishes and when a new scan starts.
+    public static func isPause(_ identifier: String, scan: Int? = nil) -> Bool {
+        guard identifier.hasPrefix(pausedIdentifierPrefix) else { return false }
+        guard let scan else { return true }
+        return identifier.hasPrefix("\(pausedIdentifierPrefix)\(scan).")
+    }
+
+    /// Whether a "Finish scan" request is honoured: only when it names the scan that is running and that scan is paused. A request for an old scan, or one made when the scan
+    /// is not paused, does nothing (the caller clears it either way).
+    public static func finishRequestHonoured(asked: Int, runningScan: Int, paused: Bool) -> Bool { paused && asked == runningScan }
+
+    /// How the time limit reads in the notification and on the Scan screen ("3 minutes"), from the one constant.
+    public static var pauseLimitText: String {
+        let m = Int((ScanEndDecision.pauseTimeoutSeconds / 60).rounded())
+        return m == 1 ? "1 minute" : "\(m) minutes"
+    }
 
     private static func last(_ name: String?, _ cp: Int?) -> String? {
         let n = (name?.isEmpty == false) ? name : nil
@@ -41,16 +60,16 @@ public struct ScanNotification: Equatable {
     }
 
     /// The scan paused at a card that is not clearly the end: "Paused at <name> CP <cp>: <N> of <M> read. Reopen its appraisal to carry on, or say "Pogo scan <size>" if the taps have
-    /// stopped." (size: the smallest covering M - N). With no count: "…<N> read. If that was not your last Pokémon, reopen its appraisal…".
+    /// stopped. It finishes by itself in 3 minutes if no new Pokémon is read." (size: the smallest covering M - N). With no count: "…<N> read. If that was not your last Pokémon, reopen its appraisal…".
     public static func paused(scan: Int, event: Int, read: Int, storageCount: Int?, lastName: String?, lastCP: Int?, sizes: [Int]) -> ScanNotification {
         let at = Self.last(lastName, lastCP).map { "Paused at \($0): " } ?? "Paused: "
         let body: String
         if let m = storageCount, m > 0 {
             let command = commandName(covering: max(1, m - read), sizes: sizes).map { "say \"\($0)\"" } ?? "say the command again"
-            body = "\(at)\(read) of about \(m) read. Reopen its appraisal to carry on, or \(command) if the taps have stopped."
+            body = "\(at)\(read) of about \(m) read. Reopen its appraisal to carry on, or \(command) if the taps have stopped. It finishes by itself in \(pauseLimitText) if no new Pokémon is read."
         } else {
-            body = "\(at)\(read) read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped."
+            body = "\(at)\(read) read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped. It finishes by itself in \(pauseLimitText) if no new Pokémon is read."
         }
-        return ScanNotification(identifier: "pogo.scan.paused.\(scan).\(event)", scanId: scan, title: "Scan paused", body: body, offersFinish: true)
+        return ScanNotification(identifier: "\(pausedIdentifierPrefix)\(scan).\(event)", scanId: scan, title: "Scan paused", body: body, offersFinish: true)
     }
 }

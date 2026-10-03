@@ -45,6 +45,8 @@ public struct ScanEndController {
         case pause(Pause)
         /// A new card was read after a pause.
         case resume(at: Double)
+        /// The appraisal's bars appeared again on the paused card (the person reopened it): the 180 s window starts over, but the scan is NOT resumed, because nothing was paged.
+        case windowRestarted(at: Double)
         /// End the scan now, with the end marker at `at` (the original quiet time after a timeout) and `last` the card that began last.
         case finish(at: Double, last: Double)
     }
@@ -75,7 +77,10 @@ public struct ScanEndController {
     private var lastName: String?, lastCP: Int?
 
     public mutating func feed(_ r: FrameReading, time: Double, read: Int) -> Event {
+        let before = detector
+        var barsAppeared = false   // a card reading with bars straight after one without
         if r.cp != nil || r.name != nil {
+            barsAppeared = r.ivs != nil && recentBars.last == false
             recentBars.append(r.ivs != nil); if recentBars.count > 8 { recentBars.removeFirst() }
             if r.name != nil { lastName = r.name }; if r.cp != nil { lastCP = r.cp }
         }
@@ -84,9 +89,20 @@ public struct ScanEndController {
         if let p = paused {
             if detector.ended != nil { detector.rearm() }   // a repeated quiet during the pause is not news
             // A resume is anything the detector counts as a new card (its clock reset): a name or HP change, or a new CP or bars value by its rules. One criterion.
-            if detector.resets != p.resets {
+            var barsOnly = false
+            if detector.resets != p.resets, r.ivs != nil {
+                // Would the same reading without its bars have counted as a new card? If not, only the bars did: the person reopened the appraisal on the same card.
+                var probe = before; var bare = r; bare.ivs = nil
+                probe.feed(bare, time: time)
+                barsOnly = probe.resets == before.resets
+            }
+            if detector.resets != p.resets, !barsOnly {
                 paused = nil
                 return .resume(at: time)
+            }
+            if barsOnly || barsAppeared {
+                paused = (p.pause, time, detector.resets)
+                return .windowRestarted(at: time)
             }
             return timeoutEvent(now: time)
         }
