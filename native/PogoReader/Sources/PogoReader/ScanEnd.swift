@@ -52,7 +52,8 @@ public struct ScanEndController {
     public private(set) var detector: EndOfListDetector
     public var storageCount: Int?
     /// The pause in progress, if any.
-    public private(set) var paused: (pause: Pause, since: Double, card: (name: String?, hp: String?))?
+    public private(set) var paused: (pause: Pause, since: Double, resets: Int)?
+    private var lastRead = 0, lastFeedTime = 0.0
     /// Pauses so far in this scan.
     public private(set) var pauseCount = 0
     private var recentBars = [Bool]()   // for each of the last card readings: were the bars read
@@ -79,26 +80,38 @@ public struct ScanEndController {
             if r.name != nil { lastName = r.name }; if r.cp != nil { lastCP = r.cp }
         }
         detector.feed(r, time: time)
+        lastRead = read; lastFeedTime = time
         if let p = paused {
             if detector.ended != nil { detector.rearm() }   // a repeated quiet during the pause is not news
-            let now = detector.currentCard
-            if now.name != p.card.name || now.hp != p.card.hp {
+            // A resume is anything the detector counts as a new card (its clock reset): a name or HP change, or a new CP or bars value by its rules. One criterion.
+            if detector.resets != p.resets {
                 paused = nil
                 return .resume(at: time)
             }
-            if time - p.since >= ScanEndDecision.pauseTimeoutSeconds { paused = nil; return .finish(at: p.pause.at, last: p.pause.last) }
-            return .none
+            return timeoutEvent(now: time)
         }
         guard let e = detector.ended else { return .none }
         switch ScanEndDecision.decide(read: read, storageCount: storageCount) {
         case .finish: return .finish(at: e.at, last: e.last)
         case .pause:
             let pause = Pause(at: e.at, last: e.last, read: read, closed: appraisalClosed(), name: lastName, cp: lastCP)
-            paused = (pause, time, detector.currentCard)
-            pauseCount += 1
             detector.rearm()
+            paused = (pause, time, detector.resets)
+            pauseCount += 1
             return .pause(pause)
         }
+    }
+
+    /// The 180 s timeout, checked from the one-second heartbeat as well as on every reading (a paused broadcast with no frames, or with Vision skipped, must still finish).
+    /// `now` is in the same clock as the readings' times. A finish after a pause is dated at the stall (so the repeated card after it is trimmed) only if no Pokémon has been
+    /// read since the pause; if rows were, the end is dated at the last reading and its card, as a normal end is, and nothing read after the pause is trimmed.
+    public mutating func tick(now: Double) -> Event { paused == nil ? .none : timeoutEvent(now: now) }
+
+    private mutating func timeoutEvent(now: Double) -> Event {
+        guard let p = paused, now - p.since >= ScanEndDecision.pauseTimeoutSeconds else { return .none }
+        paused = nil
+        if lastRead > p.pause.read { return .finish(at: lastFeedTime, last: max(detector.lastNew ?? p.pause.last, p.pause.last)) }
+        return .finish(at: p.pause.at, last: p.pause.last)
     }
 
     /// The person chose "Finish now" (or the notification action): end with the marker at `time`.

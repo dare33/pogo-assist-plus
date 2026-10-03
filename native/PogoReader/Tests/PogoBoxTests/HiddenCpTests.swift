@@ -76,7 +76,7 @@ final class HiddenCpTests: XCTestCase {
             switch line {
             case .reading(let r): readings.append(r.frameReading)
             case .tick(let t): ticks.append(t)
-            case .drop, .end, .pause, .resume: break
+            case .drop, .end, .pause, .resume, .stoppedByPerson: break
             }
         }
         XCTAssertTrue(readings.allSatisfy { $0.frame == nil })

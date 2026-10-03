@@ -54,8 +54,11 @@ final class PartialReadTests: XCTestCase {
         // a clean row with IVs that happens to look like a part read is just a new Pokémon
         let p = plan([row(cp: 182, ivs: IVs(atk: 1, def: 1, hp: 1))], [entry(row(cp: 1982), "a")])
         XCTAssertEqual(p.new, [0])
-        // a row with IVs but the no-level-fits flag is asked about
-        XCTAssertEqual(plan([row(cp: 182, ivs: IVs(atk: 1, def: 1, hp: 1), flags: ["no-level-fits"])], [entry(row(cp: 1982), "a")]).unsure.count, 1)
+        // a row with IVs but the no-level-fits flag, with its HP read as the saved entry's, is resolved by the merge (W1); with the HP unread it is asked about
+        let flagged = row(cp: 182, ivs: IVs(atk: 1, def: 1, hp: 1), flags: ["no-level-fits"])
+        XCTAssertEqual(plan([flagged], [entry(row(cp: 1982), "a")]).partMatches.count, 1)
+        var noHP = flagged; noHP.hp = nil
+        XCTAssertEqual(plan([noHP], [entry(row(cp: 1982), "a")]).unsure.count, 1)
     }
 
     func testAFullScanDoesNotProposeTheCandidateAsGone() {

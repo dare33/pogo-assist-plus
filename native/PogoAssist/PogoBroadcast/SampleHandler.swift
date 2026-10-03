@@ -66,7 +66,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var heartbeat: DispatchSourceTimer?
     private var writeFailures = 0
     private var endController: ScanEndController?   // only for a scan paged by a command; touched on `queue`
-    private var lastReadingTime = 0.0
+    private var lastReadingTime = 0.0, lastReadingUptime = 0.0
     private var finishedWork = false              // the finish work (state, log) has been done, by a user stop or by the end of the list
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
@@ -80,7 +80,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             memory = MemoryProbe()
             finishedWork = false
             let period = ReaderSettings.autoEndPeriod
-            ReaderSettings.finishRequested = false
+            ReaderSettings.finishRequestedScan = nil
             endController = ScanEndController(period: period, storageCount: ReaderSettings.storageCount)
             let table = try? SpeciesTable.bundled()
             if table == nil { log.error("species table could not be loaded") }
@@ -106,6 +106,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             state = BroadcastState()
             state.mode = mode.rawValue
             state.storageCount = ReaderSettings.storageCount
+            state.scanId = Int(state.started.timeIntervalSince1970)
             state.commandPeriod = period   // what this scan was started with: the app judges it by this, not by a setting changed since
             msTotal = 0
             replay = nil
@@ -187,13 +188,22 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     /// On `queue`, once a second: the state write, and the person's "Finish now" (the app sets a flag in the app group).
     private func beat() {
-        if ReaderSettings.finishRequested, !finishedWork {
-            ReaderSettings.finishRequested = false
-            if var c = endController {
+        guard !finishedWork else { return }
+        if let asked = ReaderSettings.finishRequestedScan {
+            ReaderSettings.finishRequestedScan = nil   // consumed whether or not it is honoured: a stale request must never wait for a later pause
+            // Honoured only for THIS scan and only while it is paused (an old notification's "Finish scan" does nothing to a later scan or to one that carried on).
+            if asked == state.scanId, state.paused, var c = endController {
                 let event = c.finishNow(at: lastReadingTime)
                 endController = c
-                if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last); return }
+                if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last, byPerson: true); return }
             }
+        }
+        // The pause timeout is also checked here, so a paused broadcast with no frames (or with Vision skipped under memory pressure) still finishes.
+        if var c = endController, c.paused != nil {
+            let now = lastReadingTime + (ProcessInfo.processInfo.systemUptime - lastReadingUptime)
+            let event = c.tick(now: now)
+            endController = c
+            if case .finish(let at, let last) = event { endAtListEnd(at: at, last: last, byPerson: false); return }
         }
         write(force: false)
     }
@@ -202,7 +212,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     /// a RESUME (a new card was read) or a FINISH (the list ended, or a pause timed out).
     private func handleEnd(_ reading: FrameReading, time: Double) {
         guard var c = endController else { return }
-        lastReadingTime = time
+        lastReadingTime = time; lastReadingUptime = ProcessInfo.processInfo.systemUptime
         let event = c.feed(reading, time: time, read: state.rows.count)
         endController = c
         switch event {
@@ -213,7 +223,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             state.paused = true; state.pauseCount += 1; state.pausedAt = Date(); state.eventSeq += 1
             state.pausedCard = [p.name, p.cp.map { "CP \($0)" }].compactMap { $0 }.joined(separator: " ")
             write(force: true)
-            ScanNotifier.post(ScanNotification.paused(event: state.eventSeq, read: p.read, storageCount: state.storageCount, lastName: p.name, lastCP: p.cp, sizes: ReaderSettings.commandSizes)) { [log] error in
+            ScanNotifier.post(ScanNotification.paused(scan: state.scanId, event: state.eventSeq, read: p.read, storageCount: state.storageCount, lastName: p.name, lastCP: p.cp, sizes: ReaderSettings.commandSizes)) { [log] error in
                 if let error { log.error("notification could not be posted: \(error.localizedDescription, privacy: .public)") }
             }
         case .resume(let at):
@@ -222,23 +232,25 @@ class SampleHandler: RPBroadcastSampleHandler {
             state.paused = false; state.pausedAt = nil
             write(force: true)
         case .finish(let at, let last):
-            endAtListEnd(at: at, last: last)
+            endAtListEnd(at: at, last: last, byPerson: false)
         }
     }
 
     /// On `queue`. The end of the list was seen: write the end marker (so the app can cut the tail), finish exactly as a user stop does,
     /// then end the broadcast. `finishBroadcastWithError` is the only way an extension can end one; the message reads as a result.
-    private func endAtListEnd(at: Double, last: Double) {
+    private func endAtListEnd(at: Double, last: Double, byPerson: Bool) {
         log.notice("end of the list reached: last new Pokémon at \(last, format: .fixed(precision: 1)), ending at \(at, format: .fixed(precision: 1))")
+        if byPerson { record(.stoppedByPerson(at: at)) }
         record(.end(at: at, last: last))
-        state.endedAtListEnd = true; state.paused = false; state.eventSeq += 1
+        // A scan the person finished is judged like a stop from the red bar (never a Full scan), so it does not claim the end of the list was reached.
+        state.endedAtListEnd = !byPerson; state.stoppedByPerson = byPerson; state.paused = false; state.eventSeq += 1
         lock.lock(); finished = true; lock.unlock()
         finishWork()
         // The notification is posted FIRST and the broadcast is ended from its completion handler, so the extension cannot be torn down before the request is handed to the
         // system; a 0.5 s timer ends it whether or not the completion fired, so a slow or refused notification cannot hang the finish. Whichever comes first ends it, once.
         // Both run off the queue: if ReplayKit answers with broadcastFinished synchronously, its `queue.sync` must not wait on this block. The state and the log are written.
         let last = state.rows.last
-        let note = ScanNotification.stopped(event: state.eventSeq, read: state.rows.count, lastName: last?.name, lastCP: last?.cp)
+        let note = ScanNotification.stopped(scan: state.scanId, event: state.eventSeq, read: state.rows.count, lastName: last?.name, lastCP: last?.cp)
         let once = OnceGate()
         let finish: () -> Void = { [weak self] in
             guard once.pass() else { return }

@@ -73,7 +73,7 @@ public enum ReplayReadings {
             case .tick(let t)?: loaded.ticks.append(t)
             case .drop?: loaded.drops += 1
             case .end(_, let last)?: endLast = last
-            case .pause?, .resume?: break
+            case .pause?, .resume?, .stoppedByPerson?: break
             case nil:
                 if (try? JSONSerialization.jsonObject(with: lineData)) is [String: Any] { loaded.skippedLines += 1 } else { loaded.malformedLines += 1 }
             }

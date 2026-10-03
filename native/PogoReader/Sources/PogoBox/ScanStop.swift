@@ -33,11 +33,13 @@ public enum ScanStop {
     }
 
     /// Where the scan paused (a card that was not the end of the list), by the row whose card was on screen when each pause began: "Stunfisk (CP 902)".
-    public static func pauseNames(_ pauses: [ScanPipeline.Pause], rows: [ScanRow]) -> [String] {
+    /// Each says what happened next: "resumed after 74 s", or (a pause that never resumed) why the scan ended.
+    public static func pauseNames(_ pauses: [ScanPipeline.Pause], rows: [ScanRow], finishedByPerson: Bool = false) -> [String] {
         pauses.compactMap { p in
             let starts: [(ScanRow, Double)] = rows.compactMap { r in r.frames.compactMap(\.time).min().map { (r, $0) } }
             guard let hit = starts.filter({ $0.1 <= p.last + 1 }).max(by: { $0.1 < $1.1 }) else { return nil }
-            return "\(hit.0.display) (CP \(hit.0.cp))"
+            let what = p.resumedAt.map { "resumed after \(Int(max(0, $0 - p.at).rounded())) s" } ?? (finishedByPerson ? "not resumed: you finished it" : "not resumed: the scan finished at the timeout")
+            return "\(hit.0.display) (CP \(hit.0.cp)), \(what)"
         }
     }
 
@@ -50,13 +52,15 @@ public enum ScanStop {
 
     /// The one place at the top of the review for a scan the extension ended itself. `commandKnown` is true only when the app itself named the command (a Full scan with a
     /// typed count); for Add and update the command that was said is not known, so a matching size is reported as "about the size of" rather than as fact, with `nearestSize`.
-    public static func summary(lastName: String?, lastCP: Int?, read: Int, appraisalClosed: Bool?, ranOut: Bool, commandKnown: Bool, nearestSize: Int? = nil, matchSentence: String? = nil, paused: [String] = []) -> String {
+    public static func summary(lastName: String?, lastCP: Int?, read: Int, appraisalClosed: Bool?, ranOut: Bool, commandKnown: Bool, nearestSize: Int? = nil, matchSentence: String? = nil, paused: [String] = [], byPerson: Bool = false) -> String {
         let last = lastName.map { name in "the last one read was \(name)" + (lastCP.map { " (CP \($0))" } ?? "") } ?? "no Pokémon were named"
         let opened = lastName ?? "the last Pokémon"
-        var s = "The scan ended by itself after \(read.formatted()) Pokémon; \(last)."
-        if !paused.isEmpty { s += paused.count == 1 ? " It paused once, at \(paused[0]), and carried on." : " It paused \(paused.count) times, at \(paused.dropLast().joined(separator: ", ")) and \(paused.last!), and carried on." }
+        var s = byPerson ? "You finished the scan after \(read.formatted()) Pokémon; \(last)." : "The scan ended by itself after \(read.formatted()) Pokémon; \(last)."
+        if !paused.isEmpty { s += paused.count == 1 ? " It paused once, at \(paused[0])." : " It paused \(paused.count) times: \(paused.joined(separator: "; "))." }
         if let c = appraisalClosed { s += c ? " The appraisal had closed." : " The appraisal was still open." }
-        if !commandKnown, ranOut {
+        if byPerson {
+            s += " If that was not the end of your list, open \(opened) in Pokémon GO with the appraisal showing and scan again from there (Add and update)."
+        } else if !commandKnown, ranOut {
             let which = nearestSize.map { "the \"Pogo scan \($0)\" command" } ?? "one of the commands"
             s += " \(read.formatted()) read is about the size of \(which). If that is the one you said, it ran out. To scan the rest, open \(opened) in Pokémon GO with the appraisal showing and say a command for what is left (Add and update)."
         } else if ranOut {

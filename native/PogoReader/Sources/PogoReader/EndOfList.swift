@@ -104,8 +104,11 @@ public struct EndOfListDetector {
     }
 
     private mutating func reset(at time: Double) {
-        quiet = 0; thirds = [0, 0, 0]; lastNew = time
+        quiet = 0; thirds = [0, 0, 0]; lastNew = time; resets += 1
     }
+    /// How many times the clock has reset for a new card (a name or HP change, or a new CP or bars value by the rules above). The pause logic recognises a resume by this
+    /// counter, so there is ONE criterion for "a new card was read".
+    public private(set) var resets = 0
 
     /// One frame's reading at `time`. True once the end has been seen (and on every call after).
     @discardableResult

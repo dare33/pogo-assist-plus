@@ -57,7 +57,7 @@ public enum ScanPipeline {
             case .drop(let t): drops += 1; times.append(t)
             case .pause(let at, let last, let read, let closed): pauses.append(Pause(at: at, last: last, read: read, closed: closed))
             case .resume(let at): if let i = pauses.indices.last, pauses[i].resumedAt == nil { pauses[i].resumedAt = at }
-            case .end: break
+            case .end, .stoppedByPerson: break
             }
         }
         if readings.isEmpty {

@@ -6,7 +6,8 @@ import PogoReader
 /// Receives the pause notification's "Finish scan" action (the app is woken for it) and lets notifications show while the app is open.
 final class NotificationActions: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        if response.actionIdentifier == ScanNotification.finishActionID { ReaderSettings.finishRequested = true }
+        // Scoped to the scan the notification was about: an old notification's action does nothing to a later scan.
+        if response.actionIdentifier == ScanNotification.finishActionID, let scan = response.notification.request.content.userInfo["scan"] as? Int { ReaderSettings.finishRequestedScan = scan }
         completionHandler()
     }
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
@@ -218,7 +219,7 @@ final class AppModel: ObservableObject {
     }
 
     /// "Finish now" while a scan is paused: the extension ends it on its next heartbeat.
-    func finishPausedScanNow() { ReaderSettings.finishRequested = true }
+    func finishPausedScanNow() { if let id = broadcast?.scanId, id != 0 { ReaderSettings.finishRequestedScan = id } }
 
     // MARK: - notifications the extension may not get shown
 
@@ -232,18 +233,23 @@ final class AppModel: ObservableObject {
     /// When the app sees the event (alive in the background, or opened) it waits a few seconds, and posts the same notification itself only if none with that identifier is
     /// delivered or pending. Same identifier, so even a race leaves one; the handled key makes it once per event.
     func postFallbackNotificationIfNeeded(_ s: BroadcastState?) {
-        guard let s, s.eventSeq > 0, s.commandPeriod != nil else { return }
-        let key = "\(Int(s.started.timeIntervalSince1970))#\(s.eventSeq)"
+        guard let s, s.eventSeq > 0, s.scanId != 0, s.commandPeriod != nil else { return }
+        let key = "\(s.scanId)#\(s.eventSeq)"
         guard UserDefaults.standard.string(forKey: Self.handledKey) != key else { return }
         let n: ScanNotification
         if s.paused {
-            n = .paused(event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes)
+            n = .paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes)
         } else if s.endedAtListEnd {
             let last = s.rows.last
-            n = .stopped(event: s.eventSeq, read: s.rows.count, lastName: last?.name, lastCP: last?.cp)
+            n = .stopped(scan: s.scanId, event: s.eventSeq, read: s.rows.count, lastName: last?.name, lastCP: last?.cp)
         } else { return }
         UserDefaults.standard.set(key, forKey: Self.handledKey)
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.fallbackGraceSeconds) {
+            // The state is read again first: a pause notice is only posted if that pause is still the current, unresumed one (the scan may have resumed, finished or been
+            // replaced while the app waited); a stop notice only if that scan is still the one that ended.
+            guard let now = SharedStore.read(), now.scanId == s.scanId else { return }
+            if s.paused, !(now.paused && now.eventSeq == s.eventSeq) { return }
+            if !s.paused, !now.endedAtListEnd { return }
             ScanNotifier.exists(n.identifier) { exists in if !exists { ScanNotifier.post(n) } }
         }
     }
@@ -690,8 +696,9 @@ final class AppModel: ObservableObject {
         // How the scan was paged is what the extension was told when it started (a command at its period, or by hand), not a setting changed since.
         let period: Double? = { if let b = broadcast { return b.commandPeriod }; return pagedByHand ? nil : pace.every }()
         let paging = period == nil ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: period, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
-        let ended = broadcast?.endedAtListEnd ?? false, logFull = broadcast?.replayLogTruncated ?? false, logFailed = broadcast?.replayLogFailed ?? false
-        let typed = storageCount
+        let ended = broadcast?.endedAtListEnd ?? false, byPerson = broadcast?.stoppedByPerson ?? false, logFull = broadcast?.replayLogTruncated ?? false, logFailed = broadcast?.replayLogFailed ?? false
+        // The count the scan was started with (captured in its state), not the field as it reads now: it may have been edited since.
+        let typed = broadcast.map { $0.storageCount } ?? storageCount
         Task {
             do {
                 let (outcome, plan, seconds, base, seq, kind, note, advice, stop) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?, ScanKindAdvice.Decision, String?) in
@@ -706,14 +713,14 @@ final class AppModel: ObservableObject {
                     let plan = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
                     // Where it stopped: the last Pokémon, how many, whether the appraisal had closed (from the whole log, the tail the end marker cuts included).
                     var stop: String?
-                    if ended {
+                    if ended || byPerson {
                         let last = outcome.scan.rows.last
                         let closed = ScanStop.appraisalClosed(lines: ReplayLog.lines(in: url))
                         let ran = ScanStop.ranOut(read: outcome.scan.rows.count, typedCount: typed, full: asked == .full, commandPeriod: period)
                         stop = ScanStop.summary(lastName: last?.display, lastCP: last?.cp, read: outcome.scan.rows.count, appraisalClosed: closed, ranOut: ran,
                                                 commandKnown: asked == .full && typed != nil, nearestSize: ScanStop.nearestSize(read: outcome.scan.rows.count, commandPeriod: period),
                                                 matchSentence: ScanKindAdvice.matchSentence(pokemonRead: outcome.scan.rows.count, decision: d),
-                                                paused: ScanStop.pauseNames(outcome.pauses, rows: outcome.scan.rows))
+                                                paused: ScanStop.pauseNames(outcome.pauses, rows: outcome.scan.rows, finishedByPerson: byPerson), byPerson: byPerson)
                     }
                     return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note, d, stop)
                 }

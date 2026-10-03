@@ -49,7 +49,7 @@ final class FoldApiTests: XCTestCase {
     // M9
     func testM9AnsweringNewMakesTheCandidatesEligibleForGoneAgain() throws {
         let saved = entry(row(cp: 1982), "s")
-        var partial = row(cp: 182, ivs: nil, flags: ["no-level-fits"]); partial.ivsRead = nil
+        var partial = row(cp: 182, hp: nil, ivs: nil, flags: ["no-level-fits"]); partial.ivsRead = nil
         let p = plan([partial], [saved])
         XCTAssertEqual(p.unsure.first?.kind, .partialRead)
         XCTAssertTrue(p.gone.isEmpty)

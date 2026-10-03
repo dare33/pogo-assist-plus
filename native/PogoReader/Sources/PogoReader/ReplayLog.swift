@@ -15,6 +15,8 @@ public enum ReplayLine: Equatable {
     case pause(at: Double, last: Double, read: Int, closed: Bool?)
     /// A new card was read after a pause: the scan carries on as one scan.
     case resume(at: Double)
+    /// The person ended the scan ("Finish now", the notification action) rather than the end of the list; written just before the end marker.
+    case stoppedByPerson(at: Double)
 }
 
 public struct ReplayReading: Codable, Equatable {
@@ -66,6 +68,7 @@ public enum ReplayLog {
         case .end(let at, let last): return (try? enc.encode(ReplayEnd(t: at, last: last))) ?? Data()
         case .pause(let at, let last, let read, let closed): return (try? enc.encode(ReplayPause(t: at, last: last, read: read, closed: closed))) ?? Data()
         case .resume(let at): return (try? enc.encode(ReplayEvent(k: "u", t: at))) ?? Data()
+        case .stoppedByPerson(let at): return (try? enc.encode(ReplayEvent(k: "s", t: at))) ?? Data()
         }
     }
 
@@ -79,6 +82,7 @@ public enum ReplayLog {
         case "e": return (try? dec.decode(ReplayEnd.self, from: data)).map { .end(at: $0.t, last: $0.last) }
         case "p": return (try? dec.decode(ReplayPause.self, from: data)).map { .pause(at: $0.t, last: $0.last, read: $0.read, closed: $0.closed) }
         case "u": return .resume(at: head.t)
+        case "s": return .stoppedByPerson(at: head.t)
         default: return nil
         }
     }
@@ -103,7 +107,7 @@ public enum ReplayLog {
             switch $0 {
             case .reading(let r): return r.t <= limit
             case .tick(let t), .drop(let t): return t <= limit
-            case .end, .pause, .resume: return true
+            case .end, .pause, .resume, .stoppedByPerson: return true
             }
         }
     }
@@ -119,7 +123,7 @@ public enum ReplayLog {
             case .reading(let r): g.add(r.frameReading); res.readings += 1
             case .tick(let t): g.swipe(at: t); res.ticks += 1
             case .drop: res.drops += 1       // a dropped frame carries no reading; it is in the log for the record
-            case .end, .pause, .resume: break
+            case .end, .pause, .resume, .stoppedByPerson: break
             }
         }
         g.finish()

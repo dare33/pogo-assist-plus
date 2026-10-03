@@ -4,6 +4,9 @@ import Foundation
 /// extension's notification was not delivered). Plain text, tested in the package; posting is the app's and the extension's job. Nothing here touches the network.
 public struct ScanNotification: Equatable {
     public var identifier: String
+    /// The scan this is about (its start time in whole seconds, `BroadcastState.scanId`): in the identifier, so one scan's event never replaces or hides another's, and in the
+    /// notification's user info, so its "Finish scan" action can only finish THAT scan.
+    public var scanId: Int
     public var title: String
     public var body: String
     /// Notifications of a pause carry the "Finish scan" action.
@@ -31,15 +34,15 @@ public struct ScanNotification: Equatable {
 
     /// The scan ended by itself: "<N> read, last <name> CP <cp>. If the command is still tapping, say "Go to sleep". Open Pogo Assist for what to do next." It does not claim to know
     /// where to continue from: the app's review says that.
-    public static func stopped(event: Int, read: Int, lastName: String?, lastCP: Int?) -> ScanNotification {
+    public static func stopped(scan: Int, event: Int, read: Int, lastName: String?, lastCP: Int?) -> ScanNotification {
         let last = Self.last(lastName, lastCP).map { ", last \($0)" } ?? ""
-        return ScanNotification(identifier: "pogo.scan.stopped.\(event)", title: "Scan stopped",
+        return ScanNotification(identifier: "pogo.scan.stopped.\(scan).\(event)", scanId: scan, title: "Scan stopped",
                                 body: "\(read) read\(last). If the command is still tapping, say \"Go to sleep\". Open Pogo Assist for what to do next.", offersFinish: false)
     }
 
     /// The scan paused at a card that is not clearly the end: "Paused at <name> CP <cp>: <N> of <M> read. Reopen its appraisal to carry on, or say "Pogo scan <size>" if the taps have
     /// stopped." (size: the smallest covering M - N). With no count: "…<N> read. If that was not your last Pokémon, reopen its appraisal…".
-    public static func paused(event: Int, read: Int, storageCount: Int?, lastName: String?, lastCP: Int?, sizes: [Int]) -> ScanNotification {
+    public static func paused(scan: Int, event: Int, read: Int, storageCount: Int?, lastName: String?, lastCP: Int?, sizes: [Int]) -> ScanNotification {
         let at = Self.last(lastName, lastCP).map { "Paused at \($0): " } ?? "Paused: "
         let body: String
         if let m = storageCount, m > 0 {
@@ -48,6 +51,6 @@ public struct ScanNotification: Equatable {
         } else {
             body = "\(at)\(read) read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped."
         }
-        return ScanNotification(identifier: "pogo.scan.paused.\(event)", title: "Scan paused", body: body, offersFinish: true)
+        return ScanNotification(identifier: "pogo.scan.paused.\(scan).\(event)", scanId: scan, title: "Scan paused", body: body, offersFinish: true)
     }
 }

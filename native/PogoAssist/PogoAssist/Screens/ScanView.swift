@@ -148,7 +148,7 @@ struct ScanView: View {
             HStack { ProgressView(); Text("Scan in progress").font(.headline) }
             Text("\(s?.framesRead ?? 0) frames read, \(s?.rows.count ?? 0) Pokémon so far" + (s?.storageCount.map { " of about \($0.formatted())" } ?? "")).monospacedDigit()
             if let s, s.paused {
-                Label(ScanNotification.paused(event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes).body, systemImage: "pause.circle.fill").font(.callout.weight(.semibold)).foregroundStyle(.orange)
+                Label(ScanNotification.paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes).body, systemImage: "pause.circle.fill").font(.callout.weight(.semibold)).foregroundStyle(.orange)
                 Button("Finish now", role: .destructive) { model.finishPausedScanNow() }
             }
             Text(s?.commandPeriod != nil ? "The scan usually ends by itself when the list ends or the command runs out; if it does not, stop the broadcast from the red bar. Come back here when the broadcast stops." : "Stop the broadcast from the red bar when the last Pokémon has been read, then come back here.").font(.footnote).foregroundStyle(.secondary)

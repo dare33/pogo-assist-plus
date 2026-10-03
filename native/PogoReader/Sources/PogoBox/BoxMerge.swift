@@ -67,6 +67,11 @@ public enum BoxMerge {
         public var reason: UpdateReason
     }
 
+    public struct PartMatch: Equatable {
+        public var scanned: Int
+        public var savedId: String
+    }
+
     public struct Pair: Equatable {
         public var scanned: Int
         public var savedId: String
@@ -96,6 +101,9 @@ public enum BoxMerge {
             case evolved
             /// A base form scanned for an entry first saved in its Mega form, same IVs: the same Pokémon (the Mega values were temporary) or a different one.
             case megaToBase
+            /// The box holds one Pokémon twice, once saved in its Mega form and once in its base form (same IVs and HP), and this scan read either: join them or keep both.
+            /// Candidates: the base entry first, then the Mega entry. Choosing "this one" (the base entry) joins them; leaving it out keeps both.
+            case megaPair
         }
         public var scanned: Int
         public var candidates: [String]
@@ -122,6 +130,8 @@ public enum BoxMerge {
         public var kept: [Kept] = []
         /// What the scan saw on screen and did not read. It protects nothing; `unreadLine` tells the person that some "not seen" entries may be those items.
         public var unmatchedItems: [Unmatched] = []
+        /// Part reads matched to a saved Pokémon by the merge itself (`autoPartMatch`): marked seen, nothing written. Shown on the review so it is visible.
+        public var partMatches: [PartMatch] = []
         /// Saved entries that no scanned row was paired with (candidates of an unsure row included), for `goneReport`.
         public var unpaired: [Unpaired] = []
         /// Scanned positions whose species is a Mega or Primal form, with the base species id. A Mega row never writes its own
@@ -175,16 +185,40 @@ public enum BoxMerge {
 
     // MARK: - plan
 
-    public static func plan(scanned rows: [ScanRow], unmatched: [Unmatched] = [], into saved: [BoxEntry], kind: BoxStore.Kind, scanDate: Date, gameMaster gm: GameMaster, shareIVs: Bool = true) -> Plan {
+    /// Whether a row's IVs are a clean read: not guessed, and not corrected by the solver (`ivs-corrected-from…`), ambiguous or unsettled. Others are treated as
+    /// UNREAD when pairing (they may fill nothing and rescue nothing), so a flagged solver guess is never "other IVs at the same CP and HP".
+    static func cleanIVs(_ r: ScanRow) -> Bool {
+        guard r.ivs != nil, r.ivsGuess == nil else { return false }
+        return !r.flags.contains { $0.hasPrefix("ivs-corrected") || $0.hasPrefix("ambiguous-ivs") || ($0.hasPrefix("bars-unsettled") && r.solveStatus != "exact") }
+    }
+
+    public static func plan(scanned originals: [ScanRow], unmatched: [Unmatched] = [], into saved: [BoxEntry], kind: BoxStore.Kind, scanDate: Date, gameMaster gm: GameMaster, shareIVs: Bool = true) -> Plan {
+        // Matching sees a row whose IVs are not a clean read as one with no IVs read; the plan keeps the rows as scanned.
+        let rows: [ScanRow] = originals.map { r in
+            guard r.ivs != nil, !cleanIVs(r) else { return r }
+            var v = r; v.ivs = nil; return v
+        }
         var sPool = Array(rows.indices)
         var vPool = Array(saved.indices)
-        var plan = Plan(kind: kind, scanDate: scanDate, scanned: rows, new: [], updated: [], same: [], unsure: [], gone: [])
+        var plan = Plan(kind: kind, scanDate: scanDate, scanned: originals, new: [], updated: [], same: [], unsure: [], gone: [])
         plan.unmatchedItems = unmatched
         var unsureSaved = Set<Int>()   // saved entries that are candidates of an unsure row and were not paired with anything
 
         for (i, r) in rows.enumerated() { if let b = megaBase(r.speciesId, gm) { plan.megaBases[i] = b } }
 
         enum Rule { case unchanged, megaSame, baseOfMega, poweredUp, evolved, noIVs }
+
+        // One Pokémon saved twice across its Mega state (a base entry and a Mega-form entry with the same IVs and HP): the next scan that reads either asks once whether to
+        // join them, instead of pairing the row with one entry and listing the other as not seen.
+        for (mi, m) in saved.enumerated() {
+            guard let base = megaBase(m.row.speciesId, gm), let mivs = m.row.ivs, m.row.hp != nil else { continue }
+            guard let bi = saved.indices.first(where: { saved[$0].row.speciesId == base && saved[$0].row.ivs == mivs && saved[$0].row.hp == m.row.hp }) else { continue }
+            guard let si = sPool.first(where: { (rows[$0].speciesId == base || rows[$0].speciesId == m.row.speciesId) && rows[$0].ivs == mivs && (rows[$0].hp == nil || rows[$0].hp == m.row.hp) }) else { continue }
+            plan.unsure.append(Unsure(scanned: si, candidates: [saved[bi].id, m.id], kind: .megaPair))
+            unsureSaved.insert(bi); unsureSaved.insert(mi)
+            sPool.removeAll { $0 == si }; vPool.removeAll { $0 == bi || $0 == mi }
+        }
+
         func record(_ rule: Rule, _ si: Int, _ vi: Int) {
             let s = rows[si], v = saved[vi], id = v.id
             // A row whose CP fits no level is never paired by a rule that would write its values (power-up, evolution, IVs now read, base of a
@@ -293,6 +327,22 @@ public enum BoxMerge {
         // Every leftover row is judged against the same pool: a row asked about an entry does not hide it from the next row that could
         // also be it (two reads of one saved Pokémon are both asked; applying the answers refuses one entry taken twice).
         let leftoverPool = vPool
+        // The leftover rows' part-read candidates, so a candidate that two rows could be is never matched automatically.
+        let leftoverParts: [Int: [Int]] = Dictionary(uniqueKeysWithValues: sPool.map { ($0, partialCandidates(rows[$0], saved)) })
+        /// A part read is resolved without a question when ALL hold: its own CP fits no level (flagged `no-level-fits`) and was read with an HP; the one saved candidate has an
+        /// HP within 1 of it and is itself a consistent reading (CP, HP, not flagged); the read CP's digits are a run of the candidate's CP (one direction: 607 in 1607); that is the
+        /// only candidate; the candidate is still unpaired by the rules; and no other leftover row could be it. For one species the HP fixes the level, so a row whose CP fits no
+        /// level for its HP cannot be a different Pokémon with that HP. Effect: the same as answering "It is this one" for a part read (marked seen, nothing written).
+        func autoPartMatch(_ si: Int, part: [Int]) -> Int? {
+            let r = rows[si]
+            guard part.count == 1, let vi = part.first, hasNoLevelFits(originals[si]), r.cp > 0, let h = r.hp else { return nil }
+            let v = saved[vi]
+            guard vPool.contains(vi), v.row.cp > 0, let vh = v.row.hp, abs(vh - h) <= 1, !hasNoLevelFits(v.row), v.row.cp != r.cp, isSubsequence(Array(String(r.cp)), Array(String(v.row.cp))) else { return nil }
+            guard !leftoverParts.contains(where: { $0.key != si && $0.value.contains(vi) }) else { return nil }
+            // nothing else may be a candidate for this row (a plausible or misread entry would make it a real question)
+            guard !leftoverPool.contains(where: { $0 != vi && (plausibleCandidate(r, saved[$0], gm, fits) || misreadSaved(r, saved[$0])) }) else { return nil }
+            return vi
+        }
         let fits = IVFit(enabled: shareIVs)   // CP and HP fits per species, shared by every leftover row
         var stillNew = [Int]()
         for si in sPool {
@@ -306,6 +356,11 @@ public enum BoxMerge {
                 stillNew.append(si); continue
             }
             let part = partialCandidates(r, saved)
+            if let vi = autoPartMatch(si, part: part) {
+                plan.same.append(Pair(scanned: si, savedId: saved[vi].id)); plan.partMatches.append(PartMatch(scanned: si, savedId: saved[vi].id))
+                vPool.removeAll { $0 == vi }
+                continue
+            }
             let plausible = leftoverPool.filter { plausibleCandidate(r, saved[$0], gm, fits) && !part.contains($0) }
             // M12: a saved entry that was misread (no IVs, no level fits) of this correctly read row, whatever the CP.
             let misread = leftoverPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
@@ -336,6 +391,8 @@ public enum BoxMerge {
         guard plan.kind == .full else { return GoneReport(gone: [], kept: []) }
         var pending = Set<String>(), seen = Set<String>()
         for u in plan.unsure {
+            // Either answer to a Mega pair means both entries were seen (the scan read one of them; joining or keeping both is the person's decision).
+            if u.kind == .megaPair, resolutions[u.scanned] != nil { seen.formUnion(u.candidates); continue }
             switch resolutions[u.scanned] {
             case nil: pending.formUnion(u.candidates)
             case .existing(let id)?: seen.insert(id)
@@ -356,6 +413,12 @@ public enum BoxMerge {
             gone.append(e.id)
         }
         return GoneReport(gone: gone, kept: kept)
+    }
+
+    /// "Read as CP 607; matched to your Charizard CP 1607 by its HP." for a part read the merge matched itself.
+    public static func partMatchLine(_ plan: Plan, _ m: PartMatch, saved: BoxEntry?) -> String {
+        let s = plan.scanned[m.scanned]
+        return "Read as CP \(s.cp); matched to your \(saved.map { "\($0.row.title) CP \($0.row.cp)" } ?? "Pokémon") by its HP."
     }
 
     /// One line for the "Not seen" list when the person left rows out of the box at review (an extra twin does not count): some of the entries listed may simply not have been read.
@@ -620,10 +683,13 @@ public enum BoxMerge {
         case replacesIVs
         /// Other IVs read at the same CP and HP: the saved IVs are kept, the entry is marked seen and flagged to check.
         case keepsIVsAndFlags
+        /// The base entry and the Mega-form entry of one Pokémon become one entry (the base entry, marked Mega when scanned as such).
+        case joinsMegaPair
     }
 
     public static func effect(_ plan: Plan, _ u: Unsure, candidate e: BoxEntry, gameMaster gm: GameMaster?) -> Effect {
         let r = plan.scanned[u.scanned]
+        if u.kind == .megaPair { return u.candidates.first == e.id ? .joinsMegaPair : .seenOnly }
         if onlyMarksSeen(plan, u, e.id) { return .seenOnly }
         if ivsDisagree(r, e) { return ivsReplaceable(r, e) ? .replacesIVs : .keepsIVsAndFlags }
         if let gm, plan.megaBases[u.scanned] != nil, megaBase(e.row.speciesId, gm) == nil { return .seenAsMega }
@@ -637,7 +703,7 @@ public enum BoxMerge {
     }
 
     /// Whether choosing saved entry `id` for this unsure row writes the row's values onto it. Rows that only mark seen may share an entry.
-    private static func writes(_ u: Unsure, _ id: String, _ plan: Plan) -> Bool { !onlyMarksSeen(plan, u, id) }
+    private static func writes(_ u: Unsure, _ id: String, _ plan: Plan) -> Bool { u.kind != .megaPair && !onlyMarksSeen(plan, u, id) }
 
     /// Both have IVs, they differ (a hand correction's old read counts as the same), and the CP and HP read are the same.
     public static func ivsDisagree(_ s: ScanRow, _ v: BoxEntry) -> Bool {
@@ -668,6 +734,7 @@ public enum BoxMerge {
         var byId = [String: BoxEntry](); for e in saved { byId[e.id] = e }
         var added = [BoxEntry]()
         var resolve = Set<String>()
+        var removedByJoin = Set<String>()
         let date = plan.scanDate
         func touch(_ id: String) { if let e = byId[id] { byId[id]?.lastSeen = max(e.lastSeen, date) } }
         func update(_ id: String, _ row: ScanRow) {
@@ -685,11 +752,26 @@ public enum BoxMerge {
         var newRows = plan.new
         for u in plan.unsure {
             switch resolutions[u.scanned]! {
-            case .new: newRows.append(u.scanned)
+            case .new: if u.kind != .megaPair { newRows.append(u.scanned) }
             case .leaveOut: break
             case .existing(let id):
                 guard let e = byId[id] else { break }
+                if u.kind == .megaPair {
+                    // Join: the base entry (candidates[0]) stays, with its own values and hand corrections (the Mega entry's corrections fill any it lacks), is marked Mega when the scan
+                    // read the Mega form, and the Mega-form entry is removed. Nothing else changes. Any other answer than "this one" keeps both.
+                    guard id == u.candidates.first, u.candidates.count == 2, let m = byId[u.candidates[1]] else { break }
+                    var c = e.corrections
+                    if c.ivs == nil { c.ivs = m.corrections.ivs }
+                    if c.species == nil { c.species = m.corrections.species }
+                    byId[id]?.corrections = c
+                    byId[id]?.firstSeen = min(e.firstSeen, m.firstSeen)
+                    touch(id)
+                    if plan.megaBases[u.scanned] != nil { setMega(id, true) } else { update(id, plan.scanned[u.scanned]); setMega(id, false) }
+                    removedByJoin.insert(m.id)
+                    break
+                }
                 switch effect(plan, u, candidate: e, gameMaster: gm0) {
+                case .joinsMegaPair: break   // handled above
                 case .seenOnly: byId[id]?.lastSeen = max(e.lastSeen, date)
                 case .seenAsMega: touch(id); setMega(id, true)
                 case .replacesValues, .replacesIVs: update(id, plan.scanned[u.scanned]); setMega(id, false)
@@ -707,7 +789,7 @@ public enum BoxMerge {
             added.append(BoxEntry(id: makeID(), row: row, firstSeen: date, lastSeen: date, megaWhenScanned: mega ? true : nil))
         }
         if let engine { for id in resolve { if let e = byId[id] { byId[id] = LevelSolve.apply(to: e, engine: engine).entry } } }
-        let gone = Set(goneReport(plan, resolutions: resolutions).gone).subtracting(keepGone)
+        let gone = Set(goneReport(plan, resolutions: resolutions).gone).subtracting(keepGone).union(removedByJoin)
         return saved.filter { !gone.contains($0.id) }.compactMap { byId[$0.id] } + added
     }
 

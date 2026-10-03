@@ -70,7 +70,7 @@ final class ScanReportTests: XCTestCase {
             ScanRow(index: 1, name: gm.byId[id]!.name, display: gm.byId[id]!.name, form: "", speciesId: id, dex: nil, cp: cp, hp: hp, ivs: nil, ivsRead: nil, ivsGuess: nil, level: nil, levelMax: nil, dust: nil, solveStatus: "none", flags: flags, frames: [])
         }
         let saved = [BoxEntry(id: "s", row: row("staraptor", cp: 1982, hp: 142), firstSeen: Date(), lastSeen: Date()), BoxEntry(id: "g", row: row("pidgey", cp: 100), firstSeen: Date(), lastSeen: Date())]
-        let plan = BoxMerge.plan(scanned: [row("staraptor", cp: 182, hp: 142, flags: ["no-level-fits"])], into: saved, kind: .full, scanDate: Date(), gameMaster: gm)
+        let plan = BoxMerge.plan(scanned: [{ var r = row("staraptor", cp: 182, hp: 142, flags: ["no-level-fits"]); r.hp = nil; return r }()], into: saved, kind: .full, scanDate: Date(), gameMaster: gm)
         let lines = ScanReportBuilder.reviewLines(plan: plan, resolutions: [0: .leaveOut], keepGone: [], base: saved)
         XCTAssertTrue(lines.contains { $0.contains("left it out of the box") })
         XCTAssertTrue(lines.contains { $0.hasPrefix("Removed because the scan did not see it, as the person marked: Pidgey") })

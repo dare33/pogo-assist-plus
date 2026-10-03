@@ -168,6 +168,11 @@ private struct ResultList: View {
                 if unmatched.isEmpty { Text("Every Pokémon on screen was read.").foregroundStyle(.secondary) }
                 ForEach(Array(unmatched.enumerated()), id: \.offset) { _, u in Text(Fmt.unmatched(u)).font(.callout) }
             }
+            if !plan.partMatches.isEmpty {
+                Section("Part reads matched by HP (\(plan.partMatches.count))") {
+                    ForEach(plan.partMatches, id: \.scanned) { m in Text(BoxMerge.partMatchLine(plan, m, saved: saved[m.savedId])).font(.footnote) }
+                }
+            }
             if !review.outcome.notices.isEmpty {
                 Section("Notes") { ForEach(review.outcome.notices, id: \.self) { Text($0).font(.footnote) } }
             }

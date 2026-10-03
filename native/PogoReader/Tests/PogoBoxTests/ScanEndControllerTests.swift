@@ -118,4 +118,75 @@ final class ScanEndControllerTests: XCTestCase {
         let kinds = out.events.map { e -> String in switch e.1 { case .pause: return "pause"; case .resume: return "resume"; case .finish: return "finish"; case .none: return "-" } }
         XCTAssertEqual(kinds, ["pause", "resume"], "one pause for the whole stall, then the resume when the new card was read")
     }
+
+    // MARK: round 18 (V1, V2)
+
+    /// run10 up to its pause (no count), the controller and the grouper positioned there.
+    private func pausedAtRun10() throws -> (c: ScanEndController, g: LiveGrouper, rs: [ReplayReading], pause: ScanEndController.Pause, at: Double) {
+        let rs = readings(ReplayLog.lines(in: try Fixture.url("device-run10-tap-25-autoend.replay.jsonl")))
+        var c = ScanEndController(period: 1.2, storageCount: nil)!
+        var g = LiveGrouper(species: try? SpeciesTable.bundled())
+        for r in rs {
+            g.add(r.frameReading)
+            if case .pause(let p) = c.feed(r.frameReading, time: r.t, read: g.rows.count) { return (c, g, rs, p, r.t) }
+        }
+        throw XCTSkip("no pause")
+    }
+
+    /// V1a: after a pause, a card with the same name and HP but another CP is a new card (the detector resets its clock), so it resumes the scan and its row is kept.
+    func testAPauseResumesOnASameNameSameHPCardWithAnotherCP() throws {
+        var (c, g, rs, p, at) = try pausedAtRun10()
+        var tail = try XCTUnwrap(rs.last)
+        var t = at, events = [ScanEndController.Event]()
+        tail.cp = (tail.cp ?? 4000) == 1500 ? 1600 : 1500
+        for _ in 0..<20 { t += 0.2; var r = tail; r.t = t; g.add(r.frameReading); let e = c.feed(r.frameReading, time: t, read: g.rows.count); if e != .none { events.append(e) } }
+        guard case .resume? = events.first else { return XCTFail("\(events)") }
+        // it stays on screen until the timeout: a second pause, then the finish dated at THAT card, so the new card's row is not trimmed
+        while t < at + 400, !events.contains(where: { if case .finish = $0 { return true } else { return false } }) {
+            t += 0.2; var r = tail; r.t = t; g.add(r.frameReading); let e = c.feed(r.frameReading, time: t, read: g.rows.count); if e != .none { events.append(e) }
+        }
+        guard case .finish(let endAt, let last)? = events.last else { return XCTFail("\(events)") }
+        XCTAssertGreaterThan(last, p.last, "the end is dated at the new card, not the original stall")
+        let lines: [ReplayLine] = (rs.map { .reading($0) }) + [ReplayLine.reading(ReplayReading(tail.frameReading, time: at + 1, ms: 1))] + [.end(at: endAt, last: last)]
+        XCTAssertTrue(readings(ReplayLog.trimmed(lines)).contains { $0.cp == tail.cp && $0.t == at + 1 }, "the card read after the pause is kept")
+    }
+
+    /// V1a: three new cards after a pause, then the timeout: all three are kept.
+    func testThreeNewCardsAfterAPauseAreAllKeptWhenTheTimeoutFollows() throws {
+        var (c, g, rs, _, at) = try pausedAtRun10()
+        var t = at, events = [ScanEndController.Event](), added = [ReplayReading]()
+        let base = try XCTUnwrap(rs.last)
+        for (i, cp) in [3100, 3000, 2900].enumerated() {
+            var card = base; card.name = ["Mewtwo", "Lugia", "Ho-Oh"][i]; card.cp = cp; card.hp = HP(current: 100 + i, max: 100 + i)
+            for _ in 0..<5 { t += 1.2; card.t = t; added.append(card); g.add(card.frameReading); let e = c.feed(card.frameReading, time: t, read: g.rows.count); if e != .none { events.append(e) } }
+        }
+        let resumes = events.filter { if case .resume = $0 { return true } else { return false } }
+        XCTAssertEqual(resumes.count, 1, "the first new card resumes it; later cards are just cards")
+        let timeout = c.tick(now: t + ScanEndDecision.pauseTimeoutSeconds + 1)
+        // whichever way it ends, nothing read after the pause is trimmed
+        var endAt = t, last = t
+        if case .finish(let a, let l) = timeout { endAt = a; last = l }
+        let lines: [ReplayLine] = rs.map { .reading($0) } + added.map { .reading($0) } + [.end(at: endAt, last: last)]
+        for card in added where card.t <= last + EndOfListDetector.keepAfterLast { XCTAssertTrue(readings(ReplayLog.trimmed(lines)).contains { $0.t == card.t }) }
+        XCTAssertGreaterThanOrEqual(last, added.last!.t - 10, "dated at the last new card")
+    }
+
+    /// V1b: even if rows were read after the pause without the detector seeing a new card, a timeout is dated at the last reading, never back at the stall.
+    func testATimeoutAfterRowsWereReadIsNotDatedAtTheStall() throws {
+        var (c, _, rs, p, at) = try pausedAtRun10()
+        let tail = try XCTUnwrap(rs.last)
+        var t = at, out = ScanEndController.Event.none
+        while t < at + 200, !({ if case .finish = out { return true } else { return false } }()) { t += 0.2; out = c.feed(tail.frameReading, time: t, read: p.read + 3) }
+        guard case .finish(let endAt, _) = out else { return XCTFail("\(out)") }
+        XCTAssertGreaterThan(endAt, p.at, "dated at the last reading, not the original quiet time")
+    }
+
+    /// V2: the timeout is checked without any reading (the heartbeat), and the finish is dated at the stall when nothing was read since.
+    func testThePauseTimesOutOnTheHeartbeatWithNoFrames() throws {
+        var (c, _, _, p, at) = try pausedAtRun10()
+        XCTAssertEqual(c.tick(now: at + ScanEndDecision.pauseTimeoutSeconds - 1), .none)
+        guard case .finish(let endAt, let last) = c.tick(now: at + ScanEndDecision.pauseTimeoutSeconds + 0.5) else { return XCTFail("no finish") }
+        XCTAssertEqual(endAt, p.at, accuracy: 0.001); XCTAssertEqual(last, p.last, accuracy: 0.001)
+        XCTAssertEqual(c.tick(now: at + 1000), .none, "once")
+    }
 }

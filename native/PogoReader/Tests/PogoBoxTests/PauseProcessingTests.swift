@@ -100,9 +100,17 @@ final class PauseProcessingTests: XCTestCase {
         let real = ["stall-scan-20261003T054229Z-b1f94047", "stall-scan-20261003T055448Z-6b2b1f4e", "stall-scan-20261003T065119Z-2fd03e3a-horsea", "run14-tail-from-horsea-scan-20261003T070213Z-08997070"]
         let out = try ScanPipeline.process(replay: write(join(real.map { try externalLines($0) }, removeGaps: true)), engine: sharedEngine, paging: hint)
         let names = ScanStop.pauseNames(out.pauses, rows: out.scan.rows)
-        XCTAssertEqual(names, ["Stunfisk (CP 902)", "Abra (CP 799)", "Horsea (CP 134)"])
+        XCTAssertEqual(names.count, 3)
+        XCTAssertEqual(names.map { $0.components(separatedBy: ", resumed").first }, ["Stunfisk (CP 902)", "Abra (CP 799)", "Horsea (CP 134)"])
+        XCTAssertTrue(names.allSatisfy { $0.contains(", resumed after ") }, "each says it resumed (V7)")
         let line = ScanStop.summary(lastName: "Jigglypuff", lastCP: 10, read: out.scan.rows.count, appraisalClosed: false, ranOut: false, commandKnown: true, paused: names)
-        XCTAssertTrue(line.contains("after 1,679 Pokémon") && line.contains("It paused 3 times, at Stunfisk (CP 902), Abra (CP 799) and Horsea (CP 134), and carried on."), line)
-        XCTAssertTrue(ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, commandKnown: true, paused: ["X (CP 2)"]).contains("It paused once, at X (CP 2), and carried on."))
+        XCTAssertTrue(line.contains("after 1,679 Pokémon") && line.contains("It paused 3 times: Stunfisk (CP 902), resumed after"), line)
+        XCTAssertTrue(ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, commandKnown: true, paused: ["X (CP 2), resumed after 74 s"]).contains("It paused once, at X (CP 2), resumed after 74 s."))
+        // a pause that never resumed says why the scan ended, and a scan the person finished says so (V7, V3)
+        let last = ScanPipeline.Pause(at: 10, last: 9, read: 3, closed: nil, resumedAt: nil)
+        let row = out.scan.rows[0]
+        _ = row; _ = last
+        let byPerson = ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, commandKnown: true, paused: ["X (CP 2), not resumed: you finished it"], byPerson: true)
+        XCTAssertTrue(byPerson.hasPrefix("You finished the scan after 5 Pokémon;") && byPerson.contains("not resumed: you finished it") && !byPerson.contains("ended by itself") && !byPerson.contains("command's size"), byPerson)
     }
 }

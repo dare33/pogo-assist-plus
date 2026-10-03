@@ -88,6 +88,31 @@ extension Refine {
         return (ScanResult(rows: rows, review: rows.filter { !$0.flags.isEmpty }.map(reviewEntry), unmatched: scan.unmatched), marks)
     }
 
+    /// The FIRST card of a scan is on screen while the person starts the broadcast and says the command, and the appraisal is still opening (its bars animate): readings
+    /// with no bars, then one or two with unsettled bars, then the settled ones. The grouper makes the unsettled start one row and the settled readings another (run15: Rayquaza
+    /// CP 4262 HP 190, "ambiguous-ivs" then 13/12/14, 2.03 s apart). The first two rows are ONE stay when they have the same name, CP and HP (or an HP unread), the first one's
+    /// IVs did not settle and the second's did, the readings are consecutive, no swipe tick lies between, and (with a known period) the first card was held longer than one beat
+    /// before the second began (a real pair of twins is one beat apart). The second row keeps the Pokémon; the first one's readings join it.
+    static func joinOpeningCard(_ scan: ScanResult, period: Double?, ticks: [Double]) -> (scan: ScanResult, marks: [(flag: String, detail: String, label: String)]) {
+        var rows = scan.rows
+        guard rows.count >= 2 else { return (scan, []) }
+        let a = rows[0], b = rows[1]
+        let at = a.frames.compactMap(\.time), bt = b.frames.compactMap(\.time)
+        guard !at.isEmpty, at.count == a.frames.count, !bt.isEmpty, bt.count == b.frames.count,
+              let aFirst = at.min(), let aLast = at.max(), let bFirst = bt.min(), aLast <= bFirst else { return (scan, []) }
+        guard a.speciesId == b.speciesId, a.cp == b.cp, a.cp > 0, hpCompatible(a.hp, b.hp), a.solveStatus != "exact", b.solveStatus == "exact", b.ivs != nil else { return (scan, []) }
+        guard bFirst - aLast <= max(1.5, (period ?? 0) * 1.5) else { return (scan, []) }
+        if let p = period, bFirst - aFirst <= 1.4 * p { return (scan, []) }
+        if ticks.contains(where: { $0 > aFirst && $0 < bFirst }) { return (scan, []) }
+        let flag = "absorbed-fragment:\(a.cp)"
+        if !rows[1].flags.contains(flag) { rows[1].flags.append(flag) }
+        rows[1].frames = (a.frames + b.frames).sorted { ($0.time ?? 0) < ($1.time ?? 0) }
+        let mark = (flag: flag, detail: "\(a.display) CP \(a.cp), the first card of the scan read while its appraisal opened (\(a.frames.count) readings, IVs not settled), is the same stay as the \(b.display) after it; joined", label: rows[1].frames.first?.frame ?? "")
+        rows.remove(at: 0)
+        for k in rows.indices { rows[k].index = k + 1 }
+        return (ScanResult(rows: rows, review: rows.filter { !$0.flags.isEmpty }.map(reviewEntry), unmatched: scan.unmatched), [mark])
+    }
+
     /// `a` is a part read of `b`: its digits are a run of the KEPT row's CP (182 in 1982). The reverse (1982 beside a better-read 182) is another number.
     private static func isPartRead(_ a: Int, of b: Int) -> Bool {
         let x = Array(String(a)), y = Array(String(b))

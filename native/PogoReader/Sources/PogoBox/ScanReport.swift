@@ -104,6 +104,7 @@ public enum ScanReportBuilder {
             case nil: lines.append("Unsure (\(u.kind.rawValue)) \(row): no answer.")
             }
         }
+        for m in plan.partMatches { lines.append(BoxMerge.partMatchLine(plan, m, saved: byId[m.savedId])) }
         let report = BoxMerge.goneReport(plan, resolutions: resolutions)
         // One line with the count for what was kept (an untouched Full scan keeps every entry it did not see: one line per entry would be 1,500 lines); a line each only for what the
         // person marked for removal.

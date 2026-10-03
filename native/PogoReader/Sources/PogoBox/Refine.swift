@@ -65,7 +65,9 @@ public enum Refine {
             base = try engine.finish(readings: readings)
         }
         // step 1: one Pokemon cut into two rows by a single disagreeing frame
-        let fragments = absorbFragments(base)
+        var fragments = absorbFragments(base)
+        let opening = joinOpeningCard(fragments.scan, period: paging?.pagedByCommand == true ? paging?.expectedPeriod : nil, ticks: ticks.filter { $0.isFinite })
+        if !opening.marks.isEmpty { fragments.scan = opening.scan; fragments.marks += opening.marks }
         let outliers = try dropCpOutliers(fragments.scan, readings: readings, engine: engine)
         let bars = try splitByBars(outliers.scan, readings: readings, engine: engine, hintPeriod: paging?.pagedByCommand == true ? paging?.expectedPeriod : nil)
         var r = try run(bars.scan, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))

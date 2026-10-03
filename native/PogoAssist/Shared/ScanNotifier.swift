@@ -16,6 +16,7 @@ enum ScanNotifier {
         content.title = n.title
         content.body = n.body
         content.sound = .default
+        content.userInfo = ["scan": n.scanId]
         if n.offersFinish { content.categoryIdentifier = ScanNotification.pausedCategoryID }
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: n.identifier, content: content, trigger: nil)) { completion?($0) }
     }

@@ -33,6 +33,10 @@ struct BroadcastState: Codable, Equatable {
     var storageCount: Int?           // the count the scan was started with (nil: none known)
     /// Counts each pause and each end of a command scan; the notification's identifier carries it, so the extension's notification and the app's fallback are the same one.
     var eventSeq = 0
+    /// This scan's id: its start time in whole seconds. Notification identifiers and the finish request carry it.
+    var scanId = 0
+    /// The person ended the scan ("Finish now", the notification action); `endedAtListEnd` is then false, so it is judged like a stop from the red bar.
+    var stoppedByPerson = false
 }
 
 extension BroadcastState {
@@ -69,6 +73,10 @@ extension BroadcastState {
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
         storageCount = try c.decodeIfPresent(Int.self, forKey: .storageCount)
         eventSeq = try c.decodeIfPresent(Int.self, forKey: .eventSeq) ?? 0
+        scanId = try c.decodeIfPresent(Int.self, forKey: .scanId) ?? 0
+        stoppedByPerson = try c.decodeIfPresent(Bool.self, forKey: .stoppedByPerson) ?? false
+        scanId = try c.decodeIfPresent(Int.self, forKey: .scanId) ?? 0
+        stoppedByPerson = try c.decodeIfPresent(Bool.self, forKey: .stoppedByPerson) ?? false
     }
 }
 

@@ -366,7 +366,7 @@ final class EndOfListTests: XCTestCase {
         XCTAssertEqual(full.scan.rows.map { "\($0.display) \($0.cp)" }, expected)
         // the log as the extension leaves it when the end fires: the lines up to the end, then the marker
         let lines = ReplayLog.lines(in: url).filter { l in
-            switch l { case .reading(let r): return r.t <= e.at; case .tick(let t), .drop(let t): return t <= e.at; case .end, .pause, .resume: return false }
+            switch l { case .reading(let r): return r.t <= e.at; case .tick(let t), .drop(let t): return t <= e.at; case .end, .pause, .resume, .stoppedByPerson: return false }
         } + [ReplayLine.end(at: e.at, last: e.last)]
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("run10-trim-\(UUID().uuidString).jsonl"); defer { try? FileManager.default.removeItem(at: tmp) }
         try (lines.map { String(decoding: ReplayLog.encode($0), as: UTF8.self) }.joined(separator: "\n") + "\n").write(to: tmp, atomically: true, encoding: .utf8)

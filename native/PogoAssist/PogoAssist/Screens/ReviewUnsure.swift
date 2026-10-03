@@ -21,6 +21,17 @@ struct UnsureCard: View {
                 Text(explanation).font(.footnote).foregroundStyle(.secondary)
             }
             ForEach(unsure.kind == .extraTwin ? Array(unsure.candidates.dropFirst()) : unsure.candidates, id: \.self) { id in
+                if unsure.kind == .megaPair {
+                    if let e = saved[id] {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(id == unsure.candidates.first ? "Saved as the normal form" : "Saved as Mega").font(.caption).foregroundStyle(.secondary)
+                            Text(Fmt.candidate(e.row)).font(.callout)
+                        }
+                        .padding(10)
+                        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                } else
+
                 if let e = saved[id] {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("In your box").font(.caption).foregroundStyle(.secondary)
@@ -32,7 +43,12 @@ struct UnsureCard: View {
                     .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 8))
                 }
             }
-            if unsure.kind == .extraTwin {
+            if unsure.kind == .megaPair {
+                HStack {
+                    answer("Join them", selected: choice == .existing(unsure.candidates.first ?? "")) { if let id = unsure.candidates.first { model.resolve(unsure.scanned, .existing(id)) } }
+                    answer("Keep both", selected: choice == .leaveOut) { model.resolve(unsure.scanned, .leaveOut) }
+                }
+            } else if unsure.kind == .extraTwin {
                 HStack {
                     answer("Add a second one", selected: choice == .new) { model.resolve(unsure.scanned, .new) }
                     answer("Leave it out", selected: choice == .leaveOut) { model.resolve(unsure.scanned, .leaveOut) }
@@ -55,6 +71,7 @@ struct UnsureCard: View {
         case .seenAsMega: return "Choosing this marks it as seen and as Mega evolved when scanned. The Mega values are not copied."
         case .replacesValues: return "Choosing this updates the saved Pokémon with the values read in the scan."
         case .replacesIVs: return "The saved IVs were not an exact read, so choosing this replaces them with the IVs read now."
+        case .joinsMegaPair: return "Joining keeps this entry with its own values and hand corrections, marks it Mega when scanned if the scan read the Mega form, and removes the other entry."
         case .keepsIVsAndFlags: return "The scan read other IVs for the same CP and HP. IVs never change, so one read is wrong: choosing this keeps the saved IVs and marks it to check."
         }
     }
@@ -71,6 +88,10 @@ struct UnsureCard: View {
         case .extraTwin: return unsure.candidates.count > 1 ? "The scan saw two identical Pokémon in a row and the box has one like it. A saved Pokémon with the same CP and HP but other IVs is shown below: it may be this one, read with the wrong IVs. Otherwise add a second?" : "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
         case .poweredUp: return "\(ivsPhrase) It may be that Pokémon powered up, or a different one with the same IVs."
         case .evolved: return "\(ivsPhrase) It may be that Pokémon evolved, or a different one with the same IVs."
+        case .megaPair:
+            let names = unsure.candidates.compactMap { saved[$0] }
+            if names.count == 2 { return "Your \(names[0].row.name) is saved twice, once as a Mega (CP \(names[1].row.cp)) and once not (CP \(names[0].row.cp)), with the same IVs and HP. Join them? Joining keeps one entry with the normal values and your hand corrections, and removes nothing else." }
+            return "This Pokémon is saved twice, once as a Mega and once not. Join them?"
         case .megaToBase: return "This is the normal form; the saved one was scanned in its Mega form. \(ivsPhrase) It may be that same Pokémon, or a different one with the same IVs."
         case .ambiguous:
             if unsure.candidates.count == 1, let e = saved[unsure.candidates[0]], let ivs = row.ivs, e.row.cp < row.cp {
