@@ -60,14 +60,23 @@ struct UnsureCard: View {
     }
 
     private var explanation: String {
+        // "Same IVs" is only true when the saved entry's current IVs equal the read ones; a match through a hand correction's old IVs says so.
+        var ivsPhrase = "Same IVs as this saved one."
+        if unsure.candidates.count == 1, let e = saved[unsure.candidates[0]], let ivs = row.ivs, e.row.ivs != ivs, e.corrections.ivs?.was == ivs {
+            ivsPhrase = "These IVs match this saved one's IVs from before you corrected them."
+        }
         switch unsure.kind {
         case .partialRead: return "Only part of the CP was read, so this may be a Pokémon already in your box."
         case .misreadSaved: return "A Pokémon in your box was read badly earlier (no IVs). This may be the same Pokémon read properly. The line under each choice says what it does."
         case .extraTwin: return "The scan saw two identical Pokémon in a row and the box has one. Add a second?"
-        case .poweredUp: return "Same IVs as this saved one. It may be that Pokémon powered up, or a different one with the same IVs."
-        case .evolved: return "Same IVs as this saved one. It may be that Pokémon evolved, or a different one with the same IVs."
+        case .poweredUp: return "\(ivsPhrase) It may be that Pokémon powered up, or a different one with the same IVs."
+        case .evolved: return "\(ivsPhrase) It may be that Pokémon evolved, or a different one with the same IVs."
+        case .megaToBase: return "This is the normal form; the saved one was scanned in its Mega form. \(ivsPhrase) It may be that same Pokémon, or a different one with the same IVs."
         case .ambiguous:
-            if unsure.candidates.count == 1, let e = saved[unsure.candidates[0]], let ivs = row.ivs, e.row.ivs == ivs, e.row.cp < row.cp { return "Same IVs as this saved one. It may be that Pokémon powered up, or a different one with the same IVs." }
+            if unsure.candidates.count == 1, let e = saved[unsure.candidates[0]], let ivs = row.ivs, e.row.cp < row.cp {
+                if e.row.ivs == ivs || e.corrections.ivs?.was == ivs { return "\(ivsPhrase) It may be that Pokémon powered up, or a different one with the same IVs." }
+                if let old = e.row.ivs, old != ivs { return "The IVs read now differ from this saved one's by a notch on a stat. It may be that Pokémon powered up with a bar read slightly off, or a different one." }
+            }
             return unsure.candidates.count == 1 ? "It could be this Pokémon already in your box." : "It could be more than one Pokémon already in your box."
         }
     }

@@ -50,7 +50,7 @@ final class MegaMergeTests: XCTestCase {
     func testTheReverseABaseScanUpdatesAnEntryFirstSavedAsMega() throws {
         let megaEntry = entry(row("staraptor_mega", cp: 3970, hp: 190), "m")
         let p = plan([row("staraptor", cp: 2819)], [megaEntry])
-        XCTAssertEqual(p.unsure, [BoxMerge.Unsure(scanned: 0, candidates: ["m"], kind: .evolved)], "never applied automatically")
+        XCTAssertEqual(p.unsure, [BoxMerge.Unsure(scanned: 0, candidates: ["m"], kind: .megaToBase)], "never applied automatically")
         let out = try BoxMerge.apply(p, resolutions: [0: .existing("m")], to: [megaEntry])
         XCTAssertEqual(out[0].row.speciesId, "staraptor"); XCTAssertEqual(out[0].row.cp, 2819); XCTAssertEqual(out[0].row.hp, 167)
         XCTAssertTrue(plan([row("staraptor", cp: 2819, ivs: IVs(atk: 0, def: 0, hp: 0))], [megaEntry]).updated.isEmpty, "different IVs")

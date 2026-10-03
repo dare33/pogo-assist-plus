@@ -660,6 +660,7 @@ final class AppModel: ObservableObject {
                         let closed = ScanStop.appraisalClosed(lines: ReplayLog.lines(in: url))
                         let ran = ScanStop.ranOut(read: outcome.scan.rows.count, typedCount: typed, full: asked == .full, commandPeriod: period)
                         stop = ScanStop.summary(lastName: last?.display, lastCP: last?.cp, read: outcome.scan.rows.count, appraisalClosed: closed, ranOut: ran,
+                                                commandKnown: asked == .full && typed != nil, nearestSize: ScanStop.nearestSize(read: outcome.scan.rows.count, commandPeriod: period),
                                                 matchSentence: ScanKindAdvice.matchSentence(pokemonRead: outcome.scan.rows.count, decision: d))
                     }
                     return (outcome, plan, Date().timeIntervalSince(t), entries, current?.seq, kind, note, d, stop)

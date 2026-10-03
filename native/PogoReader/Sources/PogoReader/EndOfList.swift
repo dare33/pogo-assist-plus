@@ -78,7 +78,7 @@ public struct EndOfListDetector {
         return "\(r.name ?? "?")|\(hp ?? "-")|\(bars ?? "-")"
     }
 
-    /// The arming identity: name and HP (bars vary between reads of one card while they settle), the CP alone when neither was read.
+    /// The arming identity: name and HP (bars vary between reads of one card while they settle), the CP alone when neither was read (by `sameTail`).
     private func armKey(_ r: FrameReading) -> String? {
         let hp = r.hp.map { "\($0.current)/\($0.max)" }
         if r.name == nil && hp == nil {
@@ -88,10 +88,10 @@ public struct EndOfListDetector {
         return "\(r.name ?? "?")|\(hp ?? "-")"
     }
 
-    /// A key made from the CP alone is the same card as a recent one whose digits it matches the way a CP misread does: one is a run of the
-    /// other's digits (262 in 4262) or they differ in one digit (4260 and 4262, 263 and 262).
+    /// A CP-only key is the same card as a recent one only by `sameTail` (the same number, or the same last three digits: 4262, 1262, 262), the comparison the stay's own CP
+    /// tracking uses for a CP read alone. Close neighbours of a CP-sorted list (218, 219) are different cards.
     private func canonical(_ key: String) -> String {
-        for known in recent + (pending.map { [$0.key] } ?? []) where known.hasPrefix("cp") && Self.sameCard(known, key) { return known }
+        for known in recent + (pending.map { [$0.key] } ?? []) where known.hasPrefix("cp") && Self.sameTail(String(known.dropFirst(2)), String(key.dropFirst(2))) { return known }
         return key
     }
     static func sameCard(_ a: String, _ b: String) -> Bool {
@@ -216,16 +216,17 @@ public struct EndOfListDetector {
 public enum ScanEndNotification {
     public static let title = "Scan stopped"
 
-    /// "<N> Pokémon read, last: <name> CP <cp>. Say "Go to sleep" to stop the command, then continue from that Pokémon." With no name read: "last: CP <cp>"; with no CP either, no "last".
+    /// "<N> read, last <name> CP <cp>. If the command is still tapping, say "Go to sleep". Open Pogo Assist for what to do next." With no name read: "last CP <cp>"; with no CP either, no "last".
+    /// It does not say where to continue from or that the command stopped: the extension cannot know either, and the app's review says what to do.
     public static func body(read: Int, lastName: String?, lastCP: Int?) -> String {
         let name = (lastName?.isEmpty == false) ? lastName : nil
         var last = ""
         switch (name, lastCP) {
-        case let (n?, c?): last = ", last: \(n) CP \(c)"
-        case let (n?, nil): last = ", last: \(n)"
-        case let (nil, c?): last = ", last: CP \(c)"
+        case let (n?, c?): last = ", last \(n) CP \(c)"
+        case let (n?, nil): last = ", last \(n)"
+        case let (nil, c?): last = ", last CP \(c)"
         default: break
         }
-        return "\(read) Pokémon read\(last). Say \"Go to sleep\" to stop the command, then continue from that Pokémon."
+        return "\(read) read\(last). If the command is still tapping, say \"Go to sleep\". Open Pogo Assist for what to do next."
     }
 }
