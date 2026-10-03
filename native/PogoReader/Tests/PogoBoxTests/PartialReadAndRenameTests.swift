@@ -62,7 +62,7 @@ final class PartialReadTests: XCTestCase {
         let a = entry(row(cp: 1982), "a")
         let p = plan([partial()], [a], .full)
         XCTAssertTrue(p.gone.isEmpty)
-        XCTAssertEqual(try! BoxMerge.apply(p, resolutions: [0: .leaveOut], to: [a]).count, 1)
+        XCTAssertEqual(try! BoxMerge.apply(p, resolutions: [0: .leaveOut], keepGone: BoxMerge.keepSet(plan: p, resolutions: [0: .leaveOut], markedForRemoval: []), to: [a]).count, 1, "an untouched save removes nothing")
     }
 
     func testTwoAmbiguousOnesStillCannotPickTheSameSaved() {
@@ -199,8 +199,11 @@ final class PartialReadByBarsTests: XCTestCase {
         XCTAssertEqual(plan(other, [saved]).new, [0], "different ivsRead")
         var none = scanned; none.ivsRead = nil
         XCTAssertEqual(plan(none, [saved]).new, [0], "ivsRead nil")
-        var hp = scanned; hp.hp = 171
-        XCTAssertEqual(plan(hp, [saved]).new, [0], "different HP")
+        var hp = scanned; hp.hp = scanned.hp! + 2
+        XCTAssertEqual(plan(hp, [saved]).new, [0], "HP two off")
+        // one point off is a misread, so it is asked, never New (U3 d)
+        var near = scanned; near.hp = scanned.hp! + 1
+        XCTAssertTrue(plan(near, [saved]).new.isEmpty); XCTAssertEqual(plan(near, [saved]).unsure.count, 1, "HP one off")
         var species = scanned; species.speciesId = "yveltal"; species.name = "Yveltal"
         XCTAssertEqual(plan(species, [saved]).new, [0], "different species")
         var fits = scanned; fits.flags = []; fits.ivs = scanned.ivsRead

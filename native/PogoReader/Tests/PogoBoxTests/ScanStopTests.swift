@@ -40,8 +40,8 @@ final class ScanStopTests: XCTestCase {
         XCTAssertFalse(ScanStop.summary(lastName: nil, lastCP: nil, read: 3, appraisalClosed: nil, ranOut: false).contains("appraisal had"))
         // a sound full scan adds the count comparison to the same line
         let d = ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 298, typedCount: 300, logTruncated: false, logFailed: false, commandPeriod: 1.2)
-        XCTAssertEqual(ScanKindAdvice.matchSentence(pokemonRead: 298, decision: d), "298 Pokémon read, within 3 of the 300 you gave.")
-        XCTAssertEqual(ScanKindAdvice.matchSentence(pokemonRead: 300, decision: ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 300, typedCount: 300, logTruncated: false, logFailed: false, commandPeriod: 1.2)), "Exactly the 300 you gave.")
+        XCTAssertEqual(ScanKindAdvice.matchSentence(pokemonRead: 298, decision: d), "298 Pokémon read against the 300 the game shows (that count includes any eggs, which are not scanned).")
+        XCTAssertEqual(ScanKindAdvice.matchSentence(pokemonRead: 300, decision: ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 300, typedCount: 300, logTruncated: false, logFailed: false, commandPeriod: 1.2)), "300 Pokémon read against the 300 the game shows (that count includes any eggs, which are not scanned).")
         XCTAssertNil(ScanKindAdvice.matchSentence(pokemonRead: 10, decision: ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 10, typedCount: 300, logTruncated: false, logFailed: false, commandPeriod: 1.2)))
     }
 }

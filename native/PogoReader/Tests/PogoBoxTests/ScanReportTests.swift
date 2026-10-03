@@ -74,7 +74,6 @@ final class ScanReportTests: XCTestCase {
         let lines = ScanReportBuilder.reviewLines(plan: plan, resolutions: [0: .leaveOut], keepGone: [], base: saved)
         XCTAssertTrue(lines.contains { $0.contains("left it out of the box") })
         XCTAssertTrue(lines.contains { $0.hasPrefix("Removed because the scan did not see it, as the person marked: Pidgey") })
-        XCTAssertTrue(lines.contains { $0.hasPrefix("Kept (not seen clearly): Staraptor") })
         let untouched = ScanReportBuilder.reviewLines(plan: plan, resolutions: [0: .new], keepGone: ["s", "g"], base: saved)
         XCTAssertTrue(untouched.contains("2 saved Pokémon the scan did not see were kept in the box."), "one summary line with the count, not a line per entry")
         XCTAssertFalse(untouched.contains { $0.hasPrefix("Kept in the box although") || $0.hasPrefix("Removed because") })

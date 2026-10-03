@@ -2,6 +2,19 @@ import Foundation
 
 /// What to do when a command scan's quiet time is reached: FINISH (the list has ended) or PAUSE (the scan is clearly not at its end, a tap or the command stalled), and the state
 /// machine around it that the broadcast extension drives. Pure, so it is tested on the device logs.
+/// How a typed storage count is compared with the Pokémon read. The count is what the game's storage screen shows, which includes eggs; eggs are not paged, so the read
+/// total may be up to `maxEggSlots` below it IN ADDITION to the 1% (at least 3) tolerance, and at most the tolerance above it. The one place these numbers live.
+public enum StorageCountRules {
+    /// The game's maximum number of egg slots (the owner: 1,698 shown, about 1,688 pageable; 8 eggs and 2 unexplained).
+    public static let maxEggSlots = 12
+    /// 1% of the count, at least 3.
+    public static func tolerance(_ count: Int) -> Int { max(3, Int((Double(count) * 0.01).rounded(.up))) }
+    /// The fewest Pokémon read that still count as having reached the count.
+    public static func lowestRead(_ count: Int) -> Int { count - maxEggSlots - tolerance(count) }
+    /// The most read that is still the count (a little above it: a Pokémon counted twice).
+    public static func highestRead(_ count: Int) -> Int { count + tolerance(count) }
+}
+
 public enum ScanEndDecision {
     public enum Verdict: Equatable { case finish, pause }
 
@@ -9,12 +22,13 @@ public enum ScanEndDecision {
     public static let pauseTimeoutSeconds = 180.0
 
     /// How far the Pokémon read may fall short of the storage count for the scan to count as having reached it: 1% of it, at least 3 (also the full-scan tolerance).
-    public static func tolerance(_ count: Int) -> Int { max(3, Int((Double(count) * 0.01).rounded(.up))) }
+    public static func tolerance(_ count: Int) -> Int { StorageCountRules.tolerance(count) }
 
-    /// FINISH at once when a storage count is known and the Pokémon read so far are within the tolerance of it (or above); otherwise PAUSE, and with no count known: PAUSE.
+    /// FINISH at once when a storage count is known and the Pokémon read so far are within the eggs allowance and tolerance of it (or above): read >= count - 12 - tolerance;
+    /// otherwise PAUSE, and with no count known: PAUSE.
     public static func decide(read: Int, storageCount: Int?) -> Verdict {
         guard let count = storageCount, count > 0 else { return .pause }
-        return read >= count - tolerance(count) ? .finish : .pause
+        return read >= StorageCountRules.lowestRead(count) ? .finish : .pause
     }
 }
 

@@ -44,7 +44,7 @@ public struct ScanNotification: Equatable {
         let body: String
         if let m = storageCount, m > 0 {
             let command = commandName(covering: max(1, m - read), sizes: sizes).map { "say \"\($0)\"" } ?? "say the command again"
-            body = "\(at)\(read) of \(m) read. Reopen its appraisal to carry on, or \(command) if the taps have stopped."
+            body = "\(at)\(read) of about \(m) read. Reopen its appraisal to carry on, or \(command) if the taps have stopped."
         } else {
             body = "\(at)\(read) read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped."
         }

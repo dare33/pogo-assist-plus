@@ -97,4 +97,11 @@ final class RoundSixteenTests: XCTestCase {
         }
         XCTAssertTrue(d.armed, "five different CP-only cards read twice each arm it")
     }
+
+    // U3 (b)
+    func testU3AnUnknownCommandIsNeverCalledShortOfItsSize() {
+        let s = ScanStop.summary(lastName: "Abra", lastCP: 799, read: 51, appraisalClosed: false, ranOut: false, commandKnown: false)
+        XCTAssertTrue(s.contains("It stopped after 51. If that was not the end of your list, open Abra"), s)
+        XCTAssertFalse(s.contains("short of the command's size"), s)
+    }
 }

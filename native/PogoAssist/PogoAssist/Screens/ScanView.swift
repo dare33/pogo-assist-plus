@@ -25,19 +25,20 @@ struct ScanView: View {
             Section("Before you start") {
                 Label("The Pogo scan commands are installed (once per phone)", systemImage: "1.circle")
                 Label("Voice Control's Show Confirmation, Show Hints and Attention Aware are off (with Attention Aware on, Voice Control goes to sleep when you look away, which stops a command at the end of its batch)", systemImage: "2.circle")
-                Label("Pokémon GO is open on the first Pokémon with the appraisal showing", systemImage: "3.circle")
-                Label("Say the command named below, or page through the Pokémon by hand", systemImage: "4.circle")
+                Label("Turn on Do Not Disturb (or a Focus) before scanning: a banner over the game blocks the reading. Allow Pogo Assist through it (Settings > Focus > Do Not Disturb > Apps), so you hear when a scan pauses or stops", systemImage: "3.circle")
+                Label("Pokémon GO is open on the first Pokémon with the appraisal showing", systemImage: "4.circle")
+                Label("Say the command named below, or page through the Pokémon by hand", systemImage: "5.circle")
             }
             do {
                 Section {
                     HStack {
-                        Text("Pokémon in storage (not counting eggs)")
+                        Text("Pokémon in storage, as shown in the game")
                         Spacer()
                         TextField("Count", text: $model.storageCountText).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(maxWidth: 120).focused($countFocused)
                     }
                 } footer: {
                     if let problem = model.storageCountProblem { Text(problem).foregroundStyle(.red) }
-                    else { Text("Remembered for this account, for every scan. A full scan uses it to pick the command and is saved with it; without it a full scan is Add and update. For Add and update it only tells the scan when it has read everything: it finishes at once at your count, and otherwise pauses (and tells you) when it stops seeing new Pokémon.") }
+                    else { Text("Type the number the game shows on its storage screen (it includes eggs; the scan allows for that). Remembered for this account, for every scan. A full scan uses it to pick the command and is saved with it; without it a full scan is Add and update. For Add and update it only tells the scan when it has read everything: it finishes at once at your count, and otherwise pauses (and tells you) when it stops seeing new Pokémon.") }
                 }
             }
             commandSection
@@ -91,7 +92,7 @@ struct ScanView: View {
             if model.scanKind == .full { fullScanCommand } else { partScanCommands }
             Label("To stop a command, say \"Go to sleep\". It stops when the batch that is playing ends, \(model.setKind.stopDelayText). Then say \"Wake up\". Touching the screen, the side button or locking the phone does not stop it. Stay on the Pokémon's appraisal screen in Pokémon GO until it ends: it keeps \(model.setKind == .tap ? "tapping" : "swiping") the same place whatever is on screen.",
                   systemImage: "exclamationmark.octagon.fill").font(.callout.weight(.semibold)).foregroundStyle(.red)
-            if !model.pagedByHand { Text("When the scan stops seeing new Pokémon it either finishes (you reached your storage count) or PAUSES and sends a notification: reopen the Pokémon's appraisal and paging carries on in the same scan, or say the command again. If nothing changes for three minutes it finishes by itself, and \"Finish now\" ends it at once.").font(.footnote).foregroundStyle(.secondary) }
+            if !model.pagedByHand { Text("When the scan stops seeing new Pokémon it either finishes (you reached your storage count) or PAUSES and sends a notification: reopen the Pokémon's appraisal and paging carries on in the same scan, or say the command again. The notification is the only signal while it is paused, so Pogo Assist must be allowed through Do Not Disturb. If nothing changes for three minutes it finishes by itself, and \"Finish now\" ends it at once.").font(.footnote).foregroundStyle(.secondary) }
             if !model.pagedByHand { Text("The scan usually ends by itself when the list ends or the command runs out (the broadcast stops and the result appears); if the last Pokémon cannot be read it does not, and you stop the broadcast from the red bar. The command keeps going until it runs out; that does nothing to your box.").font(.footnote).foregroundStyle(.secondary) }
             Text("Pogo Assist asks once to send a notification with a sound when a scan ends by itself, so you know without opening the app. It stays on your phone: nothing is sent. Without it the scan still ends and the result waits here.")
                 .font(.footnote).foregroundStyle(.secondary)
@@ -145,7 +146,7 @@ struct ScanView: View {
         let s = model.broadcast
         VStack(alignment: .leading, spacing: 6) {
             HStack { ProgressView(); Text("Scan in progress").font(.headline) }
-            Text("\(s?.framesRead ?? 0) frames read, \(s?.rows.count ?? 0) Pokémon so far").monospacedDigit()
+            Text("\(s?.framesRead ?? 0) frames read, \(s?.rows.count ?? 0) Pokémon so far" + (s?.storageCount.map { " of about \($0.formatted())" } ?? "")).monospacedDigit()
             if let s, s.paused {
                 Label(ScanNotification.paused(event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes).body, systemImage: "pause.circle.fill").font(.callout.weight(.semibold)).foregroundStyle(.orange)
                 Button("Finish now", role: .destructive) { model.finishPausedScanNow() }

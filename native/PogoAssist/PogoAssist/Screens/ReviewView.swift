@@ -129,6 +129,7 @@ private struct ResultList: View {
                     let marked = report.gone.filter { review.markedForRemoval.contains($0) }.count
                     // Nothing is removed unless the person marks it: every Pokémon the scan did not see starts as kept.
                     if let line = BoxMerge.unreadLine(plan) { Text(line).font(.footnote).foregroundStyle(.orange) }
+                    if let line = BoxMerge.leftOutLine(plan, resolutions: review.resolutions) { Text(line).font(.footnote).foregroundStyle(.orange) }
                     group("gone", "Not seen in this scan", report.gone.count, "eye.slash", detail: marked == 0 ? "all kept" : "\(marked) to remove") {
                         ForEach(report.gone, id: \.self) { id in
                             if let e = saved[id] {
@@ -150,16 +151,6 @@ private struct ResultList: View {
             let report = BoxMerge.goneReport(plan, resolutions: review.resolutions)
             if review.kind == .full && !report.gone.isEmpty {
                 Section { Text("These are in your box but the scan did not see them. They are all kept. Nothing is removed unless you mark it for removal above.").font(.footnote).foregroundStyle(.secondary) }
-            }
-            if review.kind == .full && !report.kept.isEmpty {
-                Section("Not seen clearly, kept (\(report.kept.count))") {
-                    ForEach(report.kept, id: \.savedId) { k in
-                        VStack(alignment: .leading, spacing: 2) {
-                            if let e = saved[k.savedId] { Text(Fmt.brief(e.row)).font(.callout) }
-                            Text(k.reason).font(.footnote).foregroundStyle(.secondary)
-                        }
-                    }
-                }
             }
             let flagged = review.outcome.scan.rows.indices.filter { review.outcome.scan.rows[$0].needsCheck }
             Section("To check in the game (\(flagged.count))") {

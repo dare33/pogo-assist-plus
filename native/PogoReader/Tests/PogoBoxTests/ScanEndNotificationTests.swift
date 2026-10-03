@@ -15,7 +15,7 @@ final class ScanEndNotificationTests: XCTestCase {
     func testThePausedTextSaysWhereAndWhatToDoWithAndWithoutACount() {
         let n = ScanNotification.paused(event: 2, read: 170, storageCount: 1684, lastName: "Stunfisk", lastCP: 902, sizes: sizes)
         XCTAssertEqual(n.title, "Scan paused"); XCTAssertTrue(n.offersFinish); XCTAssertEqual(n.identifier, "pogo.scan.paused.2")
-        XCTAssertEqual(n.body, "Paused at Stunfisk CP 902: 170 of 1684 read. Reopen its appraisal to carry on, or say \"Pogo scan 2000\" if the taps have stopped.", "1,514 left: the smallest size covering it is 2000")
+        XCTAssertEqual(n.body, "Paused at Stunfisk CP 902: 170 of about 1684 read. Reopen its appraisal to carry on, or say \"Pogo scan 2000\" if the taps have stopped.", "1,514 left: the smallest size covering it is 2000")
         XCTAssertTrue(ScanNotification.paused(event: 1, read: 1650, storageCount: 1684, lastName: "A", lastCP: 1, sizes: sizes).body.contains("\"Pogo scan 50\""))
         let none = ScanNotification.paused(event: 3, read: 51, storageCount: nil, lastName: "Abra", lastCP: 799, sizes: sizes)
         XCTAssertEqual(none.body, "Paused at Abra CP 799: 51 read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped.")

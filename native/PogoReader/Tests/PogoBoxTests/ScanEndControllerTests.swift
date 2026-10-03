@@ -29,12 +29,17 @@ final class ScanEndControllerTests: XCTestCase {
 
     func testFinishAtOnceWhenTheCountIsReachedAndPauseOtherwise() {
         XCTAssertEqual(ScanEndDecision.tolerance(1684), 17)
-        XCTAssertEqual(ScanEndDecision.decide(read: 1667, storageCount: 1684), .finish)
-        XCTAssertEqual(ScanEndDecision.decide(read: 1666, storageCount: 1684), .pause)
+        XCTAssertEqual(StorageCountRules.maxEggSlots, 12)
+        XCTAssertEqual(ScanEndDecision.decide(read: 1655, storageCount: 1684), .finish, "count - 12 - tolerance")
+        XCTAssertEqual(ScanEndDecision.decide(read: 1654, storageCount: 1684), .pause)
+        // the owner's numbers: 1,698 shown in the game (eggs included), about 1,688 pageable
+        XCTAssertEqual(ScanEndDecision.decide(read: 1688, storageCount: 1698), .finish)
+        XCTAssertEqual(ScanEndDecision.decide(read: 1194, storageCount: 1698), .pause)
+        XCTAssertEqual(ScanEndDecision.decide(read: 388, storageCount: 400), .finish, "a small storage with 12 eggs")
         XCTAssertEqual(ScanEndDecision.decide(read: 1700, storageCount: 1684), .finish, "above the count")
         XCTAssertEqual(ScanEndDecision.decide(read: 11, storageCount: nil), .pause, "no count known")
         XCTAssertEqual(ScanEndDecision.decide(read: 5, storageCount: 0), .pause)
-        XCTAssertEqual(ScanEndDecision.decide(read: 297, storageCount: 300), .finish); XCTAssertEqual(ScanEndDecision.decide(read: 296, storageCount: 300), .pause)
+        XCTAssertEqual(ScanEndDecision.decide(read: 285, storageCount: 300), .finish); XCTAssertEqual(ScanEndDecision.decide(read: 284, storageCount: 300), .pause)
         XCTAssertEqual(ScanKindAdvice.tolerance(300), ScanEndDecision.tolerance(300), "the same tolerance as the full-scan advice")
     }
 

@@ -61,6 +61,8 @@ public enum ScanStop {
             s += " \(read.formatted()) read is about the size of \(which). If that is the one you said, it ran out. To scan the rest, open \(opened) in Pokémon GO with the appraisal showing and say a command for what is left (Add and update)."
         } else if ranOut {
             s += " This is the size of the command the app named for your count: it ran out. To scan the rest, open \(opened) in Pokémon GO with the appraisal showing and say a command for what is left (Add and update)."
+        } else if !commandKnown {
+            s += " It stopped after \(read.formatted()). If that was not the end of your list, open \(opened) in Pokémon GO with the appraisal showing and scan again from there (Add and update)."
         } else {
             s += " It stopped after \(read.formatted()), short of the command's size. If that was not the end of your list, open \(opened) in Pokémon GO with the appraisal showing and scan again from there (Add and update)."
         }

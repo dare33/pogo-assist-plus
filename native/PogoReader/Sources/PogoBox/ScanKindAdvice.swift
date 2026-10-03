@@ -1,4 +1,5 @@
 import Foundation
+import PogoReader
 
 /// Whether a scan may be a FULL scan (every saved Pokémon it did not see is proposed as gone). The automatic end cannot tell the end of the list
 /// from the command running out, or from a stop that came too early, so a full scan is only the default when everything agrees. One function, so
@@ -12,14 +13,15 @@ public enum ScanKindAdvice {
         public var typedCount: Int?
     }
 
-    /// How far the Pokémon read may differ from the typed count: 1% of it, at least 3 (the count error seen on the device runs is under 1%).
-    public static func tolerance(_ typed: Int) -> Int { max(3, Int((Double(typed) * 0.01).rounded(.up))) }
+    /// How far the Pokémon read may differ from the typed count: 1% of it, at least 3 (the count error seen on the device runs is under 1%). The typed count is what the game
+    /// shows, which includes eggs, so the read total may also be up to `StorageCountRules.maxEggSlots` below it.
+    public static func tolerance(_ typed: Int) -> Int { StorageCountRules.tolerance(typed) }
 
     /// FULL only when ALL hold:
     /// - the automatic end fired (`endedAtListEnd`);
     /// - the replay log is neither truncated nor failed;
     /// - a count was typed and is at most the largest command size;
-    /// - typed - tol <= Pokémon read <= min(typed + tol, reach - 1), where reach is what the named command pages (`covers` + 1).
+    /// - typed - 12 (egg slots) - tol <= Pokémon read <= min(typed + tol, reach - 1), where reach is what the named command pages (`covers` + 1).
     /// `commandPeriod` is what the extension recorded for the scan (its pace picks the sizing; nil: paged by hand).
     public static func decide(endedAtListEnd: Bool, pokemonRead: Int, typedCount: Int?, logTruncated: Bool, logFailed: Bool, commandPeriod: Double?) -> Decision {
         func no(_ why: String) -> Decision { Decision(fullIsSound: false, reason: why, typedCount: typedCount) }
@@ -37,8 +39,8 @@ public enum ScanKindAdvice {
             return no("The scan was stopped by hand, not by reaching the end of the list, so it cannot say which Pokémon are gone. Add and update is chosen.")
         }
         let tol = tolerance(typed)
-        if pokemonRead < typed - tol {
-            return no("The scan stopped short of your count: \(pokemonRead.formatted()) Pokémon were read and you said \(typed.formatted()). Add and update is chosen.")
+        if pokemonRead < StorageCountRules.lowestRead(typed) {
+            return no("The scan stopped short of your count: \(pokemonRead.formatted()) Pokémon were read and the game showed \(typed.formatted()) (eggs are not scanned, so up to \(StorageCountRules.maxEggSlots) fewer is expected). Add and update is chosen.")
         }
         let size = VoiceCommandFile.setSize(covering: typed) ?? largest
         let kind: VoiceCommandFile.SetKind = (commandPeriod ?? 0) > 1.4 ? .swipe : .tap
@@ -54,14 +56,12 @@ public enum ScanKindAdvice {
     /// Only when a full scan is sound: how the Pokémon read compare with the typed count. Never "matches".
     public static func matchSentence(pokemonRead: Int, decision: Decision) -> String? {
         guard decision.fullIsSound, let typed = decision.typedCount else { return nil }
-        if pokemonRead == typed { return "Exactly the \(typed.formatted()) you gave." }
-        return "\(pokemonRead.formatted()) Pokémon read, within \(tolerance(typed).formatted()) of the \(typed.formatted()) you gave."
+        return "\(pokemonRead.formatted()) Pokémon read against the \(typed.formatted()) the game shows (that count includes any eggs, which are not scanned)."
     }
 
     public static func endedLabel(pokemonRead: Int, decision: Decision) -> String {
         guard decision.fullIsSound, let typed = decision.typedCount else { return "The scan ended by itself after \(pokemonRead.formatted()) Pokémon." }
-        if pokemonRead == typed { return "The scan ended by itself after \(pokemonRead.formatted()) Pokémon, exactly the \(typed.formatted()) you gave." }
-        return "The scan ended by itself: \(pokemonRead.formatted()) Pokémon read, within \(tolerance(typed).formatted()) of the \(typed.formatted()) you gave."
+        return "The scan ended by itself: \(pokemonRead.formatted()) Pokémon read against the \(typed.formatted()) the game shows (that count includes any eggs, which are not scanned)."
     }
 
     /// What the extension is told when the scan starts: the command's period when the person chose to page with the voice command AND the

@@ -221,14 +221,19 @@ final class AppModel: ObservableObject {
 
     // MARK: - notifications the extension may not get shown
 
-    private var handledEvent = 0
+    /// The event (this scan's start time and its event number) the fallback has already dealt with, kept across launches so a relaunch never posts an old event again. The
+    /// event number restarts at 1 with each scan, so the scan's start time is part of the key.
+    private static let handledKey = "handledScanEvent"
+    /// How long the fallback waits before it looks for the extension's own notification: the extension writes its state first and posts a moment after.
+    static let fallbackGraceSeconds = 6.0
 
-    /// The extension posts its own notification at a pause or an end. Whether iOS shows a notification posted by an extension is not proven, so when the app sees the event (it is
-    /// alive in the background, or the person opens it) and no notification with that identifier is delivered or pending, it posts the same one itself. Same identifier, so the two
-    /// can never leave two.
+    /// The extension posts its own notification at a pause or an end (iOS delivers it, seen on a device, but silently under Do Not Disturb unless the app is allowed through).
+    /// When the app sees the event (alive in the background, or opened) it waits a few seconds, and posts the same notification itself only if none with that identifier is
+    /// delivered or pending. Same identifier, so even a race leaves one; the handled key makes it once per event.
     func postFallbackNotificationIfNeeded(_ s: BroadcastState?) {
-        guard let s, s.eventSeq > handledEvent, s.commandPeriod != nil else { return }
-        handledEvent = s.eventSeq
+        guard let s, s.eventSeq > 0, s.commandPeriod != nil else { return }
+        let key = "\(Int(s.started.timeIntervalSince1970))#\(s.eventSeq)"
+        guard UserDefaults.standard.string(forKey: Self.handledKey) != key else { return }
         let n: ScanNotification
         if s.paused {
             n = .paused(event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes)
@@ -236,7 +241,10 @@ final class AppModel: ObservableObject {
             let last = s.rows.last
             n = .stopped(event: s.eventSeq, read: s.rows.count, lastName: last?.name, lastCP: last?.cp)
         } else { return }
-        ScanNotifier.exists(n.identifier) { exists in if !exists { ScanNotifier.post(n) } }
+        UserDefaults.standard.set(key, forKey: Self.handledKey)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.fallbackGraceSeconds) {
+            ScanNotifier.exists(n.identifier) { exists in if !exists { ScanNotifier.post(n) } }
+        }
     }
     /// The last command made for each single mode of the selected account (older app versions made one file per scan; still checked for the wrong-screen warning).
     @Published var voiceRecords: [VoiceCommandFile.Pace: VoiceRecord] = [:]

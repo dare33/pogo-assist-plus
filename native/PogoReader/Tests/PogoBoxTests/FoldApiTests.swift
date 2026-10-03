@@ -58,7 +58,9 @@ final class FoldApiTests: XCTestCase {
         XCTAssertEqual(report(.new).gone, ["s"], "the row is new, so the saved one was not seen")
         XCTAssertTrue(report(.existing("s")).gone.isEmpty)
         let left = report(.leaveOut)
-        XCTAssertTrue(left.gone.isEmpty); XCTAssertEqual(left.kept.map { $0.savedId }, ["s"], "a left-out row was on screen: the entry is kept, with the reason")
+        XCTAssertEqual(left.gone, ["s"], "a left-out row no longer shields the entry: it is listed as not seen (kept unless marked)"); XCTAssertTrue(left.kept.isEmpty)
+        XCTAssertEqual(BoxMerge.leftOutLine(p, resolutions: [0: .leaveOut]), "You left 1 row out of the box. Some of the entries below may be those Pokémon, which simply were not read.")
+        XCTAssertNil(BoxMerge.leftOutLine(p, resolutions: [0: .new]))
         // Save follows the report
         XCTAssertEqual(try BoxMerge.apply(p, resolutions: [0: .new], to: [saved], makeID: { "n" }).map { $0.id }, ["n"])
         XCTAssertEqual(try BoxMerge.apply(p, resolutions: [0: .new], keepGone: ["s"], to: [saved], makeID: { "n" }).map { $0.id }, ["s", "n"])

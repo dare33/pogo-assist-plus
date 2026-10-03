@@ -118,9 +118,9 @@ public enum BoxMerge {
         /// Saved ids proposed as gone before any answer: always empty for an add-and-update scan. `goneReport` is the list after the
         /// person's answers to the unsure rows.
         public var gone: [String]
-        /// Saved entries kept from "gone" because something was on screen that was not read (the reason says what).
+        /// Always empty now (kept for the saved scan format): nothing shields an unpaired entry from the "Not seen" list any more, which keeps every entry unless it is marked.
         public var kept: [Kept] = []
-        /// What the scan saw on screen and did not read; it protects same-species entries from "gone".
+        /// What the scan saw on screen and did not read. It protects nothing; `unreadLine` tells the person that some "not seen" entries may be those items.
         public var unmatchedItems: [Unmatched] = []
         /// Saved entries that no scanned row was paired with (candidates of an unsure row included), for `goneReport`.
         public var unpaired: [Unpaired] = []
@@ -323,38 +323,39 @@ public enum BoxMerge {
         return plan
     }
 
-    /// What Save removes and what it keeps, given the answers so far. Only a full scan removes anything. An unpaired saved entry is
-    /// removed unless something unread protects it: an item on screen that was not read (same species when it has a name, any entry
-    /// when it has none) or a row the person left out. A candidate of an unsure row is held back until that row is answered:
+    /// The "Not seen in this scan" list, given the answers so far. Only a full scan lists anything, and nothing is removed unless the person marks it (`keepSet`). Every unpaired
+    /// saved entry is listed, whatever was on screen unread or left out of the box (`unreadLine` and `leftOutLine` say some may simply not have been read). A candidate of an
+    /// unsure row is held back until that row is answered:
     /// "this one" means it was seen; "new" or an answer for another candidate makes it eligible again (M9).
     public static func goneReport(_ plan: Plan, resolutions: [Int: Resolution]) -> GoneReport {
         guard plan.kind == .full else { return GoneReport(gone: [], kept: []) }
         var pending = Set<String>(), seen = Set<String>()
-        var leftOutRows = [(speciesKey: String, title: String)](), leftOutCandidates = Set<String>()
         for u in plan.unsure {
             switch resolutions[u.scanned] {
             case nil: pending.formUnion(u.candidates)
             case .existing(let id)?: seen.insert(id)
             case .leaveOut?:
-                guard u.kind != .extraTwin else { break }
-                leftOutRows.append((plan.scanned[u.scanned].speciesKey, plan.scanned[u.scanned].title))
-                leftOutCandidates.formUnion(u.candidates)
+                break   // the candidates are listed as not seen like any other (see `leftOutLine`)
             case .new?:
                 // Answering "new" to a row that a misread saved entry might have been leaves that entry alone, in a full scan too, whatever
                 // the kind: the other, plausible candidates still follow M9.
                 seen.formUnion(u.misread)
             }
         }
-        var kept = [Kept](), gone = [String]()
+        let kept = [Kept](); var gone = [String]()
         // Items on screen that were not read no longer protect anything: every Pokémon the scan did not pair is listed as "not seen" (kept unless the person marks it), and
         // `unreadLine` tells the person some of them may be those items.
         for e in plan.unpaired where !seen.contains(e.id) && !pending.contains(e.id) {
-            var reason: String?
-            if reason == nil, let left = leftOutRows.first(where: { $0.speciesKey == e.speciesKey }) { reason = "You left out a \(left.title) row, so the \(e.title) stays." }
-            if reason == nil, leftOutCandidates.contains(e.id) { reason = "You left out a row that may have been this Pokémon." }
-            if let r = reason { kept.append(Kept(savedId: e.id, reason: r)) } else { gone.append(e.id) }
+            gone.append(e.id)
         }
         return GoneReport(gone: gone, kept: kept)
+    }
+
+    /// One line for the "Not seen" list when the person left rows out of the box at review (an extra twin does not count): some of the entries listed may simply not have been read.
+    public static func leftOutLine(_ plan: Plan, resolutions: [Int: Resolution]) -> String? {
+        let n = plan.unsure.filter { $0.kind != .extraTwin && resolutions[$0.scanned] == .leaveOut }.count
+        guard n > 0 else { return nil }
+        return "You left \(n == 1 ? "1 row" : "\(n) rows") out of the box. Some of the entries below may be those Pokémon, which simply were not read."
     }
 
     /// The one line shown above the "Not seen in this scan" list when items on screen could not be read (they absorbed into another row are not counted), else nil.
@@ -399,10 +400,10 @@ public enum BoxMerge {
             let v = saved[vi]
             guard sameSpecies(s, v) else { return false }
             // (a) the CP digits are a subsequence of the saved CP's (182 in 1982), HP equal or unread on either side
-            if s.cp != v.row.cp, isSubsequence(digits, Array(String(v.row.cp))), s.hp == nil || v.row.hp == nil || sameHP(s, v) { return true }
+            if s.cp != v.row.cp, isSubsequence(digits, Array(String(v.row.cp))), s.hp == nil || v.row.hp == nil || nearHP(s, v) { return true }
             // (b) whatever the CP digits: the solver found no level (or the CP is unusable), the HP is the same, and the bars read as
             // this saved Pokémon's IVs. The JavaScript nulls `ivs` when no level fits but keeps `ivsRead`.
-            if noLevelFits || s.cp <= 0, s.hp != nil, sameHP(s, v), let read = s.ivsRead, read == v.row.ivs || read == v.corrections.ivs?.was { return true }
+            if noLevelFits || s.cp <= 0, s.hp != nil, nearHP(s, v), let read = s.ivsRead, read == v.row.ivs || read == v.corrections.ivs?.was { return true }
             return false
         }
     }
@@ -446,7 +447,7 @@ public enum BoxMerge {
     private static func misreadSaved(_ s: ScanRow, _ v: BoxEntry) -> Bool {
         guard s.ivs != nil, v.row.ivs == nil, sameSpecies(s, v) else { return false }
         guard v.row.flags.contains(where: { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }) || v.row.cp <= 0 else { return false }
-        return s.hp == nil || v.row.hp == nil || sameHP(s, v)
+        return s.hp == nil || v.row.hp == nil || nearHP(s, v)
     }
 
     /// A saved entry is not offered as "the same Pokémon" (powered up, evolved, read earlier) when NO IV triple explains both readings, judged conservatively: it only
@@ -519,6 +520,11 @@ public enum BoxMerge {
     }
     private static func sameCP(_ s: ScanRow, _ v: BoxEntry) -> Bool {
         s.cp == v.row.cp || v.corrections.cp?.was == s.cp
+    }
+    /// The HP within 1 of the saved one's current (or hand-corrected `was`) value: a read off by a point is still asked about, never New.
+    private static func nearHP(_ s: ScanRow, _ v: BoxEntry) -> Bool {
+        guard let h = s.hp else { return false }
+        return [v.row.hp, v.corrections.hp?.was].contains { $0.map { abs($0 - h) <= 1 } == true }
     }
     private static func sameHP(_ s: ScanRow, _ v: BoxEntry) -> Bool {
         guard let h = s.hp else { return false }
