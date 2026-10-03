@@ -75,7 +75,6 @@ struct UnsureCard: View {
         case .ambiguous:
             if unsure.candidates.count == 1, let e = saved[unsure.candidates[0]], let ivs = row.ivs, e.row.cp < row.cp {
                 if e.row.ivs == ivs || e.corrections.ivs?.was == ivs { return "\(ivsPhrase) It may be that Pokémon powered up, or a different one with the same IVs." }
-                if let old = e.row.ivs, old != ivs { return "The IVs read now differ from this saved one's by a notch on a stat. It may be that Pokémon powered up with a bar read slightly off, or a different one." }
             }
             return unsure.candidates.count == 1 ? "It could be this Pokémon already in your box." : "It could be more than one Pokémon already in your box."
         }

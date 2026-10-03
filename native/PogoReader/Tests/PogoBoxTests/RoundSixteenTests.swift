@@ -38,11 +38,13 @@ final class RoundSixteenTests: XCTestCase {
     }
 
     // R2
-    func testR2ABarsReadOneNotchOffOnAPowerUpIsAsked() {
+    /// R2 was dropped: a genuine power-up whose bars were read one notch off on a stat is added as NEW. Accepted limit: asking added 14 questions on a big catch day (19 -> 33
+    /// against the 29 the shared-triple rule exists to reduce) for a misread the device logs have not shown (run8 vs run9: 0 IV disagreements in 298 pairs).
+    func testR2ABarsReadOneNotchOffOnAPowerUpIsNewAnAcceptedLimit() {
         let saved = entry(row(level: 10, ivs: iv))
         let p = plan([row(level: 16, ivs: IVs(atk: 9, def: 11, hp: 12), truth: iv)], [saved])
-        XCTAssertTrue(p.new.isEmpty, "was New before the fold"); XCTAssertEqual(p.unsure.count, 1); XCTAssertTrue(p.updated.isEmpty)
-        // two notches off on a stat, or a lower CP, stays a different Pokémon
+        XCTAssertEqual(p.new.count, 1); XCTAssertTrue(p.unsure.isEmpty); XCTAssertTrue(p.updated.isEmpty)
+        // two notches off on a stat, or a lower CP, is New as well
         XCTAssertEqual(plan([row(level: 16, ivs: IVs(atk: 8, def: 11, hp: 12), truth: iv)], [saved]).new.count, 1)
         XCTAssertEqual(plan([row(level: 5, ivs: IVs(atk: 9, def: 11, hp: 12), truth: iv)], [saved]).new.count, 1)
     }

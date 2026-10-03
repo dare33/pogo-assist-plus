@@ -457,9 +457,9 @@ public enum BoxMerge {
     /// - Each side is judged on its own: a reading the app already flagged `no-level-fits` (or with no usable CP) fits anything, but an unflagged reading on the other side
     ///   must still fit by itself with these tolerances, else nothing fits and the entry is not a candidate.
     /// Each side uses its own species' base stats. When the stats are unknown it cannot say no.
-    static func sharesAnIVTriple(_ s: ScanRow, _ v: BoxEntry, _ gm: GameMaster, _ fits: IVFit, readsDiffer: Bool = false) -> Bool {
+    static func sharesAnIVTriple(_ s: ScanRow, _ v: BoxEntry, _ gm: GameMaster, _ fits: IVFit) -> Bool {
         guard fits.enabled, let bs = gm.byId[s.speciesId]?.baseStats, let bv = gm.byId[v.row.speciesId]?.baseStats else { return true }
-        if !readsDiffer, let a = s.ivs, let b = v.row.ivs, a != b { return true }   // different IVs read on both sides: other rules decide (unless asked to test the one-notch case)
+        if let a = s.ivs, let b = v.row.ivs, a != b { return true }   // different IVs read on both sides: other rules decide
         func flagged(_ r: ScanRow) -> Bool { r.cp <= 0 || r.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") } }
         // the triples a side allows: nil means "anything"
         func allowed(_ r: ScanRow, _ base: BaseStats) -> Set<Int>? {
@@ -495,10 +495,7 @@ public enum BoxMerge {
         // read are one Pokémon whose bars were misread (or whose IVs were corrected by hand), so asked about, never New plus Gone.
         if let a = s.ivs, let b = v.row.ivs {
             if a == b { return sharesAnIVTriple(s, v, gm, fits) }
-            if v.corrections.ivs?.was == a || (sameCP(s, v) && sameHP(s, v)) { return true }
-            // A real power-up whose bars were read one notch off on a stat: both IV triples read, different, each stat within a notch, the CP and HP not lower, and
-            // one triple explains both readings. Asked (never automatic: it may be two Pokémon).
-            return fits.enabled && IVFit.near(IVFit.index(a), b) && s.cp >= v.row.cp && !lowers(s, v.row) && sharesAnIVTriple(s, v, gm, fits, readsDiffer: true)
+            return v.corrections.ivs?.was == a || (sameCP(s, v) && sameHP(s, v))
         }
         return (s.cp <= 0 || s.cp >= v.row.cp) && sharesAnIVTriple(s, v, gm, fits)
     }

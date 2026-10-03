@@ -135,14 +135,8 @@ final class ShareIVTripleTests: XCTestCase {
         print("PRE12 rule off: \(counts(off)); rule on: \(counts(on))")
         for u in on.unsure { print("PRE12 remains \(u.kind) \(rows[u.scanned].name) CP \(rows[u.scanned].cp) HP \(rows[u.scanned].hp.map(String.init) ?? "-") IVs \(iv(rows[u.scanned].ivs)) vs \(u.candidates.map { "CP \(byId[$0]!.row.cp) HP \(byId[$0]!.row.hp.map(String.init) ?? "-") IVs \(iv(byId[$0]!.row.ivs))" })") }
         XCTAssertEqual(off.unsure.count, 29, "the phone asked 29")
-        // Round 16 (R2) asks a power-up whose bars were read one notch off on a stat (both IV triples read, different, within a notch, one triple explains both). Without those
-        // the shared-triple rule asks fewer than the phone did; with them it asks 14 more on this box, which lacks the 1,037 Pokémon the scan adds (most of those rows are new).
-        func notch(_ u: BoxMerge.Unsure) -> Bool { u.candidates.contains { id in
-            guard let a = rows[u.scanned].ivs, let b = byId[id]?.row.ivs else { return false }
-            return a != b && IVFit.near(IVFit.index(a), b) && !(rows[u.scanned].cp == byId[id]!.row.cp && rows[u.scanned].hp == byId[id]!.row.hp) } }
-        let oneNotch = on.unsure.filter(notch).count
-        XCTAssertEqual(oneNotch, 14, "questions added by R2")
-        XCTAssertLessThan(on.unsure.count - oneNotch, off.unsure.count)
+        XCTAssertEqual(on.unsure.count, 19, "with the rule on")
+        XCTAssertLessThan(on.unsure.count, off.unsure.count)
         // every question that is kept still has its candidate; the ones the owner answered "new" for impossible pairs are what goes
         XCTAssertTrue(on.unsure.allSatisfy { !$0.candidates.isEmpty })
     }
