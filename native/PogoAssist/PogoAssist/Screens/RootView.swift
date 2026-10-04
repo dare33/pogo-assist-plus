@@ -54,7 +54,12 @@ struct RootView: View {
             Button("OK") { model.message = nil }
         } message: { Text(model.message ?? "") }
         .overlay { if let work = model.busy { BusyOverlay(text: work) } }
-        .onAppear { model.refreshBroadcast(); model.startTimer() }
+        .onAppear {
+            model.refreshBroadcast(); model.startTimer()
+            #if DEBUG
+            if let variant = UserDefaults.standard.string(forKey: "uitest-seed-review") { model.seedReview(variant: variant) }
+            #endif
+        }
         .onChange(of: phase) { _, p in
             if p == .active { model.refreshBroadcast(); model.startTimer() } else { model.stopTimer() }
         }

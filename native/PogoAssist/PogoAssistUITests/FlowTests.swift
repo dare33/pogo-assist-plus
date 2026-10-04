@@ -101,7 +101,7 @@ final class FlowTests: XCTestCase {
         if !partial.waitForExistence(timeout: 8), diagnostics2.exists { diagnostics2.tap() }
         XCTAssertTrue(partial.waitForExistence(timeout: 10))
         partial.tap()
-        let leave = app.buttons["Leave it out of the box"]
+        let leave = app.buttons["Don't include"]
         XCTAssertTrue(leave.waitForExistence(timeout: 60), "the unsure section did not appear")
         sleep(1)
         shot("12-review-unsure")
@@ -194,8 +194,14 @@ final class FlowTests: XCTestCase {
         if !load.waitForExistence(timeout: 8), diagnostics.exists { diagnostics.tap() }
         XCTAssertTrue(load.waitForExistence(timeout: 10))
         load.tap()
+        // The button is in "Scan details" at the foot of the result (UI v1).
+        let details = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Scan details'")).firstMatch
+        XCTAssertTrue(app.buttons["Save to box"].waitForExistence(timeout: 60), "the scan result did not appear")
+        for _ in 0..<8 where !(details.exists && details.isHittable) { app.swipeUp() }
+        details.tap()
         let better = app.buttons["Make scans better"]
-        XCTAssertTrue(better.waitForExistence(timeout: 60), "the button did not appear on the scan result")
+        for _ in 0..<4 where !(better.exists && better.isHittable) { app.swipeUp() }
+        XCTAssertTrue(better.waitForExistence(timeout: 10), "the button did not appear on the scan result")
         shot("16a-review-with-button")
         better.tap()
         XCTAssertTrue(app.staticTexts["Nothing is sent unless you tap Send."].waitForExistence(timeout: 5))

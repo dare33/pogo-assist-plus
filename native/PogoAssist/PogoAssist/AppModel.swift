@@ -56,6 +56,9 @@ final class AppModel: ObservableObject {
         var boxSeq: Int?
         /// The extension ended this scan itself because the end of the list was reached.
         var endedAtListEnd = false
+        /// The person ended the scan, or a pause went unanswered until the time limit (`BroadcastState`); both are false for a saved scan read again, whose end the replay log tells (`ScanEnding`).
+        var stoppedByPerson = false
+        var stoppedByTimeout = false
         /// Why the review chose Add and update although a full scan was asked for (`ScanKindAdvice`), or nil.
         var kindNote: String?
         /// What `ScanKindAdvice` said about a full scan of this result (nil for a saved scan read again).
@@ -757,7 +760,7 @@ final class AppModel: ObservableObject {
                 let t = outcome.timings
                 NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
                 var review = Review(account: a, kind: kind, outcome: outcome, plan: plan, base: base, storageCount: asked == .full ? typed : nil, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging), boxSeq: seq)
-                review.endedAtListEnd = ended; review.kindNote = note; review.advice = advice; review.stopSummary = stop
+                review.endedAtListEnd = ended; review.stoppedByPerson = byPerson; review.stoppedByTimeout = byTimeout; review.kindNote = note; review.advice = advice; review.stopSummary = stop
                 flow = .review(review)
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)
