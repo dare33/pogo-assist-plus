@@ -8,6 +8,15 @@ struct UnsureCard: View {
     let row: ScanRow
     let saved: [String: BoxEntry]
 
+    @State private var showAll = false
+    /// A row that cannot be identified by its CP has its same-species, same-HP entries ranked first (`Plan.rankedCounts`): the card shows the best three, with "Show all (N)" for the rest
+    /// of the list (the other ranked entries, then the family). Any other question shows its whole list.
+    private var rankedCount: Int { if case .review(let r) = model.flow { return r.plan.rankedCounts[unsure.scanned] ?? 0 } else { return 0 } }
+    private var shownCandidates: [String] {
+        let all = unsure.kind == .extraTwin ? Array(unsure.candidates.dropFirst()) : unsure.candidates
+        guard rankedCount > 0, !showAll else { return all }
+        return Array(all.prefix(min(3, rankedCount)))
+    }
     private var choice: BoxMerge.Resolution? {
         if case .review(let r) = model.flow { return r.resolutions[unsure.scanned] }
         return nil
@@ -20,7 +29,7 @@ struct UnsureCard: View {
                 Text(readLine).font(.callout.weight(.medium))
                 Text(explanation).font(.footnote).foregroundStyle(.secondary)
             }
-            ForEach(unsure.kind == .extraTwin ? Array(unsure.candidates.dropFirst()) : unsure.candidates, id: \.self) { id in
+            ForEach(shownCandidates, id: \.self) { id in
                 if unsure.kind == .megaPair {
                     if let e = saved[id] {
                         VStack(alignment: .leading, spacing: 6) {
@@ -54,6 +63,9 @@ struct UnsureCard: View {
                     answer("Leave it out", selected: choice == .leaveOut) { model.resolve(unsure.scanned, .leaveOut) }
                 }
             } else {
+            if rankedCount > 0, !showAll, unsure.candidates.count > shownCandidates.count {
+                Button("Show all (\(unsure.candidates.count))") { showAll = true }.font(.footnote)
+            }
             HStack {
                 answer("It is new", selected: choice == .new) { model.resolve(unsure.scanned, .new) }
                 answer("Leave it out of the box", selected: choice == .leaveOut) { model.resolve(unsure.scanned, .leaveOut) }

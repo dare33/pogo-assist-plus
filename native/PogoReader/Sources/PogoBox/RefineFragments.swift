@@ -8,6 +8,10 @@ extension Refine {
     /// With no regular beat: the fragment's reading and the neighbour's nearest reading are consecutive (two frame periods
     /// at most, no unreadable stretch between them).
     public static let fragmentFallbackGapSeconds = 0.4
+    /// The reading times jitter by a few tens of microseconds: two consecutive 0.4 s readings were once 0.400036 s apart and failed the exact limit (run20, Staraptor 987).
+    public static let fragmentFallbackSlackSeconds = 0.02
+    /// For a one-digit misread (no regular beat): the neighbour's nearest reading is at most this far, which allows one reading missing between them (0.8 s in run20, Charizard 9017).
+    public static let fragmentDigitGapSeconds = 0.85
     /// A frame whose bars have this confidence or more counts as settled (the same number the JavaScript uses).
     public static let settledBarsConfidence = 0.7
 
@@ -34,12 +38,15 @@ extension Refine {
             let ts = f.frames.compactMap(\.time)
             guard let a = ts.min(), let b = ts.max(), ts.count == f.frames.count else { i += 1; continue }
             let small = f.frames.count == 1 || (period.map { b - a < 0.5 * $0 } ?? false)
-            guard small else { i += 1; continue }
+            // A row of at most two readings that fits no level can also be a ONE-DIGIT misread of its neighbour (below), so it is examined even when it spans longer than half a beat.
+            let noFit = f.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
+            let digitCandidate = noFit && f.frames.count <= 2 && f.hp != nil
+            guard small || digitCandidate else { i += 1; continue }
             // Both neighbours are examined: the fragment may belong to the one behind it or the one ahead.
             var candidates = [Int]()
             var byFallback = Set<Int>()   // pairs judged without a regular beat around them (consecutive readings only)
             var byBarsOverride = Set<Int>()   // neighbours accepted only because the fragment is a sliding-in part read: its read bars differed at all (`barsCompatible` is false for settled bars that differ by any amount, one notch included)
-            for j in [i - 1, i + 1] where j >= 0 && j < rows.count {
+            for j in [i - 1, i + 1] where small && j >= 0 && j < rows.count {
                 let n = rows[j]
                 guard n.name == f.name else { continue }
                 let nts = n.frames.compactMap(\.time)
@@ -51,7 +58,7 @@ extension Refine {
                 } else {
                     byFallback.insert(j)
                     let gap = j > i ? na - b : a - (nts.max() ?? a)
-                    together = gap <= fragmentFallbackGapSeconds + 1e-9
+                    together = gap <= fragmentFallbackGapSeconds + fragmentFallbackSlackSeconds
                 }
                 // A part read of the neighbour's CP that fits no level, with the neighbour's own HP, is that Pokémon as its card slides in (run17: Charizard 632 read once with bars still
                 // animating, then 1632 / 120): its bars are not compared, they are the animation's.
@@ -74,13 +81,31 @@ extension Refine {
                     if !rows[i].flags.contains(flag) { rows[i].flags.append(flag); flaggedOnly = true }
                 } else { absorbedBy = first }
             }
+            // ONE-DIGIT MISREAD: a row of at most two readings that fits no level, beside (immediately before or after) a SOLVED row of the same species and HP whose CP differs from its
+            // own by one digit (one changed, missing or extra: 9017 for 2017, 987 and 982 for 1987 and 1982), is that Pokémon read badly as its card slid in or out. It must never fit a
+            // level itself (a correctly read Pokémon is never folded). Timing: the readings are consecutive, allowing one missing reading between them (`fragmentDigitGapSeconds`), with or without a regular beat. The
+            // pair-lasts-at-most-1.4-periods test of the other rules is NOT used here: it measures from the neighbours' midpoints, so a card whose frames were dropped at its edges
+            // (run20: 987, then 1987 two readings, 1.8 s outer span against 1.68) fails it although its readings are 0.4 s apart; a boundary between two Pokémon shows as a gap of a
+            // beat or more between their readings (1.6 s before this fragment), which this limit refuses. Two solved neighbours that both qualify: nothing is folded.
+            var viaDigit = false
+            if absorbedBy == nil, digitCandidate, let hp = f.hp {
+                var fits = [Int]()
+                for j in [i - 1, i + 1] where j >= 0 && j < rows.count {
+                    let n = rows[j]
+                    let nts = n.frames.compactMap(\.time)
+                    guard n.name == f.name, n.hp == hp, n.solveStatus == "exact", BoxMerge.oneDigitApart(f.cp, n.cp), let na = nts.min(), let nb = nts.max(), nts.count == n.frames.count else { continue }
+                    if (j > i ? na - b : a - nb) <= fragmentDigitGapSeconds { fits.append(j) }
+                }
+                if fits.count == 1 { absorbedBy = fits[0]; viaDigit = true }
+            }
             guard let j = absorbedBy else { i += 1; continue }
             let n = rows[j]
             // Same CP, or a part read of the kept CP: a note. Any other CP folded in: always a check (a once-read real Pokémon must not vanish quietly).
             // A once-read, solved fragment with the SAME CP, folded in with no regular beat to say a boundary lies between, could be a real identical twin.
             let solvedFragment = f.cp > 0 && f.level != nil && !f.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }
             let flag: String
-            if f.cp != n.cp && !isPartRead(f.cp, of: n.cp) { flag = "absorbed-other-cp:\(f.cp)" }
+            if viaDigit { flag = "folded-first-reading:\(f.cp)" }   // a one-digit misread of the neighbour's CP: a check, as for a sliding-in first reading
+            else if f.cp != n.cp && !isPartRead(f.cp, of: n.cp) { flag = "absorbed-other-cp:\(f.cp)" }
             else if f.cp == n.cp && solvedFragment && byFallback.contains(j) { flag = "absorbed-same-cp:\(f.cp)" }
             else if byBarsOverride.contains(j) { flag = "folded-first-reading:\(f.cp)" }   // another CP AND other bars folded in: a check, not a note
             else { flag = "absorbed-fragment:\(f.cp)" }

@@ -137,6 +137,9 @@ public enum BoxMerge {
         /// Scanned positions whose species is a Mega or Primal form, with the base species id. A Mega row never writes its own
         /// values into the box: it matches its base entry as "same", or is saved as New under the base species with no CP, HP or level.
         public var megaBases: [Int: String] = [:]
+        /// For a row that cannot be identified by its CP: how many of its question's first candidates are the ranked same-species, same-HP entries (the review card shows at most three of
+        /// them, then "Show all"; the rest of the list follows them). Absent: the whole list is shown as before.
+        public var rankedCounts: [Int: Int] = [:]
         /// Saved Mega pairs (base entry id, Mega entry id): one Pokémon saved twice. `goneReport` lists neither as not seen once the scan identified the Pokémon through either.
         public var savedPairs: [[String]] = []
 
@@ -388,9 +391,17 @@ public enum BoxMerge {
             // M12: a saved entry that was misread (no IVs, no level fits) of this correctly read row, whatever the CP.
             let misread = leftoverPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
             if part.isEmpty && plausible.isEmpty && misread.isEmpty { stillNew.append(si); continue }
-            let all = part + plausible + misread
+            var all = part + plausible + misread
             let kind: Unsure.Kind = !part.isEmpty ? .partialRead : (all.allSatisfy { misreadSaved(r, saved[$0]) } ? .misreadSaved : .ambiguous)
+            // A row that cannot be identified by its CP (it fits no level, or it is a part read) is offered first the saved entries of its SPECIES with its HP (the box's HP is the max;
+            // a point off only when no entry has it exactly), ranked by how close the CP digits are and then the bars; the rest of today's list (the family) follows them.
+            var ranked = 0
+            if hasNoLevelFits(originals[si]) || kind == .partialRead {
+                let head = rankedSameHP(r, original: originals[si], among: all.isEmpty ? [] : all, saved: saved, extra: leftoverPool)
+                if !head.isEmpty { all = head + all.filter { !head.contains($0) }; ranked = head.count }
+            }
             ask([si], all, kind: kind)
+            if ranked > 0 { plan.rankedCounts[si] = ranked }
             plan.unsure[plan.unsure.count - 1].misread = all.filter { misreadSaved(r, saved[$0]) }.map { saved[$0].id }
         }
         sPool = stillNew
@@ -504,6 +515,32 @@ public enum BoxMerge {
         out.cp = 0; out.hp = nil; out.level = nil; out.levelMax = nil; out.dust = nil
         out.solveStatus = "mega"; out.flags = ["mega-when-scanned"]
         return out
+    }
+
+    /// The unpaired saved entries of the row's species with the row's HP exactly (one point off only when none is exact), best first: CP digits one apart (a digit changed, missing or
+    /// extra) before anything else, then the bars read against the saved IVs, then the saved order.
+    static func rankedSameHP(_ r: ScanRow, original: ScanRow, among: [Int], saved: [BoxEntry], extra: [Int]) -> [Int] {
+        guard let hp = r.hp else { return [] }
+        let pool = Array(Set(among + extra)).sorted().filter { sameSpecies(r, saved[$0]) }
+        var chosen = pool.filter { saved[$0].row.hp == hp }
+        if chosen.isEmpty { chosen = pool.filter { nearHP(r, saved[$0]) } }
+        func barsDistance(_ vi: Int) -> Int {
+            guard let read = original.ivsRead ?? original.ivs, let have = saved[vi].row.ivs else { return 1000 }
+            return abs(read.atk - have.atk) + abs(read.def - have.def) + abs(read.hp - have.hp)
+        }
+        func cpClass(_ vi: Int) -> Int { oneDigitApart(r.cp, saved[vi].row.cp) ? 0 : 1 }
+        return chosen.sorted { (cpClass($0), barsDistance($0), $0) < (cpClass($1), barsDistance($1), $1) }
+    }
+
+    /// Two CPs that differ by one digit: one changed (same length), or one missing or extra.
+    public static func oneDigitApart(_ a: Int, _ b: Int) -> Bool {
+        guard a != b, a > 0, b > 0 else { return false }
+        let x = Array(String(a)), y = Array(String(b))
+        if x.count == y.count { return zip(x, y).filter { $0 != $1 }.count == 1 }
+        let (small, big) = x.count < y.count ? (x, y) : (y, x)
+        guard big.count - small.count == 1 else { return false }
+        for k in big.indices { var t = big; t.remove(at: k); if t == small { return true } }
+        return false
     }
 
     private static func partialCandidates(_ s: ScanRow, _ saved: [BoxEntry]) -> [Int] {
