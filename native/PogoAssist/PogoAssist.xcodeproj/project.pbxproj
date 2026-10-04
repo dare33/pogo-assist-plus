@@ -8,13 +8,17 @@
 
 /* Begin PBXBuildFile section */
 		010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2851EAE92D472650A78CD032 /* SampleHandler.swift */; };
+		011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */; };
+		0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */; };
 		097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 00436FF3692616EF8377125B /* PogoReader */; };
 		1DF267CCE4D1096881873210 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
 		262F06295009225A5291CD5A /* BoxChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853199DAE4157490F71A25E8 /* BoxChrome.swift */; };
+		2A1110DE2162F7DEF4734407 /* ScanSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EB8C8BEAFD00EF993F95722 /* ScanSetupView.swift */; };
 		3612921432E15343B1E195EA /* FlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAA375CD0561890BDC48B2 /* FlowTests.swift */; };
 		373A9DA32DD806383DC6106A /* ComponentGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */; };
 		408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFAC0B18897FB5A85E55764 /* Theme.swift */; };
+		44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */; };
 		4802DD98D7286E310F86378A /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D08E55E9B50EC09258EFF1 /* AppModel.swift */; };
 		53E565D8D2134740F880785D /* StateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9E2F476A7C0759293BCB1F /* StateModel.swift */; };
 		55CD9F47DF14E817FF7A91C5 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = B08D9DBF1BA823A3FB1BD6BA /* OFL.txt */; };
@@ -30,11 +34,13 @@
 		88B726BE30F7E106A63BC75E /* QuestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */; };
 		8DCC1E40BCAA03A119A1ECC8 /* sample-scan.replay.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = 50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */; };
 		8E62CA1C22FF97368E5B9F14 /* FloatingTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 943D02DD923AE19E5F63128C /* FloatingTabBar.swift */; };
+		8FC06A9C9116928BD339C75B /* ScanBroadcastButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */; };
 		909DB6E9FEFFF98EFE57CDEB /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6875B047C21F1CC4B7701507 /* Components.swift */; };
 		948718A42F4443D1612CB6B5 /* ScanMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 769F24027EB56D5A4BB8154F /* ScanMark.swift */; };
 		953581AE09525FD904E92745 /* PokemonDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */; };
 		979478DD306DC7F1C90E9131 /* PogoBox in Frameworks */ = {isa = PBXBuildFile; productRef = 2E478313CE5E32E23930E4C8 /* PogoBox */; };
 		9975DFDD41FE07B384C77B88 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1222BDC1C6F45E94BECD7F63 /* ScanView.swift */; };
+		998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */; };
 		A0129EF312F80693A11F6889 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7BBE6B4B350600CD9DBB146 /* ContentView.swift */; };
 		A0A130F029BD88C97D55D93B /* ScanNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */; };
 		ADAE04D49BAC4D1D07726C7B /* BoxIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AA7DC367A1E8DE143CF1386 /* BoxIndex.swift */; };
@@ -96,7 +102,10 @@
 		2851EAE92D472650A78CD032 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		2E3538488989AE3C1ABAA66B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonDetailView.swift; sourceTree = "<group>"; };
+		36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBroadcastButton.swift; sourceTree = "<group>"; };
 		3AA7DC367A1E8DE143CF1386 /* BoxIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxIndex.swift; sourceTree = "<group>"; };
+		3EB8C8BEAFD00EF993F95722 /* ScanSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSetupView.swift; sourceTree = "<group>"; };
+		3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanOptionsPanel.swift; sourceTree = "<group>"; };
 		444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxScreensTests.swift; sourceTree = "<group>"; };
 		485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */ = {isa = PBXFileReference; path = "sample-partial-cp.replay.jsonl"; sourceTree = "<group>"; };
 		4C694C91A68984883C8CC317 /* PogoAssist.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoAssist.entitlements; sourceTree = "<group>"; };
@@ -110,6 +119,7 @@
 		60BF710F03812439C395ED03 /* Figtree-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Figtree-Variable.ttf"; sourceTree = "<group>"; };
 		6875B047C21F1CC4B7701507 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		6B9E2F476A7C0759293BCB1F /* StateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateModel.swift; sourceTree = "<group>"; };
+		6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSteps.swift; sourceTree = "<group>"; };
 		769F24027EB56D5A4BB8154F /* ScanMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanMark.swift; sourceTree = "<group>"; };
 		853199DAE4157490F71A25E8 /* BoxChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxChrome.swift; sourceTree = "<group>"; };
 		943D02DD923AE19E5F63128C /* FloatingTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingTabBar.swift; sourceTree = "<group>"; };
@@ -129,9 +139,11 @@
 		D7EAA375CD0561890BDC48B2 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
 		E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentGallery.swift; sourceTree = "<group>"; };
 		E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanNotifier.swift; sourceTree = "<group>"; };
+		EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDebug.swift; sourceTree = "<group>"; };
 		EEE84346ABF38B9C9DFB8259 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		F17BAAA30DB1A885E5BC14BF /* BoxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxView.swift; sourceTree = "<group>"; };
 		F391C1A79CF135A501834207 /* PogoAssist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PogoAssist.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanScreensTests.swift; sourceTree = "<group>"; };
 		FF799334CCB9D208123457E5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -218,6 +230,7 @@
 			children = (
 				444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */,
 				D7EAA375CD0561890BDC48B2 /* FlowTests.swift */,
+				FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */,
 			);
 			path = PogoAssistUITests;
 			sourceTree = "<group>";
@@ -270,6 +283,11 @@
 				B23E618EC311793C89054587 /* ReviewUnsure.swift */,
 				9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */,
 				AF23F6FB7C812B78963625C3 /* RootView.swift */,
+				36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */,
+				EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */,
+				3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */,
+				3EB8C8BEAFD00EF993F95722 /* ScanSetupView.swift */,
+				6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */,
 				1222BDC1C6F45E94BECD7F63 /* ScanView.swift */,
 				FF799334CCB9D208123457E5 /* SettingsView.swift */,
 				1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */,
@@ -426,6 +444,7 @@
 			files = (
 				F9C0DA47B6D99ED2A742185D /* BoxScreensTests.swift in Sources */,
 				3612921432E15343B1E195EA /* FlowTests.swift in Sources */,
+				998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -454,8 +473,13 @@
 				767B78A46C867ABB726341EE /* ReviewView.swift in Sources */,
 				B71EB8981CA7EF438CDCB67F /* RootView.swift in Sources */,
 				6DB5DFC73A34D88596B2949B /* SampleScan.swift in Sources */,
+				8FC06A9C9116928BD339C75B /* ScanBroadcastButton.swift in Sources */,
+				0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */,
 				948718A42F4443D1612CB6B5 /* ScanMark.swift in Sources */,
 				A0A130F029BD88C97D55D93B /* ScanNotifier.swift in Sources */,
+				44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */,
+				2A1110DE2162F7DEF4734407 /* ScanSetupView.swift in Sources */,
+				011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */,
 				9975DFDD41FE07B384C77B88 /* ScanView.swift in Sources */,
 				B097AAC5F43E6BBBD3CF938B /* SettingsView.swift in Sources */,
 				CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */,

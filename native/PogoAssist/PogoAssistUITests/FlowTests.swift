@@ -135,22 +135,25 @@ final class FlowTests: XCTestCase {
         app.buttons["Scan"].tap()
         XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Next"].exists, "the scan screen hides the floating tab bar")
-        // The lists are lazy: scroll until the element is on screen (the setup list grew in round 24).
+        // The first scan opens in Edit: type the count, then Done brings the steps back.
+        let count = app.textFields["Count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        count.tap(); count.typeText("1400")
+        app.buttons["Hide keyboard"].tap()   // dismiss the number pad
+        app.buttons["Done"].tap()
+        let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
+        XCTAssertTrue(app.staticTexts["Tap the button, then Start Broadcast"].waitForExistence(timeout: 5))
+        shot(name + "-top")
+        // The setup lists are on the Scan setup screen. The lists are lazy: scroll until the element is on screen.
         // Both directions: on a smaller screen the lazy list drops what is scrolled out of sight, and the elements sit in no fixed order.
+        app.buttons["Scan setup"].tap()
+        XCTAssertTrue(app.navigationBars["Scan setup"].waitForExistence(timeout: 5))
         func reveal(_ e: XCUIElement, up: Bool = true) {
             var n = 0
             while !e.waitForExistence(timeout: 1.5), n < 8 { if up { app.swipeUp() } else { app.swipeDown() }; n += 1 }
             n = 0
             while !e.exists, n < 16 { if up { app.swipeDown() } else { app.swipeUp() }; n += 1; _ = e.waitForExistence(timeout: 1.0) }
         }
-        let count = app.textFields["Count"]
-        reveal(count)
-        XCTAssertTrue(count.waitForExistence(timeout: 5))
-        count.tap(); count.typeText("1400")
-        app.buttons["Done"].tap()   // dismiss the number pad
-        sleep(1)
-        let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
-        shot(name + "-top")
         let attention = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Attention Aware'")).firstMatch
         reveal(attention, up: false)
         XCTAssertTrue(attention.exists, "the setup list names Attention Aware")
