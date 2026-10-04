@@ -83,6 +83,8 @@ final class AppModel: ObservableObject {
     @Published var message: String?
     @Published var history: [BoxSnapshot.Header] = []
     @Published var previous: BoxSnapshot.Header?
+    /// What the last Save changed, for the Saved panel at the top of Box (see `SaveSummary`).
+    @Published var lastSave: SaveSummary?
     @Published var exportURL: URL?
     /// Files to hand to the share sheet (a saved scan's log and result).
     /// What the share sheet is offering; the notification permission is asked when it is dismissed (never over the sheet).
@@ -666,11 +668,12 @@ final class AppModel: ObservableObject {
 
     // MARK: - CSV export
 
-    func exportCSV() async {
+    /// The whole box, or only the entries with these ids (Box's select mode).
+    func exportCSV(only ids: Set<String>? = nil) async {
         guard let snap = snapshot, !snap.entries.isEmpty else { message = "There is nothing to export yet. Scan some Pokémon first."; return }
         busy = "Making the CSV"
         defer { busy = nil }
-        let entries = snap.entries, name = snap.account, date = snap.scanDate ?? snap.createdAt
+        let entries = ids.map { ids in snap.entries.filter { ids.contains($0.id) } } ?? snap.entries, name = snap.account, date = snap.scanDate ?? snap.createdAt
         do {
             let url = try await worker.run { engine -> URL in
                 let csv = try engine.csv(rows: Self.csvRows(entries), scanDate: date)
@@ -829,6 +832,7 @@ final class AppModel: ObservableObject {
             }
             if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
             flow = .idle
+            lastSave = SaveSummary(base: r.base, saved: snap)
             if r.account == account { afterCommit(snap) }
         } catch BoxLibrary.Failure.boxChanged {
             message = "The box changed while this scan was open, so nothing was saved. The result has been worked out again against the box as it is now: check it and save again."

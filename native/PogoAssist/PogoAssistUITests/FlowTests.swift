@@ -9,6 +9,16 @@ final class FlowTests: XCTestCase {
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
     }
 
+    /// Box rows are buttons now, not list cells: open a species (the third, or the last there is) and then its first Pokémon.
+    private func openPokemon(_ app: XCUIApplication, species: Int = 2) {
+        let rows = app.buttons.matching(identifier: "species-row")
+        XCTAssertTrue(rows.element(boundBy: 0).waitForExistence(timeout: 10), "the box shows no species")
+        rows.element(boundBy: min(species, rows.count - 1)).tap()
+        let first = app.buttons.matching(identifier: "pokemon-row").firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 5), "the species list shows no Pokémon")
+        first.tap()
+    }
+
     /// The tab bar's scan button replaced the old "Scan Pokémon" button on the Box screen.
     func testWholeFlow() throws {
         let app = XCUIApplication()
@@ -66,15 +76,15 @@ final class FlowTests: XCTestCase {
         app.buttons["Discard scan"].tap()
         XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 10))
         let toCheck = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch
-        if toCheck.exists { toCheck.tap(); shot("07-box-to-check"); app.buttons.matching(identifier: "All").firstMatch.tap() }
+        if toCheck.exists { toCheck.tap(); shot("07-box-to-check"); app.buttons["All"].tap() }
 
-        app.cells.element(boundBy: 2).tap()
+        openPokemon(app)
         sleep(2)
         shot("08-detail")
         app.swipeUp()
         shot("09-detail-advice")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-
+        app.buttons["Back"].tap()
+        app.buttons["Back"].tap()
         app.buttons["Next"].tap()
         sleep(3)
         shot("10-next")
@@ -103,7 +113,7 @@ final class FlowTests: XCTestCase {
         shot("12b-review-unsure-answered")
         app.buttons["Save to box"].tap()
         XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 15))
-        app.cells.element(boundBy: 2).tap()
+        openPokemon(app)
         let fix = app.buttons["Fix a value"]
         for _ in 0..<5 where !(fix.exists && fix.isHittable) { app.swipeUp() }   // the detail is longer now: scroll to the button
         XCTAssertTrue(fix.waitForExistence(timeout: 5))
