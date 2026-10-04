@@ -30,6 +30,22 @@ public struct FrameReading: Codable, Equatable {
 
     public init(frame: String? = nil, time: Double? = nil) { self.frame = frame; self.time = time }
 
+    /// Round 31: the reader recognised a stationed card (see `FrameReader.completeStationed`): name and bars, no CP, no HP.
+    public static let stationedFlag = "stationed"
+    public var isStationed: Bool { flags.contains(FrameReading.stationedFlag) }
+
+    /// What the live consumers (the grouper, the end-of-list detector, the scan-end controller) are given. They know no stationed card
+    /// yet: a named reading with no CP and no HP would start a hidden-CP row, count as a new card to the end-of-list clock and, in a
+    /// pause, as another card shown. Such a frame was a reading with no name before the reader knew it (flag `no-cp-text`, nothing
+    /// else), a separator frame, and it is handed on as exactly that until the grouper is taught the stationed card. Any other
+    /// reading is returned unchanged.
+    public var asBlankFrame: FrameReading {
+        guard isStationed else { return self }
+        var r = FrameReading(frame: frame, time: time)
+        r.flags = ["no-cp-text"]
+        return r
+    }
+
     private enum Key: String, CodingKey {
         case frame, time, cp, cpText, cpReads, name, baseName, form, speciesIds, nameText, nameConfidence, nameDistance
         case nameWeak, nameAttached, hp, hpText, ivs, ivConfidence, fills, sharpness, flags

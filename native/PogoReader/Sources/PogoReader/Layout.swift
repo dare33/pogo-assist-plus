@@ -313,3 +313,77 @@ public func regionsFrom(_ rect: PixelRect, _ cpText: CpText?, _ hpBar: HpBar?,
     }
     return out
 }
+
+// MARK: - the stationed card (Round 31)
+
+/// A Pokémon stationed away (at a Power Spot; a gym defender is believed to look the same) has an appraisal card with no
+/// "CP n" at the top and no HP bar or HP text: the name, a line "At <place>", a green RECALL button, the dimmed STATS area, and
+/// the appraisal box in its usual place. The RECALL button is the anchor (a teal pill, about 34% of the width and 5% of the
+/// height, centred, at 50 to 56% of the way down); the name and the "At" line are placed from it. Measured on the owner's two
+/// screenshots (1320 x 2868, one phone): button 0.329 to 0.671 of the width, 0.505 to 0.556 of the height; name text centred
+/// 0.089 of the height above the button's top, the "At" line 0.044 above it.
+public struct RecallButton: Equatable {
+    public var y0: Int, y1: Int, x0: Int, x1: Int
+}
+
+/// Teal of the button, in Display P3 and in sRGB (the fill runs from about 129/184/151 at the top left to 74/155/152 at the
+/// bottom right in P3, 112/186/148 to 26/157/153 in sRGB): green clearly above red, blue never more than a few units above green.
+@inline(__always) private func isTeal(_ d: UnsafeBufferPointer<UInt8>, _ i: Int) -> Bool {
+    let r = Int(d[i]), g = Int(d[i + 1]), b = Int(d[i + 2])
+    return g > r + 40 && g + 5 >= b && g > 120
+}
+
+/// The RECALL button: a band of rows, 3.5 to 6.5% of the content height, 40 to 65% of the way down, in which the centre 40% of the
+/// width holds teal pixels over at least 15% of the width (the white "RECALL" text takes the rest of the middle rows), whose rows
+/// at 20% and 80% of the band hold one unbroken run of teal 28 to 46% of the width wide and centred within 4% of the middle. A
+/// green HP bar is far too thin, scenery is not a centred pill. Called only for a frame with neither CP text nor HP bar.
+public func findRecallButton(_ img: RGBAImage, _ rect: PixelRect) -> RecallButton? {
+    let width = img.width, rh = Double(rect.h), rw = Double(rect.w)
+    let ya = jsRound(Double(rect.y) + 0.40 * rh), yb = min(img.height, jsRound(Double(rect.y) + 0.65 * rh))
+    let xa = jsRound(Double(rect.x) + 0.30 * rw), xb = jsRound(Double(rect.x) + 0.70 * rw)
+    guard yb > ya, xb > xa else { return nil }
+    var on = [Bool]()
+    on.reserveCapacity(yb - ya)
+    img.bytes.withUnsafeBufferPointer { d in
+        for y in ya..<yb {
+            var n = 0
+            for x in xa..<xb where isTeal(d, (y * width + x) * 4) { n += 1 }
+            on.append(Double(n) >= 0.15 * rw)
+        }
+    }
+    bridgeGaps(&on, maxGap: max(2, jsRound(0.004 * rh)))
+    // The first band that is button-shaped; scenery or an icon row fails the height or the width.
+    var found: RecallButton? = nil
+    img.bytes.withUnsafeBufferPointer { d in
+        func extent(row y: Int) -> (Int, Int)? {
+            var flags = [Bool]()
+            flags.reserveCapacity(rect.w)
+            for x in rect.x..<(rect.x + rect.w) { flags.append(isTeal(d, (y * width + x) * 4)) }
+            let (a, b) = widestRun(flags)
+            let w = Double(b - a) / rw, centre = (Double(a + b) / 2) / rw
+            return w >= 0.28 && w <= 0.46 && abs(centre - 0.5) <= 0.04 ? (rect.x + a, rect.x + b) : nil
+        }
+        var start: Int? = nil
+        for i in 0...on.count {
+            if i < on.count && on[i] { if start == nil { start = i }; continue }
+            guard let s = start else { continue }
+            start = nil
+            let h = Double(i - s)
+            guard found == nil, h >= 0.035 * rh, h <= 0.065 * rh,
+                  let top = extent(row: ya + s + Int(h * 0.2)), let bottom = extent(row: ya + s + Int(h * 0.8)) else { continue }
+            found = RecallButton(y0: ya + s, y1: ya + i, x0: min(top.0, bottom.0), x1: max(top.1, bottom.1))
+        }
+    }
+    return found
+}
+
+/// The crops the stationed read needs, placed from the button: the name (one line, kept clear of the "At" line under it) and the
+/// "At <place>" line (read only to see that it begins with "At"; never kept), and where the bars are searched.
+func stationedRegions(_ rect: PixelRect, _ button: RecallButton) -> (name: Rect, line: Rect, panelSearch: Rect) {
+    let h = Double(rect.h), rx = Double(rect.x), rw = Double(rect.w)
+    let top = Double(button.y0)
+    let name = Rect(x: rx + 0.14 * rw, y: top - 0.1135 * h, w: 0.72 * rw, h: 0.05 * h)
+    let line = Rect(x: rx + 0.10 * rw, y: top - 0.0685 * h, w: 0.80 * rw, h: 0.05 * h)
+    let panelTop = Double(button.y1) + 0.05 * h
+    return (name, line, Rect(x: rx, y: panelTop, w: 0.55 * rw, h: Double(rect.y + rect.h) - panelTop))
+}

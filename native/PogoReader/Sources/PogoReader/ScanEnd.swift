@@ -116,6 +116,7 @@ public struct ScanEndController {
     private var lastName: String?, lastCP: Int?
 
     public mutating func feed(_ r: FrameReading, time: Double, read: Int) -> Event {
+        let r = r.asBlankFrame   // a stationed card is not a card yet (round 31): it stays the blank frame it was
         let before = detector
         let prevBars = lastCardBars
         // The appraisal must have LOOKED closed (see `appraisalClosed`) before bars coming back count as reopening it: one dropped reading on an open appraisal is not.

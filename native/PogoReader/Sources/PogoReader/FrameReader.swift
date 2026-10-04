@@ -21,6 +21,10 @@ public struct FrameAnalysis: Codable, Equatable {
     /// frame counts as a card only if the HP text under it parses (`complete`), else it is a CP-only
     /// frame flagged `no-hp-bar`, exactly as it was before the fallback existed. nil = no.
     public var damagedBar: Bool?
+    /// Round 31: a candidate stationed card (no CP text, no HP bar, a RECALL button where one is drawn); `crops.line` holds the
+    /// "At <place>" line, and `complete` confirms the card from the name and that line. nil = no. The flags stay `no-cp-text`
+    /// until it is confirmed, so an unconfirmed candidate reads exactly as it did before the stationed card was known.
+    public var stationed: Bool?
     public var sharpness = 0.0          // of the usual name crop
     public var sharpnessUp = 0.0        // of the Lucky second-look crop
     public var ivs: IVs?
@@ -58,6 +62,9 @@ public struct FrameCrops {
     /// One line above the usual name position (the Lucky Pokémon second look).
     public var nameUp: RGBAImage
     public var hp: RGBAImage
+    /// A stationed candidate's "At <place>" line. In memory only: `CropArchive` does not save it (the place is where the player's
+    /// Pokémon is stationed) and `complete` reads it to see that it begins with "At", then drops it.
+    public var line: RGBAImage?
 }
 
 /// Port of `readFrame` (src/extract/frame.js): anchors, text reads of CP / name / HP, bar IVs,
@@ -76,6 +83,40 @@ public final class FrameReader {
         var text: String
         var confidence: Double
         var match: NameMatch?
+    }
+
+    // Tesseract reported confidence 0 for a line with anything it could not place, so a read
+    // whose whole text is exactly a species name (four letters or more) is taken whatever the
+    // confidence; Vision gives a real confidence, but the rule stays: a near miss, or a match
+    // that dropped a word, still needs confidence.
+    private func readName(_ crop: RGBAImage) -> NameRead {
+        let r = text.read(crop, kind: .name)
+        let letterWords = r.words.filter { hasLetterRun($0.text) }
+        let confidence = letterWords.isEmpty ? 0 : letterWords.reduce(0) { $0 + $1.confidence } / Double(letterWords.count)
+        let found = matchName(r.text, names)
+        var ok = false
+        if let f = found { ok = confidence >= Tuning.weakNameConfidence || (f.distance == 0 && f.whole && f.text.count >= 4) }
+        return NameRead(text: r.text, confidence: confidence, match: ok ? found : nil)
+    }
+
+    /// The name fields of a reading from a matched name read (one place, so a stationed card's name is exactly a card's).
+    private func applyName(_ out: inout FrameReading, _ nameRead: NameRead, _ m: NameMatch) {
+        out.name = m.candidate.display
+        out.baseName = m.candidate.name
+        out.form = m.candidate.form
+        out.speciesIds = m.candidate.speciesIds
+        out.nameDistance = m.distance
+        // Fault 1: if Vision actually read the Nidoran symbol, the sex is known: narrow the
+        // species to it. Otherwise the name stays "Nidoran" with both candidates and the
+        // sex is left to the stats.
+        if m.candidate.display == "Nidoran", let id = nidoranSex(inRawText: nameRead.text) {
+            out.speciesIds = [id]
+            out.baseName = id == "nidoran_female" ? "Nidoran♀" : "Nidoran♂"
+        }
+        // A name taken without confidence (Nidoran aside: its symbol is what could not be
+        // placed). The grouper uses such a frame only when a neighbouring frame agrees.
+        out.nameWeak = nameRead.confidence < Tuning.weakNameConfidence && !m.symbol
+        if m.attached { out.nameAttached = true }
     }
 
     /// `cp` and `name` are nil when the frame is not a settled Pokémon screen; `flags` say why.
@@ -107,6 +148,17 @@ public final class FrameReader {
                 a.needsText = true; a.hasCpText = true; a.cpOnly = true; a.cpRect = regions.cp
                 let empty = RGBAImage(width: 0, height: 0)
                 return (a, FrameCrops(cp: crop(img, regions.cp), name: empty, nameUp: empty, hp: empty))
+            }
+            // A stationed Pokémon's card has neither the CP text nor the HP bar. Looked for only then (the other frames
+            // pay nothing), and only as a candidate: `complete` needs the name and the "At" line too.
+            if cpText == nil, hpBar == nil, let button = findRecallButton(img, rect) {
+                let r = stationedRegions(rect, button)
+                let nameCrop = crop(img, r.name)
+                a.needsText = true; a.stationed = true; a.nameRect = r.name
+                a.sharpness = laplacianVariance(nameCrop)
+                if let result = readBars(img, rect, r.panelSearch).result { a.ivs = result.ivs; a.ivConfidence = result.confidence; a.fills = result.fills }
+                let empty = RGBAImage(width: 0, height: 0)
+                return (a, FrameCrops(cp: nil, name: nameCrop, nameUp: empty, hp: empty, line: crop(img, r.line)))
             }
             return (a, nil)
         }
@@ -141,6 +193,7 @@ public final class FrameReader {
         var out = FrameReading(frame: a.frame, time: a.time)
         out.flags = a.flags
         guard a.needsText, let crops = crops else { return out }
+        if a.stationed == true { return completeStationed(a, crops, wantBars: wantBars) }
         // A bar placed by the damaged-bar fallback is trusted only when the HP text under it is an HP: any
         // other screen with a bar-shaped band gets the reading it had before the fallback existed.
         var hpRead: TextRead?
@@ -166,19 +219,6 @@ public final class FrameReader {
             if let cp = out.cp { out.cpReads = [cp] } else { out.cpReads = [] }
         }
 
-        // Tesseract reported confidence 0 for a line with anything it could not place, so a read
-        // whose whole text is exactly a species name (four letters or more) is taken whatever the
-        // confidence; Vision gives a real confidence, but the rule stays: a near miss, or a match
-        // that dropped a word, still needs confidence.
-        func readName(_ crop: RGBAImage) -> NameRead {
-            let r = text.read(crop, kind: .name)
-            let letterWords = r.words.filter { hasLetterRun($0.text) }
-            let confidence = letterWords.isEmpty ? 0 : letterWords.reduce(0) { $0 + $1.confidence } / Double(letterWords.count)
-            let found = matchName(r.text, names)
-            var ok = false
-            if let f = found { ok = confidence >= Tuning.weakNameConfidence || (f.distance == 0 && f.whole && f.text.count >= 4) }
-            return NameRead(text: r.text, confidence: confidence, match: ok ? found : nil)
-        }
         var nameRead = readName(crops.name)
         out.sharpness = a.sharpness
         // Fault 2: a Lucky Pokémon has a "LUCKY POKÉMON" line between its name and the HP bar, so
@@ -195,22 +235,7 @@ public final class FrameReader {
         out.nameText = nameRead.text
         out.nameConfidence = nameRead.confidence
         if let m = nameRead.match {
-            out.name = m.candidate.display
-            out.baseName = m.candidate.name
-            out.form = m.candidate.form
-            out.speciesIds = m.candidate.speciesIds
-            out.nameDistance = m.distance
-            // Fault 1: if Vision actually read the Nidoran symbol, the sex is known: narrow the
-            // species to it. Otherwise the name stays "Nidoran" with both candidates and the
-            // sex is left to the stats.
-            if m.candidate.display == "Nidoran", let id = nidoranSex(inRawText: nameRead.text) {
-                out.speciesIds = [id]
-                out.baseName = id == "nidoran_female" ? "Nidoran♀" : "Nidoran♂"
-            }
-            // A name taken without confidence (Nidoran aside: its symbol is what could not be
-            // placed). The grouper uses such a frame only when a neighbouring frame agrees.
-            out.nameWeak = nameRead.confidence < Tuning.weakNameConfidence && !m.symbol
-            if m.attached { out.nameAttached = true }
+            applyName(&out, nameRead, m)
         } else if !nameRead.text.isEmpty { out.flags.append("name-unmatched") }
 
         if out.cp == nil && a.hasCpText { out.flags.append("cp-unread") }
@@ -230,6 +255,38 @@ public final class FrameReader {
         }
         return out
     }
+
+    /// A stationed candidate is a stationed card only with all three: the RECALL button (the pixel test that made it a candidate), a
+    /// name at the stationed position that the name matcher accepts as a Pokémon, and a line under it that begins with "At"
+    /// (alone or followed by a space; the place after it is not read into anything). The button alone is a green pill that other
+    /// screens may have, a name alone is what a card in mid-transition shows, and the "At" line alone is any caption; the three
+    /// together are the stationed layout and nothing else seen in the 14,918 recorded frames. Anything short of that is returned
+    /// exactly as the reader returned a frame with no CP text before this existed (`no-cp-text`, nothing else).
+    /// The reading has the name and the bars of a card, no CP and no HP, and the flag `stationed`. The text of the "At" line is
+    /// looked at for its first word and dropped: it is where the player's Pokémon is stationed and is never stored.
+    private func completeStationed(_ a: FrameAnalysis, _ crops: FrameCrops, wantBars: Bool) -> FrameReading {
+        var out = FrameReading(frame: a.frame, time: a.time)
+        out.flags = a.flags
+        let nameRead = readName(crops.name)
+        guard let m = nameRead.match, let line = crops.line, stationLineBegins(text.read(line, kind: .name).text) else { return out }
+        out.flags = ["stationed"]
+        out.sharpness = a.sharpness
+        out.nameText = nameRead.text
+        out.nameConfidence = nameRead.confidence
+        applyName(&out, nameRead, m)
+        if wantBars {
+            if a.ivs != nil { out.ivs = a.ivs; out.ivConfidence = a.ivConfidence; out.fills = a.fills }
+            else { out.flags.append("no-bars") }
+        }
+        return out
+    }
+}
+
+/// Whether the text of a stationed card's second line begins with the word "At" ("At N&R Superette"; a blank place leaves "At").
+func stationLineBegins(_ text: String) -> Bool {
+    let t = text.trimmingCharacters(in: .whitespaces).lowercased()
+    guard t.hasPrefix("at") else { return false }
+    return t.count == 2 || t.dropFirst(2).first?.isWhitespace == true
 }
 
 private func hasLetterRun(_ s: String) -> Bool {

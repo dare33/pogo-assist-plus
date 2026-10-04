@@ -190,6 +190,7 @@ public struct LiveGrouper {
     /// Feed one reading. Returns true when `rows` changed.
     @discardableResult
     public mutating func add(_ r: FrameReading) -> Bool {
+        let r = r.asBlankFrame   // a stationed card is not a card yet (round 31): it stays the blank frame it was
         let before = current.map { makeRow($0, index: finished.count + 1) }
         let finishedBefore = finished.count
         consume(r)
