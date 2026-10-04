@@ -16,9 +16,7 @@ is up to. Read both before working.
   exports and the user's own screen recordings (or the live screen, read on the device).
   One exception, decided by Greg on 1 Oct 2026: paging through the player's own storage so it can
   be read, by an iOS Voice Control gesture that only taps or swipes to move from one Pokémon to
-  the next (`experiments/voice-control/`). It reads and changes nothing in the game. Anything
-  beyond that paging gesture that taps, catches, battles, trades, transfers or otherwise acts in
-  the game stays forbidden. Players are told that Niantic's terms discourage automation before they use it.
+  the next (`experiments/voice-control/`). It reads and changes nothing in the game. A second exception, decided by Greg on 4 Oct 2026: after the player starts a broadcast, the app may open Pokémon GO by its URL scheme (pokemongo://) with no parameters, so the player is taken back to the game. It only brings the game to the front; it passes nothing to the game and reads and changes nothing in it. Anything beyond these two exceptions that taps, catches, battles, trades, transfers or otherwise acts in the game stays forbidden.
 - Never commit API keys. The optional Claude fallback takes a key at runtime only.
 - Fixtures in `fixtures/` are real exports from the owner's account; they contain no personal
   data beyond a Pokémon inventory. Do not add other people's exports without asking them.
