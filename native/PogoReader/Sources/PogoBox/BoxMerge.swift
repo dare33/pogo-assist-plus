@@ -912,7 +912,7 @@ public enum BoxMerge {
     /// The flag a saved entry gets when a later scan read other IVs at the same CP and HP and the person kept the saved ones.
     public static let ivsRescanFlag = "ivs-rescan-differs"
 
-    private static func hasNoLevelFits(_ r: ScanRow) -> Bool { r.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") } }
+    static func hasNoLevelFits(_ r: ScanRow) -> Bool { r.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") } }
 
     /// The row's own CP cannot be trusted: it fits no level, or it is a fragment of a saved CP.
     private static func untrusted(_ u: Unsure, _ r: ScanRow) -> Bool { u.kind == .partialRead || hasNoLevelFits(r) }
@@ -946,12 +946,12 @@ public enum BoxMerge {
 
     /// An answer for this candidate changes nothing but "seen": an extra twin, a row whose CP is not trusted, or an entry another row already
     /// paired or updated in this plan (it is never written twice).
-    private static func onlyMarksSeen(_ plan: Plan, _ u: Unsure, _ id: String) -> Bool {
+    static func onlyMarksSeen(_ plan: Plan, _ u: Unsure, _ id: String) -> Bool {
         (u.kind == .extraTwin && u.candidates.first == id) || untrusted(u, plan.scanned[u.scanned]) || plan.same.contains(where: { $0.savedId == id }) || plan.updated.contains(where: { $0.savedId == id })
     }
 
     /// Whether choosing saved entry `id` for this unsure row writes the row's values onto it. Rows that only mark seen may share an entry.
-    private static func writes(_ u: Unsure, _ id: String, _ plan: Plan) -> Bool { u.kind != .megaPair && !onlyMarksSeen(plan, u, id) }
+    static func writes(_ u: Unsure, _ id: String, _ plan: Plan) -> Bool { u.kind != .megaPair && !onlyMarksSeen(plan, u, id) }
 
     /// Both have IVs, they differ (a hand correction's old read counts as the same), and the CP and HP read are the same.
     public static func ivsDisagree(_ s: ScanRow, _ v: BoxEntry) -> Bool {
