@@ -165,18 +165,7 @@ private struct PartReadGroupView: View {
     }
 
     private var note: String {
-        let plural = members.count != 1
-        guard group.effect == .seenOnly else { return group.effect.map(ReviewWording.effectSentence) ?? "" }
-        // Only a CP whose digits are in the saved CP's was "only partly read"; any other (or none) was not read properly.
-        let fragments = members.filter { ReviewWording.isFragment($0.row.cp, of: $0.saved.row.cp) }.count
-        let allZero = members.allSatisfy { $0.row.cp <= 0 }
-        let what: String
-        if fragments == members.count { what = "Only part of \(plural ? "each CP was" : "the CP was") read." }
-        else if fragments == 0 { what = plural ? (allZero ? "The CPs were not read." : "The CPs were not read properly.") : (allZero ? "The CP was not read." : "The CP was not read properly.") }
-        else { what = "Some CPs were only partly read and the others not read properly." }
-        var s = "\(what) Picking the saved one just marks it as seen."
-        if helpLevel != .essentials { s += " Add new saves the row as read, with its part-read CP." }
-        return s
+        ReviewWording.partReadNote(effect: group.effect, members: members.map { ($0.row, $0.saved.row) }, showAddNew: helpLevel != .essentials)
     }
 
     private var legend: some View {
@@ -314,20 +303,41 @@ struct ReviewCardView: View {
 
     private func answer(_ r: BoxMerge.Resolution) { withAnimation(reduceMotion ? nil : .snappy) { model.resolve(q.scanned, r) } }
 
-    // Candidates: a single-candidate card shows its one saved Pokémon in the compare pair, so only the several-candidate and twin cards list them.
-    private var listed: [ReviewQuestion.Candidate] { q.shape == .single ? [] : q.candidates }
+    // Candidates: see `ReviewQuestion.listed` and `shownCandidates`.
+    private var listed: [ReviewQuestion.Candidate] { q.listed }
     private var allCount: Int { listed.count }
+    private var shown: [ReviewQuestion.Candidate] { q.shownCandidates(showAll: showAll, chosen: ctx.resolution(q.scanned)) }
+    private var canShowAll: Bool { q.canShowAll(showAll: showAll, chosen: ctx.resolution(q.scanned)) }
+
+    private func candidateRow(_ c: ReviewQuestion.Candidate) -> some View { CandidateRowView(q: q, c: c) { answer(.existing(c.id)) } }
+
+    private var pairBoxes: some View { PairBoxesView(q: q) }
+}
+
+// MARK: pieces shared with the Guide me screen
+
+extension ReviewQuestion {
+    /// A single-candidate card shows its one saved Pokémon in the compare pair, so only the several-candidate and twin cards list them.
+    var listed: [Candidate] { shape == .single ? [] : candidates }
+
     /// A row that cannot be identified by its CP has its same-species, same-HP entries ranked first (`Plan.rankedCounts`): the best three, then "Show all". A candidate already
     /// chosen from beyond the top three stays shown, however the list is rebuilt.
-    private var shown: [ReviewQuestion.Candidate] {
-        guard q.rankedCount > 0, !showAll else { return listed }
-        var top = Array(listed.prefix(min(3, q.rankedCount)))
-        if case .existing(let id)? = ctx.resolution(q.scanned), let c = listed.first(where: { $0.id == id }), !top.contains(where: { $0.id == id }) { top.append(c) }
+    func shownCandidates(showAll: Bool, chosen: BoxMerge.Resolution?) -> [Candidate] {
+        guard rankedCount > 0, !showAll else { return listed }
+        var top = Array(listed.prefix(min(3, rankedCount)))
+        if case .existing(let id)? = chosen, let c = listed.first(where: { $0.id == id }), !top.contains(where: { $0.id == id }) { top.append(c) }
         return top
     }
-    private var canShowAll: Bool { q.rankedCount > 0 && !showAll && listed.count > shown.count }
+    func canShowAll(showAll: Bool, chosen: BoxMerge.Resolution?) -> Bool { rankedCount > 0 && !showAll && listed.count > shownCandidates(showAll: showAll, chosen: chosen).count }
+}
 
-    private func candidateRow(_ c: ReviewQuestion.Candidate) -> some View {
+/// One saved candidate with its "This one" button.
+struct CandidateRowView: View {
+    let q: ReviewQuestion
+    let c: ReviewQuestion.Candidate
+    let pick: () -> Void
+
+    var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(c.line).font(.figtree(15, .semibold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink)
@@ -335,13 +345,18 @@ struct ReviewCardView: View {
                 if q.shape == .extraTwin || ReviewWording.perCandidateNotes(q) { Text(c.effectText).font(.figtree(12, .medium, relativeTo: .caption)).foregroundStyle(Theme.muted) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            PillButton("This one", style: .tint, height: 46, fullWidth: false) { answer(.existing(c.id)) }
+            PillButton("This one", style: .tint, height: 46, fullWidth: false, action: pick)
         }
         .padding(.leading, 14).padding(.trailing, 8).padding(.vertical, 6)
         .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.Radius.insetRow, style: .continuous))
     }
+}
 
-    private var pairBoxes: some View {
+/// The Mega pair's NORMAL / MEGA boxes.
+struct PairBoxesView: View {
+    let q: ReviewQuestion
+
+    var body: some View {
         HStack(alignment: .top, spacing: 8) {
             ForEach(Array(q.pair.enumerated()), id: \.offset) { _, p in
                 VStack(alignment: .leading, spacing: 1) {

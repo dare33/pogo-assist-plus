@@ -8,6 +8,7 @@ struct ResultScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.showToast) private var showToast
     @Environment(\.accent) private var accent
+    @Environment(\.helpLevel) private var helpLevel
     @Binding var path: [ReviewPage]
 
     @State private var folded: Set<String> = []
@@ -71,7 +72,8 @@ struct ResultScreen: View {
             Text("\(open.notCovered) not in this search: no CP or HP to look for.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
         }
-        ReviewQuestionsView(ctx: ctx, folded: $folded)
+        // Guide me answers one question per screen (GuideFlow); the other levels show the cards here.
+        if helpLevel == .guide { GuideEntryCard(ctx: ctx, path: $path) } else { ReviewQuestionsView(ctx: ctx, folded: $folded) }
     }
 
     // MARK: bottom bar

@@ -59,6 +59,9 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    NavigationLink("Appearance") { AppearanceView() }.accessibilityIdentifier("settings-appearance")
+                }
                 Section("Accounts") {
                     ForEach(model.accounts, id: \.self) { name in
                         Button { model.select(name) } label: { accountLabel(name) }

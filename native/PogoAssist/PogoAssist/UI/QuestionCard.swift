@@ -62,29 +62,11 @@ struct QuestionCard<Answers: View, Search: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
             }
-            if let compare {
-                HStack(alignment: .top, spacing: 8) {
-                    box("READ NOW", compare.readNow, nameInk: Theme.orangeInk)
-                    box("IN YOUR BOX", compare.inBox, nameInk: Theme.ink)
-                }
-            }
+            if let compare { CompareView(compare: compare) }
             VStack(spacing: 8) { answers }
             search
             if let note { Text(note).paText(.secondary).foregroundStyle(Theme.muted) }
         }
-    }
-
-    private func box(_ heading: String, _ side: CompareSide, nameInk: Color) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(heading).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.muted)
-            Text(side.name).paText(.rowTitle).fontWeight(.bold).foregroundStyle(nameInk)
-            Text(side.line).font(.figtree(14, .regular, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink)
-            if let ivs = side.ivs { Text(ivs).font(.figtree(14, .regular, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.muted) }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.Radius.insetRow, style: .continuous))
-        .accessibilityElement(children: .combine)
     }
 
     private func answeredRow(_ answer: String) -> some View {
@@ -104,6 +86,31 @@ struct QuestionCard<Answers: View, Search: View>: View {
         .padding(.horizontal, 14).padding(.vertical, 12)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .panelShadow()
+    }
+}
+
+/// The READ NOW / IN YOUR BOX pair, in a question card and on the Guide me screen.
+struct CompareView: View {
+    let compare: QuestionCompare
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            box("READ NOW", compare.readNow, nameInk: Theme.orangeInk)
+            box("IN YOUR BOX", compare.inBox, nameInk: Theme.ink)
+        }
+    }
+
+    private func box(_ heading: String, _ side: CompareSide, nameInk: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(heading).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.muted)
+            Text(side.name).paText(.rowTitle).fontWeight(.bold).foregroundStyle(nameInk)
+            Text(side.line).font(.figtree(14, .regular, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink)
+            if let ivs = side.ivs { Text(ivs).font(.figtree(14, .regular, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.muted) }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.Radius.insetRow, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -50,8 +50,8 @@ struct ReviewView: View {
     }
 }
 
-/// The pages pushed from the result.
-enum ReviewPage: Hashable { case toCheck, notSeen }
+/// The pages pushed from the result (`guide`: the Guide me level's one-question-per-screen flow).
+enum ReviewPage: Hashable { case toCheck, notSeen, guide }
 
 /// The result screen and the pages pushed from it (To check, Not seen). Each page reads the review live from the model, so an answer given on one shows on the others.
 private struct ReviewFlowScreen: View {
@@ -66,6 +66,7 @@ private struct ReviewFlowScreen: View {
                         switch page {
                         case .toCheck: ToCheckScreen(close: { path.removeLast() })
                         case .notSeen: NotSeenScreen(close: { path.removeLast() })
+                        case .guide: GuideScreen(close: { path.removeLast() })
                         }
                     }
                     .toolbar(.hidden, for: .navigationBar)

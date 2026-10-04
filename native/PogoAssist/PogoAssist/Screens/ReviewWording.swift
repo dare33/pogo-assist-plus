@@ -208,6 +208,22 @@ enum ReviewWording {
         }
     }
 
+    /// The note under a part-read question or group (Standard's group panel and Guide me's one-question screen say the same sentence). `members` are the rows read and the
+    /// saved rows they were matched to. Only a CP whose digits are in the saved CP's was "only partly read"; any other (or none) was not read properly.
+    static func partReadNote(effect: BoxMerge.Effect?, members: [(read: ScanRow, saved: ScanRow)], showAddNew: Bool) -> String {
+        let plural = members.count != 1
+        guard effect == .seenOnly else { return effect.map(effectSentence) ?? "" }
+        let fragments = members.filter { isFragment($0.read.cp, of: $0.saved.cp) }.count
+        let allZero = members.allSatisfy { $0.read.cp <= 0 }
+        let what: String
+        if fragments == members.count { what = "Only part of \(plural ? "each CP was" : "the CP was") read." }
+        else if fragments == 0 { what = plural ? (allZero ? "The CPs were not read." : "The CPs were not read properly.") : (allZero ? "The CP was not read." : "The CP was not read properly.") }
+        else { what = "Some CPs were only partly read and the others not read properly." }
+        var s = "\(what) Picking the saved one just marks it as seen."
+        if showAddNew { s += " Add new saves the row as read, with its part-read CP." }
+        return s
+    }
+
     // MARK: pieces
 
     static func cpText(_ cp: Int) -> String { cp > 0 ? "CP \(cp)" : "CP not known" }
