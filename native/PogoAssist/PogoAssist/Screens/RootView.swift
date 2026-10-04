@@ -4,13 +4,33 @@ struct RootView: View {
     @StateObject private var model = AppModel()
     @Environment(\.scenePhase) private var phase
 
+    @State private var tab: AppTab = .box
+    @State private var scanOpen = false
+    @State private var barHidden = false
+
+    /// The scan screen is pushed on the current tab's stack only, so it is built once.
+    private func scanBinding(for t: AppTab) -> Binding<Bool> {
+        Binding(get: { scanOpen && tab == t }, set: { if !$0 { scanOpen = false } })
+    }
+
     var body: some View {
-        TabView {
-            NavigationStack { BoxView() }
-                .tabItem { Label("Box", systemImage: "square.grid.2x2") }
-            NavigationStack { NextView() }
-                .tabItem { Label("Next", systemImage: "list.number") }
+        // The shell: the current tab's screen full-bleed on the background, the floating tab bar over it. Both
+        // tabs stay alive (their scroll position and pushed screens survive a switch); the other is hidden.
+        ZStack {
+            Theme.bg.ignoresSafeArea()
+            NavigationStack { BoxView().navigationDestination(isPresented: scanBinding(for: .box)) { ScanView().hidesTabBar() } }
+                .opacity(tab == .box ? 1 : 0).allowsHitTesting(tab == .box).accessibilityHidden(tab != .box)
+            NavigationStack { NextView().navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
+                .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)
         }
+        .onPreferenceChange(HidesTabBarKey.self) { barHidden = $0 }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !barHidden { Color.clear.frame(height: FloatingTabBar.clearance) }
+        }
+        .overlay(alignment: .bottom) {
+            if !barHidden { FloatingTabBar(selection: $tab, scanDisabled: model.boxProblem != nil) { scanOpen = true } }
+        }
+        .themeRoot()
         .environmentObject(model)
         .sheet(item: $model.sheet) { sheet in
             switch sheet {
@@ -89,6 +109,8 @@ struct BusyOverlay: View {
 
 /// The account switcher in the navigation bar, with "New account".
 struct AccountMenu: View {
+    /// The UI v1 header look: monogram, name and chevron on a surface pill (see `AccountPill`).
+    var pill = false
     @EnvironmentObject var model: AppModel
     @State private var asking = false
     @State private var newName = ""
@@ -103,11 +125,26 @@ struct AccountMenu: View {
             Divider()
             Button { newName = ""; asking = true } label: { Label("New account", systemImage: "plus") }
         } label: {
-            HStack(spacing: 4) {
-                Text(model.account ?? "Account").font(.headline).lineLimit(1)
-                Image(systemName: "chevron.down").font(.caption.bold())
+            if pill {
+                HStack(spacing: 8) {
+                    AccountMonogram(name: model.account ?? "?", size: 28)
+                    Text(model.account ?? "Account").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.figtree(12, .bold)).foregroundStyle(Theme.muted)
+                }
+                .padding(.leading, 4).padding(.trailing, 12)
+                .frame(minHeight: 36)
+                .background(Capsule().fill(Theme.surface))
+                .panelShadow()
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            } else {
+                HStack(spacing: 4) {
+                    Text(model.account ?? "Account").font(.headline).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption.bold())
+                }
             }
         }
+        .accessibilityLabel(pill ? "Account, \(model.account ?? "none")" : (model.account ?? "Account"))
         .alert("New account", isPresented: $asking) {
             TextField("Trainer name", text: $newName).accountNameField()
             Button("Create") { model.createAccount(newName) }
@@ -118,14 +155,28 @@ struct AccountMenu: View {
 
 /// Settings and Diagnostics, in a menu at the top right.
 struct MoreMenu: View {
+    /// The UI v1 header look: a 40 pt circle with an ellipsis (see `MoreButton`).
+    var circle = false
     @EnvironmentObject var model: AppModel
     var body: some View {
         Menu {
             Button { model.sheet = .settings } label: { Label("Settings", systemImage: "gearshape") }
             Button { model.sheet = .diagnostics } label: { Label("Diagnostics", systemImage: "waveform.path.ecg") }
-        } label: { Image(systemName: "ellipsis.circle") }
+        } label: {
+            if circle { IconButton(systemImage: "ellipsis", kind: .floating, label: "More", action: {}).face } else { Image(systemName: "ellipsis.circle") }
+        }
         .accessibilityLabel("More")
     }
+}
+
+/// The Box header's account pill: opens the account menu (switch account, New account).
+struct AccountPill: View {
+    var body: some View { AccountMenu(pill: true) }
+}
+
+/// The Box header's 40 pt circular "..." button: opens the Settings / Diagnostics menu.
+struct MoreButton: View {
+    var body: some View { MoreMenu(circle: true) }
 }
 
 struct ShareSheet: UIViewControllerRepresentable {

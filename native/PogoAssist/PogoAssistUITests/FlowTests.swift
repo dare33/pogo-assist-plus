@@ -9,6 +9,7 @@ final class FlowTests: XCTestCase {
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
     }
 
+    /// The tab bar's scan button replaced the old "Scan Pokémon" button on the Box screen.
     func testWholeFlow() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset"]
@@ -17,7 +18,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap(); field.typeText("Greg main")
         app.buttons["Create account"].tap()
-        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
         shot("02-box-empty")
 
         app.buttons["More"].tap()
@@ -36,7 +37,7 @@ final class FlowTests: XCTestCase {
         app.swipeUp(); app.swipeUp()
         shot("05-review-flags")
         save.tap()
-        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 15))
         sleep(1)
         shot("06-box")
 
@@ -63,7 +64,7 @@ final class FlowTests: XCTestCase {
         shot("15b-reread-review")
         discard.tap()
         app.buttons["Discard scan"].tap()
-        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 10))
         let toCheck = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch
         if toCheck.exists { toCheck.tap(); shot("07-box-to-check"); app.buttons.matching(identifier: "All").firstMatch.tap() }
 
@@ -74,14 +75,14 @@ final class FlowTests: XCTestCase {
         shot("09-detail-advice")
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
-        app.tabBars.buttons["Next"].tap()
+        app.buttons["Next"].tap()
         sleep(3)
         shot("10-next")
         app.swipeUp(); app.swipeUp()
         shot("11-next-gaps")
 
         // Round 2: a part-read CP is asked about, and "Fix a value".
-        app.tabBars.buttons["Box"].tap()
+        app.buttons["Box"].tap()
         app.buttons["More"].tap()
         let diagnostics2 = app.buttons["Diagnostics"]
         XCTAssertTrue(diagnostics2.waitForExistence(timeout: 5))
@@ -101,7 +102,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Save to box"].isEnabled, "the answer was not taken")
         shot("12b-review-unsure-answered")
         app.buttons["Save to box"].tap()
-        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 15))
         app.cells.element(boundBy: 2).tap()
         let fix = app.buttons["Fix a value"]
         for _ in 0..<5 where !(fix.exists && fix.isHittable) { app.swipeUp() }   // the detail is longer now: scroll to the button
@@ -120,8 +121,10 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap(); field.typeText("Greg main")
         app.buttons["Create account"].tap()
-        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
-        app.buttons["Scan Pokémon"].tap()
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
+        app.buttons["Scan"].tap()
+        XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Next"].exists, "the scan screen hides the floating tab bar")
         // The lists are lazy: scroll until the element is on screen (the setup list grew in round 24).
         // Both directions: on a smaller screen the lazy list drops what is scrolled out of sight, and the elements sit in no fixed order.
         func reveal(_ e: XCUIElement, up: Bool = true) {
@@ -169,7 +172,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap(); field.typeText("Greg main")
         app.buttons["Create account"].tap()
-        XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
         app.buttons["More"].tap()
         let diagnostics = app.buttons["Diagnostics"]
         XCTAssertTrue(diagnostics.waitForExistence(timeout: 5))
@@ -187,5 +190,30 @@ final class FlowTests: XCTestCase {
         shot("16-make-scans-better")
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["Save to box"].waitForExistence(timeout: 5), "back on the scan result")
+    }
+
+    /// The UI v1 component gallery (DEBUG builds, `-ui-gallery`): light, dark, a non-default accent and a large
+    /// text size, scrolled top to bottom, so the components can be looked at. Screenshots go to POGO_SCREENS.
+    func testGalleryScreens() throws {
+        let runs: [(String, [String])] = [
+            ("light", ["-appearance", "light"]),
+            ("dark", ["-appearance", "dark"]),
+            ("berry", ["-appearance", "light", "-accent", "berry"]),
+            ("large-text", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]),
+        ]
+        for (name, args) in runs {
+            let app = XCUIApplication()
+            app.launchArguments = ["-ui-gallery"] + args
+            app.launch()
+            let scroll = app.scrollViews["gallery-scroll"]
+            XCTAssertTrue(scroll.waitForExistence(timeout: 10), "the gallery did not open")
+            XCTAssertTrue(app.buttons["Scan"].exists && app.buttons["Box"].exists && app.buttons["Next"].exists, "the tab bar's buttons are labelled Box, Scan, Next")
+            let pages = name == "light" || name == "large-text" ? 14 : 9
+            for i in 0..<pages {
+                shot("gallery-\(name)-\(String(format: "%02d", i))")
+                scroll.swipeUp(velocity: .slow)
+            }
+            app.terminate()
+        }
     }
 }

@@ -47,6 +47,8 @@ targets:
         CFBundleDisplayName: Pogo Assist+
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Figtree (OFL), one variable font: the weight axis gives 400 to 800. See UI/Typography.swift.
+        UIAppFonts: [Figtree-Variable.ttf]
         AppGroupID: $(APP_GROUP)
         BroadcastExtensionID: $(EXTENSION_BUNDLE_ID)
         # "Make scans better": where reports go. Both come from the git-ignored Config/Signing.local.xcconfig; unset or placeholder hides the button.

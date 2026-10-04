@@ -28,6 +28,10 @@
 	<string>$(SCAN_REPORT_KEY)</string>
 	<key>ScanReportURL</key>
 	<string>$(SCAN_REPORT_URL)</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Figtree-Variable.ttf</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

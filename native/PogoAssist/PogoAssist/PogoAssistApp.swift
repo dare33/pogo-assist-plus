@@ -12,6 +12,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 struct PogoAssistApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     var body: some Scene {
-        WindowGroup { RootView() }
+        WindowGroup {
+            #if DEBUG
+            if CommandLine.arguments.contains("-ui-gallery") { ComponentGallery() } else { RootView() }
+            #else
+            RootView()
+            #endif
+        }
     }
 }

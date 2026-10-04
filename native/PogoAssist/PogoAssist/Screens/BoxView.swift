@@ -6,7 +6,6 @@ struct BoxView: View {
     @EnvironmentObject var model: AppModel
     @State private var showToCheck = false
     @State private var search = ""
-    @State private var scanning = false
     @State private var deleting: BoxEntry?
 
     private var toCheckCount: Int { model.entries.filter(\.needsCheck).count }
@@ -35,27 +34,13 @@ struct BoxView: View {
                 MoreMenu()
             }
         }
-        .navigationDestination(isPresented: $scanning) { ScanView() }
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
         .sheet(isPresented: Binding(get: { model.exportURL != nil }, set: { if !$0 { model.exportURL = nil } })) {
             if let url = model.exportURL { ShareSheet(url: url).presentationDetents([.medium, .large]) }
         }
-        .safeAreaInset(edge: .bottom) { scanButton }
         .confirmationDialog(deleting.map { "Delete \($0.row.title), CP \($0.row.cp)?" } ?? "Delete this Pokémon?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button("Delete from box", role: .destructive) { if let d = deleting { Task { await model.deleteEntry(d.id) } }; deleting = nil }
         } message: { Text("It is removed from the box only, not from the game. The box keeps an earlier version that still has it, which Settings can restore.") }
-    }
-
-    private var scanButton: some View {
-        Button { scanning = true } label: {
-            Label("Scan Pokémon", systemImage: "camera.viewfinder").frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .disabled(model.boxProblem != nil)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
     }
 
     /// The newest box version cannot be read: not an empty box, and nothing is saved until a readable version is restored.
