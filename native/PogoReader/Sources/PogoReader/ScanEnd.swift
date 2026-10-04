@@ -31,8 +31,8 @@ public enum ScanEndDecision {
     public static func pausesAllowed(isFull: Bool, storageCount: Int?) -> Bool { isFull && !fullScanNeedsCount(isFull: isFull, storageCount: storageCount) }
 
     /// How long a pause waits for a new card before the scan finishes as it would have (seconds). One constant.
-    public static let pauseTimeoutSeconds = 180.0
-    /// The longest a scan may stay paused in all, however often the appraisal is reopened on the same card (each reopening restarts the 180 s, none can hold the pause beyond this).
+    public static let pauseTimeoutSeconds = 90.0
+    /// The longest a scan may stay paused in all, however often the appraisal is reopened on the same card (each reopening restarts the pause window, none can hold the pause beyond this).
     public static let pauseCapSeconds = 600.0
 
     /// How far the Pokémon read may fall short of the storage count for the scan to count as having reached it: 1% of it, at least 3 (also the full-scan tolerance).
@@ -59,7 +59,7 @@ public struct ScanEndController {
         case pause(Pause)
         /// A new card was read after a pause.
         case resume(at: Double)
-        /// The appraisal's bars appeared again on the paused card (the person reopened it): the 180 s window starts over, but the scan is NOT resumed, because nothing was paged.
+        /// The appraisal's bars appeared again on the paused card (the person reopened it): the pause window starts over, but the scan is NOT resumed, because nothing was paged.
         case windowRestarted(at: Double)
         /// End the scan now, with the end marker at `at` (the original quiet time after a timeout) and `last` the card that began last.
         case finish(at: Double, last: Double)
@@ -92,7 +92,7 @@ public struct ScanEndController {
     private var twinLength = 0, twinCounts = [Int: Int]()
     /// Consecutive readings without the card's own CP, and one other CP read this many times, make a run that is evidence of a twin.
     static let twinRunLength = 6, twinCPReads = 3
-    /// The scan finished because a pause went unanswered (the 180 s, or the cap), not because the list ended.
+    /// The scan finished because a pause went unanswered (the pause window, or the cap), not because the list ended.
     public private(set) var timedOut = false
     private var lastRead = 0, lastFeedTime = 0.0
     /// Pauses so far in this scan.
@@ -168,7 +168,7 @@ public struct ScanEndController {
                 return .resume(at: time)
             }
             if detector.resets != p.resets || barsAppeared {
-                // The detector's reset by bars alone (or bars back after a closed appraisal) is absorbed into the pause either way; it restarts the 180 s only for a closed appraisal.
+                // The detector's reset by bars alone (or bars back after a closed appraisal) is absorbed into the pause either way; it restarts the pause window only for a closed appraisal.
                 paused = (p.pause, p.since, detector.resets)   // a CP-only reset (a tap covering part of the number) is absorbed and restarts nothing
                 if wasClosed, barsOnly || barsAppeared, time - pauseBegan < ScanEndDecision.pauseCapSeconds {
                     paused = (p.pause, time, detector.resets)
@@ -195,13 +195,13 @@ public struct ScanEndController {
     /// A paging tick (a swipe seen by the cheap signature) at `time`. While paused, one after the pause began is evidence that another card may have been shown.
     public mutating func noteSwipe(at time: Double) { if paused != nil, time > pauseFedAt { swipeSincePause = true } }
 
-    /// Seconds left before this pause finishes the scan if nothing new is read at `now`: the 180 s window or what is left of the 600 s cap, whichever is less (nil when not paused).
+    /// Seconds left before this pause finishes the scan if nothing new is read at `now`: the pause window or what is left of the 600 s cap, whichever is less (nil when not paused).
     public func remainingPauseSeconds(now: Double) -> Double? {
         guard let p = paused else { return nil }
         return max(0, min(ScanEndDecision.pauseTimeoutSeconds - (now - p.since), ScanEndDecision.pauseCapSeconds - (now - pauseBegan)))
     }
 
-    /// The 180 s timeout (and the cap on restarts), checked from the one-second heartbeat as well as on every reading (a paused broadcast with no frames, or with Vision skipped,
+    /// The pause timeout (and the cap on restarts), checked from the one-second heartbeat as well as on every reading (a paused broadcast with no frames, or with Vision skipped,
     /// must still finish). `now` is in the same clock as the readings' times. The end is dated at the stall (so the repeated card after it is trimmed) only if no Pokémon has been
     /// read since the pause; if rows were, nothing read after the pause is trimmed (`finishDating`).
     public mutating func tick(now: Double) -> Event { paused == nil ? .none : timeoutEvent(now: now) }

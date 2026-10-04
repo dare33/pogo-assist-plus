@@ -1,5 +1,6 @@
 import XCTest
 @testable import PogoReader
+@testable import PogoBox
 
 final class ScanEndNotificationTests: XCTestCase {
     private let sizes = [25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000]
@@ -15,10 +16,10 @@ final class ScanEndNotificationTests: XCTestCase {
     func testThePausedTextSaysWhereAndWhatToDoWithAndWithoutACount() {
         let n = ScanNotification.paused(scan: 77, event: 2, read: 170, storageCount: 1684, lastName: "Stunfisk", lastCP: 902, sizes: sizes)
         XCTAssertEqual(n.title, "Scan paused"); XCTAssertTrue(n.offersFinish); XCTAssertEqual(n.identifier, "pogo.scan.paused.77.2")
-        XCTAssertEqual(n.body, "Paused at Stunfisk CP 902: 170 of about 1684 read. Reopen its appraisal to carry on, or say \"Pogo scan 2000\" if the taps have stopped. It finishes by itself in 3 minutes if no new Pokémon is read.", "1,514 left: the smallest size covering it is 2000")
+        XCTAssertEqual(n.body, "Paused at Stunfisk CP 902: 170 of about 1684 read. Reopen its appraisal to carry on, or say \"Pogo scan 2000\" if the taps have stopped. It finishes by itself in \(ScanNotification.pauseLimitText) if no new Pokémon is read.", "1,514 left: the smallest size covering it is 2000")
         XCTAssertTrue(ScanNotification.paused(scan: 77, event: 1, read: 1650, storageCount: 1684, lastName: "A", lastCP: 1, sizes: sizes).body.contains("\"Pogo scan 50\""))
         let none = ScanNotification.paused(scan: 77, event: 3, read: 51, storageCount: nil, lastName: "Abra", lastCP: 799, sizes: sizes)
-        XCTAssertEqual(none.body, "Paused at Abra CP 799: 51 read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped. It finishes by itself in 3 minutes if no new Pokémon is read.")
+        XCTAssertEqual(none.body, "Paused at Abra CP 799: 51 read. If that was not your last Pokémon, reopen its appraisal to carry on, or say the command again if the taps have stopped. It finishes by itself in \(ScanNotification.pauseLimitText) if no new Pokémon is read.")
         XCTAssertTrue(ScanNotification.paused(scan: 77, event: 1, read: 5, storageCount: 100, lastName: nil, lastCP: nil, sizes: []).body.contains("say the command again"))
     }
 
@@ -55,5 +56,22 @@ extension ScanEndNotificationTests {
         XCTAssertEqual(ScanNotification.finishRequestVerdict(asked: 76, runningScan: 77, paused: false, ageSeconds: 1), V.drop, "another scan's")
         XCTAssertEqual(ScanNotification.finishRequestVerdict(asked: 76, runningScan: 77, paused: true, ageSeconds: 1), V.drop)
         XCTAssertGreaterThan(ScanNotification.finishRequestGraceSeconds, 6 * 1.2 * 2, "longer than the end wait")
+    }
+
+    /// Round 27: the pause window is 90 s and every text says so; a remaining time reads in whole minutes when it is one, else seconds to the nearest 10.
+    func testTheLimitTextsFollowTheNinetySecondWindow() {
+        XCTAssertEqual(ScanNotification.finishActionTitle, "End scan")
+        XCTAssertEqual(ScanEndDecision.pauseTimeoutSeconds, 90)
+        XCTAssertEqual(ScanNotification.pauseLimitText, "90 seconds")
+        XCTAssertEqual(ScanNotification.limitText(seconds: nil), "90 seconds")
+        XCTAssertTrue(ScanNotification.paused(scan: 1, event: 1, read: 5, storageCount: 100, lastName: "A", lastCP: 1, sizes: [100]).body.hasSuffix("It finishes by itself in 90 seconds if no new Pokémon is read."))
+        XCTAssertEqual(ScanNotification.durationText(90), "90 seconds"); XCTAssertEqual(ScanNotification.durationText(87), "90 seconds"); XCTAssertEqual(ScanNotification.durationText(61), "1 minute")
+        XCTAssertEqual(ScanNotification.durationText(120), "2 minutes"); XCTAssertEqual(ScanNotification.durationText(45), "50 seconds"); XCTAssertEqual(ScanNotification.durationText(14), "10 seconds")
+        XCTAssertEqual(ScanNotification.durationText(4), "less than 10 seconds"); XCTAssertEqual(ScanNotification.durationText(0), "less than 10 seconds")
+        XCTAssertEqual(ScanNotification.limitText(seconds: 30), "30 seconds")
+        XCTAssertTrue(ScanNotification.paused(scan: 1, event: 2, read: 5, storageCount: 100, lastName: "A", lastCP: 1, sizes: [100], limitSeconds: 4).body.contains("in less than 10 seconds"))
+        // the review text names no duration, so it cannot be wrong
+        XCTAssertFalse(ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, commandKnown: true, byTimeout: true).contains("90"))
+        XCTAssertFalse((ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: 5, typedCount: 5, logTruncated: false, logFailed: false, commandPeriod: 1.2, endedByTimeout: true).reason ?? "").contains("90"))
     }
 }

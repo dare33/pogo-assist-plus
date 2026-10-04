@@ -3,10 +3,10 @@ import UserNotifications
 import PogoBox
 import PogoReader
 
-/// Receives the pause notification's "Finish scan" action (the app is woken for it) and lets notifications show while the app is open.
+/// Receives the pause notification's "End scan" action (the app is woken for it) and lets notifications show while the app is open.
 final class NotificationActions: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationActions()
-    /// Set at launch (the app delegate), never from a view-owned object: when the system launches the app only to deliver the "Finish scan" action, no screen exists yet, and the
+    /// Set at launch (the app delegate), never from a view-owned object: when the system launches the app only to deliver the "End scan" action, no screen exists yet, and the
     /// delegate must already be in place for the response to be delivered.
     static func install() {
         UNUserNotificationCenter.current().delegate = shared

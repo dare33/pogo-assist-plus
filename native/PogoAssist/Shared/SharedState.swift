@@ -29,7 +29,7 @@ struct BroadcastState: Codable, Equatable {
     var pauseCount = 0               // pauses so far in this scan
     var pausedCard: String?          // "Name CP n" of the card it paused at
     var pausedAt: Date?
-    var pauseLimitSeconds: Double?   // what was left of the pause's limit when it began (the 180 s window, or less if an earlier pause of the same stall used up some of the 600 s cap)
+    var pauseLimitSeconds: Double?   // what was left of the pause's limit when it began (the 90 s window, or less if an earlier pause of the same stall used up some of the 600 s cap)
     var readCount = 0                // Pokémon read so far (the live grouper's rows), for the progress line
     var storageCount: Int?           // the count the scan was started with (nil: none known, or not a Full scan)
     var eggCount: Int?               // the eggs typed for it (nil: none, the flat allowance applies)

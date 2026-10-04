@@ -82,7 +82,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             finishedWork = false
             let period = ReaderSettings.autoEndPeriod
             ReaderSettings.clearFinishRequest()
-            ScanNotifier.removePauseNotifications()   // a new scan: no earlier scan's pause notification (or its "Finish scan" button) stays
+            ScanNotifier.removePauseNotifications()   // a new scan: no earlier scan's pause notification (or its "End scan" button) stays
             // The scan kind, the count and the eggs are captured here, like the period: only a Full scan may pause, and an Add-and-update scan neither uses nor remembers the count.
             // A Full scan started with no valid count (from Control Centre, past the Scan screen) runs as Add and update: no pause, never judged Full.
             let isFull = ScanEndDecision.pausesAllowed(isFull: ReaderSettings.scanIsFull, storageCount: ReaderSettings.storageCount)

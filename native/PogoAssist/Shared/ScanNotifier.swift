@@ -3,10 +3,10 @@ import UserNotifications
 import PogoReader
 
 /// Posting a `ScanNotification`, shared by the broadcast extension and the app so both use one path. A notification with the same identifier REPLACES the earlier one, so the
-/// extension's and the app's fallback for one event can never leave two. The "Finish scan" action of a pause is registered by the app (a category is app-wide).
+/// extension's and the app's fallback for one event can never leave two. The "End scan" action of a pause is registered by the app (a category is app-wide).
 enum ScanNotifier {
     static func registerCategories() {
-        let finish = UNNotificationAction(identifier: ScanNotification.finishActionID, title: "Finish scan", options: [])
+        let finish = UNNotificationAction(identifier: ScanNotification.finishActionID, title: ScanNotification.finishActionTitle, options: [])
         let paused = UNNotificationCategory(identifier: ScanNotification.pausedCategoryID, actions: [finish], intentIdentifiers: [], options: [])
         UNUserNotificationCenter.current().setNotificationCategories([paused])
     }
@@ -25,7 +25,7 @@ enum ScanNotifier {
     }
 
     /// Removes the delivered and the pending pause notifications of `scan` (of every scan when nil): when the scan resumes or finishes and when a new scan starts, so an old
-    /// "Finish scan" button is never left on the lock screen.
+    /// "End scan" button is never left on the lock screen.
     static func removePauseNotifications(scan: Int? = nil) {
         let center = UNUserNotificationCenter.current()
         center.getDeliveredNotifications { delivered in

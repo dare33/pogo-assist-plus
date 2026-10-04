@@ -243,7 +243,7 @@ final class ScanEndControllerTests: XCTestCase {
         XCTAssertTrue(events.allSatisfy { $0 == .none }, "\(events)")
     }
 
-    /// P2: reopening the appraisal restarts the 180 s, but no number of restarts holds a scan paused past `pauseCapSeconds` without a new Pokémon.
+    /// P2: reopening the appraisal restarts the pause window, but no number of restarts holds a scan paused past `pauseCapSeconds` without a new Pokémon.
     func testRestartsCannotHoldAPausePastTheCap() throws {
         var (c, _, rs, p, at) = try pausedAtRun10()
         let tail = try XCTUnwrap(rs.last)
@@ -251,7 +251,7 @@ final class ScanEndControllerTests: XCTestCase {
         var open = bare; open.ivs = try ownBars(rs, upTo: at)
         var t = at, restarts = 0, finishedAt: Double?
         search: while t < at + 3 * ScanEndDecision.pauseCapSeconds {
-            for _ in 0..<100 { t += 1; if case .finish = c.feed(bare, time: t, read: p.read) { finishedAt = t; break search } }   // closed for 100 s
+            for _ in 0..<60 { t += 1; if case .finish = c.feed(bare, time: t, read: p.read) { finishedAt = t; break search } }   // closed for 60 s (inside the 90 s window)
             t += 1
             switch c.feed(open, time: t, read: p.read) { case .windowRestarted: restarts += 1; case .finish: finishedAt = t; break search; default: break }
         }
@@ -270,14 +270,14 @@ final class ScanEndControllerTests: XCTestCase {
         XCTAssertEqual(c.tick(now: at + 1000), .none, "once")
     }
 
-    /// M3: bars appearing again on the paused card (the appraisal reopened) start the 180 s window over, and are not a resume; a different card still resumes.
+    /// M3: bars appearing again on the paused card (the appraisal reopened) start the pause window over, and are not a resume; a different card still resumes.
     func testReopeningTheAppraisalOnThePausedCardRestartsTheWindowWithoutResuming() throws {
         var (c, _, rs, p, at) = try pausedAtRun10()
         let tail = try XCTUnwrap(rs.last)
         var bare = tail.frameReading; bare.ivs = nil
         var open = tail.frameReading; open.ivs = try ownBars(rs, upTo: at)
         var t = at
-        while t < at + 100 { t += 0.2; XCTAssertEqual(c.feed(bare, time: t, read: p.read), .none) }   // the appraisal is closed for 100 s
+        while t < at + 60 { t += 0.2; XCTAssertEqual(c.feed(bare, time: t, read: p.read), .none) }   // the appraisal is closed for 60 s
         t += 0.2
         XCTAssertEqual(c.feed(open, time: t, read: p.read), .windowRestarted(at: t), "bars on the same card: a restart, not a resume")
         XCTAssertNotNil(c.paused, "still paused")
@@ -334,7 +334,7 @@ final class ScanEndControllerTests: XCTestCase {
         func feed(_ r: FrameReading) { t += 0.4; let e = c.feed(r, time: t, read: p.read); if e != .none { events.append(e) } }
         for _ in 0..<150 { feed(bare) }   // closed for 60 s
         feed(anim)
-        for _ in 0..<300 { feed(open) }   // reopened and settled, nothing pages for two minutes
+        for _ in 0..<150 { feed(open) }   // reopened and settled, nothing pages for another minute (inside the window the reopening restarted)
         XCTAssertEqual(events.count, 1, "\(events)")
         guard case .windowRestarted? = events.first else { return XCTFail("\(events)") }
         XCTAssertEqual(c.pauseCount, 1); XCTAssertNotNil(c.paused)
@@ -349,7 +349,7 @@ final class ScanEndControllerTests: XCTestCase {
         search: for cycle in 0..<30 {
             // a different card for 100 s (nothing is paged: the same read count): it resumes, then pauses on its own stall
             var card = tail; card.name = cycle % 2 == 0 ? "Mewtwo" : "Lugia"; card.hp = HP(current: 100 + cycle, max: 100 + cycle); card.cp = 3000 + cycle; card.ivs = nil
-            for _ in 0..<250 {
+            for _ in 0..<150 {   // 60 s on each card: it pauses, then the next card resumes it, inside the 90 s window
                 t += 0.4
                 switch c.feed(card, time: t, read: p.read) { case .resume: resumes += 1; case .pause: pauses += 1; minRemaining = min(minRemaining, c.remainingPauseSeconds(now: t) ?? 999); case .finish: finishedAt = t; break search; default: break }
             }
@@ -357,10 +357,10 @@ final class ScanEndControllerTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(resumes, 2); XCTAssertGreaterThanOrEqual(pauses, 2)
         let end = try XCTUnwrap(finishedAt, "the scan finished"); XCTAssertLessThanOrEqual(end - at, ScanEndDecision.pauseCapSeconds + 2); XCTAssertTrue(c.timedOut)
         // a later pause of the same stall reports what is really left, not the full window (the notification says it)
-        XCTAssertLessThan(minRemaining, ScanEndDecision.pauseTimeoutSeconds - 1, "a pause that continues the cap has less than 180 s left")
-        XCTAssertEqual(ScanNotification.limitText(seconds: nil), "3 minutes"); XCTAssertEqual(ScanNotification.limitText(seconds: 150), "3 minutes")
-        XCTAssertEqual(ScanNotification.limitText(seconds: 61), "2 minutes"); XCTAssertEqual(ScanNotification.limitText(seconds: 59), "less than a minute"); XCTAssertEqual(ScanNotification.limitText(seconds: 0), "less than a minute")
-        XCTAssertTrue(ScanNotification.paused(scan: 1, event: 2, read: 5, storageCount: 100, lastName: "A", lastCP: 1, sizes: [100], limitSeconds: 30).body.contains("in less than a minute"))
+        XCTAssertLessThan(minRemaining, ScanEndDecision.pauseTimeoutSeconds - 1, "a pause that continues the cap has less than the whole window left")
+        XCTAssertEqual(ScanNotification.limitText(seconds: nil), ScanNotification.pauseLimitText); XCTAssertEqual(ScanNotification.limitText(seconds: 150), "150 seconds")
+        XCTAssertEqual(ScanNotification.limitText(seconds: 120), "2 minutes"); XCTAssertEqual(ScanNotification.limitText(seconds: 59), "1 minute"); XCTAssertEqual(ScanNotification.limitText(seconds: 0), "less than 10 seconds")
+        XCTAssertTrue(ScanNotification.paused(scan: 1, event: 2, read: 5, storageCount: 100, lastName: "A", lastCP: 1, sizes: [100], limitSeconds: 4).body.contains("in less than 10 seconds"))
     }
 
     /// The pending-row question: a card the grouper would add only at its `finish()` (a name-only or hidden-CP run, LiveGrouper.swift ~180-219) cannot be read during a pause without
