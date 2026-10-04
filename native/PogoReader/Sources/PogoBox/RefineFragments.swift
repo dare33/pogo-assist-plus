@@ -6,7 +6,7 @@ extension Refine {
     /// the reading times jitter, so a little over is allowed. Two Pokemon are two periods.
     public static let fragmentPairMaxPeriods = 1.4
     /// With no regular beat: the fragment's reading and the neighbour's nearest reading are consecutive: one reading step
-    /// (0.4 s on the device) plus `fragmentFallbackSlackSeconds`, with no unreadable stretch between them.
+    /// (0.4 s on the device, and also 0.4167 s in the logs: 0.400036 and 0.416704 are both inside the slack) plus `fragmentFallbackSlackSeconds`, with no unreadable stretch between them.
     public static let fragmentFallbackGapSeconds = 0.4
     /// The reading times jitter by a few tens of microseconds: two consecutive 0.4 s readings were once 0.400036 s apart and failed the exact limit (run20, Staraptor 987).
     public static let fragmentFallbackSlackSeconds = 0.02
@@ -181,7 +181,15 @@ extension Refine {
     /// could be. A row that fits no level takes the FIRST form its name could be as its `speciesId`, while its exact neighbour takes the form the solver chose, so comparing
     /// `speciesId` refused real folds of multi-form species (Morpeko, Giratina). Regional forms carry their own display name ("Alolan Raichu", never "Raichu"; `displayNames`), so
     /// they stay apart, which the name of the base species (`name`) did not do (checked on every multi-form screen name in `RoundTwentyNineTests`).
-    private static func sameScreenName(_ f: ScanRow, _ n: ScanRow) -> Bool { f.display == n.display }
+    /// A Nidoran row whose symbol WAS read carries it in its readings' raw name text (`nidoranSex`); its `name` ("Nidoran♀") says nothing about that, because a row whose sex was not read gets
+    /// the sex the solver chose (or the first one, when no level fits). Two rows whose read sexes differ are two Pokémon.
+    private static func sexesRead(_ r: ScanRow) -> Set<String> { Set(r.frames.compactMap { $0.name.flatMap(nidoranSex(inRawText:)) }) }
+
+    private static func sameScreenName(_ f: ScanRow, _ n: ScanRow) -> Bool {
+        guard f.display == n.display else { return false }
+        let a = sexesRead(f), b = sexesRead(n)
+        return a.isEmpty || b.isEmpty || !a.isDisjoint(with: b)
+    }
 
     /// At least two of the three stats of the fragment's read bars equal the neighbour's IVs exactly. A fragment whose bars were not read is never folded by the digit rule: nothing
     /// then says it is not another Pokémon, so it stays a row and becomes a question (the safe direction; all five real folds had bars read).

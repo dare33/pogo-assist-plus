@@ -12,22 +12,27 @@ final class RoundTwentyNineTests: XCTestCase {
 
     // MARK: A, the real engine
 
-    /// The screen names that map to more than one species id carry no regional form: a regional form has its own display name ("Alolan Raichu"), so comparing the display never folds across one.
-    func testNoMultiFormScreenNameHoldsARegionalForm() throws {
+    /// Two screen names that map to more than one species id DO hold a regional form, so display equality folds across it (as round 27's `name` did): "Darmanitan" holds the Galarian Zen form
+    /// (the Galarian standard form has its own name, "Galarian Darmanitan"), and "Tauros" holds the three Paldean breeds, which the table names Aqua, Blaze and Combat (no regional word in the name,
+    /// so those three are listed by hand). Every other shared screen name is a form without a regional prefix. A regional form of any other species has its own name ("Alolan Raichu").
+    func testExactlyDarmanitanAndTaurosShareAScreenNameWithARegionalForm() throws {
         let table = try SpeciesTable.bundled()
-        let regional: Set<String> = ["Alola", "Galar", "Hisui", "Paldea"]
+        let regionalWords = ["alolan", "galarian", "hisuian", "paldean"]
+        let paldeanBreeds: Set<String> = ["tauros_aqua", "tauros_blaze", "tauros_combat"]
         var multi = 0
+        var holding = [String: [String]]()
         for c in displayNames(table) where c.speciesIds.count > 1 {
             multi += 1
-            for id in c.speciesIds {
-                let s = try XCTUnwrap(table.species.first { $0.id == id })
-                XCTAssertFalse(regional.contains(nameAndForm(s).form), "\(c.display): \(id) is a regional form under a shared screen name")
-            }
+            let regional = c.speciesIds.filter { id in regionalWords.contains { id.contains($0) } || paldeanBreeds.contains(id) }
+            if !regional.isEmpty { holding[c.display] = regional.sorted() }
         }
-        XCTAssertGreaterThan(multi, 0)
-        print("MULTI-FORM SCREEN NAMES: \(multi)")
+        XCTAssertEqual(multi, 52)
+        XCTAssertEqual(holding, ["Darmanitan": ["darmanitan_galarian_zen"], "Tauros": ["tauros_aqua", "tauros_blaze", "tauros_combat"]])
         let ids = Dictionary(uniqueKeysWithValues: displayNames(table).map { ($0.display, $0.speciesIds) })
         XCTAssertNotNil(ids["Alolan Raichu"]); XCTAssertEqual(ids["Raichu"], ["raichu"])
+        XCTAssertEqual(ids["Galarian Darmanitan"], ["darmanitan_galarian_standard"])
+        XCTAssertEqual(Set(try XCTUnwrap(ids["Darmanitan"])), ["darmanitan_galarian_zen", "darmanitan_standard", "darmanitan_zen"])
+        XCTAssertEqual(Set(try XCTUnwrap(ids["Tauros"])), paldeanBreeds.union(["tauros"]))
     }
 
     private func card(_ ids: [String: [String]], _ name: String, cp: Int?, hp: Int, ivs: IVs?, t: Double) -> FrameReading {

@@ -210,7 +210,7 @@ final class PartialReadByBarsTests: XCTestCase {
         // one point off is a misread, so it is asked, never New (U3 d)
         var near = scanned; near.hp = scanned.hp! + 1
         XCTAssertTrue(plan(near, [saved]).new.isEmpty); XCTAssertEqual(plan(near, [saved]).unsure.count, 1, "HP one off")
-        var species = scanned; species.speciesId = "yveltal"; species.name = "Yveltal"
+        var species = scanned; species.speciesId = "yveltal"; species.name = "Yveltal"; species.display = "Yveltal"
         XCTAssertEqual(plan(species, [saved]).new, [0], "different species")
         var fits = scanned; fits.flags = []; fits.ivs = scanned.ivsRead
         XCTAssertEqual(plan(fits, [saved]).new, [0], "the same IVs but no level gives this CP and HP for them: not the saved Pokémon (it is a new row, never silently dropped)")

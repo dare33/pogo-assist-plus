@@ -395,18 +395,18 @@ public enum BoxMerge {
             let kind: Unsure.Kind = !part.isEmpty ? .partialRead : (!all.isEmpty && all.allSatisfy { misreadSaved(r, saved[$0]) } ? .misreadSaved : .ambiguous)
             // A row that cannot be identified by its CP (it fits no level, or it is a part read) is offered first the saved entries of its SPECIES with its HP (the box's HP is the max;
             // a point off only when no entry has it exactly), ranked by how close the CP digits are and then the bars; the rest of today's list (the family) follows them.
-            var ranked = 0, offered = Set<Int>(), onlyPairedOffered = false
+            var ranked = 0, offered = Set<Int>(), mixedOrPairedHead = false
             let hadCandidates = !all.isEmpty
             if hasNoLevelFits(originals[si]) || kind == .partialRead {
                 let pairedIds = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
                 let head = rankedSameHP(r, original: originals[si], unpaired: Array(Set(all + leftoverPool)).filter { !pairedIds.contains(saved[$0].id) }, paired: saved.indices.filter { pairedIds.contains(saved[$0].id) }, saved: saved)
-                onlyPairedOffered = !head.isEmpty && head.allSatisfy { pairedIds.contains(saved[$0].id) }
+                mixedOrPairedHead = head.contains { pairedIds.contains(saved[$0].id) }
                 if !head.isEmpty { offered = Set(head.filter { !all.contains($0) }); all = head + all.filter { !head.contains($0) }; ranked = head.count }
             }
-            // No part, plausible or misread candidate: the row is New unless its same-species, same-HP entries (the ranked head) are all ones ALREADY PAIRED in this scan. Then it is asked
-            // about them (a second read of a Pokémon already seen, or "It is new"), not silently added as a phantom entry. An unpaired same-species, same-HP entry with nothing else
-            // that fits (other bars, a CP that is no part read) still leaves the row New, as before.
-            if !hadCandidates && !onlyPairedOffered { stillNew.append(si); continue }
+            // No part, plausible or misread candidate: the row is New unless its same-species, same-HP entries (the ranked head) include one ALREADY PAIRED in this scan. Then it is asked
+            // about the head as built (unpaired entries first): a second read of a Pokémon already seen (which the unpaired ones, a look-alike with the same HP, must not hide), or "It is new",
+            // not silently added as a phantom entry. A head of unpaired entries only (other bars, a CP that is no part read) still leaves the row New, as before.
+            if !hadCandidates && !mixedOrPairedHead { stillNew.append(si); continue }
             ask([si], all, kind: kind, offeredOnly: offered)
             if ranked > 0 { plan.rankedCounts[si] = ranked }
             plan.unsure[plan.unsure.count - 1].misread = all.filter { misreadSaved(r, saved[$0]) }.map { saved[$0].id }
@@ -535,7 +535,7 @@ public enum BoxMerge {
         func cpClass(_ vi: Int) -> Int { oneDigitApart(r.cp, saved[vi].row.cp) ? 0 : 1 }
         // Entries the scan has not paired come first; those already paired in this scan follow (choosing one means this row is a second read of a Pokémon already seen).
         func ranked(_ pool: [Int]) -> [Int] {
-            let same = pool.filter { sameSpecies(r, saved[$0]) }
+            let same = pool.filter { sameSpeciesForCandidates(r, saved[$0]) }
             var chosen = same.filter { saved[$0].row.hp == hp }
             if chosen.isEmpty { chosen = same.filter { nearHP(r, saved[$0]) } }
             return chosen.sorted { (cpClass($0), barsDistance($0), $0) < (cpClass($1), barsDistance($1), $1) }
@@ -561,7 +561,7 @@ public enum BoxMerge {
         let digits = Array(String(s.cp))
         return saved.indices.filter { vi in
             let v = saved[vi]
-            guard sameSpecies(s, v) else { return false }
+            guard sameSpeciesForCandidates(s, v) else { return false }
             // (a) the CP digits are a subsequence of the saved CP's (182 in 1982), HP equal or unread on either side
             if s.cp != v.row.cp, isSubsequence(digits, Array(String(v.row.cp))), s.hp == nil || v.row.hp == nil || nearHP(s, v) { return true }
             // (b) whatever the CP digits: the solver found no level (or the CP is unusable), the HP is the same, and the bars read as
@@ -608,7 +608,7 @@ public enum BoxMerge {
     /// A saved entry flagged `no-level-fits` (or without a usable CP) and without IVs, of the same species and HP (or an HP not read) as a
     /// row that has its IVs: the saved one was probably a misread of this Pokémon.
     private static func misreadSaved(_ s: ScanRow, _ v: BoxEntry) -> Bool {
-        guard s.ivs != nil, v.row.ivs == nil, sameSpecies(s, v) else { return false }
+        guard s.ivs != nil, v.row.ivs == nil, sameSpeciesForCandidates(s, v) else { return false }
         guard v.row.flags.contains(where: { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") }) || v.row.cp <= 0 else { return false }
         return s.hp == nil || v.row.hp == nil || nearHP(s, v)
     }
@@ -653,7 +653,7 @@ public enum BoxMerge {
             if let a = s.hp, let b = v.row.hp, a < b - 1 { return false }
             return sharesAnIVTriple(s, v, gm, fits)
         }
-        guard sameSpecies(s, v) else { return false }
+        guard sameSpeciesForCandidates(s, v) else { return false }
         if let a = s.hp, let b = v.row.hp, a < b - 1, s.ivs == nil || v.row.ivs == nil { return false }   // a power-up never lowers the HP (one point is a misread)
         // equal IVs: any CP or HP (a power-up that is not consistent, or a lower CP). Different IVs with the same CP and the same HP
         // read are one Pokémon whose bars were misread (or whose IVs were corrected by hand), so asked about, never New plus Gone.
@@ -674,6 +674,19 @@ public enum BoxMerge {
 
     private static func sameSpecies(_ s: ScanRow, _ v: BoxEntry) -> Bool {
         s.speciesKey == v.speciesKey || (v.corrections.species?.was).map { $0 == s.speciesKey } == true
+    }
+
+    /// Every species id a screen name could be (`displayNames`, the table the reader matches names against), by display. One name holds several forms (Morpeko, Giratina, Nidoran).
+    private static let screenNameIds: [String: Set<String>] = {
+        guard let table = try? SpeciesTable.bundled() else { return [:] }
+        return Dictionary(displayNames(table).map { ($0.display, Set($0.speciesIds)) }, uniquingKeysWith: { $0.union($1) })
+    }()
+
+    /// The species test for a row's CANDIDATES (the ranked same-HP head, part-read, plausible and misread entries). A row that fits no level has an untrusted species id (the first form its
+    /// name could be, where a row that solved has the form the solver chose), so it accepts a saved entry of ANY species its screen name could be; every other row compares the species id.
+    private static func sameSpeciesForCandidates(_ s: ScanRow, _ v: BoxEntry) -> Bool {
+        guard hasNoLevelFits(s), let ids = screenNameIds[s.display] else { return sameSpecies(s, v) }
+        return ids.contains(v.speciesKey) || v.corrections.species?.was.map(ids.contains) == true || sameSpecies(s, v)
     }
     private static func sameIVs(_ s: ScanRow, _ v: BoxEntry) -> Bool {
         guard let si = s.ivs else { return false }
