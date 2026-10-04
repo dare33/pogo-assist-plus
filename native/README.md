@@ -656,10 +656,15 @@ Merge rule 7 also asks when a row flagged `no-level-fits` (or with no usable CP)
   page, get the command for that choice, import it, say it), warns when the chosen mode has no command or one too small, and has an
   "I paged by hand" switch (twins are then not judged from the beat).
 - Mega and Primal forms (`<base>_mega`, `_mega_x`, `_mega_y`, `_primal`): after the unchanged rule and before powered up, a Mega row
-  matches a saved base entry with the same three IVs as Same: the entry keeps its own species, CP, HP, level and dust (the Mega CP
-  is temporary), gets `megaWhenScanned` and a new last-seen date; two different base candidates are Unsure (choosing one still copies
-  nothing); identical twins pair by count. The reverse: a base-form row with the same IVs updates an entry first saved in its Mega
-  form. A Mega row that matches nothing is saved as New under the BASE species with the IVs, but CP 0 ("not known"), no HP, level
+  matches a saved base entry with the same three IVs as Same: the entry keeps its own species, CP, HP, level and dust, gets
+  `megaWhenScanned` and a new last-seen date, and the Mega values read are stored as the entry's `megaForm` (a `MegaForm`: species,
+  CP, HP, level, dust, first and last seen; the IVs are the entry's; a row whose CP fits no level stores none); two different base
+  candidates are Unsure (choosing one stores the Mega form on it); identical twins pair by count. One entry with a Mega form is one
+  Pokémon in the count, advice and the CSV (the CSV carries the base row only, never a second row). Joining a saved Mega pair keeps
+  the base entry and moves the other entry's values into its `megaForm` (an existing Mega form is kept when it was seen more
+  recently); keeping both is unchanged. A box with a Mega form is written as box version 2 (a box without one stays version 1, with
+  no `megaForm` key), so an older build stops with "saved by a newer version" instead of dropping the Mega form. The reverse: a base-form row with the same IVs updates an entry first saved in its Mega
+  form (the values it was saved with become its `megaForm`). A Mega row that matches nothing is saved as New under the BASE species with the IVs, but CP 0 ("not known"), no HP, level
   or dust, and the flag `mega-when-scanned`; the review says so. Not handled: a Mega row whose base is not saved but an earlier
   stage is (it is saved as New and the earlier stage stays).
 

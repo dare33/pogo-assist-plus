@@ -922,7 +922,7 @@ public enum BoxMerge {
     public enum Effect: Equatable {
         /// Only marks the entry seen; nothing is changed (an untrusted row, an extra twin's own entry, an entry another row already paired).
         case seenOnly
-        /// A Mega row for its base entry: seen, and marked Mega when scanned; the Mega values are not copied.
+        /// A Mega row for its base entry: seen, marked Mega when scanned, and the Mega values read are kept as the entry's Mega form (`BoxEntry.megaForm`); its own (base) values do not change.
         case seenAsMega
         /// The read values replace the saved ones the scan read (unread values stay).
         case replacesValues
@@ -930,7 +930,7 @@ public enum BoxMerge {
         case replacesIVs
         /// Other IVs read at the same CP and HP: the saved IVs are kept, the entry is marked seen and flagged to check.
         case keepsIVsAndFlags
-        /// The base entry and the Mega-form entry of one Pokémon become one entry (the base entry, marked Mega when scanned as such).
+        /// The base entry and the Mega-form entry of one Pokémon become one entry: the base entry keeps its own values and gets the other entry's values as its Mega form (marked Mega when scanned as such).
         case joinsMegaPair
     }
 
@@ -942,6 +942,14 @@ public enum BoxMerge {
         if ivsDisagree(r, e) { return ivsReplaceable(r, e) && u.kind != .extraTwin ? .replacesIVs : .keepsIVsAndFlags }
         if let gm, plan.megaBases[u.scanned] != nil, megaBase(e.row.speciesId, gm) == nil { return .seenAsMega }
         return .replacesValues
+    }
+
+    /// Whether answering "It is this one" for this candidate of a `megaToBase` question keeps the values the entry was saved with (its Mega form) as the entry's Mega form while the base
+    /// values replace them: true for an entry saved as a Mega species, and only when that answer writes the row's values (`replacesValues` or `replacesIVs`).
+    public static func keepsSavedMegaAsMegaForm(_ plan: Plan, _ u: Unsure, candidate e: BoxEntry, gameMaster gm: GameMaster) -> Bool {
+        guard u.kind == .megaToBase, megaBase(e.row.speciesId, gm) != nil else { return false }
+        let fx = effect(plan, u, candidate: e, gameMaster: gm)
+        return fx == .replacesValues || fx == .replacesIVs
     }
 
     /// An answer for this candidate changes nothing but "seen": an extra twin, a row whose CP is not trusted, or an entry another row already
@@ -994,9 +1002,33 @@ public enum BoxMerge {
         }
 
         func setMega(_ id: String, _ mega: Bool) { byId[id]?.megaWhenScanned = mega ? true : nil }
+        /// Keep a Mega row's values as the entry's Mega form: a later read of the Mega form replaces the values it read (an unread value never replaces a saved one) and keeps the first-seen date.
+        func storeMegaForm(_ id: String, _ row: ScanRow) {
+            guard var e = byId[id] else { return }
+            if var mf = e.megaForm {
+                if mf.speciesId != row.speciesId { mf.speciesId = row.speciesId; mf.name = row.name; mf.display = row.display; mf.form = row.form; mf.dex = row.dex }
+                if row.cp > 0 { mf.cp = row.cp }
+                if let hp = row.hp { mf.hp = hp }
+                mf.level = row.level ?? mf.level; mf.levelMax = row.levelMax ?? mf.levelMax; mf.dust = row.dust ?? mf.dust
+                mf.lastSeen = max(mf.lastSeen, date)
+                e.megaForm = mf
+            } else { e.megaForm = MegaForm(row: row, firstSeen: date, lastSeen: date) }
+            byId[id] = e
+        }
+        /// An entry's existing Mega form is never overwritten by another entry's saved values: the one seen more recently is kept (a tie keeps the existing one).
+        func adoptMegaForm(_ id: String, _ other: MegaForm) {
+            guard var e = byId[id] else { return }
+            if let mf = e.megaForm {
+                if other.lastSeen > mf.lastSeen { var o = other; o.firstSeen = min(o.firstSeen, mf.firstSeen); e.megaForm = o } else { e.megaForm?.firstSeen = min(mf.firstSeen, other.firstSeen) }
+            } else { e.megaForm = other }
+            byId[id] = e
+        }
         // An untrusted row paired as Same writes nothing but last-seen (not even the Mega mark).
         for m in plan.stationedSeen { touch(m.savedId) }
-        for p in plan.same { touch(p.savedId); if !hasNoLevelFits(plan.scanned[p.scanned]) { setMega(p.savedId, p.mega) } }
+        for p in plan.same {
+            touch(p.savedId)
+            if !hasNoLevelFits(plan.scanned[p.scanned]) { setMega(p.savedId, p.mega); if p.mega { storeMegaForm(p.savedId, plan.scanned[p.scanned]) } }
+        }
         for u in plan.updated { update(u.savedId, plan.scanned[u.scanned]); setMega(u.savedId, false) }
         var newRows = plan.new
         for u in plan.unsure {
@@ -1006,11 +1038,14 @@ public enum BoxMerge {
             case .existing(let id):
                 guard let e = byId[id] else { break }
                 if u.kind == .megaPair {
-                    // Join: the base entry (candidates[0]) stays, with its own values and hand corrections UNCHANGED (the Mega entry's values and corrections go with it), is marked Mega when the scan
-                    // read the Mega form, and the Mega-form entry is removed. Nothing else changes (the earlier first-seen date is kept). Any other answer than "this one" keeps both.
+                    // Join: the base entry (candidates[0]) stays, with its own values and hand corrections UNCHANGED, is marked Mega when the scan read the Mega form, and takes the Mega-form entry's
+                    // values (as saved, hand corrections applied) as its Mega form; the Mega-form entry is removed. Its other corrections, its id and its first-seen date as an entry go (the earlier
+                    // first-seen date is kept on the base entry). Any other answer than "this one" keeps both.
                     guard id == u.candidates.first, u.candidates.count == 2, let m = byId[u.candidates[1]] else { break }
                     byId[id]?.firstSeen = min(e.firstSeen, m.firstSeen)
                     touch(id)
+                    let scannedMega = plan.megaBases[u.scanned] != nil
+                    adoptMegaForm(id, m.megaForm ?? MegaForm(row: m.row, firstSeen: m.firstSeen, lastSeen: scannedMega ? max(m.lastSeen, date) : m.lastSeen))
                     setMega(id, plan.megaBases[u.scanned] != nil)
                     removedByJoin.insert(m.id)
                     break
@@ -1018,8 +1053,12 @@ public enum BoxMerge {
                 switch effect(plan, u, candidate: e, gameMaster: gm0) {
                 case .joinsMegaPair: break   // handled above
                 case .seenOnly: byId[id]?.lastSeen = max(e.lastSeen, date)
-                case .seenAsMega: touch(id); setMega(id, true)
-                case .replacesValues, .replacesIVs: update(id, plan.scanned[u.scanned]); setMega(id, false)
+                case .seenAsMega: touch(id); setMega(id, true); storeMegaForm(id, plan.scanned[u.scanned])
+                case .replacesValues, .replacesIVs:
+                    // A base row for an entry first saved in its Mega form: the entry becomes the base form, and the Mega values it was saved with become its Mega form (nothing is lost).
+                    let wasMega = u.kind == .megaToBase && megaBase(e.row.speciesId, gm0) != nil ? MegaForm(row: e.row, firstSeen: e.firstSeen, lastSeen: e.lastSeen) : nil
+                    update(id, plan.scanned[u.scanned]); setMega(id, false)
+                    if let wasMega, let now = byId[id], megaBase(now.row.speciesId, gm0) == nil { adoptMegaForm(id, wasMega) }
                 case .keepsIVsAndFlags:
                     // The same Pokémon read twice with other IVs: the IVs never change, so one read is wrong and neither is guessed.
                     byId[id]?.lastSeen = max(e.lastSeen, date)

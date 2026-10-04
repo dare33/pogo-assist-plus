@@ -37,7 +37,10 @@ public struct BoxSnapshot: Codable, Equatable {
 /// The versioned box of each account, beside the scans `BoxStore` keeps: `<account folder>/box/<seq>.json`. The newest file
 /// is the current box. Writes are atomic. Not thread-safe: use the one queue.
 public final class BoxLibrary {
-    public static let schemaVersion = 1
+    /// The newest version this build reads. A box is written as 1 (exactly the shape of an older build's) unless an entry has a Mega form (`BoxEntry.megaForm`), then as 2: an older
+    /// build, which would drop the Mega form when it next saved, stops with "saved by a newer version" instead.
+    public static let schemaVersion = 2
+    static func schema(writing entries: [BoxEntry]) -> Int { entries.contains { $0.megaForm != nil } ? 2 : 1 }
     public let store: BoxStore
     private let fm = FileManager.default
 
@@ -121,7 +124,7 @@ public final class BoxLibrary {
         // A save prepared against a box that has since changed is refused, not written over it.
         if let expected = expectedCurrentSeq, expected != last { throw Failure.boxChanged }
         let next = (last ?? 0) + 1
-        let snap = BoxSnapshot(schema: Self.schemaVersion, seq: next, account: account, createdAt: now, reason: reason, note: note, scanId: scanId, scanKind: scanKind,
+        let snap = BoxSnapshot(schema: Self.schema(writing: entries), seq: next, account: account, createdAt: now, reason: reason, note: note, scanId: scanId, scanKind: scanKind,
                                scanDate: scanDate, restoredFrom: restoredFrom, entries: entries)
         try fm.createDirectory(at: try boxFolder(account), withIntermediateDirectories: true)
         try Self.encoder.encode(snap).write(to: file(account, next), options: .atomic)
