@@ -185,7 +185,7 @@ private struct ResultList: View {
                 }
             }
             let unmatched = review.outcome.scan.unmatched
-            Section("Cards the scan could not read (\(unmatched.count))") {
+            Section("Cards the scan could not read (\(BoxMerge.unreadCount(plan)))") {
                 if unmatched.isEmpty { Text("Every Pokémon on screen was read.").foregroundStyle(.secondary) }
                 ForEach(Array(unmatched.enumerated()), id: \.offset) { _, u in Text(Fmt.unmatched(u)).font(.callout) }
             }

@@ -610,14 +610,23 @@ public enum BoxMerge {
         return "You left \(n == 1 ? "1 row" : "\(n) rows") out of the box. Some of the entries below may be those Pokémon, which simply were not read."
     }
 
+    /// The unmatched items that are cards on screen the scan could not read: not those absorbed into another row, not a stationed item matched to a saved entry.
+    static func unreadItems(_ plan: Plan) -> [Unmatched] {
+        let matched = Set(plan.stationedSeen.map(\.item))
+        return plan.unmatchedItems.enumerated().filter { $0.element.reason != "absorbed" && !matched.contains($0.offset) }.map(\.element)
+    }
+
+    /// The number of cards `unreadLine` names (a blank-card item stands for its `count` cards, any other item for one). The Review screen's heading uses this same function, so the two numbers cannot differ.
+    public static func unreadCount(_ plan: Plan) -> Int {
+        unreadItems(plan).reduce(0) { $0 + ($1.reason == BlankCards.reason ? ($1.count ?? 1) : 1) }
+    }
+
     /// The one line shown above the "Not seen in this scan" list when items on screen could not be read (they absorbed into another row are not counted), else nil. When every one of them
     /// has an entry kept out of that list (`plan.unreadEntries`, shown by the app under "On screen but not read") the line says so and does not point at the list; otherwise some of the entries
     /// in the list may be those Pokémon.
     public static func unreadLine(_ plan: Plan) -> String? {
-        let matched = Set(plan.stationedSeen.map(\.item))
-        let items = plan.unmatchedItems.enumerated().filter { $0.element.reason != "absorbed" && !matched.contains($0.offset) }.map(\.element)
+        let items = unreadItems(plan)
         guard !items.isEmpty else { return nil }
-        let blanks = items.filter { $0.reason == BlankCards.reason }.reduce(0) { $0 + ($1.count ?? 1) }
         // What was read of each, so the person can match it to an entry in the list: a name, or the start of one with an ellipsis, and the CP when read.
         let names: [String] = items.filter { $0.reason != BlankCards.reason }.map { u in
             var label = (u.name?.isEmpty == false) ? u.name! : ((u.nameText?.isEmpty == false) ? u.nameText! + "…" : "unknown")
@@ -626,10 +635,10 @@ public enum BoxMerge {
         }
         var seen = Set<String>(), unique = [String]()
         for n in names where seen.insert(n.lowercased()).inserted { unique.append(n) }
-        let n = items.count - items.filter { $0.reason == BlankCards.reason }.count + blanks
+        let n = unreadCount(plan)
         // Entries kept out of the list stand for the cards (never more entries than cards), so with as many entries as cards none of the entries left in the list can be those.
         let tail = plan.unreadEntries.count >= n ? "Each has a saved entry kept out of the Not seen list, under \"On screen but not read\"." : "Some of the entries below may be those."
-        if unique.isEmpty { return "\(n) \(n == 1 ? "card" : "cards") on screen could not be read (no name, CP or HP showed). \(tail)" }
+        if unique.isEmpty { return "\(n) \(n == 1 ? "card" : "cards") on screen could not be read. \(tail)" }
         return "\(n) Pokémon on screen could not be read (names: \(unique.joined(separator: ", "))). \(tail)"
     }
 

@@ -49,7 +49,7 @@ enum Fmt {
         case "stationed": return "\(what): stationed away, so its card shows no CP or HP."
         case "blank-card":
             let n = u.count ?? 1
-            return n == 1 ? "A card on screen showed no name, CP or HP." : "\(n) cards on screen showed no name, CP or HP."
+            return n == 1 ? "A card on screen could not be read." : "\(n) cards on screen could not be read."
         default: return "\(what): not read (\(u.reason))."
         }
     }

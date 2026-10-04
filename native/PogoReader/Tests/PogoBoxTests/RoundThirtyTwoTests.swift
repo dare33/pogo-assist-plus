@@ -235,10 +235,10 @@ final class RoundThirtyTwoTests: XCTestCase {
         let b = box(rows, [entry("in1", "zapdos", cp: 1995, hp: 130, ivs(1, 1, 1))])
         let sheltered = plan(rows, [blankItem(before: 2000, after: 1980)], b)
         XCTAssertEqual(sheltered.unreadEntries.map(\.id), ["in1"])
-        XCTAssertEqual(BoxMerge.unreadLine(sheltered), "1 card on screen could not be read (no name, CP or HP showed). Each has a saved entry kept out of the Not seen list, under \"On screen but not read\".")
+        XCTAssertEqual(BoxMerge.unreadLine(sheltered), "1 card on screen could not be read. Each has a saved entry kept out of the Not seen list, under \"On screen but not read\".")
         // two cards, one entry: one card has no entry, so the list below may hold it
         let partial = plan(rows, [blankItem(count: 2, before: 2000, after: 1980)], b)
         XCTAssertEqual(partial.unreadEntries.map(\.id), ["in1"])
-        XCTAssertEqual(BoxMerge.unreadLine(partial), "2 cards on screen could not be read (no name, CP or HP showed). Some of the entries below may be those.")
+        XCTAssertEqual(BoxMerge.unreadLine(partial), "2 cards on screen could not be read. Some of the entries below may be those.")
     }
 }
