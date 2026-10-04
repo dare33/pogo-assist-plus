@@ -15,14 +15,18 @@ extension AppModel {
         Task {
             do {
                 var outcome = try await worker.run { engine in try ScanPipeline.process(replay: url, engine: engine) }
-                let f = ReviewFixture(gm, variant: variant)
+                let f = ReviewFixture(gm, variant: variant.replacingOccurrences(of: "+answered", with: ""))
                 outcome.scan = ScanResult(rows: f.rows, review: [], unmatched: f.unmatched)
                 outcome.readings = 1686; outcome.duration = 2040; outcome.notices = []
-                let kind: BoxStore.Kind = variant == "partial" ? .partial : .full
+                let kind: BoxStore.Kind = variant.hasPrefix("partial") ? .partial : .full
                 let plan = BoxMerge.plan(scanned: f.rows, unmatched: f.unmatched, into: f.saved, kind: kind, scanDate: Date(), gameMaster: gm)
                 var review = Review(account: name, kind: kind, outcome: outcome, plan: plan, base: f.saved, storageCount: nil, signature: "seed", mergeSeconds: 0.1, paging: nil, boxSeq: nil)
                 print("seed unsure:", plan.unsure.map { "\($0.scanned):\($0.kind.rawValue):\($0.candidates.count)" }, "new", plan.new.count, "same", plan.same.count, "updated", plan.updated.count)
-                review.endedAtListEnd = variant != "partial"
+                // "<variant>+answered": every question already answered (its one saved candidate, else "new"), to look at the answered state without tapping through.
+                if variant.hasSuffix("+answered") {
+                    for u in plan.unsure { review.resolutions[u.scanned] = (u.candidates.count == 1 && u.kind != .extraTwin) || u.kind == .megaPair ? .existing(u.candidates[0]) : .new }
+                }
+                review.endedAtListEnd = !variant.hasPrefix("partial")
                 flow = .review(review)
             } catch { flow = .failed(message: "\(error)", signature: "seed") }
         }

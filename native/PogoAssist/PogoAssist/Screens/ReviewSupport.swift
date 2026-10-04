@@ -182,11 +182,10 @@ struct ReviewTopBar: View {
     var onBack: (() -> Void)?
     var account: String?
     var body: some View {
-        ZStack {
-            Text(title).paText(.rowTitle).fontWeight(.bold).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            HStack {
-                if let onBack { IconButton(systemImage: "chevron.left", kind: .floating, label: "Back", action: onBack) }
-                if let account {
+        Group {
+            if let account {
+                // The account on the left and the title on the right, so neither sits on the other at a large text size.
+                HStack(spacing: 12) {
                     HStack(spacing: 8) {
                         AccountMonogram(name: account, size: 28)
                         Text(account).font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(1)
@@ -194,11 +193,22 @@ struct ReviewTopBar: View {
                     .padding(.leading, 4).padding(.trailing, 12).frame(minHeight: 36)
                     .background(Capsule().fill(Theme.surface)).panelShadow()
                     .accessibilityElement(children: .combine).accessibilityLabel("Account, \(account)")
+                    .layoutPriority(0)
+                    Spacer(minLength: 0)
+                    titleText.layoutPriority(1)
                 }
-                Spacer()
+            } else {
+                ZStack {
+                    titleText
+                    HStack { if let onBack { IconButton(systemImage: "chevron.left", kind: .floating, label: "Back", action: onBack) }; Spacer() }
+                }
             }
         }
         .padding(.horizontal, 18).frame(minHeight: 52)
+    }
+
+    private var titleText: some View {
+        Text(title).paText(.rowTitle).fontWeight(.bold).foregroundStyle(Theme.ink).lineLimit(1).accessibilityAddTraits(.isHeader)
     }
 }
 

@@ -17,6 +17,7 @@
 		1DF267CCE4D1096881873210 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
 		262F06295009225A5291CD5A /* BoxChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853199DAE4157490F71A25E8 /* BoxChrome.swift */; };
 		2A1110DE2162F7DEF4734407 /* ScanSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EB8C8BEAFD00EF993F95722 /* ScanSetupView.swift */; };
+		31DDB5EE5F7E61CF3A468735 /* ReviewScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */; };
 		3612921432E15343B1E195EA /* FlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAA375CD0561890BDC48B2 /* FlowTests.swift */; };
 		373A9DA32DD806383DC6106A /* ComponentGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */; };
 		408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFAC0B18897FB5A85E55764 /* Theme.swift */; };
@@ -126,6 +127,7 @@
 		55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PogoAssistApp.swift; sourceTree = "<group>"; };
 		58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSettings.swift; sourceTree = "<group>"; };
 		5A6C431800FF0BBA252331DB /* ReviewToCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewToCheck.swift; sourceTree = "<group>"; };
+		5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewScreensTests.swift; sourceTree = "<group>"; };
 		5C6AA316B422945EDE86A699 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeScansBetterSheet.swift; sourceTree = "<group>"; };
 		60BF710F03812439C395ED03 /* Figtree-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Figtree-Variable.ttf"; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 			children = (
 				444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */,
 				D7EAA375CD0561890BDC48B2 /* FlowTests.swift */,
+				5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */,
 				FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */,
 			);
 			path = PogoAssistUITests;
@@ -471,6 +474,7 @@
 			files = (
 				F9C0DA47B6D99ED2A742185D /* BoxScreensTests.swift in Sources */,
 				3612921432E15343B1E195EA /* FlowTests.swift in Sources */,
+				31DDB5EE5F7E61CF3A468735 /* ReviewScreensTests.swift in Sources */,
 				998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
