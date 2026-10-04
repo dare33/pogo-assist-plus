@@ -23,6 +23,7 @@ struct BoxView: View {
     @State private var sections: [BoxIndex.Section] = []
     @State private var sectionsReady = false
     @State private var jumped: String?
+    @FocusState private var searching: Bool
     #if DEBUG
     @State private var benchText: String?
     private var synthetic: Bool { CommandLine.arguments.contains("-box-synthetic") }
@@ -44,7 +45,10 @@ struct BoxView: View {
                 else { list }
             }
         }
+        .background(Theme.bg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        // The floating bar would ride up on the keyboard and cover the results while typing.
+        .hidesTabBar(searching)
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
         .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
         .sheet(isPresented: Binding(get: { model.exportURL != nil }, set: { if !$0 { model.exportURL = nil } })) {
@@ -165,6 +169,7 @@ struct BoxView: View {
                 .foregroundStyle(Theme.ink)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .submitLabel(.search)
+                .focused($searching)
                 .accessibilityLabel("Search")
                 .accessibilityIdentifier("box-search")
             if !query.isEmpty {

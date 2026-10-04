@@ -35,6 +35,7 @@ struct SpeciesListView: View {
             }
             .animation(nil, value: selecting)
         }
+        .background(Theme.bg.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if selecting, !picked.isEmpty { selectBar(ms) }
         }

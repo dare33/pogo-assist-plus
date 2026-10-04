@@ -47,6 +47,7 @@ struct PokemonDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .background(Theme.bg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .hidesTabBar()
         .confirmDelete($deleting) { dismiss() }
