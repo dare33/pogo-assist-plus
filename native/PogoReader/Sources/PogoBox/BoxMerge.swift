@@ -130,6 +130,9 @@ public enum BoxMerge {
         public var kept: [Kept] = []
         /// What the scan saw on screen and did not read. It protects nothing; `unreadLine` tells the person that some "not seen" entries may be those items.
         public var unmatchedItems: [Unmatched] = []
+        /// Saved entries a Full scan did not pair that were nevertheless on screen unread: inside the CP bounds of a stretch of cards that could not be read (`blank-card`, only when the
+        /// scan's rows come in CP order), or of the name and HP of an item whose CP was never read. `goneReport` lists them apart from "Not seen" and never proposes them for removal.
+        public var unreadEntries: [UnreadEntry] = []
         /// Part reads matched to a saved Pokémon by the merge itself (`autoPartMatch`): marked seen, nothing written. Shown on the review so it is visible.
         public var partMatches: [PartMatch] = []
         /// Saved entries that no scanned row was paired with (candidates of an unsure row included), for `goneReport`.
@@ -144,6 +147,12 @@ public enum BoxMerge {
         public var savedPairs: [[String]] = []
 
         public var isUnresolvedFree: Bool { unsure.isEmpty }
+    }
+
+    /// A saved entry the scan did not pair that was on screen unread, and why it is thought so.
+    public struct UnreadEntry: Equatable {
+        public var id: String
+        public var why: String
     }
 
     /// A saved entry nothing was paired with: what `goneReport` needs to know about it.
@@ -166,6 +175,9 @@ public enum BoxMerge {
     public struct GoneReport: Equatable {
         public var gone: [String]
         public var kept: [Kept]
+        /// Unpaired entries that were on screen unread (`Plan.unreadEntries`), still unanswered or answered "new": not removable, not "Not seen".
+        public var onScreenUnread: [String] = []
+        public init(gone: [String], kept: [Kept], onScreenUnread: [String] = []) { self.gone = gone; self.kept = kept; self.onScreenUnread = onScreenUnread }
     }
 
     public enum Resolution: Equatable {
@@ -361,6 +373,9 @@ public enum BoxMerge {
             let r = rows[si]
             guard part.count == 1, let vi = part.first, hasNoLevelFits(originals[si]), r.cp > 0, let h = r.hp else { return nil }
             let v = saved[vi]
+            // The automatic match needs the strict species test: the candidate list accepts any form the screen name could be (`sameSpeciesForCandidates`), and a part read of Tauros or
+            // Nidoran beside another form's entry is a question, never a silent pairing.
+            guard sameSpecies(r, v) else { return nil }
             guard vPool.contains(vi), v.row.cp > 0, let vh = v.row.hp, abs(vh - h) <= 1, !hasNoLevelFits(v.row), v.row.cp != r.cp, isSubsequence(Array(String(r.cp)), Array(String(v.row.cp))) else { return nil }
             guard !leftoverParts.contains(where: { $0.key != si && $0.value.contains(vi) }) else { return nil }
             // Bars that were read and clearly disagree with the saved IVs (beyond one notch on any stat, the same tolerance the candidate checks use) make this a real question: the
@@ -421,6 +436,7 @@ public enum BoxMerge {
         unsureSaved = unsureSaved.filter { !pairedIds.contains(saved[$0].id) }
         plan.savedPairs = savedPairs.map { [saved[$0.base].id, saved[$0.mega].id] }
         plan.unpaired = (vPool + unsureSaved.sorted()).map { Unpaired(id: saved[$0].id, speciesKey: saved[$0].speciesKey, name: saved[$0].row.name, display: saved[$0].row.display, title: saved[$0].row.title) }
+        if kind == .full { plan.unreadEntries = onScreenUnread(plan, vPool: vPool, saved: saved, rows: originals) }
         let report = goneReport(plan, resolutions: [:])
         plan.gone = report.gone
         plan.kept = report.kept
@@ -466,10 +482,42 @@ public enum BoxMerge {
         let kept = [Kept](); var gone = [String]()
         // Items on screen that were not read no longer protect anything: every Pokémon the scan did not pair is listed as "not seen" (kept unless the person marks it), and
         // `unreadLine` tells the person some of them may be those items.
+        // The exception: an entry on screen unread (inside the bounds of a stretch of unreadable cards, or the name and HP of an item whose CP was not read) is not "not seen", and is never offered for removal.
+        let unread = Set(plan.unreadEntries.map(\.id))
+        var onScreen = [String]()
         for e in plan.unpaired where !seen.contains(e.id) && !pending.contains(e.id) {
-            gone.append(e.id)
+            if unread.contains(e.id) { onScreen.append(e.id) } else { gone.append(e.id) }
         }
-        return GoneReport(gone: gone, kept: kept)
+        return GoneReport(gone: gone, kept: kept, onScreenUnread: onScreen)
+    }
+
+    /// The saved entries (still unpaired and in no question) that the scan had on screen without reading. Two kinds of evidence, nothing else:
+    /// - a stretch of cards that could not be read (`blank-card`, with the CPs of the rows before and after it): when the scan's own rows come in CP order (`BlankCards.cpOrder`, read from the
+    ///   rows), the entries whose CP lies between the two CPs, inclusive, when there are no more of them than the stretch has cards (more than that and nothing says which ones were there, so
+    ///   they stay "Not seen"; the count is still in `unreadLine`). Rows not in CP order: the count only, no entry is moved.
+    /// - an item with a name and an HP but no CP (`cp-not-read`): the entries of that name and HP (and, when the item lists the CPs it could be, one of them).
+    static func onScreenUnread(_ plan: Plan, vPool: [Int], saved: [BoxEntry], rows: [ScanRow]) -> [UnreadEntry] {
+        var taken = Set<Int>(), out = [UnreadEntry]()
+        if let order = BlankCards.cpOrder(rows) {
+            for u in plan.unmatchedItems where u.reason == BlankCards.reason {
+                guard let a = u.cpBefore, let b = u.cpAfter, let n = u.count, n >= 1 else { continue }
+                // the stretch lies where the rows' order says it does
+                guard order == .descending ? a >= b : a <= b else { continue }
+                let (lo, hi) = (min(a, b), max(a, b))
+                let inside = vPool.filter { !taken.contains($0) && saved[$0].row.cp >= lo && saved[$0].row.cp <= hi }
+                guard !inside.isEmpty, inside.count <= n else { continue }
+                for vi in inside { taken.insert(vi); out.append(UnreadEntry(id: saved[vi].id, why: "a card between CP \(a) and CP \(b) was on screen and could not be read")) }
+            }
+        }
+        for u in plan.unmatchedItems where u.reason == "cp-not-read" && u.cp == nil {
+            guard let name = u.name, !name.isEmpty, let hp = u.hp else { continue }
+            for vi in vPool where !taken.contains(vi) {
+                let v = saved[vi].row
+                guard v.display == name || v.name == name, v.hp == hp, u.cpOptions?.isEmpty != false || u.cpOptions!.contains(v.cp) else { continue }
+                taken.insert(vi); out.append(UnreadEntry(id: saved[vi].id, why: "\(name) with HP \(hp) was on screen and its CP could not be read"))
+            }
+        }
+        return out
     }
 
     /// "Read as CP 607; matched to your Charizard CP 1607 by its HP." for a part read the merge matched itself.
@@ -489,15 +537,17 @@ public enum BoxMerge {
     public static func unreadLine(_ plan: Plan) -> String? {
         let items = plan.unmatchedItems.filter { $0.reason != "absorbed" }
         guard !items.isEmpty else { return nil }
+        let blanks = items.filter { $0.reason == BlankCards.reason }.reduce(0) { $0 + ($1.count ?? 1) }
         // What was read of each, so the person can match it to an entry in the list: a name, or the start of one with an ellipsis, and the CP when read.
-        let names: [String] = items.map { u in
+        let names: [String] = items.filter { $0.reason != BlankCards.reason }.map { u in
             var label = (u.name?.isEmpty == false) ? u.name! : ((u.nameText?.isEmpty == false) ? u.nameText! + "…" : "unknown")
             if let cp = u.cp { label += " CP \(cp)" }
             return label
         }
         var seen = Set<String>(), unique = [String]()
         for n in names where seen.insert(n.lowercased()).inserted { unique.append(n) }
-        let n = items.count
+        let n = items.count - items.filter { $0.reason == BlankCards.reason }.count + blanks
+        if unique.isEmpty { return "\(n) \(n == 1 ? "card" : "cards") on screen could not be read (no name, CP or HP showed). Some of the entries below may be those." }
         return "\(n) Pokémon on screen could not be read (names: \(unique.joined(separator: ", "))). Some of the entries below may be those."
     }
 
@@ -685,6 +735,11 @@ public enum BoxMerge {
     /// The species test for a row's CANDIDATES (the ranked same-HP head, part-read, plausible and misread entries). A row that fits no level has an untrusted species id (the first form its
     /// name could be, where a row that solved has the form the solver chose), so it accepts a saved entry of ANY species its screen name could be; every other row compares the species id.
     private static func sameSpeciesForCandidates(_ s: ScanRow, _ v: BoxEntry) -> Bool {
+        // A Nidoran whose symbol was read is that sex: the other sex's entry is neither offered nor paired (the symbol is in the readings' raw name text, as `sameScreenName` reads it).
+        if s.display == "Nidoran" {
+            let read = Refine.sexesRead(s)
+            if read.count == 1, let sex = read.first, v.speciesKey != sex, v.speciesKey == "nidoran_male" || v.speciesKey == "nidoran_female" { return false }
+        }
         guard hasNoLevelFits(s), let ids = screenNameIds[s.display] else { return sameSpecies(s, v) }
         return ids.contains(v.speciesKey) || v.corrections.species?.was.map(ids.contains) == true || sameSpecies(s, v)
     }

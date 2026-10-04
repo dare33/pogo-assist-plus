@@ -6,7 +6,7 @@ extension Refine {
     /// the reading times jitter, so a little over is allowed. Two Pokemon are two periods.
     public static let fragmentPairMaxPeriods = 1.4
     /// With no regular beat: the fragment's reading and the neighbour's nearest reading are consecutive: one reading step
-    /// (0.4 s on the device, and also 0.4167 s in the logs: 0.400036 and 0.416704 are both inside the slack) plus `fragmentFallbackSlackSeconds`, with no unreadable stretch between them.
+    /// (0.4 s on the device, and also 0.4167 s in the logs: 0.400036 and 0.416704 are both inside the slack; the logs also hold 0.433372 s steps (185 of them) and 0.433405 s (6), which are outside 0.4 + 0.02 s, so a pair read that far apart is not joined on this path) plus `fragmentFallbackSlackSeconds`, with no unreadable stretch between them.
     public static let fragmentFallbackGapSeconds = 0.4
     /// The reading times jitter by a few tens of microseconds: two consecutive 0.4 s readings were once 0.400036 s apart and failed the exact limit (run20, Staraptor 987).
     public static let fragmentFallbackSlackSeconds = 0.02
@@ -86,20 +86,29 @@ extension Refine {
             // own by one digit (one changed, missing or extra: 9017 for 2017, 987 and 982 for 1987 and 1982), is that Pokémon read badly as its card slid in or out. What protects against
             // folding a real Pokémon: it is adjacent, it fits no level itself (a correctly read Pokémon is never folded), it has at most two readings, the screen name and the max HP are the
             // neighbour's, the neighbour is exact, the CP is one digit apart, and the fragment's bars were read with at least two of the three stats equal to the neighbour's IVs exactly
-            // (a fragment with no bars read is not folded: it becomes a question; run15: a real Staraptor 1995/142 read once as "199" beside 1994/142 has bars 13/14/15 against 12/15/15: one equal, not folded). The readings must also be within
+            // (a fragment with no bars read is not folded: it stays a row, asked about only when the box holds an entry it could be, and flagged `misread-of-neighbour` when it is one reading beside its card; run15: a real Staraptor 1995/142 read once as "199" beside 1994/142 has bars 13/14/15 against 12/15/15: one equal, not folded). The readings must also be within
             // `fragmentDigitGapSeconds` of the neighbour's nearest reading; that refuses a long gap but separates little under tap paging (consecutive cards' readings are a median
             // 0.40 s apart, so 90-100% of card boundaries are inside it). The pair-lasts-at-most-1.4-periods test of the other rules is not used: it measures from the neighbours'
             // midpoints and a card whose edge frames were dropped fails it (run20: 987 then 1987, 1.8 s against 1.68). Two neighbours that both qualify: nothing is folded.
             var viaDigit = false
             if absorbedBy == nil, digitCandidate, let hp = f.hp {
-                var fits = [Int]()
+                var fits = [Int](), withoutBars = [Int]()   // `withoutBars`: every condition but the bars
                 for j in [i - 1, i + 1] where j >= 0 && j < rows.count {
                     let n = rows[j]
                     let nts = n.frames.compactMap(\.time)
-                    guard sameScreenName(f, n), n.hp == hp, n.solveStatus == "exact", BoxMerge.oneDigitApart(f.cp, n.cp), barsAgree(f, n), let na = nts.min(), let nb = nts.max(), nts.count == n.frames.count else { continue }
-                    if (j > i ? na - b : a - nb) <= fragmentDigitGapSeconds { fits.append(j) }
+                    guard sameScreenName(f, n), n.hp == hp, n.solveStatus == "exact", BoxMerge.oneDigitApart(f.cp, n.cp), let na = nts.min(), let nb = nts.max(), nts.count == n.frames.count else { continue }
+                    guard (j > i ? na - b : a - nb) <= fragmentDigitGapSeconds else { continue }
+                    withoutBars.append(j)
+                    if barsAgree(f, n) { fits.append(j) }
                 }
                 if fits.count == 1 { absorbedBy = fits[0]; viaDigit = true }
+                // A fragment of ONE reading with no bars read, beside a card it could be a one-digit misread of, is not folded (nothing says it is not another Pokémon). It stays a row, and it is a
+                // question only when the box holds an entry it could be: the row of a NEW catch has none, so both it and the card beside it would be added. The flag names the neighbour so
+                // the row lands in To check with that explanation (run23 review, C5).
+                else if fits.isEmpty, withoutBars.count == 1, f.frames.count == 1, f.ivsRead == nil, f.ivs == nil {
+                    let flag = "misread-of-neighbour:\(rows[withoutBars[0]].cp)"
+                    if !rows[i].flags.contains(flag) { rows[i].flags.append(flag); flaggedOnly = true }
+                }
             }
             guard let j = absorbedBy else { i += 1; continue }
             let n = rows[j]
@@ -183,16 +192,17 @@ extension Refine {
     /// they stay apart, which the name of the base species (`name`) did not do (checked on every multi-form screen name in `RoundTwentyNineTests`).
     /// A Nidoran row whose symbol WAS read carries it in its readings' raw name text (`nidoranSex`); its `name` ("Nidoran♀") says nothing about that, because a row whose sex was not read gets
     /// the sex the solver chose (or the first one, when no level fits). Two rows whose read sexes differ are two Pokémon.
-    private static func sexesRead(_ r: ScanRow) -> Set<String> { Set(r.frames.compactMap { $0.name.flatMap(nidoranSex(inRawText:)) }) }
+    static func sexesRead(_ r: ScanRow) -> Set<String> { Set(r.frames.compactMap { $0.name.flatMap(nidoranSex(inRawText:)) }) }
 
     private static func sameScreenName(_ f: ScanRow, _ n: ScanRow) -> Bool {
         guard f.display == n.display else { return false }
+        guard f.display == "Nidoran" else { return true }   // only the Nidoran screen name has a symbol that tells two species apart
         let a = sexesRead(f), b = sexesRead(n)
         return a.isEmpty || b.isEmpty || !a.isDisjoint(with: b)
     }
 
     /// At least two of the three stats of the fragment's read bars equal the neighbour's IVs exactly. A fragment whose bars were not read is never folded by the digit rule: nothing
-    /// then says it is not another Pokémon, so it stays a row and becomes a question (the safe direction; all five real folds had bars read).
+    /// then says it is not another Pokémon, so it stays a row (the safe direction; all five real folds had bars read). It is a question only when the box holds an entry it could be; a one-reading fragment of a NEW catch is flagged `misread-of-neighbour:<cp>` instead, so it is in To check.
     private static func barsAgree(_ f: ScanRow, _ n: ScanRow) -> Bool {
         guard let read = f.ivsRead ?? f.ivs else { return false }
         guard let have = n.ivs else { return false }

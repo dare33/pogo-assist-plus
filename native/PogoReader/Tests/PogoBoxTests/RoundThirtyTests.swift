@@ -60,8 +60,10 @@ final class RoundThirtyTests: XCTestCase {
         let part = scanned(species: "morpeko_full_belly", display: "Morpeko", cp: 353, hp: 110, fits: false)
         let p = BoxMerge.plan(scanned: [part], into: [hangry], kind: .partial, scanDate: date(1), gameMaster: gm)
         XCTAssertTrue(p.new.isEmpty, "\(p.new)")
-        // the part rule's own entry: either resolved by its HP or asked as a partial read, never New
-        XCTAssertTrue(p.same.contains { $0.savedId == "hangry" } || p.unsure.first?.kind == .partialRead, "\(p.same) \(p.unsure)")
+        // Round 31: the entry is of another form id, so the automatic part match (strict species test) never pairs it: it is asked as a partial read.
+        XCTAssertTrue(p.same.isEmpty && p.partMatches.isEmpty, "\(p.same) \(p.partMatches)")
+        let u = try XCTUnwrap(p.unsure.first)
+        XCTAssertEqual(u.kind, .partialRead); XCTAssertEqual(u.candidates, ["hangry"])
     }
 
     private let forms = [("Morpeko", "morpeko_hangry", "morpeko_full_belly", 1353, 110, 9353), ("Giratina", "giratina_origin", "giratina_altered", 2581, 199, 9581)]

@@ -20,7 +20,7 @@ public enum FlagInfo {
         "form-ambiguous": .note, "level-ambiguous": .note,
         "no-level-fits": .check, "ivs-unread": .check, "ambiguous-ivs": .check, "cp-computed": .check, "hp-unread": .check, "name-low-confidence": .check,
         "same-as-previous": .check, "split-by-timing": .check, "split-by-bars": .check, "absorbed-unread": .check, "mega-when-scanned": .check,
-        "sex-from-stats": .check, "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check, "absorbed-same-cp": .check, "folded-first-reading": .check, "folded-digit-misread": .check,
+        "sex-from-stats": .check, "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check, "absorbed-same-cp": .check, "folded-first-reading": .check, "folded-digit-misread": .check, "misread-of-neighbour": .check,
     ]
 
     public static func severity(of flag: String, solveStatus: String) -> Severity {
@@ -53,6 +53,7 @@ public enum FlagInfo {
         Entry(prefix: "absorbed-same-cp", field: nil) { cp in "One reading of an identical Pokémon (CP \(cp)) was folded into this one. If you have two, one was missed. Check in the game." },
         Entry(prefix: "folded-first-reading", field: nil) { cp in "A first reading with another CP (\(cp)) and other bars was folded into this Pokémon as its card slid in. If you own two of these, one was missed. Check in the game." },
         Entry(prefix: "folded-digit-misread", field: nil) { cp in "A reading with a CP one digit different (\(cp)) was folded into this Pokémon. If you own two of these with the same HP, one was missed. Check in the game." },
+        Entry(prefix: "misread-of-neighbour", field: nil) { cp in "This was read once, with no bars, beside a Pokémon of the same species and HP whose CP (\(cp)) is one digit different. It may be a misread of that Pokémon. If it is, leave it out. Check in the game." },
         Entry(prefix: "absorbed-other-cp", field: nil) { cp in "A Pokémon read as CP \(cp) was folded into this one. Check whether another one exists beside it." },
         Entry(prefix: "absorbed-unread", field: nil) { _ in "A reading without a CP was treated as this same Pokémon. Check that you do not own a second identical one." },
         Entry(prefix: "split-by-bars", field: nil) { _ in "Two different Pokémon with the same CP were read one after the other. Check both." },

@@ -54,12 +54,13 @@ final class PauseProcessingTests: XCTestCase {
         let logs = try real.map { try externalLines($0) }
         var separate = [[ScanRow]]()
         for l in logs { separate.append(try ScanPipeline.process(replay: write(l), engine: sharedEngine, paging: hint).scan.rows) }
-        XCTAssertEqual(separate.map { $0.count }, [170, 51, 1194, 267])
+        // run14's tail holds the Charmander CP 12 triplet (three bar states), owner-confirmed 4 Oct 2026: 267 became 269 when it was cut
+        XCTAssertEqual(separate.map { $0.count }, [170, 51, 1194, 269])
         for removeGaps in [true, false] {
             let joined = join(logs, removeGaps: removeGaps)
             let out = try ScanPipeline.process(replay: write(joined), engine: sharedEngine, paging: hint)
             let rows = out.scan.rows
-            XCTAssertEqual(rows.count, 170 + 51 + 1194 + 267 - 3, "removeGaps \(removeGaps): the four scans' rows minus the three overlaps")
+            XCTAssertEqual(rows.count, 170 + 51 + 1194 + 269 - 3, "removeGaps \(removeGaps): the four scans' rows minus the three overlaps")
             XCTAssertEqual(out.pauses.count, 3)
             for (name, cp) in [("Stunfisk", 902), ("Abra", 799), ("Horsea", 134)] { XCTAssertEqual(rows.filter { $0.display == name && $0.cp == cp }.count, 1, "\(name) \(cp) once") }
             // every Pokémon of the four separate results is in the joined one with the same values (the three overlap rows may carry more readings, so compare name, CP and HP there)
@@ -141,7 +142,8 @@ final class PauseProcessingTests: XCTestCase {
         XCTAssertEqual(names.map { $0.components(separatedBy: ", resumed").first }, ["Stunfisk (CP 902)", "Abra (CP 799)", "Horsea (CP 134)"])
         XCTAssertTrue(names.allSatisfy { $0.contains(", resumed after ") }, "each says it resumed (V7)")
         let line = ScanStop.summary(lastName: "Jigglypuff", lastCP: 10, read: out.scan.rows.count, appraisalClosed: false, ranOut: false, commandKnown: true, paused: names)
-        XCTAssertTrue(line.contains("after 1,679 Pokémon") && line.contains("It paused 3 times: Stunfisk (CP 902), resumed after"), line)
+        // 1,681 (was 1,679): the Charmander CP 12 triplet, owner-confirmed 4 Oct 2026
+        XCTAssertTrue(line.contains("after 1,681 Pokémon") && line.contains("It paused 3 times: Stunfisk (CP 902), resumed after"), line)
         XCTAssertTrue(ScanStop.summary(lastName: "A", lastCP: 1, read: 5, appraisalClosed: nil, ranOut: false, commandKnown: true, paused: ["X (CP 2), resumed after 74 s"]).contains("It paused once, at X (CP 2), resumed after 74 s."))
         // a pause that never resumed says why the scan ended (the timeout, or the person), taken from a real pipeline outcome whose pause has no resume marker (V7, V3)
         let unresumed = try ScanPipeline.process(replay: write(beatLog(pause: true, resume: false)), engine: sharedEngine, paging: hint)

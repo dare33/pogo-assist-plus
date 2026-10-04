@@ -116,7 +116,8 @@ public struct ReviewEntry: Codable, Equatable {
 
 /// A Pokémon that was on screen and did not become a row: a CP with no readable name (`name-not-read`),
 /// a named Pokémon whose CP was never read (`cp-not-read`, with the CPs its HP and bars allow in
-/// `cpOptions`), or a one-frame row folded into its neighbour (`absorbed`, `into` is that CP).
+/// `cpOptions`), a one-frame row folded into its neighbour (`absorbed`, `into` is that CP), or a stretch of card-less readings under command paging that lasted whole periods
+/// (`blank-card`: `count` cards, between the rows with CP `cpBefore` and `cpAfter`; see `BlankCards`).
 public struct Unmatched: Codable, Equatable {
     public var frame: String?
     public var cp: Int?
@@ -129,6 +130,10 @@ public struct Unmatched: Codable, Equatable {
     public var reason: String
     public var into: Int?
     public var clip: String?
+    /// `blank-card` only: how many cards the stretch lasted (a whole number of periods) and the CPs of the rows before and after it. Optional, so a scan saved before they existed still decodes.
+    public var count: Int?
+    public var cpBefore: Int?
+    public var cpAfter: Int?
 }
 
 public struct ScanResult: Codable, Equatable {

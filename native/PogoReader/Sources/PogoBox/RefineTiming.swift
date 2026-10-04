@@ -37,6 +37,9 @@ extension Refine {
     /// than three identical Pokemon in a row (darentas-03, paged by a gesture on a steady 2.1 s beat, has stays of 3, 5 and 7 periods
     /// on single Pokemon: the finger was shown touching while the card stayed).
     public static let timingMaxCopies = 2
+    /// With the neighbourhood judged by the command's period rather than by both sides' medians, a row's stay may exceed the span of its own readings by this much at most (the half-gaps to
+    /// the rows either side: 0.4 s at the device's reading step, 0.8 s with one dropped frame).
+    public static let timingRelaxedMaxGapSeconds = 0.8
     /// With no hint from the app (it did not say the paging was a generated command) the rule is stricter: the beat must be
     /// regular as a whole scan to this (`ScanPace.regularity` over every stay; the local test below still applies) and no faster
     /// than `timingMinimumPeriod`, the fastest beat the app generates. Locally, hand tapping measures as regular as a command to
@@ -83,9 +86,20 @@ extension Refine {
             let left = beat(max(1, i - 6)..<i)
             let right = i + 1 <= rows.count - 2 ? beat((i + 1)..<(min(rows.count - 2, i + 6) + 1)) : []
             guard left.count >= 3, right.count >= 3, let all = ScanPace.relativeMAD(left + right), all.mad <= ScanPace.regularityTolerance,
-                  let lm = ScanPace.median(left), let rm = ScanPace.median(right),
-                  abs(lm - all.median) <= timingSideTolerance * all.median, abs(rm - all.median) <= timingSideTolerance * all.median
+                  let lm = ScanPace.median(left), let rm = ScanPace.median(right)
             else { placed.append((row, nil)); continue }
+            let leftOK = abs(lm - all.median) <= timingSideTolerance * all.median, rightOK = abs(rm - all.median) <= timingSideTolerance * all.median
+            // Both sides on the beat, or, with the command's own period known, ONE side off it (a card folded into its neighbour and a one-reading row make a side's median 1.4 s on a 1.2 s beat,
+            // run23 Staraptor 1986) while the whole neighbourhood still matches the period the command was written for. Both sides off, or no known period: not split, as before.
+            let sidesOK = leftOK && rightOK
+            let judgedByHint: Bool = {
+                guard !sidesOK, leftOK || rightOK, let expected = paging?.expectedPeriod, paging?.pagedByCommand == true else { return false }
+                return abs(all.median - expected) <= timingSideTolerance * expected
+            }()
+            guard sidesOK || judgedByHint else { placed.append((row, nil)); continue }
+            // On the relaxed path the row's own readings must fill its stay: the two half-gaps to its neighbours come to at most `timingRelaxedMaxGapSeconds` (two reading steps). A card with an
+            // unread stretch or a run of dropped frames beside it (a stationed Pokémon, a menu) measures a long stay for the same reason a twin does, and is not split.
+            if judgedByHint, stay - (spans[i].last - spans[i].first) > timingRelaxedMaxGapSeconds { placed.append((row, nil)); continue }
             let period = all.median
             if paging == nil && period < timingMinimumPeriod { placed.append((row, nil)); continue }
             if let expected = paging?.expectedPeriod, abs(period - expected) > 0.25 * expected { placed.append((row, nil)); continue }

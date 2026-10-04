@@ -84,6 +84,9 @@ public enum ScanPipeline {
         let refined = try Refine.apply(to: base, readings: stalled, ticks: ticks, engine: engine, paging: hint)
         timings.refine = Date().timeIntervalSince(t2)
         let span = (times.max() ?? 0) - (times.min() ?? 0)
-        return Outcome(scan: refined.scan, readings: readings.count, ticks: ticks.count, drops: drops, duration: max(0, span), changes: refined.changes, notices: refined.notices, timings: timings, pace: ScanPace.measure(rows: refined.scan.rows), pauses: pauses)
+        // Cards on screen that no row stands for (a whole number of periods with no name, CP or HP text) join the items the reader could not read.
+        var scan = refined.scan
+        scan.unmatched += BlankCards.find(readings: readings, rows: scan.rows, paging: hint)
+        return Outcome(scan: scan, readings: readings.count, ticks: ticks.count, drops: drops, duration: max(0, span), changes: refined.changes, notices: refined.notices, timings: timings, pace: ScanPace.measure(rows: scan.rows), pauses: pauses)
     }
 }
