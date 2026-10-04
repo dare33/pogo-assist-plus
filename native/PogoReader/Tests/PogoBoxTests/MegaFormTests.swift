@@ -151,27 +151,57 @@ final class MegaFormTests: XCTestCase {
         XCTAssertEqual(try dec.decode(BoxEntry.self, from: try enc.encode(withForm)), withForm)
     }
 
-    func testTheBoxFileIsVersion1WithoutAMegaFormAnd2WithOneAndAnOlderBuildStopsAtTheSecond() throws {
+    /// The entry as the build before the Mega form knew it (no `megaForm` key).
+    private struct OldEntry: Codable, Equatable {
+        var id: String; var row: ScanRow; var firstSeen: Date; var lastSeen: Date; var corrections: Corrections; var megaWhenScanned: Bool?
+    }
+    private func jsonKeys(_ data: Data) throws -> Set<String> { Set((try JSONSerialization.jsonObject(with: data) as! [String: Any]).keys) }
+
+    func testABoxHoldingAMegaFormIsWrittenAsSchema1AndAnOlderBuildReadsItLosingOnlyTheMegaForm() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-mega-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }
         let lib = BoxLibrary(root: dir)
         try lib.createAccount("A")
         let plain = entry(row("staraptor", cp: 2819), "a")
-        var with = plain; with.megaForm = MegaForm(row: row("staraptor_mega", cp: 3970), firstSeen: date(1), lastSeen: date(2))
+        var with = plain; with.megaForm = MegaForm(row: row("staraptor_mega", cp: 3970), firstSeen: date(1), lastSeen: date(2)); with.megaWhenScanned = true
         let v1 = try lib.commit(account: "A", entries: [plain], reason: .scan, note: "plain", now: date(1))
         let v2 = try lib.commit(account: "A", entries: [with], reason: .scan, note: "mega", now: date(2))
-        XCTAssertEqual(v1.schema, 1); XCTAssertEqual(v2.schema, 2)
+        XCTAssertEqual(BoxLibrary.schemaVersion, 1); XCTAssertEqual(v1.schema, 1); XCTAssertEqual(v2.schema, 1)
         XCTAssertEqual(try lib.current(account: "A")?.entries, [with])
-        XCTAssertEqual(try lib.load(account: "A", seq: 1).entries, [plain])
-        // what an older build (maximum version 1) does with the file: it sees a version above its own
+        XCTAssertNil(lib.newerVersion(account: "A"), "nothing here is 'saved by a newer version'")
+        // the written file, read as the older build's entry shape: only megaForm is lost
         let files = FileManager.default.enumerator(atPath: dir.path)!.compactMap { $0 as? String }.filter { $0.hasSuffix("2.json") }
-        let raw = try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent(files[0]))) as! [String: Any]
-        XCTAssertEqual(raw["schema"] as? Int, 2)
-        let rawFirst = try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent(files[0].replacingOccurrences(of: "2.json", with: "1.json")))) as! [String: Any]
-        XCTAssertEqual(rawFirst["schema"] as? Int, 1); XCTAssertFalse(String(decoding: try JSONSerialization.data(withJSONObject: rawFirst), as: UTF8.self).contains("megaForm"))
+        let data = try Data(contentsOf: dir.appendingPathComponent(files[0]))
+        let raw = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(raw["schema"] as? Int, 1)
+        struct OldSnapshot: Decodable { var entries: [OldEntry] }
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let old = try dec.decode(OldSnapshot.self, from: data).entries
+        XCTAssertEqual(old, [OldEntry(id: with.id, row: with.row, firstSeen: with.firstSeen, lastSeen: with.lastSeen, corrections: with.corrections, megaWhenScanned: true)])
     }
 
-    /// A box saved by the previous build, then scanned again (what a reread starts from): it loads, merges and saves as version 2 with the Mega form.
+    func testAnEntryWithoutAMegaFormHasTheSameKeysAsBeforeTheChange() throws {
+        let e = entry(row("staraptor", cp: 2819), "a")
+        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+        let old = OldEntry(id: e.id, row: e.row, firstSeen: e.firstSeen, lastSeen: e.lastSeen, corrections: e.corrections, megaWhenScanned: e.megaWhenScanned)
+        XCTAssertEqual(try jsonKeys(try enc.encode(e)), try jsonKeys(try enc.encode(old)))
+        XCTAssertFalse(try jsonKeys(try enc.encode(e)).contains("megaForm"))
+    }
+
+    func testAVersionAboveThisBuildsSchemaStillStopsAsSavedByANewerVersion() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-mega-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        try lib.createAccount("A")
+        try lib.commit(account: "A", entries: [entry(row("staraptor", cp: 2819), "a")], reason: .scan, note: "x", now: date(1))
+        let file = FileManager.default.enumerator(atPath: dir.path)!.compactMap { $0 as? String }.first { $0.hasSuffix("1.json") }!
+        var obj = try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent(file))) as! [String: Any]
+        obj["schema"] = BoxLibrary.schemaVersion + 1
+        try JSONSerialization.data(withJSONObject: obj).write(to: dir.appendingPathComponent(file))
+        XCTAssertEqual(BoxLibrary(root: dir).newerVersion(account: "A"), 1)
+    }
+
+    /// A box saved by the previous build, then scanned again (what a reread starts from): it loads, merges and saves with the Mega form.
     func testAnOlderBoxFileLoadsAndTheNextScanSavesTheMegaForm() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-mega-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -182,7 +212,7 @@ final class MegaFormTests: XCTestCase {
         let base = try XCTUnwrap(try lib.current(account: "A")).entries
         let out = try BoxMerge.apply(plan([row("staraptor_mega", cp: 3970, hp: 190)], base, .full), to: base)
         let snap = try lib.commit(account: "A", entries: out, reason: .scan, note: "new", now: date(5))
-        XCTAssertEqual(snap.schema, 2); XCTAssertEqual(try lib.current(account: "A")?.entries.first?.megaForm?.cp, 3970)
+        XCTAssertEqual(snap.schema, 1); XCTAssertEqual(try lib.current(account: "A")?.entries.first?.megaForm?.cp, 3970)
     }
 
     private func megaRow(level: Double, dust: Int, cp: Int = 3970) -> ScanRow { var r = row("staraptor_mega", cp: cp); r.level = level; r.levelMax = level; r.dust = dust; return r }

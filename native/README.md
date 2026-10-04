@@ -662,8 +662,7 @@ Merge rule 7 also asks when a row flagged `no-level-fits` (or with no usable CP)
   candidates are Unsure (choosing one stores the Mega form on it); identical twins pair by count. One entry with a Mega form is one
   Pokémon in the count, advice and the CSV (the CSV carries the base row only, never a second row). Joining a saved Mega pair keeps
   the base entry and moves the other entry's values into its `megaForm` (an existing Mega form is kept when it was seen more
-  recently); keeping both is unchanged. A box with a Mega form is written as box version 2 (a box without one stays version 1, with
-  no `megaForm` key), so an older build stops with "saved by a newer version" instead of dropping the Mega form. The consequence is plain and unchanged by this build: once ANY version in an account's history is schema 2, a build without this change shows no box for that account and refuses every save, edit and restore there, even after a newer build restores an earlier version (`BoxLibrary.newerVersionSeq` checks the whole history). The reverse: a base-form row with the same IVs updates an entry first saved in its Mega
+  recently); keeping both is unchanged. The Mega form is an optional field in the same box format (schema 1, the key is omitted when there is none): a build without it opens the box normally and drops the Mega form from the versions it saves; the next scan of the Mega form by a build that has it stores it again. The reverse: a base-form row with the same IVs updates an entry first saved in its Mega
   form (the values it was saved with become its `megaForm`). A Mega row that matches nothing is saved as New under the BASE species with the IVs, but CP 0 ("not known"), no HP, level
   or dust, and the flag `mega-when-scanned`; the review says so. Not handled: a Mega row whose base is not saved but an earlier
   stage is (it is saved as New and the earlier stage stays).
