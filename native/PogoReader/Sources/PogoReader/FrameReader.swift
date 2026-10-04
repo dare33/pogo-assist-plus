@@ -129,8 +129,18 @@ public final class FrameReader {
 
     /// Anchors, bars and crops; no text is read. `crops` is nil when the frame is not a settled card.
     public func analyse(_ img: RGBAImage, frame: String? = nil, time: Double? = nil) -> (FrameAnalysis, FrameCrops?) {
+        analyse(img, rect: contentRect(img), frame: frame, time: time, darkBackdropFallback: true)
+    }
+
+    /// Round 31c: a card whose backdrop is near black in bands (the owner's Nickit CP 212, rows 500 to 681 and 925 to 952 of 2868) has rows that average under `contentRect`'s brightness, more
+    /// than the 0.5% of the height it bridges, so the content is cut to the white card alone and the CP above it is never found. Only when the ordinary anchoring found NO CP text and NO HP
+    /// bar and the frame is not a stationed candidate (the same gate as the stationed check, so a frame that read as anything before is untouched and a normal card pays nothing), the rect is
+    /// worked out again bridging dark bands up to this fraction of the height, and the frame is analysed once more on it. The result is kept only when it is a card: a centred CP text AND an HP
+    /// bar both found on the wider rect; anything else is returned exactly as before. A menu, a transition or another screen has no centred CP text over a green bar, so it stays unread.
+    public static let darkBackdropRowBridge = 0.08
+
+    private func analyse(_ img: RGBAImage, rect: PixelRect, frame: String?, time: Double?, darkBackdropFallback: Bool) -> (FrameAnalysis, FrameCrops?) {
         var a = FrameAnalysis(frame: frame, time: time)
-        let rect = contentRect(img)
         guard rect.w > 0, rect.h > 0 else { a.flags.append("no-cp-text"); return (a, nil) }
         let cpText = findCpText(img, rect)
         var hpBar = findHpBar(img, rect)
@@ -159,6 +169,13 @@ public final class FrameReader {
                 if let result = readBars(img, rect, r.panelSearch).result { a.ivs = result.ivs; a.ivConfidence = result.confidence; a.fills = result.fills }
                 let empty = RGBAImage(width: 0, height: 0)
                 return (a, FrameCrops(cp: nil, name: nameCrop, nameUp: empty, hp: empty, line: crop(img, r.line)))
+            }
+            if darkBackdropFallback, cpText == nil, hpBar == nil {
+                let wider = contentRect(img, rowBridge: Self.darkBackdropRowBridge)
+                if wider != rect {
+                    let retry = analyse(img, rect: wider, frame: frame, time: time, darkBackdropFallback: false)
+                    if retry.1 != nil, retry.0.needsText, retry.0.hasCpText, !retry.0.cpOnly, retry.0.stationed != true, !retry.0.flags.contains("mid-swipe") { return retry }
+                }
             }
             return (a, nil)
         }

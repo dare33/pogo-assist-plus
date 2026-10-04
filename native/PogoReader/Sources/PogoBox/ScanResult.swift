@@ -117,7 +117,8 @@ public struct ReviewEntry: Codable, Equatable {
 /// A Pokémon that was on screen and did not become a row: a CP with no readable name (`name-not-read`),
 /// a named Pokémon whose CP was never read (`cp-not-read`, with the CPs its HP and bars allow in
 /// `cpOptions`), a one-frame row folded into its neighbour (`absorbed`, `into` is that CP), or a stretch of card-less readings under command paging that lasted whole periods
-/// (`blank-card`: `count` cards, between the rows with CP `cpBefore` and `cpAfter`; see `BlankCards`).
+/// (`blank-card`: `count` cards, between the rows with CP `cpBefore` and `cpAfter`; see `BlankCards`), or a stationed Pokémon's card (`stationed`, round 31c: its `name`, `speciesIds` and the
+/// `ivs` the bars showed, no CP and no HP, `frames` readings, between the same neighbours; the place it is stationed at is never kept).
 public struct Unmatched: Codable, Equatable {
     public var frame: String?
     public var cp: Int?
@@ -134,6 +135,8 @@ public struct Unmatched: Codable, Equatable {
     public var count: Int?
     public var cpBefore: Int?
     public var cpAfter: Int?
+    /// `stationed` only: the species ids the card's name could be (one when the reader narrowed it). Optional, so a scan saved before it existed still decodes.
+    public var speciesIds: [String]?
 }
 
 public struct ScanResult: Codable, Equatable {

@@ -20,8 +20,9 @@ public func widestRun(_ flags: [Bool]) -> (Int, Int) {
 /// The rectangle of the frame that holds the phone screen: the widest run of columns whose mean
 /// brightness clears `threshold`, then the widest run of rows within those columns. Handles the
 /// black pillarboxing of a landscape re-encode and letterboxing of a portrait one. On a frame with
-/// no dark border it returns the whole frame.
-public func contentRect(_ img: RGBAImage, threshold: Double = 30, step: Int = 4) -> PixelRect {
+/// no dark border it returns the whole frame. `rowBridge` is the largest run of dark rows, as a fraction of the height, that is still part of the content (0.5%: a thin stroke; the
+/// dark-backdrop fallback of `FrameReader.analyse` uses `FrameReader.darkBackdropRowBridge`).
+public func contentRect(_ img: RGBAImage, threshold: Double = 30, step: Int = 4, rowBridge: Double = 0.005) -> PixelRect {
     let width = img.width, height = img.height
     guard width > 0, height > 0 else { return PixelRect(x: 0, y: 0, w: 0, h: 0) }
     var colOn = [Bool](repeating: false, count: width)
@@ -53,7 +54,7 @@ public func contentRect(_ img: RGBAImage, threshold: Double = 30, step: Int = 4)
             rowOn[y] = Double(s) / Double(3 * n) > threshold
         }
     }
-    bridgeGaps(&rowOn, maxGap: max(2, Int(0.005 * Double(height))))
+    bridgeGaps(&rowOn, maxGap: max(2, Int(rowBridge * Double(height))))
     let (y0, y1) = widestRun(rowOn)
     return PixelRect(x: x0, y: y0, w: x1 - x0, h: y1 - y0)
 }

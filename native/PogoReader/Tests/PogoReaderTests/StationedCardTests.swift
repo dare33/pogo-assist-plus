@@ -332,21 +332,43 @@ final class StationedCardTests: XCTestCase {
         }
     }
 
-    /// The normal card, for comparison: Nickit CP 212, 61 / 61 HP. NOT read today: the screenshot's backdrop is near black in two bands
-    /// (rows 500 to 681 and the shadow band 925 to 952 average under `contentRect`'s brightness 30, and it bridges only 0.5% of the
-    /// height), so `contentRect` takes the card alone (from row 952) as the content and the CP, which is above it, is never found:
-    /// flags `no-cp-text`, as for any frame with no anchors. Pinned as the behaviour of the reader before and after round 31 (this is
-    /// NOT the desired behaviour; when `contentRect` is fixed, expect CP 212 / HP 61/61 / flags [] here). What this test guards is the
-    /// thing round 31 could break: a normal card is never taken for a stationed one, and never gains the flag.
-    func testTheNormalNickitCardIsNeverTakenForAStationedOne() throws {
+    /// The normal card, for comparison: Nickit CP 212, 61 / 61 HP, the owner's Nickit 212 / 61 with bars 9/2/13. Its backdrop is near black in two bands (rows 500 to 681 and the shadow
+    /// band 925 to 952 average under `contentRect`'s brightness 30, and it bridges only 0.5% of the height), so the ordinary anchoring takes the card alone (from row 952) as the content
+    /// and never finds the CP above it. Round 31c: with no CP text and no HP bar found, no stationed candidate, the content is worked out again bridging dark bands up to 8% of the height
+    /// (`FrameReader.darkBackdropRowBridge`); the card then reads as any card does (before 31c: flags `no-cp-text`, nothing else). In P3 and sRGB, at 750 wide and full width. A normal card is
+    /// never taken for a stationed one and never gains the flag.
+    func testTheNormalNickitCardOnADarkBackdropReadsAsACardAndIsNeverStationed() throws {
         let file = "normal-nickit-212.png"
         for (space, img) in [("P3", try p3(file)), ("sRGB", try srgb(file))] {
             for w in Width.allCases {
                 let r = process(img, w)
-                XCTAssertFalse(r.isStationed, "\(space) \(w)")
-                XCTAssertNil(r.name, "\(space) \(w)")
-                XCTAssertEqual(r.flags, ["no-cp-text"], "\(space) \(w): known limit of contentRect on a near-black backdrop")
+                let label = "\(space) \(w): cpText '\(r.cpText)' hpText '\(r.hpText)' flags \(r.flags)"
+                XCTAssertFalse(r.isStationed, label)
+                XCTAssertEqual(r.name, "Nickit", label)
+                XCTAssertEqual(r.cp, 212, label)
+                XCTAssertEqual(r.hp, HP(current: 61, max: 61), label)
+                XCTAssertEqual(r.ivs, IVs(atk: 9, def: 2, hp: 13), label)
+                XCTAssertEqual(r.flags, [], label)
             }
+        }
+    }
+
+    /// The fallback does not turn other screens into cards. A frame whose dark band hides a text-sized white mark from the ordinary anchoring and has no HP bar anywhere: the wider content rect
+    /// finds the mark as a centred CP text, and only the card test (an HP bar too) keeps it unread. Near-black and plain frames stay unread. (The stationed screenshots keep their reading: a
+    /// RECALL button is looked for first, in `StationedCardTests` above.)
+    func testTheDarkBackdropFallbackLeavesOtherScreensUnread() throws {
+        // a dark-banded frame with the white CP text but no HP bar and no card under it: the CP-only reading is not taken from the wider rect
+        var banded = RGBAImage(width: 750, height: 1630)
+        banded.fill(Rect(x: 0, y: 0, w: 750, h: 1630), (60, 80, 100))
+        banded.fill(Rect(x: 0, y: 0.20 * 1630, w: 750, h: 0.07 * 1630), (5, 5, 5))          // a dark band wider than 0.5% of the height and narrower than 8%
+        banded.fill(Rect(x: 0, y: 0.27 * 1630, w: 750, h: 0.73 * 1630), (215, 228, 238))
+        for k in 0..<6 { banded.fill(Rect(x: 0.40 * 750 + Double(k) * 16, y: 0.05 * 1630, w: 6, h: 0.025 * 1630), (255, 255, 255)) }   // text-like white strokes at the top, no green bar anywhere
+        let r = FrameReader(text: FakeText(), names: names).read(banded, frame: "f", time: 0)   // FakeText answers "CP1234" for any CP crop: a reading would carry it
+        XCTAssertNil(r.name); XCTAssertNil(r.cp); XCTAssertEqual(r.cpText, ""); XCTAssertEqual(r.flags, ["no-cp-text"], "\(r.flags)")
+        // the near-black backdrop on its own, and a plain frame
+        for fill in [(5, 5, 5), (200, 200, 200)] as [(UInt8, UInt8, UInt8)] {
+            var img = RGBAImage(width: 750, height: 1630); img.fill(Rect(x: 0, y: 0, w: 750, h: 1630), fill)
+            XCTAssertEqual(FrameReader(text: StationText(), names: names).read(img, frame: "f", time: 0).flags, ["no-cp-text"])
         }
     }
 

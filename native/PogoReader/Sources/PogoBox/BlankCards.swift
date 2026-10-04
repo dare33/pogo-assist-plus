@@ -20,7 +20,8 @@ public enum BlankCards {
         let spans = ScanPace.spans(of: rows)
         guard spans.allSatisfy({ $0 != nil }), !rows.isEmpty else { return [] }
         let rowSpans = spans.compactMap { $0 }
-        func blank(_ r: FrameReading) -> Bool { r.nameText.isEmpty && r.cpText.isEmpty && r.hpText.isEmpty }
+        // A stationed card (round 31c) is a stretch of its own kind: no CP and no HP, like a blank one, but with a name and bars (`StationedCards`).
+        func blank(_ r: FrameReading) -> Bool { r.isStationed || (r.nameText.isEmpty && r.cpText.isEmpty && r.hpText.isEmpty) }
         let timed = readings.filter { $0.time != nil }.sorted { $0.time! < $1.time! }
         var out = [Unmatched]()
         var i = 0
@@ -41,6 +42,10 @@ public enum BlankCards {
             if hint.pauses.contains(where: { $0.lowerBound <= after && $0.upperBound >= before }) { continue }
             // between two different rows: the row before has ended, the row after has not begun
             guard let b = rowSpans.lastIndex(where: { $0.last <= first }), b + 1 < rowSpans.count, rowSpans[b + 1].first >= last, rowSpans[b + 1].first > first else { continue }
+            if timed[i...j].contains(where: \.isStationed) {
+                out += StationedCards.items(timed: timed, from: i, to: j, period: period, cpBefore: rows[b].cp, cpAfter: rows[b + 1].cp)
+                continue
+            }
             out.append(Unmatched(frame: timed[i].frame, cp: nil, name: nil, nameText: nil, hp: nil, ivs: nil, cpOptions: nil, frames: j - i + 1, reason: reason, into: nil, clip: nil,
                                  count: count, cpBefore: rows[b].cp, cpAfter: rows[b + 1].cp))
         }

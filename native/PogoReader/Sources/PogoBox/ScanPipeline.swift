@@ -75,7 +75,9 @@ public enum ScanPipeline {
         try engine.prepare()
         let t1 = Date()
         // A card stalled with its appraisal closed reads with misread CPs and no bars; those readings are the card's own (see `StalledCardNormaliser`).
-        let stalled = StalledCardNormaliser.normalise(readings)
+        // A stationed card (round 31c) reaches the grouper, `Refine` and the JavaScript as the blank frame it has always been to them (`asBlankFrame`: a named reading with no CP and no HP would
+        // become a hidden-CP row); `BlankCards.find` below is given the readings as logged and records each stationed card as an item of its own.
+        let stalled = StalledCardNormaliser.normalise(readings.map(\.asBlankFrame))
         let base = try engine.finish(readings: stalled)
         timings.finish = Date().timeIntervalSince(t1)
         let t2 = Date()

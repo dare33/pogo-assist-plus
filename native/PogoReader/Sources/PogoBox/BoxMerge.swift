@@ -133,6 +133,9 @@ public enum BoxMerge {
         /// Saved entries a Full scan did not pair that were nevertheless on screen unread: inside the CP bounds of a stretch of cards that could not be read (`blank-card`, only when the
         /// scan's rows come in CP order), or of the name and HP of an item whose CP was never read. `goneReport` lists them apart from "Not seen" and never proposes them for removal.
         public var unreadEntries: [UnreadEntry] = []
+        /// Stationed cards (round 31c) matched to exactly one unseen saved entry by species, bars and (in CP order) CP bounds: marked seen, nothing written, and reported apart from `same` so the
+        /// counts stay honest (the card showed no CP and no HP). `item` is the position in `unmatchedItems`.
+        public var stationedSeen: [StationedMatch] = []
         /// Part reads matched to a saved Pokémon by the merge itself (`autoPartMatch`): marked seen, nothing written. Shown on the review so it is visible.
         public var partMatches: [PartMatch] = []
         /// Saved entries that no scanned row was paired with (candidates of an unsure row included), for `goneReport`.
@@ -147,6 +150,11 @@ public enum BoxMerge {
         public var savedPairs: [[String]] = []
 
         public var isUnresolvedFree: Bool { unsure.isEmpty }
+    }
+
+    public struct StationedMatch: Equatable {
+        public var item: Int
+        public var savedId: String
     }
 
     /// A saved entry the scan did not pair that was on screen unread, and why it is thought so.
@@ -428,6 +436,7 @@ public enum BoxMerge {
         }
         sPool = stillNew
         plan.new = sPool
+        matchStationed(&plan, vPool: &vPool, saved: saved, rows: originals)
 
         // An entry that a later component of the same rule paired (as Same, or updated) may already have been offered as an extra twin's other candidate: it was seen, so it is
         // neither listed as not seen nor offered.
@@ -499,8 +508,19 @@ public enum BoxMerge {
     static func onScreenUnread(_ plan: Plan, vPool: [Int], saved: [BoxEntry], rows: [ScanRow]) -> [UnreadEntry] {
         var taken = Set<Int>(), out = [UnreadEntry]()
         if let order = BlankCards.cpOrder(rows) {
-            for u in plan.unmatchedItems where u.reason == BlankCards.reason {
+            // The cards of a stretch: a blank-card item counts `count` cards, a stationed card that no entry was matched to counts one. Items that share a stretch (the same neighbours) are one
+            // group, so a stretch of three unmatched stationed cards covers three entries; a blank-card item that shares its bounds with no stationed one is judged alone, as before round 31c.
+            let matched = Set(plan.stationedSeen.map(\.item))
+            let stationedBounds = Set(plan.unmatchedItems.indices.filter { plan.unmatchedItems[$0].reason == StationedCards.reason && !matched.contains($0) }.map { "\(plan.unmatchedItems[$0].cpBefore ?? -1)|\(plan.unmatchedItems[$0].cpAfter ?? -1)" })
+            var groups = [(a: Int, b: Int, n: Int)](), grouped = [String: Int]()
+            for (k, u) in plan.unmatchedItems.enumerated() where (u.reason == BlankCards.reason || u.reason == StationedCards.reason) && !matched.contains(k) {
                 guard let a = u.cpBefore, let b = u.cpAfter, let n = u.count, n >= 1 else { continue }
+                let key = "\(a)|\(b)"
+                if stationedBounds.contains(key) {
+                    if let g = grouped[key] { groups[g].n += n } else { grouped[key] = groups.count; groups.append((a, b, n)) }
+                } else { groups.append((a, b, n)) }
+            }
+            for (a, b, n) in groups {
                 // the stretch lies where the rows' order says it does
                 guard order == .descending ? a >= b : a <= b else { continue }
                 let (lo, hi) = (min(a, b), max(a, b))
@@ -520,6 +540,35 @@ public enum BoxMerge {
         return out
     }
 
+    /// Round 31c. A stationed card (name and bars, no CP, no HP) is matched to a saved entry when exactly ONE unseen entry (still unpaired and in no question) has a species the card's name
+    /// could be (the ids the reader narrowed it to, else every form of the screen name), the same IVs as the bars read and, when the scan's rows are in CP order and the item has its
+    /// neighbours' CPs, a CP between them (inclusive). Nothing is written: the entry is marked seen. No unique match (none, or several): the item stays on screen unread, which
+    /// `onScreenUnread` and `unreadLine` already treat as they treat a blank card. Items are taken in order and a matched entry leaves the pool, so two identical cards and one entry
+    /// match one of them. A stationed card never creates an entry: its CP and HP are unknown.
+    private static func matchStationed(_ plan: inout Plan, vPool: inout [Int], saved: [BoxEntry], rows: [ScanRow]) {
+        let order = BlankCards.cpOrder(rows)
+        for (k, u) in plan.unmatchedItems.enumerated() where u.reason == StationedCards.reason {
+            guard let ivs = u.ivs else { continue }
+            let ids: Set<String> = u.speciesIds?.isEmpty == false ? Set(u.speciesIds!) : (u.name.flatMap { screenNameIds[$0] } ?? [])
+            guard !ids.isEmpty else { continue }
+            let hits = vPool.filter { vi in
+                let v = saved[vi]
+                guard ids.contains(v.speciesKey) || v.corrections.species?.was.map({ ids.contains($0) }) == true else { return false }
+                guard v.row.ivs == ivs || v.corrections.ivs?.was == ivs else { return false }
+                if let order, let a = u.cpBefore, let b = u.cpAfter, order == .descending ? a >= b : a <= b { return v.row.cp >= min(a, b) && v.row.cp <= max(a, b) }
+                return true
+            }
+            guard hits.count == 1, let vi = hits.first else { continue }
+            plan.stationedSeen.append(StationedMatch(item: k, savedId: saved[vi].id))
+            vPool.removeAll { $0 == vi }
+        }
+    }
+
+    /// "Zapdos CP 1990 (stationed): seen by its name and bars; its card shows no CP or HP." for each stationed card the merge matched.
+    public static func stationedLine(_ plan: Plan, _ m: StationedMatch, saved: BoxEntry?) -> String {
+        "\(saved.map { "\($0.row.title) CP \($0.row.cp)" } ?? "A Pokémon") is stationed: seen by its name and bars, its card shows no CP or HP, nothing was changed."
+    }
+
     /// "Read as CP 607; matched to your Charizard CP 1607 by its HP." for a part read the merge matched itself.
     public static func partMatchLine(_ plan: Plan, _ m: PartMatch, saved: BoxEntry?) -> String {
         let s = plan.scanned[m.scanned]
@@ -535,7 +584,8 @@ public enum BoxMerge {
 
     /// The one line shown above the "Not seen in this scan" list when items on screen could not be read (they absorbed into another row are not counted), else nil.
     public static func unreadLine(_ plan: Plan) -> String? {
-        let items = plan.unmatchedItems.filter { $0.reason != "absorbed" }
+        let matched = Set(plan.stationedSeen.map(\.item))
+        let items = plan.unmatchedItems.enumerated().filter { $0.element.reason != "absorbed" && !matched.contains($0.offset) }.map(\.element)
         guard !items.isEmpty else { return nil }
         let blanks = items.filter { $0.reason == BlankCards.reason }.reduce(0) { $0 + ($1.count ?? 1) }
         // What was read of each, so the person can match it to an entry in the list: a name, or the start of one with an ellipsis, and the CP when read.
@@ -904,6 +954,7 @@ public enum BoxMerge {
 
         func setMega(_ id: String, _ mega: Bool) { byId[id]?.megaWhenScanned = mega ? true : nil }
         // An untrusted row paired as Same writes nothing but last-seen (not even the Mega mark).
+        for m in plan.stationedSeen { touch(m.savedId) }
         for p in plan.same { touch(p.savedId); if !hasNoLevelFits(plan.scanned[p.scanned]) { setMega(p.savedId, p.mega) } }
         for u in plan.updated { update(u.savedId, plan.scanned[u.scanned]); setMega(u.savedId, false) }
         var newRows = plan.new
