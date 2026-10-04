@@ -5,9 +5,11 @@ extension Refine {
     /// A pair (fragment and the row it joins) lasts at most this many periods of the measured beat. One period is a Pokemon;
     /// the reading times jitter, so a little over is allowed. Two Pokemon are two periods.
     public static let fragmentPairMaxPeriods = 1.4
-    /// With no regular beat: the fragment's reading and the neighbour's nearest reading are consecutive (two frame periods
-    /// at most, no unreadable stretch between them).
+    /// With no regular beat: the fragment's reading and the neighbour's nearest reading are consecutive: one reading step
+    /// (0.4 s on the device) plus `fragmentFallbackSlackSeconds`, with no unreadable stretch between them.
     public static let fragmentFallbackGapSeconds = 0.4
+    /// The reading times jitter by a few tens of microseconds: two consecutive 0.4 s readings were once 0.400036 s apart and failed the exact limit (run20, Staraptor 987).
+    public static let fragmentFallbackSlackSeconds = 0.02
     /// For a one-digit misread: the neighbour's nearest reading is at most this far, which allows one reading missing between them (0.8 s in run20, Charizard 9017). It refuses a long gap
     /// but separates little under tap paging, where card boundaries are a median 0.40 s apart; the other conditions of the rule are what protect a real Pokémon.
     public static let fragmentDigitGapSeconds = 0.85
@@ -47,7 +49,7 @@ extension Refine {
             var byBarsOverride = Set<Int>()   // neighbours accepted only because the fragment is a sliding-in part read: its read bars differed at all (`barsCompatible` is false for settled bars that differ by any amount, one notch included)
             for j in [i - 1, i + 1] where small && j >= 0 && j < rows.count {
                 let n = rows[j]
-                guard n.speciesId == f.speciesId else { continue }
+                guard sameScreenName(f, n) else { continue }
                 let nts = n.frames.compactMap(\.time)
                 guard let na = nts.min(), nts.max() != nil, nts.count == n.frames.count else { continue }
                 // no paging boundary between them
@@ -57,7 +59,7 @@ extension Refine {
                 } else {
                     byFallback.insert(j)
                     let gap = j > i ? na - b : a - (nts.max() ?? a)
-                    together = gap <= fragmentFallbackGapSeconds + 1e-9
+                    together = gap <= fragmentFallbackGapSeconds + fragmentFallbackSlackSeconds
                 }
                 // A part read of the neighbour's CP that fits no level, with the neighbour's own HP, is that Pokémon as its card slides in (run17: Charizard 632 read once with bars still
                 // animating, then 1632 / 120): its bars are not compared, they are the animation's.
@@ -80,11 +82,11 @@ extension Refine {
                     if !rows[i].flags.contains(flag) { rows[i].flags.append(flag); flaggedOnly = true }
                 } else { absorbedBy = first }
             }
-            // ONE-DIGIT MISREAD: a row of at most two readings that fits no level, beside (immediately before or after) a SOLVED row of the same SPECIES and HP whose CP differs from its
+            // ONE-DIGIT MISREAD: a row of at most two readings that fits no level, beside (immediately before or after) a SOLVED row of the same screen name and HP whose CP differs from its
             // own by one digit (one changed, missing or extra: 9017 for 2017, 987 and 982 for 1987 and 1982), is that Pokémon read badly as its card slid in or out. What protects against
-            // folding a real Pokémon: it is adjacent, it fits no level itself (a correctly read Pokémon is never folded), it has at most two readings, the species and the max HP are the
-            // neighbour's, the neighbour is exact, the CP is one digit apart, and, when the fragment's bars were read, at least two of the three stats equal the neighbour's IVs exactly
-            // (run15: a real Staraptor 1995/142 read once as "199" beside 1994/142 has bars 13/14/15 against 12/15/15: one equal, not folded). The readings must also be within
+            // folding a real Pokémon: it is adjacent, it fits no level itself (a correctly read Pokémon is never folded), it has at most two readings, the screen name and the max HP are the
+            // neighbour's, the neighbour is exact, the CP is one digit apart, and the fragment's bars were read with at least two of the three stats equal to the neighbour's IVs exactly
+            // (a fragment with no bars read is not folded: it becomes a question; run15: a real Staraptor 1995/142 read once as "199" beside 1994/142 has bars 13/14/15 against 12/15/15: one equal, not folded). The readings must also be within
             // `fragmentDigitGapSeconds` of the neighbour's nearest reading; that refuses a long gap but separates little under tap paging (consecutive cards' readings are a median
             // 0.40 s apart, so 90-100% of card boundaries are inside it). The pair-lasts-at-most-1.4-periods test of the other rules is not used: it measures from the neighbours'
             // midpoints and a card whose edge frames were dropped fails it (run20: 987 then 1987, 1.8 s against 1.68). Two neighbours that both qualify: nothing is folded.
@@ -94,7 +96,7 @@ extension Refine {
                 for j in [i - 1, i + 1] where j >= 0 && j < rows.count {
                     let n = rows[j]
                     let nts = n.frames.compactMap(\.time)
-                    guard n.speciesId == f.speciesId, n.hp == hp, n.solveStatus == "exact", BoxMerge.oneDigitApart(f.cp, n.cp), barsAgree(f, n), let na = nts.min(), let nb = nts.max(), nts.count == n.frames.count else { continue }
+                    guard sameScreenName(f, n), n.hp == hp, n.solveStatus == "exact", BoxMerge.oneDigitApart(f.cp, n.cp), barsAgree(f, n), let na = nts.min(), let nb = nts.max(), nts.count == n.frames.count else { continue }
                     if (j > i ? na - b : a - nb) <= fragmentDigitGapSeconds { fits.append(j) }
                 }
                 if fits.count == 1 { absorbedBy = fits[0]; viaDigit = true }
@@ -160,7 +162,9 @@ extension Refine {
 
     /// The flags a fragment absorption, a lone-CP-outlier fix or a bars split leave on a row; a row solved again keeps them.
     static let refineFlagPrefixes = ["absorbed-fragment", "absorbed-other-cp", "absorbed-same-cp", "read-once-beside", "folded-first-reading", "folded-digit-misread", "cp-outlier-dropped", "split-by-bars"]
-    /// What each part of a row split by its bars keeps: the carried flags except a fold (`folded-…`): the split undoes it, so neither part is marked as having folded something in.
+    /// What each part of a row split by its bars keeps: the carried flags except a fold (`folded-…`). The `folded-…` flag (the "if you own two of these, one was missed" warning) is
+    /// dropped from BOTH parts, although both still carry `split-by-bars` and land in To check; the twin-reconcile split (`Refine.swift`) and the timing split (`RefineTiming.swift`)
+    /// copy every flag to every part, so there the fold flag stays on each part.
     static func carriedFlagsForSplit(_ row: ScanRow) -> [String] { carriedFlags(row).filter { !$0.hasPrefix("folded-") } }
     static func carriedFlags(_ row: ScanRow) -> [String] { row.flags.filter { f in refineFlagPrefixes.contains { f == $0 || f.hasPrefix($0 + ":") || f.hasPrefix($0 + "-") } } }
 
@@ -173,9 +177,16 @@ extension Refine {
         return (h.1 + n.0) / 2 - (p.1 + l.0) / 2
     }
 
-    /// When the fragment's bars were read, at least two of the three stats equal the neighbour's IVs exactly; with none read, nothing contradicts.
+    /// The two rows are the same Pokémon as far as the screen can tell: the same name as the card shows it. That is the neighbour's solved species being one the fragment's name
+    /// could be. A row that fits no level takes the FIRST form its name could be as its `speciesId`, while its exact neighbour takes the form the solver chose, so comparing
+    /// `speciesId` refused real folds of multi-form species (Morpeko, Giratina). Regional forms carry their own display name ("Alolan Raichu", never "Raichu"; `displayNames`), so
+    /// they stay apart, which the name of the base species (`name`) did not do (checked on every multi-form screen name in `RoundTwentyNineTests`).
+    private static func sameScreenName(_ f: ScanRow, _ n: ScanRow) -> Bool { f.display == n.display }
+
+    /// At least two of the three stats of the fragment's read bars equal the neighbour's IVs exactly. A fragment whose bars were not read is never folded by the digit rule: nothing
+    /// then says it is not another Pokémon, so it stays a row and becomes a question (the safe direction; all five real folds had bars read).
     private static func barsAgree(_ f: ScanRow, _ n: ScanRow) -> Bool {
-        guard let read = f.ivsRead ?? f.ivs else { return true }
+        guard let read = f.ivsRead ?? f.ivs else { return false }
         guard let have = n.ivs else { return false }
         return [read.atk == have.atk, read.def == have.def, read.hp == have.hp].filter { $0 }.count >= 2
     }

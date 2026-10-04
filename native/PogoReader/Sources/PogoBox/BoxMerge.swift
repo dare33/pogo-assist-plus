@@ -391,17 +391,22 @@ public enum BoxMerge {
             let plausible = leftoverPool.filter { plausibleCandidate(r, saved[$0], gm, fits) && !part.contains($0) }
             // M12: a saved entry that was misread (no IVs, no level fits) of this correctly read row, whatever the CP.
             let misread = leftoverPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
-            if part.isEmpty && plausible.isEmpty && misread.isEmpty { stillNew.append(si); continue }
             var all = part + plausible + misread
-            let kind: Unsure.Kind = !part.isEmpty ? .partialRead : (all.allSatisfy { misreadSaved(r, saved[$0]) } ? .misreadSaved : .ambiguous)
+            let kind: Unsure.Kind = !part.isEmpty ? .partialRead : (!all.isEmpty && all.allSatisfy { misreadSaved(r, saved[$0]) } ? .misreadSaved : .ambiguous)
             // A row that cannot be identified by its CP (it fits no level, or it is a part read) is offered first the saved entries of its SPECIES with its HP (the box's HP is the max;
             // a point off only when no entry has it exactly), ranked by how close the CP digits are and then the bars; the rest of today's list (the family) follows them.
-            var ranked = 0, offered = Set<Int>()
+            var ranked = 0, offered = Set<Int>(), onlyPairedOffered = false
+            let hadCandidates = !all.isEmpty
             if hasNoLevelFits(originals[si]) || kind == .partialRead {
                 let pairedIds = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
                 let head = rankedSameHP(r, original: originals[si], unpaired: Array(Set(all + leftoverPool)).filter { !pairedIds.contains(saved[$0].id) }, paired: saved.indices.filter { pairedIds.contains(saved[$0].id) }, saved: saved)
+                onlyPairedOffered = !head.isEmpty && head.allSatisfy { pairedIds.contains(saved[$0].id) }
                 if !head.isEmpty { offered = Set(head.filter { !all.contains($0) }); all = head + all.filter { !head.contains($0) }; ranked = head.count }
             }
+            // No part, plausible or misread candidate: the row is New unless its same-species, same-HP entries (the ranked head) are all ones ALREADY PAIRED in this scan. Then it is asked
+            // about them (a second read of a Pokémon already seen, or "It is new"), not silently added as a phantom entry. An unpaired same-species, same-HP entry with nothing else
+            // that fits (other bars, a CP that is no part read) still leaves the row New, as before.
+            if !hadCandidates && !onlyPairedOffered { stillNew.append(si); continue }
             ask([si], all, kind: kind, offeredOnly: offered)
             if ranked > 0 { plan.rankedCounts[si] = ranked }
             plan.unsure[plan.unsure.count - 1].misread = all.filter { misreadSaved(r, saved[$0]) }.map { saved[$0].id }

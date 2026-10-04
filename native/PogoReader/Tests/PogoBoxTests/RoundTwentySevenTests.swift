@@ -43,6 +43,7 @@ final class RoundTwentySevenTests: XCTestCase {
 
     func testOneDigitMisreadsOfEveryKindFoldAndCarryTheirOwnFlag() {
         for (cp, label) in [(9017, "one digit changed"), (217, "one missing"), (20177, "one extra")] {
+            // 0.8 s before its card (1.6 against 2.4): outside the older rules' 0.42 s, so only the digit rule can fold it
             let out = fold(line([row(2, cp: cp, hp: 132, times: [1.6], fits: false), own()]))
             XCTAssertEqual(out.count, 3, label)
             XCTAssertTrue(out.first { $0.cp == 2017 }?.flags.contains("folded-digit-misread:\(cp)") == true, label)
@@ -64,8 +65,10 @@ final class RoundTwentySevenTests: XCTestCase {
         // an unsolved neighbour, 0.8 s away (outside the older rules' 0.4 s, inside the digit rule's 0.85 s: only `exact` stops it)
         XCTAssertEqual(fold(line([row(2, cp: 9017, hp: 132, times: [1.2], fits: false), row(3, cp: 2017, hp: 132, times: [2.0, 2.4], fits: true, exact: false)])).count, 4)
         XCTAssertEqual(fold(line([row(2, cp: 9017, hp: 132, times: [1.2], fits: false), row(3, cp: 2017, hp: 132, times: [2.0, 2.4], fits: true)])).count, 3, "the same with an exact neighbour folds")
-        // another species with the same name (a regional form): speciesId, not the name
-        XCTAssertEqual(fold(line([row(2, cp: 9017, hp: 132, times: [1.6], fits: false, species: "charizard_other"), own([2.0, 2.4])])).count, 4)
+        // another form under another screen name (a regional form: "Alolan Raichu" against "Raichu"): the screen name, not the base name. Round 29 compares `display`; the multi-form
+        // species that share one screen name are in RoundTwentyNineTests.
+        XCTAssertEqual(fold(line([row(2, cp: 9017, hp: 132, times: [1.2], fits: false, species: "charizard_other").with(display: "Alolan Charizard"), own([2.0, 2.4])])).count, 4)
+        XCTAssertEqual(fold(line([row(2, cp: 9017, hp: 132, times: [1.6], fits: false, species: "charizard_other").with(display: "Alolan Charizard"), own([2.0, 2.4])])).count, 4, "nor by the older rules, 0.4 s away")
         // both neighbours qualify: nothing is folded
         XCTAssertEqual(fold(line([row(2, cp: 2017, hp: 132, times: [1.0, 1.4], fits: true), row(3, cp: 9017, hp: 132, times: [2.0], fits: false), row(4, cp: 2017, hp: 132, times: [2.8, 3.2], fits: true)])).count, 5)
         XCTAssertEqual(fold(line([row(2, cp: 2017, hp: 132, times: [1.0, 1.4], fits: true), row(3, cp: 9017, hp: 132, times: [2.0], fits: false), row(4, cp: 2017, hp: 131, times: [2.8, 3.2], fits: true)])).count, 4, "one qualifying neighbour folds")
@@ -80,16 +83,17 @@ final class RoundTwentySevenTests: XCTestCase {
     /// Bars: with the fragment's bars read, at least two of the three stats equal the neighbour's. The five real folds all pass; the reviewer's twin (13/14/15 against 12/15/15) is not folded.
     func testTheBarsMustAgreeInAtLeastTwoStats() {
         let neighbour = IVs(atk: 12, def: 13, hp: 13)
-        func folds(_ frag: IVs?) -> Bool { fold(line([row(2, cp: 9017, hp: 132, times: [1.6], fits: false, bars: frag), row(3, cp: 2017, hp: 132, times: [2.0, 2.4], fits: true, bars: neighbour)])).count == 3 }
+        // 0.8 s before its card: the older sliding-in and fallback rules (0.42 s) cannot fold it, so these isolate the digit rule
+        func folds(_ frag: IVs?) -> Bool { fold(line([row(2, cp: 9017, hp: 132, times: [1.2], fits: false, bars: frag), row(3, cp: 2017, hp: 132, times: [2.0, 2.4], fits: true, bars: neighbour)])).count == 3 }
         XCTAssertTrue(folds(neighbour), "all three equal (987, 982, 951)")
         XCTAssertTrue(folds(IVs(atk: 12, def: 13, hp: 10)), "run20's Charizard 9017: 12/13/10 against 12/13/13, two equal")
-        XCTAssertTrue(folds(nil), "no bars read: the other conditions decide")
+        XCTAssertFalse(folds(nil), "no bars read: nothing says it is not another Pokémon, so it stays a row (round 29)")
         XCTAssertFalse(folds(IVs(atk: 13, def: 14, hp: 13)), "one equal")
         let twin = fold(line([row(2, cp: 199, hp: 142, times: [1.4], fits: false, bars: IVs(atk: 13, def: 14, hp: 15)), row(3, cp: 1994, hp: 142, times: [2.0, 2.4], fits: true, bars: IVs(atk: 12, def: 15, hp: 15))]))
         XCTAssertEqual(twin.count, 4, "a real Staraptor 1995/142 read once as 199 beside 1994/142 is not folded (bars 13/14/15 against 12/15/15)")
     }
 
-    /// A fold that a bars split undoes is kept by neither part.
+    /// The bars split drops the fold flags from both parts (the call site is tested in RoundTwentyNineTests).
     func testASplitKeepsNoFoldFlag() {
         var r = row(3, cp: 2017, hp: 132, times: [2.0], fits: true)
         r.flags = ["folded-digit-misread:9017", "folded-first-reading:632", "absorbed-fragment:2011", "cp-outlier-dropped:1910"]
@@ -216,4 +220,5 @@ private enum ScanResultGap { static let inside = 0.84, outside = 0.86 }
 
 private extension ScanRow {
     func with(name: String) -> ScanRow { var r = self; r.name = name; r.display = name; r.speciesId = name.lowercased(); return r }
+    func with(display: String) -> ScanRow { var r = self; r.display = display; return r }
 }
