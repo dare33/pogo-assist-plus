@@ -69,8 +69,8 @@ struct ScanView: View {
                         Text("The last broadcast stopped without finishing. Its readings will be offered for review.").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-            } footer: { Text(model.pagedByHand ? "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown. Stop it from the red bar when the last Pokémon has been read."
-                                              : "Choose Pogo Assist in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown and say the command. The scan usually ends by itself when the list ends or the command runs out. If it does not, stop the broadcast from the red bar.") }
+            } footer: { Text(model.pagedByHand ? "Choose Pogo Broadcast in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown. Stop it from the red bar when the last Pokémon has been read."
+                                              : "Choose Pogo Broadcast in the list, start the broadcast, then switch to Pokémon GO within the three-second countdown and say the command. The scan usually ends by itself when the list ends or the command runs out. If it does not, stop the broadcast from the red bar.") }
         }
         // The permission is asked when the paging choice changes or the commands are made; a phone that already has both would never be asked, so ask once here too
         // (not while a share sheet is up).

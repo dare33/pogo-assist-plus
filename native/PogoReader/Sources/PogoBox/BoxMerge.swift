@@ -269,12 +269,13 @@ public enum BoxMerge {
             sPool.removeAll { $0 == si }
             vPool.removeAll { $0 == vi }
         }
-        func ask(_ ss: [Int], _ candidates: [Int], kind: Unsure.Kind = .ambiguous) {
+        func ask(_ ss: [Int], _ candidates: [Int], kind: Unsure.Kind = .ambiguous, offeredOnly: Set<Int> = []) {
             let ids = candidates.map { saved[$0].id }
             for si in ss { plan.unsure.append(Unsure(scanned: si, candidates: ids, kind: kind)) }
-            for vi in candidates where vPool.contains(vi) { unsureSaved.insert(vi) }
+            // An entry that is only OFFERED (the ranked same-species, same-HP extras) stays in the pool: it is not taken out of the other rows' matching.
+            for vi in candidates where vPool.contains(vi) && !offeredOnly.contains(vi) { unsureSaved.insert(vi) }
             sPool.removeAll { ss.contains($0) }
-            vPool.removeAll { candidates.contains($0) }
+            vPool.removeAll { candidates.contains($0) && !offeredOnly.contains($0) }
         }
 
         // Before the rules: several saved Pokémon of one species with the SAME IVs (M6). The game shows no id, so when they were
@@ -395,12 +396,13 @@ public enum BoxMerge {
             let kind: Unsure.Kind = !part.isEmpty ? .partialRead : (all.allSatisfy { misreadSaved(r, saved[$0]) } ? .misreadSaved : .ambiguous)
             // A row that cannot be identified by its CP (it fits no level, or it is a part read) is offered first the saved entries of its SPECIES with its HP (the box's HP is the max;
             // a point off only when no entry has it exactly), ranked by how close the CP digits are and then the bars; the rest of today's list (the family) follows them.
-            var ranked = 0
+            var ranked = 0, offered = Set<Int>()
             if hasNoLevelFits(originals[si]) || kind == .partialRead {
-                let head = rankedSameHP(r, original: originals[si], among: all.isEmpty ? [] : all, saved: saved, extra: leftoverPool)
-                if !head.isEmpty { all = head + all.filter { !head.contains($0) }; ranked = head.count }
+                let pairedIds = Set(plan.same.map { $0.savedId } + plan.updated.map { $0.savedId })
+                let head = rankedSameHP(r, original: originals[si], unpaired: Array(Set(all + leftoverPool)).filter { !pairedIds.contains(saved[$0].id) }, paired: saved.indices.filter { pairedIds.contains(saved[$0].id) }, saved: saved)
+                if !head.isEmpty { offered = Set(head.filter { !all.contains($0) }); all = head + all.filter { !head.contains($0) }; ranked = head.count }
             }
-            ask([si], all, kind: kind)
+            ask([si], all, kind: kind, offeredOnly: offered)
             if ranked > 0 { plan.rankedCounts[si] = ranked }
             plan.unsure[plan.unsure.count - 1].misread = all.filter { misreadSaved(r, saved[$0]) }.map { saved[$0].id }
         }
@@ -519,17 +521,22 @@ public enum BoxMerge {
 
     /// The unpaired saved entries of the row's species with the row's HP exactly (one point off only when none is exact), best first: CP digits one apart (a digit changed, missing or
     /// extra) before anything else, then the bars read against the saved IVs, then the saved order.
-    static func rankedSameHP(_ r: ScanRow, original: ScanRow, among: [Int], saved: [BoxEntry], extra: [Int]) -> [Int] {
+    static func rankedSameHP(_ r: ScanRow, original: ScanRow, unpaired: [Int], paired: [Int], saved: [BoxEntry]) -> [Int] {
         guard let hp = r.hp else { return [] }
-        let pool = Array(Set(among + extra)).sorted().filter { sameSpecies(r, saved[$0]) }
-        var chosen = pool.filter { saved[$0].row.hp == hp }
-        if chosen.isEmpty { chosen = pool.filter { nearHP(r, saved[$0]) } }
         func barsDistance(_ vi: Int) -> Int {
             guard let read = original.ivsRead ?? original.ivs, let have = saved[vi].row.ivs else { return 1000 }
             return abs(read.atk - have.atk) + abs(read.def - have.def) + abs(read.hp - have.hp)
         }
         func cpClass(_ vi: Int) -> Int { oneDigitApart(r.cp, saved[vi].row.cp) ? 0 : 1 }
-        return chosen.sorted { (cpClass($0), barsDistance($0), $0) < (cpClass($1), barsDistance($1), $1) }
+        // Entries the scan has not paired come first; those already paired in this scan follow (choosing one means this row is a second read of a Pokémon already seen).
+        func ranked(_ pool: [Int]) -> [Int] {
+            let same = pool.filter { sameSpecies(r, saved[$0]) }
+            var chosen = same.filter { saved[$0].row.hp == hp }
+            if chosen.isEmpty { chosen = same.filter { nearHP(r, saved[$0]) } }
+            return chosen.sorted { (cpClass($0), barsDistance($0), $0) < (cpClass($1), barsDistance($1), $1) }
+        }
+        let first = ranked(Array(Set(unpaired)).sorted())
+        return first + ranked(paired).filter { !first.contains($0) }
     }
 
     /// Two CPs that differ by one digit: one changed (same length), or one missing or extra.

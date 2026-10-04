@@ -230,7 +230,7 @@ final class ScanEndControllerTests: XCTestCase {
         XCTAssertNil(c.paused)
     }
 
-    /// P2: a single reading without bars on an OPEN appraisal (an OCR dropout) followed by bars is not a reopened appraisal and does not restart the 180 s.
+    /// P2: a single reading without bars on an OPEN appraisal (an OCR dropout) followed by bars is not a reopened appraisal and does not restart the pause window.
     func testADropoutOnAnOpenAppraisalDoesNotRestartTheWindow() throws {
         var (c, _, rs, p, at) = try pausedAtRun10()
         let tail = try XCTUnwrap(rs.last)

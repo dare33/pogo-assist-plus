@@ -15,7 +15,15 @@ struct UnsureCard: View {
     private var shownCandidates: [String] {
         let all = unsure.kind == .extraTwin ? Array(unsure.candidates.dropFirst()) : unsure.candidates
         guard rankedCount > 0, !showAll else { return all }
-        return Array(all.prefix(min(3, rankedCount)))
+        var top = Array(all.prefix(min(3, rankedCount)))
+        // A candidate already chosen from beyond the top three stays shown, however the list is rebuilt (the Full / Add-and-update toggle makes a new card).
+        if case .existing(let id)? = choice, all.contains(id), !top.contains(id) { top.append(id) }
+        return top
+    }
+    /// An entry the scan has already paired with another row: choosing it means this row is a second read of that Pokémon.
+    private func alreadySeen(_ id: String) -> Bool {
+        if case .review(let r) = model.flow { return r.plan.same.contains { $0.savedId == id } || r.plan.updated.contains { $0.savedId == id } }
+        return false
     }
     private var choice: BoxMerge.Resolution? {
         if case .review(let r) = model.flow { return r.resolutions[unsure.scanned] }
@@ -43,7 +51,7 @@ struct UnsureCard: View {
 
                 if let e = saved[id] {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("In your box").font(.caption).foregroundStyle(.secondary)
+                        Text(alreadySeen(id) ? "In your box, already seen in this scan" : "In your box").font(.caption).foregroundStyle(.secondary)
                         Text(Fmt.candidate(e.row)).font(.callout)
                         if let text = effectText(for: e) { Text(text).font(.footnote).foregroundStyle(.secondary) }
                         answer("It is this one", selected: choice == .existing(id)) { model.resolve(unsure.scanned, .existing(id)) }
@@ -63,8 +71,8 @@ struct UnsureCard: View {
                     answer("Leave it out", selected: choice == .leaveOut) { model.resolve(unsure.scanned, .leaveOut) }
                 }
             } else {
-            if rankedCount > 0, !showAll, unsure.candidates.count > shownCandidates.count {
-                Button("Show all (\(unsure.candidates.count))") { showAll = true }.font(.footnote)
+            if rankedCount > 0, !showAll, unsure.candidates.count > shownCandidates.count {   // (a plain button: a bordered one makes the whole List row tappable)
+                Button("Show all (\(unsure.candidates.count))") { showAll = true }.font(.footnote).buttonStyle(.plain).foregroundStyle(Color.accentColor).padding(.vertical, 6)
             }
             HStack {
                 answer("It is new", selected: choice == .new) { model.resolve(unsure.scanned, .new) }

@@ -55,7 +55,7 @@ extension Refine {
             // BOTH parts are flagged: either may be the wrong one (the first can solve exactly on transient bars). Each keeps what the earlier steps
             // flagged on the row, and the original `ivs-disagree` is still a fact about the pair.
             for k in solved.indices {
-                for carried in carriedFlags(row) where !solved[k].flags.contains(carried) { solved[k].flags.append(carried) }
+                for carried in carriedFlagsForSplit(row) where !solved[k].flags.contains(carried) { solved[k].flags.append(carried) }
                 if !solved[k].flags.contains("split-by-bars") { solved[k].flags.append("split-by-bars") }
             }
             let detail = "\(row.display) CP \(row.cp): bars change \(cut.from) to \(cut.to) at \(String(format: "%.1f", cut.time)) s, each held by two or more readings: two Pokemon"
