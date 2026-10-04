@@ -69,7 +69,7 @@ public enum Refine {
         let opening = joinOpeningCard(fragments.scan, period: paging?.pagedByCommand == true ? paging?.expectedPeriod : nil, ticks: ticks.filter { $0.isFinite })
         if !opening.marks.isEmpty { fragments.scan = opening.scan; fragments.marks += opening.marks }
         let outliers = try dropCpOutliers(fragments.scan, readings: readings, engine: engine)
-        let bars = try splitByBars(outliers.scan, readings: readings, engine: engine, hintPeriod: paging?.pagedByCommand == true ? paging?.expectedPeriod : nil)
+        let bars = try splitByBars(outliers.scan, readings: readings, engine: engine, hintPeriod: paging?.pagedByCommand == true ? paging?.expectedPeriod : nil, pauses: paging?.pauses ?? [])
         var r = try run(bars.scan, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
         // then the timing step (off when the app says the player paged by hand)
         let t = splitByTiming(r.scan, readings: readings, paging: paging)

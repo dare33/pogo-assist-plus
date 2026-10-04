@@ -128,6 +128,9 @@ final class StationedCardTests: XCTestCase {
         guard case .reading(let back)? = ReplayLog.decode(json) else { return XCTFail("did not decode") }
         XCTAssertEqual(back.flags, ["stationed"]); XCTAssertEqual(back.name, "Zapdos"); XCTAssertNil(back.cp); XCTAssertNil(back.hp)
         XCTAssertTrue(back.frameReading.isStationed)
+        // what the merge matches by must survive the log (round 32: a log that dropped the bars, their confidence or the species ids passed this test)
+        XCTAssertEqual(back.ivs, IVs(atk: 13, def: 14, hp: 14)); XCTAssertEqual(back.ivConfidence, 0.94); XCTAssertEqual(back.speciesIds, ["zapdos"])
+        XCTAssertEqual(back.frameReading.ivs, IVs(atk: 13, def: 14, hp: 14)); XCTAssertEqual(back.frameReading.ivConfidence, 0.94); XCTAssertEqual(back.frameReading.speciesIds, ["zapdos"])
         // the line carries no field the old format lacked
         let keys = Set(((try JSONSerialization.jsonObject(with: json)) as? [String: Any] ?? [:]).keys)
         XCTAssertTrue(keys.isSubset(of: ["k", "t", "cp", "cpText", "name", "nameText", "nameWeak", "nameAttached", "speciesIds", "hp", "hpText", "ivs", "ivConfidence", "flags", "ms"]), "\(keys)")

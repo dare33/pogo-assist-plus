@@ -200,13 +200,15 @@ final class StationedCardMergeTests: XCTestCase {
         // a CP outside the bounds is no match (CP order): the same entry, 1500, is not seen by the card
         let far = try plan([entry("far", "zapdos", cp: 1500, hp: 130, ivs(11, 14, 12))], drop: ["z1966"])
         XCTAssertFalse(far.stationedSeen.map(\.savedId).contains("far")); XCTAssertEqual(far.gone, ["far"])
-        // rows not in CP order: the bounds mean nothing, a unique species and bars match is still a match (the entry at CP 1500 is the only one)
+        // rows not in CP order: the bounds mean nothing, so nothing is matched (round 32; rounds 31c took the entry whatever its CP, here the one at CP 1500, which a far entry of the same bars
+        // could be: the match is refused and the item is left unread)
         var shuffled = rows; for i in stride(from: 0, to: rows.count - 2, by: 3) { shuffled.swapAt(i, i + 2) }
         if BlankCards.cpOrder(shuffled) == nil {
             let box = try ownerBox().filter { $0.id != "z1966" } + [entry("far", "zapdos", cp: 1500, hp: 130, ivs(11, 14, 12))]
             let p = BoxMerge.plan(scanned: shuffled, unmatched: o.scan.unmatched, into: box, kind: .full, scanDate: date(1), gameMaster: gm)
-            XCTAssertTrue(p.stationedSeen.map(\.savedId).contains("far"))
-        }
+            XCTAssertFalse(p.stationedSeen.map(\.savedId).contains("far"), "rows not in CP order: no bounds, no match")
+            XCTAssertTrue(p.stationedSeen.isEmpty, "none of the six is matched without the bounds")
+        } else { XCTFail("the shuffled rows must not be in CP order for this check to mean anything") }
         // a stationed card never creates an entry: a card nobody in the box is: nothing New
         let empty = BoxMerge.plan(scanned: rows, unmatched: o.scan.unmatched, into: try ownerBox().filter { !owners.map(\.id).contains($0.id) }, kind: .full, scanDate: date(1), gameMaster: gm)
         XCTAssertTrue(empty.stationedSeen.isEmpty && empty.new.isEmpty && empty.unsure.isEmpty)
@@ -222,7 +224,8 @@ final class StationedCardMergeTests: XCTestCase {
     /// A card whose reading narrowed the species (Nidoran's symbol read) matches that species only; one that did not (every form its name could be) matches any of them, as the merge's
     /// other name-based rules do. A hand correction of the IVs matches by the value the scan read.
     func testSpeciesNarrowingAndCorrections() throws {
-        let rows = [rowAt(1, cp: 900, from: 10, to: 10.8), rowAt(2, cp: 800, from: 12.0, to: 12.8)]
+        // 24 rows in CP order (the bounds are required, round 32), the two the stretch lies between among them
+        let rows = (0..<24).map { rowAt($0 + 1, cp: 1100 - $0 * 10, from: 10 + Double($0) * 1.2, to: 10.8 + Double($0) * 1.2) }
         func item(_ name: String, _ ids: [String]?, _ b: IVs) -> Unmatched {
             Unmatched(frame: "a", cp: nil, name: name, nameText: nil, hp: nil, ivs: b, cpOptions: nil, frames: 6, reason: StationedCards.reason, into: nil, clip: nil, count: 1, cpBefore: 900, cpAfter: 800, speciesIds: ids)
         }

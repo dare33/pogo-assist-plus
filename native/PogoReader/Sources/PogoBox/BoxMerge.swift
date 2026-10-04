@@ -500,65 +500,93 @@ public enum BoxMerge {
         return GoneReport(gone: gone, kept: kept, onScreenUnread: onScreen)
     }
 
-    /// The saved entries (still unpaired and in no question) that the scan had on screen without reading. Two kinds of evidence, nothing else:
-    /// - a stretch of cards that could not be read (`blank-card`, with the CPs of the rows before and after it): when the scan's own rows come in CP order (`BlankCards.cpOrder`, read from the
-    ///   rows), the entries whose CP lies between the two CPs, inclusive, when there are no more of them than the stretch has cards (more than that and nothing says which ones were there, so
-    ///   they stay "Not seen"; the count is still in `unreadLine`). Rows not in CP order: the count only, no entry is moved.
-    /// - an item with a name and an HP but no CP (`cp-not-read`): the entries of that name and HP (and, when the item lists the CPs it could be, one of them).
+    /// A stretch of unreadable cards whose neighbours' CPs are further apart than this (larger over smaller) shelters no entry by its bounds, only the count: the bounds then say nothing about
+    /// which entries were there. Chosen from the 25 device logs (round 32): the widest real stretch is 4262 / 3000 (1.42, the first two cards of run1's list), the next 3000 / 2819 (1.06), and the
+    /// stretches of the owner's box (1992 / 1987, 1967 / 1961, 1920 / 1913, 212 / 210) are under 1.03. A misread neighbour (a lost leading digit, 1987 read as 987; or a stray one, 2992) is
+    /// at least 2.0.
+    public static let widestPlausibleBoundsRatio = 1.5
+
+    /// The saved entries (still unpaired and in no question) that the scan had on screen without reading. Two kinds of evidence, nothing else, and in both no more entries are sheltered than
+    /// there were cards (more than that and nothing says which ones were there, so they stay "Not seen"; the count is still in `unreadLine`):
+    /// - a stretch of cards that could not be read (`blank-card` or an unmatched `stationed` item, with the CPs of the rows before and after it): when the scan's own rows come in CP order
+    ///   (`BlankCards.cpOrder`, read from the rows), the entries whose CP lies between the two CPs, inclusive, when there are no more of them than the stretch has cards and the two CPs are
+    ///   within `widestPlausibleBoundsRatio` of each other. Rows not in CP order: the count only, no entry is moved. The cards of ONE stretch count together (items with the same
+    ///   `stretch` and bounds that follow one another, when one of them is stationed; a blank-card item beside no stationed one is judged alone); two stretches that happen to have the same
+    ///   neighbouring CPs are two stretches.
+    /// - an item with a name and an HP but no CP (`cp-not-read`): the entries of that name and HP (and, when the item lists the CPs it could be, one of them), when there are no more of them
+    ///   than there are such items of that name and HP: each item shelters at most one entry.
     static func onScreenUnread(_ plan: Plan, vPool: [Int], saved: [BoxEntry], rows: [ScanRow]) -> [UnreadEntry] {
         var taken = Set<Int>(), out = [UnreadEntry]()
         if let order = BlankCards.cpOrder(rows) {
-            // The cards of a stretch: a blank-card item counts `count` cards, a stationed card that no entry was matched to counts one. Items that share a stretch (the same neighbours) are one
-            // group, so a stretch of three unmatched stationed cards covers three entries; a blank-card item that shares its bounds with no stationed one is judged alone, as before round 31c.
             let matched = Set(plan.stationedSeen.map(\.item))
-            let stationedBounds = Set(plan.unmatchedItems.indices.filter { plan.unmatchedItems[$0].reason == StationedCards.reason && !matched.contains($0) }.map { "\(plan.unmatchedItems[$0].cpBefore ?? -1)|\(plan.unmatchedItems[$0].cpAfter ?? -1)" })
-            var groups = [(a: Int, b: Int, n: Int)](), grouped = [String: Int]()
-            for (k, u) in plan.unmatchedItems.enumerated() where (u.reason == BlankCards.reason || u.reason == StationedCards.reason) && !matched.contains(k) {
-                guard let a = u.cpBefore, let b = u.cpAfter, let n = u.count, n >= 1 else { continue }
-                let key = "\(a)|\(b)"
-                if stationedBounds.contains(key) {
-                    if let g = grouped[key] { groups[g].n += n } else { grouped[key] = groups.count; groups.append((a, b, n)) }
-                } else { groups.append((a, b, n)) }
+            let items = plan.unmatchedItems
+            let eligible = items.indices.filter { k in
+                let u = items[k]
+                return (u.reason == BlankCards.reason || u.reason == StationedCards.reason) && !matched.contains(k) && u.cpBefore != nil && u.cpAfter != nil && (u.count ?? 0) >= 1
+            }
+            // consecutive eligible items of one stretch
+            var runs = [[Int]]()
+            for k in eligible {
+                if let last = runs.last?.last, items[last].stretch == items[k].stretch, items[last].cpBefore == items[k].cpBefore, items[last].cpAfter == items[k].cpAfter { runs[runs.count - 1].append(k) } else { runs.append([k]) }
+            }
+            var groups = [(a: Int, b: Int, n: Int)]()
+            for run in runs {
+                let (a, b) = (items[run[0]].cpBefore!, items[run[0]].cpAfter!)
+                if run.contains(where: { items[$0].reason == StationedCards.reason }) { groups.append((a, b, run.reduce(0) { $0 + items[$1].count! })) }
+                else { for k in run { groups.append((a, b, items[k].count!)) } }
             }
             for (a, b, n) in groups {
-                // the stretch lies where the rows' order says it does
+                // the stretch lies where the rows' order says it does, and its two ends are near enough for the bounds to mean something
                 guard order == .descending ? a >= b : a <= b else { continue }
                 let (lo, hi) = (min(a, b), max(a, b))
+                guard lo > 0, Double(hi) <= widestPlausibleBoundsRatio * Double(lo) else { continue }
                 let inside = vPool.filter { !taken.contains($0) && saved[$0].row.cp >= lo && saved[$0].row.cp <= hi }
                 guard !inside.isEmpty, inside.count <= n else { continue }
                 for vi in inside { taken.insert(vi); out.append(UnreadEntry(id: saved[vi].id, why: "a card between CP \(a) and CP \(b) was on screen and could not be read")) }
             }
         }
-        for u in plan.unmatchedItems where u.reason == "cp-not-read" && u.cp == nil {
-            guard let name = u.name, !name.isEmpty, let hp = u.hp else { continue }
-            for vi in vPool where !taken.contains(vi) {
+        // cards with a name and an HP but no CP: the entries of that name and HP, no more of them than such cards
+        let noCp = plan.unmatchedItems.filter { $0.reason == "cp-not-read" && $0.cp == nil && $0.name?.isEmpty == false && $0.hp != nil }
+        var seenKeys = Set<String>()
+        for first in noCp {
+            let (name, hp) = (first.name!, first.hp!)
+            guard seenKeys.insert("\(name)|\(hp)").inserted else { continue }
+            let cards = noCp.filter { $0.name == name && $0.hp == hp }
+            let pool = vPool.filter { vi in
                 let v = saved[vi].row
-                guard v.display == name || v.name == name, v.hp == hp, u.cpOptions?.isEmpty != false || u.cpOptions!.contains(v.cp) else { continue }
-                taken.insert(vi); out.append(UnreadEntry(id: saved[vi].id, why: "\(name) with HP \(hp) was on screen and its CP could not be read"))
+                guard !taken.contains(vi), v.display == name || v.name == name, v.hp == hp else { return false }
+                return cards.contains { $0.cpOptions?.isEmpty != false || $0.cpOptions!.contains(v.cp) }
             }
+            guard !pool.isEmpty, pool.count <= cards.count else { continue }
+            for vi in pool { taken.insert(vi); out.append(UnreadEntry(id: saved[vi].id, why: "\(name) with HP \(hp) was on screen and its CP could not be read")) }
         }
         return out
     }
 
-    /// Round 31c. A stationed card (name and bars, no CP, no HP) is matched to a saved entry when exactly ONE unseen entry (still unpaired and in no question) has a species the card's name
-    /// could be (the ids the reader narrowed it to, else every form of the screen name), the same IVs as the bars read and, when the scan's rows are in CP order and the item has its
-    /// neighbours' CPs, a CP between them (inclusive). Nothing is written: the entry is marked seen. No unique match (none, or several): the item stays on screen unread, which
-    /// `onScreenUnread` and `unreadLine` already treat as they treat a blank card. Items are taken in order and a matched entry leaves the pool, so two identical cards and one entry
-    /// match one of them. A stationed card never creates an entry: its CP and HP are unknown.
+    /// Round 31c, tightened in round 32. A stationed card (name and bars, no CP, no HP) is matched to a saved entry when exactly ONE unseen entry (still unpaired and in no question) has a
+    /// species the card's name could be (the ids the reader narrowed it to, else every form of the screen name), the same IVs as the bars read and a CP between the neighbours' CPs
+    /// (inclusive), and when NO other unseen entry of that species with a CP between them has IVs within one notch on every stat of the bars (a bars misread one notch off would have
+    /// taken the wrong entry). The bounds are required: a scan whose rows are not in CP order (or whose stretch lies against the order) matches nothing, because without them a far-CP
+    /// entry of the same bars would be taken. Nothing is written: the entry is marked seen. Any refusal leaves the item on screen unread, which `onScreenUnread` and `unreadLine` already
+    /// treat as they treat a blank card. Items are taken in order and a matched entry leaves the pool, so two identical cards and one entry match one of them. A stationed card never creates
+    /// an entry: its CP and HP are unknown.
     private static func matchStationed(_ plan: inout Plan, vPool: inout [Int], saved: [BoxEntry], rows: [ScanRow]) {
-        let order = BlankCards.cpOrder(rows)
+        guard let order = BlankCards.cpOrder(rows) else { return }
+        func oneNotch(_ x: IVs, _ y: IVs) -> Bool { abs(x.atk - y.atk) <= 1 && abs(x.def - y.def) <= 1 && abs(x.hp - y.hp) <= 1 }
         for (k, u) in plan.unmatchedItems.enumerated() where u.reason == StationedCards.reason {
-            guard let ivs = u.ivs else { continue }
+            guard let ivs = u.ivs, let a = u.cpBefore, let b = u.cpAfter, order == .descending ? a >= b : a <= b else { continue }
             let ids: Set<String> = u.speciesIds?.isEmpty == false ? Set(u.speciesIds!) : (u.name.flatMap { screenNameIds[$0] } ?? [])
             guard !ids.isEmpty else { continue }
-            let hits = vPool.filter { vi in
+            let candidates = vPool.filter { vi in
                 let v = saved[vi]
-                guard ids.contains(v.speciesKey) || v.corrections.species?.was.map({ ids.contains($0) }) == true else { return false }
-                guard v.row.ivs == ivs || v.corrections.ivs?.was == ivs else { return false }
-                if let order, let a = u.cpBefore, let b = u.cpAfter, order == .descending ? a >= b : a <= b { return v.row.cp >= min(a, b) && v.row.cp <= max(a, b) }
-                return true
+                return (ids.contains(v.speciesKey) || v.corrections.species?.was.map({ ids.contains($0) }) == true) && v.row.cp >= min(a, b) && v.row.cp <= max(a, b)
             }
+            let hits = candidates.filter { saved[$0].row.ivs == ivs || saved[$0].corrections.ivs?.was == ivs }
             guard hits.count == 1, let vi = hits.first else { continue }
+            let neighbour = candidates.contains { other in
+                other != vi && [saved[other].row.ivs, saved[other].corrections.ivs?.was].contains { $0.map { oneNotch($0, ivs) } == true }
+            }
+            guard !neighbour else { continue }
             plan.stationedSeen.append(StationedMatch(item: k, savedId: saved[vi].id))
             vPool.removeAll { $0 == vi }
         }
@@ -582,7 +610,9 @@ public enum BoxMerge {
         return "You left \(n == 1 ? "1 row" : "\(n) rows") out of the box. Some of the entries below may be those Pokémon, which simply were not read."
     }
 
-    /// The one line shown above the "Not seen in this scan" list when items on screen could not be read (they absorbed into another row are not counted), else nil.
+    /// The one line shown above the "Not seen in this scan" list when items on screen could not be read (they absorbed into another row are not counted), else nil. When every one of them
+    /// has an entry kept out of that list (`plan.unreadEntries`, shown by the app under "On screen but not read") the line says so and does not point at the list; otherwise some of the entries
+    /// in the list may be those Pokémon.
     public static func unreadLine(_ plan: Plan) -> String? {
         let matched = Set(plan.stationedSeen.map(\.item))
         let items = plan.unmatchedItems.enumerated().filter { $0.element.reason != "absorbed" && !matched.contains($0.offset) }.map(\.element)
@@ -597,8 +627,10 @@ public enum BoxMerge {
         var seen = Set<String>(), unique = [String]()
         for n in names where seen.insert(n.lowercased()).inserted { unique.append(n) }
         let n = items.count - items.filter { $0.reason == BlankCards.reason }.count + blanks
-        if unique.isEmpty { return "\(n) \(n == 1 ? "card" : "cards") on screen could not be read (no name, CP or HP showed). Some of the entries below may be those." }
-        return "\(n) Pokémon on screen could not be read (names: \(unique.joined(separator: ", "))). Some of the entries below may be those."
+        // Entries kept out of the list stand for the cards (never more entries than cards), so with as many entries as cards none of the entries left in the list can be those.
+        let tail = plan.unreadEntries.count >= n ? "Each has a saved entry kept out of the Not seen list, under \"On screen but not read\"." : "Some of the entries below may be those."
+        if unique.isEmpty { return "\(n) \(n == 1 ? "card" : "cards") on screen could not be read (no name, CP or HP showed). \(tail)" }
+        return "\(n) Pokémon on screen could not be read (names: \(unique.joined(separator: ", "))). \(tail)"
     }
 
     // MARK: - rule predicates

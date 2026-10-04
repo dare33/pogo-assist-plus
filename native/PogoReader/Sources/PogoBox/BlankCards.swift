@@ -43,11 +43,11 @@ public enum BlankCards {
             // between two different rows: the row before has ended, the row after has not begun
             guard let b = rowSpans.lastIndex(where: { $0.last <= first }), b + 1 < rowSpans.count, rowSpans[b + 1].first >= last, rowSpans[b + 1].first > first else { continue }
             if timed[i...j].contains(where: \.isStationed) {
-                out += StationedCards.items(timed: timed, from: i, to: j, period: period, cpBefore: rows[b].cp, cpAfter: rows[b + 1].cp)
+                out += StationedCards.items(timed: timed, from: i, to: j, period: period, cpBefore: rows[b].cp, cpAfter: rows[b + 1].cp, stretch: b)
                 continue
             }
             out.append(Unmatched(frame: timed[i].frame, cp: nil, name: nil, nameText: nil, hp: nil, ivs: nil, cpOptions: nil, frames: j - i + 1, reason: reason, into: nil, clip: nil,
-                                 count: count, cpBefore: rows[b].cp, cpAfter: rows[b + 1].cp))
+                                 count: count, cpBefore: rows[b].cp, cpAfter: rows[b + 1].cp, stretch: b))
         }
         return out
     }

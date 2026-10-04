@@ -22,7 +22,7 @@ extension Refine {
     /// is solved again by the JavaScript on its own readings, so it gets its own bars, level and flags; the second row is flagged
     /// `split-by-bars` (not `same-as-previous`: they are different Pokemon).
     /// A single odd reading never splits a row: the first frame after a page is the previous Pokemon's bars moving to the new ones.
-    static func splitByBars(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, hintPeriod: Double? = nil, maxStates: Int = barsSplitMaxStates) throws -> (scan: ScanResult, marks: [(label: String, detail: String)], notices: [String]) {
+    static func splitByBars(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, hintPeriod: Double? = nil, pauses: [ClosedRange<Double>] = [], maxStates: Int = barsSplitMaxStates) throws -> (scan: ScanResult, marks: [(label: String, detail: String)], notices: [String]) {
         var labelIndex = [String: Int]()
         for (i, r) in readings.enumerated() { if let f = r.frame, labelIndex[f] == nil { labelIndex[f] = i } }
         let pace = ScanPace.measure(rows: scan.rows)
@@ -44,9 +44,13 @@ extension Refine {
             if found == nil, hintPeriod != nil, let l = barsChanges(row, lenient: true, maxStates: maxStates) { found = l; lenient = true }
             guard let change = found else { out.append(row); continue }
             if lenient {
-                // Bars below the settled confidence count only when the cuts they imply lie on the command's beat: each cut a whole number (at least one) of expected periods from the
-                // row's own boundaries, within `timingMultipleTolerance`. The same confidence floor still protects every other row.
-                guard let p = hintPeriod, let bd = bounds, change.cuts.allSatisfy({ onBeat($0.time - bd.b0, p) && onBeat(bd.b1 - $0.time, p) }) else { out.append(row); continue }
+                // Bars below the settled confidence count only when the row is one the beat can vouch for, which is stricter than the settled path (round 32): the row touches no pause (a Pokémon
+                // held through a recorded pause is one Pokémon whatever its bars do, the same notion `splitByTiming` uses), and every part made by a cut lasts ONE expected period, within
+                // `timingMultipleTolerance` (the real Fidough twin does; a part of two or more periods or a part of a few readings is a weak state flipping inside a held card).
+                // The confidence floor still protects every other row, and each lenient state is still held by `barsStateMinReadings` consecutive agreeing readings.
+                guard let p = hintPeriod, let bd = bounds, !touchesPause(n, in: allSpans, pauses: pauses) else { out.append(row); continue }
+                let edges = [bd.b0] + change.cuts.map(\.time) + [bd.b1]
+                guard zip(edges, edges.dropFirst()).allSatisfy({ abs(($1 - $0) - p) <= timingMultipleTolerance * p }) else { out.append(row); continue }
             } else if let p = period, let bd = bounds {
                 // beat evidence: with a regular beat each part lasts about one period (cut j is j periods after the row's first boundary, the last part one period before its end)
                 let tol = barsSplitPartTolerance * p
@@ -85,10 +89,10 @@ extension Refine {
         return (ScanResult(rows: out, review: out.filter { !$0.flags.isEmpty }.map(reviewEntry), unmatched: scan.unmatched), marks, notices)
     }
 
-    /// A whole number (at least one) of periods, within `timingMultipleTolerance` of a period.
-    private static func onBeat(_ x: Double, _ period: Double) -> Bool {
-        let k = (x / period).rounded()
-        return k >= 1 && abs(x - k * period) <= timingMultipleTolerance * period
+    /// Whether row `n` touches a recorded pause, as `splitByTiming`'s `inPause` decides it (the row's first to last reading against each pause).
+    private static func touchesPause(_ n: Int, in spans: [(first: Double, last: Double)], pauses: [ClosedRange<Double>]) -> Bool {
+        guard n < spans.count else { return false }
+        return pauses.contains { $0.lowerBound <= spans[n].last && $0.upperBound >= spans[n].first }
     }
 
     /// Where a row's bars change from one state to another, each state held by at least `barsStateMinReadings` consecutive readings with exactly equal bars: the time of each cut (halfway

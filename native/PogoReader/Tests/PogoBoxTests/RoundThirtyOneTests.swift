@@ -220,8 +220,8 @@ final class RoundThirtyOneTests: XCTestCase {
         XCTAssertTrue(Set(report.gone).isDisjoint(with: report.onScreenUnread))
         let after = try BoxMerge.apply(p, resolutions: [:], keepGone: BoxMerge.keepSet(plan: p, resolutions: [:], markedForRemoval: Set(report.gone)), to: b)
         XCTAssertEqual(Set(after.map(\.id)), Set(b.map(\.id)).subtracting(["above", "below"]), "only the marked ones are removed, never an unread one")
-        // the line counts the cards
-        XCTAssertEqual(BoxMerge.unreadLine(p), "2 cards on screen could not be read (no name, CP or HP showed). Some of the entries below may be those.")
+        // the line counts the cards; both have an entry kept out of the list, so it no longer says entries below may be those (round 32: they are not below)
+        XCTAssertEqual(BoxMerge.unreadLine(p), "2 cards on screen could not be read (no name, CP or HP showed). Each has a saved entry kept out of the Not seen list, under \"On screen but not read\".")
         // an add-and-update scan lists and removes nothing
         let part = BoxMerge.plan(scanned: rows, unmatched: items, into: b, kind: .partial, scanDate: date(1), gameMaster: gm)
         XCTAssertTrue(part.unreadEntries.isEmpty); XCTAssertTrue(part.gone.isEmpty)

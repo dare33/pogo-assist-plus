@@ -137,6 +137,9 @@ public struct Unmatched: Codable, Equatable {
     public var cpAfter: Int?
     /// `stationed` only: the species ids the card's name could be (one when the reader narrowed it). Optional, so a scan saved before it existed still decodes.
     public var speciesIds: [String]?
+    /// `blank-card` and `stationed` only (round 32): the position, in the scan's rows, of the row before the stretch. Items with the same value are of one stretch; two stretches with the same
+    /// neighbouring CPs elsewhere in the scan have another. Optional, so a scan saved before it existed still decodes.
+    public var stretch: Int?
 }
 
 public struct ScanResult: Codable, Equatable {

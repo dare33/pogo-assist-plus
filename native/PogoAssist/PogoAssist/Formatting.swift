@@ -46,6 +46,10 @@ enum Fmt {
             let opts = (u.cpOptions ?? []).map(String.init).joined(separator: " or ")
             return "\(what): the CP could not be read" + (opts.isEmpty ? "." : "; it could be \(opts).")
         case "absorbed": return "\(what): seen on one frame only and joined to the Pokémon next to it" + (u.into.map { " (CP \($0))." } ?? ".")
+        case "stationed": return "\(what): stationed away, so its card shows no CP or HP."
+        case "blank-card":
+            let n = u.count ?? 1
+            return n == 1 ? "A card on screen showed no name, CP or HP." : "\(n) cards on screen showed no name, CP or HP."
         default: return "\(what): not read (\(u.reason))."
         }
     }

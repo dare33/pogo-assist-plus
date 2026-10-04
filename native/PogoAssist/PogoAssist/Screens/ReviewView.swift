@@ -152,6 +152,27 @@ private struct ResultList: View {
             if review.kind == .full && !report.gone.isEmpty {
                 Section { Text("These are in your box but the scan did not see them. They are all kept. Nothing is removed unless you mark it for removal above.").font(.footnote).foregroundStyle(.secondary) }
             }
+            // Entries the scan did not pair but had on screen unread, and entries a stationed card was matched to. Neither is selectable for removal: they are not in the Not seen list.
+            if review.kind == .full && !report.onScreenUnread.isEmpty {
+                Section {
+                    ForEach(report.onScreenUnread, id: \.self) { id in
+                        if let e = saved[id] { Text(Fmt.brief(e.row)).font(.callout) }
+                    }
+                } header: { Text("On screen but not read").accessibilityIdentifier("review-on-screen-unread-header") } footer: {
+                    Text("These were kept. The scan saw a card it could not read where each of these would be.")
+                }
+                .accessibilityIdentifier("review-on-screen-unread")
+            }
+            if !plan.stationedSeen.isEmpty {
+                Section {
+                    ForEach(plan.stationedSeen, id: \.item) { m in
+                        if let e = saved[m.savedId] { Text(Fmt.brief(e.row)).font(.callout) }
+                    }
+                } header: { Text("Stationed, seen but not read").accessibilityIdentifier("review-stationed-seen-header") } footer: {
+                    Text("Their cards show no CP or HP while they are away.")
+                }
+                .accessibilityIdentifier("review-stationed-seen")
+            }
             let flagged = review.outcome.scan.rows.indices.filter { review.outcome.scan.rows[$0].needsCheck }
             Section("To check in the game (\(flagged.count))") {
                 if flagged.isEmpty { Text("Nothing needs a check.").foregroundStyle(.secondary) }
@@ -164,7 +185,7 @@ private struct ResultList: View {
                 }
             }
             let unmatched = review.outcome.scan.unmatched
-            Section("On screen but not read (\(unmatched.count))") {
+            Section("Cards the scan could not read (\(unmatched.count))") {
                 if unmatched.isEmpty { Text("Every Pokémon on screen was read.").foregroundStyle(.secondary) }
                 ForEach(Array(unmatched.enumerated()), id: \.offset) { _, u in Text(Fmt.unmatched(u)).font(.callout) }
             }
