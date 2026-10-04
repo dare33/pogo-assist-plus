@@ -96,6 +96,8 @@ final class BoxScreensTests: XCTestCase {
         if toCheck.exists {
             toCheck.tap()
             rows.element(boundBy: 0).tap()
+            // The species list is pushed with the To check filter on; its rows appear after the push, so wait for them rather than tapping at once.
+            XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 10), "the species list under the To check chip shows its Pokémon")
             members.element(boundBy: 0).tap()
             XCTAssertTrue(app.buttons["These values are right"].waitForExistence(timeout: 5), "a Pokémon with a check shows the button")
             sleep(1)

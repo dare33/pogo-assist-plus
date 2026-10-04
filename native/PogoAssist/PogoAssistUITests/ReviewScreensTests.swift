@@ -44,19 +44,22 @@ final class ReviewScreensTests: XCTestCase {
 
         // Few queries on purpose: each one walks the whole long page's accessibility tree, which is slow in a Debug build.
         scrollTop(app)
-        let saved = app.buttons["It's the saved one"].firstMatch
-        XCTAssertTrue(saved.waitForExistence(timeout: 10))
-        saved.tap()
+        // One row is answered "Don't include" by hand first: the bulk button must neither count it nor overwrite it.
+        let left = app.buttons["Don't include"].firstMatch
+        XCTAssertTrue(left.waitForExistence(timeout: 10))
+        left.tap()
         sleep(1)
         shot("\(p)-03-part-mid-answer")
         app.swipeUp()
         let bulk = button(app, beginsWith: "Yes, all")
         XCTAssertTrue(bulk.waitForExistence(timeout: 10), "the bulk button is on screen")
+        XCTAssertEqual(bulk.label, "Yes, all 2 are the saved ones", "the label counts only the rows still open")
         bulk.tap()
         sleep(1)
         shot("\(p)-04-part-bulk-ticking")
         sleep(2)
         shot("\(p)-05-part-folded")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '1 not included'")).firstMatch.waitForExistence(timeout: 5), "the answer given by hand was kept, not overwritten by the bulk answer")
         let evolved = app.buttons["Yes, it evolved"].firstMatch
         XCTAssertTrue(evolved.waitForExistence(timeout: 10))
         evolved.tap(); sleep(1); shot("\(p)-06-card-answered")
@@ -108,6 +111,39 @@ final class ReviewScreensTests: XCTestCase {
         shot("\(p)-16-not-seen-grid-by-cp")
         button(app, beginsWith: "Done").tap()
         XCTAssertTrue(app.scrollViews["review-scroll"].waitForExistence(timeout: 5))
+    }
+
+    /// The last whole number in an InsetRow's label ("New, 8"), after scrolling down the answered page (the open page is too heavy to scroll to its end in a Debug build).
+    private func rowNumber(_ app: XCUIApplication, _ title: String) -> Int? {
+        let e = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        guard e.exists else { return nil }
+        return e.label.split(whereSeparator: { !$0.isNumber }).last.flatMap { Int($0) }
+    }
+
+    private func savingTotal(_ app: XCUIApplication) -> (new: Int, updated: Int, same: Int) {
+        for _ in 0..<9 { app.swipeUp() }
+        return (rowNumber(app, "New") ?? -1, rowNumber(app, "Updated") ?? -1, rowNumber(app, "Same") ?? -1)
+    }
+
+    /// "What saving does" follows the answers: with one question still open the panel says so, and with every one answered New, Updated, Same and Removed are what Save will write.
+    func testSavingNumbersFollowAnswers() throws {
+        let one = launch(["-appearance", "light"], variant: "full+leaveone")
+        let a = savingTotal(one)
+        XCTAssertTrue(one.staticTexts["1 question not answered yet. It is not counted above."].exists, "the open question is named under the numbers")
+        XCTAssertTrue(one.buttons["review-save-locked"].exists)
+        shot("saving-one-open")
+        one.terminate()
+
+        let all = launch(["-appearance", "light"], variant: "full+answered")
+        let b = savingTotal(all)
+        XCTAssertFalse(all.staticTexts.matching(NSPredicate(format: "label CONTAINS 'not answered yet'")).firstMatch.exists)
+        XCTAssertGreaterThan(b.new, 0, "New is counted")
+        XCTAssertGreaterThan(b.updated, 0, "evolved and powered-up answers are counted as Updated")
+        XCTAssertGreaterThan(b.same, 6, "the six rows already in the box and the rows answered as the saved one are counted as Same")
+        XCTAssertEqual(b.new + b.updated + b.same, a.new + a.updated + a.same + 1, "answering the last question adds one row to New, Updated or Same")
+        let removed = all.staticTexts["Removed"]
+        XCTAssertTrue(removed.exists, "the Mega pair answered Same Pokémon removes the Mega entry")
+        shot("saving-answered")
     }
 
     func testOpenLight() throws { tourOpen(launch(["-appearance", "light"]), "light", pages: 7) }
