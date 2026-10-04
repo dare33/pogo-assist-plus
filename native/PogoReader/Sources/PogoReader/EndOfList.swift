@@ -114,6 +114,7 @@ public struct EndOfListDetector {
     /// One frame's reading at `time`. True once the end has been seen (and on every call after).
     @discardableResult
     public mutating func feed(_ r: FrameReading, time: Double) -> Bool {
+        let r = r.asBlankFrame   // a stationed card is not a card yet (round 31): it stays the blank frame it was
         if ended != nil { return true }
         guard time.isFinite else { return false }
         defer { lastFrame = time }

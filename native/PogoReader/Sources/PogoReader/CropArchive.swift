@@ -67,7 +67,8 @@ public struct CropSaver {
         let t = max(a.time ?? (clock + Tuning.framePeriod), clock)
         clock = t
         let eps = 1e-9
-        if !a.needsText {
+        // A stationed candidate is no card here (round 31): a deferred read has no "At" line to confirm it, and it was a separator frame before.
+        if !a.needsText || a.stationed == true {
             if sepStart == nil { sepStart = t }
             sepLast = t
             return false
