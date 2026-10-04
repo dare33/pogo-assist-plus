@@ -7,6 +7,8 @@ import PogoReader
 struct ToCheckScreen: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var circle: CGFloat = 30
     let close: () -> Void
     @State private var showInfo = false
     @State private var find: FindTarget?
@@ -21,9 +23,11 @@ struct ToCheckScreen: View {
 
     private func content(_ ctx: ReviewContext) -> some View {
         let plan = ctx.plan
-        let groups = ReviewCheckGroup.groups(plan, resolutions: ctx.review.resolutions)
+        let groups = ctx.checkGroups
         let rows = groups.flatMap(\.rows)
-        let search = GameSearch.text(rows.map { GameSearch.part(row: plan.scanned[$0]) })
+        let parts = rows.map { GameSearch.part(row: plan.scanned[$0]) }
+        let search = GameSearch.text(parts)
+        let notCovered = parts.count - GameSearch.covered(parts)
         return VStack(spacing: 0) {
             ReviewTopBar(title: "To check", onBack: close)
             ScrollView {
@@ -32,12 +36,13 @@ struct ToCheckScreen: View {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(rows.count.formatted()).paText(.heroFigure).foregroundStyle(Theme.ink)
                             Text("to look at in the game").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+                            if notCovered > 0 { Text("\(notCovered) not in the search: no CP or HP to look for.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
                         }
                         .accessibilityElement(children: .combine)
                         HStack(spacing: 12) {
                             step("1")
                             Text("Copy one search for all").paText(.rowTitle).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
-                            Button { withAnimation(.snappy) { showInfo.toggle() } } label: {
+                            Button { withAnimation(reduceMotion ? nil : .snappy) { showInfo.toggle() } } label: {
                                 Image(systemName: "info.circle").font(.figtree(18, .semibold)).foregroundStyle(Theme.muted).frame(minWidth: 44, minHeight: 44)
                             }
                             .accessibilityLabel("About this search")
@@ -96,7 +101,7 @@ struct ToCheckScreen: View {
         .background(Theme.bg.ignoresSafeArea())
         .sheet(item: $find) { t in
             let r = plan.scanned[t.index]
-            FindSheet(row: r, reason: t.reason, flags: ReviewCheckGroup.remainingFlags(r, cleared: BoxMerge.clearedChecks(plan, resolutions: ctx.review.resolutions).contains(t.index)))
+            FindSheet(row: r, reason: t.reason, fate: ctx.fate(of: t.index), flags: ReviewCheckGroup.remainingFlags(r, cleared: BoxMerge.clearedChecks(plan, resolutions: ctx.review.resolutions).contains(t.index)))
                 .presentationDetents([.medium, .large]).presentationCornerRadius(Theme.Radius.sheet).presentationDragIndicator(.visible)
                 .themeRoot()
         }
@@ -104,7 +109,7 @@ struct ToCheckScreen: View {
 
     private func step(_ n: String) -> some View {
         Text(n).font(.figtree(14, .heavy)).foregroundStyle(Theme.orangeInk)
-            .frame(width: 30, height: 30).background(Circle().fill(Theme.orangeTint)).accessibilityHidden(true)
+            .frame(width: circle, height: circle).background(Circle().fill(Theme.orangeTint)).accessibilityHidden(true)
     }
 }
 
@@ -129,6 +134,7 @@ struct CopyPill: View {
 struct FindSheet: View {
     let row: ScanRow
     let reason: ReviewCheckGroup.Reason
+    let fate: SaveFate
     let flags: [String]
     @Environment(\.dismiss) private var dismiss
 
@@ -154,10 +160,20 @@ struct FindSheet: View {
                 }
                 .padding(.horizontal, 16).padding(.vertical, 14).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                Text("After you save, you can mark this one as checked or fix a value from its page in the box.").paText(.secondary).foregroundStyle(Theme.muted)
+                if let note = fateNote { Text(note).paText(.secondary).foregroundStyle(Theme.muted) }
             }
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 24)
         }
         .background(Theme.surface.ignoresSafeArea())
+    }
+
+    /// What Save does with this row, from `BoxMerge.apply`'s own decision for it (`ReviewContext.fate`).
+    private var fateNote: String? {
+        switch fate {
+        case .values: return "After you save, you can mark this one as checked or fix a value from its page in the box."
+        case .notSaved: return "This one is not saved to the box as read: its values are not written, so there is nothing to confirm there."
+        case .undecided: return "What is saved for this one depends on your answer to its question."
+        case .unknown: return nil
+        }
     }
 }

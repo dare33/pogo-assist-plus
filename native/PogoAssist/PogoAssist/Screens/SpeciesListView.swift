@@ -70,7 +70,7 @@ struct SpeciesListView: View {
 
     private func rows(_ ms: [Int]) -> some View {
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
-        return VStack(spacing: 0) {
+        return LazyVStack(spacing: 0) {
             ForEach(Array(ms.enumerated()), id: \.element) { n, i in
                 let it = index.items[i]
                 Group {
@@ -126,28 +126,32 @@ struct SpeciesListView: View {
         let order = ms.filter { picked.contains(index.items[$0].id) }
         let search = index.gameSearch(picked: order)
         return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").font(.figtree(16, .bold)).foregroundStyle(Theme.orangeInk).accessibilityHidden(true)
-                Text(search.text).font(.figtree(14, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.orangeInk)
-                    .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+            if let text = search.text {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass").font(.figtree(16, .bold)).foregroundStyle(Theme.orangeInk).accessibilityHidden(true)
+                    Text(text).font(.figtree(14, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.orangeInk)
+                        .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 44)
+                .background(Theme.orangeTint, in: RoundedRectangle(cornerRadius: Theme.Radius.insetRow, style: .continuous))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Search to paste into the game")
+                .accessibilityValue(text)
             }
-            .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 44)
-            .background(Theme.orangeTint, in: RoundedRectangle(cornerRadius: Theme.Radius.insetRow, style: .continuous))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Search to paste into the game")
-            .accessibilityValue(search.text)
             if search.extra > 0 {
-                Text("In the game this search will also show \(search.extra.formatted()) more: \(search.extra == 1 ? "a Pokémon" : "Pokémon") with the same name and one of these CPs that you did not pick.")
+                Text("\(search.extra.formatted()) other Pokémon in your box also \(search.extra == 1 ? "matches" : "match") this search.")
                     .font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.orangeInk)
             }
-            if search.withoutCP > 0 {
-                Text("\(search.withoutCP.formatted()) of the picked \(search.withoutCP == 1 ? "has" : "have") no CP known, so this search cannot find \(search.withoutCP == 1 ? "it" : "them").")
+            if search.notCovered > 0 {
+                Text("\(search.notCovered.formatted()) of the picked \(search.notCovered == 1 ? "has" : "have") no CP or HP to search for, so this search leaves \(search.notCovered == 1 ? "it" : "them") out.")
                     .font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.orangeInk)
             }
             HStack(spacing: 8) {
-                PillButton("Copy search (\(order.count.formatted()))", systemImage: "doc.on.doc", style: .filled, height: 52) {
-                    UIPasteboard.general.string = search.text
-                    showToast("Copied")
+                if let text = search.text {
+                    PillButton("Copy search (\(search.covered.formatted()))", systemImage: "doc.on.doc", style: .filled, height: 52) {
+                        UIPasteboard.general.string = text
+                        showToast("Copied")
+                    }
                 }
                 PillButton("Export", systemImage: "square.and.arrow.up", style: .tint, height: 52, fullWidth: false) {
                     let ids = Set(order.map { index.items[$0].id })

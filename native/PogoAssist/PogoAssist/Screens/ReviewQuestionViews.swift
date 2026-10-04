@@ -15,7 +15,7 @@ struct ReviewQuestionsView: View {
                 PartReadGroupView(ctx: ctx, group: g, folded: $folded)
             } else {
                 VStack(spacing: Theme.Space.panelGap) {
-                    if g.canBulk, g.members.contains(where: { ctx.resolution($0) == nil }) { bulkButton(g) }
+                    if g.canBulk { BulkButton(ctx: ctx, group: g, kind: .card) }
                     ForEach(g.members, id: \.self) { m in
                         if let q = ctx.question(m) { ReviewCardView(ctx: ctx, q: q) }
                     }
@@ -24,34 +24,78 @@ struct ReviewQuestionsView: View {
         }
     }
 
-    private func bulkButton(_ g: BoxMerge.QuestionGroup) -> some View {
-        let n = g.members.count
-        let label: String
-        switch g.kind {
-        case .evolved: label = "Yes, all \(n) evolved"
-        case .poweredUp: label = "Yes, all \(n) powered up"
-        case .megaPair, .megaToBase: label = "Yes, all \(n) are the same Pokémon"
-        default: label = "Yes, all \(n) are the saved ones"
+}
+
+/// "Yes, all N" above a group of questions. It answers only the members that have no answer yet (never one the person already gave), says how many that is, and is gone once none
+/// is open.
+struct BulkButton: View {
+    enum Style { case card, partRead }
+    @EnvironmentObject var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let ctx: ReviewContext
+    let group: BoxMerge.QuestionGroup
+    let kind: Style
+    @State private var runner = BulkRunner()
+
+    var body: some View {
+        let open = group.members.filter { ctx.resolution($0) == nil && group.primary[$0] != nil }
+        let n = open.count
+        if n > 0 {
+            PillButton(label(n), systemImage: "checkmark", style: group.kind == .megaPair ? .tint : .filled, height: 52) {
+                runner.start(model, members: group.members, answers: group.primary, reduceMotion: reduceMotion)
+            }
+            // The scan kind was switched or the screen is going away: nothing more is written.
+            .onChange(of: ctx.review.planToken) { _, _ in runner.cancel() }
+            .onDisappear { runner.cancel() }
         }
-        // The Mega pair's "yes" removes the Mega entry, so it is never the filled button.
-        return PillButton(label, systemImage: "checkmark", style: g.kind == .megaPair ? .tint : .filled, height: 52) {
-            ReviewAnswering.bulk(model, members: g.members, answers: g.primary, current: { ctx.resolution($0) }, reduceMotion: reduceMotion)
+    }
+
+    private func label(_ n: Int) -> String {
+        if kind == .partRead { return "Yes, all \(n) are the saved ones" }
+        switch group.kind {
+        case .evolved: return "Yes, all \(n) evolved"
+        case .poweredUp: return "Yes, all \(n) powered up"
+        case .megaPair, .megaToBase: return "Yes, all \(n) are the same Pokémon"
+        default: return "Yes, all \(n) are the saved ones"
         }
     }
 }
 
-/// Answering one or many questions. Bulk answers tick one after another, 90 ms apart (at once with Reduce Motion).
-enum ReviewAnswering {
-    @MainActor
-    static func bulk(_ model: AppModel, members: [Int], answers: [Int: BoxMerge.Resolution], current: @escaping (Int) -> BoxMerge.Resolution?, reduceMotion: Bool) {
-        let todo = members.filter { current($0) != answers[$0] }
+/// Answering a group in bulk. The answers tick one after another, 90 ms apart (at once with Reduce Motion), from ONE task: a second tap while it runs does nothing. It stops (and writes
+/// nothing more) when the person answers or takes back any member of the group, when the plan changes (another scan kind) and when its button goes away.
+@MainActor
+final class BulkRunner {
+    private var task: Task<Void, Never>?
+    private var generation = 0
+
+    func start(_ model: AppModel, members: [Int], answers: [Int: BoxMerge.Resolution], reduceMotion: Bool) {
+        guard task == nil, case .review(let r0) = model.flow else { return }
+        // Only members with no answer yet: an answer the person gave is never overwritten.
+        let todo = members.filter { r0.resolutions[$0] == nil && answers[$0] != nil }
+        guard !todo.isEmpty else { return }
         if reduceMotion { for m in todo { model.resolve(m, answers[m]) }; return }
-        Task { @MainActor in
+        let token = r0.planToken
+        generation += 1
+        let mine = generation
+        task = Task { @MainActor [weak self] in
+            // What each member's answer should be if nobody but this task has touched it.
+            var expected = [Int: BoxMerge.Resolution]()
+            for m in members { if let a = r0.resolutions[m] { expected[m] = a } }
             for (i, m) in todo.enumerated() {
                 if i > 0 { try? await Task.sleep(nanoseconds: 90_000_000) }
+                guard !Task.isCancelled, case .review(let r) = model.flow, r.planToken == token else { break }
+                if members.contains(where: { r.resolutions[$0] != expected[$0] }) { break }
                 withAnimation(.snappy) { model.resolve(m, answers[m]) }
+                expected[m] = answers[m]
             }
+            if let self, self.generation == mine { self.task = nil }
         }
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+        generation += 1
     }
 }
 
@@ -110,11 +154,7 @@ private struct PartReadGroupView: View {
             }
             VStack(spacing: 6) { ForEach(members) { PartReadRow(ctx: ctx, member: $0) } }
             if helpLevel != .essentials { legend }
-            if group.canBulk && members.contains(where: { ctx.resolution($0.scanned) == nil }) {
-                PillButton("Yes, all \(n) are the saved ones", systemImage: "checkmark", style: .filled, height: 52) {
-                    ReviewAnswering.bulk(model, members: group.members, answers: group.primary, current: { ctx.resolution($0) }, reduceMotion: reduceMotion)
-                }
-            }
+            if group.canBulk { BulkButton(ctx: ctx, group: group, kind: .partRead) }
             if let s = search { SearchStrip(text: s) }
             Text(note).paText(.secondary).foregroundStyle(Theme.muted)
         }
@@ -127,7 +167,14 @@ private struct PartReadGroupView: View {
     private var note: String {
         let plural = members.count != 1
         guard group.effect == .seenOnly else { return group.effect.map(ReviewWording.effectSentence) ?? "" }
-        var s = "Only part of \(plural ? "each CP was" : "the CP was") read. Picking the saved one just marks it as seen."
+        // Only a CP whose digits are in the saved CP's was "only partly read"; any other (or none) was not read properly.
+        let fragments = members.filter { ReviewWording.isFragment($0.row.cp, of: $0.saved.row.cp) }.count
+        let allZero = members.allSatisfy { $0.row.cp <= 0 }
+        let what: String
+        if fragments == members.count { what = "Only part of \(plural ? "each CP was" : "the CP was") read." }
+        else if fragments == 0 { what = plural ? (allZero ? "The CPs were not read." : "The CPs were not read properly.") : (allZero ? "The CP was not read." : "The CP was not read properly.") }
+        else { what = "Some CPs were only partly read and the others not read properly." }
+        var s = "\(what) Picking the saved one just marks it as seen."
         if helpLevel != .essentials { s += " Add new saves the row as read, with its part-read CP." }
         return s
     }
@@ -179,8 +226,11 @@ private struct PartReadRow: View {
     private var sub: some View {
         let r = member.row, e = member.saved.row
         let sameHP = r.hp != nil && r.hp == e.hp
-        let tail = sameHP ? " read · saved \(e.cp) · HP \(e.hp ?? 0)" : "\(r.hp.map { ", HP \($0)" } ?? "") read · saved \(e.cp)\(e.hp.map { ", HP \($0)" } ?? "")"
-        return (Text("\(r.cp)").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.orangeInk) + Text(tail).font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted)).monospacedDigit()
+        let read = r.cp > 0
+        let tail: String
+        if read { tail = sameHP ? " read · saved \(e.cp) · HP \(e.hp ?? 0)" : "\(r.hp.map { ", HP \($0)" } ?? "") read · saved \(e.cp)\(e.hp.map { ", HP \($0)" } ?? "")" }
+        else { tail = sameHP ? " · saved \(e.cp) · HP \(e.hp ?? 0)" : "\(r.hp.map { " · HP \($0) read" } ?? "") · saved \(e.cp)\(e.hp.map { ", HP \($0)" } ?? "")" }
+        return (Text(read ? "\(r.cp)" : "CP not read").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.orangeInk) + Text(tail).font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted)).monospacedDigit()
     }
 
     private var icons: some View {
@@ -239,6 +289,10 @@ struct ReviewCardView: View {
                      answered: res.map { ReviewWording.answeredText(q, $0, plan: ctx.plan, saved: ctx.saved, gm: ctx.gm) },
                      onChange: { withAnimation(reduceMotion ? nil : .snappy) { model.resolve(q.scanned, nil) } }) {
             if !q.pair.isEmpty { pairBoxes }
+            // A single saved candidate is in the compare pair, not in a list: say here when another row of this scan already paired it.
+            if q.shape == .single, q.candidates.first?.alreadySeen == true {
+                Text("In your box, already seen in this scan").font(.figtree(12, .medium, relativeTo: .caption)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading)
+            }
             if let line = q.readLine { Text(line).paText(.secondary).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading) }
             ForEach(shown) { candidateRow($0) }
             ForEach(q.answers) { a in

@@ -77,7 +77,7 @@ enum ReviewWording {
             var note = "Yes adds one more to the box. No leaves it out and changes nothing."
             if !cands.isEmpty { note += " A saved Pokémon with the same CP and HP but other IVs is listed above: it may be this one, read with the wrong IVs." }
             return ReviewQuestion(scanned: u.scanned, shape: .extraTwin, kind: .copies,
-                title: exact ? "The scan saw \(word(n)) identical \(row.name). Your box has \(word(k)). Do you have \(word(n))?" : "The scan saw identical \(row.name) in a row, and the box has one like it. Add a second one?",
+                title: exact ? "The scan saw \(word(n)) identical \(row.name). Your box has \(word(k)). Do you have \(word(n))?" : "The scan saw \(word(n)) identical \(row.name). Your box has \(k == 0 ? "none" : word(k)). Add one more?",
                 short: short,
                 compare: exact ? QuestionCompare(readNow: side(row, name: "\(row.name) ×\(n)"), inBox: side(saved[u.candidates.first ?? ""]?.row ?? row, name: "\(row.name) ×\(k)")) : nil,
                 answers: [.init(label: "Yes, add one", icon: "checkmark", resolution: .new, style: .filled), .init(label: "No, don't include", icon: "minus", resolution: .leaveOut, style: .tint)],
@@ -228,6 +228,14 @@ enum ReviewWording {
     static func candidateLine(_ c: ScanRow, among row: ScanRow) -> String {
         let core = "\(cpText(c.cp)) · \(hpText(c.hp)) · \(ivsText(c.ivs))"
         return c.title == row.title ? core : "\(c.title) · \(core)"
+    }
+
+    /// The digits of a CP read in part are some of the digits of the saved CP, in order (182 in 1982), which is what makes it "only partly read".
+    static func isFragment(_ read: Int, of saved: Int) -> Bool {
+        guard read > 0, read != saved else { return false }
+        var i = Array(String(read)).makeIterator(), next = i.next()
+        for c in String(saved) where c == next { next = i.next() }
+        return next == nil
     }
 
     static func alreadySeen(_ id: String, _ plan: BoxMerge.Plan) -> Bool {

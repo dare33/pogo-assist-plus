@@ -12,17 +12,18 @@ struct BoxIndex {
         var title: String
         /// The lowercase name the game's search takes ("staraptor"); the form is not part of it.
         var name: String
-        /// Lowercase text a typed search is matched against.
+        /// Lowercase text a typed search is matched against: the title and the display name with its form ("Mega Charizard X", "Alolan Raichu"), so "mega" or "alola" find them.
         var key: String
         /// 0 when the CP is not known (a Mega-when-scanned entry).
         var cp: Int
+        /// What the game search needs besides the name and CP (see `GameSearch.part(name:cp:hp:noLevelFits:)`).
+        var hp: Int?
+        var noLevelFits: Bool
         var ivs: String?
         var ivSum: Int?
         var pct: Int? { ivSum.map { Int((Double($0) / 45 * 100).rounded()) } }
         var needsCheck: Bool
         var fixed: Bool
-        /// The latest scan was a Full scan and did not see this Pokémon.
-        var notSeen: Bool
     }
 
     struct Group {
@@ -46,28 +47,27 @@ struct BoxIndex {
     /// Item positions by the game-search name, to count what a name and CP search would also show.
     var byName: [String: [Int]] = [:]
     var toCheckCount = 0
-    var notSeenCount = 0
     var fixedCount = 0
     var count: Int { items.count }
-    var speciesCount: Int { groups.count }
+    /// Distinct species (by Pokédex number, so a regional form or a Mega is the same species as its base), not the species-and-form rows the list shows.
+    private(set) var speciesCount = 0
 
     static let empty = BoxIndex()
 
     init() {}
 
-    init(entries: [BoxEntry], scanKind: BoxStore.Kind?, scanDate: Date?) {
-        // Only a Full scan says what it did not see: an add-and-update scan reads part of the box on purpose.
-        let seenCutoff: Date? = scanKind == .full ? scanDate : nil
+    init(entries: [BoxEntry]) {
         items.reserveCapacity(entries.count)
         var byTitle = [String: [Int]]()
+        var species = Set<String>()
         for e in entries {
             let r = e.row, title = r.title
             let sum = r.ivs.map { $0.atk + $0.def + $0.hp }
-            let item = Item(id: e.id, title: title, name: r.name.lowercased(), key: title.lowercased(), cp: r.cp, ivs: r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }, ivSum: sum,
-                            needsCheck: e.needsCheck, fixed: e.isHandCorrected, notSeen: seenCutoff.map { e.lastSeen < $0 } ?? false)
+            let item = Item(id: e.id, title: title, name: r.name.lowercased(), key: title.lowercased() + "|" + r.display.lowercased(), cp: r.cp, hp: r.hp, noLevelFits: GameSearch.noLevelFits(r.flags), ivs: r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }, ivSum: sum,
+                            needsCheck: e.needsCheck, fixed: e.isHandCorrected)
             if item.needsCheck { toCheckCount += 1 }
             if item.fixed { fixedCount += 1 }
-            if item.notSeen { notSeenCount += 1 }
+            species.insert(r.dex.map { "dex\($0)" } ?? r.name.lowercased())
             byTitle[title, default: []].append(items.count)
             byName[item.name, default: []].append(items.count)
             items.append(item)
@@ -86,6 +86,7 @@ struct BoxIndex {
             built.append(Group(title: title, letter: Self.letter(of: title), members: sorted, stats: Self.stats(of: sorted, in: all)))
         }
         groups = built
+        speciesCount = species.count
         groups.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
@@ -109,7 +110,7 @@ struct BoxIndex {
 
     // MARK: filtering
 
-    enum Chip: Hashable { case all, toCheck, notSeen, fixed }
+    enum Chip: Hashable { case all, toCheck, fixed }
 
     enum Query: Hashable {
         case none
@@ -136,7 +137,6 @@ struct BoxIndex {
         switch chip {
         case .all: break
         case .toCheck: if !it.needsCheck { return false }
-        case .notSeen: if !it.notSeen { return false }
         case .fixed: if !it.fixed { return false }
         }
         switch query {
@@ -215,34 +215,30 @@ struct BoxIndex {
 
     // MARK: the game search for picked Pokémon
 
-    struct GameSearch: Equatable {
-        /// "staraptor&cp2819,cp2008,cp1994": names joined with "," then "&" then the CPs joined with ",". In the game "," binds
-        /// before "&", so this shows the Pokémon with one of the names and one of the CPs.
-        var text: String
-        /// Pokémon the search shows that were not picked: the same name and a picked CP.
+    struct PickedSearch: Equatable {
+        /// The search, built by `GameSearch` like every other one in the app. nil when none of the picked can be searched for.
+        var text: String?
+        /// How many of the picked it covers.
+        var covered: Int
+        /// Other Pokémon in this box that the search also matches: the same name and one of the CPs (or HPs) in it, and not picked. Counted from the saved box.
         var extra: Int
-        /// Picked Pokémon whose CP is not known, which the search cannot point at.
-        var withoutCP: Int
+        /// Picked Pokémon with no CP or HP to search for (no CP, or a CP that fits no level and no HP), which the search leaves out.
+        var notCovered: Int
     }
 
     /// `picked` are item positions in the order the list shows them.
-    func gameSearch(picked: [Int]) -> GameSearch {
-        var names = [String](), cps = [Int]()
-        for i in picked {
-            let it = items[i]
+    func gameSearch(picked: [Int]) -> PickedSearch {
+        let parts = picked.map { i -> GameSearch.Part in let it = items[i]; return GameSearch.part(name: it.name, cp: it.cp, hp: it.hp, noLevelFits: it.noLevelFits) }
+        let covered = GameSearch.covered(parts)
+        var names = [String](), cps = Set<Int>(), hps = Set<Int>()
+        for (n, p) in parts.enumerated() where p.covered {
+            let it = items[picked[n]]
             if !names.contains(it.name) { names.append(it.name) }
-            if it.cp > 0, !cps.contains(it.cp) { cps.append(it.cp) }
+            if it.noLevelFits { if let h = it.hp { hps.insert(h) } } else { cps.insert(it.cp) }
         }
-        let text = names.joined(separator: ",") + (cps.isEmpty ? "" : "&" + cps.map { "cp\($0)" }.joined(separator: ","))
         var shown = 0
-        if !cps.isEmpty {
-            let cpSet = Set(cps)
-            for n in names { for i in byName[n] ?? [] where cpSet.contains(items[i].cp) { shown += 1 } }
-        } else {
-            for n in names { shown += byName[n]?.count ?? 0 }
-        }
-        let findable = picked.filter { items[$0].cp > 0 || cps.isEmpty }.count
-        return GameSearch(text: text, extra: max(0, shown - findable), withoutCP: cps.isEmpty ? 0 : picked.filter { items[$0].cp == 0 }.count)
+        for n in names { for i in byName[n] ?? [] where cps.contains(items[i].cp) || items[i].hp.map(hps.contains) == true { shown += 1 } }
+        return PickedSearch(text: GameSearch.text(parts), covered: covered, extra: max(0, shown - covered), notCovered: picked.count - covered)
     }
 }
 
@@ -254,13 +250,13 @@ final class BoxIndexStore: ObservableObject {
     @Published private(set) var version = 0
     private var builtFor: String?
 
-    func refresh(key: String, entries: [BoxEntry], scanKind: BoxStore.Kind?, scanDate: Date?) async {
+    func refresh(key: String, entries: [BoxEntry]) async {
         guard builtFor != key else { return }
         let built: BoxIndex
         if entries.count < 2000 {
-            built = BoxIndex(entries: entries, scanKind: scanKind, scanDate: scanDate)
+            built = BoxIndex(entries: entries)
         } else {
-            built = await Task.detached(priority: .userInitiated) { BoxIndex(entries: entries, scanKind: scanKind, scanDate: scanDate) }.value
+            built = await Task.detached(priority: .userInitiated) { BoxIndex(entries: entries) }.value
         }
         guard !Task.isCancelled else { return }
         index = built; builtFor = key; version += 1
@@ -280,8 +276,11 @@ struct SaveSummary: Equatable {
     var added: Int
     var updated: Int
     var removed: Int
+    /// False for a scan read again: its box is the one from before that scan, so counts against it would not describe what the person's box did.
+    var showsCounts: Bool
 
-    init(base: [BoxEntry], saved: BoxSnapshot) {
+    init(base: [BoxEntry], saved: BoxSnapshot, showsCounts: Bool = true) {
+        self.showsCounts = showsCounts
         account = saved.account; seq = saved.seq; date = saved.createdAt
         var before = [String: BoxEntry](minimumCapacity: base.count)
         for e in base { before[e.id] = e }
@@ -326,9 +325,8 @@ extension BoxIndex {
     static func bench() -> (BoxIndex, String) {
         func ms(_ since: Date) -> String { String(format: "%.1f", Date().timeIntervalSince(since) * 1000) }
         let entries = syntheticEntries()
-        let scanDate = Date(timeIntervalSince1970: 1_790_000_000)
         var t = Date()
-        let index = BoxIndex(entries: entries, scanKind: .full, scanDate: scanDate)
+        let index = BoxIndex(entries: entries)
         let build = ms(t)
         t = Date()
         let all = index.sections(query: .none, chip: .all, sort: .name)

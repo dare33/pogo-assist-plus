@@ -10,6 +10,7 @@ struct FloatingTabBar: View {
     var scanDisabled = false
     var onScan: () -> Void
     @Environment(\.accent) private var accent
+    @Environment(\.colorScheme) private var scheme
 
     /// Room a screen should leave at its bottom so nothing scrolls under the bar.
     static let clearance: CGFloat = 112
@@ -43,7 +44,7 @@ struct FloatingTabBar: View {
             .foregroundStyle(on ? accent.ink : Theme.muted)
             .frame(minWidth: 88, idealWidth: 118, maxWidth: 118, minHeight: 54)
             .background(Capsule().fill(on ? accent.tint : Theme.surface))
-            .shadow(color: Color(red: 20 / 255, green: 30 / 255, blue: 60 / 255).opacity(0.1), radius: 8, x: 0, y: 4)
+            .shadow(color: Color(red: 20 / 255, green: 30 / 255, blue: 60 / 255).opacity(scheme == .dark ? 0 : 0.1), radius: 8, x: 0, y: 4)
             .contentShape(Capsule())
         }
         .buttonStyle(PressStyle())
@@ -58,7 +59,7 @@ struct FloatingTabBar: View {
                 .frame(width: 96, height: 96)
                 .background(Circle().fill(accent.solid))
                 .background(Circle().fill(accent.tint).padding(-8))
-                .shadow(color: Color(red: 20 / 255, green: 30 / 255, blue: 60 / 255).opacity(0.25), radius: 13, x: 0, y: 10)
+                .shadow(color: Color(red: 20 / 255, green: 30 / 255, blue: 60 / 255).opacity(scheme == .dark ? 0 : 0.25), radius: 13, x: 0, y: 10)
                 .opacity(scanDisabled ? 0.45 : 1)
                 .contentShape(Circle())
         }

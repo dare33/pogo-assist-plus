@@ -15,7 +15,7 @@ extension AppModel {
         Task {
             do {
                 var outcome = try await worker.run { engine in try ScanPipeline.process(replay: url, engine: engine) }
-                let f = ReviewFixture(gm, variant: variant.replacingOccurrences(of: "+answered", with: ""))
+                let f = ReviewFixture(gm, variant: variant.replacingOccurrences(of: "+answered", with: "").replacingOccurrences(of: "+leaveone", with: ""))
                 outcome.scan = ScanResult(rows: f.rows, review: [], unmatched: f.unmatched)
                 outcome.readings = 1686; outcome.duration = 2040; outcome.notices = []
                 let kind: BoxStore.Kind = variant.hasPrefix("partial") ? .partial : .full
@@ -23,10 +23,13 @@ extension AppModel {
                 var review = Review(account: name, kind: kind, outcome: outcome, plan: plan, base: f.saved, storageCount: nil, signature: "seed", mergeSeconds: 0.1, paging: nil, boxSeq: nil)
                 print("seed unsure:", plan.unsure.map { "\($0.scanned):\($0.kind.rawValue):\($0.candidates.count)" }, "new", plan.new.count, "same", plan.same.count, "updated", plan.updated.count)
                 // "<variant>+answered": every question already answered (its one saved candidate, else "new"), to look at the answered state without tapping through.
-                if variant.hasSuffix("+answered") {
-                    for u in plan.unsure { review.resolutions[u.scanned] = (u.candidates.count == 1 && u.kind != .extraTwin) || u.kind == .megaPair ? .existing(u.candidates[0]) : .new }
+                // "<variant>+leaveone": the same, except the last question, which stays open.
+                if variant.hasSuffix("+answered") || variant.hasSuffix("+leaveone") {
+                    for u in plan.unsure.dropLast(variant.hasSuffix("+leaveone") ? 1 : 0) { review.resolutions[u.scanned] = (u.candidates.count == 1 && u.kind != .extraTwin) || u.kind == .megaPair ? .existing(u.candidates[0]) : .new }
                 }
                 review.endedAtListEnd = !variant.hasPrefix("partial")
+                // A Full scan the advice accepted (so "Mark all" on Not seen is offered).
+                if kind == .full { review.advice = ScanKindAdvice.decide(endedAtListEnd: true, pokemonRead: f.rows.count, typedCount: f.rows.count, logTruncated: false, logFailed: false, commandPeriod: nil) }
                 flow = .review(review)
             } catch { flow = .failed(message: "\(error)", signature: "seed") }
         }

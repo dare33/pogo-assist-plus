@@ -35,6 +35,8 @@ final class AppModel: ObservableObject {
         var kind: BoxStore.Kind
         var outcome: ScanPipeline.Outcome
         var plan: BoxMerge.Plan
+        /// Changes whenever `plan` or `base` is replaced (a new review, another scan kind, a refresh against a changed box), so what the screens derive from them can be kept until then.
+        var planToken = UUID()
         var resolutions: [Int: BoxMerge.Resolution] = [:]
         var base: [BoxEntry]
         var storageCount: Int?
@@ -776,7 +778,7 @@ final class AppModel: ObservableObject {
         let unmatched = r.outcome.scan.unmatched
         let plan = try? await worker.run { _ in BoxMerge.plan(scanned: rows, unmatched: unmatched, into: base, kind: kind, scanDate: date, gameMaster: try .bundled()) }
         guard let plan, case .review = flow else { return }
-        r.kind = kind; r.plan = plan; r.resolutions = [:]; r.markedForRemoval = []
+        r.kind = kind; r.plan = plan; r.planToken = UUID(); r.resolutions = [:]; r.markedForRemoval = []
         flow = .review(r)
     }
 
@@ -835,7 +837,8 @@ final class AppModel: ObservableObject {
             }
             if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
             flow = .idle
-            lastSave = SaveSummary(base: r.base, saved: snap)
+            // A scan read again was merged into the box as it was BEFORE that scan, so the box it started from is not the box the person had: no counts for it.
+            lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: r.reread == nil)
             if r.account == account { afterCommit(snap) }
         } catch BoxLibrary.Failure.boxChanged {
             message = "The box changed while this scan was open, so nothing was saved. The result has been worked out again against the box as it is now: check it and save again."
@@ -855,7 +858,7 @@ final class AppModel: ObservableObject {
                 let entries = cur?.entries ?? []
                 return (BoxMerge.plan(scanned: rows, unmatched: unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled()), entries, cur?.seq)
             }
-            var n = r; n.plan = plan; n.base = base; n.boxSeq = seq; n.resolutions = [:]; n.markedForRemoval = []
+            var n = r; n.plan = plan; n.planToken = UUID(); n.base = base; n.boxSeq = seq; n.resolutions = [:]; n.markedForRemoval = []
             flow = .review(n)
             if a == account { loadBox() }
         } catch { message = "The box could not be read again: \(Self.plain(error))" }

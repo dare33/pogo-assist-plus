@@ -6,6 +6,7 @@ import PogoReader
 /// UI v1 (design handoff v2 section 1a): a scroll of panels on the background, the result and its questions first, a bottom bar with Discard and Save.
 struct ReviewView: View {
     @EnvironmentObject var model: AppModel
+    @State private var confirmDiscard = false
 
     var body: some View {
         ZStack {
@@ -38,10 +39,14 @@ struct ReviewView: View {
             Text("The scan could not be read").paText(.screenTitle).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
             Text(message).paText(.secondary).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
             PillButton("Try again", style: .filled) { model.retryReview() }
-            PillButton("Discard scan", style: .plain, isDestructive: true) { model.discardReview() }
+            PillButton("Discard scan", style: .plain, isDestructive: true) { confirmDiscard = true }
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The same question as the result screen's Discard.
+        .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button("Discard scan", role: .destructive) { model.discardReview() }
+        } message: { Text("Nothing will be added to the box.") }
     }
 }
 

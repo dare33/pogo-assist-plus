@@ -7,6 +7,7 @@ struct NotSeenScreen: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     let close: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var grid = false
     @State private var sort = Sort.az
 
@@ -24,12 +25,14 @@ struct NotSeenScreen: View {
         let entries = sorted(report.gone.compactMap { ctx.saved[$0] })
         let marked = report.gone.filter { review.markedForRemoval.contains($0) }.count
         let markable = markableIds(report, ctx)
-        let search = GameSearch.text(entries.map { GameSearch.part(saved: $0) })
+        let parts = entries.map { GameSearch.part(saved: $0) }
+        let search = GameSearch.text(parts)
+        let uncovered = parts.count - GameSearch.covered(parts)
         return VStack(spacing: 0) {
             ReviewTopBar(title: "Not seen", onBack: close)
             ScrollView {
                 LazyVStack(spacing: Theme.Space.panelGap) {
-                    header(count: entries.count, marked: marked, search: search)
+                    header(count: entries.count, marked: marked, search: search, uncovered: uncovered)
                     // Items on screen that could not be read, and rows the person left out: some of the entries below may be those Pokémon.
                     if let line = BoxMerge.unreadLine(ctx.plan) { Text(line).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.orangeInk).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6) }
                     if let line = BoxMerge.leftOutLine(ctx.plan, resolutions: review.resolutions) { Text(line).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.orangeInk).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6) }
@@ -52,11 +55,13 @@ struct NotSeenScreen: View {
 
     // MARK: header
 
-    private func header(count: Int, marked: Int, search: String?) -> some View {
+    private func header(count: Int, marked: Int, search: String?, uncovered: Int) -> some View {
         HStack(spacing: 12) {
             Text(count.formatted()).font(.figtree(30, .heavy, relativeTo: .largeTitle)).monospacedDigit().foregroundStyle(Theme.ink)
-            Text(marked == 0 ? "not in this scan, all kept. Search the game: if one shows up, you still have it."
+            Text((marked == 0 ? "not in this scan, all kept. Search the game: if one shows up, you still have it."
                  : "not in this scan. \(marked.formatted()) marked for removal, the rest kept. Search the game: if one shows up, you still have it.")
+                 + " The search can also show other Pokémon with the same name and one of the other CPs, so check the CP."
+                 + (uncovered > 0 ? " \(uncovered.formatted()) of these \(uncovered == 1 ? "has" : "have") no usable CP, so the search does not cover \(uncovered == 1 ? "it" : "them")." : ""))
                 .font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading)
             if let search { CopyCircle(text: search) }
         }
@@ -157,7 +162,7 @@ struct NotSeenScreen: View {
                 .accessibilityLabel("\(e.row.title), \(ReviewWording.cpText(e.row.cp)), \(ReviewWording.ivsText(e.row.ivs)), \(on ? "marked for removal" : "kept")")
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: review.markedForRemoval)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: review.markedForRemoval)
     }
 
     // MARK: Mark all
@@ -173,7 +178,8 @@ struct NotSeenScreen: View {
         let report = ctx.goneReport
         let allMarked = !markable.isEmpty && markable.allSatisfy { ctx.review.markedForRemoval.contains($0) }
         return HStack(spacing: 8) {
-            if ctx.ending == .listEnd && !markable.isEmpty {
+            // A Full scan the person chose against the app's advice cannot say which Pokémon are gone, so it offers no bulk mark (tapping single entries still works).
+            if ctx.ending == .listEnd && ctx.review.advice?.fullIsSound == true && !markable.isEmpty {
                 PillButton(allMarked ? "Keep all" : "Mark all \(markable.count.formatted())", style: .plain, height: 54, fullWidth: false, isDestructive: !allMarked) {
                     if allMarked { model.keepAllNotSeen() } else {
                         model.removeAllNotSeen()

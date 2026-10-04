@@ -30,7 +30,7 @@ struct PokemonDetailView: View {
                         advicePanel(e)
                         factsPanel(e)
                         notesPanel(e)
-                        SearchStrip(text: gameSearch(e.row), prominent: true)
+                        if let search = GameSearch.text([GameSearch.part(row: e.row)]) { SearchStrip(text: search, prominent: true) }
                         Button { deleting = DeleteTarget(id: e.id, title: e.row.title, cp: e.row.cp) } label: {
                             Text("Delete from box").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
                                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -53,22 +53,17 @@ struct PokemonDetailView: View {
         .confirmDelete($deleting) { dismiss() }
     }
 
-    /// The game's own search for this Pokémon: its name and its CP ("staraptor&cp2819"); the name alone when the CP is not known.
-    private func gameSearch(_ r: ScanRow) -> String { r.name.lowercased() + (r.cp > 0 ? "&cp\(r.cp)" : "") }
-
     // MARK: heading
 
     private func heading(_ e: BoxEntry) -> some View {
         let r = e.row
-        var meta = [String]()
-        if let l = Fmt.level(r) { meta.append("Level \(l)") }
-        if let hp = r.hp { meta.append("HP \(hp)") }
+        let meta = [Fmt.level(r).map { "Level \($0)" } ?? "Level not known", r.hp.map { "HP \($0)" } ?? "HP not read"]
         return VStack(alignment: .leading, spacing: 0) {
             Text(r.title).font(.figtree(34, .heavy, relativeTo: .largeTitle)).tracking(-0.025 * 34).foregroundStyle(Theme.ink)
                 .accessibilityAddTraits(.isHeader)
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(verbatim: Fmt.cp(r.cp)).font(.figtree(r.cp > 0 ? 22 : 17, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(Theme.ink)
-                if !meta.isEmpty { Text(meta.joined(separator: " · ")).font(.figtree(15, .semibold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.muted) }
+                Text(meta.joined(separator: " · ")).font(.figtree(15, .semibold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.muted)
             }
         }
         .padding(.horizontal, 8).padding(.top, 4)
@@ -155,7 +150,7 @@ struct PokemonDetailView: View {
 
     private func factsPanel(_ e: BoxEntry) -> some View {
         var facts = [(String, String)]()
-        if let d = e.row.dust { facts.append(("Power-up dust", d.formatted())) }
+        facts.append(("Power-up dust", e.row.dust.map { $0.formatted() } ?? "not known"))
         if case .ready(let advice) = model.advice, let spares = advice.entries(for: e.id).builds.map(\.spares).max(), spares > 0 { facts.append(("Spare copies", spares.formatted())) }
         facts.append(("First seen · last seen", "\(Self.short(e.firstSeen)) · \(Self.short(e.lastSeen))"))
         return Panel(padding: 0, spacing: 0) {

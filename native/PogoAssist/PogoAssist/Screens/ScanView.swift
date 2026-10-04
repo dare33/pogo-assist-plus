@@ -9,6 +9,8 @@ struct ScanView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.helpLevel) private var help
     @Environment(\.accent) private var accent
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .subheadline) private var badgeSize: CGFloat = 36
     @AppStorage(ScanSteps.key) private var hiddenRaw = ""
     /// Editing the options replaces the steps. Decided once on appearing: the first scan for an account (nothing to confirm yet) opens in Edit.
     @State private var editing = false
@@ -48,7 +50,7 @@ struct ScanView: View {
                 .id("top")
             }
             // Leaving Edit would otherwise keep the scroll position the long options panel and the keyboard left behind.
-            .onChange(of: editing) { _, _ in withAnimation { proxy.scrollTo("top", anchor: .top) } }
+            .onChange(of: editing) { _, _ in withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("top", anchor: .top) } }
             }
         }
         .background(Theme.bg.ignoresSafeArea())
@@ -162,7 +164,7 @@ struct ScanView: View {
 
     private func badge(_ n: String, on: Bool) -> some View {
         Text(n).font(.figtree(14, .heavy, relativeTo: .subheadline)).foregroundStyle(on ? accent.ink : Theme.muted)
-            .frame(width: 36, height: 36).background(on ? accent.tint : Theme.surface2, in: Circle()).accessibilityHidden(true)
+            .frame(width: badgeSize, height: badgeSize).background(on ? accent.tint : Theme.surface2, in: Circle()).accessibilityHidden(true)
     }
 
     @ViewBuilder private var stepTwo: some View {

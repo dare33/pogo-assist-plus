@@ -66,7 +66,11 @@ struct ResultScreen: View {
             Text(ctx.left > 0 ? "\(ctx.left) left" : "All answered").font(.figtree(14, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
         }
         .padding(.horizontal, 6).padding(.top, 6)
-        if let text = open.text, open.count > 0 { FindAllBar(count: open.count, text: text) }
+        if let text = open.text { FindAllBar(count: open.covered, text: text) }
+        if open.notCovered > 0 {
+            Text("\(open.notCovered) not in this search: no CP or HP to look for.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
+        }
         ReviewQuestionsView(ctx: ctx, folded: $folded)
     }
 
@@ -104,6 +108,9 @@ private struct ReviewHeader: View {
     @Environment(\.accent) private var accent
     let ctx: ReviewContext
     @Binding var path: [ReviewPage]
+    // The number circles hold text that grows with Dynamic Type, so they grow with it.
+    @ScaledMetric(relativeTo: .body) private var bigCircle: CGFloat = 32
+    @ScaledMetric(relativeTo: .body) private var smallCircle: CGFloat = 30
 
     var body: some View {
         let read = ctx.review.outcome.scan.rows.count
@@ -148,7 +155,7 @@ private struct ReviewHeader: View {
     private var stepOne: some View {
         HStack(spacing: 12) {
             Text("1").font(.figtree(15, .heavy)).foregroundStyle(accent.onSolid)
-                .frame(width: 32, height: 32).background(Circle().fill(accent.solid)).accessibilityHidden(true)
+                .frame(width: bigCircle, height: bigCircle).background(Circle().fill(accent.solid)).accessibilityHidden(true)
             Text(ctx.total == 0 ? "No questions to answer" : "Answer \(ReviewFormat.count(ctx.total, "question", "questions"))").paText(.button).foregroundStyle(Theme.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if ctx.total > 0 { Text("\(ctx.answered) of \(ctx.total)").font(.figtree(15, .heavy, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(accent.ink) }
@@ -162,7 +169,7 @@ private struct ReviewHeader: View {
     @ViewBuilder private func stepTwo(_ toCheck: Int) -> some View {
         let row = HStack(spacing: 12) {
             Text("2").font(.figtree(14, .heavy)).foregroundStyle(Theme.muted)
-                .frame(width: 30, height: 30).background(Circle().fill(Theme.surface)).accessibilityHidden(true)
+                .frame(width: smallCircle, height: smallCircle).background(Circle().fill(Theme.surface)).accessibilityHidden(true)
             Text(toCheck == 0 ? "Nothing to check in the game" : "Check \(toCheck.formatted()) in the game").paText(.rowTitle).foregroundStyle(Theme.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if toCheck > 0 {
@@ -181,7 +188,7 @@ private struct ReviewHeader: View {
     private var stepThree: some View {
         HStack(spacing: 12) {
             Image(systemName: ctx.left == 0 && model.saveBlocker(ctx.review) == nil ? "lock.open" : "lock").font(.figtree(15, .semibold)).foregroundStyle(Theme.muted)
-                .frame(width: 30, height: 30).background(Circle().fill(Theme.surface)).accessibilityHidden(true)
+                .frame(width: smallCircle, height: smallCircle).background(Circle().fill(Theme.surface)).accessibilityHidden(true)
             Text("Save to box").paText(.rowTitle).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 2).frame(minHeight: 44)

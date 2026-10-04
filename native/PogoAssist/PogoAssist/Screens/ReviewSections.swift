@@ -72,7 +72,7 @@ struct ReviewLowerSections: View {
         let rows = listRows(report, marked: marked)
         if !rows.isEmpty { Panel(padding: 0, spacing: 0) { ForEach(rows) { $0 } }.padding(.top, 4) }
         if review.reread == nil { scanKind }
-        whatSavingDoes(marked: marked)
+        whatSavingDoes()
         scanDetails
     }
 
@@ -81,7 +81,7 @@ struct ReviewLowerSections: View {
     @ViewBuilder private var checkInTheGame: some View {
         let toCheck = ctx.toCheck
         let cleared = ctx.clearedByAnswers
-        let groups = ReviewCheckGroup.groups(plan, resolutions: review.resolutions)
+        let groups = ctx.checkGroups
         heading("Check in the game", count: toCheck.count)
         if toCheck.isEmpty && cleared == 0 {
             Panel { Text("Nothing needs a check.").paText(.secondary).foregroundStyle(Theme.muted) }
@@ -95,10 +95,12 @@ struct ReviewLowerSections: View {
                 if cleared > 0 && !groups.contains(where: { $0.reason == .noLevelFits }) {
                     InsetRow(title: "No level fits", sub: "\(cleared) more cleared by your answers", value: "0", separator: true)
                 }
-                if let text = GameSearch.text(toCheck.map { GameSearch.part(row: plan.scanned[$0]) }) {
+                let parts = toCheck.map { GameSearch.part(row: plan.scanned[$0]) }
+                if let text = GameSearch.text(parts) {
+                    let left = parts.count - GameSearch.covered(parts)
                     VStack(alignment: .leading, spacing: 8) {
                         CopySearchButton(text: text, style: .tint)
-                        Text("Paste the search into the game's storage.").paText(.secondary).foregroundStyle(Theme.muted)
+                        Text("Paste the search into the game's storage." + (left > 0 ? " \(left) not in this search: no CP or HP to look for." : "")).paText(.secondary).foregroundStyle(Theme.muted)
                     }
                     .padding(16)
                 }
@@ -173,11 +175,12 @@ struct ReviewLowerSections: View {
 
     // MARK: What saving does
 
-    @ViewBuilder private func whatSavingDoes(marked: Int) -> some View {
+    @ViewBuilder private func whatSavingDoes() -> some View {
+        let p = ctx.savePreview
         heading("What saving does")
         Panel(padding: 0, spacing: 0) {
-            savingRow("new", "New", "plus.circle", plan.new.count) {
-                ForEach(plan.new, id: \.self) { i in
+            savingRow("new", "New", "plus.circle", p.newRows.count) {
+                ForEach(p.newRows, id: \.self) { i in
                     if let base = plan.megaBases[i] {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(ctx.plan.scanned[i].title), IVs \(Fmt.ivs(ctx.plan.scanned[i].ivs))").paText(.secondary).foregroundStyle(Theme.ink)
@@ -186,25 +189,32 @@ struct ReviewLowerSections: View {
                     } else { Text(Fmt.brief(plan.scanned[i])).paText(.secondary).foregroundStyle(Theme.ink) }
                 }
             }
-            savingRow("updated", "Updated", "arrow.up.circle", plan.updated.count) {
-                ForEach(plan.updated, id: \.scanned) { u in
+            savingRow("updated", "Updated", "arrow.up.circle", p.updated.count) {
+                ForEach(p.updated, id: \.scanned) { u in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ctx.saved[u.savedId]?.row.title ?? "Pokémon").paText(.secondary).foregroundStyle(Theme.ink)
                         Text(change(u)).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                     }
                 }
             }
-            savingRow("same", "Same", "equal.circle", plan.same.count, last: marked == 0) {
-                ForEach(plan.same, id: \.scanned) { p in
+            savingRow("same", "Same", "equal.circle", p.same.count, last: p.removed.isEmpty) {
+                ForEach(p.same, id: \.scanned) { m in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(Fmt.brief(plan.scanned[p.scanned])).paText(.secondary).foregroundStyle(Theme.ink)
-                        if p.mega { Text("Mega evolved when scanned. The saved \(ctx.saved[p.savedId]?.row.title ?? "Pokémon") keeps its own values.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
+                        Text(Fmt.brief(plan.scanned[m.scanned])).paText(.secondary).foregroundStyle(Theme.ink)
+                        if m.mega { Text("Mega evolved when scanned. The saved \(ctx.saved[m.savedId]?.row.title ?? "Pokémon") keeps its own values.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
+                        else if m.effect == .keepsIVsAndFlags { Text("The saved IVs are kept and it is marked to check.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
                     }
                 }
             }
-            if marked > 0 {
-                InsetRow(title: "Removed", sub: "Marked in Not seen", icon: "trash", iconBackground: Theme.off, iconInk: Theme.red, value: marked.formatted(), separator: false)
+            if !p.removed.isEmpty {
+                let why = p.markedRemoved > 0 && p.joined > 0 ? "Marked in Not seen, and Mega entries joined" : (p.joined > 0 ? "Mega entries joined into their normal entry" : "Marked in Not seen")
+                InsetRow(title: "Removed", sub: why, icon: "trash", iconBackground: Theme.off, iconInk: Theme.red, value: p.removed.count.formatted(), separator: false)
             }
+        }
+        if p.open > 0 {
+            // Save is locked until every question has an answer: the numbers above are for the answers given so far.
+            Text(p.open == 1 ? "1 question not answered yet. It is not counted above." : "\(p.open) questions not answered yet. They are not counted above.")
+                .paText(.secondary).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
         }
     }
 
@@ -212,7 +222,7 @@ struct ReviewLowerSections: View {
         reveal(key, InsetRow(title: title, icon: icon, value: count.formatted(), showsChevron: count > 0, separator: !last, action: count > 0 ? { toggle(key) } : nil), content: content)
     }
 
-    private func change(_ u: BoxMerge.Update) -> String {
+    private func change(_ u: SavePreview.Change) -> String {
         let s = plan.scanned[u.scanned], old = ctx.saved[u.savedId]?.row
         switch u.reason {
         case .poweredUp: return "Powered up: CP \(old?.cp ?? 0) to \(s.cp)"

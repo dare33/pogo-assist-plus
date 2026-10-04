@@ -43,23 +43,152 @@ enum ReviewFormat {
     static func count(_ n: Int, _ one: String, _ many: String) -> String { n == 1 ? "1 \(one)" : "\(n.formatted()) \(many)" }
 }
 
-/// What the Review screen works out once per render from the review: the merge's plan, the saved entries by id, the question groups and the counts.
-struct ReviewContext {
-    let review: AppModel.Review
-    let plan: BoxMerge.Plan
+/// A value worked out for one key and kept until the key changes (the answers, say), so a screen's body does not redo it on every evaluation.
+private struct Memo<K: Equatable, V> {
+    private var key: K?
+    private var value: V?
+    mutating func get(_ k: K, _ make: () -> V) -> V {
+        if let key, key == k, let value { return value }
+        let v = make()
+        key = k; value = v
+        return v
+    }
+}
+
+/// What the three review screens (result, To check, Not seen) derive from the review, kept for as long as the review's plan is the same (`Review.planToken`):
+/// the saved entries by id (up to 15,000), the question groups and how the scan ended (which reads the replay log) once; the lists that follow the answers
+/// are kept for the answers they were worked out for. Nothing here changes behaviour: it is the same values, worked out once instead of on every render.
+@MainActor
+final class ReviewDerived {
+    private static var current: ReviewDerived?
+    static func of(_ review: AppModel.Review) -> ReviewDerived {
+        if let c = current, c.planToken == review.planToken { return c }
+        let d = ReviewDerived(review)
+        current = d
+        return d
+    }
+
+    let planToken: UUID
     let saved: [String: BoxEntry]
     let gm: GameMaster?
     let groups: [BoxMerge.QuestionGroup]
     let ending: ScanEnding
+    /// The rows with a check before any answer, to count what the answers cleared.
+    private let rowsWithoutAnswers: Int
+    private let plan: BoxMerge.Plan
+
+    private init(_ review: AppModel.Review) {
+        planToken = review.planToken
+        plan = review.plan
+        saved = Dictionary(review.base.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let gm = try? GameMaster.bundled()
+        self.gm = gm
+        groups = BoxMerge.questionGroups(review.plan, saved: review.base, gameMaster: gm)
+        ending = ScanEnding.of(review)
+        rowsWithoutAnswers = BoxMerge.rowsToCheck(review.plan, resolutions: [:]).count
+    }
+
+    private var checkMemo = Memo<[Int: BoxMerge.Resolution], (rows: [Int], cleared: Int, groups: [ReviewCheckGroup])>()
+    private var goneMemo = Memo<[Int: BoxMerge.Resolution], BoxMerge.GoneReport>()
+    private struct PreviewKey: Equatable { var resolutions: [Int: BoxMerge.Resolution]; var marked: Set<String> }
+    private var previewMemo = Memo<PreviewKey, SavePreview>()
+
+    /// The rows still to check once the answers are counted, those answered "Don't include" left out (they will not be in the box), the number the answers
+    /// cleared (`BoxMerge.clearedChecks`), and the rows by reason.
+    func check(_ resolutions: [Int: BoxMerge.Resolution]) -> (rows: [Int], cleared: Int, groups: [ReviewCheckGroup]) {
+        checkMemo.get(resolutions) {
+            let engine = BoxMerge.rowsToCheck(plan, resolutions: resolutions)
+            let cleared = BoxMerge.clearedChecks(plan, resolutions: resolutions)
+            let leftOut = Set(plan.unsure.filter { resolutions[$0.scanned] == .leaveOut }.map(\.scanned))
+            let rows = engine.filter { !leftOut.contains($0) }
+            return (rows, max(0, rowsWithoutAnswers - engine.count), ReviewCheckGroup.groups(plan, rows: rows, cleared: cleared))
+        }
+    }
+
+    func goneReport(_ resolutions: [Int: BoxMerge.Resolution]) -> BoxMerge.GoneReport {
+        goneMemo.get(resolutions) { BoxMerge.goneReport(plan, resolutions: resolutions) }
+    }
+
+    func preview(_ resolutions: [Int: BoxMerge.Resolution], marked: Set<String>) -> SavePreview {
+        previewMemo.get(PreviewKey(resolutions: resolutions, marked: marked)) {
+            SavePreview.make(plan, resolutions: resolutions, saved: saved, gone: goneReport(resolutions).gone, marked: marked, gm: gm)
+        }
+    }
+}
+
+/// What Save will do with the scan's Pokémon, given the answers and marks so far. It follows the engine's own decisions: `plan.new`, `plan.updated` and `plan.same`, and for
+/// each answered question `BoxMerge.effect` (the function `apply` follows), so what the panel counts is what `apply` writes. A question not answered yet counts for nothing.
+struct SavePreview {
+    struct Change { var scanned: Int; var savedId: String; var reason: BoxMerge.UpdateReason }
+    struct Match { var scanned: Int; var savedId: String; var mega: Bool; var effect: BoxMerge.Effect? }
+    /// Positions in `plan.scanned` that Save adds.
+    var newRows: [Int]
+    var updated: [Change]
+    var same: [Match]
+    /// Saved entries Save removes: the Not seen entries that are marked, and the Mega entries a "Same Pokémon" answer joins into their base entry.
+    var removed: Set<String>
+    var markedRemoved: Int
+    var joined: Int
+    /// Questions with no answer yet.
+    var open: Int
+
+    static func make(_ plan: BoxMerge.Plan, resolutions: [Int: BoxMerge.Resolution], saved: [String: BoxEntry], gone: [String], marked: Set<String>, gm: GameMaster?) -> SavePreview {
+        var new = plan.new
+        var updated = plan.updated.map { Change(scanned: $0.scanned, savedId: $0.savedId, reason: $0.reason) }
+        var same = plan.same.map { Match(scanned: $0.scanned, savedId: $0.savedId, mega: $0.mega, effect: nil) }
+        var joins = Set<String>(), open = 0
+        for u in plan.unsure {
+            guard let answer = resolutions[u.scanned] else { open += 1; continue }
+            switch answer {
+            case .leaveOut: break
+            case .new: if u.kind != .megaPair { new.append(u.scanned) }
+            case .existing(let id):
+                guard let e = saved[id] else { break }
+                if u.kind == .megaPair {
+                    // `apply`: only "this one" on the base entry joins, and only when the Mega entry is there.
+                    if id == u.candidates.first, u.candidates.count == 2, saved[u.candidates[1]] != nil { joins.insert(u.candidates[1]) }
+                    break
+                }
+                let fx = BoxMerge.effect(plan, u, candidate: e, gameMaster: gm)
+                switch fx {
+                case .joinsMegaPair: break
+                case .replacesValues, .replacesIVs: updated.append(Change(scanned: u.scanned, savedId: id, reason: reason(of: u.kind)))
+                case .seenOnly, .seenAsMega, .keepsIVsAndFlags: same.append(Match(scanned: u.scanned, savedId: id, mega: fx == .seenAsMega, effect: fx))
+                }
+            }
+        }
+        let markedGone = Set(gone).intersection(marked)
+        return SavePreview(newRows: new.sorted(), updated: updated, same: same, removed: markedGone.union(joins), markedRemoved: markedGone.count, joined: joins.count, open: open)
+    }
+
+    private static func reason(of kind: BoxMerge.Unsure.Kind) -> BoxMerge.UpdateReason {
+        switch kind {
+        case .poweredUp: return .poweredUp
+        case .evolved: return .evolved
+        case .megaToBase: return .megaToBase
+        default: return .chosen
+        }
+    }
+}
+
+/// What the Review screen works out from the review: the merge's plan, the saved entries by id, the question groups and the counts. The costly parts
+/// (`ReviewDerived`) are kept per review and per set of answers, not rebuilt on every render.
+@MainActor
+struct ReviewContext {
+    let review: AppModel.Review
+    let plan: BoxMerge.Plan
+    private let derived: ReviewDerived
 
     init(_ review: AppModel.Review) {
         self.review = review
         plan = review.plan
-        saved = Dictionary(review.base.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        gm = try? GameMaster.bundled()
-        groups = BoxMerge.questionGroups(review.plan, saved: review.base, gameMaster: gm)
-        ending = ScanEnding.of(review)
+        derived = ReviewDerived.of(review)
     }
+
+    var saved: [String: BoxEntry] { derived.saved }
+    var gm: GameMaster? { derived.gm }
+    var groups: [BoxMerge.QuestionGroup] { derived.groups }
+    var ending: ScanEnding { derived.ending }
 
     var total: Int { plan.unsure.count }
     var answered: Int { plan.unsure.filter { review.resolutions[$0.scanned] != nil }.count }
@@ -69,16 +198,51 @@ struct ReviewContext {
     func resolution(_ scanned: Int) -> BoxMerge.Resolution? { review.resolutions[scanned] }
     func groupKey(_ g: BoxMerge.QuestionGroup) -> String { "\(g.kind.rawValue)-\(g.members.first ?? -1)" }
 
-    /// The rows that still need a look in the game once the answers are counted, and how many the answers cleared.
-    var toCheck: [Int] { BoxMerge.rowsToCheck(plan, resolutions: review.resolutions) }
-    var clearedByAnswers: Int { max(0, BoxMerge.rowsToCheck(plan, resolutions: [:]).count - toCheck.count) }
-    var goneReport: BoxMerge.GoneReport { BoxMerge.goneReport(plan, resolutions: review.resolutions) }
+    /// The rows that still need a look in the game once the answers are counted (rows answered "Don't include" are not in the list: they will not be in the box),
+    /// and how many the answers cleared.
+    var toCheck: [Int] { derived.check(review.resolutions).rows }
+    var clearedByAnswers: Int { derived.check(review.resolutions).cleared }
+    var checkGroups: [ReviewCheckGroup] { derived.check(review.resolutions).groups }
+    var goneReport: BoxMerge.GoneReport { derived.goneReport(review.resolutions) }
+    var savePreview: SavePreview { derived.preview(review.resolutions, marked: review.markedForRemoval) }
 
-    /// One search for every question still open.
-    var openSearch: (count: Int, text: String?) {
+    /// One search for every question still open: how many it covers, how many it cannot (no CP or HP to look for), and the text (nil when it covers none).
+    var openSearch: (covered: Int, notCovered: Int, text: String?) {
         let open = plan.unsure.filter { review.resolutions[$0.scanned] == nil }
-        return (open.count, GameSearch.text(open.map { GameSearch.part(for: $0, row: plan.scanned[$0.scanned], saved: saved) }))
+        let parts = open.map { GameSearch.part(for: $0, row: plan.scanned[$0.scanned], saved: saved) }
+        let covered = GameSearch.covered(parts)
+        return (covered, open.count - covered, GameSearch.text(parts))
     }
+
+    /// What Save does with the row at this position of the scan, for the Find sheet (see `SaveFate`).
+    func fate(of scanned: Int) -> SaveFate {
+        if plan.new.contains(scanned) || plan.updated.contains(where: { $0.scanned == scanned }) { return .values }
+        if plan.same.contains(where: { $0.scanned == scanned }) || plan.partMatches.contains(where: { $0.scanned == scanned }) { return .notSaved }
+        guard let u = unsure(scanned) else { return .unknown }
+        switch resolution(scanned) {
+        case nil: return .undecided
+        case .leaveOut?: return .notSaved
+        case .new?: return u.kind == .megaPair ? .notSaved : .values
+        case .existing(let id)?:
+            guard u.kind != .megaPair, let e = saved[id] else { return .notSaved }
+            switch BoxMerge.effect(plan, u, candidate: e, gameMaster: gm) {
+            case .replacesValues, .replacesIVs: return .values
+            default: return .notSaved
+            }
+        }
+    }
+}
+
+/// Whether the values a scanned row read reach the box when Save runs (decided from what `BoxMerge.apply` does with the row).
+enum SaveFate {
+    /// Saved as a new Pokémon, or written onto the saved one it matches.
+    case values
+    /// Matched to a saved Pokémon that is only marked as seen, joined or left alone; or not included.
+    case notSaved
+    /// Its question has no answer yet.
+    case undecided
+    /// The plan has no decision for this row.
+    case unknown
 }
 
 // MARK: To check groups (design 1d)
@@ -130,11 +294,10 @@ struct ReviewCheckGroup: Identifiable {
         return .other
     }
 
-    /// The groups of the rows that still need a check, in the design's order, with the empty ones left out.
-    static func groups(_ plan: BoxMerge.Plan, resolutions: [Int: BoxMerge.Resolution]) -> [ReviewCheckGroup] {
-        let cleared = BoxMerge.clearedChecks(plan, resolutions: resolutions)
+    /// The groups of these rows (the ones that still need a check, `ReviewDerived.check`), in the design's order, with the empty ones left out.
+    static func groups(_ plan: BoxMerge.Plan, rows: [Int], cleared: Set<Int>) -> [ReviewCheckGroup] {
         var byReason = [Reason: [Int]]()
-        for i in BoxMerge.rowsToCheck(plan, resolutions: resolutions) {
+        for i in rows {
             let flags = remainingFlags(plan.scanned[i], cleared: cleared.contains(i))
             byReason[flags.first.map(reason(of:)) ?? .other, default: []].append(i)
         }

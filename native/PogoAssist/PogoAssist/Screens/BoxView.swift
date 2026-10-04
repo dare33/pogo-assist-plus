@@ -56,7 +56,7 @@ struct BoxView: View {
         }
         .task(id: indexKey) {
             if synthetic { return }
-            await store.refresh(key: indexKey, entries: model.entries, scanKind: model.snapshot?.scanKind, scanDate: model.snapshot?.scanDate)
+            await store.refresh(key: indexKey, entries: model.entries)
         }
         #if DEBUG
         .task {
@@ -70,7 +70,7 @@ struct BoxView: View {
         .task(id: SectionKey(query: query, chip: chip, sort: sort, version: store.version)) { await recompute() }
         .onChange(of: store.version) { _, _ in
             // A chip whose Pokémon are all gone (the last check cleared, say) would show an empty list with no way to know why.
-            if (chip == .toCheck && index.toCheckCount == 0) || (chip == .notSeen && index.notSeenCount == 0) || (chip == .fixed && index.fixedCount == 0) { chip = .all }
+            if (chip == .toCheck && index.toCheckCount == 0) || (chip == .fixed && index.fixedCount == 0) { chip = .all }
         }
         #if DEBUG
         .overlay(alignment: .bottom) {
@@ -153,9 +153,12 @@ struct BoxView: View {
     }
 
     private var countLine: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(index.count.formatted()).paText(.screenTitle).foregroundStyle(Theme.ink)
-            Text("Pokémon · \(index.speciesCount.formatted()) species").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(index.count.formatted()).paText(.screenTitle).foregroundStyle(Theme.ink)
+                Text("Pokémon · \(index.speciesCount.formatted()) species").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+            }
+            if let d = model.snapshot?.scanDate { Text("Last scan \(Fmt.date(d))").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
         }
         .padding(.horizontal, 6)
         .accessibilityElement(children: .combine)
@@ -192,14 +195,13 @@ struct BoxView: View {
 
     // MARK: chips and sort
 
-    /// A chip only when the box has something for it: To check from the entries' checks, Not seen from what the latest Full scan did not
-    /// see, Fixed by hand from the hand corrections.
+    /// A chip only when the box has something for it: To check from the entries' checks, Fixed by hand from the hand corrections. There is no "Not seen" chip: the
+    /// saved box does not record which entries a Full scan saw but could not read ("On screen but not read", "Stationed"), so an old last-seen date cannot say "not seen".
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 filterChip("All", .all)
                 if index.toCheckCount > 0 { filterChip("To check \(index.toCheckCount.formatted())", .toCheck) }
-                if index.notSeenCount > 0 { filterChip("Not seen \(index.notSeenCount.formatted())", .notSeen) }
                 if index.fixedCount > 0 { filterChip("Fixed by hand", .fixed) }
             }
             .padding(.horizontal, 1).padding(.vertical, 4)
@@ -356,8 +358,10 @@ struct BoxView: View {
                     .accessibilityHint("Goes back to the box as it was before this save")
                 }
             }
-            HStack(spacing: 6) {
-                stat(s.added, "new"); stat(s.updated, "updated"); stat(s.removed, "removed")
+            if s.showsCounts {
+                HStack(spacing: 6) {
+                    stat(s.added, "new"); stat(s.updated, "updated"); stat(s.removed, "removed")
+                }
             }
             if index.toCheckCount > 0 {
                 Button { chip = .toCheck } label: {
