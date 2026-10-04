@@ -17,6 +17,10 @@ public struct FrameAnalysis: Codable, Equatable {
     /// The CP text is there but no HP bar (a special-background or buddy card, a bar the colour test
     /// misses): only the CP can be read, and the Pokémon is listed unnamed rather than lost.
     public var cpOnly = false
+    /// The HP bar was placed by `findDamagedHpBar` (a damaged or fainted card), not by its green: the
+    /// frame counts as a card only if the HP text under it parses (`complete`), else it is a CP-only
+    /// frame flagged `no-hp-bar`, exactly as it was before the fallback existed. nil = no.
+    public var damagedBar: Bool?
     public var sharpness = 0.0          // of the usual name crop
     public var sharpnessUp = 0.0        // of the Lucky second-look crop
     public var ivs: IVs?
@@ -88,7 +92,11 @@ public final class FrameReader {
         let rect = contentRect(img)
         guard rect.w > 0, rect.h > 0 else { a.flags.append("no-cp-text"); return (a, nil) }
         let cpText = findCpText(img, rect)
-        let hpBar = findHpBar(img, rect)
+        var hpBar = findHpBar(img, rect)
+        var damaged = false
+        // Only with the CP centred: a frame the green search could not place and that has no settled CP text
+        // stays what it was (no bar, or mid-swipe).
+        if hpBar == nil, let c = cpText, c.centred, let bar = findDamagedHpBar(img, rect) { hpBar = bar; damaged = true }
         let regions = regionsFrom(rect, cpText, hpBar, cpPadding: cpPadding, cpIncludesPrefix: cpIncludesPrefix)
         guard let bar = hpBar, let nameRegion = regions.name, let hpRegion = regions.hp, let panel = regions.panelSearch else {
             a.flags.append(cpText == nil ? "no-cp-text" : "no-hp-bar")
@@ -115,6 +123,7 @@ public final class FrameReader {
         }
         a.needsText = true
         a.hasCpText = cpText != nil
+        if damaged { a.damagedBar = true }
         var up = nameRegion
         up.y -= Tuning.luckyLineOffset * Double(rect.h)
         a.cpRect = cpText != nil ? regions.cp : nil; a.nameRect = nameRegion; a.hpRect = hpRegion
@@ -132,7 +141,15 @@ public final class FrameReader {
         var out = FrameReading(frame: a.frame, time: a.time)
         out.flags = a.flags
         guard a.needsText, let crops = crops else { return out }
-        if a.cpOnly {
+        // A bar placed by the damaged-bar fallback is trusted only when the HP text under it is an HP: any
+        // other screen with a bar-shaped band gets the reading it had before the fallback existed.
+        var hpRead: TextRead?
+        var cpOnly = a.cpOnly
+        if a.damagedBar == true {
+            let r = text.read(crops.hp, kind: .hp)
+            if hpReadHasValidShape(r.text), parseHp(r.text) != nil { hpRead = r } else { cpOnly = true; out.flags.append("no-hp-bar") }
+        }
+        if cpOnly {
             if let cpCrop = crops.cp {
                 let r = text.read(cpCrop, kind: .cp)
                 out.cpText = r.text
@@ -202,7 +219,7 @@ public final class FrameReader {
         if out.name == nil { return out }
 
         if wantHp {
-            let r = text.read(crops.hp, kind: .hp)
+            let r = hpRead ?? text.read(crops.hp, kind: .hp)
             out.hpText = r.text
             out.hp = hpReadHasValidShape(r.text) ? parseHp(r.text) : nil
             if out.hp == nil { out.flags.append("hp-unread") }

@@ -76,15 +76,36 @@ final class RoundTwentyFiveTests: XCTestCase {
         var f = FrameReading(); f.name = "Staraptor"; f.hp = HP(current: 141, max: 141); f.cp = cp; if bars { f.ivs = IVs(atk: 14, def: 14, hp: 14) }
         return f
     }
-    func testAStretchIsRewrittenOnlyWhenTheAnchorsCPShowsInIt() {
-        // anchor 1999, then a real next card of the same name and HP read once as 1995 and unreadable: nothing in the stretch is the anchor
+    // The stretch rule is the most-read CP, the anchor winning a tie (round 24's; round 25's "the anchor must show again" rule was reverted). Both variants below are run17's stall
+    // with the readings changed the way the reviewer did.
+    private func run17(_ edit: (inout [ReplayReading]) -> Void) throws -> [ScanRow] {
+        var ls = ReplayLog.lines(in: try Fixture.url("run17-closed-stall.replay.jsonl"))
+        var rs = ls.compactMap { l -> ReplayReading? in if case .reading(let r) = l { return r } else { return nil } }
+        edit(&rs)
+        var k = 0
+        ls = ls.map { l in if case .reading = l { defer { k += 1 }; return .reading(rs[k]) } else { return l } }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("r26-\(UUID().uuidString).jsonl")
+        try (ls.map { String(decoding: ReplayLog.encode($0), as: UTF8.self) }.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        return try ScanPipeline.process(replay: url, engine: sharedEngine, paging: hint).scan.rows
+    }
+
+    /// Variant A: the tap always covers part of the stalled card's number, so its own CP 1999 is never readable in the barless readings: one row, not seven phantom ones.
+    func testAStalledCardWhoseOwnCPIsNeverReadableIsStillOneRow() throws {
+        let rows = try run17 { rs in for i in rs.indices where rs[i].ivs == nil && rs[i].name == "Staraptor" && rs[i].cp == 1999 { rs[i].cp = nil } }
+        let st = rows.filter { $0.display == "Staraptor" && $0.hp == 141 && $0.cp != 1994 }
+        XCTAssertEqual(st.map { $0.cp }, [1999], "\(rows.map { "\($0.display) \($0.cp)/\($0.hp ?? 0)" })")
+    }
+
+    /// Variant B: the anchor's own CP was misread (1099): the most-read value corrects it, with the bars.
+    func testAMisreadAnchorIsCorrectedByTheMostReadCP() throws {
+        let rows = try run17 { rs in if let i = rs.firstIndex(where: { $0.ivs != nil && $0.name == "Staraptor" && $0.cp == 1999 }) { rs[i].cp = 1099 } }
+        let st = rows.filter { $0.display == "Staraptor" && $0.hp == 141 && $0.cp != 1994 }
+        XCTAssertEqual(st.map { $0.cp }, [1999]); XCTAssertEqual(st.first?.ivs, IVs(atk: 14, def: 14, hp: 14))
+    }
+
+    /// ACCEPTED LIMIT (named as one): a real next card of the same name and HP, read once and then seven readings with no CP and no bars, is taken for the stalled card and gets its CP.
+    func testALimitANextCardReadOnceThenUnreadableTakesTheStalledCardsCP() {
         let next = [card(1999, bars: true), card(1995)] + Array(repeating: card(nil), count: 7)
-        XCTAssertEqual(StalledCardNormaliser.normalise(next).map { $0.cp }, next.map { $0.cp })
-        // the anchor shows again: the stretch is the card's
-        let stall = [card(1999, bars: true)] + [1299, 1999, nil, 1099, nil, 199, 1999, nil].map { card($0) }
-        XCTAssertTrue(StalledCardNormaliser.normalise(stall).dropFirst().allSatisfy { $0.cp == 1999 })
-        // the anchor was the misread (run11: 262 for 4262): the most-read value that contains its digits corrects it
-        let misread = [card(262, bars: true)] + [4262, 4262, 1262, 4262, 4262, nil, 4262, 4262].map { card($0) }
-        XCTAssertTrue(StalledCardNormaliser.normalise(misread).dropFirst().allSatisfy { $0.cp == 4262 })
+        XCTAssertTrue(StalledCardNormaliser.normalise(next).dropFirst().allSatisfy { $0.cp == 1999 })
     }
 }

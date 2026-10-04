@@ -38,13 +38,38 @@ final class FakeText: TextReader {
 
 /// Dark header, white card, optional CP "text" blocks, a green HP bar starting at `barX` of the width
 /// (the JS read-frame test's screen).
-func cardScreen(cp: Bool = true, barX: Double = 0.26, lucky: Bool = false, w: Int = 400, h: Int = 800) -> RGBAImage {
+enum HpBarLook { case full, damaged, fainted }
+
+/// `gradient` gives the card the vertical shading the real one has (226/235/240 at the bar, below it falling
+/// 814 / 537 / 407 units per card height in R / G / B, the slope measured on the owner's screenshot), which
+/// has bands that an absolute "track grey" colour test also accepts. Off, the card is flat, as before.
+func cardScreen(cp: Bool = true, barX: Double = 0.26, lucky: Bool = false, bar: HpBarLook = .full, gradient: Bool = false, w: Int = 400, h: Int = 800) -> RGBAImage {
     var img = RGBAImage(width: w, height: h)
     let W = Double(w), H = Double(h), barY = 0.45 * H
     img.fill(Rect(x: 0, y: 0, w: W, h: H), (60, 80, 100))
     img.fill(Rect(x: 0, y: 0.35 * H, w: W, h: 0.65 * H), (250, 250, 245))
+    if gradient {
+        for y in Int(0.35 * H)..<h {
+            let t = Double(y) - barY
+            let f = t < 0 ? max(0, -t / (0.1 * H)) : 0
+            let u = max(0, t) / H
+            let c: (UInt8, UInt8, UInt8) = t < 0
+                ? (UInt8(226 + 14 * f), UInt8(235 + 11 * f), UInt8(240 + 8 * f))
+                : (UInt8(max(160, 226 - 814 * u)), UInt8(max(190, 235 - 537 * u)), UInt8(max(205, 240 - 407 * u)))
+            img.fill(Rect(x: 0, y: Double(y), w: W, h: 1), c)
+        }
+    }
     if cp { for i in 0..<4 { img.fill(Rect(x: 0.42 * W + Double(i) * 0.045 * W, y: 0.06 * H, w: 0.02 * W, h: Double(jsRound(0.025 * H))), (255, 255, 255)) } }
-    img.fill(Rect(x: barX * W, y: barY, w: 0.48 * W, h: 0.006 * H), (102, 231, 170))
+    let barH = 0.0067 * H
+    switch bar {
+    case .full: img.fill(Rect(x: barX * W, y: barY, w: 0.48 * W, h: 0.006 * H), (102, 231, 170))
+    // a short red fill in a grey track, and the empty track (colours from the phone's own screenshots; the
+    // bar is half the width and 0.67% of the height, as on the phone)
+    case .damaged:
+        img.fill(Rect(x: 0.25 * W, y: barY, w: 0.5 * W, h: barH), (205, 216, 219))
+        img.fill(Rect(x: 0.25 * W, y: barY, w: 0.05 * W, h: barH), (173, 87, 89))
+    case .fainted: img.fill(Rect(x: 0.25 * W, y: barY, w: 0.5 * W, h: barH), (205, 216, 219))
+    }
     if lucky { img.fill(Rect(x: 0.3 * W, y: barY - 0.08 * H, w: 6, h: 4), marker) }
     return img
 }

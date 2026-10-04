@@ -133,7 +133,7 @@ public struct ScanEndController {
         lastRead = read; lastFeedTime = time
         if let p = paused {
             if let was = pausedBars, let now = r.ivs, !Self.sameBars(was, now) { otherCardEvidence = true }
-            if let card = pausedCard, r.name != nil || r.cp != nil, r.name == card.name, r.hp.map({ "\($0.current)/\($0.max)" }) == card.hp {
+            if let card = pausedCard, r.name != nil || r.cp != nil, r.name == card.name, r.hp.map(\.identity) == card.hp {
                 if let cp = r.cp, pausedCPs.contains(cp) { twinLength = 0; twinCounts.removeAll() }
                 else {
                     twinLength += 1; if let cp = r.cp { twinCounts[cp, default: 0] += 1 }

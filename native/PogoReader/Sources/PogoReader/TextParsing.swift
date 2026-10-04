@@ -89,6 +89,10 @@ public struct HP: Codable, Equatable, Hashable {
     public var current: Int
     public var max: Int
     public init(current: Int, max: Int) { self.current = current; self.max = max }
+    /// What identifies a card by its HP: the MAX only. The current HP changes with battles and, on a damaged
+    /// card, is the figure most often misread between frames (19 / 190 then 9 / 190); it is never part of a
+    /// card's identity (the box, the grouper and the merge already use the max).
+    public var identity: String { String(max) }
 }
 
 /// Parse "145 / 145 HP" style reads; nil when there is no read. A current above the max is a

@@ -1,6 +1,7 @@
 import Foundation
 
-// Port of src/extract/layout.js: find the UI anchors that place the text regions, so the same code
+// Port of src/extract/layout.js (plus one Swift-only addition, `findDamagedHpBar`, which the JavaScript
+// does not have): find the UI anchors that place the text regions, so the same code
 // reads iPhone and iPad frames and re-encoded copies: the white CP text at the top and the green
 // HP bar under the name. Everything is in pixels of the frame; `rect` is the content rectangle.
 
@@ -200,6 +201,84 @@ public func findHpBar(_ img: RGBAImage, _ rect: PixelRect) -> HpBar? {
         }
     }
     return best?.bar
+}
+
+/// A damaged or fainted Pokémon's HP bar has little or no green (a short red fill in front of a grey
+/// track, or the empty track alone; run17's first card, Rayquaza 19 / 190 HP, was read without name or
+/// HP), so `findHpBar`'s colour test never sees it. This fallback is tried only when the green search
+/// found nothing and the CP text is centred, and it finds a BAR by its shape and its contrast with the
+/// card on either side of it in the same row, never by an absolute colour (the owner's screenshots carry
+/// a Display P3 profile and the broadcast delivers sRGB, a unit or two apart on every channel):
+///  - a pixel is bar-like when, in its own row, it differs by at least `barContrast` on some channel
+///    from the card on BOTH sides of the bar (the mean colour of the row at 6 to 18% and at 82 to 94% of
+///    the content width, which must lie within 2 x `barContrast` - 1 of each other, else the row is
+///    skipped: then a pixel between them cannot differ from both by `barContrast`). The card is a vertical
+///    gradient, so its bands are about uniform along a row and never differ from their own sides: an
+///    absolute "track grey" test also matched them, and a band of them out-ran the real bar;
+///  - the bar is the widest such run in a row, 28 to 56% of the content width, starting 16 to 36% in
+///    from its left edge (25% when settled; a card sliding in or out is a little to either side), in a band of rows 0.4 to 1.1% of the content height tall, nothing like it in the
+///    rows around it (green bars in the 14,918 recorded frames: 50.0% of the width and 25.1% in on a
+///    phone, 31.7% and 28.7% on the iPad, 0.61 to 0.79% tall; a covered bar is shorter, never wider);
+///  - it sits 40 to 58% of the way down (recorded green bars: 42 to 47% on a phone, 55% on the iPad), the
+///    band nearest the middle of that range winning.
+/// The caller still requires the HP text under it to parse (`FrameReader.complete`); this only places it.
+let barContrast = 12
+let barWidthRange = 0.28...0.56, barLeftRange = 0.16...0.36, barHeightRange = 0.004...0.011, barExpectedY = 0.40...0.58
+
+func findDamagedHpBar(_ img: RGBAImage, _ rect: PixelRect) -> HpBar? {
+    let width = img.width, rh = Double(rect.h), rw = Double(rect.w)
+    let ya = jsRound(Double(rect.y) + 0.34 * rh), yb = min(img.height, jsRound(Double(rect.y) + 0.66 * rh))
+    let lx0 = rect.x + jsRound(0.06 * rw), lx1 = rect.x + jsRound(0.18 * rw)
+    let rx0 = rect.x + jsRound(0.82 * rw), rx1 = rect.x + jsRound(0.94 * rw)
+    guard yb > ya, lx1 > lx0, rx1 > rx0 else { return nil }
+    // For each row, the widest run of bar-like pixels (start, end) or nil.
+    var runs = [(a: Int, b: Int)?]()
+    img.bytes.withUnsafeBufferPointer { d in
+        func mean(_ y: Int, _ x0: Int, _ x1: Int) -> [Int] {
+            var s = [0, 0, 0]
+            for x in x0..<x1 { let i = (y * width + x) * 4; s[0] += Int(d[i]); s[1] += Int(d[i + 1]); s[2] += Int(d[i + 2]) }
+            let n = x1 - x0
+            return s.map { $0 / n }
+        }
+        for y in ya..<yb {
+            let l = mean(y, lx0, lx1), r = mean(y, rx0, rx1)
+            guard zip(l, r).allSatisfy({ abs($0 - $1) < 2 * barContrast - 1 }) else { runs.append(nil); continue }
+            var best: (a: Int, b: Int)? = nil
+            var start = -1
+            let xa = lx1, xb = rx0
+            for x in xa...xb {
+                var on = false
+                if x < xb {
+                    let i = (y * width + x) * 4
+                    let dl = max(abs(Int(d[i]) - l[0]), abs(Int(d[i + 1]) - l[1]), abs(Int(d[i + 2]) - l[2]))
+                    let dr = max(abs(Int(d[i]) - r[0]), abs(Int(d[i + 1]) - r[1]), abs(Int(d[i + 2]) - r[2]))
+                    on = min(dl, dr) >= barContrast
+                }
+                if on { if start < 0 { start = x } } else if start >= 0 {
+                    if best == nil || x - start > best!.b - best!.a { best = (start, x) }
+                    start = -1
+                }
+            }
+            runs.append(best.flatMap { Double($0.b - $0.a) >= barWidthRange.lowerBound * rw ? $0 : nil })
+        }
+    }
+    var found: (bar: HpBar, score: Double)? = nil
+    var i = 0
+    while i < runs.count {
+        guard runs[i] != nil else { i += 1; continue }
+        var j = i
+        while j < runs.count, runs[j] != nil { j += 1 }
+        defer { i = j }
+        let h = Double(j - i) / rh
+        guard barHeightRange.contains(h), let mid = runs[(i + j) / 2] else { continue }
+        let w = Double(mid.b - mid.a) / rw, left = Double(mid.a - rect.x) / rw
+        guard barWidthRange.contains(w), barLeftRange.contains(left) else { continue }
+        let yFrac = (Double(ya + i) - Double(rect.y)) / rh
+        guard barExpectedY.contains(yFrac) else { continue }
+        let score = abs(yFrac - 0.5 * (barExpectedY.lowerBound + barExpectedY.upperBound))
+        if found == nil || score < found!.score { found = (HpBar(y0: ya + i, y1: ya + j, x0: mid.a, x1: mid.b), score) }
+    }
+    return found?.bar
 }
 
 /// Text regions derived from the anchors, in frame pixels.

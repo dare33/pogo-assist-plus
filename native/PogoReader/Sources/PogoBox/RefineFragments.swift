@@ -38,7 +38,7 @@ extension Refine {
             // Both neighbours are examined: the fragment may belong to the one behind it or the one ahead.
             var candidates = [Int]()
             var byFallback = Set<Int>()   // pairs judged without a regular beat around them (consecutive readings only)
-            var byBarsOverride = Set<Int>()   // neighbours accepted only because the fragment is a sliding-in part read: its read bars differed beyond a notch
+            var byBarsOverride = Set<Int>()   // neighbours accepted only because the fragment is a sliding-in part read: its read bars differed at all (`barsCompatible` is false for settled bars that differ by any amount, one notch included)
             for j in [i - 1, i + 1] where j >= 0 && j < rows.count {
                 let n = rows[j]
                 guard n.name == f.name else { continue }

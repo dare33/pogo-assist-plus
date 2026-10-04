@@ -72,7 +72,7 @@ public struct EndOfListDetector {
 
     /// The identity of what the frame shows (name, HP, bars; the CP only when none of those was read), or nil when no card was read at all.
     static func key(_ r: FrameReading) -> String? {
-        let hp = r.hp.map { "\($0.current)/\($0.max)" }
+        let hp = r.hp.map(\.identity)
         let bars = r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }
         if r.name == nil && hp == nil && bars == nil { return r.cp.map { "cp\($0)" } }
         return "\(r.name ?? "?")|\(hp ?? "-")|\(bars ?? "-")"
@@ -80,7 +80,7 @@ public struct EndOfListDetector {
 
     /// The arming identity: name and HP (bars vary between reads of one card while they settle), the CP alone when neither was read (by `sameTail`).
     private func armKey(_ r: FrameReading) -> String? {
-        let hp = r.hp.map { "\($0.current)/\($0.max)" }
+        let hp = r.hp.map(\.identity)
         if r.name == nil && hp == nil {
             guard let cp = r.cp else { return nil }
             return canonical("cp\(cp)")
@@ -133,7 +133,7 @@ public struct EndOfListDetector {
         }
 
         // The current card and the quiet clock
-        let name = r.name, hp = r.hp.map { "\($0.current)/\($0.max)" }, bars = r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }
+        let name = r.name, hp = r.hp.map(\.identity), bars = r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }
         guard name != nil || hp != nil || bars != nil || r.cp != nil else { lastFrameWasCard = false; return false }   // no card read: adds nothing, resets nothing
         let previous = lastFrame
         var sameCard = true

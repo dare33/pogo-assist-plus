@@ -123,7 +123,13 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Scan Pokémon"].waitForExistence(timeout: 5))
         app.buttons["Scan Pokémon"].tap()
         // The lists are lazy: scroll until the element is on screen (the setup list grew in round 24).
-        func reveal(_ e: XCUIElement, up: Bool = true) { var n = 0; while !e.waitForExistence(timeout: 1.5), n < 6 { if up { app.swipeUp() } else { app.swipeDown() }; n += 1 } }
+        // Both directions: on a smaller screen the lazy list drops what is scrolled out of sight, and the elements sit in no fixed order.
+        func reveal(_ e: XCUIElement, up: Bool = true) {
+            var n = 0
+            while !e.waitForExistence(timeout: 1.5), n < 8 { if up { app.swipeUp() } else { app.swipeDown() }; n += 1 }
+            n = 0
+            while !e.exists, n < 16 { if up { app.swipeDown() } else { app.swipeUp() }; n += 1; _ = e.waitForExistence(timeout: 1.0) }
+        }
         let count = app.textFields["Count"]
         reveal(count)
         XCTAssertTrue(count.waitForExistence(timeout: 5))
@@ -147,6 +153,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Go to sleep'")).firstMatch.waitForExistence(timeout: 5), "the warning says how to stop a command")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'cannot be stopped'")).firstMatch.exists)
         let get = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Get the'")).firstMatch
+        reveal(get)
         XCTAssertTrue(get.waitForExistence(timeout: 5))
         get.tap()
         sleep(3)
