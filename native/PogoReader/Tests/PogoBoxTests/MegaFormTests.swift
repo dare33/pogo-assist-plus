@@ -184,4 +184,48 @@ final class MegaFormTests: XCTestCase {
         let snap = try lib.commit(account: "A", entries: out, reason: .scan, note: "new", now: date(5))
         XCTAssertEqual(snap.schema, 2); XCTAssertEqual(try lib.current(account: "A")?.entries.first?.megaForm?.cp, 3970)
     }
+
+    private func megaRow(level: Double, dust: Int, cp: Int = 3970) -> ScanRow { var r = row("staraptor_mega", cp: cp); r.level = level; r.levelMax = level; r.dust = dust; return r }
+
+    /// A join through a Mega row: the other entry's older values never beat a more recently seen Mega form, and what the scan read is what the form holds.
+    func testJoiningThroughAMegaRowHoldsTheValuesReadNowAndNeverStampsOlderOnes() throws {
+        var saved = savedPair()   // base last seen day 2; Mega entry (CP 3970) last seen day 3
+        saved[0].megaForm = MegaForm(row: megaRow(level: 40, dust: 10000), firstSeen: date(1), lastSeen: date(4))
+        var old = saved[1].row; old.level = 39; old.levelMax = 39; old.dust = 9000; saved[1].row = old
+        let p = plan([megaRow(level: 40, dust: 10000)], saved, .full)
+        XCTAssertEqual(p.unsure.first?.kind, .megaPair)
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("base")], to: saved)
+        let mf = try XCTUnwrap(out[0].megaForm)
+        XCTAssertEqual(mf.level, 40); XCTAssertEqual(mf.dust, 10000); XCTAssertEqual(mf.lastSeen, date(5)); XCTAssertEqual(mf.firstSeen, date(-3), "the earliest of the forms")
+        // read at a trusted CP only: a Mega row whose CP fits no level stores nothing, and the older values do not beat the newer form
+        let flagged = plan([row("staraptor_mega", cp: 3970, flags: ["no-level-fits"])], saved, .full)
+        if flagged.unsure.first?.kind == .megaPair {
+            let o = try BoxMerge.apply(flagged, resolutions: [0: .existing("base")], to: saved)
+            XCTAssertEqual(o[0].megaForm?.level, 40); XCTAssertEqual(o[0].megaForm?.lastSeen, date(4))
+        }
+    }
+
+    func testJoiningThroughTheBaseRowKeepsTheAdoptedValuesOwnDatesAndALaterFormWins() throws {
+        var saved = savedPair()
+        saved[1].row.level = 39
+        let viaBase = try BoxMerge.apply(plan([row("staraptor", cp: 2819)], saved, .full), resolutions: [0: .existing("base")], to: saved)
+        XCTAssertEqual(viaBase[0].megaForm?.level, 39); XCTAssertEqual(viaBase[0].megaForm?.lastSeen, date(3)); XCTAssertEqual(viaBase[0].megaForm?.firstSeen, date(-3))
+        saved[0].megaForm = MegaForm(row: megaRow(level: 40, dust: 10000), firstSeen: date(1), lastSeen: date(4))
+        let kept = try BoxMerge.apply(plan([row("staraptor", cp: 2819)], saved, .full), resolutions: [0: .existing("base")], to: saved)
+        XCTAssertEqual(kept[0].megaForm?.level, 40); XCTAssertEqual(kept[0].megaForm?.lastSeen, date(4))
+    }
+
+    /// A Mega row whose CP fits no level, or that has no CP, never stores a Mega form, whichever way it reaches the entry.
+    func testAnUntrustedMegaRowAnsweredItIsThisOneStoresNoMegaForm() throws {
+        let a = entry(row("staraptor", cp: 2819), "a"), b = entry(row("staraptor", cp: 2500, hp: 160), "b")
+        for bad in [row("staraptor_mega", cp: 3970, flags: ["no-level-fits"]), row("staraptor_mega", cp: 0)] {
+            let p = plan([bad], [a, b])
+            guard let u = p.unsure.first else { continue }
+            for c in u.candidates {
+                let out = try BoxMerge.apply(p, resolutions: [0: .existing(c)], to: [a, b])
+                XCTAssertTrue(out.allSatisfy { $0.megaForm == nil }, "cp \(bad.cp) flags \(bad.flags) candidate \(c)")
+            }
+            XCTAssertNotEqual(BoxMerge.effect(p, u, candidate: [a, b].first { $0.id == u.candidates[0] }!, gameMaster: gm), .replacesValues)
+        }
+    }
 }

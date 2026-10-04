@@ -52,7 +52,7 @@ import PogoReader
 public enum BoxMerge {
     public enum UpdateReason: String, Codable, Equatable {
         case poweredUp, evolved
-        /// A saved Mega-form entry scanned in its base form: the base species and values replace it.
+        /// A saved Mega-form entry scanned in its base form: the base species and values replace it, and the Mega values it was saved with are kept as its `megaForm`.
         case megaToBase
         /// Rule 4: the saved entry had no IVs and the scan read them.
         case ivsNowRead
@@ -75,7 +75,7 @@ public enum BoxMerge {
     public struct Pair: Equatable {
         public var scanned: Int
         public var savedId: String
-        /// The scanned Pokémon was Mega (or Primal) evolved and matched its base entry: only "last seen" is updated.
+        /// The scanned Pokémon was Mega (or Primal) evolved and matched its base entry: its last-seen date is updated and its Mega values are stored as the entry's `megaForm` (the entry's own values are not changed; a row whose CP fits no level stores none).
         public var mega = false
         public init(scanned: Int, savedId: String, mega: Bool = false) { self.scanned = scanned; self.savedId = savedId; self.mega = mega }
     }
@@ -141,7 +141,7 @@ public enum BoxMerge {
         /// Saved entries that no scanned row was paired with (candidates of an unsure row included), for `goneReport`.
         public var unpaired: [Unpaired] = []
         /// Scanned positions whose species is a Mega or Primal form, with the base species id. A Mega row never writes its own
-        /// values into the box: it matches its base entry as "same", or is saved as New under the base species with no CP, HP or level.
+        /// values over the base entry's: it matches its base entry as "same" and its values are stored as that entry's `megaForm`, or it is saved as New under the base species with no CP, HP or level (its Mega values are not stored then).
         public var megaBases: [Int: String] = [:]
         /// For a row that cannot be identified by its CP: how many of its question's first candidates are the ranked same-species, same-HP entries (the review card shows at most three of
         /// them, then "Show all"; the rest of the list follows them). Absent: the whole list is shown as before.
@@ -1003,8 +1003,9 @@ public enum BoxMerge {
 
         func setMega(_ id: String, _ mega: Bool) { byId[id]?.megaWhenScanned = mega ? true : nil }
         /// Keep a Mega row's values as the entry's Mega form: a later read of the Mega form replaces the values it read (an unread value never replaces a saved one) and keeps the first-seen date.
+        /// Nothing is stored from a row whose CP fits no level or was not read: its CP and level cannot be trusted.
         func storeMegaForm(_ id: String, _ row: ScanRow) {
-            guard var e = byId[id] else { return }
+            guard !hasNoLevelFits(row), row.cp > 0, var e = byId[id] else { return }
             if var mf = e.megaForm {
                 if mf.speciesId != row.speciesId { mf.speciesId = row.speciesId; mf.name = row.name; mf.display = row.display; mf.form = row.form; mf.dex = row.dex }
                 if row.cp > 0 { mf.cp = row.cp }
@@ -1044,8 +1045,10 @@ public enum BoxMerge {
                     guard id == u.candidates.first, u.candidates.count == 2, let m = byId[u.candidates[1]] else { break }
                     byId[id]?.firstSeen = min(e.firstSeen, m.firstSeen)
                     touch(id)
-                    let scannedMega = plan.megaBases[u.scanned] != nil
-                    adoptMegaForm(id, m.megaForm ?? MegaForm(row: m.row, firstSeen: m.firstSeen, lastSeen: scannedMega ? max(m.lastSeen, date) : m.lastSeen))
+                    // The other entry's values keep their OWN last-seen date (a base scan did not see the Mega form), so an existing, more recently seen Mega form wins over them; then a Mega row
+                    // the scan read (CP fitting a level) is stored on top like an automatic Same pair, so what ends up held is what was read now.
+                    adoptMegaForm(id, m.megaForm ?? MegaForm(row: m.row, firstSeen: m.firstSeen, lastSeen: m.lastSeen))
+                    if plan.megaBases[u.scanned] != nil { storeMegaForm(id, plan.scanned[u.scanned]) }
                     setMega(id, plan.megaBases[u.scanned] != nil)
                     removedByJoin.insert(m.id)
                     break

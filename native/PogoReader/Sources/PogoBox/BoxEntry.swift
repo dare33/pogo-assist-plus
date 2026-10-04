@@ -58,8 +58,8 @@ public struct BoxEntry: Codable, Equatable, Identifiable {
     public var firstSeen: Date
     public var lastSeen: Date
     public var corrections = Corrections()
-    /// The latest scan that saw this Pokémon found it Mega (or Primal) evolved. Its values were not saved from that scan: the
-    /// Mega CP is temporary. nil or false when the latest scan saw it in its own form.
+    /// The latest scan that saw this Pokémon found it Mega (or Primal) evolved. Its own (base) values were not changed by that scan: the Mega values it read are
+    /// kept apart in `megaForm` (the Mega CP is temporary, so they are never the entry's `row`). nil or false when the latest scan saw it in its own form.
     public var megaWhenScanned: Bool?
     /// The Mega form's own values, when a scan has read this Pokémon Mega evolved (or a box held it as a second, Mega entry that was joined to this one). `row` stays the base form. One
     /// entry with a Mega form is one Pokémon everywhere: the box count, advice and the CSV use `row` once.
