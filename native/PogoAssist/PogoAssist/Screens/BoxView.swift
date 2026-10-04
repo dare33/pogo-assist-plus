@@ -49,6 +49,8 @@ struct BoxView: View {
         .toolbar(.hidden, for: .navigationBar)
         // The floating bar would ride up on the keyboard and cover the results while typing.
         .hidesTabBar(searching)
+        // Leaving for a species list or a Pokémon ends the typing, so coming back does not bring the keyboard up over the list (iOS 27 gives the field its focus back).
+        .onDisappear { searching = false }
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
         .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
         .sheet(isPresented: Binding(get: { model.exportURL != nil }, set: { if !$0 { model.exportURL = nil } })) {
@@ -212,7 +214,7 @@ struct BoxView: View {
     private func filterChip(_ title: String, _ value: BoxIndex.Chip) -> some View {
         let on = chip == value
         let orange = value == .toCheck
-        return Button { chip = value } label: {
+        return Button { chip = value; searching = false } label: {
             Text(title).font(.figtree(14, orange || on ? .bold : .semibold, relativeTo: .subheadline))
                 .foregroundStyle(on ? Theme.bg : (orange ? Theme.orangeInk : Theme.ink))
                 .padding(.horizontal, 14).frame(minHeight: 36)
@@ -260,6 +262,7 @@ struct BoxView: View {
                 ForEach(Array(s.rows.enumerated()), id: \.element.id) { i, r in
                     NavigationLink(value: SpeciesRoute(title: r.title, query: applied, chip: chip)) { speciesRow(r, last: i == s.rows.count - 1) }
                         .buttonStyle(PressStyle())
+                        .simultaneousGesture(TapGesture().onEnded { searching = false })   // opening a species ends the typing
                         .accessibilityIdentifier("species-row")
                 }
             }
