@@ -239,6 +239,92 @@ final class ReviewScreensTests: XCTestCase {
         for i in 0..<3 { app.swipeUp(); shot("large-answered-\(i)") }
     }
 
+    // MARK: Mega pair
+
+    /// The Mega pair card says what joining does now (one entry with both forms), the answered row shows the two forms, and "What saving does" counts the join as one removed entry.
+    private func megaPairTour(_ app: XCUIApplication, _ p: String) {
+        let note = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'the box keeps one entry with both forms'")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 10), "the Mega pair card's note")
+        XCTAssertTrue(note.label.contains("The normal entry keeps its values and hand corrections, the Mega entry's values become its Mega form, and the separate Mega entry is removed."), note.label)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'with whatever was saved for it'")).firstMatch.exists, "the old sentence is gone")
+        XCTAssertTrue(app.buttons["Same Pokémon"].exists && app.buttons["Different ones"].exists)
+        let same = app.buttons["Same Pokémon"], h = app.windows.firstMatch.frame.height
+        app.swipeUp(); sleep(1)
+        shot("\(p)-01-card")
+        for _ in 0..<6 where !(same.isHittable && same.frame.maxY < h - 190) { app.swipeUp() }
+        same.tap()
+        sleep(1)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Same Pokémon · Normal · CP 2819 · Mega · CP 3970'")).firstMatch.waitForExistence(timeout: 5), "the answered row shows both forms")
+        shot("\(p)-02-answered")
+        for _ in 0..<4 where !app.staticTexts["Removed"].exists { app.swipeDown() }
+        XCTAssertTrue(app.staticTexts["Removed"].exists, "a join still removes one entry from the list")
+        XCTAssertTrue(app.staticTexts["Mega entries joined into their normal entry"].exists)
+    }
+    func testMegaPairLight() throws { megaPairTour(launch(["-appearance", "light"], variant: "megapair"), "mega-light") }
+    func testMegaPairDark() throws { megaPairTour(launch(["-appearance", "dark"], variant: "megapair"), "mega-dark") }
+    func testMegaPairLargeText() throws {
+        megaPairTour(launch(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"], variant: "megapair"), "mega-large")
+    }
+
+    // MARK: trouble stretch
+
+    /// The seeded scan has 40 rows whose CP was worked out, 6 cards that could not be read between them, then 20 clean rows: one stretch of 46 cards, 66 cards from its first to the end of the scan.
+    private func stretchText(_ app: XCUIApplication) -> String {
+        let t = app.staticTexts["review-stretch-0"]
+        XCTAssertTrue(t.waitForExistence(timeout: 10), "the stretch panel is on the result")
+        return t.label
+    }
+
+    func testStretchPanelWithoutACommandSet() throws {
+        let app = launch(["-appearance", "light"], variant: "stretch")
+        let text = stretchText(app)
+        XCTAssertTrue(text.contains("The CP was covered for 46 in a row"), text)
+        XCTAssertTrue(text.contains("Something probably covered the top of the screen, such as a banner or an alarm, from Smoliv (CP 131, worked out) to Rattata. 6 of them could not be read at all."), text)
+        XCTAssertTrue(text.contains("To read them again: in Pokémon GO open Smoliv (it comes right after Snorlax CP 133) with the appraisal showing, then scan again from there (Add and update)."), text)
+        XCTAssertFalse(text.contains("Pogo scan"), "no command set was made: no command is named")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Copy search' AND value == 'smoliv&hp60'")).firstMatch.exists, "the first card's search uses its HP, not its worked-out CP")
+        XCTAssertFalse(app.staticTexts["review-stretch-1"].exists, "one stretch, one panel")
+        let heading = app.staticTexts["What saving does"], panel = app.staticTexts["review-stretch-0"]
+        XCTAssertLessThan(heading.frame.minY, panel.frame.minY, "the panel is under What saving does")
+        shot("stretch-light-01-top")
+        app.swipeUp(); sleep(1)
+        shot("stretch-light-01b-panel")
+    }
+
+    func testStretchPanelNamesTheSmallestCommandThatCovers() throws {
+        let app = launch(["-appearance", "light"], variant: "stretch+commands")
+        let text = stretchText(app)
+        XCTAssertTrue(text.contains("choose Add and update, then say \"Wake up\" and \"Pogo scan 100\"."), text + " (66 cards to the end: 100 is the smallest size that covers them)")
+        app.swipeUp(); sleep(1)
+        shot("stretch-light-02-command")
+        app.terminate()
+        let hand = launch(["-appearance", "light"], variant: "stretch+commands+hand")
+        let t2 = stretchText(hand)
+        XCTAssertTrue(t2.contains("then scan again from there (Add and update)."), t2)
+        XCTAssertFalse(t2.contains("Pogo scan"), "paging by hand: no command is named")
+    }
+
+    func testStretchPanelDarkAndLarge() throws {
+        let dark = launch(["-appearance", "dark"], variant: "stretch+commands")
+        _ = stretchText(dark)
+        dark.swipeUp(); sleep(1)
+        shot("stretch-dark-01-top")
+        dark.terminate()
+        let large = launch(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"], variant: "stretch+commands")
+        _ = stretchText(large)
+        large.swipeUp(); sleep(1)
+        shot("stretch-large-01-panel")
+        large.swipeUp()
+        shot("stretch-large-02-below")
+    }
+
+    /// Guide me shows the same panel on its result screen.
+    func testStretchPanelOnTheGuideResult() throws {
+        let app = launch(["-appearance", "light", "-helpLevel", "guide"], variant: "stretch+commands")
+        XCTAssertTrue(stretchText(app).contains("The CP was covered for 46 in a row"))
+        shot("stretch-guide-01-top")
+    }
+
     /// A scan with nothing to ask: Save to box is available at once.
     func testCleanScanIsUnlocked() throws {
         let app = launch(["-appearance", "light"], variant: "clean")

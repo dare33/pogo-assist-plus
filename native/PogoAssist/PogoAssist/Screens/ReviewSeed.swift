@@ -3,19 +3,25 @@ import Foundation
 import PogoBox
 import PogoReader
 
-/// A review for screenshots and UI tests, in DEBUG builds only: launch with `-uitest-seed-review <variant>` (`full`, `clean` or `partial`).
+/// A review for screenshots and UI tests, in DEBUG builds only: launch with `-uitest-seed-review <variant>` (`full`, `clean`, `partial`, `megapair` or `stretch`; see the suffixes below).
 /// The merge is the real one: the fixture is a small saved box and a list of scanned rows, and `BoxMerge.plan` decides what to ask, which is how the
 /// engine's own tests build their cases. Only the scan's `Outcome` is borrowed from the bundled sample scan (it cannot be built outside the engine),
 /// with its rows, unmatched cards and duration replaced by the fixture's.
 extension AppModel {
     func seedReview(variant: String) {
         if accounts.isEmpty { createAccount("Greg main") }
+        // "<variant>+commands": the command set was made on this phone (paging by the command); "+hand": ... and the person chose to page by hand. Without either, no set was made.
+        if variant.contains("+commands"), let a = account, let d = try? JSONEncoder().encode(SetRecord(kind: setKind, date: Date(), screen: screenLabel)) {
+            UserDefaults.standard.set(d, forKey: "voiceSet." + a)
+            loadVoiceRecord(); restorePaging()
+            if variant.contains("+hand") { choosePaging(byHand: true) }
+        }
         guard let name = account, let url = Bundle.main.url(forResource: "sample-scan.replay", withExtension: "jsonl"), let gm = try? GameMaster.bundled() else { return }
         flow = .processing("Reading the scan")
         Task {
             do {
                 var outcome = try await worker.run { engine in try ScanPipeline.process(replay: url, engine: engine) }
-                let f = ReviewFixture(gm, variant: variant.replacingOccurrences(of: "+answered", with: "").replacingOccurrences(of: "+leaveone", with: ""))
+                let f = ReviewFixture(gm, variant: String(variant.split(separator: "+").first ?? ""))
                 outcome.scan = ScanResult(rows: f.rows, review: [], unmatched: f.unmatched)
                 outcome.readings = 1686; outcome.duration = 2040; outcome.notices = []
                 let kind: BoxStore.Kind = variant.hasPrefix("partial") ? .partial : .full
@@ -36,7 +42,9 @@ extension AppModel {
     }
 }
 
-/// The scanned rows and the saved box of the fixture.
+/// The scanned rows and the saved box of the fixture. `megapair` is a small scan with only the Mega pair to answer (answer "Same Pokémon" and save for a box entry with a Mega form);
+/// `stretch` is a scan of 80 cards in which the CP of 40 was worked out (6 more cards could not be read), the shape of the 5 Oct 2026 alarm scan, built the way the engine's own tests build it:
+/// rows flagged `cp-computed` in a row and unmatched `cp-not-read` cards placed by frame number, so `TroubleStretches.find` finds it.
 struct ReviewFixture {
     let gm: GameMaster
     var rows = [ScanRow]()
@@ -64,6 +72,30 @@ struct ReviewFixture {
         // Not in the box: "New".
         rows.append(row("meltan", cp: 421, hp: 70, ivs: iv(3, 7, 12)))
         rows.append(row("combee", cp: 120, hp: 40, ivs: iv(9, 9, 9)))
+        if variant == "stretch" {
+            rows = []; saved = []; unmatched = []
+            let ids = ["pidgey", "rattata", "eevee", "zubat", "oddish", "bellsprout", "geodude", "machop", "magikarp", "wooloo", "hatenna", "fidough", "nacli", "combee", "meltan", "snorlax", "smoliv", "tympole", "kakuna", "pikachu"]
+            let hidden = 20..<60
+            for i in 0..<80 {
+                let id = i == 19 ? "snorlax" : (i == 20 ? "smoliv" : (i == 59 ? "rattata" : ids[(i * 7) % ids.count]))
+                let ivs = iv(i % 16, (i / 2) % 16, (i * 3) % 16)
+                var r = row(id, cp: 133 - (i == 19 ? 0 : i % 50) + (i % 5) * 31, hp: 40 + i % 60, ivs: ivs, flags: hidden.contains(i) ? ["cp-computed:\(100 + i)"] : [])
+                if i == 19 { r.cp = 133 }; if i == 20 { r.cp = 131 }; if i == 59 { r.cp = 67 }
+                r.frames = [(try? JSONDecoder().decode(FrameLabel.self, from: Data(#"{"frame":"r\#(i * 3)"}"#.utf8)))].compactMap { $0 }
+                rows.append(r)
+            }
+            for i in [25, 33, 34, 41, 50, 52] {
+                if let u = try? JSONDecoder().decode(Unmatched.self, from: Data(#"{"frame":"r\#(i * 3 + 1)","name":"Pidgey","hp":40,"cpOptions":[],"frames":1,"reason":"cp-not-read"}"#.utf8)) { unmatched.append(u) }
+            }
+            for i in rows.indices { rows[i].index = i + 1 }
+            return
+        }
+        if variant == "megapair" {
+            // The Mega pair alone (and the rows the box already has).
+            own("blaziken", 2819, 167, iv(15, 15, 14), "mb"); own("blaziken_mega", 3970, 167, iv(15, 15, 14), "mm"); rows.append(row("blaziken_mega", cp: 3970, hp: 167, ivs: iv(15, 15, 14)))
+            for i in rows.indices { rows[i].index = i + 1 }
+            return
+        }
         if variant != "clean" {
             // Three part reads of a saved Pokémon's CP: one bulk-able group.
             let bad = iv(1, 1, 1)

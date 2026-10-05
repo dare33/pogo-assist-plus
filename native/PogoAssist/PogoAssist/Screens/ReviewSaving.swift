@@ -57,7 +57,11 @@ struct ReviewSavingSection: View {
                     ForEach(p.same, id: \.scanned) { m in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(Fmt.brief(plan.scanned[m.scanned])).paText(.secondary).foregroundStyle(Theme.ink)
-                            if m.mega { Text("Mega evolved when scanned. The saved \(ctx.saved[m.savedId]?.row.title ?? "Pokémon") keeps its own values.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
+                            if m.mega && !GameSearch.noLevelFits(plan.scanned[m.scanned].flags) {
+                                // The engine keeps the Mega values only from a CP that was read.
+                                let own = "Mega evolved when scanned. The saved \(ctx.saved[m.savedId]?.row.title ?? "Pokémon") keeps its own values"
+                                Text(plan.scanned[m.scanned].cp > 0 ? own + " and keeps the Mega values read now as its Mega form." : own + ".").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                            }
                             else if m.effect == .keepsIVsAndFlags { Text("The saved IVs are kept and it is marked to check.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
                         }
                     }
@@ -90,7 +94,10 @@ struct ReviewSavingSection: View {
         case .poweredUp: return "Powered up: CP \(old?.cp ?? 0) to \(s.cp)"
         case .evolved: return "Evolved from \(old?.name ?? "?"): now \(s.title), CP \(s.cp)"
         case .ivsNowRead: return "IVs now read: \(Fmt.ivs(s.ivs))"
-        case .megaToBase: return "Saved in its Mega form before; now \(s.title), CP \(s.cp)"
+        case .megaToBase:
+            var keeps = false
+            if let q = ctx.unsure(u.scanned), let e = ctx.saved[u.savedId], let gm = ctx.gm { keeps = BoxMerge.keepsSavedMegaAsMegaForm(plan, q, candidate: e, gameMaster: gm) }
+            return "Saved in its Mega form before; now \(s.title), CP \(s.cp)" + (keeps ? ". The Mega values it was saved with are kept as its Mega form." : "")
         case .chosen: return "Matched by you: now CP \(s.cp)"
         }
     }

@@ -51,7 +51,7 @@ enum ReviewWording {
         let cands: [ReviewQuestion.Candidate] = ids.compactMap { id in
             guard let e = saved[id] else { return nil }
             let fx = BoxMerge.effect(plan, u, candidate: e, gameMaster: gm)
-            return .init(id: id, line: candidateLine(e.row, among: row), alreadySeen: alreadySeen(id, plan), effect: fx, effectText: effectSentence(fx))
+            return .init(id: id, line: candidateLine(e.row, among: row), alreadySeen: alreadySeen(id, plan), effect: fx, effectText: effectSentence(fx) + megaFormSentence(plan, u, e, gm))
         }
         let ranked = plan.rankedCounts[u.scanned] ?? 0
 
@@ -63,12 +63,12 @@ enum ReviewWording {
                     title: "Your \(entries[0].row.name) is saved twice, as a Mega and not. Are they the same Pokémon?", short: "\(entries[0].row.name), saved twice",
                     pair: [("NORMAL", side(entries[0].row, plain: true)), ("MEGA", side(entries[1].row, plain: true))],
                     answers: [.init(label: "Same Pokémon", icon: nil, resolution: .existing(entries[0].id), style: .tint), .init(label: "Different ones", icon: nil, resolution: .leaveOut, style: .tint)],
-                    note: "Same Pokémon keeps the normal entry exactly as saved (marked Mega when scanned if the scan read the Mega form) and removes the Mega entry with whatever was saved for it. Different ones changes nothing.",
+                    note: "Same Pokémon: the box keeps one entry with both forms. The normal entry keeps its values and hand corrections, the Mega entry's values become its Mega form, and the separate Mega entry is removed. Different ones changes nothing.",
                     search: search)
             }
             return ReviewQuestion(scanned: u.scanned, shape: .megaPair, kind: .copies, title: "This Pokémon is saved twice, as a Mega and not. Are they the same Pokémon?", short: short,
                 answers: [.init(label: "Same Pokémon", icon: nil, resolution: u.candidates.first.map { .existing($0) } ?? .leaveOut, style: .tint), .init(label: "Different ones", icon: nil, resolution: .leaveOut, style: .tint)],
-                note: "Same Pokémon removes the Mega entry. Different ones changes nothing.", search: search)
+                note: "Same Pokémon: the box keeps one entry with both forms. The Mega entry's values become the normal entry's Mega form and the separate Mega entry is removed. Different ones changes nothing.", search: search)
 
         case .extraTwin:
             let n = plan.scanned.filter { sameRead($0, row) }.count
@@ -130,15 +130,14 @@ enum ReviewWording {
             title = "\(n) saved Pokémon could be this \(row.title)."
         }
         // One sentence for the cards when every candidate shown does the same; otherwise each candidate says its own.
-        let same = Set(cands.map { effectKey($0.effect) }).count <= 1
+        let same = Set(cands.map(\.effectText)).count <= 1
         let note = [explanation(u, row: row, saved: saved), same ? cands.first?.effectText : nil].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
         return ReviewQuestion(scanned: u.scanned, shape: .several, kind: kind, title: title, short: short, readLine: readLine(row),
             answers: [addNew, leave], candidates: cands, rankedCount: ranked, note: note.isEmpty ? nil : note, search: search)
     }
 
     /// The note under a card whose candidates are listed one by one: only when they do not all do the same.
-    static func perCandidateNotes(_ q: ReviewQuestion) -> Bool { Set(q.candidates.map { effectKey($0.effect) }).count > 1 }
-    private static func effectKey(_ fx: BoxMerge.Effect) -> String { "\(fx)" }
+    static func perCandidateNotes(_ q: ReviewQuestion) -> Bool { Set(q.candidates.map(\.effectText)).count > 1 }
 
     // MARK: the answered row
 
@@ -153,9 +152,12 @@ enum ReviewWording {
             guard let u, let e = saved[id] else { return "Saved one" }
             let fx = BoxMerge.effect(plan, u, candidate: e, gameMaster: gm)
             switch fx {
-            case .joinsMegaPair: return "Same Pokémon: the Mega entry is removed"
+            case .joinsMegaPair:
+                // The design's answered state: the two forms side by side.
+                guard u.candidates.count == 2, let mega = saved[u.candidates[1]] else { return "Same Pokémon: joined into one entry" }
+                return "Same Pokémon · Normal · \(cpText(e.row.cp)) · Mega · \(cpText(mega.row.cp))"
             case .seenOnly: return "Saved one: marked as seen"
-            case .seenAsMega: return "Saved one: marked as seen and as Mega"
+            case .seenAsMega: return GameSearch.noLevelFits(row.flags) || row.cp <= 0 ? "Saved one: marked as seen and as Mega" : "Saved one: marked as seen and as Mega, Mega values kept"
             case .replacesIVs: return "Saved one: IVs replaced with those read now"
             case .keepsIVsAndFlags: return "Saved one: saved IVs kept, marked to check"
             case .replacesValues:
@@ -174,12 +176,18 @@ enum ReviewWording {
     static func effectSentence(_ fx: BoxMerge.Effect) -> String {
         switch fx {
         case .seenOnly: return "Choosing this only marks it as seen. Nothing is changed."
-        case .seenAsMega: return "Choosing this marks it as seen and as Mega evolved when scanned. The Mega values are not copied."
+        case .seenAsMega: return "Choosing this marks it as seen and as Mega evolved when scanned. If its CP was read, the Mega values read now are kept as its Mega form. Its own saved values do not change."
         case .replacesValues: return "Choosing this updates the saved Pokémon with the values read in the scan."
         case .replacesIVs: return "The saved IVs were not an exact read, so choosing this replaces them with the IVs read now."
-        case .joinsMegaPair: return "Joining keeps this entry exactly as saved (values and hand corrections unchanged), marks it Mega when scanned if the scan read the Mega form, and removes the other entry with whatever was saved for it."
+        case .joinsMegaPair: return "Joining keeps this entry with its values and hand corrections, keeps the other entry's values as its Mega form, and removes the separate Mega entry. It is marked Mega when scanned if the scan read the Mega form."
         case .keepsIVsAndFlags: return "The scan read other IVs for the same CP and HP. IVs never change, so one read is wrong: choosing this keeps the saved IVs and marks it to check."
         }
+    }
+
+    /// For a megaToBase candidate, when "It's this one" keeps the Mega values the entry was saved with: said after the effect sentence. Empty otherwise.
+    static func megaFormSentence(_ plan: BoxMerge.Plan, _ u: BoxMerge.Unsure, _ e: BoxEntry, _ gm: GameMaster?) -> String {
+        guard let gm, BoxMerge.keepsSavedMegaAsMegaForm(plan, u, candidate: e, gameMaster: gm) else { return "" }
+        return " The Mega values it was saved with become its Mega form."
     }
 
     /// "Same IVs" is only true when the saved entry's current IVs equal the read ones; a match through a hand correction's old IVs says so.
@@ -222,6 +230,47 @@ enum ReviewWording {
         var s = "\(what) Picking the saved one just marks it as seen."
         if showAddNew { s += " Add new saves the row as read, with its part-read CP." }
         return s
+    }
+
+    // MARK: trouble stretches
+
+    /// The words of one trouble stretch panel (`TroubleStretches`): what happened, with the engine's real numbers, and how to read the cards again.
+    struct StretchText: Equatable {
+        var title: String
+        var what: String
+        var resume: String
+    }
+
+    /// The command that covers the cards from the first affected one to the end, when there is one to name: the smallest size of the set that covers them. nil when the person pages by
+    /// hand, no command set was made on this phone, or the cards outnumber the largest command.
+    static func resumeSize(_ t: TroubleStretch, pagedByHand: Bool, commandSetMade: Bool) -> Int? {
+        pagedByHand || !commandSetMade ? nil : VoiceCommandFile.setSize(covering: t.cardsToEnd)
+    }
+
+    static func stretch(_ t: TroubleStretch, commandSize: Int?) -> StretchText {
+        let n = t.count.formatted(), first = t.firstCard, last = t.lastCard
+        let title: String, what: String
+        switch t.kind {
+        case .cpHidden:
+            title = "The CP was covered for \(n) in a row"
+            var s = "Something probably covered the top of the screen, such as a banner or an alarm, from \(first.name) (CP \(first.cp), worked out) to \(last.name)."
+            if t.unreadCards > 0 { s += " \(t.unreadCards.formatted()) of them could not be read at all." }
+            what = s
+        case .barsUnread:
+            title = "The IV bars were not read for \(n) in a row"
+            what = "The appraisal may have been closed or covered from \(first.name) to \(last.name), so the IV bars were not read."
+        }
+        let place = t.cardBefore.map { "it comes right after \($0.name) CP \($0.cp)" } ?? "it is the first one in this scan"
+        let then = commandSize.map { "choose Add and update, then say \"Wake up\" and \"Pogo scan \($0)\"." } ?? "then scan again from there (Add and update)."
+        return StretchText(title: title, what: what, resume: "To read them again: in Pokémon GO open \(first.name) (\(place)) with the appraisal showing, \(then)")
+    }
+
+    /// The first card of a stretch as a game search: its HP when its CP is not to be trusted (always for a hidden CP, and for a CP that was worked out or fits no level).
+    static func stretchSearch(_ t: TroubleStretch, scan: ScanResult) -> String? {
+        guard scan.rows.indices.contains(t.firstRow) else { return nil }
+        let r = scan.rows[t.firstRow]
+        let worked = t.kind == .cpHidden || r.flags.contains { $0 == "cp-computed" || $0.hasPrefix("cp-computed:") } || GameSearch.untrusted(r)
+        return GameSearch.text([GameSearch.part(name: r.name, cp: r.cp, hp: r.hp, noLevelFits: worked)])
     }
 
     // MARK: pieces

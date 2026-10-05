@@ -73,6 +73,8 @@ final class ReviewDerived {
     let gm: GameMaster?
     let groups: [BoxMerge.QuestionGroup]
     let ending: ScanEnding
+    /// Runs of cards that failed the same way (a hidden CP, unread bars), found once per review: the scan does not change.
+    let stretches: [TroubleStretch]
     /// The rows with a check before any answer, to count what the answers cleared.
     private let rowsWithoutAnswers: Int
     private let plan: BoxMerge.Plan
@@ -85,6 +87,7 @@ final class ReviewDerived {
         self.gm = gm
         groups = BoxMerge.questionGroups(review.plan, saved: review.base, gameMaster: gm)
         ending = ScanEnding.of(review)
+        stretches = TroubleStretches.find(review.outcome.scan)
         rowsWithoutAnswers = BoxMerge.rowsToCheck(review.plan, resolutions: [:]).count
     }
 
@@ -189,6 +192,7 @@ struct ReviewContext {
     var gm: GameMaster? { derived.gm }
     var groups: [BoxMerge.QuestionGroup] { derived.groups }
     var ending: ScanEnding { derived.ending }
+    var stretches: [TroubleStretch] { derived.stretches }
 
     var total: Int { plan.unsure.count }
     var answered: Int { plan.unsure.filter { review.resolutions[$0.scanned] != nil }.count }

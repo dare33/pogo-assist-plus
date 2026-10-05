@@ -51,6 +51,40 @@ struct ReviewNotices: View {
     }
 }
 
+// MARK: trouble stretches
+
+/// One orange panel for each run of cards that failed the same way (`TroubleStretches`), under "What saving does": what happened, with the real numbers, and how to read those cards again.
+/// Nothing in the counts, To check or the questions changes; the panel only tells the person where to start again.
+struct ReviewStretchPanels: View {
+    @EnvironmentObject var model: AppModel
+    let ctx: ReviewContext
+
+    var body: some View {
+        ForEach(Array(ctx.stretches.enumerated()), id: \.offset) { n, t in
+            let text = ReviewWording.stretch(t, commandSize: ReviewWording.resumeSize(t, pagedByHand: model.pagedByHand, commandSetMade: model.commandSetMade))
+            let search = ReviewWording.stretchSearch(t, scan: ctx.review.outcome.scan)
+            Panel(tint: .orange, padding: 16, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill").font(.figtree(17, .bold)).foregroundStyle(Theme.orangeInk).accessibilityHidden(true)
+                        Text(text.title).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.orangeInk)
+                            .frame(maxWidth: .infinity, alignment: .leading).accessibilityAddTraits(.isHeader)
+                    }
+                    Text(text.what).font(.figtree(15, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(text.resume).font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("review-stretch-\(n)")
+                if let search {
+                    Text("To find the first one in the game:").font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.orangeInk)
+                    SearchStrip(text: search)
+                }
+            }
+        }
+    }
+}
+
 // MARK: below the questions
 
 /// Everything under the questions (second frame of design 1a): what needs a look in the game, notes, not seen, on screen but not read, the scan kind, the scan details ("What saving does" is the second segment, `ReviewSavingSection`).

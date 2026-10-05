@@ -41,6 +41,7 @@ struct ResultScreen: View {
                         ReviewSavingSection(ctx: ctx, open: $savingOpen).id(Self.savingID)
                         // An empty strip under the segment: the scroll position reports it as the top item once the segment has scrolled out of view.
                         Color.clear.frame(height: 1).id(Self.stripID)
+                        ReviewStretchPanels(ctx: ctx)
                         ReviewNotices(ctx: ctx)
                         if ctx.total > 0 { questions(ctx) }
                         ReviewLowerSections(ctx: ctx, path: $path, confirmFull: $confirmFull)
