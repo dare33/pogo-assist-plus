@@ -10,7 +10,7 @@ import PogoReader
 extension AppModel {
     func seedReview(variant: String) {
         if accounts.isEmpty { createAccount("Greg main") }
-        // "<variant>+commands": the command set was made on this phone (paging by the command); "+hand": ... and the person chose to page by hand. Without either, no set was made.
+        // "<variant>+commands": the command set was made on this phone (paging by the command); "+hand": ... and the person chose to page by hand (today's setting); a `stretch` review is stored as paged by the command unless "+hand", or with "+scancmd" whatever the setting. Without either, no set was made.
         if variant.contains("+commands"), let a = account, let d = try? JSONEncoder().encode(SetRecord(kind: setKind, date: Date(), screen: screenLabel)) {
             UserDefaults.standard.set(d, forKey: "voiceSet." + a)
             loadVoiceRecord(); restorePaging()
@@ -26,7 +26,7 @@ extension AppModel {
                 outcome.readings = 1686; outcome.duration = 2040; outcome.notices = []
                 let kind: BoxStore.Kind = variant.hasPrefix("partial") ? .partial : .full
                 let plan = BoxMerge.plan(scanned: f.rows, unmatched: f.unmatched, into: f.saved, kind: kind, scanDate: Date(), gameMaster: gm)
-                var review = Review(account: name, kind: kind, outcome: outcome, plan: plan, base: f.saved, storageCount: nil, signature: "seed", mergeSeconds: 0.1, paging: nil, boxSeq: nil)
+                var review = Review(account: name, kind: kind, outcome: outcome, plan: plan, base: f.saved, storageCount: nil, signature: "seed", mergeSeconds: 0.1, paging: variant.hasPrefix("stretch") ? StoredPaging(pagedByCommand: variant.contains("+scancmd") || (variant.contains("+commands") && !variant.contains("+hand"))) : nil, boxSeq: nil)
                 print("seed unsure:", plan.unsure.map { "\($0.scanned):\($0.kind.rawValue):\($0.candidates.count)" }, "new", plan.new.count, "same", plan.same.count, "updated", plan.updated.count)
                 // "<variant>+answered": every question already answered (its one saved candidate, else "new"), to look at the answered state without tapping through.
                 // "<variant>+leaveone": the same, except the last question, which stays open.
@@ -72,19 +72,21 @@ struct ReviewFixture {
         // Not in the box: "New".
         rows.append(row("meltan", cp: 421, hp: 70, ivs: iv(3, 7, 12)))
         rows.append(row("combee", cp: 120, hp: 40, ivs: iv(9, 9, 9)))
-        if variant == "stretch" {
+        if variant.hasPrefix("stretch") {
             rows = []; saved = []; unmatched = []
             let ids = ["pidgey", "rattata", "eevee", "zubat", "oddish", "bellsprout", "geodude", "machop", "magikarp", "wooloo", "hatenna", "fidough", "nacli", "combee", "meltan", "snorlax", "smoliv", "tympole", "kakuna", "pikachu"]
             let hidden = 20..<60
+            // `stretchmixed`: three rows inside the stretch kept their CP. `stretchlead`: one more card that could not be read, right after row 19 and ahead of the first row whose CP was worked out.
+            let clean: Set<Int> = variant == "stretchmixed" ? [30, 31, 45] : []
             for i in 0..<80 {
                 let id = i == 19 ? "snorlax" : (i == 20 ? "smoliv" : (i == 59 ? "rattata" : ids[(i * 7) % ids.count]))
                 let ivs = iv(i % 16, (i / 2) % 16, (i * 3) % 16)
-                var r = row(id, cp: 133 - (i == 19 ? 0 : i % 50) + (i % 5) * 31, hp: 40 + i % 60, ivs: ivs, flags: hidden.contains(i) ? ["cp-computed:\(100 + i)"] : [])
+                var r = row(id, cp: 133 - (i == 19 ? 0 : i % 50) + (i % 5) * 31, hp: 40 + i % 60, ivs: ivs, flags: hidden.contains(i) && !clean.contains(i) ? ["cp-computed:\(100 + i)"] : [])
                 if i == 19 { r.cp = 133 }; if i == 20 { r.cp = 131 }; if i == 59 { r.cp = 67 }
                 r.frames = [(try? JSONDecoder().decode(FrameLabel.self, from: Data(#"{"frame":"r\#(i * 3)"}"#.utf8)))].compactMap { $0 }
                 rows.append(r)
             }
-            for i in [25, 33, 34, 41, 50, 52] {
+            for i in (variant == "stretchlead" ? [19] : []) + [25, 33, 34, 41, 50, 52] {
                 if let u = try? JSONDecoder().decode(Unmatched.self, from: Data(#"{"frame":"r\#(i * 3 + 1)","name":"Pidgey","hp":40,"cpOptions":[],"frames":1,"reason":"cp-not-read"}"#.utf8)) { unmatched.append(u) }
             }
             for i in rows.indices { rows[i].index = i + 1 }

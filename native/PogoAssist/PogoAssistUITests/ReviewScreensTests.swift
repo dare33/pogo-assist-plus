@@ -291,9 +291,10 @@ final class ReviewScreensTests: XCTestCase {
         let app = launch(["-appearance", "light"], variant: "stretch")
         let text = stretchText(app)
         XCTAssertTrue(text.contains("The CP was covered for 46 in a row"), text)
-        XCTAssertTrue(text.contains("Something probably covered the top of the screen, such as a banner or an alarm, from Smoliv (CP 131, worked out) to Rattata. 6 of them could not be read at all."), text)
+        XCTAssertTrue(text.contains("Something probably covered the top of the screen, such as a banner or an alarm, from Smoliv (CP 131, worked out) to Rattata. 6 of them are not in this scan's list: their CP could not be read or worked out."), text)
         XCTAssertTrue(text.contains("To read them again: in Pokémon GO open Smoliv (it comes right after Snorlax CP 133) with the appraisal showing, then scan again from there (Add and update)."), text)
         XCTAssertFalse(text.contains("Pogo scan"), "no command set was made: no command is named")
+        XCTAssertFalse(text.contains("could not be read at all") || text.contains("in between"), "no clean row sits inside this stretch")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Copy search' AND value == 'smoliv&hp60'")).firstMatch.exists, "the first card's search uses its HP, not its worked-out CP")
         XCTAssertFalse(app.staticTexts["review-stretch-1"].exists, "one stretch, one panel")
         let heading = app.staticTexts["What saving does"], panel = app.staticTexts["review-stretch-0"]
@@ -314,6 +315,32 @@ final class ReviewScreensTests: XCTestCase {
         let t2 = stretchText(hand)
         XCTAssertTrue(t2.contains("then scan again from there (Add and update)."), t2)
         XCTAssertFalse(t2.contains("Pogo scan"), "paging by hand: no command is named")
+    }
+
+    /// Clean rows inside the stretch: the title no longer says "in a row" and the body says how many had their CP read.
+    func testStretchPanelWithCleanRowsInside() throws {
+        let app = launch(["-appearance", "light"], variant: "stretchmixed")
+        let text = stretchText(app)
+        XCTAssertTrue(text.contains("The CP was covered for 43 cards, on and off"), text)
+        XCTAssertFalse(text.contains("in a row"), text)
+        XCTAssertTrue(text.contains("6 of them are not in this scan's list: their CP could not be read or worked out. 3 Pokémon in between had their CP read."), text)
+    }
+
+    /// An unread card sits between the row before the stretch and its first row: that card is where to open, the command counts from it, and it follows how THIS scan was paged
+    /// (the seeded review's paging), not today's setting.
+    func testStretchResumesAtTheUnreadCardBeforeTheFirstRow() throws {
+        let hand = launch(["-appearance", "light"], variant: "stretchlead")
+        let t = stretchText(hand)
+        XCTAssertTrue(t.contains("in Pokémon GO open the Pokémon that comes right after Snorlax CP 133 (the scan could not read it) with the appraisal showing, then scan again from there (Add and update)."), t)
+        XCTAssertFalse(t.contains("open Smoliv"), t)
+        XCTAssertFalse(hand.staticTexts["To find the first one in the game:"].exists, "the first card to open is one the scan could not read: no search for it")
+        hand.terminate()
+        let app = launch(["-appearance", "light"], variant: "stretchlead+commands")
+        XCTAssertTrue(stretchText(app).contains("then say \"Wake up\" and \"Pogo scan 100\"."), "67 cards from the unread one to the end")
+        app.terminate()
+        // Today's setting is by hand, but this scan was paged by the command: the command is still named.
+        let was = launch(["-appearance", "light"], variant: "stretch+commands+hand+scancmd")
+        XCTAssertTrue(stretchText(was).contains("Pogo scan 100"))
     }
 
     func testStretchPanelDarkAndLarge() throws {

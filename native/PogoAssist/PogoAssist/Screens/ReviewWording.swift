@@ -63,12 +63,12 @@ enum ReviewWording {
                     title: "Your \(entries[0].row.name) is saved twice, as a Mega and not. Are they the same Pokémon?", short: "\(entries[0].row.name), saved twice",
                     pair: [("NORMAL", side(entries[0].row, plain: true)), ("MEGA", side(entries[1].row, plain: true))],
                     answers: [.init(label: "Same Pokémon", icon: nil, resolution: .existing(entries[0].id), style: .tint), .init(label: "Different ones", icon: nil, resolution: .leaveOut, style: .tint)],
-                    note: "Same Pokémon: the box keeps one entry with both forms. The normal entry keeps its values and hand corrections, the Mega entry's values become its Mega form, and the separate Mega entry is removed. Different ones changes nothing.",
+                    note: "Same Pokémon: the box keeps one entry with both forms. The normal entry keeps its values and hand corrections, the Mega entry's values become its Mega form, and the separate Mega entry is removed. If the normal entry already had a Mega form, the Mega values kept are the most recently seen ones. Different ones changes nothing.",
                     search: search)
             }
             return ReviewQuestion(scanned: u.scanned, shape: .megaPair, kind: .copies, title: "This Pokémon is saved twice, as a Mega and not. Are they the same Pokémon?", short: short,
                 answers: [.init(label: "Same Pokémon", icon: nil, resolution: u.candidates.first.map { .existing($0) } ?? .leaveOut, style: .tint), .init(label: "Different ones", icon: nil, resolution: .leaveOut, style: .tint)],
-                note: "Same Pokémon: the box keeps one entry with both forms. The Mega entry's values become the normal entry's Mega form and the separate Mega entry is removed. Different ones changes nothing.", search: search)
+                note: "Same Pokémon: the box keeps one entry with both forms. The Mega entry's values become the normal entry's Mega form and the separate Mega entry is removed. If the normal entry already had a Mega form, the Mega values kept are the most recently seen ones. Different ones changes nothing.", search: search)
 
         case .extraTwin:
             let n = plan.scanned.filter { sameRead($0, row) }.count
@@ -176,10 +176,10 @@ enum ReviewWording {
     static func effectSentence(_ fx: BoxMerge.Effect) -> String {
         switch fx {
         case .seenOnly: return "Choosing this only marks it as seen. Nothing is changed."
-        case .seenAsMega: return "Choosing this marks it as seen and as Mega evolved when scanned. If its CP was read, the Mega values read now are kept as its Mega form. Its own saved values do not change."
+        case .seenAsMega: return "Choosing this marks it as seen and as Mega evolved when scanned. If its CP was read and fits a level, the Mega values read now are kept as its Mega form. Its own saved values do not change."
         case .replacesValues: return "Choosing this updates the saved Pokémon with the values read in the scan."
         case .replacesIVs: return "The saved IVs were not an exact read, so choosing this replaces them with the IVs read now."
-        case .joinsMegaPair: return "Joining keeps this entry with its values and hand corrections, keeps the other entry's values as its Mega form, and removes the separate Mega entry. It is marked Mega when scanned if the scan read the Mega form."
+        case .joinsMegaPair: return "Joining keeps this entry with its values and hand corrections, keeps the other entry's values as its Mega form, and removes the separate Mega entry. If this entry already had a Mega form, the Mega values kept are the most recently seen ones. It is marked Mega when scanned if the scan read the Mega form."
         case .keepsIVsAndFlags: return "The scan read other IVs for the same CP and HP. IVs never change, so one read is wrong: choosing this keeps the saved IVs and marks it to check."
         }
     }
@@ -241,33 +241,46 @@ enum ReviewWording {
         var resume: String
     }
 
-    /// The command that covers the cards from the first affected one to the end, when there is one to name: the smallest size of the set that covers them. nil when the person pages by
-    /// hand, no command set was made on this phone, or the cards outnumber the largest command.
-    static func resumeSize(_ t: TroubleStretch, pagedByHand: Bool, commandSetMade: Bool) -> Int? {
-        pagedByHand || !commandSetMade ? nil : VoiceCommandFile.setSize(covering: t.cardsToEnd)
+    /// The command that covers the cards from where the person resumes (`cardsToEndFromResume`: the first affected card, or the unread card that comes right before it) to the end: the smallest
+    /// size of the set that covers them. nil when THIS scan was not paged by a command (`pagedByCommand`: `review.paging`; false when that is unknown, as in a state saved before it was kept),
+    /// no command set was made on this phone, or the cards outnumber the largest command. A person who changed the setting since the scan does not change how that scan was paged.
+    static func resumeSize(_ t: TroubleStretch, pagedByCommand: Bool, commandSetMade: Bool) -> Int? {
+        pagedByCommand && commandSetMade ? VoiceCommandFile.setSize(covering: t.cardsToEndFromResume) : nil
     }
 
     static func stretch(_ t: TroubleStretch, commandSize: Int?) -> StretchText {
         let n = t.count.formatted(), first = t.firstCard, last = t.lastCard
+        let clean = t.cleanRowsInside
+        let between = clean > 0 ? " \(ReviewFormat.count(clean, "Pokémon", "Pokémon")) in between had \(clean == 1 ? "its" : "their") \(t.kind == .cpHidden ? "CP" : "IV bars") read." : ""
         let title: String, what: String
         switch t.kind {
         case .cpHidden:
-            title = "The CP was covered for \(n) in a row"
+            // With clean rows inside, the cards counted are not all the cards from the first to the last, so the title does not say "in a row".
+            title = clean > 0 ? "The CP was covered for \(n) cards, on and off" : "The CP was covered for \(n) in a row"
             var s = "Something probably covered the top of the screen, such as a banner or an alarm, from \(first.name) (CP \(first.cp), worked out) to \(last.name)."
-            if t.unreadCards > 0 { s += " \(t.unreadCards.formatted()) of them could not be read at all." }
-            what = s
+            if t.unreadCards > 0 { s += " \(t.unreadCards.formatted()) of them are not in this scan's list: their CP could not be read or worked out." }
+            what = s + between
         case .barsUnread:
-            title = "The IV bars were not read for \(n) in a row"
-            what = "The appraisal may have been closed or covered from \(first.name) to \(last.name), so the IV bars were not read."
+            title = clean > 0 ? "The IV bars were not read for \(n) cards, on and off" : "The IV bars were not read for \(n) in a row"
+            what = "The appraisal may have been closed or covered from \(first.name) to \(last.name), so the IV bars were not read." + between
         }
-        let place = t.cardBefore.map { "it comes right after \($0.name) CP \($0.cp)" } ?? "it is the first one in this scan"
+        // Where to open: the first affected card, unless the scan holds unread cards between the one before and it: the card right after the one before is then one the scan could not read.
+        let target: String, place: String
+        if t.leadingUnread > 0 {
+            if let b = t.cardBefore { target = "the Pokémon that comes right after \(b.name) CP \(b.cp) (the scan could not read it)"; place = "" }
+            else { target = "the first Pokémon in this scan (the scan could not read it)"; place = "" }
+        } else {
+            target = first.name
+            place = " (\(t.cardBefore.map { "it comes right after \($0.name) CP \($0.cp)" } ?? "it is the first one in this scan"))"
+        }
         let then = commandSize.map { "choose Add and update, then say \"Wake up\" and \"Pogo scan \($0)\"." } ?? "then scan again from there (Add and update)."
-        return StretchText(title: title, what: what, resume: "To read them again: in Pokémon GO open \(first.name) (\(place)) with the appraisal showing, \(then)")
+        return StretchText(title: title, what: what, resume: "To read them again: in Pokémon GO open \(target)\(place) with the appraisal showing, \(then)")
     }
 
     /// The first card of a stretch as a game search: its HP when its CP is not to be trusted (always for a hidden CP, and for a CP that was worked out or fits no level).
     static func stretchSearch(_ t: TroubleStretch, scan: ScanResult) -> String? {
-        guard scan.rows.indices.contains(t.firstRow) else { return nil }
+        // With unread cards ahead of the first affected row, the place to open is one the scan could not read: there is nothing to search for.
+        guard t.leadingUnread == 0, scan.rows.indices.contains(t.firstRow) else { return nil }
         let r = scan.rows[t.firstRow]
         let worked = t.kind == .cpHidden || r.flags.contains { $0 == "cp-computed" || $0.hasPrefix("cp-computed:") } || GameSearch.untrusted(r)
         return GameSearch.text([GameSearch.part(name: r.name, cp: r.cp, hp: r.hp, noLevelFits: worked)])

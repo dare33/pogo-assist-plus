@@ -61,7 +61,7 @@ struct ReviewStretchPanels: View {
 
     var body: some View {
         ForEach(Array(ctx.stretches.enumerated()), id: \.offset) { n, t in
-            let text = ReviewWording.stretch(t, commandSize: ReviewWording.resumeSize(t, pagedByHand: model.pagedByHand, commandSetMade: model.commandSetMade))
+            let text = ReviewWording.stretch(t, commandSize: ReviewWording.resumeSize(t, pagedByCommand: ctx.review.paging?.pagedByCommand == true, commandSetMade: model.commandSetMade))
             let search = ReviewWording.stretchSearch(t, scan: ctx.review.outcome.scan)
             Panel(tint: .orange, padding: 16, spacing: 10) {
                 VStack(alignment: .leading, spacing: 8) {
