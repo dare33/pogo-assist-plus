@@ -171,6 +171,8 @@ final class ReviewScreensTests: XCTestCase {
         shot("notseen-large-none")
         let first = button(app, beginsWith: "Bulbasaur")
         XCTAssertTrue(first.waitForExistence(timeout: 5))
+        // At this text size the first row starts under the bottom bar: bring it clear of the bar before touching it.
+        XCTAssertTrue(reveal(app, first))
         first.tap(); sleep(1)
         XCTAssertTrue(button(app, beginsWith: "Remove 1 when you save").exists)
         shot("notseen-large-one")
@@ -199,7 +201,8 @@ final class ReviewScreensTests: XCTestCase {
         let evolved = app.buttons["Yes, it evolved"].firstMatch
         for _ in 0..<3 where !(evolved.exists && evolved.isHittable) { app.swipeUp() }
         XCTAssertTrue(evolved.waitForExistence(timeout: 10))
-        evolved.tap()
+        // At a large text size the button can sit half under the bottom bar, where a tap at its centre lands on the bar.
+        tapClear(app, evolved)
         sleep(1)
         let after = barNumbers(bar)
         XCTAssertNotEqual(after, before, "answering a question changes a number in the slim bar")
