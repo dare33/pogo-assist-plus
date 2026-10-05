@@ -301,7 +301,7 @@ final class SetupTests: XCTestCase {
     private func logLabel(_ app: XCUIApplication) -> String { app.descendants(matching: .any)["game-open-log"].firstMatch.label }
 
     func testTheGameIsOpenedOnceWhenTheBroadcastGoesLive() throws {
-        let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "15", "-fake-open-game", "ok"])
+        let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "15", "-fake-start-press-after", "5", "-fake-open-game", "ok"])
         XCTAssertTrue(app.staticTexts["We'll take you back to the game."].exists)
         XCTAssertEqual(logLabel(app), "0 ", "nothing is opened before a broadcast starts")
         XCTAssertTrue(app.staticTexts["Scan in progress"].waitForExistence(timeout: 40))
@@ -311,12 +311,22 @@ final class SetupTests: XCTestCase {
     }
 
     func testTheFallbackLineWhenTheGameCannotBeOpened() throws {
-        let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "15", "-fake-open-game", "fail"])
+        let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "15", "-fake-start-press-after", "5", "-fake-open-game", "fail"])
         XCTAssertTrue(app.staticTexts["Scan in progress"].waitForExistence(timeout: 40))
         XCTAssertTrue(app.staticTexts["game-fallback"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["game-fallback"].label, "Now switch to Pokémon GO.")
         XCTAssertEqual(logLabel(app), "1 pokemongo://")
         shot("scan-scanning-fallback")
+    }
+
+    /// A broadcast that goes live without this screen's start control having been pressed (started from Control Centre) opens nothing.
+    func testABroadcastStartedWithoutPressingThisScreensControlDoesNotOpenTheGame() throws {
+        let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "10", "-fake-open-game", "ok"])
+        XCTAssertEqual(logLabel(app), "0 ")
+        XCTAssertTrue(app.staticTexts["Scan in progress"].waitForExistence(timeout: 40))
+        sleep(4)
+        XCTAssertEqual(logLabel(app), "0 ", "no press of this screen's start control, so the game is not opened")
+        XCTAssertFalse(app.staticTexts["game-fallback"].exists)
     }
 
     func testAScanAlreadyRunningWhenTheScreenOpensDoesNotOpenTheGame() throws {

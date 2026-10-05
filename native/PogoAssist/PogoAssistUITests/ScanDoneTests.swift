@@ -74,7 +74,7 @@ final class ScanDoneTests: XCTestCase {
             let ring = app.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES '.* read in .*'")).firstMatch
             XCTAssertTrue(ring.exists, "the ring says what was read")
             let open = app.buttons["scan-done-open"]
-            XCTAssertTrue(open.label.contains("quick question") || open.label == "Save", "the button names what needs doing: \(open.label)")
+            XCTAssertTrue(open.label.contains("quick question") || open.label == "Review and save", "the button names what needs doing: \(open.label)")
             XCTAssertFalse(app.buttons["Start scan"].exists, "no start button on the Done screen")
             shot("done-sample-\(name)")
             if name == "light" {

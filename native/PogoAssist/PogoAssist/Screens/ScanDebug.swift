@@ -7,6 +7,7 @@ import PogoReader
 /// way it reads the real one.
 enum ScanDebug {
     private static var timer: Timer?
+    private static var pressTimer: Timer?
 
     /// `-fake-ending list-end | pause | person` marks the sample scan the way the extension marks a scan that ended at the end of the list, after a pause
     /// that ran out, or by the person; `-fake-storage-count N` is the count the scan was started with (a Full scan is only judged sound with one). Only the
@@ -22,8 +23,13 @@ enum ScanDebug {
         if d.object(forKey: "fake-storage-count") != nil { s.storageCount = d.integer(forKey: "fake-storage-count"); s.eggCount = 0 }
     }
 
-    static func installIfAsked() {
+    /// `-fake-start-press-after N`: N seconds after the Scan screen appears, the start control counts as pressed (`startPressed`), as if the person had used this screen's picker.
+    /// Without it a live state that appears opens nothing, like a broadcast started from Control Centre.
+    static func installIfAsked(startPressed: @escaping () -> Void) {
         let args = CommandLine.arguments
+        if UserDefaults.standard.object(forKey: "fake-start-press-after") != nil, pressTimer == nil {
+            pressTimer = Timer.scheduledTimer(withTimeInterval: UserDefaults.standard.double(forKey: "fake-start-press-after"), repeats: false) { _ in startPressed() }
+        }
         let paused = args.contains("-fake-scan-paused")
         guard paused || args.contains("-fake-scan"), timer == nil else { return }
         // `-fake-scan-after N`: the broadcast goes live N seconds after launch and is fresh (started just now), as a broadcast the Scan screen started would be.

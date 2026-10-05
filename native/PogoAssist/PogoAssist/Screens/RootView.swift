@@ -124,11 +124,32 @@ struct BusyOverlay: View {
 struct AccountMenu: View {
     /// The UI v1 header look: monogram, name and chevron on a surface pill (see `AccountPill`).
     var pill = false
+    /// Display only (no menu, no chevron): a finished scan waiting for review belongs to the account named, so the account cannot be switched under it.
+    var locked = false
     @EnvironmentObject var model: AppModel
     @State private var asking = false
     @State private var newName = ""
 
     var body: some View {
+        if locked { pillLabel(chevron: false).accessibilityElement(children: .ignore).accessibilityLabel("Account, \(model.account ?? "none")") }
+        else { menu }
+    }
+
+    private func pillLabel(chevron: Bool) -> some View {
+        HStack(spacing: 8) {
+            AccountMonogram(name: model.account ?? "?", size: 28)
+            Text(model.account ?? "Account").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(1)
+            if chevron { Image(systemName: "chevron.down").font(.figtree(12, .bold)).foregroundStyle(Theme.muted) }
+        }
+        .padding(.leading, 4).padding(.trailing, 12)
+        .frame(minHeight: 36)
+        .background(Capsule().fill(Theme.surface))
+        .panelShadow()
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+    }
+
+    private var menu: some View {
         Menu {
             ForEach(model.accounts, id: \.self) { name in
                 Button { model.select(name) } label: {
@@ -139,17 +160,7 @@ struct AccountMenu: View {
             Button { newName = ""; asking = true } label: { Label("New account", systemImage: "plus") }
         } label: {
             if pill {
-                HStack(spacing: 8) {
-                    AccountMonogram(name: model.account ?? "?", size: 28)
-                    Text(model.account ?? "Account").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(1)
-                    Image(systemName: "chevron.down").font(.figtree(12, .bold)).foregroundStyle(Theme.muted)
-                }
-                .padding(.leading, 4).padding(.trailing, 12)
-                .frame(minHeight: 36)
-                .background(Capsule().fill(Theme.surface))
-                .panelShadow()
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+                pillLabel(chevron: true)
             } else {
                 HStack(spacing: 4) {
                     Text(model.account ?? "Account").font(.headline).lineLimit(1)
@@ -184,7 +195,10 @@ struct MoreMenu: View {
 
 /// The Box header's account pill: opens the account menu (switch account, New account).
 struct AccountPill: View {
-    var body: some View { AccountMenu(pill: true) }
+    @EnvironmentObject var model: AppModel
+    /// The Scan screen's pill is display only while a scan is waiting for review or being read (`isReviewing`): its Done headline is about this account.
+    var locksWhileReviewing = false
+    var body: some View { AccountMenu(pill: true, locked: locksWhileReviewing && model.isReviewing) }
 }
 
 /// The Box header's 40 pt circular "..." button: opens the Settings / Diagnostics menu.

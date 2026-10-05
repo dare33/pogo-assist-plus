@@ -30,8 +30,8 @@ struct ScanDoneWords: Equatable {
         }
     }
 
-    /// The one button names what needs doing: the questions, or Save when there are none.
-    var buttonTitle: String { questions > 0 ? ReviewFormat.count(questions, "quick question", "quick questions") : "Save" }
+    /// The one button names what needs doing: the questions, or "Review and save" when there are none (it opens the review; nothing is saved by this button).
+    var buttonTitle: String { questions > 0 ? ReviewFormat.count(questions, "quick question", "quick questions") : "Review and save" }
 
     /// Under the button: what comes next and that the rows to check in the game can wait. Each clause is left out when it would not be true.
     var subline: String? {

@@ -8,20 +8,28 @@ import ReplayKit
 @MainActor
 final class BroadcastTrigger: ObservableObject {
     fileprivate weak var picker: FullTapPicker?
+    /// Called whenever the picker's button is pressed from this app (a touch, or `fire()`): the Scan screen uses it to know the person started the broadcast here.
+    var onPress: (() -> Void)?
     func fire() {
+        onPress?()
         for case let b as UIButton in picker?.subviews ?? [] { b.sendActions(for: .touchUpInside) }
     }
 }
 
 /// The system picker with its button filling the view and no icon of its own.
 final class FullTapPicker: RPSystemBroadcastPickerView {
+    var onPress: (() -> Void)?
+    private var watching = false
+    @objc private func pressed() { onPress?() }
     override func layoutSubviews() {
         super.layoutSubviews()
         for case let b as UIButton in subviews {
+            if !watching { b.addTarget(self, action: #selector(pressed), for: .touchUpInside) }
             b.frame = bounds
             b.setImage(nil, for: .normal)
             b.backgroundColor = .clear
         }
+        if subviews.contains(where: { $0 is UIButton }) { watching = true }
     }
 }
 
@@ -33,6 +41,7 @@ private struct PickerOverlay: UIViewRepresentable {
         picker.showsMicrophoneButton = false
         picker.isAccessibilityElement = false
         trigger.picker = picker
+        picker.onPress = { [weak trigger] in trigger?.onPress?() }
         return picker
     }
     func updateUIView(_ uiView: FullTapPicker, context: Context) { trigger.picker = uiView }

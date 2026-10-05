@@ -137,7 +137,7 @@ final class ScanScreensTests: XCTestCase {
             return p.label
         }
         let covered = openScan(["-appearance", "light", "-fake-scan", "-fake-cp", "covered"])
-        XCTAssertEqual(panel(covered), "Something is covering the CP, Since Pidgey, the CP has not been readable — a banner or an alarm is probably over the top of the screen. Clear it in the game. The scan keeps going.")
+        XCTAssertEqual(panel(covered), "Something may be covering the CP, From Pidgey on, several Pokémon in a row showed no CP. A banner or an alarm is probably over the top of the screen: clear it in the game. The scan keeps going.")
         shot("scan-cp-covered-light")
         covered.terminate()
         let dark = openScan(["-appearance", "dark", "-fake-scan", "-fake-cp", "covered"])
@@ -145,7 +145,7 @@ final class ScanScreensTests: XCTestCase {
         shot("scan-cp-covered-dark")
         dark.terminate()
         let cleared = openScan(["-appearance", "light", "-fake-scan", "-fake-cp", "cleared"])
-        XCTAssertEqual(panel(cleared), "The CP was covered for a while, It started at Pidgey, right after Rattata CP 412. When the scan ends, the result shows how to read those again.")
+        XCTAssertEqual(panel(cleared), "The CP was covered for a while, It started at Pidgey, right after Rattata CP 412. When the scan ends, the result shows which ones to check or read again.")
         shot("scan-cp-cleared-light")
         cleared.terminate()
         let twice = openScan(["-appearance", "light", "-fake-scan", "-fake-cp", "cleared", "-fake-cp-stretches", "2"])

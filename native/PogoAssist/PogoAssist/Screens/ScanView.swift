@@ -20,6 +20,8 @@ struct ScanView: View {
     /// "Get ready to scan" is open (`jump`: at the next unfinished step), and the gentle sheet that comes before a scan while setup is not done.
     @State private var setupPage: SetupPage?
     @State private var showSetupSheet = false
+    /// "Scan anyway" was pressed: the start (the walkthrough, or the system picker) waits until the sheet has gone, since iOS can refuse to present during a dismissal.
+    @State private var startAfterSheet = false
     /// The screen showed no scan running since it appeared: only then is a broadcast that goes live one this screen started (see `GameOpener`).
     @State private var sawNoScan = false
     enum SetupPage: Hashable { case checklist, nextStep }
@@ -78,7 +80,7 @@ struct ScanView: View {
         .navigationTitle("Scan Pokémon")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) { AccountPill() }
+            ToolbarItem(placement: .principal) { AccountPill(locksWhileReviewing: true) }
             ToolbarItem(placement: .topBarTrailing) {
                 if !model.scanDonePending {
                     Button { hiddenRaw = ""; if !model.live { walkSteps = Array(0..<ScanSteps.count) } } label: {
@@ -90,9 +92,9 @@ struct ScanView: View {
             }
         }
         .navigationDestination(item: $setupPage) { page in SetupChecklistView(jumpToNext: page == .nextStep) }
-        .sheet(isPresented: $showSetupSheet) {
+        .sheet(isPresented: $showSetupSheet, onDismiss: { if startAfterSheet { startAfterSheet = false; startScan() } }) {
             SetupSheet(openSetup: { showSetupSheet = false; setupPage = .nextStep },
-                       scanAnyway: { showSetupSheet = false; startScan() })
+                       scanAnyway: { startAfterSheet = true; showSetupSheet = false })
                 .environment(\.accent, accent)
         }
         .fullScreenCover(isPresented: Binding(get: { walkSteps != nil }, set: { if !$0 { walkSteps = nil } })) {
@@ -115,11 +117,15 @@ struct ScanView: View {
         .onAppear {
             if !decidedEditing { decidedEditing = true; editing = model.fullScanNeedsCount }
             sawNoScan = !model.live
+            // Only a broadcast started with this screen's own control takes the person back to the game (`GameOpener`): both pickers report their press.
+            let game = model.game
+            markTrigger.onPress = { game.noteStartPressed() }
+            walkTrigger.onPress = { game.noteStartPressed() }
             model.setup.refresh()
             model.setup.backfillFromSavedScans(model: model)
             if !model.pagedByHand, model.commandSetMade, model.shareURLs.isEmpty { model.askForNotificationsOnce() }
             #if DEBUG
-            ScanDebug.installIfAsked()
+            ScanDebug.installIfAsked(startPressed: { game.noteStartPressed() })
             #endif
         }
     }
@@ -268,8 +274,8 @@ struct ScanView: View {
         let good = s.cpCoveredLastGoodName.flatMap { $0.isEmpty ? nil : $0 }
         let title: String, text: String
         if s.cpCovered {
-            title = "Something is covering the CP"
-            text = (first.map { "Since \($0), the CP has not been readable" } ?? "The CP has not been readable for a while") + " — a banner or an alarm is probably over the top of the screen. Clear it in the game. The scan keeps going."
+            title = "Something may be covering the CP"
+            text = (first.map { "From \($0) on, several Pokémon in a row showed no CP." } ?? "Several Pokémon in a row showed no CP.") + " A banner or an alarm is probably over the top of the screen: clear it in the game. The scan keeps going."
         } else {
             let n = s.cpCoveredStretches
             title = n > 1 ? "The CP was covered \(n) times" : "The CP was covered for a while"
@@ -279,7 +285,7 @@ struct ScanView: View {
                 if let good { start += ", right after \(good)" + (s.cpCoveredLastGoodCp.map { " CP \($0)" } ?? "") }
                 parts.append(start + ".")
             }
-            parts.append("When the scan ends, the result shows how to read those again.")
+            parts.append("When the scan ends, the result shows which ones to check or read again.")
             text = parts.joined(separator: " ")
         }
         return Panel(tint: .orange, spacing: 6) {
