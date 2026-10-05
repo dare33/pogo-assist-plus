@@ -58,6 +58,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         GENERATE_INFOPLIST_FILE: NO
+        # The only asset catalog holds the setup pictures; the app has no icon yet.
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
   PogoBroadcast:
     type: app-extension
     platform: iOS
