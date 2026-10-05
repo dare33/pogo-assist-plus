@@ -24,6 +24,34 @@ final class ScanScreensTests: XCTestCase {
         return app
     }
 
+    /// The first time the Scan screen is opened the steps come by themselves, with "Don't show this step again"; the next time they do not.
+    func testTheStepsOpenByThemselvesTheFirstTime() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-first-walk", "-appearance", "light"]
+        app.launch()
+        let field = app.textFields["Trainer name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap(); field.typeText("Greg main")
+        app.buttons["Create account"].tap()
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
+        app.buttons["Scan"].tap()
+        XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5), "the steps open by themselves on the first visit")
+        XCTAssertTrue(app.descendants(matching: .any)["Don't show this step again"].firstMatch.exists)
+        shot("scan-first-walk")
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["Scan options"].waitForExistence(timeout: 5), "behind them, the first scan's options")
+        XCTAssertTrue(app.staticTexts["Put in the number of Pokémon in your storage and scan them all."].exists)
+        shot("scan-first-options")
+        app.terminate()
+        let again = XCUIApplication()
+        again.launchArguments = ["-first-walk", "-appearance", "light"]
+        again.launch()
+        XCTAssertTrue(again.buttons["Scan"].waitForExistence(timeout: 10))
+        again.buttons["Scan"].tap()
+        XCTAssertTrue(again.staticTexts["Scan options"].waitForExistence(timeout: 5))
+        XCTAssertFalse(again.staticTexts["Step 1 of 3"].waitForExistence(timeout: 3), "only the first visit")
+    }
+
     /// The first scan for the account opens in Edit; type the options and press Done.
     private func rememberOptions(_ app: XCUIApplication) {
         let count = app.textFields["Count"]

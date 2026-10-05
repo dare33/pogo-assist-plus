@@ -49,23 +49,21 @@ struct ScanOptionsEditor: View {
                 Text("remembered for \(model.account ?? "this account")").font(.secondary).foregroundStyle(Theme.muted)
             }
             kindPicker
+            // One short line per kind (Greg, 6 Oct 2026). The long explanation of the count, the eggs and how a scan ends is no longer shown here.
             Text(model.scanKind == .full
-                 ? "Scans the whole storage. When the scan ends at the end of your list, Pokémon in your box that it did not see are listed as \"Not seen in this scan\" and kept; you choose whether to remove any. Otherwise it is Add and update."
-                 : "Scans part of the storage, such as your newest Pokémon. Nothing is removed from the box.")
-                .font(.secondary).foregroundStyle(Theme.muted)
+                 ? "Put in the number of Pokémon in your storage and scan them all."
+                 : "Scan part of your storage. Nothing is removed from your box." + (model.pagedByHand ? "" : " The voice command you say sets how many."))
+                .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             if model.scanKind == .full {
-                field("In storage", prompt: "Count", text: $model.storageCountText, focus: $countFocused)
-                field("Eggs", prompt: "Eggs", text: $model.eggText, focus: $eggsFocused)
+                field("Number of Pokémon in storage", prompt: "Count", text: $model.storageCountText, focus: $countFocused)
+                field("Maximum Eggs", prompt: "Eggs", text: $model.eggText, focus: $eggsFocused)
                 if let problem = model.storageCountProblem ?? model.eggProblem {
                     Text(problem).font(.secondary).foregroundStyle(Theme.red)
                 } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Type the number the game shows on its storage screen (it includes eggs). Remembered for this account. A full scan uses it to pick the command and is saved with it; without it a full scan is Add and update. It also tells the scan when it has read everything: it finishes at once when the Pokémon read reach your count less your eggs, and otherwise pauses (and tells you) when it stops seeing new Pokémon. An Add and update scan has no count and no pause: it ends by itself when it stops seeing new Pokémon.")
-                        Text(model.eggCount == nil
-                             ? "No egg count typed: the scan allows for up to \(StorageCountRules.maxEggSlots) eggs. Type your eggs (0 to \(StorageCountRules.maxEggSlots)) for a tighter check."
-                             : "Expected Pokémon: the game's count less \(model.eggCount ?? 0) eggs.")
-                    }
-                    .font(.secondary).foregroundStyle(Theme.muted)
+                    Text(model.eggCount == nil
+                         ? "No egg count typed: the scan allows for up to \(StorageCountRules.maxEggSlots) eggs."
+                         : "Expected Pokémon: the game's count less \(model.eggCount ?? 0) eggs.")
+                        .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             PillButton("Done", style: .filled) { countFocused = false; eggsFocused = false; onDone() }

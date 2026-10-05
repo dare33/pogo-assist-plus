@@ -24,7 +24,18 @@ struct ScanView: View {
     @State private var startAfterSheet = false
     /// The screen showed no scan running since it appeared: only then is a broadcast that goes live one this screen started (see `GameOpener`).
     @State private var sawNoScan = false
+    /// The steps were shown by themselves the first time this screen was opened (Greg, 6 Oct 2026); afterwards they come when a scan is started, or from the "?" button.
+    @AppStorage("scan.firstWalkShown") private var firstWalkShown = false
     enum SetupPage: Hashable { case checklist, nextStep }
+    /// UI tests start from a clean install on every launch (`-uitest-reset`) and would meet the steps each time: there they come by themselves only with `-first-walk`.
+    private static var firstWalkAllowed: Bool {
+        #if DEBUG
+        let args = CommandLine.arguments
+        return !args.contains("-uitest-reset") || args.contains("-first-walk")
+        #else
+        return true
+        #endif
+    }
     @StateObject private var markTrigger = BroadcastTrigger()
     @StateObject private var walkTrigger = BroadcastTrigger()
 
@@ -117,6 +128,13 @@ struct ScanView: View {
         .onAppear {
             if !decidedEditing { decidedEditing = true; editing = model.fullScanNeedsCount }
             sawNoScan = !model.live
+            // A UI test's clean install counts as a first visit already made, so a later launch of the same test does not meet the steps either.
+            if !Self.firstWalkAllowed { firstWalkShown = true }
+            if !firstWalkShown, !model.live, !model.isReviewing, !visibleSteps.isEmpty {
+                firstWalkShown = true
+                let steps = visibleSteps
+                DispatchQueue.main.async { walkSteps = steps }
+            }
             // Only a broadcast started with this screen's own control takes the person back to the game (`GameOpener`): both pickers report their press.
             let game = model.game
             markTrigger.onPress = { game.noteStartPressed() }
