@@ -47,6 +47,8 @@ final class ReviewScreensTests: XCTestCase {
         // One row is answered "Don't include" by hand first: the bulk button must neither count it nor overwrite it.
         let left = app.buttons["Don't include"].firstMatch
         XCTAssertTrue(left.waitForExistence(timeout: 10))
+        // "What saving does" now sits above the questions, so the first card is lower: scroll it clear of the bars before tapping.
+        app.swipeUp()
         left.tap()
         sleep(1)
         shot("\(p)-03-part-mid-answer")
@@ -101,15 +103,18 @@ final class ReviewScreensTests: XCTestCase {
         shot("\(p)-13-not-seen-list")
         let first = button(app, beginsWith: "Bulbasaur")
         XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Done"].exists, "Done, in the normal style, while none is marked")
+        XCTAssertFalse(button(app, beginsWith: "Remove ").exists, "nothing marked: no Remove button")
         first.tap()
         sleep(1)
-        XCTAssertTrue(button(app, beginsWith: "Done · 1 marked").exists, "tapping one marks it for removal")
+        XCTAssertTrue(button(app, beginsWith: "Remove 1 when you save").exists, "tapping one marks it for removal, and the main button says what it will do")
+        XCTAssertFalse(app.buttons["Done"].exists, "no plain Done while one is marked")
         shot("\(p)-14-not-seen-list-marked")
         app.buttons["Grid"].tap(); sleep(1)
         shot("\(p)-15-not-seen-grid-marked")
         app.buttons["CP"].firstMatch.tap(); sleep(1)
         shot("\(p)-16-not-seen-grid-by-cp")
-        button(app, beginsWith: "Done").tap()
+        button(app, beginsWith: "Remove 1 when you save").tap()
         XCTAssertTrue(app.scrollViews["review-scroll"].waitForExistence(timeout: 5))
     }
 
@@ -120,9 +125,83 @@ final class ReviewScreensTests: XCTestCase {
         return e.label.split(whereSeparator: { !$0.isNumber }).last.flatMap { Int($0) }
     }
 
+    /// "What saving does" is the second segment, so its rows are on screen at the top of the result.
     private func savingTotal(_ app: XCUIApplication) -> (new: Int, updated: Int, same: Int) {
-        for _ in 0..<9 { app.swipeUp() }
-        return (rowNumber(app, "New") ?? -1, rowNumber(app, "Updated") ?? -1, rowNumber(app, "Same") ?? -1)
+        (rowNumber(app, "New") ?? 0, rowNumber(app, "Updated") ?? 0, rowNumber(app, "Same") ?? 0)
+    }
+
+    /// The numbers in the pinned bar's label ("What saving does: 15 new, 3 updated, 11 same, 1 removed. 2 questions not answered yet").
+    private func barNumbers(_ bar: XCUIElement) -> [String: Int] {
+        var out = [String: Int]()
+        let main = bar.label.components(separatedBy: ". ").first ?? bar.label
+        for part in main.replacingOccurrences(of: "What saving does: ", with: "").components(separatedBy: ", ") {
+            let w = part.split(separator: " ")
+            if w.count == 2, let n = Int(w[0].filter { $0.isNumber }) { out[String(w[1])] = n }
+        }
+        return out
+    }
+
+    /// The segment sits second, straight under the blue header; once it has scrolled away a slim bar carries the same numbers, follows the answers and goes back on a tap.
+    func testSavingBarPinsAndFollowsAnswers() throws { try savingBarTour(launch(["-appearance", "light"]), "savebar") }
+    func testSavingBarDark() throws { try savingBarTour(launch(["-appearance", "dark"]), "savebar-dark") }
+    func testSavingBarLargeText() throws {
+        try savingBarTour(launch(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"]), "savebar-large")
+    }
+
+    /// The Not seen page at a large text size: Done with none marked, then the red button with one marked.
+    func testNotSeenLargeText() throws {
+        let app = launch(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"], variant: "full+answered")
+        let notSeen = button(app, beginsWith: "Not seen in this scan")
+        XCTAssertTrue(reveal(app, notSeen))
+        notSeen.tap()
+        XCTAssertTrue(app.staticTexts["Tap the ones you no longer have"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Done"].exists)
+        shot("notseen-large-none")
+        let first = button(app, beginsWith: "Bulbasaur")
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        first.tap(); sleep(1)
+        XCTAssertTrue(button(app, beginsWith: "Remove 1 when you save").exists)
+        shot("notseen-large-one")
+    }
+
+    private func savingBarTour(_ app: XCUIApplication, _ p: String) throws {
+        let header = app.staticTexts["Scan finished at the end of your list"]
+        let heading = app.staticTexts["What saving does"]
+        XCTAssertTrue(heading.exists && header.exists)
+        XCTAssertLessThan(header.frame.minY, heading.frame.minY, "the segment comes after the blue header")
+        XCTAssertLessThan(heading.frame.minY, app.windows.firstMatch.frame.height * 0.8, "and is the next thing on the screen")
+        let full = savingTotal(app)
+        XCTAssertFalse(app.buttons["review-saving-bar"].exists, "no slim bar while the full segment is in view")
+        shot("\(p)-01-result-top")
+
+        let bar = app.buttons["review-saving-bar"]
+        for _ in 0..<4 where !bar.exists { app.swipeUp() }
+        shot("\(p)-02-pinned")
+        XCTAssertTrue(bar.waitForExistence(timeout: 5), "the slim bar is pinned once the segment has scrolled past")
+        XCTAssertTrue(bar.label.hasPrefix("What saving does: "))
+        XCTAssertTrue(bar.label.contains("questions not answered yet"), "the bar says how many questions are open")
+        let before = barNumbers(bar)
+        XCTAssertEqual(before["new"], full.new); XCTAssertEqual(before["updated"], full.updated); XCTAssertEqual(before["same"], full.same)
+        shot("\(p)-02-pinned")
+
+        let evolved = app.buttons["Yes, it evolved"].firstMatch
+        for _ in 0..<3 where !(evolved.exists && evolved.isHittable) { app.swipeUp() }
+        XCTAssertTrue(evolved.waitForExistence(timeout: 10))
+        evolved.tap()
+        sleep(1)
+        let after = barNumbers(bar)
+        XCTAssertNotEqual(after, before, "answering a question changes a number in the slim bar")
+        XCTAssertEqual(after.values.reduce(0, +), before.values.reduce(0, +) + 1, "the answer adds one Pokémon to New, Updated or Same")
+        shot("\(p)-03-after-answer")
+
+        bar.tap()
+        sleep(1)
+        shot("\(p)-04-after-bar-tap")
+        XCTAssertFalse(bar.exists, "the bar steps aside once the full segment is back")
+        XCTAssertTrue(heading.waitForExistence(timeout: 5))
+        XCTAssertTrue(heading.isHittable, "a tap on the bar scrolls back to the full segment")
+        let back = savingTotal(app)
+        XCTAssertEqual(back.new + back.updated + back.same, after.values.reduce(0, +) - (after["removed"] ?? 0), "the full segment shows the same numbers")
     }
 
     /// "What saving does" follows the answers: with one question still open the panel says so, and with every one answered New, Updated, Same and Removed are what Save will write.

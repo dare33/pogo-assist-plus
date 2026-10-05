@@ -2,7 +2,7 @@ import SwiftUI
 import PogoBox
 import PogoReader
 
-/// The scan result (design v2 section 1a): header with the three steps, the open questions, then what the rest of the scan found and what saving does.
+/// The scan result (design v2 section 1a): header with the three steps, what saving does (with a slim bar pinned once it scrolls away), the open questions, then what the rest of the scan found.
 struct ResultScreen: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -14,6 +14,13 @@ struct ResultScreen: View {
     @State private var folded: Set<String> = []
     @State private var confirmDiscard = false
     @State private var confirmFull: String?
+    @State private var savingPinned = false
+    /// The scroll position's top item: one cheap signal, nothing is measured per frame. Rows without an id leave the last answer in place.
+    @State private var topItem: String?
+    @State private var savingOpen: Set<String> = []
+    private static let headerID = "review-header"
+    private static let stripID = "review-saving-end"
+    private static let savingID = "review-saving"
 
     var body: some View {
         if case .review(let review) = model.flow {
@@ -27,19 +34,45 @@ struct ResultScreen: View {
         let review = ctx.review
         return VStack(spacing: 0) {
             ReviewTopBar(title: "Scan result", account: review.account)
-            ScrollView {
-                LazyVStack(spacing: Theme.Space.panelGap) {
-                    ReviewHeader(ctx: ctx, path: $path)
-                    ReviewNotices(ctx: ctx)
-                    if ctx.total > 0 { questions(ctx) }
-                    ReviewLowerSections(ctx: ctx, path: $path, confirmFull: $confirmFull)
+            Group {
+                ScrollView {
+                    LazyVStack(spacing: Theme.Space.panelGap) {
+                        ReviewHeader(ctx: ctx, path: $path).id(Self.headerID)
+                        ReviewSavingSection(ctx: ctx, open: $savingOpen).id(Self.savingID)
+                        // An empty strip under the segment: the scroll position reports it as the top item once the segment has scrolled out of view.
+                        Color.clear.frame(height: 1).id(Self.stripID)
+                        ReviewNotices(ctx: ctx)
+                        if ctx.total > 0 { questions(ctx) }
+                        ReviewLowerSections(ctx: ctx, path: $path, confirmFull: $confirmFull)
+                    }
+                    .scrollTargetLayout()
+                    .padding(.horizontal, Theme.Space.screen)
+                    .padding(.top, 6)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, Theme.Space.screen)
-                .padding(.top, 6)
-                .padding(.bottom, 24)
+                .scrollPosition(id: $topItem)
+                .scrollIndicators(.hidden)
+                .accessibilityIdentifier("review-scroll")
+                // Once the full segment is above the top, a slim bar with the same numbers is pinned under the top bar (a tap goes back to the segment).
+                .overlay(alignment: .top) {
+                    // Not while To check, Not seen or a guided question is open on top of this screen.
+                    if savingPinned && path.isEmpty {
+                        SavingBar(counts: SavingCounts(ctx.savePreview)) {
+                            if reduceMotion { topItem = Self.savingID }
+                            else { withAnimation(.easeInOut(duration: 0.3)) { topItem = Self.savingID } }
+                        }
+                        .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: savingPinned)
+                .onChange(of: topItem) { _, top in
+                    switch top {
+                    case Self.headerID, Self.savingID: if savingPinned { savingPinned = false }
+                    case Self.stripID: if !savingPinned { savingPinned = true }
+                    default: if top != nil && !savingPinned { savingPinned = true }
+                    }
+                }
             }
-            .scrollIndicators(.hidden)
-            .accessibilityIdentifier("review-scroll")
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar(ctx) }
         .background(Theme.bg.ignoresSafeArea())

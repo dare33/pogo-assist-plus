@@ -53,7 +53,7 @@ struct ReviewNotices: View {
 
 // MARK: below the questions
 
-/// Everything under the questions (second frame of design 1a): what needs a look in the game, notes, not seen, on screen but not read, the scan kind, what saving does and the scan details.
+/// Everything under the questions (second frame of design 1a): what needs a look in the game, notes, not seen, on screen but not read, the scan kind, the scan details ("What saving does" is the second segment, `ReviewSavingSection`).
 struct ReviewLowerSections: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
@@ -72,7 +72,6 @@ struct ReviewLowerSections: View {
         let rows = listRows(report, marked: marked)
         if !rows.isEmpty { Panel(padding: 0, spacing: 0) { ForEach(rows) { $0 } }.padding(.top, 4) }
         if review.reread == nil { scanKind }
-        whatSavingDoes()
         scanDetails
     }
 
@@ -170,66 +169,6 @@ struct ReviewLowerSections: View {
                 Text("Add and update").tag(BoxStore.Kind.partial)
             }
             .pickerStyle(.segmented)
-        }
-    }
-
-    // MARK: What saving does
-
-    @ViewBuilder private func whatSavingDoes() -> some View {
-        let p = ctx.savePreview
-        heading("What saving does")
-        Panel(padding: 0, spacing: 0) {
-            savingRow("new", "New", "plus.circle", p.newRows.count) {
-                ForEach(p.newRows, id: \.self) { i in
-                    if let base = plan.megaBases[i] {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(ctx.plan.scanned[i].title), IVs \(Fmt.ivs(ctx.plan.scanned[i].ivs))").paText(.secondary).foregroundStyle(Theme.ink)
-                            Text("Mega evolved when scanned. It will be saved as \(ctx.gm?.byId[base]?.name ?? base) with no CP, HP or level, marked to check, because the Mega values are temporary.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-                        }
-                    } else { Text(Fmt.brief(plan.scanned[i])).paText(.secondary).foregroundStyle(Theme.ink) }
-                }
-            }
-            savingRow("updated", "Updated", "arrow.up.circle", p.updated.count) {
-                ForEach(p.updated, id: \.scanned) { u in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(ctx.saved[u.savedId]?.row.title ?? "Pokémon").paText(.secondary).foregroundStyle(Theme.ink)
-                        Text(change(u)).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-                    }
-                }
-            }
-            savingRow("same", "Same", "equal.circle", p.same.count, last: p.removed.isEmpty) {
-                ForEach(p.same, id: \.scanned) { m in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(Fmt.brief(plan.scanned[m.scanned])).paText(.secondary).foregroundStyle(Theme.ink)
-                        if m.mega { Text("Mega evolved when scanned. The saved \(ctx.saved[m.savedId]?.row.title ?? "Pokémon") keeps its own values.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
-                        else if m.effect == .keepsIVsAndFlags { Text("The saved IVs are kept and it is marked to check.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
-                    }
-                }
-            }
-            if !p.removed.isEmpty {
-                let why = p.markedRemoved > 0 && p.joined > 0 ? "Marked in Not seen, and Mega entries joined" : (p.joined > 0 ? "Mega entries joined into their normal entry" : "Marked in Not seen")
-                InsetRow(title: "Removed", sub: why, icon: "trash", iconBackground: Theme.off, iconInk: Theme.red, value: p.removed.count.formatted(), separator: false)
-            }
-        }
-        if p.open > 0 {
-            // Save is locked until every question has an answer: the numbers above are for the answers given so far.
-            Text(p.open == 1 ? "1 question not answered yet. It is not counted above." : "\(p.open) questions not answered yet. They are not counted above.")
-                .paText(.secondary).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
-        }
-    }
-
-    private func savingRow<C: View>(_ key: String, _ title: String, _ icon: String, _ count: Int, last: Bool = false, @ViewBuilder content: () -> C) -> some View {
-        reveal(key, InsetRow(title: title, icon: icon, value: count.formatted(), showsChevron: count > 0, separator: !last, action: count > 0 ? { toggle(key) } : nil), content: content)
-    }
-
-    private func change(_ u: SavePreview.Change) -> String {
-        let s = plan.scanned[u.scanned], old = ctx.saved[u.savedId]?.row
-        switch u.reason {
-        case .poweredUp: return "Powered up: CP \(old?.cp ?? 0) to \(s.cp)"
-        case .evolved: return "Evolved from \(old?.name ?? "?"): now \(s.title), CP \(s.cp)"
-        case .ivsNowRead: return "IVs now read: \(Fmt.ivs(s.ivs))"
-        case .megaToBase: return "Saved in its Mega form before; now \(s.title), CP \(s.cp)"
-        case .chosen: return "Matched by you: now CP \(s.cp)"
         }
     }
 

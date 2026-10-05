@@ -26,6 +26,17 @@ final class GuideScreensTests: XCTestCase {
         return nums.count == 2 ? (nums[0], nums[1]) : nil
     }
 
+    /// "What saving does" is now the second segment, so the entry card is lower on the result: scroll to it, clear of the bottom bar, then tap it.
+    private func openGuide(_ app: XCUIApplication) {
+        let start = app.buttons["guide-start"]
+        let h = app.windows.firstMatch.frame.height
+        func clear() -> Bool { start.exists && start.isHittable && start.frame.maxY < h - 190 && start.frame.minY > 150 }
+        // From wherever the result was left (the last answers leave it low down), go up first, then down to the card.
+        for _ in 0..<12 where !clear() && !app.staticTexts["Scan finished at the end of your list"].exists { app.swipeDown() }
+        for _ in 0..<4 where !clear() { app.swipeUp() }
+        start.tap()
+    }
+
     // MARK: Appearance
 
     func testAppearanceSettings() throws {
@@ -89,7 +100,7 @@ final class GuideScreensTests: XCTestCase {
         let start = app.buttons["guide-start"]
         XCTAssertTrue(start.exists)
         XCTAssertTrue(start.label.hasPrefix("Start the "), "no answer given yet: \(start.label)")
-        start.tap()
+        openGuide(app)
 
         guard let first = position(app) else { return XCTFail("the guided screen did not open") }
         XCTAssertEqual(first.n, 1)
@@ -141,7 +152,7 @@ final class GuideScreensTests: XCTestCase {
         shot("g-99-result-answered")
 
         // The answers are what was tapped: reopen the questions and each one shows its answer.
-        app.buttons["guide-start"].tap()
+        openGuide(app)
         for i in 0..<total {
             XCTAssertEqual(position(app)?.n, i + 1)
             let mine = app.buttons.matching(NSPredicate(format: "label == %@", tapped[i])).firstMatch
@@ -157,7 +168,7 @@ final class GuideScreensTests: XCTestCase {
 
     func testGuideDark() throws {
         let app = launch(["-appearance", "dark", "-accent", "berry", "-helpLevel", "guide"])
-        app.buttons["guide-start"].tap()
+        openGuide(app)
         guard let p = position(app) else { return XCTFail("the guided screen did not open") }
         for i in 0..<min(5, p.of) {
             shot(String(format: "gd-%02d-question", i + 1))
@@ -168,7 +179,7 @@ final class GuideScreensTests: XCTestCase {
 
     func testGuideLargeText() throws {
         let app = launch(["-appearance", "light", "-helpLevel", "guide", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"])
-        app.buttons["guide-start"].tap()
+        openGuide(app)
         XCTAssertNotNil(position(app))
         shot("gl-01-question")
         app.swipeUp(); shot("gl-02-question-lower")

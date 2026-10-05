@@ -189,7 +189,19 @@ struct NotSeenScreen: View {
                 }
                 .panelShadow()
             }
-            PillButton("Done · \(marked.formatted()) marked", style: .filled, height: 54) { close() }
+            if marked > 0 {
+                // Removing is destructive: red text and outline on the surface, never the filled accent style. It only closes the page; the marks are applied on Save.
+                Button(action: close) {
+                    Text("Remove \(marked.formatted()) when you save").font(.button).multilineTextAlignment(.center).foregroundStyle(Theme.red)
+                        .padding(.horizontal, 20).padding(.vertical, 8).frame(maxWidth: .infinity, minHeight: 54)
+                        .background(Theme.surface, in: Capsule()).overlay(Capsule().stroke(Theme.red, lineWidth: 2))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(PressStyle())
+                .accessibilityIdentifier("notseen-done")
+            } else {
+                PillButton("Done", style: .filled, height: 54) { close() }.accessibilityIdentifier("notseen-done")
+            }
         }
         .padding(.horizontal, Theme.Space.screen).padding(.top, 14).padding(.bottom, 8)
         .background(LinearGradient(stops: [.init(color: Theme.bg.opacity(0), location: 0), .init(color: Theme.bg, location: 0.3)], startPoint: .top, endPoint: .bottom).ignoresSafeArea(edges: .bottom))

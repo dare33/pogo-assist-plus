@@ -59,6 +59,7 @@
 		B23E335C55433BBEBD9E3DA2 /* ScanNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */; };
 		B71EB8981CA7EF438CDCB67F /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF23F6FB7C812B78963625C3 /* RootView.swift */; };
 		BB5FFC989BC424882CE9E129 /* AppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F588B630BAB0C78B337D8139 /* AppearanceView.swift */; };
+		C5654EA7CCA44CBCF1DDD285 /* ReviewSaving.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */; };
 		C65013B44F62BBA96FF5B144 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE84346ABF38B9C9DFB8259 /* Toast.swift */; };
 		C875980798B1206FF0A644E8 /* BoxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17BAAA30DB1A885E5BC14BF /* BoxView.swift */; };
 		CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
@@ -123,6 +124,7 @@
 		444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxScreensTests.swift; sourceTree = "<group>"; };
 		485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */ = {isa = PBXFileReference; path = "sample-partial-cp.replay.jsonl"; sourceTree = "<group>"; };
 		4C694C91A68984883C8CC317 /* PogoAssist.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoAssist.entitlements; sourceTree = "<group>"; };
+		4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSaving.swift; sourceTree = "<group>"; };
 		50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */ = {isa = PBXFileReference; path = "sample-scan.replay.jsonl"; sourceTree = "<group>"; };
 		51C5D5C5A5E06415BB056093 /* GuideFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideFlow.swift; sourceTree = "<group>"; };
 		5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PogoBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -312,6 +314,7 @@
 				B61B527C762D4C808D507072 /* ReviewNotSeen.swift */,
 				936229D5CE5AD592DA498B16 /* ReviewQuestionViews.swift */,
 				A052B76A429D7B08291119B9 /* ReviewResult.swift */,
+				4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */,
 				D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */,
 				7658A29BC83D760022D1FB3A /* ReviewSeed.swift */,
 				3EF2F19209145E4C035F933E /* ReviewSupport.swift */,
@@ -513,6 +516,7 @@
 				D4D21195EE5DE09BDCAE9BE0 /* ReviewNotSeen.swift in Sources */,
 				9F51E8805AFDD803B6C15033 /* ReviewQuestionViews.swift in Sources */,
 				0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */,
+				C5654EA7CCA44CBCF1DDD285 /* ReviewSaving.swift in Sources */,
 				F9863E5471B04F338208E6E9 /* ReviewSections.swift in Sources */,
 				8EF4EB6711143884E09716FE /* ReviewSeed.swift in Sources */,
 				9D59AE77A0468643F441B2C8 /* ReviewSupport.swift in Sources */,
