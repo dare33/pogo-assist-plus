@@ -97,6 +97,49 @@ final class TroubleStretchTests: XCTestCase {
         XCTAssertEqual(TroubleStretches.find(scan(both)).map { $0.kind }, [.barsUnread, .cpHidden])
     }
 
+    // MARK: where to resume
+
+    private func other(_ reason: String, after i: Int, count: Int? = nil) -> Unmatched {
+        var u = unread(after: i); u.reason = reason; u.count = count; return u
+    }
+
+    func testNoUnreadCardBeforeTheFirstRowMeansTheResumePointIsTheFirstRow() throws {
+        let t = try XCTUnwrap(TroubleStretches.find(scan(rows(30, hiddenAt: Set(10..<15)), [unread(after: 12)])).first)
+        XCTAssertEqual(t.leadingUnread, 0); XCTAssertEqual(t.cardsToEndFromResume, t.cardsToEnd)
+    }
+
+    func testAnUnreadCardAheadOfTheFirstFailingRowIsLeadingAndCountedFromTheRowBefore() throws {
+        // row 9 is clean, an unread CP card sits between it and the first failing row 10: it is itself affected, so it is already in cardsToEnd
+        let t = try XCTUnwrap(TroubleStretches.find(scan(rows(30, hiddenAt: Set(10..<15)), [unread(after: 9)])).first)
+        XCTAssertEqual(t.firstRow, 10); XCTAssertEqual(t.cardBefore?.position, 9)
+        XCTAssertEqual(t.leadingUnread, 1)
+        XCTAssertEqual(t.cardsToEnd, (30 - 10) + 1, "cardsToEnd starts at the unread card")
+        XCTAssertEqual(t.cardsToEndFromResume, t.cardsToEnd, "and it already includes the leading one")
+        XCTAssertEqual(t.count, 6)
+    }
+
+    func testOtherUnreadItemsBetweenTheRowBeforeAndTheFirstRowAreLeadingAndAddedToTheCommand() throws {
+        // a name that could not be read and a 3-card blank stretch lie between clean row 9 and failing row 10: the stretch (a CP stretch) does not include them
+        let s = scan(rows(30, hiddenAt: Set(10..<15)), [other("name-not-read", after: 9), other("blank-card", after: 9, count: 3)])
+        let t = try XCTUnwrap(TroubleStretches.find(s).first)
+        XCTAssertEqual(t.firstRow, 10); XCTAssertEqual(t.count, 5)
+        XCTAssertEqual(t.leadingUnread, 4)
+        XCTAssertEqual(t.cardsToEnd, 30 - 10)
+        XCTAssertEqual(t.cardsToEndFromResume, 30 - 10 + 4)
+    }
+
+    func testUnreadCardsAtTheStartOfTheScanLeadWhenThereIsNoRowBefore() throws {
+        let rs = rows(20, hiddenAt: Set(0..<6))
+        let t0 = try XCTUnwrap(TroubleStretches.find(scan(rs)).first)
+        XCTAssertNil(t0.cardBefore); XCTAssertEqual(t0.leadingUnread, 0); XCTAssertEqual(t0.cardsToEndFromResume, 20)
+        // rows whose frames start at r3, and an unread card at r1: it lies before the first row
+        var late = rs; for i in late.indices { late[i].frames = [FrameLabel(frame: "r\(i * 3 + 3)", time: nil, cp: nil, cpText: nil, name: nil, hp: nil, ivs: nil, ivConfidence: nil, sharpness: nil, clip: nil)] }
+        var lead = other("stationed", after: 0); lead.frame = "r1"
+        let t = try XCTUnwrap(TroubleStretches.find(scan(late, [lead])).first)
+        XCTAssertNil(t.cardBefore); XCTAssertEqual(t.leadingUnread, 1)
+        XCTAssertEqual(t.cardsToEnd, 20); XCTAssertEqual(t.cardsToEndFromResume, 21)
+    }
+
     // MARK: the older device logs
 
     /// Evidence for the thresholds, not an assertion about them: walks every device log through the pipeline and writes every stretch it finds. Needs PROBE_RUNS (the device-runs folder) and STRETCH_OUT.

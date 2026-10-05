@@ -40,6 +40,13 @@ public struct TroubleStretch: Equatable {
     /// How many cards there are from the first affected card to the END of the scan, that first card included: rows, plus unmatched cards (`cp-not-read`, `name-not-read`, `stationed`, and a
     /// `blank-card` stretch's `count`) that are placed after it. Unmatched items whose frame cannot be placed among the rows are not counted. The app names the smallest command that covers it.
     public var cardsToEnd: Int
+    /// Cards the scan holds between `cardBefore` (or the start of the scan) and the first affected ROW that are not rows: unread cards (`cp-not-read`, `name-not-read`, `stationed`, and a
+    /// `blank-card` stretch's `count`) placed there, whether or not they are themselves affected. When it is above 0 the card that comes right after `cardBefore` is NOT `firstCard`: it is
+    /// one the scan could not read, and a re-scan that starts at `firstCard` skips those.
+    public var leadingUnread: Int = 0
+    /// How many cards there are from the one right after `cardBefore` (the start of the scan when there is none) to the END of the scan: `cardsToEnd` plus the leading unread cards it does not
+    /// already include (those before the first affected card). Equals `cardsToEnd` when `leadingUnread` is 0. The size of the command that re-reads the stretch from that point.
+    public var cardsToEndFromResume: Int = 0
 }
 
 public enum TroubleStretches {
@@ -66,6 +73,15 @@ public enum TroubleStretches {
     }
 
     private enum Event { case row(Int), item(Int, frame: Int) }
+
+    /// How many cards an unmatched item stands for when it is counted among the cards (0: it is not a card of the list, e.g. an absorbed frame).
+    private static func cards(_ u: Unmatched) -> Int {
+        switch u.reason {
+        case "cp-not-read", "name-not-read", "stationed": return 1
+        case "blank-card": return max(1, u.count ?? 1)
+        default: return 0
+        }
+    }
 
     private static func hasFlag(_ r: ScanRow, _ prefix: String) -> Bool { r.flags.contains { $0 == prefix || $0.hasPrefix(prefix + ":") } }
 
@@ -123,17 +139,22 @@ public enum TroubleStretches {
             for e in ev[start...] {
                 switch e {
                 case .row: toEnd += 1
-                case .item(let k, _):
-                    let u = scan.unmatched[k]
-                    switch u.reason {
-                    case "cp-not-read", "name-not-read", "stationed": toEnd += 1
-                    case "blank-card": toEnd += max(1, u.count ?? 1)
-                    default: break
-                    }
+                case .item(let k, _): toEnd += cards(scan.unmatched[k])
                 }
             }
+            // The cards between the row before (or the start) and the first affected row: every one lies after `before`, and those ahead of `start` are not in `toEnd` yet.
+            let beforeAt = before.flatMap { b in ev.firstIndex { if case .row(let r) = $0 { return r == b } else { return false } } } ?? -1
+            let firstRowAt = ev.firstIndex { if case .row(let r) = $0 { return r == firstRow } else { return false } } ?? start
+            var leading = 0, ahead = 0
+            for i in (beforeAt + 1)..<max(beforeAt + 1, firstRowAt) {
+                guard case .item(let k, _) = ev[i] else { continue }
+                let c = cards(scan.unmatched[k])
+                leading += c
+                if i < start { ahead += c }
+            }
             stretches.append(TroubleStretch(kind: kind, firstRow: firstRow, lastRow: lastRow, count: run.count, rowBefore: before, unreadCards: unread, cleanRowsInside: cleanInside,
-                                            firstCard: card(firstRow), lastCard: card(lastRow), cardBefore: before.map(card), cardsToEnd: toEnd))
+                                            firstCard: card(firstRow), lastCard: card(lastRow), cardBefore: before.map(card), cardsToEnd: toEnd,
+                                            leadingUnread: leading, cardsToEndFromResume: toEnd + ahead))
         }
         for (i, e) in ev.enumerated() {
             if failing(e) { run.append(i); gap = 0; continue }
