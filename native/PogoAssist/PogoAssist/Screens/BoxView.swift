@@ -13,6 +13,7 @@ struct SpeciesRoute: Hashable {
 /// The Box tab: the box grouped by species, A to Z, with search and filter chips (design handoff v2 section 1g and the prototype's Box).
 struct BoxView: View {
     @EnvironmentObject var model: AppModel
+    @Environment(\.showToast) private var showToast
     @Environment(\.accent) private var accent
     @StateObject private var store = BoxIndexStore()
 
@@ -212,12 +213,23 @@ struct BoxView: View {
         .scrollClipDisabled()
     }
 
-    /// Step three of the to-check flow: the Scan screen with Add and update chosen (`AppModel.startRescan`). Only the button: this view does not copy one search for all of them.
+    /// The to-check flow in the Box: one game search for every Pokémon to check (Greg, 6 Oct 2026), beside "Re-scan N", the Scan screen with Add and update chosen
+    /// (`AppModel.startRescan`). The search leaves out entries with no CP or HP to look for, as the Review's does.
     @ViewBuilder private var rescanButton: some View {
         if !model.live {
-            PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount) }
-                .accessibilityIdentifier("rescan-button")
+            HStack(spacing: 10) {
+                if let search = toCheckSearch {
+                    PillButton("Copy search", systemImage: "doc.on.doc", style: .tint) { UIPasteboard.general.string = search; showToast("Copied") }
+                        .accessibilityIdentifier("copy-check-search").accessibilityValue(search)
+                }
+                PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount) }
+                    .accessibilityIdentifier("rescan-button")
+            }
         }
+    }
+
+    private var toCheckSearch: String? {
+        GameSearch.text(index.items.filter(\.needsCheck).map { GameSearch.part(name: $0.name, cp: $0.cp, hp: $0.hp, noLevelFits: $0.noLevelFits) })
     }
 
     private func filterChip(_ title: String, _ value: BoxIndex.Chip) -> some View {

@@ -160,6 +160,11 @@ final class BoxScreensTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch.tap()
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons.matching(identifier: "rescan-button").count, 1)
+        // Beside it, one search for all of them: names, then their CPs or HPs.
+        let copy = app.buttons["copy-check-search"]
+        XCTAssertTrue(copy.exists, "Copy search sits beside Re-scan")
+        XCTAssertTrue(copy.value as? String ?? "" != "", "the search is not empty: \(String(describing: copy.value))")
+        XCTAssertTrue((copy.value as? String ?? "").contains("&"), "the search has names and terms")
         XCTAssertEqual(button.label, "Re-scan \(n)")
         sleep(1)
         shot("rescan-02-to-check-chip")
@@ -170,7 +175,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5), "the scan kind is Add and update")
         XCTAssertTrue(app.staticTexts["rescan-line"].exists)
-        XCTAssertEqual(app.staticTexts["rescan-line"].label, "Re-scan of \(n) to check: in the game, show just those, open the first one's appraisal, then start.")
+        XCTAssertEqual(app.staticTexts["rescan-line"].label, "Re-scan of \(n) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
         XCTAssertTrue(app.staticTexts["\"\(command)\""].exists, "the steps name \(command)")
         sleep(1)
         shot("rescan-03-scan-screen")

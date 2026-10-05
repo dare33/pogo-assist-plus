@@ -192,7 +192,7 @@ struct ScanView: View {
             } else {
                 ScanOptionsSummary { model.rescanCount = nil; editing = true }
                 if let n = model.rescanCount {
-                    Text("Re-scan of \(n.formatted()) to check: in the game, show just those, open the first one's appraisal, then start.")
+                    Text("Re-scan of \(n.formatted()) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
                         .font(.secondary).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("rescan-line")
                 }
