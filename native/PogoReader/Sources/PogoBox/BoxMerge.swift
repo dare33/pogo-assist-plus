@@ -1003,12 +1003,13 @@ public enum BoxMerge {
 
         func setMega(_ id: String, _ mega: Bool) { byId[id]?.megaWhenScanned = mega ? true : nil }
         /// Keep a Mega row's values as the entry's Mega form: a later read of the Mega form replaces the values it read (an unread value never replaces a saved one) and keeps the first-seen date.
-        /// Nothing is stored from a row whose CP fits no level or was not read: its CP and level cannot be trusted.
+        /// Nothing is stored from a row READ in this scan whose CP fits no level or was not read: its CP and level cannot be trusted. (A saved entry's values adopted by `adoptMegaForm` may still
+        /// carry CP 0, "not known"; they only fill what the other source lacks.)
         func storeMegaForm(_ id: String, _ row: ScanRow) {
             guard !hasNoLevelFits(row), row.cp > 0, var e = byId[id] else { return }
             if var mf = e.megaForm {
                 if mf.speciesId != row.speciesId { mf.speciesId = row.speciesId; mf.name = row.name; mf.display = row.display; mf.form = row.form; mf.dex = row.dex }
-                if row.cp > 0 { mf.cp = row.cp }
+                mf.cp = row.cp
                 if let hp = row.hp { mf.hp = hp }
                 mf.level = row.level ?? mf.level; mf.levelMax = row.levelMax ?? mf.levelMax; mf.dust = row.dust ?? mf.dust
                 mf.lastSeen = max(mf.lastSeen, date)
@@ -1016,12 +1017,20 @@ public enum BoxMerge {
             } else { e.megaForm = MegaForm(row: row, firstSeen: date, lastSeen: date) }
             byId[id] = e
         }
-        /// An entry's existing Mega form is never overwritten by another entry's saved values: the one seen more recently is kept (a tie keeps the existing one).
+        /// Two Mega forms of one Pokémon, field by field: the first argument's values win for every field it actually has (CP above 0, HP, level, level max, dust; the species and names
+        /// always), the second fills what the first lacks, so an unread value never replaces a known one. First seen is the earliest, last seen the latest.
+        func merged(_ recent: MegaForm, _ other: MegaForm) -> MegaForm {
+            var m = recent
+            if m.cp <= 0 { m.cp = other.cp }
+            m.hp = recent.hp ?? other.hp; m.level = recent.level ?? other.level; m.levelMax = recent.levelMax ?? other.levelMax; m.dust = recent.dust ?? other.dust
+            m.dex = recent.dex ?? other.dex
+            m.firstSeen = min(recent.firstSeen, other.firstSeen); m.lastSeen = max(recent.lastSeen, other.lastSeen)
+            return m
+        }
+        /// An entry's existing Mega form is merged with another's saved values: the more recently seen one wins each field it has (a tie keeps the existing one's), the other fills the rest.
         func adoptMegaForm(_ id: String, _ other: MegaForm) {
             guard var e = byId[id] else { return }
-            if let mf = e.megaForm {
-                if other.lastSeen > mf.lastSeen { var o = other; o.firstSeen = min(o.firstSeen, mf.firstSeen); e.megaForm = o } else { e.megaForm?.firstSeen = min(mf.firstSeen, other.firstSeen) }
-            } else { e.megaForm = other }
+            if let mf = e.megaForm { e.megaForm = other.lastSeen > mf.lastSeen ? merged(other, mf) : merged(mf, other) } else { e.megaForm = other }
             byId[id] = e
         }
         // An untrusted row paired as Same writes nothing but last-seen (not even the Mega mark).
@@ -1040,14 +1049,16 @@ public enum BoxMerge {
                 guard let e = byId[id] else { break }
                 if u.kind == .megaPair {
                     // Join: the base entry (candidates[0]) stays, with its own values and hand corrections UNCHANGED, is marked Mega when the scan read the Mega form, and takes the Mega-form entry's
-                    // values (as saved, hand corrections applied) as its Mega form; the Mega-form entry is removed. Its other corrections, its id and its first-seen date as an entry go (the earlier
+                    // values (as saved, hand corrections applied) as its Mega form: the removed entry's OWN row values are what is adopted, its `megaForm` (when it has one) only filling the fields the row lacks; the Mega-form entry is removed. Its other corrections, its id and its first-seen date as an entry go (the earlier
                     // first-seen date is kept on the base entry). Any other answer than "this one" keeps both.
                     guard id == u.candidates.first, u.candidates.count == 2, let m = byId[u.candidates[1]] else { break }
                     byId[id]?.firstSeen = min(e.firstSeen, m.firstSeen)
                     touch(id)
                     // The other entry's values keep their OWN last-seen date (a base scan did not see the Mega form), so an existing, more recently seen Mega form wins over them; then a Mega row
                     // the scan read (CP fitting a level) is stored on top like an automatic Same pair, so what ends up held is what was read now.
-                    adoptMegaForm(id, m.megaForm ?? MegaForm(row: m.row, firstSeen: m.firstSeen, lastSeen: m.lastSeen))
+                    var adopted = MegaForm(row: m.row, firstSeen: m.firstSeen, lastSeen: m.lastSeen)
+                    if let old = m.megaForm { adopted = merged(adopted, old) }
+                    adoptMegaForm(id, adopted)
                     if plan.megaBases[u.scanned] != nil { storeMegaForm(id, plan.scanned[u.scanned]) }
                     setMega(id, plan.megaBases[u.scanned] != nil)
                     removedByJoin.insert(m.id)
