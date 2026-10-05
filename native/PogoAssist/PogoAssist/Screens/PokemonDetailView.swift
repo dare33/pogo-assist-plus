@@ -45,8 +45,15 @@ struct PokemonDetailView: View {
                         advicePanel(e)
                         factsPanel(e, mega: megaShown(e))
                         notesPanel(e, mega: megaShown(e))
-                        // The search is for the form shown: its name and its CP (a Mega form's CP was read, so it is trusted).
-                        if let search = GameSearch.text([megaShown(e).map { GameSearch.part(name: $0.name, cp: $0.cp, hp: $0.hp, noLevelFits: false) } ?? GameSearch.part(row: e.row)]) { SearchStrip(text: search, prominent: true) }
+                        // The search is always the normal form's: the game shows a Mega CP only while the Pokémon is Mega evolved, so a search on it would find nothing the rest of the time.
+                        if let search = GameSearch.text([GameSearch.part(row: e.row)]) {
+                            SearchStrip(text: search, prominent: true)
+                            if megaShown(e) != nil {
+                                Text("The game shows the Mega CP only while it is Mega evolved, so this search uses the normal CP.")
+                                    .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("mega-search-note")
+                            }
+                        }
                         Button { deleting = DeleteTarget(id: e.id, title: e.row.title, cp: e.row.cp) } label: {
                             Text("Delete from box").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
                                 .frame(maxWidth: .infinity, minHeight: 44)
