@@ -220,6 +220,9 @@ final class BoxScreensTests: XCTestCase {
         sleep(1)
         shot("mega-light-07-settings-mega")
         app.buttons["Done"].tap()
+        // The sheet must be gone before the next tap: a tap during its dismissal reached nothing on iOS 27.
+        XCTAssertTrue(app.navigationBars["Settings"].waitForNonExistence(timeout: 10))
+        sleep(1)
         XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 5))
         openBlaziken(app)
         XCTAssertTrue(app.buttons["form-mega"].isSelected, "the page starts on Mega when Settings says so")

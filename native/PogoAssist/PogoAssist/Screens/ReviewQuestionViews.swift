@@ -226,7 +226,7 @@ private struct PartReadRow: View {
         HStack(spacing: 0) {
             IconButton(systemImage: "checkmark", kind: .done, label: "It's the saved one") { answer(.existing(member.saved.id)) }
             IconButton(systemImage: "plus", kind: .add, label: "Add new") { answer(.new) }
-            IconButton(systemImage: "minus", kind: .neutral, label: "Don't include") { answer(.leaveOut) }
+            IconButton(systemImage: "minus", kind: .neutral, label: "Don't include") { answer(.leaveOut) }.accessibilityIdentifier("part-leave-\(member.scanned)")
         }
     }
 

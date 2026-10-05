@@ -30,6 +30,18 @@ final class ReviewScreensTests: XCTestCase {
         return clear()
     }
 
+    /// Scrolls `e` clear of both bars in small steps, then touches its centre. A full swipe can leave a control under the pinned bar (iOS 27 scrolls further than 26.5), where a tap
+    /// answers nothing, and `XCUIElement.tap()` on it did not reach the app on iOS 27.
+    private func tapClear(_ app: XCUIApplication, _ e: XCUIElement) {
+        for _ in 0..<12 {
+            let y = e.frame.minY, h = app.windows.firstMatch.frame.height
+            if y > 220 && y < h - 260 { break }
+            let up = y >= 220
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.6 : 0.4)).press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.45 : 0.55)))
+        }
+        e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
     private func button(_ app: XCUIApplication, beginsWith s: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", s)).firstMatch
     }
@@ -45,11 +57,11 @@ final class ReviewScreensTests: XCTestCase {
         // Few queries on purpose: each one walks the whole long page's accessibility tree, which is slow in a Debug build.
         scrollTop(app)
         // One row is answered "Don't include" by hand first: the bulk button must neither count it nor overwrite it.
-        let left = app.buttons["Don't include"].firstMatch
+        // The part-read group's own "Don't include" (by identifier: the query order of identical labels is not the order on screen on every iOS version).
+        let left = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'part-leave-'")).firstMatch
         XCTAssertTrue(left.waitForExistence(timeout: 10))
         // "What saving does" now sits above the questions, so the first card is lower: scroll it clear of the bars before tapping.
-        app.swipeUp()
-        left.tap()
+        tapClear(app, left)
         sleep(1)
         shot("\(p)-03-part-mid-answer")
         app.swipeUp()
@@ -194,7 +206,8 @@ final class ReviewScreensTests: XCTestCase {
         XCTAssertEqual(after.values.reduce(0, +), before.values.reduce(0, +) + 1, "the answer adds one Pokémon to New, Updated or Same")
         shot("\(p)-03-after-answer")
 
-        bar.tap()
+        // By coordinate: on iOS 27 `XCUIElement.tap()` on this bar does not reach it (the app never receives the tap), while a touch at the same centre point does what a thumb does.
+        bar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         sleep(1)
         shot("\(p)-04-after-bar-tap")
         XCTAssertFalse(bar.exists, "the bar steps aside once the full segment is back")
@@ -248,11 +261,10 @@ final class ReviewScreensTests: XCTestCase {
         XCTAssertTrue(note.label.contains("The normal entry keeps its values and hand corrections, the Mega entry's values become its Mega form, and the separate Mega entry is removed."), note.label)
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'with whatever was saved for it'")).firstMatch.exists, "the old sentence is gone")
         XCTAssertTrue(app.buttons["Same Pokémon"].exists && app.buttons["Different ones"].exists)
-        let same = app.buttons["Same Pokémon"], h = app.windows.firstMatch.frame.height
+        let same = app.buttons["Same Pokémon"]
         app.swipeUp(); sleep(1)
         shot("\(p)-01-card")
-        for _ in 0..<6 where !(same.isHittable && same.frame.maxY < h - 190) { app.swipeUp() }
-        same.tap()
+        tapClear(app, same)
         sleep(1)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Same Pokémon · Normal · CP 2819 · Mega · CP 3970'")).firstMatch.waitForExistence(timeout: 5), "the answered row shows both forms")
         shot("\(p)-02-answered")

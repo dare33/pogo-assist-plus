@@ -51,7 +51,8 @@ struct ResultScreen: View {
                     .padding(.top, 6)
                     .padding(.bottom, 24)
                 }
-                .scrollPosition(id: $topItem)
+                // Aligned by its top and centre: with the default alignment iOS 27 also moved the page sideways to line the segment's left edge up with the screen's.
+                .scrollPosition(id: $topItem, anchor: .top)
                 .scrollIndicators(.hidden)
                 .accessibilityIdentifier("review-scroll")
                 // Once the full segment is above the top, a slim bar with the same numbers is pinned under the top bar (a tap goes back to the segment).
