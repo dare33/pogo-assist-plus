@@ -66,6 +66,8 @@ enum ScanSteps {
 struct ScanWalkthrough: View {
     let steps: [Int]
     let words: ScanWords
+    /// Whether to say the game will be opened for the person (false once opening it has failed).
+    let takesBack: Bool
     @Binding var hiddenRaw: String
     let trigger: BroadcastTrigger
     var onClose: () -> Void
@@ -86,8 +88,8 @@ struct ScanWalkthrough: View {
     private var body_: String {
         switch step {
         case 0: return "The scan reads from this screen and moves through your storage in the order it's sorted."
-        // The design's line ends "We'll take you back to the game"; this build does not open the game, so it says what is true.
-        case 1: return "Pick \"Pogo Broadcast\" if asked. Now switch to Pokémon GO."
+        // "We'll take you back to the game" is true only while opening the game works (`GameOpener`); otherwise the person is told to switch.
+        case 1: return "Pick \"Pogo Broadcast\" if asked. " + (takesBack ? "We'll take you back to the game." : GameOpener.fallbackLine)
         default: return words.walkBody
         }
     }

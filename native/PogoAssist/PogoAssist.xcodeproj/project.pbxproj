@@ -13,14 +13,17 @@
 		07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */; };
 		097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0A3EC8BBA5B78347A0413F5C /* ReviewWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B793340E977374E8287D10D /* ReviewWording.swift */; };
+		0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4B281BB0B64267189CDB87 /* SetupProgress.swift */; };
 		0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052B76A429D7B08291119B9 /* ReviewResult.swift */; };
 		1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 00436FF3692616EF8377125B /* PogoReader */; };
 		1DF267CCE4D1096881873210 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
 		205415EE687703C0379569F7 /* GuideFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C5D5C5A5E06415BB056093 /* GuideFlow.swift */; };
 		262F06295009225A5291CD5A /* BoxChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853199DAE4157490F71A25E8 /* BoxChrome.swift */; };
-		2A1110DE2162F7DEF4734407 /* ScanSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EB8C8BEAFD00EF993F95722 /* ScanSetupView.swift */; };
+		29D9364DF6997E6C296892EC /* GameOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = C317D4A35524B2870E2635E8 /* GameOpener.swift */; };
+		31CA236599307F00B33A65CA /* SetupStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B7030AC596BFDD03757B5C /* SetupStepView.swift */; };
 		31DDB5EE5F7E61CF3A468735 /* ReviewScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */; };
 		3612921432E15343B1E195EA /* FlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAA375CD0561890BDC48B2 /* FlowTests.swift */; };
+		371C03D06719ECB18761E0D6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4C1077B425FFEEFAFBFA9570 /* Assets.xcassets */; };
 		373A9DA32DD806383DC6106A /* ComponentGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */; };
 		408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFAC0B18897FB5A85E55764 /* Theme.swift */; };
 		44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */; };
@@ -60,6 +63,9 @@
 		B23E335C55433BBEBD9E3DA2 /* ScanNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */; };
 		B71EB8981CA7EF438CDCB67F /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF23F6FB7C812B78963625C3 /* RootView.swift */; };
 		BB5FFC989BC424882CE9E129 /* AppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F588B630BAB0C78B337D8139 /* AppearanceView.swift */; };
+		C08B608A460725E2E5529AFB /* ScanSetupPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E142247214BEF767388106 /* ScanSetupPrompts.swift */; };
+		C0A0118C2725F58B90F1E11A /* SetupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */; };
+		C46DCAB7C3935BB722DFEBF9 /* ScanMoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D59DA0D8FD3A81C5286A75 /* ScanMoreView.swift */; };
 		C5654EA7CCA44CBCF1DDD285 /* ReviewSaving.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */; };
 		C65013B44F62BBA96FF5B144 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE84346ABF38B9C9DFB8259 /* Toast.swift */; };
 		C875980798B1206FF0A644E8 /* BoxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17BAAA30DB1A885E5BC14BF /* BoxView.swift */; };
@@ -70,6 +76,7 @@
 		E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83DD8DD5AEC769BBE964440 /* ScanDone.swift */; };
 		EDABA9EEAC727744599A9E39 /* ReportSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F5275BA12DBF318D759175 /* ReportSupport.swift */; };
 		F4EC58D5E187857BA98309EC /* BarsAndAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */; };
+		F8C6E92B9CF663047CCCC108 /* SetupChecklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F723B7B2F32D040376093D /* SetupChecklistView.swift */; };
 		F9863E5471B04F338208E6E9 /* ReviewSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */; };
 		F9C0DA47B6D99ED2A742185D /* BoxScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */; };
 		FCC6A2B1D4B58BED4B8BA355 /* SpeciesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */; };
@@ -108,6 +115,8 @@
 
 /* Begin PBXFileReference section */
 		00027E9C738C8485EF328388 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		00B7030AC596BFDD03757B5C /* SetupStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepView.swift; sourceTree = "<group>"; };
+		01F723B7B2F32D040376093D /* SetupChecklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistView.swift; sourceTree = "<group>"; };
 		09D08E55E9B50EC09258EFF1 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		1222BDC1C6F45E94BECD7F63 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
 		1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSearch.swift; sourceTree = "<group>"; };
@@ -120,12 +129,13 @@
 		33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonDetailView.swift; sourceTree = "<group>"; };
 		36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBroadcastButton.swift; sourceTree = "<group>"; };
 		3AA7DC367A1E8DE143CF1386 /* BoxIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxIndex.swift; sourceTree = "<group>"; };
-		3EB8C8BEAFD00EF993F95722 /* ScanSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSetupView.swift; sourceTree = "<group>"; };
 		3EF2F19209145E4C035F933E /* ReviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSupport.swift; sourceTree = "<group>"; };
 		3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanOptionsPanel.swift; sourceTree = "<group>"; };
 		444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxScreensTests.swift; sourceTree = "<group>"; };
 		485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */ = {isa = PBXFileReference; path = "sample-partial-cp.replay.jsonl"; sourceTree = "<group>"; };
+		4C1077B425FFEEFAFBFA9570 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4C694C91A68984883C8CC317 /* PogoAssist.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoAssist.entitlements; sourceTree = "<group>"; };
+		4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupTests.swift; sourceTree = "<group>"; };
 		4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSaving.swift; sourceTree = "<group>"; };
 		50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */ = {isa = PBXFileReference; path = "sample-scan.replay.jsonl"; sourceTree = "<group>"; };
 		51C5D5C5A5E06415BB056093 /* GuideFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideFlow.swift; sourceTree = "<group>"; };
@@ -142,6 +152,7 @@
 		6B793340E977374E8287D10D /* ReviewWording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewWording.swift; sourceTree = "<group>"; };
 		6B9E2F476A7C0759293BCB1F /* StateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateModel.swift; sourceTree = "<group>"; };
 		6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSteps.swift; sourceTree = "<group>"; };
+		72D59DA0D8FD3A81C5286A75 /* ScanMoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanMoreView.swift; sourceTree = "<group>"; };
 		7658A29BC83D760022D1FB3A /* ReviewSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSeed.swift; sourceTree = "<group>"; };
 		769F24027EB56D5A4BB8154F /* ScanMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanMark.swift; sourceTree = "<group>"; };
 		853199DAE4157490F71A25E8 /* BoxChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxChrome.swift; sourceTree = "<group>"; };
@@ -160,17 +171,20 @@
 		B6261F1BB3C75D905222CC61 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
 		B7BBE6B4B350600CD9DBB146 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Identifiers.xcconfig; sourceTree = "<group>"; };
+		C317D4A35524B2870E2635E8 /* GameOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameOpener.swift; sourceTree = "<group>"; };
 		C6F031A6C112AFF16F56C17A /* PogoReader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PogoReader; path = ../PogoReader; sourceTree = SOURCE_ROOT; };
 		CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoBroadcast.entitlements; sourceTree = "<group>"; };
 		D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSections.swift; sourceTree = "<group>"; };
 		D7EAA375CD0561890BDC48B2 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
 		E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentGallery.swift; sourceTree = "<group>"; };
 		E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanNotifier.swift; sourceTree = "<group>"; };
+		EC4B281BB0B64267189CDB87 /* SetupProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupProgress.swift; sourceTree = "<group>"; };
 		EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDebug.swift; sourceTree = "<group>"; };
 		EEE84346ABF38B9C9DFB8259 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		F17BAAA30DB1A885E5BC14BF /* BoxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxView.swift; sourceTree = "<group>"; };
 		F391C1A79CF135A501834207 /* PogoAssist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PogoAssist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F588B630BAB0C78B337D8139 /* AppearanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceView.swift; sourceTree = "<group>"; };
+		F7E142247214BEF767388106 /* ScanSetupPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSetupPrompts.swift; sourceTree = "<group>"; };
 		F83DD8DD5AEC769BBE964440 /* ScanDone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDone.swift; sourceTree = "<group>"; };
 		F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDoneTests.swift; sourceTree = "<group>"; };
 		FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanScreensTests.swift; sourceTree = "<group>"; };
@@ -229,6 +243,7 @@
 		5411364665689D6D065557A6 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				4C1077B425FFEEFAFBFA9570 /* Assets.xcassets */,
 				485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */,
 				50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */,
 				6FF996B3012A44A445145B1D /* Fonts */,
@@ -264,6 +279,7 @@
 				5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */,
 				F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */,
 				FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */,
+				4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */,
 			);
 			path = PogoAssistUITests;
 			sourceTree = "<group>";
@@ -311,6 +327,7 @@
 				F588B630BAB0C78B337D8139 /* AppearanceView.swift */,
 				853199DAE4157490F71A25E8 /* BoxChrome.swift */,
 				F17BAAA30DB1A885E5BC14BF /* BoxView.swift */,
+				C317D4A35524B2870E2635E8 /* GameOpener.swift */,
 				1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */,
 				51C5D5C5A5E06415BB056093 /* GuideFlow.swift */,
 				5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */,
@@ -330,11 +347,15 @@
 				36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */,
 				EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */,
 				F83DD8DD5AEC769BBE964440 /* ScanDone.swift */,
+				72D59DA0D8FD3A81C5286A75 /* ScanMoreView.swift */,
 				3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */,
-				3EB8C8BEAFD00EF993F95722 /* ScanSetupView.swift */,
+				F7E142247214BEF767388106 /* ScanSetupPrompts.swift */,
 				6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */,
 				1222BDC1C6F45E94BECD7F63 /* ScanView.swift */,
 				FF799334CCB9D208123457E5 /* SettingsView.swift */,
+				01F723B7B2F32D040376093D /* SetupChecklistView.swift */,
+				EC4B281BB0B64267189CDB87 /* SetupProgress.swift */,
+				00B7030AC596BFDD03757B5C /* SetupStepView.swift */,
 				1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */,
 			);
 			path = Screens;
@@ -473,6 +494,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				371C03D06719ECB18761E0D6 /* Assets.xcassets in Resources */,
 				E6247625CABEEE77FEB55C70 /* Figtree-Variable.ttf in Resources */,
 				55CD9F47DF14E817FF7A91C5 /* OFL.txt in Resources */,
 				8195313A1A5D36E07D5E0BA8 /* sample-partial-cp.replay.jsonl in Resources */,
@@ -493,6 +515,7 @@
 				31DDB5EE5F7E61CF3A468735 /* ReviewScreensTests.swift in Sources */,
 				07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */,
 				998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */,
+				C0A0118C2725F58B90F1E11A /* SetupTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -511,6 +534,7 @@
 				A0129EF312F80693A11F6889 /* ContentView.swift in Sources */,
 				8E62CA1C22FF97368E5B9F14 /* FloatingTabBar.swift in Sources */,
 				877CD9FE721D96DF464F3FD7 /* Formatting.swift in Sources */,
+				29D9364DF6997E6C296892EC /* GameOpener.swift in Sources */,
 				68A28061D9146D4EA5A538CC /* GameSearch.swift in Sources */,
 				205415EE687703C0379569F7 /* GuideFlow.swift in Sources */,
 				7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */,
@@ -536,12 +560,16 @@
 				0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */,
 				E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */,
 				948718A42F4443D1612CB6B5 /* ScanMark.swift in Sources */,
+				C46DCAB7C3935BB722DFEBF9 /* ScanMoreView.swift in Sources */,
 				A0A130F029BD88C97D55D93B /* ScanNotifier.swift in Sources */,
 				44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */,
-				2A1110DE2162F7DEF4734407 /* ScanSetupView.swift in Sources */,
+				C08B608A460725E2E5529AFB /* ScanSetupPrompts.swift in Sources */,
 				011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */,
 				9975DFDD41FE07B384C77B88 /* ScanView.swift in Sources */,
 				B097AAC5F43E6BBBD3CF938B /* SettingsView.swift in Sources */,
+				F8C6E92B9CF663047CCCC108 /* SetupChecklistView.swift in Sources */,
+				0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */,
+				31CA236599307F00B33A65CA /* SetupStepView.swift in Sources */,
 				CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */,
 				FCC6A2B1D4B58BED4B8BA355 /* SpeciesListView.swift in Sources */,
 				53E565D8D2134740F880785D /* StateModel.swift in Sources */,
@@ -632,7 +660,7 @@
 		87987F379C67731CA24E27C0 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_ENTITLEMENTS = PogoAssist/PogoAssist.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -735,7 +763,7 @@
 		E3C3CC2CF33FC005565D4E41 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_ENTITLEMENTS = PogoAssist/PogoAssist.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;

@@ -146,32 +146,39 @@ final class FlowTests: XCTestCase {
         let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
         XCTAssertTrue(app.staticTexts["Tap the button, then Start Broadcast"].waitForExistence(timeout: 5))
         shot(name + "-top")
-        // The setup lists are on the Scan setup screen. The lists are lazy: scroll until the element is on screen.
-        // Both directions: on a smaller screen the lazy list drops what is scrolled out of sight, and the elements sit in no fixed order.
-        app.buttons["Scan setup"].tap()
-        XCTAssertTrue(app.navigationBars["Scan setup"].waitForExistence(timeout: 5))
-        func reveal(_ e: XCUIElement, up: Bool = true) {
+        // The commands are made in step 2 of "Get ready to scan"; what to say and how to stop are on "More about scanning". Both pages scroll.
+        func reveal(_ e: XCUIElement) {
             var n = 0
-            while !e.waitForExistence(timeout: 1.5), n < 8 { if up { app.swipeUp() } else { app.swipeDown() }; n += 1 }
+            while !e.waitForExistence(timeout: 1.5), n < 8 { app.swipeUp(); n += 1 }
             n = 0
-            while !e.exists, n < 16 { if up { app.swipeDown() } else { app.swipeUp() }; n += 1; _ = e.waitForExistence(timeout: 1.0) }
+            while !e.exists, n < 16 { app.swipeDown(); n += 1; _ = e.waitForExistence(timeout: 1.0) }
         }
+        app.buttons["setup-banner"].tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5))
+        app.buttons["setup-step-4"].tap()
+        XCTAssertTrue(app.navigationBars["Step 4 of 6"].waitForExistence(timeout: 5))
         let attention = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Attention Aware'")).firstMatch
-        reveal(attention, up: false)
-        XCTAssertTrue(attention.exists, "the setup list names Attention Aware")
+        reveal(attention)
+        XCTAssertTrue(attention.exists, "step 4 names Attention Aware")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["setup-step-6"].tap()
         let sharing = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Screen Sharing'")).firstMatch
-        reveal(sharing, up: false)
-        XCTAssertTrue(sharing.exists, "the setup list names the Screen Sharing notification setting")
-        app.swipeUp()
-        shot(name)
+        XCTAssertTrue(sharing.waitForExistence(timeout: 5), "step 6 names the Screen Sharing notification setting")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let more = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More about scanning'")).firstMatch
+        app.swipeUp(); app.swipeUp()   // the last row sits under the Continue button until the page is scrolled
+        more.tap()
         // the command to say, as it is spoken: digits without a thousands separator
         reveal(app.staticTexts["Say: Pogo scan 1500"])
         XCTAssertTrue(app.staticTexts["Say: Pogo scan 1500"].waitForExistence(timeout: 5), "1,400 Pokémon is covered by the 1,500 command")
         reveal(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Go to sleep'")).firstMatch)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Go to sleep'")).firstMatch.waitForExistence(timeout: 5), "the warning says how to stop a command")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'cannot be stopped'")).firstMatch.exists)
+        shot(name)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // Step 2 makes the one-time set file and hands it to the share sheet.
+        app.buttons["setup-step-2"].tap()
         let get = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Get the'")).firstMatch
-        reveal(get)
         XCTAssertTrue(get.waitForExistence(timeout: 5))
         get.tap()
         sleep(3)

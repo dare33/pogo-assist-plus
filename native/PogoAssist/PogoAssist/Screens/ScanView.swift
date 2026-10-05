@@ -4,18 +4,25 @@ import PogoReader
 
 /// The Scan screen (design handoff, "Magic scan", Scan §3m): the reminder, the 240 pt mark button and a bottom panel with the options summary
 /// and the two steps. Edit swaps the steps for the options. If the app is opened while a broadcast runs, the same button is the progress ring.
-/// Everything the old screen held that has no place here is in `ScanSetupView` ("Scan setup").
+/// Everything the old screen held that has no place here is in "Get ready to scan" (`SetupChecklistView`) and "More about scanning" (`ScanMoreView`).
 struct ScanView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.helpLevel) private var help
     @Environment(\.accent) private var accent
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var phase
     @ScaledMetric(relativeTo: .subheadline) private var badgeSize: CGFloat = 36
     @AppStorage(ScanSteps.key) private var hiddenRaw = ""
     /// Editing the options replaces the steps. Decided once on appearing: the first scan for an account (nothing to confirm yet) opens in Edit.
     @State private var editing = false
     @State private var decidedEditing = false
     @State private var walkSteps: [Int]?
+    /// "Get ready to scan" is open (`jump`: at the next unfinished step), and the gentle sheet that comes before a scan while setup is not done.
+    @State private var setupPage: SetupPage?
+    @State private var showSetupSheet = false
+    /// The screen showed no scan running since it appeared: only then is a broadcast that goes live one this screen started (see `GameOpener`).
+    @State private var sawNoScan = false
+    enum SetupPage: Hashable { case checklist, nextStep }
     @StateObject private var markTrigger = BroadcastTrigger()
     @StateObject private var walkTrigger = BroadcastTrigger()
 
@@ -23,6 +30,8 @@ struct ScanView: View {
     private var visibleSteps: [Int] { ScanSteps.visible(raw: hiddenRaw, help: help) }
     /// The button can start a scan: not while editing, and a Full scan needs its count first.
     private var canStart: Bool { !editing && !model.fullScanNeedsCount }
+    /// Setup is not done and the scan is paged by voice: the mark button asks first (paging by hand skips it).
+    private var asksAboutSetup: Bool { !model.setup.isDone && !model.pagedByHand }
 
     var body: some View {
         GeometryReader { geo in
@@ -40,9 +49,10 @@ struct ScanView: View {
                         // A scan has ended and is waiting for the person: its Done state, not the start screen.
                         ScanDoneView()
                     } else {
-                        reminder
+                        SetupBanner { setupPage = .checklist }
                         // With the options open the panel is long: no spare space around the button then.
                         if !editing { Spacer(minLength: 0) }
+                        if !editing, !model.setup.isDone { SetupLeftLine(left: model.setup.stepsLeft) { setupPage = .checklist } }
                         markButton
                         if !editing { Spacer(minLength: 0) }
                         bottomPanel
@@ -56,6 +66,13 @@ struct ScanView: View {
             .onChange(of: editing) { _, _ in withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("top", anchor: .top) } }
             }
         }
+        #if DEBUG
+        // UI tests only: what `GameOpener` was asked to open, as "count url,url". Nothing on screen.
+        .overlay(alignment: .topLeading) {
+            Color.clear.frame(width: 4, height: 4).accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(model.game.requests.count) " + model.game.requests.map(\.absoluteString).joined(separator: ",")).accessibilityIdentifier("game-open-log")
+        }
+        #endif
         .background(Theme.bg.ignoresSafeArea())
         .navigationTitle("Scan Pokémon")
         .navigationBarTitleDisplayMode(.inline)
@@ -71,19 +88,34 @@ struct ScanView: View {
                 }
             }
         }
+        .navigationDestination(item: $setupPage) { page in SetupChecklistView(jumpToNext: page == .nextStep) }
+        .sheet(isPresented: $showSetupSheet) {
+            SetupSheet(openSetup: { showSetupSheet = false; setupPage = .nextStep },
+                       scanAnyway: { showSetupSheet = false; startScan() })
+                .environment(\.accent, accent)
+        }
         .fullScreenCover(isPresented: Binding(get: { walkSteps != nil }, set: { if !$0 { walkSteps = nil } })) {
             if let steps = walkSteps {
-                ScanWalkthrough(steps: steps, words: words, hiddenRaw: $hiddenRaw, trigger: walkTrigger) { walkSteps = nil }
+                ScanWalkthrough(steps: steps, words: words, takesBack: !model.game.failed, hiddenRaw: $hiddenRaw, trigger: walkTrigger) { walkSteps = nil }
                     .environment(\.accent, accent)
             }
         }
         // The broadcast has started: the steps have done their job.
-        .onChange(of: model.live) { _, live in if live { walkSteps = nil } }
+        .onChange(of: model.live) { _, live in
+            if live { walkSteps = nil; model.game.consider(model.broadcast, screenSawNoScan: sawNoScan) } else { sawNoScan = true }
+        }
+        // While the system's broadcast sheet is up the app is inactive: the game is opened when the app is active again (once per started broadcast).
+        .onChange(of: phase) { _, p in
+            if p == .active { model.setup.refresh(); model.game.consider(model.broadcast, screenSawNoScan: sawNoScan) }
+        }
         .onChange(of: model.account) { _, _ in editing = model.fullScanNeedsCount }
         // The permission is asked when the paging choice changes or the commands are made; a phone that already has both would never be asked, so ask once here too
         // (not while a share sheet is up).
         .onAppear {
             if !decidedEditing { decidedEditing = true; editing = model.fullScanNeedsCount }
+            sawNoScan = !model.live
+            model.setup.refresh()
+            model.setup.backfillFromSavedScans(model: model)
             if !model.pagedByHand, model.commandSetMade, model.shareURLs.isEmpty { model.askForNotificationsOnce() }
             #if DEBUG
             ScanDebug.installIfAsked()
@@ -92,18 +124,6 @@ struct ScanView: View {
     }
 
     // MARK: - ready
-
-    private var reminder: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "gamecontroller.fill").font(.figtree(17, .bold)).frame(width: 36, height: 36)
-                .foregroundStyle(Theme.orangeInk).background(Theme.orangeTint, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).accessibilityHidden(true)
-            Text("In Pokémon GO, open your first Pokémon's **appraisal** before you start.")
-                .font(.figtree(14, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous)).panelShadow()
-    }
 
     @ViewBuilder private var markButton: some View {
         let live = model.live
@@ -119,12 +139,19 @@ struct ScanView: View {
             }
         } else if !canStart {
             Button {} label: { face }.buttonStyle(.plain).disabled(true).accessibilityLabel("Start scan")
-        } else if !visibleSteps.isEmpty {
-            Button { walkSteps = visibleSteps } label: { face }.buttonStyle(.plain).accessibilityLabel("Start scan")
+        } else if !visibleSteps.isEmpty || asksAboutSetup {
+            // The walkthrough, or the setup sheet first. With every step hidden the sheet's "Scan anyway" fires the system picker, which sits invisibly behind the button.
+            Button { if asksAboutSetup { showSetupSheet = true } else { startScan() } } label: { face }.buttonStyle(.plain).accessibilityLabel("Start scan")
+                .broadcastPickerBehind(trigger: markTrigger)
         } else {
             // Every step hidden: the button itself starts the broadcast (the system picker, laid invisibly over it).
             face.broadcastPicker(trigger: markTrigger, shape: Circle())
         }
+    }
+
+    /// What "Start scan" does once nothing is in the way: the walkthrough, or (every step hidden) the system broadcast picker.
+    private func startScan() {
+        if !visibleSteps.isEmpty { walkSteps = visibleSteps } else { markTrigger.fire() }
     }
 
     /// What the scan is expected to read, when the count is known (the same arithmetic as the old status line).
@@ -150,20 +177,13 @@ struct ScanView: View {
                 badge("1", on: false)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Tap the button, then Start Broadcast").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
-                    // The design says "We'll take you back to the game"; this build does not open the game.
-                    Text("Now switch to Pokémon GO.").font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                    // "We'll take you back to the game" only while opening the game has not failed (`GameOpener`); otherwise the person is told to switch.
+                    Text(model.game.failed ? GameOpener.fallbackLine : "We'll take you back to the game.").font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                 }
             }
             .accessibilityElement(children: .combine)
             stepTwo
             notes
-            NavigationLink { ScanSetupView() } label: {
-                HStack(spacing: 6) {
-                    Text("Scan setup").font(.figtree(14, .bold, relativeTo: .subheadline))
-                    Image(systemName: "chevron.right").font(.figtree(12, .bold)).accessibilityHidden(true)
-                }
-                .foregroundStyle(accent.ink).frame(minHeight: 44).contentShape(Rectangle())
-            }
         }
     }
 
@@ -179,7 +199,7 @@ struct ScanView: View {
         case .anySize:
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 14) { badge("2", on: true); Text("In the game, say \"Wake up\" first, then").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
-                Text("\"Pogo scan\" and the size that covers the Pokémon you want to scan, counting from the one on screen. A command pages that many; if the list ends first, the scan usually ends by itself. The sizes are in Scan setup.")
+                Text("\"Pogo scan\" and the size that covers the Pokémon you want to scan, counting from the one on screen. A command pages that many; if the list ends first, the scan usually ends by itself. The sizes are in More about scanning (Get ready to scan).")
                     .font(.secondary).foregroundStyle(Theme.muted)
             }
         case .needsCount:
@@ -229,7 +249,7 @@ struct ScanView: View {
         }
         if !model.pagedByHand, let warning = model.commandWarning {
             Text(warning).font(.secondary).foregroundStyle(Theme.orangeInk)
-            Text("The scan ends by itself only with the commands: get them first (Scan setup). Until then nothing ends the scan but you, from the red bar.").font(.secondary).foregroundStyle(Theme.muted)
+            Text("The scan ends by itself only with the commands: get them first (Get ready to scan, step 2). Until then nothing ends the scan but you, from the red bar.").font(.secondary).foregroundStyle(Theme.muted)
         }
         if let warning = model.tapCommandWarning {
             Label(warning, systemImage: "exclamationmark.octagon.fill").font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
@@ -254,6 +274,7 @@ struct ScanView: View {
                     PillButton("Finish now", style: .plain, isDestructive: true) { model.finishPausedScanNow() }
                 }
             }
+            if model.game.failed { Text(GameOpener.fallbackLine).font(.figtree(16, .bold, relativeTo: .body)).foregroundStyle(Theme.ink).accessibilityIdentifier("game-fallback") }
             Text(s?.commandPeriod != nil ? "The scan usually ends by itself when the list ends or the command runs out; if it does not, stop the broadcast from the red bar. Come back here when the broadcast stops." : "Stop the broadcast from the red bar when the last Pokémon has been read, then come back here.")
                 .font(.secondary).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
         }

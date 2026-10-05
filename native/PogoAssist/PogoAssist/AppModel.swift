@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UserNotifications
 import PogoBox
 import PogoReader
@@ -79,6 +80,19 @@ final class AppModel: ObservableObject {
 
     let worker = EngineWorker()
     let library: BoxLibrary
+    /// "Get ready to scan" progress (`SetupProgress`) and taking the player back to the game after a broadcast starts (`GameOpener`).
+    /// Both are made on first use (after a test's reset of the defaults) and tell the screens that watch the model when they change.
+    private var forwarded: [AnyCancellable] = []
+    lazy var setup: SetupProgress = {
+        let s = SetupProgress(commandsMade: { [unowned self] in self.commandSetMade })
+        forwarded.append(s.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() })
+        return s
+    }()
+    lazy var game: GameOpener = {
+        let g = GameOpener()
+        forwarded.append(g.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() })
+        return g
+    }()
 
     @Published var accounts: [String] = []
     @Published var account: String? { didSet { UserDefaults.standard.set(account, forKey: Keys.account) } }
@@ -847,6 +861,8 @@ final class AppModel: ObservableObject {
                 return try lib.commit(account: r.account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: r.kind, scanDate: r.plan.scanDate, expectedCurrentSeq: .some(r.boxSeq))
             }
             if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
+            // A scan paged by the voice command is saved: setup counts as done (`SetupProgress.pagedScanSaved`).
+            if r.reread == nil, r.paging?.pagedByCommand == true { setup.notePagedScanSaved() }
             flow = .idle
             // A scan read again was merged into the box as it was BEFORE that scan, so the box it started from is not the box the person had: no counts for it.
             lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: r.reread == nil)

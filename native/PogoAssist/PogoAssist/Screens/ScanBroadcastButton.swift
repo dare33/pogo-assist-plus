@@ -50,3 +50,10 @@ extension View {
             .accessibilityAction { trigger.fire() }
     }
 }
+
+extension View {
+    /// The system picker behind this view, not touchable: for a button that decides first (the setup sheet) and then starts the broadcast through `trigger.fire()`.
+    func broadcastPickerBehind(trigger: BroadcastTrigger) -> some View {
+        self.background { PickerOverlay(trigger: trigger).allowsHitTesting(false).accessibilityHidden(true) }
+    }
+}

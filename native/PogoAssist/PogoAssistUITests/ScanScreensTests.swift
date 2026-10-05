@@ -62,7 +62,7 @@ final class ScanScreensTests: XCTestCase {
             rememberOptions(app)
             XCTAssertTrue(app.buttons["Start scan"].isEnabled)
             XCTAssertTrue(app.staticTexts["Tap the button, then Start Broadcast"].exists)
-            XCTAssertTrue(app.staticTexts["Now switch to Pokémon GO."].exists)
+            XCTAssertTrue(app.staticTexts["We'll take you back to the game."].exists)
             shot("scan-ready-\(name)")
             // Edit swaps the steps for the options and dims Start.
             app.buttons["Edit scan options"].tap()
@@ -106,21 +106,23 @@ final class ScanScreensTests: XCTestCase {
         }
     }
 
-    func testScanSetupScreen() throws {
+    /// The old "Scan setup" page is now "Get ready to scan" (SetupTests) and "More about scanning": the paging choice moved there, and the Scan screen names the command.
+    func testMoreAboutScanningAndPaging() throws {
         let app = openScan(["-appearance", "light"])
         rememberOptions(app)
-        app.buttons["Scan setup"].tap()
-        XCTAssertTrue(app.navigationBars["Scan setup"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Attention Aware'")).firstMatch.waitForExistence(timeout: 5))
-        shot("scan-setup-top")
-        let get = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Get the'")).firstMatch
-        for _ in 0..<10 where !get.exists { app.swipeUp() }
-        XCTAssertTrue(get.exists)
-        shot("scan-setup-commands")
-        // Paging by voice (the command set is not made in a test): step 2 then names the command, and says the set is missing.
+        app.buttons["setup-banner"].tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5))
+        let more = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More about scanning'")).firstMatch
+        app.swipeUp(); app.swipeUp()   // the last row sits under the Continue button until the page is scrolled
+        more.tap()
+        XCTAssertTrue(app.staticTexts["More about scanning"].waitForExistence(timeout: 5))
+        shot("scan-more-top")
+        // Paging by voice (the command set is not made in a test): the Scan screen then names the command, and says the set is missing.
         let voice = app.buttons["Page with the voice command"]
         for _ in 0..<10 where !voice.exists { app.swipeUp() }
         voice.tap()
+        shot("scan-more-voice")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["In the game, say"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["\"Pogo scan 2000\""].exists)

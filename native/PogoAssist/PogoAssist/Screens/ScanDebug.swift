@@ -26,8 +26,12 @@ enum ScanDebug {
         let args = CommandLine.arguments
         let paused = args.contains("-fake-scan-paused")
         guard paused || args.contains("-fake-scan"), timer == nil else { return }
-        let started = Date().addingTimeInterval(-300)
+        // `-fake-scan-after N`: the broadcast goes live N seconds after launch and is fresh (started just now), as a broadcast the Scan screen started would be.
+        let after = UserDefaults.standard.double(forKey: "fake-scan-after")
+        let launched = Date()
+        let started = after > 0 ? launched.addingTimeInterval(after) : Date().addingTimeInterval(-300)
         func write() {
+            if after > 0, Date() < launched.addingTimeInterval(after) { return }
             var s = BroadcastState()
             s.started = started
             s.updated = Date()
