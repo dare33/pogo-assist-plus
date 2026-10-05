@@ -66,6 +66,9 @@ final class AppModel: ObservableObject {
         var kindNote: String?
         /// What `ScanKindAdvice` said about a full scan of this result (nil for a saved scan read again).
         var advice: ScanKindAdvice.Decision?
+        /// This review's own copy of the scan's replay log (`AppModel.takeCopy`): the review reads, saves, reports and shares only from it, because the shared log is
+        /// rewritten by the next broadcast. Nil for a saved scan read again (its log is the saved one) and for the DEBUG seeded reviews.
+        var log: URL?
         /// Where a scan the extension ended itself stopped and what to do (`ScanStop.summary`), shown once at the top of the review.
         var stopSummary: String?
     }
@@ -98,7 +101,9 @@ final class AppModel: ObservableObject {
     @Published var account: String? { didSet { UserDefaults.standard.set(account, forKey: Keys.account) } }
     @Published var snapshot: BoxSnapshot?
     @Published var advice: AdviceState = .none
-    @Published var flow: ScanFlow = .idle { didSet { if case .idle = flow { scanDonePending = false } } }
+    @Published var flow: ScanFlow = .idle { didSet { if case .idle = flow { scanDonePending = false; dropCopy() } } }
+    /// The private copy of the log of the scan being reviewed, kept while that review (or its failure, for a retry) lasts.
+    private var scanCopy: (signature: String, url: URL)?
     /// A scan that has just ended is being read or has been read, and its Done screen has not been left for the review yet (`ScanDone`): the review cover stays
     /// closed until `openReview()`. Cleared when the flow ends, and when reading fails (the failed state goes straight to the cover). Other entries to the review
     /// (a saved scan read again, retry after a failure) never set it.
@@ -159,7 +164,7 @@ final class AppModel: ObservableObject {
         switch target {
         case .review:
             guard case .review(let r) = flow else { throw BoxStore.Failure.notFound(account: "", id: "review") }
-            let url = r.reread?.replayURL ?? SharedStore.replayURL
+            let url = r.reread?.replayURL ?? r.log
             let log = url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
             let changes = r.outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" }
             let input = ScanReportInput(replayLog: log, result: r.outcome.scan, kind: r.kind, scanDate: r.plan.scanDate, storageCount: r.storageCount, paging: r.paging, pace: r.outcome.pace,
@@ -211,7 +216,7 @@ final class AppModel: ObservableObject {
         switch target {
         case .saved(let id): if let s = scans.first(where: { $0.id == id }) { return shareFiles(for: s) } else { return [] }
         case .review:
-            guard case .review(let r) = flow, let url = r.reread?.replayURL ?? SharedStore.replayURL else { return [] }
+            guard case .review(let r) = flow, let url = r.reread?.replayURL ?? r.log else { return [] }
             return [url]
         }
     }
@@ -747,7 +752,18 @@ final class AppModel: ObservableObject {
 
     /// `doneFirst`: a scan that has just ended shows its Done screen before the review opens (`scanDonePending`); a retry after a failure opens the review directly.
     func startReview(signature: String, doneFirst: Bool = false) {
-        guard let url = SharedStore.replayURL, let a = account, boxProblem == nil else { return }
+        guard let shared = SharedStore.replayURL, let a = account, boxProblem == nil else { return }
+        // The review works from its own copy of the log: the next broadcast truncates and rewrites the shared one, and a finished scan can wait for the person for a long time.
+        // A retry after a failure reuses the copy it made. If the shared log is no longer this scan's (a newer broadcast has rewritten it), nothing is presented: the newer
+        // scan is picked up on its own when it has finished.
+        let url: URL
+        if let c = scanCopy, c.signature != signature || !FileManager.default.fileExists(atPath: c.url.path) { dropCopy() }
+        if let c = scanCopy { url = c.url }
+        else if let copy = Self.takeCopy(of: shared, signature: signature) { scanCopy = (signature, copy); url = copy }
+        else {
+            if case .failed = flow { flow = .failed(message: "The log of this scan has been replaced by a newer scan, so it cannot be read again. Discard it.", signature: signature) }
+            return
+        }
         flow = .processing("Reading the scan")
         scanDonePending = doneFirst
         let asked = scanKind, date = Date(), lib = library
@@ -786,7 +802,7 @@ final class AppModel: ObservableObject {
                 let t = outcome.timings
                 NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
                 var review = Review(account: a, kind: kind, outcome: outcome, plan: plan, base: base, storageCount: asked == .full ? typed : nil, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging), boxSeq: seq)
-                review.endedAtListEnd = ended; review.stoppedByPerson = byPerson; review.stoppedByTimeout = byTimeout; review.kindNote = note; review.advice = advice; review.stopSummary = stop
+                review.log = url; review.endedAtListEnd = ended; review.stoppedByPerson = byPerson; review.stoppedByTimeout = byTimeout; review.kindNote = note; review.advice = advice; review.stopSummary = stop
                 flow = .review(review)
             } catch {
                 scanDonePending = false
@@ -849,7 +865,7 @@ final class AppModel: ObservableObject {
                 let entries = try BoxMerge.apply(r.plan, resolutions: r.resolutions, keepGone: r.keepGone, to: r.base, engine: engine)
                 // A scan read again: a new box version from the earlier box plus the new read; the scan itself is not saved twice.
                 if let plan = r.reread { return try lib.commitReread(plan, entries: entries, account: r.account, expectedCurrentSeq: .some(r.boxSeq)) }
-                let log = SharedStore.replayURL.flatMap { try? Data(contentsOf: $0) }
+                let log = r.log.flatMap { try? Data(contentsOf: $0) }
                 let current = try lib.current(account: r.account)
                 guard current?.seq == r.boxSeq else { throw BoxLibrary.Failure.boxChanged }
                 let scan = try lib.store.save(r.outcome.scan, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, storageCount: r.storageCount, replayLog: log, paging: r.paging,
@@ -901,6 +917,27 @@ final class AppModel: ObservableObject {
     }
 
     private static let rereadPrefix = "reread:"
+
+    private static let copyPrefix = "pogo-review-"
+
+    /// A copy of the shared replay log in the app's temporary directory, named by the scan's signature, or nil when the shared log is not (any longer) the scan with that
+    /// signature: its signature is checked before the read and after it, and the bytes read must be as long as the signature says, so a log rewritten underneath never gives a mixed copy.
+    nonisolated static func takeCopy(of shared: URL, signature: String) -> URL? {
+        guard ReplayMarker.signature() == signature, let data = try? Data(contentsOf: shared),
+              String(data.count) == signature.prefix { $0 != "-" }, ReplayMarker.signature() == signature else { return nil }
+        let dir = FileManager.default.temporaryDirectory
+        // Copies left by an earlier run of the app are of no use: a relaunch reads the shared log again.
+        for f in (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [] where f.hasPrefix(copyPrefix) { try? FileManager.default.removeItem(at: dir.appendingPathComponent(f)) }
+        let dest = dir.appendingPathComponent("\(copyPrefix)\(signature).jsonl")
+        do { try data.write(to: dest, options: .atomic) } catch { return nil }
+        return dest
+    }
+
+    /// The review has ended (saved or discarded) or is replaced: its copy goes.
+    private func dropCopy() {
+        if let c = scanCopy { try? FileManager.default.removeItem(at: c.url) }
+        scanCopy = nil
+    }
 
     /// Read a saved scan again with the latest rules, against the box as it was before that scan was saved. Opens the normal review
     /// screen; nothing changes until Save, and Discard changes nothing.

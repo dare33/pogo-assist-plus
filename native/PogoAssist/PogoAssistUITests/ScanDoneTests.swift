@@ -143,6 +143,54 @@ final class ScanDoneTests: XCTestCase {
         person.terminate()
     }
 
+    /// A scan that finished and waits must keep its own log: a second scan finishing in the meantime rewrites the shared one. Scan A (the sample) waits behind the pill,
+    /// scan B (the partial-read sample) is installed as a newly finished broadcast, A is saved: A's stored log is A's (read again gives A's 51), and B is then offered.
+    func testASecondFinishedScanDoesNotChangeTheWaitingOnesLog() throws {
+        let app = finishedScan(["-appearance", "light"])
+        XCTAssertTrue(app.staticTexts["Scan finished."].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let pill = app.buttons["scan-done-pill"]
+        XCTAssertTrue(pill.waitForExistence(timeout: 5))
+        loadSample(app, partial: true)            // B replaces the shared log while A waits
+        sleep(3)                                   // the timer has looked at it more than once
+        XCTAssertTrue(pill.waitForExistence(timeout: 5), "A is still the scan waiting")
+        pill.tap()
+        let ring = app.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES '51 read in .*'")).firstMatch
+        XCTAssertTrue(ring.waitForExistence(timeout: 10), "the Done screen still describes scan A")
+        app.openReviewFromDone()
+        let save = app.buttons["Save to box"]
+        XCTAssertTrue(save.waitForExistence(timeout: 30), "A's review did not open")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '51 Pokémon read in'")).firstMatch.exists, "A's review has A's 51 Pokémon")
+        save.tap()
+        // B was not lost: it is offered once A is saved.
+        let second = app.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES '1 read in .*'")).firstMatch
+        XCTAssertTrue(second.waitForExistence(timeout: 30), "B's Done screen was not offered")
+        app.openReviewFromDone()
+        let discard = app.buttons["Discard"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 30), "B's review did not open")
+        discard.tap()
+        app.buttons["Discard scan"].tap()
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 10))
+        // Read A again from Settings > Scans: it reads A's own log (51), not B's.
+        app.buttons["More"].tap()
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), "Settings did not open")
+        let actions = app.buttons["Scan actions"]
+        for _ in 0..<6 where !(actions.exists && actions.isHittable) { app.swipeUp() }
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        actions.tap()
+        let again = app.buttons["Read again with the latest rules"]
+        XCTAssertTrue(again.waitForExistence(timeout: 5))
+        again.tap()
+        let reread = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '51 Pokémon read in'")).firstMatch
+        if !reread.waitForExistence(timeout: 20), again.exists { again.tap() }
+        XCTAssertTrue(reread.waitForExistence(timeout: 60), "the saved scan was not read again as A's 51 Pokémon")
+        app.terminate()
+    }
+
     /// How many Pokémon the bundled sample scan reads.
     static let sampleCount = 51
 }
