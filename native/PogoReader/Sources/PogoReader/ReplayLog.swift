@@ -59,7 +59,28 @@ private struct ReplayEvent: Codable { var k: String; var t: Double }
 private struct ReplayEnd: Codable { var k = "e"; var t: Double; var last: Double }
 private struct ReplayPause: Codable { var k = "p"; var t: Double; var last: Double; var read: Int; var closed: Bool? }
 
+/// A note in the replay log that is NOT a `ReplayLine` case: "the CP is covered from here" (kind "c"). It is deliberately outside the enum, so
+/// no exhaustive `switch` over `ReplayLine` (the box engine, the tools) has to know it. `ReplayLog.decode` returns nil for the kind, so
+/// `lines(in:)` and every replay skip it, and `ReplayReadings.load` counts it as a skipped non-reading line.
+public struct CpCoveredNote: Codable, Equatable {
+    public var k = "c"
+    public var t: Double
+    /// The first covered card (the stretch began there) and the last card read with a CP before it.
+    public var first: String
+    public var lastGood: String?
+    public var lastGoodCp: Int?
+    public init(t: Double, first: String, lastGood: String?, lastGoodCp: Int?) { self.t = t; self.first = first; self.lastGood = lastGood; self.lastGoodCp = lastGoodCp }
+}
+
 public enum ReplayLog {
+    public static func encode(_ note: CpCoveredNote) -> Data { (try? JSONEncoder().encode(note)) ?? Data() }
+
+    /// The notes of a file (kind "c"), in file order; for a tool or a test that wants them. Nothing else reads them.
+    public static func cpCoveredNotes(in url: URL) -> [CpCoveredNote] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        return data.split(separator: UInt8(ascii: "\n")).compactMap { try? JSONDecoder().decode(CpCoveredNote.self, from: Data($0)) }.filter { $0.k == "c" }
+    }
+
     /// One compact JSON object, no newline.
     public static func encode(_ line: ReplayLine) -> Data {
         let enc = JSONEncoder()
@@ -167,8 +188,16 @@ public final class ReplayWriter {
     public func append(_ line: ReplayLine) -> Outcome {
         var isEnd = false
         if case .end = line { isEnd = true }
+        return append(ReplayLog.encode(line), isEnd: isEnd)
+    }
+
+    /// The "CP covered from here" note, under the same cap and failure rules as any line.
+    @discardableResult
+    public func append(_ note: CpCoveredNote) -> Outcome { append(ReplayLog.encode(note), isEnd: false) }
+
+    private func append(_ encoded: Data, isEnd: Bool) -> Outcome {
         guard let write = sink, !failed, !truncated || isEnd else { return .disabled }
-        var data = ReplayLog.encode(line)
+        var data = encoded
         data.append(UInt8(ascii: "\n"))
         // Streamed: each line goes straight to the file; nothing is buffered. Past the cap only the end marker is still written.
         if !isEnd, bytes + data.count > maxBytes { truncated = true; return .truncatedNow }   // the file stays open for the end marker

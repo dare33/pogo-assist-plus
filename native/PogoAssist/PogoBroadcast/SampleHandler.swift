@@ -1,6 +1,7 @@
 import ReplayKit
 import CoreMedia
 import CoreVideo
+import AudioToolbox
 import os
 import PogoReader
 import UserNotifications
@@ -66,6 +67,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var lastWrite = Date.distantPast
     private var heartbeat: DispatchSourceTimer?
     private var writeFailures = 0
+    private var covered = CoveredCpDetector()      // touched on `queue`: a banner over the CP makes the phone vibrate (see `handleCovered`)
     private var endController: ScanEndController?   // only for a scan paged by a command; touched on `queue`
     private var lastReadingTime = 0.0, lastReadingUptime = 0.0
     private var finishedWork = false              // the finish work (state, log) has been done, by a user stop or by the end of the list
@@ -80,6 +82,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             lock.lock(); finished = false; ticks.removeAll(); droppedTimes.removeAll(); detector = SwipeDetector(); ticker = SwipeTicker(); lock.unlock()
             memory = MemoryProbe()
             finishedWork = false
+            covered = CoveredCpDetector()
             let period = ReaderSettings.autoEndPeriod
             ReaderSettings.clearFinishRequest()
             ScanNotifier.removePauseNotifications()   // a new scan: no earlier scan's pause notification (or its "End scan" button) stays
@@ -258,6 +261,33 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
     }
 
+    /// On `queue`. Something covers the CP (`CoveredCpDetector`): vibrate twice, a second apart (two pulses are easier to notice than one, never more per
+    /// stretch), note it in the replay log and the shared state. No sound and no notification (a notification banner would itself cover the CP). The scan goes on reading.
+    private func handleCovered(_ reading: FrameReading, time: Double) {
+        guard let event = covered.feed(reading) else { return }
+        switch event {
+        case .covered(let c):
+            log.notice("CP covered from \(c.firstName, privacy: .public): last card with a CP was \(c.lastGoodName ?? "?", privacy: .public) \(c.lastGoodCp ?? 0)")
+            AudioServicesPlayAlertSound(kSystemSoundID_Vibrate)
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { AudioServicesPlayAlertSound(kSystemSoundID_Vibrate) }
+            if let writer = replay {
+                switch writer.append(CpCoveredNote(t: c.startedAt ?? time, first: c.firstName, lastGood: c.lastGoodName, lastGoodCp: c.lastGoodCp)) {
+                case .written: state.replayLines = writer.lineCount
+                case .truncatedNow: state.replayLogTruncated = true; log.notice("replay log reached its size cap and stopped")
+                case .failedNow: state.replayLogFailed = true; log.error("replay log write failed: the log is switched off, reading continues")
+                case .disabled: break
+                }
+            }
+            state.cpCovered = true; state.cpCoveredStretches += 1; state.cpCoveredSince = Date()
+            state.cpCoveredFirstName = c.firstName; state.cpCoveredLastGoodName = c.lastGoodName; state.cpCoveredLastGoodCp = c.lastGoodCp
+            write(force: true)
+        case .cleared:
+            log.notice("CP shown again")
+            state.cpCovered = false
+            write(force: true)
+        }
+    }
+
     /// On `queue`. The end of the list was seen: write the end marker (so the app can cut the tail), finish exactly as a user stop does,
     /// then end the broadcast. `finishBroadcastWithError` is the only way an extension can end one; the message reads as a result.
     private func endAtListEnd(at: Double, last: Double, byPerson: Bool, timeout: Bool = false) {
@@ -334,6 +364,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             if changed { state.rows = grouper.rows }
             write(force: changed)
             state.readCount = state.rows.count
+            handleCovered(reading, time: time)
             handleEnd(reading, time: time)
         }
     }
@@ -348,6 +379,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         for t in seenDrops { record(.drop(t)) }
         for t in seenTicks {
             record(.tick(t))
+            covered.swipe()
             if mode == .saveCrops { saver.noteSwipe(at: t) } else { grouper.swipe(at: t) }
             if var c = endController { c.noteSwipe(at: t); endController = c }
         }

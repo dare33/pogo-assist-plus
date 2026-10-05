@@ -42,6 +42,14 @@ struct BroadcastState: Codable, Equatable {
     var stoppedByPerson = false
     /// A pause went unanswered and the scan finished at the time limit; `endedAtListEnd` is then false too, so it is never judged Full.
     var stoppedByTimeout = false
+    /// The CP is being covered right now (a banner): `CoveredCpDetector` fired and has not yet seen cards with a CP again. Optional-by-default fields below: an older pairing decodes without them.
+    var cpCovered = false
+    /// How many separate stretches of covered CP this scan has had (0: none). "Was covered at some point" is `cpCoveredStretches > 0`; the fields below describe the latest stretch and stay after it ends.
+    var cpCoveredStretches = 0
+    var cpCoveredSince: Date?            // when the extension noticed (not when the banner appeared: that was about `threshold` cards earlier)
+    var cpCoveredFirstName: String?      // the first card read with no CP
+    var cpCoveredLastGoodName: String?   // the last card read with a CP before it
+    var cpCoveredLastGoodCp: Int?
 }
 
 extension BroadcastState {
@@ -84,6 +92,12 @@ extension BroadcastState {
         scanId = try c.decodeIfPresent(Int.self, forKey: .scanId) ?? 0
         stoppedByPerson = try c.decodeIfPresent(Bool.self, forKey: .stoppedByPerson) ?? false
         stoppedByTimeout = try c.decodeIfPresent(Bool.self, forKey: .stoppedByTimeout) ?? false
+        cpCovered = try c.decodeIfPresent(Bool.self, forKey: .cpCovered) ?? false
+        cpCoveredStretches = try c.decodeIfPresent(Int.self, forKey: .cpCoveredStretches) ?? 0
+        cpCoveredSince = try c.decodeIfPresent(Date.self, forKey: .cpCoveredSince)
+        cpCoveredFirstName = try c.decodeIfPresent(String.self, forKey: .cpCoveredFirstName)
+        cpCoveredLastGoodName = try c.decodeIfPresent(String.self, forKey: .cpCoveredLastGoodName)
+        cpCoveredLastGoodCp = try c.decodeIfPresent(Int.self, forKey: .cpCoveredLastGoodCp)
     }
 }
 
