@@ -95,6 +95,8 @@ enum PrefKey {
     static let accent = "accent"
     static let appearance = "appearance"
     static let helpLevel = "helpLevel"
+    /// Which form of a Pokémon with a Mega form its page shows first: `MegaDefault`.
+    static let megaDefault = "megaDefault"
 }
 
 enum Appearance: String, CaseIterable, Identifiable {

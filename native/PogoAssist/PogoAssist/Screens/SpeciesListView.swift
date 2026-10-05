@@ -104,7 +104,13 @@ struct SpeciesListView: View {
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(it.title).paText(.rowTitle).foregroundStyle(Theme.ink)
+                if it.hasMega {
+                    // The tag beside the name when it fits on one line, under it at large text sizes (a name is never broken to make room).
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) { Text(it.title).paText(.rowTitle).foregroundStyle(Theme.ink).fixedSize(horizontal: true, vertical: false); MegaMarker() }
+                        VStack(alignment: .leading, spacing: 4) { Text(it.title).paText(.rowTitle).foregroundStyle(Theme.ink); MegaMarker() }
+                    }
+                } else { Text(it.title).paText(.rowTitle).foregroundStyle(Theme.ink) }
                 Text("\(ivs)\(Text(it.needsCheck ? " · To check" : "").fontWeight(.bold).foregroundStyle(Theme.orangeInk))\(it.fixed ? " · Fixed by hand" : "")")
                     .font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted).monospacedDigit()
             }
@@ -117,7 +123,7 @@ struct SpeciesListView: View {
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) { if !last { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, selecting ? 54 : 16) } }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(it.title), \(it.cp > 0 ? "CP \(it.cp)" : "CP not known"), \(ivs)\(it.needsCheck ? ", to check" : "")\(it.fixed ? ", fixed by hand" : "")")
+        .accessibilityLabel("\(it.title), \(it.cp > 0 ? "CP \(it.cp)" : "CP not known"), \(ivs)\(it.hasMega ? ", has a Mega form" : "")\(it.needsCheck ? ", to check" : "")\(it.fixed ? ", fixed by hand" : "")")
     }
 
     // MARK: select bar

@@ -11,26 +11,42 @@ struct PokemonDetailView: View {
     let id: String
     @State private var fixing = false
     @State private var deleting: DeleteTarget?
+    @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
+    /// The switch's position once the person has moved it; until then the Settings choice.
+    @State private var chosenMega: Bool?
+
+    /// The Mega form the page shows now: only for an entry whose Mega form has a CP, and only while the switch is on Mega.
+    private func megaShown(_ e: BoxEntry) -> MegaForm? {
+        guard let mf = e.shownMegaForm, chosenMega ?? (megaDefault == MegaDefault.mega.rawValue) else { return nil }
+        return mf
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
                 Spacer()
-                if model.entry(id) != nil { IconButton(systemImage: "pencil", kind: .floating, label: "Fix a value") { fixing = true } }
+                if let e = model.entry(id) {
+                    // "Fix a value" changes the normal values only, so it waits while the page shows the Mega form.
+                    let onMega = megaShown(e) != nil
+                    IconButton(systemImage: "pencil", kind: .floating, label: "Fix a value") { fixing = true }
+                        .disabled(onMega).opacity(onMega ? 0.4 : 1)
+                        .accessibilityHint(onMega ? "Fixing changes the normal values. Switch to Normal first." : "")
+                }
             }
             .padding(.horizontal, Theme.Space.screen)
             .frame(minHeight: 52)
             if let e = model.entry(id) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
-                        heading(e)
+                        heading(e, mega: megaShown(e))
                         if !e.row.checkFlags.isEmpty { checkPanel(e) }
                         ivPanel(e.row)
                         advicePanel(e)
-                        factsPanel(e)
-                        notesPanel(e)
-                        if let search = GameSearch.text([GameSearch.part(row: e.row)]) { SearchStrip(text: search, prominent: true) }
+                        factsPanel(e, mega: megaShown(e))
+                        notesPanel(e, mega: megaShown(e))
+                        // The search is for the form shown: its name and its CP (a Mega form's CP was read, so it is trusted).
+                        if let search = GameSearch.text([megaShown(e).map { GameSearch.part(name: $0.name, cp: $0.cp, hp: $0.hp, noLevelFits: false) } ?? GameSearch.part(row: e.row)]) { SearchStrip(text: search, prominent: true) }
                         Button { deleting = DeleteTarget(id: e.id, title: e.row.title, cp: e.row.cp) } label: {
                             Text("Delete from box").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
                                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -55,19 +71,51 @@ struct PokemonDetailView: View {
 
     // MARK: heading
 
-    private func heading(_ e: BoxEntry) -> some View {
+    /// The entry's own values, or its Mega form's while the switch is on Mega.
+    private func heading(_ e: BoxEntry, mega: MegaForm?) -> some View {
         let r = e.row
-        let meta = [Fmt.level(r).map { "Level \($0)" } ?? "Level not known", r.hp.map { "HP \($0)" } ?? "HP not read"]
+        let title = mega?.title ?? r.title, cp = mega?.cp ?? r.cp
+        let level = mega != nil ? Fmt.level(mega?.level, mega?.levelMax) : Fmt.level(r), hp = mega != nil ? mega?.hp : r.hp
+        let meta = [level.map { "Level \($0)" } ?? "Level not known", hp.map { "HP \($0)" } ?? "HP not read"]
         return VStack(alignment: .leading, spacing: 0) {
-            Text(r.title).font(.figtree(34, .heavy, relativeTo: .largeTitle)).tracking(-0.025 * 34).foregroundStyle(Theme.ink)
+            Text(title).font(.figtree(34, .heavy, relativeTo: .largeTitle)).tracking(-0.025 * 34).foregroundStyle(Theme.ink)
                 .accessibilityAddTraits(.isHeader)
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(verbatim: Fmt.cp(r.cp)).font(.figtree(r.cp > 0 ? 22 : 17, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(Theme.ink)
+                Text(verbatim: Fmt.cp(cp)).font(.figtree(cp > 0 ? 22 : 17, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(Theme.ink)
                 Text(meta.joined(separator: " · ")).font(.figtree(15, .semibold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.muted)
             }
+            if e.shownMegaForm != nil { formSwitch(on: mega != nil).padding(.top, 12) }
         }
         .padding(.horizontal, 8).padding(.top, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Normal / Mega
+
+    /// Two parts, as Settings > Appearance's mode switch: the page shows the normal form or the Mega form of this one Pokémon. IVs, advice, checks and Delete are the same for both.
+    private func formSwitch(on mega: Bool) -> some View {
+        HStack(spacing: 0) {
+            formButton("Normal", selected: !mega, to: false)
+            formButton("Mega", selected: mega, to: true)
+        }
+        .padding(4).background(Theme.off, in: Capsule())
+        .frame(maxWidth: 300)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Form")
+    }
+
+    private func formButton(_ title: String, selected: Bool, to mega: Bool) -> some View {
+        Button { chosenMega = mega } label: {
+            Text(title).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+                .frame(maxWidth: .infinity, minHeight: 38)
+                .background(selected ? Theme.surface : Color.clear, in: Capsule())
+                .frame(minHeight: 44)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("form-\(title.lowercased())")
     }
 
     // MARK: a check
@@ -148,11 +196,11 @@ struct PokemonDetailView: View {
 
     // MARK: facts
 
-    private func factsPanel(_ e: BoxEntry) -> some View {
+    private func factsPanel(_ e: BoxEntry, mega: MegaForm?) -> some View {
         var facts = [(String, String)]()
-        facts.append(("Power-up dust", e.row.dust.map { $0.formatted() } ?? "not known"))
+        facts.append(("Power-up dust", (mega != nil ? mega?.dust : e.row.dust).map { $0.formatted() } ?? "not known"))
         if case .ready(let advice) = model.advice, let spares = advice.entries(for: e.id).builds.map(\.spares).max(), spares > 0 { facts.append(("Spare copies", spares.formatted())) }
-        facts.append(("First seen · last seen", "\(Self.short(e.firstSeen)) · \(Self.short(e.lastSeen))"))
+        facts.append(("First seen · last seen", "\(Self.short(mega?.firstSeen ?? e.firstSeen)) · \(Self.short(mega?.lastSeen ?? e.lastSeen))"))
         return Panel(padding: 0, spacing: 0) {
             ForEach(Array(facts.enumerated()), id: \.offset) { n, f in
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -168,15 +216,17 @@ struct PokemonDetailView: View {
 
     // MARK: how it was read
 
-    @ViewBuilder private func notesPanel(_ e: BoxEntry) -> some View {
+    @ViewBuilder private func notesPanel(_ e: BoxEntry, mega: MegaForm?) -> some View {
         let r = e.row
-        if !r.noteFlags.isEmpty || e.megaWhenScanned == true || e.isHandCorrected {
+        if !r.noteFlags.isEmpty || e.megaWhenScanned == true || mega != nil || e.isHandCorrected {
             Panel(padding: 16, spacing: 10) {
                 if !r.noteFlags.isEmpty {
                     Text("How it was read").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                     ForEach(r.noteFlags, id: \.self) { Text(FlagInfo.explainNote($0)).paText(.secondary).foregroundStyle(Theme.muted) }
                 }
-                if e.megaWhenScanned == true {
+                if mega != nil {
+                    Label("The Mega CP is temporary: these are the Mega values from the last scan that saw it Mega evolved. The IVs and the advice are the same for both forms. To fix a value, switch to Normal.", systemImage: "sparkles").paText(.secondary).foregroundStyle(Theme.muted)
+                } else if e.megaWhenScanned == true {
                     Label("Mega evolved when scanned. The Mega CP is temporary, so the values above are from an earlier scan.", systemImage: "sparkles").paText(.secondary).foregroundStyle(Theme.muted)
                 }
                 if e.isHandCorrected {

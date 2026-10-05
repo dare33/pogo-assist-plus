@@ -24,6 +24,8 @@ struct BoxIndex {
         var pct: Int? { ivSum.map { Int((Double($0) / 45 * 100).rounded()) } }
         var needsCheck: Bool
         var fixed: Bool
+        /// The entry has a Mega form with a known CP. It is still one Pokémon, and every figure here (CP, best IV, top CP) is its normal form's.
+        var hasMega = false
     }
 
     struct Group {
@@ -63,8 +65,11 @@ struct BoxIndex {
         for e in entries {
             let r = e.row, title = r.title
             let sum = r.ivs.map { $0.atk + $0.def + $0.hp }
-            let item = Item(id: e.id, title: title, name: r.name.lowercased(), key: title.lowercased() + "|" + r.display.lowercased(), cp: r.cp, hp: r.hp, noLevelFits: GameSearch.noLevelFits(r.flags), ivs: r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }, ivSum: sum,
+            let mega = e.shownMegaForm
+            let key = title.lowercased() + "|" + r.display.lowercased() + (mega.map { "|" + $0.title.lowercased() + "|" + $0.display.lowercased() } ?? "")
+            var item = Item(id: e.id, title: title, name: r.name.lowercased(), key: key, cp: r.cp, hp: r.hp, noLevelFits: GameSearch.noLevelFits(r.flags), ivs: r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }, ivSum: sum,
                             needsCheck: e.needsCheck, fixed: e.isHandCorrected)
+            item.hasMega = mega != nil
             if item.needsCheck { toCheckCount += 1 }
             if item.fixed { fixedCount += 1 }
             species.insert(r.dex.map { "dex\($0)" } ?? r.name.lowercased())

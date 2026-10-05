@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var renaming = false
     @State private var newName = ""
     @State private var renameProblem: String?
+    @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
 
     private func accountLabel(_ name: String) -> some View {
         let selected: Bool = name == model.account
@@ -70,6 +71,12 @@ struct SettingsView: View {
                     }
                     .accessibilityIdentifier("settings-get-ready")
                 }
+                Section {
+                    Picker("Mega Pokémon", selection: $megaDefault) {
+                        ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                    .accessibilityIdentifier("settings-mega")
+                } footer: { Text("Which form a Pokémon's page shows first when it has a Mega form. You can switch on the page.") }
                 Section("Accounts") {
                     ForEach(model.accounts, id: \.self) { name in
                         Button { model.select(name) } label: { accountLabel(name) }

@@ -40,6 +40,18 @@ struct CPFigure: View {
     }
 }
 
+/// The small "Mega" tag on a row of a Pokémon that has a Mega form (it is one Pokémon; the row's figures are its normal form's).
+struct MegaMarker: View {
+    @Environment(\.accent) private var accent
+    var body: some View {
+        Text("Mega").font(.figtree(11, .heavy, relativeTo: .caption2)).foregroundStyle(accent.ink)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(accent.tint, in: Capsule())
+            .fixedSize()
+            .accessibilityHidden(true)
+    }
+}
+
 /// A Pokémon the person asked to delete, held while the confirmation is up.
 struct DeleteTarget: Identifiable, Equatable {
     var id: String

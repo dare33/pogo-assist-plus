@@ -11,10 +11,12 @@ enum Fmt {
     /// "IVs 15/14/13 (96%)" or "IVs not read".
     static func ivLine(_ i: IVs?) -> String { i.map { "IVs \(ivs($0)) (\(ivPercent($0) ?? ""))" } ?? "IVs not read" }
 
-    static func level(_ r: ScanRow) -> String? {
-        guard let l = r.level else { return nil }
+    static func level(_ r: ScanRow) -> String? { level(r.level, r.levelMax) }
+
+    static func level(_ level: Double?, _ levelMax: Double?) -> String? {
+        guard let l = level else { return nil }
         func n(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
-        if let m = r.levelMax, m != l { return "\(n(l)) to \(n(m))" }
+        if let m = levelMax, m != l { return "\(n(l)) to \(n(m))" }
         return n(l)
     }
 
@@ -53,6 +55,23 @@ enum Fmt {
         default: return "\(what): not read (\(u.reason))."
         }
     }
+}
+
+/// The Mega form of a box entry, as the screens use it. CP 0 means the CP is not known, and then there is nothing to show: no switch, no marker.
+extension BoxEntry {
+    var shownMegaForm: MegaForm? { megaForm.flatMap { $0.cp > 0 ? $0 : nil } }
+}
+
+extension MegaForm {
+    /// Name with form in brackets, as `ScanRow.title` writes it ("Blaziken (Mega)").
+    var title: String { form.isEmpty || form == "Normal" ? name : "\(name) (\(form))" }
+}
+
+/// Settings > Mega Pokémon: which form a Pokémon's page shows first when it has a Mega form (stored under `PrefKey.megaDefault`).
+enum MegaDefault: String, CaseIterable, Identifiable {
+    case normal, mega
+    var id: String { rawValue }
+    var title: String { self == .mega ? "Mega" : "Normal" }
 }
 
 extension Fmt {
