@@ -40,6 +40,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(load.waitForExistence(timeout: 10))
         shot("03-diagnostics")
         load.tap()
+        app.openReviewFromDone()
         let save = app.buttons["Save to box"]
         XCTAssertTrue(save.waitForExistence(timeout: 60), "review did not appear")
         sleep(1)
@@ -101,6 +102,7 @@ final class FlowTests: XCTestCase {
         if !partial.waitForExistence(timeout: 8), diagnostics2.exists { diagnostics2.tap() }
         XCTAssertTrue(partial.waitForExistence(timeout: 10))
         partial.tap()
+        app.openReviewFromDone()
         let leave = app.buttons["Don't include"]
         XCTAssertTrue(leave.waitForExistence(timeout: 60), "the unsure section did not appear")
         sleep(1)
@@ -194,6 +196,7 @@ final class FlowTests: XCTestCase {
         if !load.waitForExistence(timeout: 8), diagnostics.exists { diagnostics.tap() }
         XCTAssertTrue(load.waitForExistence(timeout: 10))
         load.tap()
+        app.openReviewFromDone()
         // The button is in "Scan details" at the foot of the result (UI v1).
         let details = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Scan details'")).firstMatch
         XCTAssertTrue(app.buttons["Save to box"].waitForExistence(timeout: 60), "the scan result did not appear")

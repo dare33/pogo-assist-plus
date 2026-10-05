@@ -8,6 +8,20 @@ import PogoReader
 enum ScanDebug {
     private static var timer: Timer?
 
+    /// `-fake-ending list-end | pause | person` marks the sample scan the way the extension marks a scan that ended at the end of the list, after a pause
+    /// that ran out, or by the person; `-fake-storage-count N` is the count the scan was started with (a Full scan is only judged sound with one). Only the
+    /// shared state is faked: the rows, the merge and the advice are the real ones.
+    static func applyEnding(to s: inout BroadcastState) {
+        let d = UserDefaults.standard
+        switch d.string(forKey: "fake-ending") {
+        case "list-end": s.endedAtListEnd = true
+        case "pause": s.stoppedByTimeout = true
+        case "person": s.stoppedByPerson = true
+        default: break
+        }
+        if d.object(forKey: "fake-storage-count") != nil { s.storageCount = d.integer(forKey: "fake-storage-count"); s.eggCount = 0 }
+    }
+
     static func installIfAsked() {
         let args = CommandLine.arguments
         let paused = args.contains("-fake-scan-paused")

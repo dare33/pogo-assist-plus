@@ -7,6 +7,8 @@ struct RootView: View {
     @State private var tab: AppTab = .box
     @State private var scanOpen = false
     @State private var barHidden = false
+    /// A scan that has just ended opened the Scan screen's Done state; the Scan screen closes again when its review ends.
+    @State private var doneRun = false
 
     /// The scan screen is pushed on the current tab's stack only, so it is built once.
     private func scanBinding(for t: AppTab) -> Binding<Bool> {
@@ -30,6 +32,9 @@ struct RootView: View {
         .overlay(alignment: .bottom) {
             if !barHidden { FloatingTabBar(selection: $tab, scanDisabled: model.boxProblem != nil) { scanOpen = true } }
         }
+        .overlay(alignment: .bottom) {
+            if model.scanDonePending && !scanOpen { ScanDonePill { scanOpen = true }.padding(.bottom, FloatingTabBar.clearance) }
+        }
         .themeRoot()
         .environmentObject(model)
         .sheet(item: $model.sheet) { sheet in
@@ -46,7 +51,7 @@ struct RootView: View {
             }
         }
         .background { Color.clear.fullScreenCover(isPresented: .constant(model.accounts.isEmpty)) { WelcomeView().environmentObject(model) } }
-        .background { Color.clear.fullScreenCover(isPresented: Binding(get: { model.isReviewing }, set: { _ in })) { ReviewView().environmentObject(model) } }
+        .background { Color.clear.fullScreenCover(isPresented: Binding(get: { model.reviewCoverShown }, set: { _ in })) { ReviewView().environmentObject(model) } }
         .sheet(isPresented: Binding(get: { !model.shareURLs.isEmpty }, set: { if !$0 { model.shareURLs = [] } })) {
             ShareSheet(urls: model.shareURLs).presentationDetents([.medium, .large])
         }
@@ -60,6 +65,9 @@ struct RootView: View {
             if let variant = UserDefaults.standard.string(forKey: "uitest-seed-review") { model.seedReview(variant: variant) }
             #endif
         }
+        // A scan has ended: bring the person to its Done screen (the Scan screen), and back out of it when the review is over.
+        .onChange(of: model.scanDonePending) { _, pending in if pending { doneRun = true; scanOpen = true } }
+        .onChange(of: model.isReviewing) { _, reviewing in if !reviewing && doneRun { doneRun = false; scanOpen = false } }
         .onChange(of: phase) { _, p in
             if p == .active { model.refreshBroadcast(); model.startTimer() } else { model.stopTimer() }
         }

@@ -29,6 +29,9 @@ enum SampleScan {
         state.replayLines = lines
         state.started = Date().addingTimeInterval(-110)
         state.updated = Date()
+        #if DEBUG
+        ScanDebug.applyEnding(to: &state)
+        #endif
         guard SharedStore.write(state) else { throw Failure.noContainer }
     }
 }

@@ -10,6 +10,7 @@
 		010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2851EAE92D472650A78CD032 /* SampleHandler.swift */; };
 		011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */; };
 		0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */; };
+		07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */; };
 		097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0A3EC8BBA5B78347A0413F5C /* ReviewWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B793340E977374E8287D10D /* ReviewWording.swift */; };
 		0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052B76A429D7B08291119B9 /* ReviewResult.swift */; };
@@ -66,6 +67,7 @@
 		D4D21195EE5DE09BDCAE9BE0 /* ReviewNotSeen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61B527C762D4C808D507072 /* ReviewNotSeen.swift */; };
 		DF232EF5A04B4ADA4B79527B /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6261F1BB3C75D905222CC61 /* Typography.swift */; };
 		E6247625CABEEE77FEB55C70 /* Figtree-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 60BF710F03812439C395ED03 /* Figtree-Variable.ttf */; };
+		E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83DD8DD5AEC769BBE964440 /* ScanDone.swift */; };
 		EDABA9EEAC727744599A9E39 /* ReportSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F5275BA12DBF318D759175 /* ReportSupport.swift */; };
 		F4EC58D5E187857BA98309EC /* BarsAndAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */; };
 		F9863E5471B04F338208E6E9 /* ReviewSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */; };
@@ -169,6 +171,8 @@
 		F17BAAA30DB1A885E5BC14BF /* BoxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxView.swift; sourceTree = "<group>"; };
 		F391C1A79CF135A501834207 /* PogoAssist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PogoAssist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F588B630BAB0C78B337D8139 /* AppearanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceView.swift; sourceTree = "<group>"; };
+		F83DD8DD5AEC769BBE964440 /* ScanDone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDone.swift; sourceTree = "<group>"; };
+		F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDoneTests.swift; sourceTree = "<group>"; };
 		FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanScreensTests.swift; sourceTree = "<group>"; };
 		FF799334CCB9D208123457E5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -258,6 +262,7 @@
 				D7EAA375CD0561890BDC48B2 /* FlowTests.swift */,
 				B4553543BAEE1146FEB5BC7F /* GuideScreensTests.swift */,
 				5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */,
+				F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */,
 				FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */,
 			);
 			path = PogoAssistUITests;
@@ -324,6 +329,7 @@
 				AF23F6FB7C812B78963625C3 /* RootView.swift */,
 				36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */,
 				EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */,
+				F83DD8DD5AEC769BBE964440 /* ScanDone.swift */,
 				3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */,
 				3EB8C8BEAFD00EF993F95722 /* ScanSetupView.swift */,
 				6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */,
@@ -485,6 +491,7 @@
 				3612921432E15343B1E195EA /* FlowTests.swift in Sources */,
 				93DC471F59BEADA19D7B80B8 /* GuideScreensTests.swift in Sources */,
 				31DDB5EE5F7E61CF3A468735 /* ReviewScreensTests.swift in Sources */,
+				07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */,
 				998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -527,6 +534,7 @@
 				6DB5DFC73A34D88596B2949B /* SampleScan.swift in Sources */,
 				8FC06A9C9116928BD339C75B /* ScanBroadcastButton.swift in Sources */,
 				0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */,
+				E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */,
 				948718A42F4443D1612CB6B5 /* ScanMark.swift in Sources */,
 				A0A130F029BD88C97D55D93B /* ScanNotifier.swift in Sources */,
 				44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */,

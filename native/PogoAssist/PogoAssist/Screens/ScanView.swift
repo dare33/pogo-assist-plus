@@ -36,6 +36,9 @@ struct ScanView: View {
                         markButton.padding(.top, 24)
                         liveStatus
                         Spacer(minLength: 0)
+                    } else if model.scanDonePending {
+                        // A scan has ended and is waiting for the person: its Done state, not the start screen.
+                        ScanDoneView()
                     } else {
                         reminder
                         // With the options open the panel is long: no spare space around the button then.
@@ -59,11 +62,13 @@ struct ScanView: View {
         .toolbar {
             ToolbarItem(placement: .principal) { AccountPill() }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { hiddenRaw = ""; if !model.live { walkSteps = Array(0..<ScanSteps.count) } } label: {
-                    Image(systemName: "questionmark").font(.figtree(16, .bold)).foregroundStyle(Theme.muted)
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                if !model.scanDonePending {
+                    Button { hiddenRaw = ""; if !model.live { walkSteps = Array(0..<ScanSteps.count) } } label: {
+                        Image(systemName: "questionmark").font(.figtree(16, .bold)).foregroundStyle(Theme.muted)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Show the steps again")
                 }
-                .accessibilityLabel("Show the steps again")
             }
         }
         .fullScreenCover(isPresented: Binding(get: { walkSteps != nil }, set: { if !$0 { walkSteps = nil } })) {

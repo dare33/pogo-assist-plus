@@ -49,7 +49,7 @@ struct ContentView: View {
                     Section {
                         Button("Load sample scan") { onLoadSample(false) }.disabled(model.live)
                         Button("Load partial-read sample") { onLoadSample(true) }.disabled(model.live)
-                    } footer: { Text("Copies a bundled device log into the app group as if a broadcast had just finished, then opens the scan result. For use where the broadcast cannot run. The partial-read sample is one Staraptor whose CP was read as 182; scan the full sample first and save it, then load this as an add-and-update scan.") }
+                    } footer: { Text("Copies a bundled device log into the app group as if a broadcast had just finished, then shows the finished scan, as it would when you come back to the app. For use where the broadcast cannot run. The partial-read sample is one Staraptor whose CP was read as 182; scan the full sample first and save it, then load this as an add-and-update scan.") }
                 }
                 Section("Reader (applies when the broadcast starts)") {
                     Picker("Reader", selection: $model.mode) {

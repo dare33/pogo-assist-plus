@@ -25,6 +25,7 @@ final class BoxScreensTests: XCTestCase {
         if !load.waitForExistence(timeout: 8), diagnostics.exists { diagnostics.tap() }   // the menu can swallow the first tap
         XCTAssertTrue(load.waitForExistence(timeout: 10))
         load.tap()
+        app.openReviewFromDone()
         let save = app.buttons["Save to box"]
         XCTAssertTrue(save.waitForExistence(timeout: 60), "review did not appear")
         save.tap()

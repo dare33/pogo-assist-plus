@@ -84,7 +84,11 @@ final class AppModel: ObservableObject {
     @Published var account: String? { didSet { UserDefaults.standard.set(account, forKey: Keys.account) } }
     @Published var snapshot: BoxSnapshot?
     @Published var advice: AdviceState = .none
-    @Published var flow: ScanFlow = .idle
+    @Published var flow: ScanFlow = .idle { didSet { if case .idle = flow { scanDonePending = false } } }
+    /// A scan that has just ended is being read or has been read, and its Done screen has not been left for the review yet (`ScanDone`): the review cover stays
+    /// closed until `openReview()`. Cleared when the flow ends, and when reading fails (the failed state goes straight to the cover). Other entries to the review
+    /// (a saved scan read again, retry after a failure) never set it.
+    @Published var scanDonePending = false
     @Published var message: String?
     @Published var history: [BoxSnapshot.Header] = []
     @Published var previous: BoxSnapshot.Header?
@@ -715,17 +719,23 @@ final class AppModel: ObservableObject {
     // MARK: - scan review
 
     var isReviewing: Bool { if case .idle = flow { return false } else { return true } }
+    /// The review cover is up: a review (or its reading, or its failure) is in progress and the Done screen is not waiting for the person.
+    var reviewCoverShown: Bool { isReviewing && !scanDonePending }
+    /// The person leaves the Done screen for the review.
+    func openReview() { scanDonePending = false }
 
     /// A broadcast has finished (or died without saying so) and its replay log has not been through review yet: read it.
     func checkForFinishedScan() {
         guard !holdReview, account != nil, boxProblem == nil, !isReviewing, !live, let state = broadcast, state.finished || endedWithoutFinish,
               let sig = ReplayMarker.unprocessedSignature() else { return }
-        startReview(signature: sig)
+        startReview(signature: sig, doneFirst: true)
     }
 
-    func startReview(signature: String) {
+    /// `doneFirst`: a scan that has just ended shows its Done screen before the review opens (`scanDonePending`); a retry after a failure opens the review directly.
+    func startReview(signature: String, doneFirst: Bool = false) {
         guard let url = SharedStore.replayURL, let a = account, boxProblem == nil else { return }
         flow = .processing("Reading the scan")
+        scanDonePending = doneFirst
         let asked = scanKind, date = Date(), lib = library
         // How the scan was paged is what the extension was told when it started (a command at its period, or by hand), not a setting changed since.
         let period: Double? = { if let b = broadcast { return b.commandPeriod }; return pagedByHand ? nil : pace.every }()
@@ -765,6 +775,7 @@ final class AppModel: ObservableObject {
                 review.endedAtListEnd = ended; review.stoppedByPerson = byPerson; review.stoppedByTimeout = byTimeout; review.kindNote = note; review.advice = advice; review.stopSummary = stop
                 flow = .review(review)
             } catch {
+                scanDonePending = false
                 flow = .failed(message: Self.plain(error), signature: signature)
             }
         }
