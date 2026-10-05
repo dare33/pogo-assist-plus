@@ -139,6 +139,69 @@ final class BoxScreensTests: XCTestCase {
         shot("box-09-large-text-detail")
     }
 
+    // MARK: Re-scan N
+
+    /// A box saved with checks and the command set made: the Saved panel offers "Re-scan N", the To check chip offers it too, and it lands on the Scan screen
+    /// with Add and update and the smallest command covering N plus the margin. Editing the options, or leaving the screen, drops the suggestion.
+    func testRescanButtonLandsOnScanWithTheCommand() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-uitest-seed-review", "full+commands+answered", "-appearance", "light"]
+        app.launch()
+        let save = app.buttons["review-save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 90), "the seeded review did not appear")
+        save.tap()
+        let button = app.buttons["rescan-button"]
+        XCTAssertTrue(button.waitForExistence(timeout: 20), "the Saved panel offers Re-scan when the box has checks")
+        let n = Int(button.label.replacingOccurrences(of: "Re-scan ", with: "")) ?? 0
+        XCTAssertGreaterThan(n, 0, button.label)
+        shot("rescan-01-saved-panel")
+
+        // With the chip on, the one button sits under the chips.
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch.tap()
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(identifier: "rescan-button").count, 1)
+        XCTAssertEqual(button.label, "Re-scan \(n)")
+        sleep(1)
+        shot("rescan-02-to-check-chip")
+
+        let sizes = [25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000]
+        let command = "Pogo scan \(sizes.first { $0 >= n + max(2, n / 10) }!)"
+        button.tap()
+        XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5), "the scan kind is Add and update")
+        XCTAssertTrue(app.staticTexts["rescan-line"].exists)
+        XCTAssertEqual(app.staticTexts["rescan-line"].label, "Re-scan of \(n) to check: in the game, show just those, open the first one's appraisal, then start.")
+        XCTAssertTrue(app.staticTexts["\"\(command)\""].exists, "the steps name \(command)")
+        sleep(1)
+        shot("rescan-03-scan-screen")
+
+        // Edit drops it: the steps go back to naming the size.
+        app.buttons["Edit scan options"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["rescan-line"].exists)
+        XCTAssertFalse(app.staticTexts["\"\(command)\""].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '\"Pogo scan\" and the size'")).firstMatch.exists)
+    }
+
+    /// Changing the scan kind, or closing the Scan screen, drops the suggestion; the screen opened later from the tab bar does not meet it.
+    func testRescanSuggestionDoesNotSurviveALaterVisit() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-uitest-seed-review", "full+commands+answered", "-appearance", "light"]
+        app.launch()
+        XCTAssertTrue(app.buttons["review-save"].waitForExistence(timeout: 90))
+        app.buttons["review-save"].tap()
+        let button = app.buttons["rescan-button"]
+        XCTAssertTrue(button.waitForExistence(timeout: 20))
+        button.tap()
+        XCTAssertTrue(app.staticTexts["rescan-line"].waitForExistence(timeout: 5))
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
+        app.buttons["Scan"].tap()
+        XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["rescan-line"].exists, "a later visit does not carry the suggestion")
+    }
+
     // MARK: Mega form
 
     /// The seeded Mega pair answered "Same Pokémon" and saved: the box holds one Blaziken with a Mega form. Leaves the app on the Box.

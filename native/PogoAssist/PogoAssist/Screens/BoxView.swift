@@ -140,6 +140,7 @@ struct BoxView: View {
                     countLine
                     searchField
                     chips
+                    if chip == .toCheck { rescanButton }
                     sortLine
                     if sectionsReady && sections.isEmpty { Text("No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20) }
                     ForEach(sections) { sectionView($0) }
@@ -209,6 +210,14 @@ struct BoxView: View {
             .padding(.horizontal, 1).padding(.vertical, 4)
         }
         .scrollClipDisabled()
+    }
+
+    /// Step three of the to-check flow: the Scan screen with Add and update chosen (`AppModel.startRescan`). Only the button: this view does not copy one search for all of them.
+    @ViewBuilder private var rescanButton: some View {
+        if !model.live {
+            PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount) }
+                .accessibilityIdentifier("rescan-button")
+        }
     }
 
     private func filterChip(_ title: String, _ value: BoxIndex.Chip) -> some View {
@@ -378,6 +387,8 @@ struct BoxView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PressStyle())
+                // With the To check chip on, the button sits under the chips instead.
+                if chip != .toCheck { rescanButton }
             }
         }
     }

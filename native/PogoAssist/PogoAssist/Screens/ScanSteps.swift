@@ -17,11 +17,18 @@ enum ScanWords: Equatable {
 
     @MainActor static func current(_ model: AppModel) -> ScanWords {
         if model.pagedByHand { return .byHand }
-        if model.scanKind == .partial { return .anySize }
+        if model.scanKind == .partial {
+            // Re-scan N from the Box: the smallest command of the set that covers them (none made, or more than the largest, leaves the size to the person).
+            if let n = model.rescanCount, model.commandSetMade, let size = ScanWords.rescanSize(toCheck: n) { return .size(size) }
+            return .anySize
+        }
         if let size = model.commandSize { return .size(size) }
         if model.countAboveLargest { return .aboveLargest(VoiceCommandFile.setSizes.last!) }
         return .needsCount
     }
+
+    /// The command size for a re-scan of `n` Pokémon to check: the smallest that covers n plus a margin, since the game's search shows a few extra matches.
+    static func rescanSize(toCheck n: Int) -> Int? { VoiceCommandFile.setSize(covering: n + max(2, n / 10)) }
 
     /// The command to say, when there is one.
     var command: String? {

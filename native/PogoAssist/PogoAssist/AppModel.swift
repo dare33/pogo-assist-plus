@@ -98,7 +98,7 @@ final class AppModel: ObservableObject {
     }()
 
     @Published var accounts: [String] = []
-    @Published var account: String? { didSet { UserDefaults.standard.set(account, forKey: Keys.account) } }
+    @Published var account: String? { didSet { UserDefaults.standard.set(account, forKey: Keys.account); if account != oldValue { rescanCount = nil } } }
     @Published var snapshot: BoxSnapshot?
     @Published var advice: AdviceState = .none
     @Published var flow: ScanFlow = .idle { didSet { if case .idle = flow { scanDonePending = false; dropCopy() } } }
@@ -123,15 +123,21 @@ final class AppModel: ObservableObject {
     /// The newest version came from a newer app: no restore is offered (it would roll the box back), only "update the app".
     @Published var boxNeedsNewerApp = false
 
-    @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind); refreshReaderSettings() } }
+    @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind); refreshReaderSettings(); if scanKind != oldValue { rescanCount = nil } } }
+    /// "Re-scan N" was pressed in the Box: how many Pokémon are to be checked. Held only for the next scan and never saved. It goes when a scan starts, when the scan kind or the
+    /// options change, when the account changes and when the Scan screen closes (see `startRescan`), so it cannot name a command for a later, unrelated scan.
+    @Published var rescanCount: Int?
+    /// Sets Add and update and records N; the root view opens the Scan screen on the change. The kind is set first because changing it drops the count.
+    func startRescan(count: Int) { scanKind = .partial; rescanCount = count }
     /// The storage count of a full scan, remembered per account (editable); it picks which command to say.
-    @Published var storageCountText: String { didSet { if let a = account { UserDefaults.standard.set(storageCountText, forKey: Keys.count + "." + a) }; refreshReaderSettings() } }
+    @Published var storageCountText: String { didSet { if let a = account { UserDefaults.standard.set(storageCountText, forKey: Keys.count + "." + a) }; refreshReaderSettings(); if storageCountText != oldValue { rescanCount = nil } } }
 
     /// The eggs shown in the game's storage, typed for a Full scan (0 to `StorageCountRules.maxEggSlots`), remembered per account; empty means the flat allowance.
-    @Published var eggText: String { didSet { if let a = account { UserDefaults.standard.set(eggText, forKey: Keys.eggs + "." + a) }; refreshReaderSettings() } }
+    @Published var eggText: String { didSet { if let a = account { UserDefaults.standard.set(eggText, forKey: Keys.eggs + "." + a) }; refreshReaderSettings(); if eggText != oldValue { rescanCount = nil } } }
 
     // The broadcast, as the extension last reported it.
-    @Published var broadcast: BroadcastState?
+    /// A scan going live ends a re-scan suggestion (`rescanCount`).
+    @Published var broadcast: BroadcastState? { didSet { if rescanCount != nil, live { rescanCount = nil } } }
     @Published var now = Date()
     enum Sheet: String, Identifiable { case settings, diagnostics; var id: String { rawValue } }
     /// Settings or Diagnostics. While one is open a finished scan waits (it cannot be presented underneath); it is picked up on close.

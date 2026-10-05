@@ -66,6 +66,9 @@ struct RootView: View {
             #endif
         }
         // A scan has ended: bring the person to its Done screen (the Scan screen), and back out of it when the review is over.
+        // "Re-scan N" in the Box: open the Scan screen; closing it ends the suggestion.
+        .onChange(of: model.rescanCount) { _, n in if n != nil { scanOpen = true } }
+        .onChange(of: scanOpen) { _, open in if !open { model.rescanCount = nil } }
         .onChange(of: model.scanDonePending) { _, pending in if pending { doneRun = true; scanOpen = true } }
         .onChange(of: model.isReviewing) { _, reviewing in if !reviewing && doneRun { doneRun = false; scanOpen = false } }
         .onChange(of: phase) { _, p in
