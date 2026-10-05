@@ -143,7 +143,9 @@ final class SetupTests: XCTestCase {
         close.tap()
         XCTAssertTrue(app.buttons["setup-confirm"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["setup-confirm"].label, "Continue", "the app's own record says the commands were made")
+        sleep(2)   // iOS 27 can swallow a tap while the share sheet is still leaving: tap again if the page did not close
         confirm(app)
+        if app.buttons["setup-confirm"].waitForExistence(timeout: 2) { confirm(app) }
         XCTAssertTrue(done(app, 2))
         for n in 3...6 {
             XCTAssertTrue(app.buttons["Continue with step \(n)"].waitForExistence(timeout: 5))
@@ -177,6 +179,36 @@ final class SetupTests: XCTestCase {
         }
     }
 
+    func testStep5SaysAlarmsStillRing() throws {
+        let app = openScan()
+        openChecklist(app)
+        openStep(app, 5)
+        let line = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Alarms and timers still ring through Do Not Disturb, so check none is due during a scan.'")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5), "the alarm warning is visible text on step 5, not in the disclosure")
+        shot("setup-step5-alarms")
+    }
+
+    func testSettingsHasGetReadyToScan() throws {
+        let app = openScan()
+        back(app)   // the Scan screen is pushed over Box
+        app.buttons["More"].tap()
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
+        let row = app.buttons["settings-get-ready"]
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        XCTAssertTrue(row.label.contains("0 of 6 done"), row.label)
+        shot("settings-get-ready")
+        row.tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5), "the same checklist")
+        XCTAssertTrue(done(app, 0))
+        toggleSetUp(app)
+        XCTAssertTrue(done(app, 6))
+        back(app)
+        XCTAssertTrue(app.buttons["settings-get-ready"].label.contains("Done"))
+    }
+
     func testThreeSwitchStep() throws {
         let app = openScan()
         openChecklist(app)
@@ -199,6 +231,8 @@ final class SetupTests: XCTestCase {
 
     func testMyPhoneIsSetUp() throws {
         let app = openScan()
+        chooseVoicePaging(app)
+        XCTAssertTrue(app.buttons["setup-left"].exists)
         openChecklist(app)
         let toggle = app.switches["My phone is set up"]
         XCTAssertTrue(toggle.exists)
@@ -219,6 +253,8 @@ final class SetupTests: XCTestCase {
 
     func testStepsLeftLineOpensTheChecklist() throws {
         let app = openScan()
+        XCTAssertFalse(app.buttons["setup-left"].exists, "paging by hand is selected: the line is about voice paging")
+        chooseVoicePaging(app)
         let line = app.buttons["setup-left"]
         XCTAssertTrue(line.exists)
         XCTAssertEqual(line.label, "6 setup steps left · Finish")

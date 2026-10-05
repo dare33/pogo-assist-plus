@@ -129,6 +129,39 @@ final class ScanScreensTests: XCTestCase {
         shot("scan-ready-command")
     }
 
+    /// The extension published that the CP is covered (`-fake-cp covered`), or that it was and has cleared (`-fake-cp cleared`, `-fake-cp-stretches N`).
+    func testCoveredCpPanel() throws {
+        func panel(_ app: XCUIApplication) -> String {
+            let p = app.descendants(matching: .any)["cp-covered-panel"].firstMatch
+            XCTAssertTrue(p.waitForExistence(timeout: 10))
+            return p.label
+        }
+        let covered = openScan(["-appearance", "light", "-fake-scan", "-fake-cp", "covered"])
+        XCTAssertEqual(panel(covered), "Something is covering the CP, Since Pidgey, the CP has not been readable — a banner or an alarm is probably over the top of the screen. Clear it in the game. The scan keeps going.")
+        shot("scan-cp-covered-light")
+        covered.terminate()
+        let dark = openScan(["-appearance", "dark", "-fake-scan", "-fake-cp", "covered"])
+        _ = panel(dark)
+        shot("scan-cp-covered-dark")
+        dark.terminate()
+        let cleared = openScan(["-appearance", "light", "-fake-scan", "-fake-cp", "cleared"])
+        XCTAssertEqual(panel(cleared), "The CP was covered for a while, It started at Pidgey, right after Rattata CP 412. When the scan ends, the result shows how to read those again.")
+        shot("scan-cp-cleared-light")
+        cleared.terminate()
+        let twice = openScan(["-appearance", "light", "-fake-scan", "-fake-cp", "cleared", "-fake-cp-stretches", "2"])
+        XCTAssertTrue(panel(twice).hasPrefix("The CP was covered 2 times, The latest time started at Pidgey"))
+        shot("scan-cp-cleared-twice-light")
+        twice.terminate()
+        let large = openScan(["-appearance", "light", "-fake-scan", "-fake-cp", "covered", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])
+        _ = panel(large)
+        shot("scan-cp-covered-large")
+        large.terminate()
+        // No fields, no panel.
+        let none = openScan(["-fake-scan"])
+        XCTAssertTrue(none.staticTexts["Scan in progress"].waitForExistence(timeout: 10))
+        XCTAssertFalse(none.descendants(matching: .any)["cp-covered-panel"].exists)
+    }
+
     func testScanningStates() throws {
         for (name, args) in runs() {
             let app = openScan(args + ["-fake-scan"])

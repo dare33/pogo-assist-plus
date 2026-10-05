@@ -61,6 +61,14 @@ struct SettingsView: View {
             Form {
                 Section {
                     NavigationLink("Appearance") { AppearanceView() }.accessibilityIdentifier("settings-appearance")
+                    NavigationLink { SetupChecklistView() } label: {
+                        HStack {
+                            Text("Get ready to scan")
+                            Spacer()
+                            Text(model.setup.isDone ? "Done" : "\(model.setup.doneCount) of \(SetupProgress.count) done").foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("settings-get-ready")
                 }
                 Section("Accounts") {
                     ForEach(model.accounts, id: \.self) { name in

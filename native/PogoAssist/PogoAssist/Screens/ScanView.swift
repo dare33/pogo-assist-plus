@@ -52,7 +52,8 @@ struct ScanView: View {
                         SetupBanner { setupPage = .checklist }
                         // With the options open the panel is long: no spare space around the button then.
                         if !editing { Spacer(minLength: 0) }
-                        if !editing, !model.setup.isDone { SetupLeftLine(left: model.setup.stepsLeft) { setupPage = .checklist } }
+                        // About voice paging, like the sheet: not shown when paging by hand is selected.
+                        if !editing, asksAboutSetup { SetupLeftLine(left: model.setup.stepsLeft) { setupPage = .checklist } }
                         markButton
                         if !editing { Spacer(minLength: 0) }
                         bottomPanel
@@ -261,12 +262,41 @@ struct ScanView: View {
 
     // MARK: - scanning
 
+    /// The extension saw five cards in a row with no CP (`CoveredCpDetector`): while it lasts, and once it has cleared, say so under the ring. No sound and no notification: the extension already vibrated.
+    private func coveredPanel(_ s: BroadcastState) -> some View {
+        let first = s.cpCoveredFirstName.flatMap { $0.isEmpty ? nil : $0 }
+        let good = s.cpCoveredLastGoodName.flatMap { $0.isEmpty ? nil : $0 }
+        let title: String, text: String
+        if s.cpCovered {
+            title = "Something is covering the CP"
+            text = (first.map { "Since \($0), the CP has not been readable" } ?? "The CP has not been readable for a while") + " — a banner or an alarm is probably over the top of the screen. Clear it in the game. The scan keeps going."
+        } else {
+            let n = s.cpCoveredStretches
+            title = n > 1 ? "The CP was covered \(n) times" : "The CP was covered for a while"
+            var parts = [String]()
+            if let first {
+                var start = (n > 1 ? "The latest time started at " : "It started at ") + first
+                if let good { start += ", right after \(good)" + (s.cpCoveredLastGoodCp.map { " CP \($0)" } ?? "") }
+                parts.append(start + ".")
+            }
+            parts.append("When the scan ends, the result shows how to read those again.")
+            text = parts.joined(separator: " ")
+        }
+        return Panel(tint: .orange, spacing: 6) {
+            Label(title, systemImage: "exclamationmark.triangle.fill").font(.figtree(16, .heavy, relativeTo: .body)).foregroundStyle(Theme.orangeInk)
+            Text(text).font(.secondary).foregroundStyle(Theme.ink)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("cp-covered-panel")
+    }
+
     @ViewBuilder private var liveStatus: some View {
         let s = model.broadcast
         VStack(spacing: 10) {
             Text("Scan in progress").font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
             Text("\(s?.framesRead ?? 0) frames read, \(s?.readCount ?? 0) Pokémon so far" + (expectedCount.map { " of about \($0.formatted())" } ?? ""))
                 .font(.secondary).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+            if let s, s.cpCoveredStretches > 0 { coveredPanel(s) }
             if let s, s.paused {
                 Panel(tint: .orange) {
                     Label(ScanNotification.paused(scan: s.scanId, event: s.eventSeq, read: s.readCount, storageCount: s.storageCount, eggCount: s.eggCount, lastName: s.pausedCard, lastCP: nil, sizes: VoiceCommandFile.setSizes, limitSeconds: s.pauseLimitSeconds).body, systemImage: "pause.circle.fill")

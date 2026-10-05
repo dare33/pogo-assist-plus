@@ -41,6 +41,13 @@ enum ScanDebug {
             s.pausesAllowed = true
             s.scanId = Int(started.timeIntervalSince1970)
             s.commandPeriod = 0.5
+            // `-fake-cp covered | cleared` (and `-fake-cp-stretches N`): the extension's covered-CP fields, as it publishes them.
+            if let cp = UserDefaults.standard.string(forKey: "fake-cp") {
+                s.cpCovered = cp == "covered"
+                s.cpCoveredStretches = max(1, UserDefaults.standard.integer(forKey: "fake-cp-stretches"))
+                s.cpCoveredSince = Date().addingTimeInterval(-40)
+                s.cpCoveredFirstName = "Pidgey"; s.cpCoveredLastGoodName = "Rattata"; s.cpCoveredLastGoodCp = 412
+            }
             if paused { s.paused = true; s.pausedAt = Date().addingTimeInterval(-20); s.pausedCard = "Pidgey CP 312"; s.pauseLimitSeconds = 70 }
             _ = SharedStore.write(s)
         }

@@ -112,7 +112,7 @@ private struct SetupStepBody: View {
                 : "One file holds all the commands. Choose Save to Files on this \(deviceKind)."
         case 3: return "In Voice Control › Commands, scroll to the bottom. Tap Import Custom Commands, then pick the file you saved in step 2."
         case 4: return "Tick each one here as you switch it off."
-        case 5: return "A banner over the game blocks the reading. Turn Do Not Disturb on before each scan, and let Pogo Assist through: Settings › Focus › Do Not Disturb › Apps › add Pogo Assist."
+        case 5: return "A banner over the game blocks the reading. Turn Do Not Disturb on before each scan, and let Pogo Assist through: Settings › Focus › Do Not Disturb › Apps › add Pogo Assist. Alarms and timers still ring through Do Not Disturb, so check none is due during a scan."
         default: return "iOS hides notification banners while the screen is shared. In Settings › Notifications › Screen Sharing, turn on Allow Notifications."
         }
     }
