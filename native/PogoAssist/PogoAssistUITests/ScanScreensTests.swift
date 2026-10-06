@@ -1,8 +1,8 @@
 import XCTest
 
-/// The UI v1 Scan screen in the simulator: ready with remembered options, Edit, the first scan (opens in Edit), the walkthrough steps, Scan setup,
+/// The UI v1 Scan screen in the simulator: ready with remembered options, Edit, the first scan (opens in Edit), the guide ("?"), Scan setup,
 /// and the scanning / paused states (DEBUG launch arguments `-fake-scan` and `-fake-scan-paused` write the shared broadcast state, as the sample scan does).
-/// The system broadcast picker cannot start a broadcast in the simulator, so starting is not driven here. Screenshots go to POGO_SCREENS.
+/// The system broadcast picker cannot start a broadcast in the simulator, so starting is not driven here (starting never opens the guide). Screenshots go to POGO_SCREENS.
 final class ScanScreensTests: XCTestCase {
     private func shot(_ name: String) {
         let dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
@@ -24,8 +24,9 @@ final class ScanScreensTests: XCTestCase {
         return app
     }
 
-    /// The first time the Scan screen is opened the steps come by themselves, with "Don't show this step again"; the next time they do not.
-    func testTheStepsOpenByThemselvesTheFirstTime() throws {
+    /// The first time the Scan screen is opened the guide comes by itself, with "Don't show this step again" and no Close; the last page's button only closes it, and the
+    /// card behind it is on the options. The next time neither comes. Hiding a page keeps it out of the "?".
+    func testTheGuideOpensByItselfTheFirstTime() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-first-walk", "-appearance", "light"]
         app.launch()
@@ -35,13 +36,24 @@ final class ScanScreensTests: XCTestCase {
         app.buttons["Create account"].tap()
         XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
         app.buttons["Scan"].tap()
-        XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5), "the steps open by themselves on the first visit")
+        XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5), "the guide opens by itself on the first visit")
         XCTAssertTrue(app.descendants(matching: .any)["Don't show this step again"].firstMatch.exists)
+        XCTAssertFalse(app.buttons["Close"].exists, "no Close at the top")
         shot("scan-first-walk")
-        app.buttons["Close"].tap()
-        XCTAssertTrue(app.staticTexts["Scan options"].waitForExistence(timeout: 5), "behind them, the first scan's options")
+        app.descendants(matching: .any)["Don't show this step again"].firstMatch.tap()
+        app.buttons["Next"].tap()
+        app.buttons["Next"].tap()
+        XCTAssertTrue(app.staticTexts["Step 3 of 3"].waitForExistence(timeout: 3))
+        app.buttons["OK, I've got it. Let's scan!"].tap()
+        XCTAssertTrue(app.staticTexts["Scan options"].waitForExistence(timeout: 5), "behind it, the first visit's options")
         XCTAssertTrue(app.staticTexts["Put in the number of Pokémon in your storage and scan them all."].exists)
         shot("scan-first-options")
+        // The "?" skips the page that was hidden.
+        app.buttons["Show the steps again"].tap()
+        XCTAssertTrue(app.staticTexts["Step 1 of 2"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Tap the button, then Start Broadcast"].exists)
+        app.buttons["Next"].tap()
+        app.buttons["OK, I've got it. Let's scan!"].tap()
         app.terminate()
         let again = XCUIApplication()
         again.launchArguments = ["-first-walk", "-appearance", "light"]
@@ -49,7 +61,8 @@ final class ScanScreensTests: XCTestCase {
         XCTAssertTrue(again.buttons["Scan"].waitForExistence(timeout: 10))
         again.buttons["Scan"].tap()
         XCTAssertTrue(again.staticTexts["Scan options"].waitForExistence(timeout: 5))
-        XCTAssertFalse(again.staticTexts["Step 1 of 3"].waitForExistence(timeout: 3), "only the first visit")
+        XCTAssertFalse(again.staticTexts["Step 1 of 2"].waitForExistence(timeout: 3), "only the first visit")
+        XCTAssertFalse(again.staticTexts["Step 1 of 3"].exists, "only the first visit")
     }
 
     /// The first scan for the account opens in Edit; type the options and press Done.
@@ -74,6 +87,16 @@ final class ScanScreensTests: XCTestCase {
         field.typeText(text)
     }
 
+    /// Replaces what a number field holds: the caret is put at the end of the text first, then it is deleted back.
+    private func retype(_ field: XCUIElement, _ text: String) {
+        for _ in 0..<3 {
+            field.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).tap()
+            if XCUIApplication().keyboards.firstMatch.waitForExistence(timeout: 2) { break }
+        }
+        usleep(400_000)
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + text)
+    }
+
     private func runs() -> [(String, [String])] {
         [("light", ["-appearance", "light"]),
          ("dark", ["-appearance", "dark"]),
@@ -89,8 +112,14 @@ final class ScanScreensTests: XCTestCase {
             shot("scan-first-scan-\(name)")
             rememberOptions(app)
             XCTAssertTrue(app.buttons["Start scan"].isEnabled)
-            XCTAssertTrue(app.staticTexts["Tap the button, then Start Broadcast"].exists)
+            // Paging by hand (the default until the commands exist): six steps, step 2 (Voice Control) left out, step 5 swipes by hand.
+            XCTAssertTrue(app.staticTexts["Open the appraisal of the Pokémon you want the scan to start at."].exists)
+            XCTAssertFalse(app.staticTexts["Make sure Voice Control is on. Not sure? Say \"Wake up\"."].exists)
+            XCTAssertTrue(app.staticTexts["Choose your scan options above."].exists)
+            XCTAssertTrue(app.staticTexts["Tap the Pogo Assist button, then Start Broadcast, then close that sheet."].exists)
             XCTAssertTrue(app.staticTexts["We'll take you back to the game."].exists)
+            XCTAssertTrue(app.staticTexts["Back in the game, swipe from one Pokémon to the next yourself."].exists)
+            XCTAssertTrue(app.staticTexts["When the scan ends, come back to Pogo Assist to meet your new Pokémon or export your collection."].exists)
             shot("scan-ready-\(name)")
             // Edit swaps the steps for the options and dims Start.
             app.buttons["Edit scan options"].tap()
@@ -104,32 +133,22 @@ final class ScanScreensTests: XCTestCase {
             type(app.textFields["Eggs"], String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4) + "12")
             app.buttons["Hide keyboard"].tap()
             app.buttons["Done"].tap()
-            // The walkthrough: three steps.
-            app.buttons["Start scan"].tap()
+            // The guide from the "?": three pages; the last button only closes it.
+            app.buttons["Show the steps again"].tap()
             XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.staticTexts["Open your first Pokémon's appraisal"].exists)
+            XCTAssertFalse(app.buttons["Close"].exists)
             shot("scan-walk-1-\(name)")
             app.buttons["Next"].tap()
             XCTAssertTrue(app.staticTexts["Step 2 of 3"].waitForExistence(timeout: 3))
             shot("scan-walk-2-\(name)")
             app.buttons["Next"].tap()
             XCTAssertTrue(app.staticTexts["Step 3 of 3"].waitForExistence(timeout: 3))
-            XCTAssertTrue(app.buttons["Start scanning"].exists)
+            XCTAssertTrue(app.staticTexts["Page through your Pokémon by hand"].exists, "by hand the page stays as it was")
+            XCTAssertFalse(app.buttons["Start scanning"].exists)
             shot("scan-walk-3-\(name)")
-            if name == "light" {
-                // Hide step 1; the next time the walk starts at step 2 of 2. The ? brings it back.
-                app.buttons["Close"].tap()
-                app.buttons["Start scan"].tap()
-                app.descendants(matching: .any)["Don't show this step again"].firstMatch.tap()
-                app.buttons["Close"].tap()
-                app.buttons["Start scan"].tap()
-                XCTAssertTrue(app.staticTexts["Step 1 of 2"].waitForExistence(timeout: 5))
-                XCTAssertTrue(app.staticTexts["Tap the button, then Start Broadcast"].exists)
-                app.buttons["Close"].tap()
-                app.buttons["Show the steps again"].tap()
-                XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5))
-                app.buttons["Close"].tap()
-            }
+            app.buttons["OK, I've got it. Let's scan!"].tap()
+            XCTAssertTrue(app.buttons["Show the steps again"].waitForExistence(timeout: 3), "the button only closed the guide")
             app.terminate()
         }
     }
@@ -152,9 +171,74 @@ final class ScanScreensTests: XCTestCase {
         shot("scan-more-voice")
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(app.staticTexts["In the game, say"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["\"Pogo scan 2000\""].exists)
+        XCTAssertTrue(app.staticTexts["Make sure Voice Control is on. Not sure? Say \"Wake up\"."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 2000\"."].exists)
         shot("scan-ready-command")
+        // The guide's third page shows that size, with no asterisk line.
+        app.buttons["Show the steps again"].tap()
+        app.buttons["Next"].tap(); app.buttons["Next"].tap()
+        XCTAssertTrue(app.staticTexts["Pogo scan 2000 Then leave the phone alone."].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["* Or the scan size that you choose!"].exists)
+        shot("scan-walk-3-size")
+        app.buttons["OK, I've got it. Let's scan!"].tap()
+    }
+
+    /// Add and update asks how many to scan (remembered; empty means 200) and the steps and the guide's third page name the smallest command that covers it.
+    func testAddAndUpdateNumberNamesTheCommand() throws {
+        let app = openScan(["-appearance", "light"])
+        rememberOptions(app)
+        app.buttons["setup-banner"].tap()
+        app.swipeUp(); app.swipeUp()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More about scanning'")).firstMatch.tap()
+        let voice = app.buttons["Page with the voice command"]
+        for _ in 0..<10 where !voice.exists { app.swipeUp() }
+        voice.tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["Edit scan options"].waitForExistence(timeout: 5))
+        app.buttons["Edit scan options"].tap()
+        XCTAssertFalse(app.textFields["200"].exists, "a Full scan has no such field")
+        app.buttons["Add and update"].tap()
+        let number = app.textFields["200"]
+        XCTAssertTrue(number.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["How many Pokémon to scan?"].exists)
+        shot("scan-options-add-and-update")
+        app.buttons["Done"].tap()
+        // Nothing typed: the default, 200, with the guide's asterisk and its line.
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 200\"."].waitForExistence(timeout: 3))
+        app.buttons["Show the steps again"].tap()
+        app.buttons["Next"].tap(); app.buttons["Next"].tap()
+        XCTAssertTrue(app.staticTexts["Pogo scan 200* Then leave the phone alone."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["* Or the scan size that you choose!"].exists)
+        shot("scan-walk-3-placeholder")
+        app.buttons["OK, I've got it. Let's scan!"].tap()
+        // 260 is covered by the 300 command.
+        app.buttons["Edit scan options"].tap()
+        retype(app.textFields["200"], "260")
+        app.buttons["Hide keyboard"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 300\"."].waitForExistence(timeout: 3))
+        shot("scan-ready-add-and-update")
+        app.buttons["Show the steps again"].tap()
+        app.buttons["Next"].tap(); app.buttons["Next"].tap()
+        XCTAssertTrue(app.staticTexts["Pogo scan 300 Then leave the phone alone."].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["* Or the scan size that you choose!"].exists)
+        app.buttons["OK, I've got it. Let's scan!"].tap()
+        // 200 is itself a size; the number is remembered.
+        app.buttons["Edit scan options"].tap()
+        retype(app.textFields["200"], "200")
+        app.buttons["Hide keyboard"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 200\"."].waitForExistence(timeout: 3))
+        // Above the largest command: say so.
+        app.buttons["Edit scan options"].tap()
+        retype(app.textFields["200"], "6000")
+        app.buttons["Hide keyboard"].tap()
+        shot("scan-options-above-largest")
+        XCTAssertTrue(app.staticTexts["The largest command covers 5,000 Pokémon."].waitForExistence(timeout: 3))
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 5000\"."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'The largest command covers 5,000 Pokémon. Scan the first'")).firstMatch.exists)
     }
 
     /// The extension published that the CP is covered (`-fake-cp covered`), or that it was and has cleared (`-fake-cp cleared`, `-fake-cp-stretches N`).

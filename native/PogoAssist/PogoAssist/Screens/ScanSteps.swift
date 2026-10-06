@@ -4,12 +4,12 @@ import PogoReader
 
 /// What the person is told to say or do in the game, from what the app really knows (the count, the paging choice).
 enum ScanWords: Equatable {
-    /// Full scan with a usable count: the smallest command that covers it.
+    /// The smallest command that covers the Full scan's count, or the Add and update number (a Re-scan puts its number there).
     case size(Int)
-    /// Full scan of a storage larger than the largest command.
+    /// A count or number larger than the largest command.
     case aboveLargest(Int)
-    /// Add and update: the person picks the size.
-    case anySize
+    /// Add and update with no number typed: the command for the default of 200.
+    case defaultSize(Int)
     /// Full scan, no usable count yet.
     case needsCount
     /// Paging by hand: no command.
@@ -18,9 +18,9 @@ enum ScanWords: Equatable {
     @MainActor static func current(_ model: AppModel) -> ScanWords {
         if model.pagedByHand { return .byHand }
         if model.scanKind == .partial {
-            // Re-scan N from the Box: the smallest command of the set that covers them (none made, or more than the largest, leaves the size to the person).
-            if let n = model.rescanCount, model.commandSetMade, let size = ScanWords.rescanSize(toCheck: n) { return .size(size) }
-            return .anySize
+            guard let n = model.partialCount else { return .defaultSize(VoiceCommandFile.setSize(covering: AppModel.defaultPartialCount) ?? AppModel.defaultPartialCount) }
+            if let size = VoiceCommandFile.setSize(covering: n) { return .size(size) }
+            return .aboveLargest(VoiceCommandFile.setSizes.last!)
         }
         if let size = model.commandSize { return .size(size) }
         if model.countAboveLargest { return .aboveLargest(VoiceCommandFile.setSizes.last!) }
@@ -33,29 +33,24 @@ enum ScanWords: Equatable {
     /// The command to say, when there is one.
     var command: String? {
         switch self {
-        case .size(let n), .aboveLargest(let n): return "Pogo scan \(n)"
+        case .size(let n), .aboveLargest(let n), .defaultSize(let n): return "Pogo scan \(n)"
         default: return nil
         }
     }
 
-    /// The one-line form of step 3 of the walkthrough.
-    var walkTitle: String {
+    /// The command as the steps show it: 200 only when nothing is known.
+    var spoken: String { command ?? "Pogo scan \(AppModel.defaultPartialCount)" }
+
+    /// The size is the person's own (a count, a number or a re-scan), so the walkthrough shows it as it is; otherwise it is an example with an asterisk.
+    var sizeKnown: Bool {
         switch self {
-        case .size(let n), .aboveLargest(let n): return "Say \"Wake up\", then \"Pogo scan \(n)\""
-        case .anySize: return "Say \"Wake up\", then \"Pogo scan\" and a size"
-        case .needsCount: return "Say \"Wake up\", then the \"Pogo scan\" command"
-        case .byHand: return "Page through your Pokémon by hand"
-        }
-    }
-    var walkBody: String {
-        switch self {
-        case .byHand: return "You swipe from one Pokémon to the next yourself. Stop the broadcast from the red bar when the last Pokémon has been read."
-        default: return "Then leave the phone alone."
+        case .size, .aboveLargest: return true
+        default: return false
         }
     }
 }
 
-/// The three steps shown before each scan, and which of them the person has hidden ("Don't show this step again").
+/// The three steps of the guide, and which of them the person has hidden ("Don't show this step again").
 /// Stored in AppStorage as the hidden step numbers, comma separated.
 enum ScanSteps {
     static let key = "scan.hiddenSteps"
@@ -69,14 +64,13 @@ enum ScanSteps {
     }
 }
 
-/// "Before each scan · step n of 3": a full-screen cover with one step at a time.
+/// The guide, "Step n of 3": a full-screen cover with one step at a time.
 struct ScanWalkthrough: View {
     let steps: [Int]
     let words: ScanWords
     /// Whether to say the game will be opened for the person (false once opening it has failed).
     let takesBack: Bool
     @Binding var hiddenRaw: String
-    let trigger: BroadcastTrigger
     var onClose: () -> Void
     @Environment(\.helpLevel) private var help
     @Environment(\.accent) private var accent
@@ -89,7 +83,7 @@ struct ScanWalkthrough: View {
         switch step {
         case 0: return "Open your first Pokémon's appraisal"
         case 1: return "Tap the button, then Start Broadcast"
-        default: return words.walkTitle
+        default: return words == .byHand ? "Page through your Pokémon by hand" : words.spoken + (words.sizeKnown ? "" : "*")
         }
     }
     private var body_: String {
@@ -97,20 +91,15 @@ struct ScanWalkthrough: View {
         case 0: return "The scan reads from this screen and moves through your storage in the order it's sorted."
         // "We'll take you back to the game" is true only while opening the game works (`GameOpener`); otherwise the person is told to switch.
         case 1: return "Pick \"Pogo Broadcast\" if asked. " + (takesBack ? "We'll take you back to the game." : GameOpener.fallbackLine)
-        default: return words.walkBody
+        default: return words == .byHand ? "You swipe from one Pokémon to the next yourself. Stop the broadcast from the red bar when the last Pokémon has been read." : "Then leave the phone alone."
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button("Close", action: onClose).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.muted).frame(minWidth: 44, minHeight: 44, alignment: .leading)
-                Spacer()
-                Text("Step \(position + 1) of \(steps.count)").font(.secondary).foregroundStyle(Theme.muted)
-                Spacer()
-                Color.clear.frame(width: 44, height: 44)
-            }
-            .padding(.horizontal, 22)
+            Text("Step \(position + 1) of \(steps.count)").font(.secondary).foregroundStyle(Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.horizontal, 22)
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     illustration
@@ -118,8 +107,17 @@ struct ScanWalkthrough: View {
                         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(title).font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
-                        Text(body_).font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted)
+                        if step == 2, words != .byHand {
+                            // The command and the sentence run on in one line of text; the asterisk is explained below, smaller.
+                            (Text(title + " ").font(.figtree(28, .heavy, relativeTo: .title)).foregroundStyle(Theme.ink)
+                                + Text(body_).font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted))
+                            if !words.sizeKnown {
+                                Text("* Or the scan size that you choose!").font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                            }
+                        } else {
+                            Text(title).font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
+                            Text(body_).font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted)
+                        }
                     }
                     .padding(.horizontal, 6)
                 }
@@ -149,7 +147,7 @@ struct ScanWalkthrough: View {
                     Text("\"Wake up\"").font(.figtree(24, .heavy, relativeTo: .title2)).foregroundStyle(accent.ink)
                         .padding(.horizontal, 18).padding(.vertical, 10).background(accent.tint, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     Image(systemName: "arrow.down").font(.figtree(18, .bold)).foregroundStyle(Theme.faint)
-                    Text(words.command.map { "\"\($0)\"" } ?? "\"Pogo scan\"").font(.figtree(24, .heavy, relativeTo: .title2)).foregroundStyle(accent.onSolid)
+                    Text("\"\(words.spoken)\"").font(.figtree(24, .heavy, relativeTo: .title2)).foregroundStyle(accent.onSolid)
                         .padding(.horizontal, 18).padding(.vertical, 10).background(accent.solid, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 }
                 .padding(.vertical, 20)
@@ -177,11 +175,12 @@ struct ScanWalkthrough: View {
 
     @ViewBuilder private var nextButton: some View {
         if isLast {
-            // The last step starts the scan: the whole button is the system broadcast picker (see BroadcastTrigger).
-            Text("Start scanning").font(.figtree(17, .bold)).foregroundStyle(accent.onSolid)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(accent.solid, in: Capsule())
-                .broadcastPicker(trigger: trigger, label: "Start scanning", shape: Capsule())
+            // The guide only explains: the scan is started from the Scan screen's button.
+            Button(action: onClose) {
+                Text("OK, I've got it. Let's scan!").font(.figtree(17, .bold)).foregroundStyle(accent.onSolid)
+                    .frame(maxWidth: .infinity, minHeight: 56).background(accent.solid, in: Capsule()).contentShape(Capsule())
+            }
+            .buttonStyle(PressStyle())
         } else {
             Button { position += 1 } label: {
                 Text("Next").font(.figtree(17, .bold)).foregroundStyle(accent.onSolid)

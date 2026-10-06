@@ -128,9 +128,18 @@ final class AppModel: ObservableObject {
     /// options change, when the account changes and when the Scan screen closes (see `startRescan`), so it cannot name a command for a later, unrelated scan.
     @Published var rescanCount: Int?
     /// Sets Add and update and records N; the root view opens the Scan screen on the change. The kind is set first because changing it drops the count.
-    func startRescan(count: Int) { scanKind = .partial; rescanCount = count }
+    /// The covering command size goes into the Add and update number as well, so the steps and the field agree (the number is set before `rescanCount`, since changing it drops the count).
+    func startRescan(count: Int) {
+        scanKind = .partial
+        partialCountText = String(ScanWords.rescanSize(toCheck: count) ?? count + max(2, count / 10))
+        rescanCount = count
+    }
     /// The storage count of a full scan, remembered per account (editable); it picks which command to say.
     @Published var storageCountText: String { didSet { if let a = account { UserDefaults.standard.set(storageCountText, forKey: Keys.count + "." + a) }; refreshReaderSettings(); if storageCountText != oldValue { rescanCount = nil } } }
+
+    /// "How many Pokémon to scan?" for Add and update, remembered per account like the storage count; empty means `defaultPartialCount`.
+    @Published var partialCountText: String { didSet { if let a = account { UserDefaults.standard.set(partialCountText, forKey: Keys.partial + "." + a) }; if partialCountText != oldValue { rescanCount = nil } } }
+    nonisolated static let defaultPartialCount = 200
 
     /// The eggs shown in the game's storage, typed for a Full scan (0 to `StorageCountRules.maxEggSlots`), remembered per account; empty means the flat allowance.
     @Published var eggText: String { didSet { if let a = account { UserDefaults.standard.set(eggText, forKey: Keys.eggs + "." + a) }; refreshReaderSettings(); if eggText != oldValue { rescanCount = nil } } }
@@ -145,7 +154,7 @@ final class AppModel: ObservableObject {
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
-    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", eggs = "eggCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
+    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", partial = "partialCount", eggs = "eggCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
 
     // MARK: - "Make scans better"
 
@@ -323,6 +332,11 @@ final class AppModel: ObservableObject {
 
     /// The command to say for a full scan: the smallest size covering the typed count, nil when no count (or one above 5,000, see `countAboveLargest`).
     var commandSize: Int? { storageCount.flatMap { VoiceCommandFile.setSize(covering: $0) } }
+    /// The typed Add and update number, 1 to 10,000; nil when empty or not usable (`partialCountProblem` says why).
+    var partialCount: Int? { if case .valid(let n) = StorageCount.parse(partialCountText) { return n } else { return nil } }
+    var partialCountProblem: String? { StorageCount.problem(for: partialCountText) }
+    /// What the Add and update command has to cover: the typed number, else 200.
+    var partialWanted: Int { partialCount ?? Self.defaultPartialCount }
     var countAboveLargest: Bool { (storageCount ?? 0) > (VoiceCommandFile.setSizes.last ?? 0) }
     /// Minutes the command of this size takes, as the Python's estimate has it.
     func estimatedMinutes(size: Int) -> Int { Int((VoiceCommandFile.setSizing(size: size, kind: setKind).estimatedSeconds / 60).rounded()) }
@@ -398,6 +412,7 @@ final class AppModel: ObservableObject {
         guard let a = account else { return }
         eggText = UserDefaults.standard.string(forKey: Keys.eggs + "." + a) ?? ""
         storageCountText = UserDefaults.standard.string(forKey: Keys.count + "." + a) ?? ""
+        partialCountText = UserDefaults.standard.string(forKey: Keys.partial + "." + a) ?? ""
         setRecord = UserDefaults.standard.data(forKey: Keys.set + a).flatMap { try? JSONDecoder().decode(SetRecord.self, from: $0) }
         for p in VoiceCommandFile.Pace.allCases {
             if let data = UserDefaults.standard.data(forKey: Keys.voice + a + "." + p.rawValue), let r = try? JSONDecoder().decode(VoiceRecord.self, from: data) { voiceRecords[p] = r }
@@ -450,6 +465,7 @@ final class AppModel: ObservableObject {
         library = BoxLibrary(root: root)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
         eggText = ""
+        partialCountText = ""
         storageCountText = ""   // read per account by loadVoiceRecord once the account is known
         pagedByHand = true   // restorePaging() below: by hand until the commands exist, unless the person chose
         account = UserDefaults.standard.string(forKey: Keys.account)
@@ -625,9 +641,9 @@ final class AppModel: ObservableObject {
                 let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
                 if let d = UserDefaults.standard.data(forKey: k(old)) { UserDefaults.standard.set(d, forKey: k(name)); UserDefaults.standard.removeObject(forKey: k(old)) }
             }
-            // The one-time set record and the remembered storage count follow the name; the old-name records go, so a stale tap-set record under
+            // The one-time set record and the remembered counts follow the name; the old-name records go, so a stale tap-set record under
             // the old name cannot keep the wrong-screen warning on.
-            for key in [Keys.set, Keys.count + "."] {
+            for key in [Keys.set, Keys.count + ".", Keys.partial + "."] {
                 if let d = UserDefaults.standard.object(forKey: key + old) { UserDefaults.standard.set(d, forKey: key + name); UserDefaults.standard.removeObject(forKey: key + old) }
             }
             if account == old { account = name; loadBox(); loadVoiceRecord() } else { refreshDeviceRecords() }

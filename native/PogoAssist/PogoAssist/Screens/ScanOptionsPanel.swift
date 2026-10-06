@@ -34,12 +34,13 @@ struct ScanOptionsSummary: View {
     }
 }
 
-/// "Scan options" (frame 2b): the kind, the storage count and the eggs, remembered for the account. Replaces the steps while it is open.
+/// "Scan options" (frame 2b): the kind, the storage count and the eggs (or, for Add and update, how many to scan), remembered for the account. Replaces the steps while it is open.
 struct ScanOptionsEditor: View {
     @EnvironmentObject var model: AppModel
     var onDone: () -> Void
     @FocusState private var countFocused: Bool
     @FocusState private var eggsFocused: Bool
+    @FocusState private var partialFocused: Bool
     @Environment(\.accent) private var accent
 
     var body: some View {
@@ -66,9 +67,20 @@ struct ScanOptionsEditor: View {
                         .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            PillButton("Done", style: .filled) { countFocused = false; eggsFocused = false; onDone() }
+            // Paging by hand has no command to size, so the number is asked for only when a voice command will be said.
+            if model.scanKind == .partial, !model.pagedByHand {
+                field("How many Pokémon to scan?", prompt: "200", text: $model.partialCountText, focus: $partialFocused)
+                if let problem = model.partialCountProblem {
+                    Text(problem).font(.secondary).foregroundStyle(Theme.red)
+                } else if (model.partialCount ?? 0) > (VoiceCommandFile.setSizes.last ?? 0) {
+                    Text("The largest command covers \((VoiceCommandFile.setSizes.last ?? 0).formatted()) Pokémon.").font(.secondary).foregroundStyle(Theme.orangeInk)
+                } else {
+                    Text("Left empty, it scans 200.").font(.secondary).foregroundStyle(Theme.muted)
+                }
+            }
+            PillButton("Done", style: .filled) { countFocused = false; eggsFocused = false; partialFocused = false; onDone() }
         }
-        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Hide keyboard") { countFocused = false; eggsFocused = false } } }
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Hide keyboard") { countFocused = false; eggsFocused = false; partialFocused = false } } }
     }
 
     private var kindPicker: some View {

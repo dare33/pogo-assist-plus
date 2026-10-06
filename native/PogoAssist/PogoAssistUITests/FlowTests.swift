@@ -144,7 +144,7 @@ final class FlowTests: XCTestCase {
         app.buttons["Hide keyboard"].tap()   // dismiss the number pad
         app.buttons["Done"].tap()
         let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
-        XCTAssertTrue(app.staticTexts["Tap the button, then Start Broadcast"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Choose your scan options above."].waitForExistence(timeout: 5))
         shot(name + "-top")
         // The commands are made in step 2 of "Get ready to scan"; what to say and how to stop are on "More about scanning". Both pages scroll.
         func reveal(_ e: XCUIElement) {

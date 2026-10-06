@@ -202,17 +202,17 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5), "the scan kind is Add and update")
         XCTAssertTrue(app.staticTexts["rescan-line"].exists)
         XCTAssertEqual(app.staticTexts["rescan-line"].label, "Re-scan of \(n) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
-        XCTAssertTrue(app.staticTexts["\"\(command)\""].exists, "the steps name \(command)")
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"\(command)\"."].exists, "the steps name \(command)")
         sleep(1)
         shot("rescan-03-scan-screen")
 
-        // Edit drops it: the steps go back to naming the size.
+        // Edit drops the re-scan line; the covering number stays in "How many Pokémon to scan?", so the steps still name the same command.
         app.buttons["Edit scan options"].tap()
+        XCTAssertTrue(app.staticTexts["How many Pokémon to scan?"].waitForExistence(timeout: 3) || app.textFields.firstMatch.exists)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["rescan-line"].exists)
-        XCTAssertFalse(app.staticTexts["\"\(command)\""].exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH '\"Pogo scan\" and the size'")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"\(command)\"."].exists)
     }
 
     /// Changing the scan kind, or closing the Scan screen, drops the suggestion; the screen opened later from the tab bar does not meet it.
