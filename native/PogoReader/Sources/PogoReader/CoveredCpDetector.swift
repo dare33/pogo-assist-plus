@@ -51,7 +51,7 @@ public struct CoveredCpDetector {
     private var swiped = true                   // a swipe was seen since the last card reading: the next one is a new card
     private var cardHasCp = false               // the current card has shown a CP
     private var noCpCards = 0                   // consecutive cards with no CP, the current one included
-    private var sinceFire = 0                   // cards with no CP since firing (reminder count); a card with a CP does not reset it, only `.cleared` does
+    private var sinceFire = 0                   // cards that ended with no CP since firing (reminder count); a card with a CP does not reset it, only `.cleared` does
     private var cpCards = 0                     // consecutive cards with a CP since firing (re-arm count)
     private var first: (name: String, hpMax: Int?, at: Double?, card: Int)?
     private var good: (name: String?, cp: Int, at: Double?)?
@@ -73,7 +73,20 @@ public struct CoveredCpDetector {
         let id = name + "|" + (r.hp.map { String($0.max) } ?? "-")
         let isNew = swiped || id != key
         swiped = false
-        if isNew { cards += 1; key = id; cardHasCp = false }
+        // A card is judged "with no CP" only when it ENDS (the next card begins): its CP often shows a frame or two after its first reading, so the first reading proves nothing.
+        // A card with no CP breaks the re-arm run and counts towards the next reminder.
+        var reminder: Event?
+        if isNew {
+            if key != nil, !cardHasCp {
+                cpCards = 0
+                if isCovered { sinceFire += 1; if sinceFire > 0, sinceFire % stillEvery == 0 { reminder = .stillCovered(cards: sinceFire) } }
+            }
+            cards += 1; key = id; cardHasCp = false
+        }
+        return read(r, name: name, hasCp: hasCp, isNew: isNew) ?? reminder
+    }
+
+    private mutating func read(_ r: FrameReading, name: String, hasCp: Bool, isNew: Bool) -> Event? {
 
         if let cp = r.cp {
             good = (name, cp, r.time)
@@ -91,14 +104,10 @@ public struct CoveredCpDetector {
         if isNew {
             noCpCards += 1
             if noCpCards == 1 { first = (name, r.hp?.max, r.time, cards) }
-            cpCards = 0
-            if isCovered {
-                sinceFire += 1
-                if sinceFire % stillEvery == 0 { return .stillCovered(cards: sinceFire) }
-            }
         }
         guard !isCovered, noCpCards >= threshold, let f = first else { return nil }
         isCovered = true
+        sinceFire = -1    // the firing card is not one of the cards after the firing: its own end brings the count to 0
         return .covered(Covered(firstName: f.name, firstHpMax: f.hpMax, startedAt: f.at, startCard: f.card,
                                 lastGoodName: good?.name, lastGoodCp: good?.cp, lastGoodAt: good?.at, firedAt: r.time))
     }

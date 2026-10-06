@@ -266,7 +266,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     }
 
     /// A burst of vibration: `buzzPulses` pulses `buzzGap` seconds apart, about 3.5 s. The vibrate sound is one fixed short pulse, so back to back pulses are the only way to make it longer and feel stronger.
-    /// Each pulse schedules the next on a global queue and checks the generation first, so `cancelBuzz` stops a burst at once and nothing is left scheduled once the scan finishes.
+    /// Each pulse schedules the next on a global queue and checks the generation first, so once `cancelBuzz` has run no further pulse plays. A callback already queued stays queued (at most 0.5 s) until it runs, and then plays nothing.
     private static let buzzPulses = 7, buzzGap = 0.5
 
     private func startBuzz() {
@@ -275,9 +275,11 @@ class SampleHandler: RPBroadcastSampleHandler {
     }
 
     private func pulse(_ n: Int, generation: Int) {
-        buzzLock.lock(); let current = buzzGeneration == generation; buzzLock.unlock()
-        guard current else { return }
+        // The check and the pulse are under one lock (the vibrate call is short and does not block), so a cancel cannot land between them.
+        buzzLock.lock()
+        guard buzzGeneration == generation else { buzzLock.unlock(); return }
         AudioServicesPlayAlertSound(kSystemSoundID_Vibrate)
+        buzzLock.unlock()
         guard n < Self.buzzPulses else { return }
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + Self.buzzGap) { [weak self] in self?.pulse(n + 1, generation: generation) }
     }
