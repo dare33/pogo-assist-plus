@@ -118,7 +118,7 @@ private struct SetupChecklistBody: View {
         .accessibilityIdentifier("setup-step-\(n)")
     }
 
-    /// Checked: solid green. You said done: accent tint with a tick. To do: the step number on a neutral well.
+    /// Checked: solid green. You said done: the same green tick (the row's words say who checked it). To do: the step number on a neutral well.
     @ViewBuilder private func tick(_ n: Int, _ state: SetupProgress.StepState) -> some View {
         ZStack {
             switch state {
@@ -126,8 +126,8 @@ private struct SetupChecklistBody: View {
                 Circle().fill(Theme.green)
                 Image(systemName: "checkmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(.white)
             case .said:
-                Circle().fill(accent.tint)
-                Image(systemName: "checkmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(accent.ink)
+                Circle().fill(Theme.green)
+                Image(systemName: "checkmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(.white)
             case .todo:
                 Circle().fill(Theme.surface2)
                 Text("\(n)").font(.system(size: 14, weight: .heavy)).foregroundStyle(Theme.muted)
