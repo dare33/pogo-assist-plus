@@ -18,6 +18,7 @@ struct BoxView: View {
     @StateObject private var store = BoxIndexStore()
 
     @State private var query = ""
+    @State private var choosingExport = false
     @State private var applied = BoxIndex.Query.none
     @State private var chip = BoxIndex.Chip.all
     @State private var sort = BoxIndex.Sort.name
@@ -55,7 +56,11 @@ struct BoxView: View {
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
         .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
         .sheet(isPresented: Binding(get: { model.exportURL != nil }, set: { if !$0 { model.exportURL = nil } })) {
-            if let url = model.exportURL { ShareSheet(url: url).presentationDetents([.medium, .large]) }
+            if let url = model.exportURL {
+                ShareSheet(url: url).presentationDetents([.medium, .large])
+                    // The share sheet shortens the file name in its preview; this says it whole (and lets a UI test check the file's kind).
+                    .overlay(alignment: .topLeading) { Color.clear.frame(width: 1, height: 1).accessibilityElement().accessibilityIdentifier("export-file").accessibilityLabel(url.lastPathComponent) }
+            }
         }
         .task(id: indexKey) {
             if synthetic { return }
@@ -89,7 +94,8 @@ struct BoxView: View {
             AccountPill()
             Spacer(minLength: 8)
             if !model.entries.isEmpty {
-                IconButton(systemImage: "square.and.arrow.up", kind: .floating, label: "Export CSV") { Task { await model.exportCSV() } }
+                IconButton(systemImage: "square.and.arrow.up", kind: .floating, label: "Export") { choosingExport = true }
+                    .exportChoice(isPresented: $choosingExport) { format in Task { await model.export(format) } }
             }
             MoreButton()
         }

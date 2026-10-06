@@ -11,6 +11,7 @@ struct SpeciesListView: View {
     @Environment(\.accent) private var accent
     @Environment(\.showToast) private var showToast
     @State private var selecting = false
+    @State private var choosingExport = false
     @State private var picked = Set<String>()
     @State private var deleting: DeleteTarget?
 
@@ -159,10 +160,11 @@ struct SpeciesListView: View {
                         showToast("Copied")
                     }
                 }
-                PillButton("Export", systemImage: "square.and.arrow.up", style: .tint, height: 52, fullWidth: false) {
-                    let ids = Set(order.map { index.items[$0].id })
-                    Task { await model.exportCSV(only: ids) }
-                }
+                PillButton("Export", systemImage: "square.and.arrow.up", style: .tint, height: 52, fullWidth: false) { choosingExport = true }
+                    .exportChoice(isPresented: $choosingExport) { format in
+                        let ids = Set(order.map { index.items[$0].id })
+                        Task { await model.export(format, only: ids) }
+                    }
             }
         }
         .padding(14)

@@ -209,6 +209,17 @@ struct MoreButton: View {
     var body: some View { MoreMenu(circle: true) }
 }
 
+extension View {
+    /// The Export choice, shared by the Box screen and select mode: a CSV as before, or the Markdown file written for a chat model.
+    func exportChoice(isPresented: Binding<Bool>, _ pick: @escaping (ExportFormat) -> Void) -> some View {
+        confirmationDialog("Export", isPresented: isPresented, titleVisibility: .visible) {
+            Button("CSV") { pick(.csv) }
+            Button("For Claude or ChatGPT") { pick(.markdown) }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("A CSV works in spreadsheets and Poke Genie. The other is a text file with every term explained, to give to Claude or ChatGPT.") }
+    }
+}
+
 struct ShareSheet: UIViewControllerRepresentable {
     let urls: [URL]
     init(url: URL) { urls = [url] }

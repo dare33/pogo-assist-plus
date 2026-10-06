@@ -452,9 +452,7 @@ final class AppModel: ObservableObject {
     }
 
     init() {
-        let root = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))?
-            .appendingPathComponent("PogoAssist", isDirectory: true).appendingPathComponent("boxes", isDirectory: true)
-            ?? FileManager.default.temporaryDirectory.appendingPathComponent("boxes", isDirectory: true)
+        let root = BoxExportFile.boxesRoot
         // The UI test starts from a clean install each time: it passes this argument and the app forgets everything first.
         if CommandLine.arguments.contains("-uitest-reset") {
             if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
@@ -716,25 +714,17 @@ final class AppModel: ObservableObject {
         } catch { message = Self.plain(error) }
     }
 
-    // MARK: - CSV export
+    // MARK: - export
 
-    /// The whole box, or only the entries with these ids (Box's select mode).
-    func exportCSV(only ids: Set<String>? = nil) async {
+    /// The whole box, or only the entries with these ids (Box's select mode), as a CSV or as the Markdown file for a chat model. Both go to the share sheet.
+    func export(_ format: ExportFormat, only ids: Set<String>? = nil) async {
         guard let snap = snapshot, !snap.entries.isEmpty else { message = "There is nothing to export yet. Scan some Pokémon first."; return }
-        busy = "Making the CSV"
+        busy = format == .csv ? "Making the CSV" : "Making the file"
         defer { busy = nil }
-        let entries = ids.map { ids in snap.entries.filter { ids.contains($0.id) } } ?? snap.entries, name = snap.account, date = snap.scanDate ?? snap.createdAt
+        let lib = library
         do {
-            let url = try await worker.run { engine -> URL in
-                let csv = try engine.csv(rows: Self.csvRows(entries), scanDate: date)
-                let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
-                let safe = name.filter { $0.isLetter || $0.isNumber || $0 == "-" }
-                let url = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-box-\(safe.isEmpty ? "box" : safe)-\(f.string(from: date)).csv")
-                try Data(csv.utf8).write(to: url, options: .atomic)
-                return url
-            }
-            exportURL = url
-        } catch { message = "The CSV could not be made: \(Self.plain(error))" }
+            exportURL = try await worker.run { engine in try BoxExportFile.write(format, snap: snap, only: ids, library: lib, engine: engine) }
+        } catch { message = "The \(format == .csv ? "CSV" : "file") could not be made: \(Self.plain(error))" }
     }
 
     // MARK: - the broadcast

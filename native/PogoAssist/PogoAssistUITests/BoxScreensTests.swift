@@ -139,6 +139,49 @@ final class BoxScreensTests: XCTestCase {
         shot("box-09-large-text-detail")
     }
 
+    // MARK: Export
+
+    /// Export asks which file: a CSV, or the Markdown one for Claude or ChatGPT. Each lands on the share sheet with its own file name (a `.csv` or a `.md`).
+    func testExportOffersTwoFilesAndSharesEach() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        // The share sheet shortens the file name in its preview, so the app also says it whole in an element of its own.
+        let sheetFile = { (ext: String) in app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'export-file' AND label BEGINSWITH 'pogo-box-' AND label ENDSWITH '.\(ext)'")).firstMatch }
+
+        app.buttons["Export"].tap()
+        XCTAssertTrue(app.buttons["CSV"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["For Claude or ChatGPT"].exists)
+        sleep(1)
+        shot("export-01-choice")
+        app.buttons["For Claude or ChatGPT"].tap()
+        XCTAssertTrue(sheetFile("md").waitForExistence(timeout: 30), "the share sheet offers a .md file")
+        sleep(1)
+        shot("export-02-share-markdown")
+        app.swipeDown(velocity: .fast)
+        XCTAssertTrue(app.buttons["Export"].waitForExistence(timeout: 10))
+
+        app.buttons["Export"].tap()
+        XCTAssertTrue(app.buttons["CSV"].waitForExistence(timeout: 5))
+        app.buttons["CSV"].tap()
+        XCTAssertTrue(sheetFile("csv").waitForExistence(timeout: 30), "the share sheet offers a .csv file")
+        shot("export-03-share-csv")
+        app.swipeDown(velocity: .fast)
+
+        // Select mode's export asks too, and the picked Pokémon go in the file.
+        XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 10))
+        app.buttons.matching(identifier: "species-row").element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Select"].tap()
+        app.buttons.matching(identifier: "pokemon-row").element(boundBy: 0).tap()
+        app.buttons["Export"].tap()
+        XCTAssertTrue(app.buttons["For Claude or ChatGPT"].waitForExistence(timeout: 5))
+        app.buttons["For Claude or ChatGPT"].tap()
+        XCTAssertTrue(sheetFile("md").waitForExistence(timeout: 30), "select mode shares a .md file too")
+        shot("export-04-select-share-markdown")
+    }
+
     // MARK: Re-scan N
 
     /// The line under the buttons says what the copied search shows, and its numbers add up: the total is the to-check Pokémon it covers plus the others with the same name and CP
