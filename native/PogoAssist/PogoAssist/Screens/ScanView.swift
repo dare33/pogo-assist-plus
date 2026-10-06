@@ -3,7 +3,7 @@ import PogoBox
 import PogoReader
 
 /// The Scan screen (design handoff, "Magic scan", Scan §3m): the reminder, the 240 pt mark button and a bottom panel with the options summary
-/// and the two steps. Edit swaps the steps for the options. If the app is opened while a broadcast runs, the same button is the progress ring.
+/// and the six steps. Scan Options swaps the steps for the options; the steps can be folded away (Show less). If the app is opened while a broadcast runs, the same button is the progress ring.
 /// Everything the old screen held that has no place here is in "Get ready to scan" (`SetupChecklistView`) and "More about scanning" (`ScanMoreView`).
 struct ScanView: View {
     @EnvironmentObject var model: AppModel
@@ -13,10 +13,14 @@ struct ScanView: View {
     @Environment(\.scenePhase) private var phase
     @ScaledMetric(relativeTo: .subheadline) private var badgeSize: CGFloat = 36
     @AppStorage(ScanSteps.key) private var hiddenRaw = ""
-    /// Editing the options replaces the steps. Decided once on appearing: the first scan for an account (nothing to confirm yet) opens in Edit.
+    /// Editing the options replaces the steps. Decided once on appearing: the options card is always the first view of the start screen (Greg, 7 Oct 2026); "Done" then shows the steps.
     @State private var editing = false
     @State private var decidedEditing = false
     @State private var walkSteps: [Int]?
+    /// The picture of the game's appraisal screen, opened from the word in step 1.
+    @State private var showAppraisal = false
+    /// "Show less" folds the six steps away and keeps the options row and the warnings; remembered on the device. A UI test's clean install clears it with the rest of the defaults.
+    @AppStorage("scan.stepsCollapsed") private var stepsCollapsed = false
     /// "Get ready to scan" is open (`jump`: at the next unfinished step), and the gentle sheet that comes before a scan while setup is not done.
     @State private var setupPage: SetupPage?
     @State private var showSetupSheet = false
@@ -75,7 +79,7 @@ struct ScanView: View {
                 .frame(minHeight: geo.size.height)
                 .id("top")
             }
-            // Leaving Edit would otherwise keep the scroll position the long options panel and the keyboard left behind.
+            // Leaving the options would otherwise keep the scroll position the long options panel and the keyboard left behind.
             .onChange(of: editing) { _, _ in withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("top", anchor: .top) } }
             }
         }
@@ -111,6 +115,11 @@ struct ScanView: View {
                        scanAnyway: { startAfterSheet = true; showSetupSheet = false })
                 .environment(\.accent, accent)
         }
+        .sheet(isPresented: $showAppraisal) {
+            AppraisalSheet { showAppraisal = false }
+                .presentationDetents([.large]).presentationCornerRadius(Theme.Radius.sheet).presentationDragIndicator(.visible)
+                .environment(\.accent, accent)
+        }
         .fullScreenCover(isPresented: Binding(get: { walkSteps != nil }, set: { if !$0 { walkSteps = nil } })) {
             if let steps = walkSteps {
                 ScanWalkthrough(steps: steps, words: words, takesBack: !model.game.failed, hiddenRaw: $hiddenRaw) { walkSteps = nil }
@@ -133,8 +142,8 @@ struct ScanView: View {
             // A UI test's clean install counts as a first visit already made, so a later launch of the same test does not meet the guide either.
             if !Self.firstWalkAllowed { firstWalkShown = true }
             let firstVisit = !firstWalkShown && !model.live && !model.isReviewing
-            // The first visit opens the card on the options (behind the guide); after that, only a Full scan with no count does.
-            if !decidedEditing { decidedEditing = true; editing = model.fullScanNeedsCount || firstVisit }
+            // The start screen always opens on the options (behind the guide, on a first visit): Done shows the steps. Pushed fresh each time, so this is every open.
+            if !decidedEditing { decidedEditing = true; editing = (!model.live && !model.scanDonePending) || model.fullScanNeedsCount }
             if firstVisit {
                 firstWalkShown = true
                 let steps = visibleSteps
@@ -190,37 +199,78 @@ struct ScanView: View {
     private var bottomPanel: some View {
         Panel(spacing: 14) {
             if editing {
+                // The options open first, so the re-scan line must not be left behind them; its own identifier, as only one copy is on screen at a time.
+                rescanLine("rescan-line-editing")
                 ScanOptionsEditor { editing = false }
             } else {
                 ScanOptionsSummary { model.rescanCount = nil; editing = true }
-                if let n = model.rescanCount {
-                    Text("Re-scan of \(n.formatted()) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
-                        .font(.secondary).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("rescan-line")
-                }
-                steps
+                rescanLine("rescan-line")
+                if !stepsCollapsed { steps }
+                // The warnings explain a dimmed button, so they stay when the steps are folded away.
+                notes
+                stepsToggle
             }
         }
+    }
+
+    @ViewBuilder private func rescanLine(_ id: String) -> some View {
+        if let n = model.rescanCount {
+            Text("Re-scan of \(n.formatted()) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
+                .font(.secondary).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier(id)
+        }
+    }
+
+    /// Folds the steps away. The two spacers around the mark button share the height this frees, so the button moves down with the card's top edge.
+    private var stepsToggle: some View {
+        Button {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) { stepsCollapsed.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Text(stepsCollapsed ? "Show more" : "Show less")
+                Image(systemName: stepsCollapsed ? "chevron.down" : "chevron.up").font(.figtree(12, .bold)).accessibilityHidden(true)
+            }
+            .font(.figtree(14, .semibold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
+            .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityLabel(stepsCollapsed ? "Show more" : "Show less")
+        .accessibilityIdentifier("scan-steps-toggle")
+    }
+
+    /// Step 1's "appraisal": a link to nowhere outside the app (`openURL` below keeps it in), bold and in the accent colour.
+    private var step1Text: Text {
+        var s = (try? AttributedString(markdown: "In Pokémon Go, open the [appraisal](pogoassist://appraisal) of the Pokémon you want to start at.")) ?? AttributedString("In Pokémon Go, open the appraisal of the Pokémon you want to start at.")
+        if let r = s.runs.first(where: { $0.link != nil })?.range {
+            s[r].font = .figtree(15, .heavy, relativeTo: .subheadline)
+            s[r].foregroundColor = accent.ink
+        }
+        return Text(s)
     }
 
     /// The six steps (Greg, 6 Oct 2026). Paging by hand leaves out the Voice Control step and swipes itself.
     private var steps: some View {
         let byHand = words == .byHand
         return VStack(alignment: .leading, spacing: 14) {
-            step("1", Text("Open the appraisal of the Pokémon you want the scan to start at."))
+            step("1", step1Text)
+                .accessibilityAction(named: "Show the appraisal screen") { showAppraisal = true }
+                .accessibilityIdentifier("scan-step-1")
             if !byHand { step("2", Text("Make sure Voice Control is on. Not sure? Say \"Wake up\".")) }
             step("3", Text("Choose your scan options above."))
-            // "We'll take you back to the game" only while opening the game has not failed (`GameOpener`); otherwise the person is told to switch.
-            step("4", Text("Tap the Pogo Assist button, then Start Broadcast, then close that sheet."),
-                 small: model.game.failed ? GameOpener.fallbackLine : "We'll take you back to the game.")
+            // "We'll take you back to the game" only while opening the game has not failed (`GameOpener`); otherwise the person is told to switch. One text, in the step's own font (Greg, 7 Oct 2026).
+            step("4", Text("Tap the Pogo Assist button, then Start Broadcast, then close that sheet. " + (model.game.failed ? GameOpener.fallbackLine : "We'll take you back to the game.")))
             if byHand {
                 step("5", Text("Back in the game, swipe from one Pokémon to the next yourself."), small: "The scan does not end by itself: stop the broadcast from the red bar when the last one has been read.")
             } else {
                 step("5", Text("Back in the game, say ") + Text("\"\(words.spoken)\"").bold().foregroundStyle(accent.ink) + Text("."))
             }
             step("6", Text("When the scan ends, come back to Pogo Assist to meet your new Pokémon or export your collection."))
-            notes
         }
+        // Nothing is opened outside the app: the only link is step 1's.
+        .environment(\.openURL, OpenURLAction { url in
+            if url.scheme == "pogoassist", url.host == "appraisal" { showAppraisal = true }
+            return .handled
+        })
     }
 
     private func step(_ n: String, _ text: Text, small: String? = nil) -> some View {
@@ -243,7 +293,7 @@ struct ScanView: View {
     /// The things that are true now and that the person needs to see before starting, in the old screen's words.
     @ViewBuilder private var notes: some View {
         if model.fullScanNeedsCount {
-            Text("Type the number of Pokémon the game shows on its storage screen (Edit) before a Full scan. It needs the count to tell the end of your list from a stall.").font(.secondary).foregroundStyle(Theme.orangeInk)
+            Text("Type the number of Pokémon the game shows on its storage screen (Scan Options) before a Full scan. It needs the count to tell the end of your list from a stall.").font(.secondary).foregroundStyle(Theme.orangeInk)
         }
         if case .aboveLargest(let largest) = words {
             Text(model.scanKind == .partial
@@ -347,5 +397,33 @@ struct ScanButtonFace: View {
         .frame(width: 240, height: 240)
         .opacity(dimmed ? 0.45 : 1)
         .contentShape(Circle())
+    }
+}
+
+/// The game's appraisal screen, so the person knows what to open before starting (step 1). The picture is the owner's own screenshot, cropped to the game's screen.
+struct AppraisalSheet: View {
+    var onDone: () -> Void
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        VStack(spacing: 16) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("The appraisal screen").paText(.screenTitle).foregroundStyle(Theme.ink)
+                    Text("Have this screen open in Pokémon GO before you start: open the Pokémon in your storage, tap the menu at the bottom right, then Appraise.")
+                        .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    Image("scan-appraisal").resizable().scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+                        // Whole picture in view without scrolling on a large sheet (the scroll is for the largest text sizes).
+                        .frame(maxWidth: .infinity, maxHeight: 560)
+                        .accessibilityLabel("The appraisal screen in Pokémon GO, shown for a Cinderace")
+                }
+                .padding(.horizontal, Theme.Space.screen).padding(.top, 28)
+            }
+            PillButton("Done", style: .filled, action: onDone).padding(.horizontal, Theme.Space.screen).padding(.bottom, 14)
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("appraisal-sheet")
     }
 }

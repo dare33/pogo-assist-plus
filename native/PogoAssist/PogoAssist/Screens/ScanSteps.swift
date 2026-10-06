@@ -108,9 +108,8 @@ struct ScanWalkthrough: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 8) {
                         if step == 2, words != .byHand {
-                            // The command and the sentence run on in one line of text; the asterisk is explained below, smaller.
-                            (Text(title + " ").font(.figtree(28, .heavy, relativeTo: .title)).foregroundStyle(Theme.ink)
-                                + Text(body_).font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted))
+                            // The command and the sentence run on in one line of text, in one style (Greg, 7 Oct 2026); the asterisk is explained below, smaller.
+                            Text(title + " " + body_).font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
                             if !words.sizeKnown {
                                 Text("* Or the scan size that you choose!").font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                             }

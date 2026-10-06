@@ -242,16 +242,24 @@ final class BoxScreensTests: XCTestCase {
         let command = "Pogo scan \(sizes.first { $0 >= n + max(2, n / 10) }!)"
         button.tap()
         XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5), "the scan kind is Add and update")
+        // The Scan screen opens on the options (Add and update chosen, the number set); the re-scan line sits above them, not behind them.
+        XCTAssertTrue(app.staticTexts["How many Pokémon to scan?"].waitForExistence(timeout: 5), "the options are the first view")
+        XCTAssertTrue(app.buttons["Add and update"].isSelected, "the scan kind is Add and update")
+        XCTAssertEqual(app.staticTexts["rescan-line-editing"].label, "Re-scan of \(n) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
+        sleep(1)
+        shot("rescan-03-scan-screen-options")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["rescan-line"].exists)
         XCTAssertEqual(app.staticTexts["rescan-line"].label, "Re-scan of \(n) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
         XCTAssertTrue(app.staticTexts["Back in the game, say \"\(command)\"."].exists, "the steps name \(command)")
         sleep(1)
         shot("rescan-03-scan-screen")
 
-        // Edit drops the re-scan line; the covering number stays in "How many Pokémon to scan?", so the steps still name the same command.
-        app.buttons["Edit scan options"].tap()
+        // Scan Options drops the re-scan line; the covering number stays in "How many Pokémon to scan?", so the steps still name the same command.
+        app.buttons["Scan Options"].tap()
         XCTAssertTrue(app.staticTexts["How many Pokémon to scan?"].waitForExistence(timeout: 3) || app.textFields.firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["rescan-line-editing"].exists)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["rescan-line"].exists)
@@ -268,12 +276,12 @@ final class BoxScreensTests: XCTestCase {
         let button = app.buttons["rescan-button"]
         XCTAssertTrue(button.waitForExistence(timeout: 20))
         button.tap()
-        XCTAssertTrue(app.staticTexts["rescan-line"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["rescan-line-editing"].waitForExistence(timeout: 5))
         app.buttons["Back"].tap()
         XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
         app.buttons["Scan"].tap()
         XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["rescan-line"].exists, "a later visit does not carry the suggestion")
+        XCTAssertFalse(app.staticTexts["rescan-line"].exists || app.staticTexts["rescan-line-editing"].exists, "a later visit does not carry the suggestion")
     }
 
     // MARK: Mega form

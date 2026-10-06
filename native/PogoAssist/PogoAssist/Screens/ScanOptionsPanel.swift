@@ -2,7 +2,7 @@ import SwiftUI
 import PogoBox
 import PogoReader
 
-/// The one summary line of the remembered options: "Full scan · 1,698 in storage · Edit".
+/// The one summary line of the remembered options: "Full scan · 1,698 in storage · Scan Options".
 struct ScanOptionsSummary: View {
     @EnvironmentObject var model: AppModel
     var onEdit: () -> Void
@@ -20,13 +20,13 @@ struct ScanOptionsSummary: View {
             Text(text).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button(action: onEdit) {
-                Text("Edit").font(.figtree(13, .heavy, relativeTo: .footnote)).foregroundStyle(accent.ink)
+                Text("Scan Options").font(.figtree(13, .heavy, relativeTo: .footnote)).foregroundStyle(accent.ink)
                     .padding(.horizontal, 14).frame(minHeight: 34)
                     .background(Capsule().fill(Theme.surface))
                     .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(PressStyle())
-            .accessibilityLabel("Edit scan options")
+            .accessibilityLabel("Scan Options")
         }
         .padding(.leading, 14).padding(.trailing, 4).padding(.vertical, 2)
         .background(accent.tint, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
