@@ -48,6 +48,7 @@ struct ScanDoneView: View {
     @Environment(\.accent) private var accent
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var turned = false
+    @State private var confirmDiscard = false
 
     var body: some View {
         switch model.flow {
@@ -89,8 +90,27 @@ struct ScanDoneView: View {
             sleepReminder
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Where the "?" sits on the Scan start screen (hidden here): a way out of a scan the person does not want, asked about first like the review's Discard.
+        .overlay(alignment: .topTrailing) { discardButton }
         // The ring turns green as the screen comes up; with Reduce Motion it is green at once.
         .onAppear { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6)) { turned = true } }
+    }
+
+    /// The IconButton pattern (38 pt circle, 44 pt hit area) in red with a white cross, the usual delete button. The flow goes idle, so the Scan screen returns to its start view.
+    private var discardButton: some View {
+        Button { confirmDiscard = true } label: {
+            Image(systemName: "xmark").font(.figtree(16, .bold)).dynamicTypeSize(...DynamicTypeSize.large).foregroundStyle(.white)   // the circle is a fixed 38 pt: a larger cross would spill out of it
+                .frame(width: 38, height: 38).background(Circle().fill(Theme.red))
+                .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityLabel("Discard scan")
+        .accessibilityIdentifier("scan-done-discard")
+        // On the button itself, so the popover iOS shows here points at the cross; outside it the arrow pointed at the ring.
+        .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button("Discard scan", role: .destructive) { model.discardReview() }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Nothing will be added to the box.") }
     }
 
     private func openButton(_ words: ScanDoneWords) -> some View {

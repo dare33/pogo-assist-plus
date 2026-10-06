@@ -15,7 +15,12 @@ final class ScanDoneTests: XCTestCase {
     private func shot(_ name: String) {
         let dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
+        let screenshot = XCUIScreen.main.screenshot()
+        try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
+        // Also kept in the result bundle: the runner cannot always write to POGO_SCREENS.
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name; attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     private func runs() -> [(String, [String])] {
@@ -80,6 +85,9 @@ final class ScanDoneTests: XCTestCase {
             if name == "light" {
                 open.tap()
                 XCTAssertTrue(app.buttons["Save to box"].waitForExistence(timeout: 20) || app.buttons["review-save-locked"].waitForExistence(timeout: 5), "the review did not open")
+                // The sample has no questions, so step 1 says so; it has rows to check, so step 2 keeps "Check N in the game".
+                XCTAssertTrue(app.staticTexts["Successful scan"].exists)
+                shot("review-sample-successful-scan")
                 XCTAssertFalse(app.staticTexts["Finished scanning? Say \"Go to sleep\" to turn Voice Control off."].exists)
             }
             app.terminate()
@@ -189,6 +197,42 @@ final class ScanDoneTests: XCTestCase {
         if !reread.waitForExistence(timeout: 20), again.exists { again.tap() }
         XCTAssertTrue(reread.waitForExistence(timeout: 60), "the saved scan was not read again as A's 51 Pokémon")
         app.terminate()
+    }
+
+    /// The red cross on the Done screen asks first; Cancel keeps the scan, Discard scan clears it, closes the Scan screen and leaves no pill; Scan then opens at its start view.
+    func testDiscardFromTheDoneScreen() throws {
+        for (name, args) in runs() {
+            let app = finishedScan(args)
+            let discard = app.buttons["scan-done-discard"]
+            XCTAssertTrue(discard.exists, "no discard button on the Done screen")
+            XCTAssertEqual(discard.label, "Discard scan")
+            shot("done-discard-button-\(name)")
+            guard name == "light" else { app.terminate(); continue }
+            discard.tap()
+            // The dialog's own button has the cross's label but no identifier.
+            let confirm = app.buttons.matching(NSPredicate(format: "label == 'Discard scan' AND identifier == ''")).firstMatch
+            XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no question asked")
+            sleep(1)
+            shot("done-discard-dialog-\(name)")
+            // Here iOS shows the dialog as a popover, which has no Cancel button: tapping outside it is Cancel.
+            let cancel = app.buttons["Cancel"]
+            if cancel.exists { cancel.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72)).tap() }
+            XCTAssertTrue(app.buttons["scan-done-discard"].waitForExistence(timeout: 5) && !confirm.exists, "the dialog did not close")
+            XCTAssertTrue(app.buttons["scan-done-open"].exists, "Cancel kept the Done screen")
+            discard.tap()
+            XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+            confirm.tap()
+            // The flow is idle, so the Scan screen closes with the scan (as after a discard from the review) and the tabs are back with no pill over them.
+            XCTAssertTrue(app.buttons["Box"].waitForExistence(timeout: 10), "the Scan screen did not close")
+            XCTAssertFalse(app.buttons["scan-done-open"].exists)
+            XCTAssertFalse(app.buttons["scan-done-pill"].waitForExistence(timeout: 2), "a discarded scan left a pill")
+            // Scan opens at its start view, not at a Done screen.
+            app.buttons["Scan"].tap()
+            XCTAssertTrue(app.buttons["Start scan"].waitForExistence(timeout: 10), "the Scan screen did not open at its start view")
+            XCTAssertFalse(app.buttons["scan-done-open"].exists)
+            shot("done-discard-after-\(name)")
+            app.terminate()
+        }
     }
 
     /// How many Pokémon the bundled sample scan reads.
