@@ -140,7 +140,7 @@ struct ScanView: View {
                 let steps = visibleSteps
                 if !steps.isEmpty { DispatchQueue.main.async { walkSteps = steps } }
             }
-            // Only a broadcast started with this screen's own control takes the person back to the game (`GameOpener`): both pickers report their press.
+            // Only a broadcast started with this screen's own control takes the person back to the game (`GameOpener`): the mark button's picker reports its press (a touch, or `fire()` from "Scan anyway").
             let game = model.game
             markTrigger.onPress = { game.noteStartPressed() }
             model.setup.refresh()

@@ -3,7 +3,7 @@ import SwiftUI
 /// Takes the player back to Pokémon GO after the Scan screen started a broadcast (repo rule, Greg's decision of 4 Oct 2026): the app opens `pokemongo://` with no path and
 /// no parameters, once per started broadcast. It only brings the game to the front; nothing is passed to it and nothing in it is read or changed. Never from the extension.
 ///
-/// When it is asked: the person pressed this app's own start control (the mark button's broadcast picker, or the walkthrough's "Start scanning" / "Scan anyway"; see `noteStartPressed`)
+/// When it is asked: the person pressed this app's own start control (the mark button's broadcast picker, also fired by "Scan anyway" on the setup sheet; see `noteStartPressed`)
 /// no more than `pressWindow` before the broadcast started, so a broadcast started from Control Centre never counts; a broadcast goes live while the Scan screen is up and showed
 /// no scan running (so a scan already running when the screen was opened never counts), the broadcast started in the last `freshSeconds` (a person who switched to the game
 /// themselves and comes back later is not thrown back into it), and the app is active again.
