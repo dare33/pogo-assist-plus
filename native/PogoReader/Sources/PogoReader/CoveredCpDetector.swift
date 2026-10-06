@@ -15,6 +15,8 @@ public struct CoveredCpDetector {
     public static let defaultThreshold = 5
     /// After firing, consecutive cards WITH a CP before it can fire again: one long banner is one alert, a later banner alerts again.
     public static let defaultRearm = 3
+    /// While a stretch stays covered, one reminder per this many further cards with no CP after the firing.
+    public static let defaultStillEvery = 5
 
     public struct Covered: Equatable {
         /// The first card of the stretch with no CP: its name and HP maximum, the time of its first reading and its position in the
@@ -36,9 +38,11 @@ public struct CoveredCpDetector {
         case covered(Covered)
         /// `rearm` cards with a CP in a row after it fired: it can fire again.
         case cleared(at: Double?)
+        /// The stretch goes on: `cards` more cards with no CP since it fired (5, 10, ...), once per `stillEvery` until `.cleared`.
+        case stillCovered(cards: Int)
     }
 
-    public let threshold: Int, rearm: Int
+    public let threshold: Int, rearm: Int, stillEvery: Int
     /// True from the firing until it re-arms.
     public private(set) var isCovered = false
 
@@ -47,12 +51,13 @@ public struct CoveredCpDetector {
     private var swiped = true                   // a swipe was seen since the last card reading: the next one is a new card
     private var cardHasCp = false               // the current card has shown a CP
     private var noCpCards = 0                   // consecutive cards with no CP, the current one included
+    private var sinceFire = 0                   // cards with no CP since firing (reminder count); a card with a CP does not reset it, only `.cleared` does
     private var cpCards = 0                     // consecutive cards with a CP since firing (re-arm count)
     private var first: (name: String, hpMax: Int?, at: Double?, card: Int)?
     private var good: (name: String?, cp: Int, at: Double?)?
 
-    public init(threshold: Int = CoveredCpDetector.defaultThreshold, rearm: Int = CoveredCpDetector.defaultRearm) {
-        self.threshold = max(1, threshold); self.rearm = max(1, rearm)
+    public init(threshold: Int = CoveredCpDetector.defaultThreshold, rearm: Int = CoveredCpDetector.defaultRearm, stillEvery: Int = CoveredCpDetector.defaultStillEvery) {
+        self.threshold = max(1, threshold); self.rearm = max(1, rearm); self.stillEvery = max(1, stillEvery)
     }
 
     /// A swipe was seen: the next card reading is a new card.
@@ -77,7 +82,7 @@ public struct CoveredCpDetector {
             noCpCards = 0; first = nil          // a CP in any reading of a card resets the count, even one that was counted
             if isCovered, firstOfCard {
                 cpCards += 1
-                if cpCards >= rearm { isCovered = false; cpCards = 0; return .cleared(at: r.time) }
+                if cpCards >= rearm { isCovered = false; cpCards = 0; sinceFire = 0; return .cleared(at: r.time) }
             }
             return nil
         }
@@ -87,6 +92,10 @@ public struct CoveredCpDetector {
             noCpCards += 1
             if noCpCards == 1 { first = (name, r.hp?.max, r.time, cards) }
             cpCards = 0
+            if isCovered {
+                sinceFire += 1
+                if sinceFire % stillEvery == 0 { return .stillCovered(cards: sinceFire) }
+            }
         }
         guard !isCovered, noCpCards >= threshold, let f = first else { return nil }
         isCovered = true

@@ -45,7 +45,9 @@ final class CoveredCpDetectorTests: XCTestCase {
         XCTAssertEqual(c.lastGoodName, "Good2"); XCTAssertEqual(c.lastGoodCp, 502)
         XCTAssertEqual(c.startCard, 4)
         XCTAssertTrue(d.isCovered)
-        XCTAssertTrue(feedCards(&d, covered(50, 5), from: 30).isEmpty, "one long banner is one alert")
+        let more = feedCards(&d, covered(50, 5), from: 30)
+        XCTAssertFalse(more.contains { if case .covered = $0 { return true } else { return false } }, "one long banner is one firing")
+        XCTAssertEqual(more, (1...10).map { .stillCovered(cards: 5 * $0) }, "a reminder every five cards")
     }
 
     func testSingleAndShortRunsOfCpLessCardsNeverFire() {
@@ -136,6 +138,34 @@ final class CoveredCpDetectorTests: XCTestCase {
         ev += feedCards(&d, covered(5, 30), from: 60)
         guard case .covered(let c)? = ev.first, ev.count == 1 else { return XCTFail("second banner should alert: \(ev)") }
         XCTAssertEqual(c.firstName, "Cov30"); XCTAssertEqual(c.lastGoodName, "Good40")
+    }
+
+    func testStillCoveredEveryFiveCardsAfterTheFiringUntilCleared() {
+        var d = CoveredCpDetector()
+        var ev = feedCards(&d, covered(5))
+        XCTAssertEqual(ev.count, 1); XCTAssertTrue(d.isCovered)
+        ev = feedCards(&d, covered(4, 5), from: 10)
+        XCTAssertTrue(ev.isEmpty, "four more cards are not five")
+        ev = feedCards(&d, covered(1, 9), from: 20)
+        XCTAssertEqual(ev, [.stillCovered(cards: 5)])
+        ev = feedCards(&d, covered(5, 10), from: 30)
+        XCTAssertEqual(ev, [.stillCovered(cards: 10)])
+        // Cleared: nothing more, however many cards follow.
+        ev = feedCards(&d, good(3), from: 40)
+        XCTAssertEqual(ev.count, 1); if case .cleared? = ev.first {} else { XCTFail("\(ev)") }
+        XCTAssertTrue(feedCards(&d, good(20, 10), from: 50).isEmpty)
+    }
+
+    func testARearmedStretchStartsItsReminderCountOver() {
+        var d = CoveredCpDetector()
+        var ev = feedCards(&d, covered(5)) + feedCards(&d, covered(5, 5), from: 10)
+        XCTAssertEqual(ev.count, 2)
+        ev = feedCards(&d, good(3), from: 20)
+        XCTAssertEqual(ev.count, 1)
+        ev = feedCards(&d, covered(5, 20), from: 30)
+        guard case .covered? = ev.first, ev.count == 1 else { return XCTFail("a new stretch fires: \(ev)") }
+        ev = feedCards(&d, covered(5, 25), from: 40)
+        XCTAssertEqual(ev, [.stillCovered(cards: 5)], "counted from the new firing, not the old")
     }
 
     func testConfiguredThreshold() {

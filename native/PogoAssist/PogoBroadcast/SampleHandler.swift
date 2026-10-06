@@ -68,6 +68,8 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var heartbeat: DispatchSourceTimer?
     private var writeFailures = 0
     private var covered = CoveredCpDetector()      // touched on `queue`: a banner over the CP makes the phone vibrate (see `handleCovered`)
+    private let buzzLock = NSLock()
+    private var buzzGeneration = 0                  // a burst of vibration pulses plays only while its generation is the current one: bumped when the CP clears and when the scan finishes
     private var endController: ScanEndController?   // only for a scan paged by a command; touched on `queue`
     private var lastReadingTime = 0.0, lastReadingUptime = 0.0
     private var finishedWork = false              // the finish work (state, log) has been done, by a user stop or by the end of the list
@@ -83,6 +85,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             memory = MemoryProbe()
             finishedWork = false
             covered = CoveredCpDetector()
+            cancelBuzz()
             let period = ReaderSettings.autoEndPeriod
             ReaderSettings.clearFinishRequest()
             ScanNotifier.removePauseNotifications()   // a new scan: no earlier scan's pause notification (or its "End scan" button) stays
@@ -188,6 +191,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         finishedWork = true
         heartbeat?.cancel()
         heartbeat = nil
+        cancelBuzz()
         drainTicks()
         grouper.finish()
         state.rows = grouper.rows
@@ -261,15 +265,33 @@ class SampleHandler: RPBroadcastSampleHandler {
         }
     }
 
-    /// On `queue`. Something covers the CP (`CoveredCpDetector`): vibrate twice, a second apart (two pulses are easier to notice than one, never more per
-    /// stretch), note it in the replay log and the shared state. No sound and no notification (a notification banner would itself cover the CP). The scan goes on reading.
+    /// A burst of vibration: `buzzPulses` pulses `buzzGap` seconds apart, about 3.5 s. The vibrate sound is one fixed short pulse, so back to back pulses are the only way to make it longer and feel stronger.
+    /// Each pulse schedules the next on a global queue and checks the generation first, so `cancelBuzz` stops a burst at once and nothing is left scheduled once the scan finishes.
+    private static let buzzPulses = 7, buzzGap = 0.5
+
+    private func startBuzz() {
+        buzzLock.lock(); buzzGeneration += 1; let generation = buzzGeneration; buzzLock.unlock()   // a burst still playing gives way to the new one
+        pulse(1, generation: generation)
+    }
+
+    private func pulse(_ n: Int, generation: Int) {
+        buzzLock.lock(); let current = buzzGeneration == generation; buzzLock.unlock()
+        guard current else { return }
+        AudioServicesPlayAlertSound(kSystemSoundID_Vibrate)
+        guard n < Self.buzzPulses else { return }
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + Self.buzzGap) { [weak self] in self?.pulse(n + 1, generation: generation) }
+    }
+
+    private func cancelBuzz() { buzzLock.lock(); buzzGeneration += 1; buzzLock.unlock() }
+
+    /// On `queue`. Something covers the CP (`CoveredCpDetector`): a burst of vibration of about 3.5 s, repeated every five more cards with no CP until the CP is shown again; the firing is
+    /// also noted in the replay log and the shared state. No sound and no notification (a notification banner would itself cover the CP). The scan goes on reading.
     private func handleCovered(_ reading: FrameReading, time: Double) {
         guard let event = covered.feed(reading) else { return }
         switch event {
         case .covered(let c):
             log.notice("CP covered from \(c.firstName, privacy: .public): last card with a CP was \(c.lastGoodName ?? "?", privacy: .public) \(c.lastGoodCp ?? 0)")
-            AudioServicesPlayAlertSound(kSystemSoundID_Vibrate)
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { AudioServicesPlayAlertSound(kSystemSoundID_Vibrate) }
+            startBuzz()
             if let writer = replay {
                 switch writer.append(CpCoveredNote(t: c.startedAt ?? time, first: c.firstName, lastGood: c.lastGoodName, lastGoodCp: c.lastGoodCp)) {
                 case .written: state.replayLines = writer.lineCount
@@ -281,8 +303,13 @@ class SampleHandler: RPBroadcastSampleHandler {
             state.cpCovered = true; state.cpCoveredStretches += 1; state.cpCoveredSince = Date()
             state.cpCoveredFirstName = c.firstName; state.cpCoveredLastGoodName = c.lastGoodName; state.cpCoveredLastGoodCp = c.lastGoodCp
             write(force: true)
+        case .stillCovered(let cards):
+            // Not noted in the replay log: no note type fits and the log's firing note already says where the stretch began.
+            log.notice("CP still covered after \(cards) more cards: another burst")
+            startBuzz()
         case .cleared:
             log.notice("CP shown again")
+            cancelBuzz()
             state.cpCovered = false
             write(force: true)
         }
