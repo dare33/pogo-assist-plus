@@ -217,19 +217,38 @@ struct BoxView: View {
     /// (`AppModel.startRescan`). The search leaves out entries with no CP or HP to look for, as the Review's does.
     @ViewBuilder private var rescanButton: some View {
         if !model.live {
-            HStack(spacing: 10) {
-                if let search = toCheckSearch {
-                    PillButton("Copy search", systemImage: "doc.on.doc", style: .tint) { UIPasteboard.general.string = search; showToast("Copied") }
-                        .accessibilityIdentifier("copy-check-search").accessibilityValue(search)
+            let search = toCheckSearch
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    if let text = search.text {
+                        PillButton("Copy search", systemImage: "doc.on.doc", style: .tint) { UIPasteboard.general.string = text; showToast("Copied") }
+                            .accessibilityIdentifier("copy-check-search").accessibilityValue(text)
+                    }
+                    PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount) }
+                        .accessibilityIdentifier("rescan-button")
                 }
-                PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount) }
-                    .accessibilityIdentifier("rescan-button")
+                if let line = Self.searchLine(search) {
+                    Text(line).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("check-search-line")
+                }
             }
         }
     }
 
-    private var toCheckSearch: String? {
-        GameSearch.text(index.items.filter(\.needsCheck).map { GameSearch.part(name: $0.name, cp: $0.cp, hp: $0.hp, noLevelFits: $0.noLevelFits) })
+    /// What the copied search really shows: the to-check Pokémon it covers plus the others in the box with the same name and CP (or HP). The game can show more than the box knows of.
+    static func searchLine(_ s: BoxIndex.PickedSearch) -> String? {
+        guard s.text != nil else { return nil }
+        let covered = s.covered.formatted()
+        var line = s.extra > 0
+            ? "The search shows at least \((s.covered + s.extra).formatted()) in the game: \(covered) to check and \(s.extra.formatted()) \(s.extra == 1 ? "other" : "others") with the same name and CP or HP."
+            : "The search finds the \(covered) to check and no others in your box."
+        if s.notCovered > 0 { line += " \(s.notCovered.formatted()) of them \(s.notCovered == 1 ? "is" : "are") not in the search." }
+        return line
+    }
+
+    private var toCheckSearch: BoxIndex.PickedSearch {
+        index.gameSearch(picked: index.items.indices.filter { index.items[$0].needsCheck })
     }
 
     private func filterChip(_ title: String, _ value: BoxIndex.Chip) -> some View {

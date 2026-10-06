@@ -141,6 +141,30 @@ final class BoxScreensTests: XCTestCase {
 
     // MARK: Re-scan N
 
+    /// The line under the buttons says what the copied search shows, and its numbers add up: the total is the to-check Pokémon it covers plus the others with the same name and CP
+    /// (or just the to-check ones when there are no others), and the covered plus the left-out ones are all N.
+    @discardableResult private func checkSearchLine(_ app: XCUIApplication, toCheck n: Int) -> String {
+        let line = app.staticTexts["check-search-line"]
+        XCTAssertTrue(line.waitForExistence(timeout: 5), "a line under the buttons says what the search shows")
+        let text = line.label
+        func numbers(_ s: String) -> [Int] { s.split(whereSeparator: { !$0.isNumber && $0 != "," }).compactMap { Int($0.replacingOccurrences(of: ",", with: "")) } }
+        let sentences = text.components(separatedBy: ". ")
+        let nums = numbers(sentences[0])
+        var covered = 0
+        if text.hasPrefix("The search shows at least ") {
+            XCTAssertEqual(nums.count, 3, text)
+            XCTAssertEqual(nums[0], nums[1] + nums[2], text)
+            XCTAssertGreaterThan(nums[2], 0, text)
+            covered = nums[1]
+        } else {
+            XCTAssertTrue(text.hasPrefix("The search finds the "), text)
+            covered = nums[0]
+        }
+        let left = sentences.dropFirst().flatMap { numbers($0) }.first ?? 0
+        XCTAssertEqual(covered + left, n, "every Pokémon to check is in the search or left out of it: \(text)")
+        return text
+    }
+
     /// A box saved with checks and the command set made: the Saved panel offers "Re-scan N", the To check chip offers it too, and it lands on the Scan screen
     /// with Add and update and the smallest command covering N plus the margin. Editing the options, or leaving the screen, drops the suggestion.
     func testRescanButtonLandsOnScanWithTheCommand() throws {
@@ -155,6 +179,7 @@ final class BoxScreensTests: XCTestCase {
         let n = Int(button.label.replacingOccurrences(of: "Re-scan ", with: "")) ?? 0
         XCTAssertGreaterThan(n, 0, button.label)
         shot("rescan-01-saved-panel")
+        let savedLine = checkSearchLine(app, toCheck: n)
 
         // With the chip on, the one button sits under the chips.
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch.tap()
@@ -166,6 +191,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(copy.value as? String ?? "" != "", "the search is not empty: \(String(describing: copy.value))")
         XCTAssertTrue((copy.value as? String ?? "").contains("&"), "the search has names and terms")
         XCTAssertEqual(button.label, "Re-scan \(n)")
+        XCTAssertEqual(checkSearchLine(app, toCheck: n), savedLine, "the same line under the buttons on the chip")
         sleep(1)
         shot("rescan-02-to-check-chip")
 
