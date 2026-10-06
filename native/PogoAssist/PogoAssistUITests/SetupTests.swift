@@ -347,7 +347,7 @@ final class SetupTests: XCTestCase {
 
     func testTheGameIsOpenedOnceWhenTheBroadcastGoesLive() throws {
         let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "15", "-fake-start-press-after", "5", "-fake-open-game", "ok"])
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ENDSWITH 'We\'ll take you back to the game.'")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ENDSWITH %@", "We'll take you back to the game.")).firstMatch.exists)   // the apostrophe cannot sit inside a quoted format string
         XCTAssertEqual(logLabel(app), "0 ", "nothing is opened before a broadcast starts")
         XCTAssertTrue(app.staticTexts["Scan in progress"].waitForExistence(timeout: 40))
         sleep(4)   // the state is rewritten every second: it must not be asked again
