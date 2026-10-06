@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "Get ready to scan" (design handoff, Setup §2b): six steps with three kinds of tick (checked by the app, "you said done", to do), a progress bar, one main button for
+/// "Get ready to scan" (design handoff, Setup §2b): six steps with three kinds of tick (checked by the app, "Marked complete" by the person, to do), a progress bar, one main button for
 /// the next step, and the "My phone is set up" switch. It remembers where the person is (`SetupProgress`), so leaving for iOS Settings and coming back is safe.
 struct SetupChecklistView: View {
     /// Opens the next unfinished step straight away (the gentle sheet's "Open Scan setup").
@@ -93,7 +93,7 @@ private struct SetupChecklistBody: View {
         let sub: String = {
             switch state {
             case .checked: return n == 2 ? "Checked · commands made" : "Checked"
-            case .said: return "You said done"
+            case .said: return "Marked complete"
             case .todo: return info.rowSub
             }
         }()
@@ -113,12 +113,12 @@ private struct SetupChecklistBody: View {
         }
         .buttonStyle(PressStyle())
         .accessibilityLabel("Step \(n), \(info.rowTitle)")
-        .accessibilityValue(state == .checked ? "Checked by the app" : state == .said ? "You said done" : "To do")
+        .accessibilityValue(state == .checked ? "Checked by the app" : state == .said ? "Marked complete" : "To do")
         .accessibilityHint(info.rowSub)
         .accessibilityIdentifier("setup-step-\(n)")
     }
 
-    /// Checked: solid green. You said done: the same green tick (the row's words say who checked it). To do: the step number on a neutral well.
+    /// Checked: solid green. Marked complete: the same green tick (the row's words say who checked it). To do: the step number on a neutral well.
     @ViewBuilder private func tick(_ n: Int, _ state: SetupProgress.StepState) -> some View {
         ZStack {
             switch state {

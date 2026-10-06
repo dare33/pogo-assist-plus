@@ -8,7 +8,7 @@ import UserNotifications
 /// survive leaving the app and a relaunch; what the app can verify is re-checked when the app becomes active (`refresh`).
 ///
 /// Setup counts as done (`isDone`) when all six steps are ticked, or a scan paged by the voice command has been saved on this phone (`pagedScanSaved`, below), or the person
-/// turned on "My phone is set up" (`phoneSetUp`). The last one makes every step show as "you said done" without erasing what the app verified.
+/// turned on "My phone is set up" (`phoneSetUp`). The last one makes every step show as "Marked complete" without erasing what the app verified.
 @MainActor
 final class SetupProgress: ObservableObject {
     static let stepsKey = "setup.steps"

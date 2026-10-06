@@ -284,7 +284,7 @@ final class SetupTests: XCTestCase {
         toggle.tap()
         XCTAssertTrue(done(app, 6))
         XCTAssertFalse(app.buttons["Continue with step 1"].exists)
-        XCTAssertEqual(app.buttons["setup-step-3"].value as? String, "You said done")
+        XCTAssertEqual(app.buttons["setup-step-3"].value as? String, "Marked complete")
         shot("setup-checklist-said-done")
         back(app)
         XCTAssertFalse(app.buttons["setup-left"].exists, "setup is done: no line above the button")
