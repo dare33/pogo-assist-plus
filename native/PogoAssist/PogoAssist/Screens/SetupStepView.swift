@@ -2,8 +2,8 @@ import SwiftUI
 import PogoBox
 import PogoReader
 
-/// One step, one screen (design handoff, Setup §2c): "Step N of 6", a picture of the exact setting, the instruction as the title, at most two lines of text, the Siri line
-/// where it is true, and a confirm button that names what is done. The same template for all six; step 4 holds three ticks. Nothing here opens a private Settings page: the
+/// One step, one screen (design handoff, Setup §2c): "Step N of 6", the instruction as the title, then a short numbered list (steps 3 to 5) or one line of text, the picture of the exact setting (behind
+/// "See where it is" on steps 3 and 4), the Siri line where it is true, and a confirm button that names what is done. The same template for all six; step 4 holds three ticks. Nothing here opens a private Settings page: the
 /// app can open only its own page in iOS Settings, which helps only for notifications (step 1).
 struct SetupStepView: View {
     let step: Int
@@ -33,6 +33,8 @@ private struct SetupStepBody: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     @State private var moreOpen = false
+    @State private var pictureOpen = false
+    @State private var settingsFellBack = false
 
     private var info: SetupProgress.Info { SetupProgress.info[step - 1] }
     private var deviceKind: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
@@ -41,18 +43,24 @@ private struct SetupStepBody: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                picture
+                // The instruction comes first on every step. Steps 3 and 4 keep their picture behind "See where it is"; step 5's picture carries the answer, so it stays on the page.
                 VStack(alignment: .leading, spacing: 8) {
                     Text(info.title).font(.figtree(26, .heavy, relativeTo: .title)).tracking(-0.02 * 26).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-                    Text(text).font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted)
+                    if keySteps == nil { sentence }
                 }
                 .padding(.horizontal, 6)
+                if step != 3 && step != 4 { picture }
+                if let keySteps { numbered(keySteps) }
+                if step == 4 || step == 5 { sentence.padding(.horizontal, 6) }
+                if step == 3 || step == 4 { seeWhere }
                 extras
-                if let siri = siriLine { siri }
                 more
+                if let path = Self.settingsPaths[step], !(step == 1 && setup.notifications == .denied) { settingsRow(path) }
+                if let siri = siriLine { siri }
             }
             .padding(.horizontal, Theme.Space.screen).padding(.top, 8).padding(.bottom, 12)
         }
+        .sheet(isPresented: $pictureOpen) { pictureSheet }
         .background(Theme.bg.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PillButton(confirmTitle, style: .filled, height: 56, action: confirm)
@@ -71,10 +79,7 @@ private struct SetupStepBody: View {
             switch step {
             case 1: symbol("bell.badge")
             case 2: symbol("square.and.arrow.up")
-            default:
-                Image("setup-step\(step)").resizable().scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .padding(14)
+            default: settingsImage.padding(14)
             }
         }
         .frame(maxWidth: .infinity)
@@ -82,6 +87,82 @@ private struct SetupStepBody: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(pictureLabel)
         .accessibilityIdentifier("setup-picture")
+    }
+
+    /// The Settings picture. On step 5 a ring in the accent colour sits on the Apps box; its position is measured in the 700 x 286 asset and kept as fractions of the image,
+    /// so it stays on Apps at any size.
+    private var settingsImage: some View {
+        Image("setup-step\(step)").resizable().scaledToFit()
+            .overlay {
+                if step == 5 {
+                    GeometryReader { g in
+                        RoundedRectangle(cornerRadius: 0.1 * g.size.height, style: .continuous).stroke(accent.solid, lineWidth: 4)
+                            .frame(width: 0.47 * g.size.width, height: 0.52 * g.size.height)
+                            .position(x: 0.75 * g.size.width, y: 0.34 * g.size.height)
+                    }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var sentence: some View { Text(text).font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted) }
+
+    /// Steps 3 and 4: the picture opens large in a sheet, so the page leads with what to do.
+    private var seeWhere: some View {
+        Button { pictureOpen = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "photo").font(.system(size: 16, weight: .bold)).frame(width: 34, height: 34)
+                    .foregroundStyle(accent.ink).background(accent.tint, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).accessibilityHidden(true)
+                Text("See where it is").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink).frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right").font(.figtree(14, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 56)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous)).panelShadow()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityIdentifier("setup-see")
+    }
+
+    private var pictureSheet: some View {
+        NavigationStack {
+            ScrollView {
+                settingsImage.padding(Theme.Space.screen)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(pictureLabel)
+                    .accessibilityIdentifier("setup-picture")
+            }
+            .background(Theme.bg.ignoresSafeArea())
+            .navigationTitle("Where it is").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { pictureOpen = false }.accessibilityIdentifier("setup-picture-done") } }
+        }
+        .presentationDetents([.large])
+    }
+
+    /// The key steps, one line each, with number wells like the Scan screen's steps.
+    private func numbered(_ lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                HStack(alignment: .firstTextBaseline, spacing: 14) {
+                    Text("\(i + 1)").font(.figtree(14, .heavy, relativeTo: .subheadline)).foregroundStyle(accent.ink)
+                        .frame(width: 28, height: 28).background(accent.tint, in: Circle()).accessibilityHidden(true)
+                    Text(line).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.horizontal, 6)
+        .accessibilityIdentifier("setup-steps")
+    }
+
+    /// Steps 3 to 5 say what to do as a short list; the other steps keep their one line of text.
+    private var keySteps: [String]? {
+        switch step {
+        case 3: return ["Open Settings › Accessibility › Voice Control › Commands", "Scroll to the bottom, tap Import Custom Commands", "Pick the file you saved in step 2"]
+        case 4: return ["Open Settings › Accessibility › Voice Control", "Switch off Show Confirmation and Show Hints", "Scroll down, switch off Attention Aware"]
+        case 5: return ["Open Settings › Focus › Do Not Disturb", "Tap Apps, then add Pogo Assist", "Turn Do Not Disturb on before each scan"]
+        default: return nil
+        }
     }
 
     private func symbol(_ name: String) -> some View {
@@ -95,7 +176,7 @@ private struct SetupStepBody: View {
         case 2: return "The share icon: the commands file is shared to Files"
         case 3: return "Settings, Voice Control, Commands, at the bottom: Import Custom Commands, Export Custom Commands and Delete All Custom Commands"
         case 4: return "Settings, Voice Control: Show Confirmation, Play Sound and Show Hints, then Attention Aware, all switched off"
-        case 5: return "Settings, Focus, Do Not Disturb: the People and Apps boxes and Options"
+        case 5: return "Settings, Focus, Do Not Disturb: the People and Apps boxes and Options, with a ring round Apps"
         default: return "Settings, Notifications: Screen Sharing, Notifications On, and below it Screen Sharing's Allow Notifications switched on"
         }
     }
@@ -110,21 +191,21 @@ private struct SetupStepBody: View {
             return model.setKind == .tap
                 ? "One file holds all the commands. Choose Save to Files on THIS \(deviceKind): its taps are placed for this screen only."
                 : "One file holds all the commands. Choose Save to Files on this \(deviceKind)."
-        case 3: return "In Voice Control › Commands, scroll to the bottom. Tap Import Custom Commands, then pick the file you saved in step 2."
+        case 3: return ""
         case 4: return "Tick each one here as you switch it off."
-        case 5: return "A banner over the game blocks the reading. Turn Do Not Disturb on before each scan, and let Pogo Assist through: Settings › Focus › Do Not Disturb › Apps › add Pogo Assist. Alarms and timers still ring through Do Not Disturb, so check none is due during a scan."
+        case 5: return "Alarms and timers still ring through Do Not Disturb, so check none is due during a scan."
         default: return "iOS hides notification banners while the screen is shared. In Settings › Notifications › Screen Sharing, turn on Allow Notifications."
         }
     }
 
-    /// The Siri phrase is shown only where it helps (the Voice Control settings), as words to say: a device check found it works from the Home Screen, not from inside the game.
+    /// The Siri phrase is shown only where it helps (the Voice Control settings), as words to say.
     private var siriLine: AnyView? {
         guard step == 3 || step == 4 else { return nil }
         return AnyView(
             HStack(spacing: 12) {
                 Image(systemName: "mic.fill").font(.system(size: 16, weight: .bold)).frame(width: 34, height: 34)
                     .foregroundStyle(accent.ink).background(accent.tint, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).accessibilityHidden(true)
-                Text("Say \"Hey Siri, open Voice Control settings\" from the Home Screen.").font(.figtree(14, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+                Text("Say \"Hey Siri, open Voice Control settings\".").font(.figtree(14, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 56)
@@ -223,7 +304,8 @@ private struct SetupStepBody: View {
             return ["With Attention Aware on, Voice Control goes to sleep when you look away, which stops a command at the end of its batch.",
                     "Show Confirmation and Show Hints are in Voice Control's Command Feedback section; Attention Aware is lower on the same page."]
         case 5:
-            return ["A Focus other than Do Not Disturb works the same way: allow Pogo Assist through it.",
+            return ["A banner over the game blocks the reading.",
+                    "A Focus other than Do Not Disturb works the same way: allow Pogo Assist through it.",
                     "Allowing Pogo Assist through means you hear when a scan pauses or stops."]
         default:
             return ["Without it, a pause or a stop only goes quietly to Notification Centre."]
@@ -244,13 +326,47 @@ private struct SetupStepBody: View {
         .accessibilityIdentifier("setup-more")
     }
 
+    // MARK: open the Settings page
+
+    /// The Settings page each step is about. The `App-Prefs:` scheme is private: Greg chose to use it on 6 Oct 2026 and accepts that an iOS update may change or block it.
+    /// The supported link (`openSettingsURLString`) reaches only this app's own page, so it is the fallback when iOS refuses the private one. Step 2 has no Settings page.
+    static let settingsPaths: [Int: String] = [
+        1: "App-Prefs:root=NOTIFICATIONS_ID",
+        3: "App-Prefs:root=ACCESSIBILITY&path=VOICE_CONTROL",
+        4: "App-Prefs:root=ACCESSIBILITY&path=VOICE_CONTROL",
+        5: "App-Prefs:root=DO_NOT_DISTURB",
+        6: "App-Prefs:root=NOTIFICATIONS_ID",
+    ]
+
+    /// No `canOpenURL` for the private scheme (it would need a declared scheme): just try, and fall back when iOS says no.
+    private func openSettingsPage(_ path: String) {
+        settingsFellBack = false
+        guard let url = URL(string: path) else { return }
+        UIApplication.shared.open(url, options: [:]) { opened in
+            guard !opened else { return }
+            settingsFellBack = true
+            if let own = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(own) }
+        }
+    }
+
+    private func settingsRow(_ path: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            PillButton("Open Settings", systemImage: "gearshape", style: .tint) { openSettingsPage(path) }
+                .accessibilityIdentifier("setup-open-settings")
+            if settingsFellBack {
+                Text("Opens Settings; find the page from there.").font(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6)
+                    .accessibilityIdentifier("setup-settings-fallback")
+            }
+        }
+    }
+
     // MARK: confirm
 
     private var confirmTitle: String {
         switch step {
         case 4: return "Done · \(setup.switches.count) of 3 ticked"
         case 5: return "It's set up"
-        default: return setup.isVerified(step) ? "Continue" : "I've done it"
+        default: return setup.isVerified(step) ? "Continue" : "I've done it!"
         }
     }
     private var canConfirm: Bool {

@@ -173,9 +173,52 @@ final class SetupTests: XCTestCase {
         openChecklist(app)
         for n in 1...6 {
             openStep(app, n)
-            XCTAssertTrue(app.descendants(matching: .any)["setup-picture"].firstMatch.exists, "step \(n) has its picture")
+            let picture = app.descendants(matching: .any)["setup-picture"].firstMatch
+            if n == 3 || n == 4 {
+                // The picture is behind "See where it is", not on the page; the numbered steps are.
+                XCTAssertFalse(picture.exists, "step \(n): the picture is not on the page")
+                XCTAssertTrue(app.descendants(matching: .any)["setup-steps"].firstMatch.exists, "step \(n) has its numbered steps")
+                let see = app.buttons["setup-see"]
+                reveal(app, see)
+                see.tap()
+                XCTAssertTrue(picture.waitForExistence(timeout: 5), "step \(n) has its picture in the sheet")
+                app.buttons["setup-picture-done"].tap()
+                XCTAssertTrue(app.buttons["setup-confirm"].waitForExistence(timeout: 5))
+                XCTAssertFalse(picture.exists)
+            } else {
+                XCTAssertTrue(picture.exists, "step \(n) has its picture")
+            }
+            XCTAssertEqual(app.descendants(matching: .any)["setup-steps"].firstMatch.exists, n >= 3 && n <= 5, "numbered steps on steps 3 to 5")
             XCTAssertEqual(app.descendants(matching: .any)["setup-siri"].firstMatch.exists, n == 3 || n == 4, "the Siri line only on the Voice Control steps")
             XCTAssertTrue(app.buttons["setup-confirm"].exists)
+            XCTAssertEqual(app.buttons["setup-open-settings"].exists, n != 2, "Open Settings on every step that has a Settings page")
+            if n == 3 || n == 6 { XCTAssertEqual(app.buttons["setup-confirm"].label, "I've done it!") }
+            if n == 3 { XCTAssertTrue(app.staticTexts["Say \"Hey Siri, open Voice Control settings\"."].exists) }
+            back(app)
+        }
+    }
+
+    /// "Open Settings" on each step page that has a Settings page: the private App-Prefs link must take the app to the background and Settings must come up. The page it
+    /// lands on is printed (the navigation bar title) so each iOS version's result can be read; if iOS refuses the link, the fallback line is shown instead.
+    func testOpenSettingsLinksLeaveTheApp() throws {
+        let app = openScan(["-appearance", "light"])
+        openChecklist(app)
+        let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        XCTAssertFalse(app.buttons["setup-open-settings"].exists)
+        for n in [1, 3, 4, 5, 6] {
+            openStep(app, n)
+            let open = app.buttons["setup-open-settings"]
+            reveal(app, open)
+            open.tap()
+            let landed = settings.wait(for: .runningForeground, timeout: 15)
+            sleep(2)
+            let titles = settings.navigationBars.allElementsBoundByIndex.map(\.identifier)
+            print("SETTINGS-LINK step \(n): foreground=\(landed) bars=\(titles)")
+            XCTAssertTrue(landed, "step \(n): Settings came up")
+            XCTAssertNotEqual(app.state, .runningForeground, "step \(n): the app went to the background")
+            settings.terminate()
+            app.activate()
+            XCTAssertTrue(app.navigationBars["Step \(n) of 6"].waitForExistence(timeout: 10))
             back(app)
         }
     }
@@ -242,6 +285,7 @@ final class SetupTests: XCTestCase {
         XCTAssertTrue(done(app, 6))
         XCTAssertFalse(app.buttons["Continue with step 1"].exists)
         XCTAssertEqual(app.buttons["setup-step-3"].value as? String, "You said done")
+        shot("setup-checklist-said-done")
         back(app)
         XCTAssertFalse(app.buttons["setup-left"].exists, "setup is done: no line above the button")
         // Once setup is done the banner keeps only its first sentence, and still opens the checklist.
