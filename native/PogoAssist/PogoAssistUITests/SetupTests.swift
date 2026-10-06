@@ -37,7 +37,7 @@ final class SetupTests: XCTestCase {
             count.typeText("1400")
             app.buttons["Hide keyboard"].tap()
             app.buttons["Done"].tap()
-            XCTAssertTrue(app.staticTexts["Tap the button, then Start Broadcast"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["Choose your scan options above."].waitForExistence(timeout: 5))
         }
         return app
     }
@@ -112,6 +112,7 @@ final class SetupTests: XCTestCase {
         let banner = app.buttons["setup-banner"]
         XCTAssertTrue(banner.exists)
         XCTAssertEqual(banner.label, "Important! Before you start your scan please ensure that you have opened your first Pokémon's appraisal in Pokémon GO. For first time users, set your device up to work with Pogo Assist by tapping this banner.")
+        shot("banner-setup-not-done")
         XCTAssertFalse(app.buttons["Scan setup"].exists, "the old Scan setup link is gone")
         XCTAssertTrue(app.buttons["Start scan"].isHittable, "the banner does not push the mark button off the screen")
         banner.tap()
@@ -243,7 +244,11 @@ final class SetupTests: XCTestCase {
         XCTAssertEqual(app.buttons["setup-step-3"].value as? String, "You said done")
         back(app)
         XCTAssertFalse(app.buttons["setup-left"].exists, "setup is done: no line above the button")
+        // Once setup is done the banner keeps only its first sentence, and still opens the checklist.
+        XCTAssertEqual(app.buttons["setup-banner"].label, "Important! Before you start your scan please ensure that you have opened your first Pokémon's appraisal in Pokémon GO.")
+        shot("banner-setup-done")
         app.buttons["setup-banner"].tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5))
         toggleSetUp(app)
         XCTAssertTrue(done(app, 0), "turning it off again brings the steps back")
         XCTAssertTrue(app.buttons["Continue with step 1"].exists)
@@ -268,19 +273,16 @@ final class SetupTests: XCTestCase {
 
     func testGentleSheetOnlyWhenSetupIsNotDoneAndPagingIsByVoice() throws {
         let app = openScan(["-appearance", "light"])
-        // Paging by hand (the default until the commands exist): no sheet, the walkthrough starts.
-        app.buttons["Start scan"].tap()
-        XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5))
+        // Paging by hand (the default until the commands exist): no sheet, and starting never opens the guide (it goes to the system picker, which the simulator cannot show).
         XCTAssertFalse(app.staticTexts["Set your phone up first?"].exists)
-        app.buttons["Close"].tap()
         // Paging by voice, setup not done: the sheet comes first.
         chooseVoicePaging(app)
         app.buttons["Start scan"].tap()
         XCTAssertTrue(app.staticTexts["Set your phone up first?"].waitForExistence(timeout: 5))
         shot("setup-sheet-light")
         app.buttons["setup-sheet-anyway"].tap()
-        XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5), "Scan anyway goes on as before")
-        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["Set your phone up first?"].waitForNonExistence(timeout: 5), "Scan anyway closes the sheet")
+        XCTAssertFalse(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 2), "Scan anyway goes to the system picker, not to the guide")
         // Open Scan setup lands on the next unfinished step.
         app.buttons["Start scan"].tap()
         XCTAssertTrue(app.buttons["setup-sheet-open"].waitForExistence(timeout: 5))
@@ -291,9 +293,8 @@ final class SetupTests: XCTestCase {
         // When setup is done the sheet never appears.
         toggleSetUp(app)
         back(app)
-        app.buttons["Start scan"].tap()
-        XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Set your phone up first?"].exists)
+        XCTAssertFalse(app.staticTexts["Step 1 of 3"].exists)
     }
 
     // MARK: the game

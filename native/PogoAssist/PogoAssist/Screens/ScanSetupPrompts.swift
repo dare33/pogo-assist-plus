@@ -5,15 +5,19 @@ import SwiftUI
 
 /// The top banner. One Panel: the icon well, the text, a chevron. Tapping it opens the checklist.
 struct SetupBanner: View {
-    static let text = "Important! Before you start your scan please ensure that you have opened your first Pokémon's appraisal in Pokémon GO. For first time users, set your device up to work with Pogo Assist by tapping this banner."
+    static let firstSentence = "Important! Before you start your scan please ensure that you have opened your first Pokémon's appraisal in Pokémon GO."
+    static let setupSentence = " For first time users, set your device up to work with Pogo Assist by tapping this banner."
     var action: () -> Void
+    @EnvironmentObject var model: AppModel
+    /// Once setup is done only the first sentence is shown; tapping the banner still opens "Get ready to scan".
+    private var text: String { model.setup.isDone ? Self.firstSentence : Self.firstSentence + Self.setupSentence }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: "gamecontroller.fill").font(.system(size: 17, weight: .bold)).frame(width: 36, height: 36)
                     .foregroundStyle(Theme.orangeInk).background(Theme.orangeTint, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).accessibilityHidden(true)
-                (Text("Important! ").bold() + Text(String(Self.text.dropFirst("Important! ".count))))
+                (Text("Important! ").bold() + Text(String(text.dropFirst("Important! ".count))))
                     .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.ink)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -25,7 +29,7 @@ struct SetupBanner: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressStyle())
-        .accessibilityLabel(Self.text)
+        .accessibilityLabel(text)
         .accessibilityHint("Opens Get ready to scan")
         .accessibilityIdentifier("setup-banner")
     }
