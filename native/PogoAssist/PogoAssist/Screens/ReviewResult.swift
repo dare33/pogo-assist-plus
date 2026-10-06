@@ -193,7 +193,7 @@ private struct ReviewHeader: View {
         HStack(spacing: 12) {
             Text("1").font(.figtree(15, .heavy)).foregroundStyle(accent.onSolid)
                 .frame(width: bigCircle, height: bigCircle).background(Circle().fill(accent.solid)).accessibilityHidden(true)
-            Text(ctx.total == 0 ? "No questions to answer" : "Answer \(ReviewFormat.count(ctx.total, "question", "questions"))").paText(.button).foregroundStyle(Theme.ink)
+            Text(ctx.total == 0 ? "Successful scan" : "Answer \(ReviewFormat.count(ctx.total, "question", "questions"))").paText(.button).foregroundStyle(Theme.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if ctx.total > 0 { Text("\(ctx.answered) of \(ctx.total)").font(.figtree(15, .heavy, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(accent.ink) }
         }
@@ -207,7 +207,7 @@ private struct ReviewHeader: View {
         let row = HStack(spacing: 12) {
             Text("2").font(.figtree(14, .heavy)).foregroundStyle(Theme.muted)
                 .frame(width: smallCircle, height: smallCircle).background(Circle().fill(Theme.surface)).accessibilityHidden(true)
-            Text(toCheck == 0 ? "Nothing to check in the game" : "Check \(toCheck.formatted()) in the game").paText(.rowTitle).foregroundStyle(Theme.ink)
+            Text(toCheck == 0 ? "Nothing to check" : "Check \(toCheck.formatted()) in the game").paText(.rowTitle).foregroundStyle(Theme.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if toCheck > 0 {
                 Text("optional").font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted)

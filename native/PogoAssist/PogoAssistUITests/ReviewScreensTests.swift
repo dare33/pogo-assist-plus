@@ -373,6 +373,9 @@ final class ReviewScreensTests: XCTestCase {
     func testCleanScanIsUnlocked() throws {
         let app = launch(["-appearance", "light"], variant: "clean")
         XCTAssertTrue(app.buttons["review-save"].exists)
+        XCTAssertTrue(app.staticTexts["Successful scan"].exists)
+        // This seeded scan has rows to check, so step 2 keeps its "Check N in the game" wording; "Nothing to check" is asserted on the sample scan (ScanDoneTests).
+        XCTAssertTrue(app.buttons["review-step-check"].label.hasPrefix("Check "))
         shot("clean-01-top")
     }
 
