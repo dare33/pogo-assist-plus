@@ -62,7 +62,6 @@ struct ReviewStretchPanels: View {
     var body: some View {
         ForEach(Array(ctx.stretches.enumerated()), id: \.offset) { n, t in
             let text = ReviewWording.stretch(t, commandSize: ReviewWording.resumeSize(t, pagedByCommand: ctx.review.paging?.pagedByCommand == true, commandSetMade: model.commandSetMade))
-            let search = ReviewWording.stretchSearch(t, scan: ctx.review.outcome.scan)
             Panel(tint: .orange, padding: 16, spacing: 10) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -76,10 +75,6 @@ struct ReviewStretchPanels: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("review-stretch-\(n)")
-                if let search {
-                    Text("To find the first one in the game:").font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.orangeInk)
-                    SearchStrip(text: search)
-                }
             }
         }
     }

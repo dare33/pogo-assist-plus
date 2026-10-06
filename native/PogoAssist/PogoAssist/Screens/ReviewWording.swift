@@ -274,16 +274,7 @@ enum ReviewWording {
             place = " (\(t.cardBefore.map { "it comes right after \($0.name) CP \($0.cp)" } ?? "it is the first one in this scan"))"
         }
         let then = commandSize.map { "choose Add and update, then say \"Wake up\" and \"Pogo scan \($0)\"." } ?? "then scan again from there (Add and update)."
-        return StretchText(title: title, what: what, resume: "To read them again: in Pokémon GO open \(target)\(place) with the appraisal showing, \(then)")
-    }
-
-    /// The first card of a stretch as a game search: its HP when its CP is not to be trusted (always for a hidden CP, and for a CP that was worked out or fits no level).
-    static func stretchSearch(_ t: TroubleStretch, scan: ScanResult) -> String? {
-        // With unread cards ahead of the first affected row, the place to open is one the scan could not read: there is nothing to search for.
-        guard t.leadingUnread == 0, scan.rows.indices.contains(t.firstRow) else { return nil }
-        let r = scan.rows[t.firstRow]
-        let worked = t.kind == .cpHidden || r.flags.contains { $0 == "cp-computed" || $0.hasPrefix("cp-computed:") } || GameSearch.untrusted(r)
-        return GameSearch.text([GameSearch.part(name: r.name, cp: r.cp, hp: r.hp, noLevelFits: worked)])
+        return StretchText(title: title, what: what, resume: "To read them again: in Pokémon GO open \(target)\(place) with the appraisal showing, \(then) Keep your storage sorted the same way as for that scan.")
     }
 
     // MARK: pieces
