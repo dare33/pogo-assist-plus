@@ -308,7 +308,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         let once = OnceGate()
         let finish: () -> Void = { [weak self] in
             guard once.pass() else { return }
-            self?.finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0, userInfo: [NSLocalizedDescriptionKey: "Scan finished."]))
+            self?.finishBroadcastWithError(NSError(domain: "com.dare33.pogoassist.broadcast", code: 0, userInfo: [NSLocalizedDescriptionKey: "The Pogo Assist scan has ended. OK stays in Pokémon GO; Go to Application opens Pogo Assist."]))
         }
         DispatchQueue.global(qos: .userInitiated).async { [log] in
             ScanNotifier.post(note) { error in
