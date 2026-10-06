@@ -70,21 +70,25 @@ struct ScanDoneView: View {
     }
 
     private func done(_ words: ScanDoneWords) -> some View {
-        VStack(spacing: 20) {
+        // Spread over the height with spacers (no fixed positions): the ring, then the headline, then the button and its line, the reminder last. At a large text size the
+        // spacers shrink to their minimum and the Scan screen's scroll view takes over.
+        VStack(spacing: 0) {
+            Spacer(minLength: 16)
             DoneRing(read: words.read, readIn: words.readIn, turned: turned)
-                .padding(.top, 24)
+            Spacer(minLength: 28)
             Text(words.headline).font(.figtree(26, .heavy, relativeTo: .title)).tracking(-0.015 * 26).foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 36)
             VStack(spacing: 10) {
                 openButton(words)
                 if let sub = words.subline {
                     Text(sub).font(.figtree(14, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
                 }
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: 36)
             sleepReminder
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         // The ring turns green as the screen comes up; with Reduce Motion it is green at once.
         .onAppear { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6)) { turned = true } }
     }
@@ -109,10 +113,11 @@ struct ScanDoneView: View {
     private var sleepReminder: some View {
         HStack(spacing: 8) {
             Image(systemName: "moon.fill").font(.figtree(15, .bold)).foregroundStyle(Theme.muted).accessibilityHidden(true)
-            Text("Say \"Go to sleep\"").font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+            Text("Finished scanning? Say \"Go to sleep\" to turn Voice Control off.").font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 16).padding(.vertical, 8).frame(minHeight: 40)
-        .background(Theme.surface, in: Capsule()).panelShadow()
+        .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 40)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous)).panelShadow()
         .accessibilityElement(children: .combine)
     }
 }

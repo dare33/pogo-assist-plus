@@ -70,7 +70,7 @@ final class ScanDoneTests: XCTestCase {
             let app = finishedScan(args)
             headline(app, "Scan finished.")
             XCTAssertFalse(app.staticTexts["That's your whole box."].exists)
-            XCTAssertTrue(app.staticTexts["Say \"Go to sleep\""].exists)
+            XCTAssertTrue(app.staticTexts["Finished scanning? Say \"Go to sleep\" to turn Voice Control off."].exists)
             let ring = app.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES '.* read in .*'")).firstMatch
             XCTAssertTrue(ring.exists, "the ring says what was read")
             let open = app.buttons["scan-done-open"]
@@ -80,7 +80,7 @@ final class ScanDoneTests: XCTestCase {
             if name == "light" {
                 open.tap()
                 XCTAssertTrue(app.buttons["Save to box"].waitForExistence(timeout: 20) || app.buttons["review-save-locked"].waitForExistence(timeout: 5), "the review did not open")
-                XCTAssertFalse(app.staticTexts["Say \"Go to sleep\""].exists)
+                XCTAssertFalse(app.staticTexts["Finished scanning? Say \"Go to sleep\" to turn Voice Control off."].exists)
             }
             app.terminate()
         }
