@@ -100,8 +100,9 @@ struct ScanWalkthrough: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 8) {
                         if step == 2, words != .byHand {
-                            // The command, the sentence and the note about the number run on as one text in one style (Greg, 7 Oct 2026): the number is the one the chosen scan needs.
-                            Text(title + " " + body_ + " Note- the number will change depending on your chosen scan!").font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
+                            // The command and the sentence run on as one big text; the note about the number sits under it in the body style (Greg, 7 Oct 2026): the number is the one the chosen scan needs.
+                            Text(title + " " + body_).font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
+                            Text("Note- the number will change depending on your chosen scan!").font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted)
                         } else {
                             Text(title).font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
                             Text(body_).font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted)
@@ -125,7 +126,7 @@ struct ScanWalkthrough: View {
         case 0:
             Image(systemName: "list.bullet.rectangle.portrait").font(.system(size: 96, weight: .light)).foregroundStyle(accent.solid)
         case 1:
-            ScanMark().frame(width: 124, height: 124).foregroundStyle(accent.onSolid)
+            ScanMark().frame(width: 124, height: 124).foregroundStyle(accent.markInk)
                 .frame(width: 150, height: 150).background(Circle().fill(accent.solid))
         default:
             if words == .byHand {
