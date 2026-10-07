@@ -51,9 +51,8 @@ struct ContentView: View {
                         Button("Load partial-read sample") { onLoadSample(true) }.disabled(model.live)
                     } footer: { Text("Copies a bundled device log into the app group as if a broadcast had just finished, then shows the finished scan, as it would when you come back to the app. For use where the broadcast cannot run. The partial-read sample is one Staraptor whose CP was read as 182; scan the full sample first and save it, then load this as an add-and-update scan.") }
                 }
-                #if DEBUG
+                // Not DEBUG-only: the scheme runs Release on a phone, and the tester exists for the owner's phone.
                 if onLoadSample != nil { SettingsLinkTester() }
-                #endif
                 Section("Reader (applies when the broadcast starts)") {
                     Picker("Reader", selection: $model.mode) {
                         ForEach(ReaderMode.allCases) { Text($0.title).tag($0) }
@@ -128,7 +127,6 @@ struct ContentView: View {
     private func mb(_ v: Double) -> String { String(format: "%.1f MB", v) }
 }
 
-#if DEBUG
 /// For the owner's phone: every Settings link candidate as a button, with what iOS said, so the one that opens the named page can be reported. The simulators open only the Settings root.
 struct SettingsLinkTester: View {
     private static let targets: [(name: String, links: [String])] = [
@@ -164,7 +162,6 @@ struct SettingsLinkTester: View {
         UIApplication.shared.open(url, options: [:]) { opened in results[key] = opened ? "opened" : "refused by iOS" }
     }
 }
-#endif
 
 struct RowView: View {
     let row: LiveRow
