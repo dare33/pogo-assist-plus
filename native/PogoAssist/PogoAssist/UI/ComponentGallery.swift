@@ -135,6 +135,8 @@ struct ComponentGallery: View {
                 ScanMark().frame(width: 48, height: 48).foregroundStyle(Theme.orange)
                 ScanMark().frame(width: 24, height: 24).foregroundStyle(Theme.green)
                 ScanMark().frame(width: 20, height: 20).foregroundStyle(Theme.muted)
+                // The default is two-tone (gold stars); this is the monochrome option the tab bar uses.
+                ScanMark(monochrome: true).frame(width: 48, height: 48).foregroundStyle(Theme.ink)
             }
         }
     }
