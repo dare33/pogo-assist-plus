@@ -100,6 +100,9 @@ struct SettingsView: View {
                 } header: { Text("Scans") } footer: { Text("Share a scan's replay log and result to send them for diagnosis.") }
                 Section("About") {
                     Text("Reader mode is set to accurate. The mode picker is in Diagnostics.").font(.footnote)
+                    // Trademark notice, needed by Apple's review and fair to the owners of the names: the app reads a player's own screen and is nobody's partner.
+                    Text("Pogo Assist+ is not affiliated with, endorsed by or connected to Niantic, Nintendo or The Pokémon Company. Pokémon and Pokémon GO are trademarks of their owners.").font(.footnote)
+                        .accessibilityIdentifier("about-affiliation")
                 }
             }
             .navigationTitle("Settings")
