@@ -29,6 +29,7 @@
 		408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFAC0B18897FB5A85E55764 /* Theme.swift */; };
 		44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */; };
 		4802DD98D7286E310F86378A /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D08E55E9B50EC09258EFF1 /* AppModel.swift */; };
+		5143F741547AF0FBD8D7A675 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */; };
 		53E565D8D2134740F880785D /* StateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9E2F476A7C0759293BCB1F /* StateModel.swift */; };
 		55CD9F47DF14E817FF7A91C5 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = B08D9DBF1BA823A3FB1BD6BA /* OFL.txt */; };
 		590D6523FF4E5A4A47A05349 /* ReviewToCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6C431800FF0BBA252331DB /* ReviewToCheck.swift */; };
@@ -73,6 +74,7 @@
 		C875980798B1206FF0A644E8 /* BoxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17BAAA30DB1A885E5BC14BF /* BoxView.swift */; };
 		CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
 		D4D21195EE5DE09BDCAE9BE0 /* ReviewNotSeen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61B527C762D4C808D507072 /* ReviewNotSeen.swift */; };
+		DB7F0F261F579F598E2F94B8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9A7F76950DF8ED2D50218072 /* PrivacyInfo.xcprivacy */; };
 		DF232EF5A04B4ADA4B79527B /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6261F1BB3C75D905222CC61 /* Typography.swift */; };
 		E6247625CABEEE77FEB55C70 /* Figtree-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 60BF710F03812439C395ED03 /* Figtree-Variable.ttf */; };
 		E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83DD8DD5AEC769BBE964440 /* ScanDone.swift */; };
@@ -162,6 +164,7 @@
 		936229D5CE5AD592DA498B16 /* ReviewQuestionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewQuestionViews.swift; sourceTree = "<group>"; };
 		943D02DD923AE19E5F63128C /* FloatingTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingTabBar.swift; sourceTree = "<group>"; };
 		972B5D573E425B7C4A866181 /* BoxIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxIntents.swift; sourceTree = "<group>"; };
+		9A7F76950DF8ED2D50218072 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
 		9DD3B9B348BAD6411BC1C01A /* SharedState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedState.swift; sourceTree = "<group>"; };
 		A052B76A429D7B08291119B9 /* ReviewResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewResult.swift; sourceTree = "<group>"; };
@@ -181,6 +184,7 @@
 		D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSections.swift; sourceTree = "<group>"; };
 		D7EAA375CD0561890BDC48B2 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
 		E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentGallery.swift; sourceTree = "<group>"; };
+		E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanNotifier.swift; sourceTree = "<group>"; };
 		EC4B281BB0B64267189CDB87 /* SetupProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupProgress.swift; sourceTree = "<group>"; };
 		EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDebug.swift; sourceTree = "<group>"; };
@@ -229,6 +233,7 @@
 			children = (
 				2E3538488989AE3C1ABAA66B /* Info.plist */,
 				CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */,
+				9A7F76950DF8ED2D50218072 /* PrivacyInfo.xcprivacy */,
 				2851EAE92D472650A78CD032 /* SampleHandler.swift */,
 			);
 			path = PogoBroadcast;
@@ -377,6 +382,7 @@
 				00027E9C738C8485EF328388 /* Info.plist */,
 				4C694C91A68984883C8CC317 /* PogoAssist.entitlements */,
 				55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */,
+				E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */,
 				B3F5275BA12DBF318D759175 /* ReportSupport.swift */,
 				2174CAD06ADF7ECC068B88FD /* SampleScan.swift */,
 				6B9E2F476A7C0759293BCB1F /* StateModel.swift */,
@@ -395,6 +401,7 @@
 			buildConfigurationList = 601830ECC46122AAE0399C36 /* Build configuration list for PBXNativeTarget "PogoBroadcast" */;
 			buildPhases = (
 				E3E4F8E83C4C7E6BC24510AA /* Sources */,
+				57A38079DE99D5A666F30749 /* Resources */,
 				A2B9BC1BE8EBC5FE0C4A37FE /* Frameworks */,
 			);
 			buildRules = (
@@ -496,6 +503,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		57A38079DE99D5A666F30749 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB7F0F261F579F598E2F94B8 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B47A81455E0680E2F2E985A2 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -503,6 +518,7 @@
 				371C03D06719ECB18761E0D6 /* Assets.xcassets in Resources */,
 				E6247625CABEEE77FEB55C70 /* Figtree-Variable.ttf in Resources */,
 				55CD9F47DF14E817FF7A91C5 /* OFL.txt in Resources */,
+				5143F741547AF0FBD8D7A675 /* PrivacyInfo.xcprivacy in Resources */,
 				8195313A1A5D36E07D5E0BA8 /* sample-partial-cp.replay.jsonl in Resources */,
 				8DCC1E40BCAA03A119A1ECC8 /* sample-scan.replay.jsonl in Resources */,
 			);
