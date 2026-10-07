@@ -100,6 +100,8 @@ final class ScanScreensTests: XCTestCase {
     private func runs() -> [(String, [String])] {
         [("light", ["-appearance", "light"]),
          ("dark", ["-appearance", "dark"]),
+         // Greg's accent, to see the mark's navy ring on it.
+         ("dark-berry", ["-appearance", "dark", "-accent", "berry"]),
          ("large", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])]
     }
 
@@ -152,9 +154,11 @@ final class ScanScreensTests: XCTestCase {
         }
     }
 
-    /// The guide's third page by voice, as one text (over the 128 characters a string subscript allows, so by predicate).
+    /// The guide's third page by voice: the big line (the command and the sentence run on as one text) and, as its own text, the note about the number.
     private func voiceLine(_ app: XCUIApplication, _ n: Int) -> XCUIElement {
-        app.staticTexts.matching(NSPredicate(format: "label == %@", "Say \"Pogo scan \(n)\". Then leave the phone alone until the scan is done! Note- the number will change depending on your chosen scan!")).firstMatch
+        let big = app.staticTexts["Say \"Pogo scan \(n)\". Then leave the phone alone until the scan is done!"]
+        XCTAssertTrue(app.staticTexts["Note- the number will change depending on your chosen scan!"].waitForExistence(timeout: 3), "the note is its own row")
+        return big
     }
 
     private let step1 = "In Pokémon Go, open the appraisal of the Pokémon you want to start at."

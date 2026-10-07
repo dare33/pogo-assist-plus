@@ -46,6 +46,8 @@ struct ScanView: View {
 
     /// The least free height above and below the mark button, and the sizes it may take.
     private static let markGap: CGFloat = 12
+    /// Free space between the bottom of the content and the screen edge.
+    private static let bottomGap: CGFloat = 20
     private static let markMax: CGFloat = 240, markMin: CGFloat = 200
     private var words: ScanWords { ScanWords.current(model) }
     private var visibleSteps: [Int] { ScanSteps.visible(raw: hiddenRaw, help: help) }
@@ -57,7 +59,9 @@ struct ScanView: View {
     var body: some View {
         GeometryReader { geo in
             // 240 pt when the card fits under it; down to 200 pt only when the screen is too short for the card (Greg, 7 Oct 2026: "Show less" fully visible).
-            let markSize = max(Self.markMin, min(Self.markMax, geo.size.height - fixedHeights - 8 - 14 - 2 * Self.markGap))
+            // The scroll view runs on under the home indicator, so the card ends `bottomGap` above the screen edge (Greg, 7 Oct 2026: move the cards lower); the height it has is the safe height plus that inset.
+            let height = geo.size.height + geo.safeAreaInsets.bottom
+            let markSize = max(Self.markMin, min(Self.markMax, height - fixedHeights - 8 - Self.bottomGap - 2 * Self.markGap))
             ScrollViewReader { proxy in
             ScrollView {
                 // No automatic gaps: the start screen's spacers share the free height, and their minimum is the gap, so a full card costs no more than it must.
@@ -84,13 +88,14 @@ struct ScanView: View {
                         bottomPanel.measured()
                     }
                 }
-                .padding(.horizontal, Theme.Space.screen).padding(.top, 8).padding(.bottom, 14)
+                .padding(.horizontal, Theme.Space.screen).padding(.top, 8).padding(.bottom, Self.bottomGap)
                 // Top-aligned: with the default centre, content shorter than the screen (the options first) floated down and left a gap under the card.
-                .frame(minHeight: geo.size.height, alignment: .top)
+                .frame(minHeight: height, alignment: .top)
                 .onPreferenceChange(FixedHeights.self) { fixedHeights = $0 }
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: editing)
                 .id("top")
             }
+            .ignoresSafeArea(.container, edges: .bottom)
             // Leaving the options would otherwise keep the scroll position the long options panel and the keyboard left behind.
             .onChange(of: editing) { _, _ in withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("top", anchor: .top) } }
             }
@@ -408,7 +413,7 @@ struct ScanButtonFace: View {
                 }
                 .foregroundStyle(accent.onSolid).frame(width: 170)
             } else {
-                ScanMark().frame(width: 176, height: 176).foregroundStyle(accent.onSolid)
+                ScanMark().frame(width: 176, height: 176).foregroundStyle(accent.markInk)
             }
         }
         .frame(width: 240, height: 240)
