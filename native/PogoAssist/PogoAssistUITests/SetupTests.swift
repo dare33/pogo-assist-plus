@@ -198,8 +198,8 @@ final class SetupTests: XCTestCase {
         }
     }
 
-    /// "Open Settings" on each step page that has a Settings page: the private App-Prefs link must take the app to the background and Settings must come up. The page it
-    /// lands on is printed (the navigation bar title) so each iOS version's result can be read; if iOS refuses the link, the fallback line is shown instead.
+    /// "Open Settings" on each step page that has a Settings page: the private Settings link must take the app to the background and Settings must come up. The page it
+    /// lands on is printed (the navigation bar title) so each iOS version's result can be read.
     func testOpenSettingsLinksLeaveTheApp() throws {
         let app = openScan(["-appearance", "light"])
         openChecklist(app)
@@ -221,6 +221,19 @@ final class SetupTests: XCTestCase {
             XCTAssertTrue(app.navigationBars["Step \(n) of 6"].waitForExistence(timeout: 10))
             back(app)
         }
+    }
+
+    /// The words under "Open Settings" are always shown, since the app cannot know where Settings opened. The button is not tapped: it would leave the app.
+    func testStep6NamesTheSettingsPageInWords() throws {
+        let app = openScan(["-appearance", "light"])
+        openChecklist(app)
+        openStep(app, 6)
+        let button = app.buttons["setup-open-settings"]
+        reveal(app, button)
+        XCTAssertTrue(button.exists)
+        let line = app.staticTexts["setup-settings-fallback"]
+        XCTAssertTrue(line.exists)
+        XCTAssertEqual(line.label, "If Settings opens on another page, go to Notifications › Screen Sharing.")
     }
 
     func testStep5SaysAlarmsStillRing() throws {

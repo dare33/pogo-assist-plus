@@ -3,8 +3,8 @@ import PogoBox
 import PogoReader
 
 /// One step, one screen (design handoff, Setup §2c): "Step N of 6", the instruction as the title, then a short numbered list (steps 3 to 5) or one line of text, the picture of the exact setting (behind
-/// "See where it is" on steps 3 and 4), the Siri line where it is true, and a confirm button that names what is done. The same template for all six; step 4 holds three ticks. Nothing here opens a private Settings page: the
-/// app can open only its own page in iOS Settings, which helps only for notifications (step 1).
+/// "See where it is" on steps 3 and 4), the Siri line where it is true, and a confirm button that names what is done. The same template for all six; step 4 holds three ticks. Steps 1 and 3 to 6 also have an
+/// "Open Settings" button that tries a list of Settings links in order, and always says in words which page to go to, because the app cannot tell where Settings really opened.
 struct SetupStepView: View {
     let step: Int
     @EnvironmentObject var model: AppModel
@@ -34,7 +34,6 @@ private struct SetupStepBody: View {
     @Environment(\.accent) private var accent
     @State private var moreOpen = false
     @State private var pictureOpen = false
-    @State private var settingsFellBack = false
 
     private var info: SetupProgress.Info { SetupProgress.info[step - 1] }
     private var deviceKind: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
@@ -55,7 +54,7 @@ private struct SetupStepBody: View {
                 if step == 3 || step == 4 { seeWhere }
                 extras
                 more
-                if let path = Self.settingsPaths[step], !(step == 1 && setup.notifications == .denied) { settingsRow(path) }
+                if let links = Self.settingsLinks[step], !(step == 1 && setup.notifications == .denied) { settingsRow(links) }
                 if let siri = siriLine { siri }
             }
             .padding(.horizontal, Theme.Space.screen).padding(.top, 8).padding(.bottom, 12)
@@ -328,35 +327,50 @@ private struct SetupStepBody: View {
 
     // MARK: open the Settings page
 
-    /// The Settings page each step is about. The `App-Prefs:` scheme is private: Greg chose to use it on 6 Oct 2026 and accepts that an iOS update may change or block it.
-    /// The supported link (`openSettingsURLString`) reaches only this app's own page, so it is the fallback when iOS refuses the private one. Step 2 has no Settings page.
-    static let settingsPaths: [Int: String] = [
-        1: "App-Prefs:root=NOTIFICATIONS_ID",
-        3: "App-Prefs:root=ACCESSIBILITY&path=VOICE_CONTROL",
-        4: "App-Prefs:root=ACCESSIBILITY&path=VOICE_CONTROL",
-        5: "App-Prefs:root=DO_NOT_DISTURB",
-        6: "App-Prefs:root=NOTIFICATIONS_ID",
+    /// The Settings links each step tries, in order. The `prefs:` and `App-Prefs:` schemes and `settings-navigation://` are private: Greg chose to use them on 6 Oct 2026 and accepts that an iOS update may change or
+    /// block them. iOS 18 broke most `App-Prefs:` forms and every `&path=` sub-path, and iOS 26 sends some unsupported ones to the Apps list, so each step lists several and the words under the button say where to go
+    /// if none lands. Step 1 is this app's own notification page, which the documented API reaches. `App-Prefs:root=NOTIFICATIONS_ID` is left out of step 6: it is known to land on the Apps list on iOS 26.
+    /// Step 2 has no Settings page. The last resort is always `openSettingsURLString`, this app's own page.
+    static let settingsLinks: [Int: [String]] = [
+        1: [UIApplication.openNotificationSettingsURLString],
+        3: voiceControlLinks,
+        4: voiceControlLinks,
+        5: ["prefs:root=DO_NOT_DISTURB", "App-Prefs:root=DO_NOT_DISTURB", "settings-navigation://com.apple.Settings.Focus"],
+        6: ["settings-navigation://com.apple.Settings.Notifications", "prefs:root=NOTIFICATIONS_ID", "App-Prefs:NOTIFICATIONS_ID"],
     ]
+    private static let voiceControlLinks = ["prefs:root=ACCESSIBILITY&path=CommandAndControlTitle", "App-Prefs:root=ACCESSIBILITY&path=CommandAndControlTitle",
+                                            "settings-navigation://com.apple.Settings.Accessibility", "App-Prefs:root=ACCESSIBILITY"]
 
-    /// No `canOpenURL` for the private scheme (it would need a declared scheme): just try, and fall back when iOS says no.
-    private func openSettingsPage(_ path: String) {
-        settingsFellBack = false
-        guard let url = URL(string: path) else { return }
-        UIApplication.shared.open(url, options: [:]) { opened in
-            guard !opened else { return }
-            settingsFellBack = true
-            if let own = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(own) }
+    /// A private link can report that it opened and still land on the wrong page (step 6 did, on the Apps list), so this line is shown whatever happened.
+    private var settingsWords: String {
+        switch step {
+        case 1: return "If Settings opens on another page, go to Apps › Pogo Assist+ › Notifications."
+        case 3: return "If Settings opens on another page, go to Accessibility › Voice Control."
+        case 4: return "If Settings opens on another page, go to Accessibility › Voice Control; the three switches are on that page."
+        case 5: return "If Settings opens on another page, go to Focus."
+        default: return "If Settings opens on another page, go to Notifications › Screen Sharing."
         }
     }
 
-    private func settingsRow(_ path: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            PillButton("Open Settings", systemImage: "gearshape", style: .tint) { openSettingsPage(path) }
-                .accessibilityIdentifier("setup-open-settings")
-            if settingsFellBack {
-                Text("Opens Settings; find the page from there.").font(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6)
-                    .accessibilityIdentifier("setup-settings-fallback")
+    /// No `canOpenURL` for the private schemes (it would need declared schemes): just try each, and move on when iOS says no.
+    private func openSettingsPage(_ links: [String]) {
+        var rest = links.compactMap { URL(string: $0) }[...]
+        func next() {
+            guard let url = rest.popFirst() else {
+                if let own = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(own) }
+                return
             }
+            UIApplication.shared.open(url, options: [:]) { opened in if !opened { next() } }
+        }
+        next()
+    }
+
+    private func settingsRow(_ links: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            PillButton("Open Settings", systemImage: "gearshape", style: .tint) { openSettingsPage(links) }
+                .accessibilityIdentifier("setup-open-settings")
+            Text(settingsWords).font(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6)
+                .accessibilityIdentifier("setup-settings-fallback")
         }
     }
 
