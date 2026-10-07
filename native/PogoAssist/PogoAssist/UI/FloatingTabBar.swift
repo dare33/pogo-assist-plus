@@ -55,7 +55,7 @@ struct FloatingTabBar: View {
     private var scanButton: some View {
         Button(action: onScan) {
             ScanMark().frame(width: 80, height: 80)
-                .foregroundStyle(accent.onSolid)
+                .foregroundStyle(accent.markInk)
                 .frame(width: 96, height: 96)
                 .background(Circle().fill(accent.solid))
                 .background(Circle().fill(accent.tint).padding(-8))

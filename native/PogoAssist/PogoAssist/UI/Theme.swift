@@ -73,6 +73,9 @@ enum Accent: String, CaseIterable, Identifiable {
     /// On the light solid the text is always white; in dark mode it is per accent.
     var onSolid: Color { Theme.pair(0xFFFFFF, t.on) }
 
+    /// The mark's ring and the on-disc ink in dark mode: a navy, not the background. White in light mode, and in dark mode for the accents whose onSolid is already white.
+    var markInk: Color { Theme.pair(0xFFFFFF, t.on == 0xFFFFFF ? 0xFFFFFF : 0x1B2A4E) }
+
     private struct T { let ls, li, lt, ds, di: UInt32; let dt: (CGFloat, CGFloat, CGFloat, CGFloat); let on: UInt32 }
     private var t: T {
         switch self {
