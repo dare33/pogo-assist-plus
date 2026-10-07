@@ -17,7 +17,8 @@ settings:
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "0.1"
     CURRENT_PROJECT_VERSION: "1"
-    TARGETED_DEVICE_FAMILY: "1,2"
+    # iPhone only for v1 (Greg, 8 Oct 2026): nothing has been laid out for iPad, and App Store Connect refuses an iPad-capable archive that is portrait-only.
+    TARGETED_DEVICE_FAMILY: "1"
 packages:
   PogoReader:
     path: ../PogoReader
