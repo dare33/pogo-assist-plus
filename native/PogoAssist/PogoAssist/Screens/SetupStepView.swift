@@ -3,8 +3,8 @@ import PogoBox
 import PogoReader
 
 /// One step, one screen (design handoff, Setup §2c): "Step N of 6", the instruction as the title, then a short numbered list (steps 3 to 5) or one line of text, the picture of the exact setting (behind
-/// "See where it is" on steps 3 and 4), the Siri line where it is true, and a confirm button that names what is done. The same template for all six; step 4 holds three ticks. Steps 1 and 3 to 6 also have an
-/// "Open Settings" button that tries a list of Settings links in order, and always says in words which page to go to, because the app cannot tell where Settings really opened.
+/// "See where it is" on steps 3 and 4), the Siri line where it is true, and a confirm button that names what is done. The same template for all six; step 4 holds three ticks. Step 1 has an "Open Settings"
+/// button (the documented link to this app's own notification page); steps 3 to 6 have none, because iOS offers no link into their pages (see `openOwnNotificationSettings`).
 struct SetupStepView: View {
     let step: Int
     @EnvironmentObject var model: AppModel
@@ -54,7 +54,7 @@ private struct SetupStepBody: View {
                 if step == 3 || step == 4 { seeWhere }
                 extras
                 more
-                if let links = Self.settingsLinks[step], !(step == 1 && setup.notifications == .denied) { settingsRow(links) }
+                if step == 1, setup.notifications != .denied { settingsRow }
                 if let siri = siriLine { siri }
             }
             .padding(.horizontal, Theme.Space.screen).padding(.top, 8).padding(.bottom, 12)
@@ -327,52 +327,26 @@ private struct SetupStepBody: View {
 
     // MARK: open the Settings page
 
-    /// The Settings links each step tries, in order. The `prefs:` and `App-Prefs:` schemes and `settings-navigation://` are private: Greg chose to use them on 6 Oct 2026 and accepts that an iOS update may change or
-    /// block them. iOS 18 broke most `App-Prefs:` forms and every `&path=` sub-path, and iOS 26 sends some unsupported ones to the Apps list, so each step lists several and the words under the button say where to go
-    /// if none lands. Step 1 is this app's own notification page, which the documented API reaches. `App-Prefs:root=NOTIFICATIONS_ID` is left out of step 6: it is known to land on the Apps list on iOS 26.
-    /// Step 2 has no Settings page. The last resort is always `openSettingsURLString`, this app's own page.
-    static let settingsLinks: [Int: [String]] = [
-        1: [UIApplication.openNotificationSettingsURLString],
-        3: voiceControlLinks,
-        4: voiceControlLinks,
-        5: ["prefs:root=DO_NOT_DISTURB", "App-Prefs:root=DO_NOT_DISTURB", "settings-navigation://com.apple.Settings.Focus"],
-        6: ["settings-navigation://com.apple.Settings.Notifications", "prefs:root=NOTIFICATIONS_ID", "App-Prefs:NOTIFICATIONS_ID"],
-    ]
-    private static let voiceControlLinks = ["prefs:root=ACCESSIBILITY&path=CommandAndControlTitle", "App-Prefs:root=ACCESSIBILITY&path=CommandAndControlTitle",
-                                            "settings-navigation://com.apple.Settings.Accessibility", "App-Prefs:root=ACCESSIBILITY"]
-
-    /// A private link can report that it opened and still land on the wrong page (step 6 did, on the Apps list), so this line is shown whatever happened.
-    private var settingsWords: String {
-        switch step {
-        case 1: return "If Settings opens on another page, go to Apps › Pogo Assist+ › Notifications."
-        case 3: return "If Settings opens on another page, go to Accessibility › Voice Control."
-        case 4: return "If Settings opens on another page, go to Accessibility › Voice Control; the three switches are on that page."
-        case 5: return "If Settings opens on another page, go to Focus."
-        default: return "If Settings opens on another page, go to Notifications › Screen Sharing."
+    /// Step 1 opens this app's own notification page with the documented link; the only other documented link reaches this app's own page. Nothing reaches Voice
+    /// Control, Focus or Notifications › Screen Sharing: on iOS 26 every private `App-Prefs:` link lands on the Apps list whatever its path, and `prefs:` and
+    /// `settings-navigation://` are refused (every candidate tried on Greg's phone, 7 Oct 2026). Those pages already say their Settings path in their own words,
+    /// so they get no button that would land somewhere else.
+    private func openOwnNotificationSettings() {
+        guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
+        UIApplication.shared.open(url, options: [:]) { opened in
+            if !opened, let own = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(own) }
         }
     }
 
-    /// No `canOpenURL` for the private schemes (it would need declared schemes): just try each, and move on when iOS says no.
-    private func openSettingsPage(_ links: [String]) {
-        var rest = links.compactMap { URL(string: $0) }[...]
-        func next() {
-            guard let url = rest.popFirst() else {
-                if let own = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(own) }
-                return
-            }
-            UIApplication.shared.open(url, options: [:]) { opened in if !opened { next() } }
-        }
-        next()
-    }
-
-    private func settingsRow(_ links: [String]) -> some View {
+    private var settingsRow: some View {
         VStack(alignment: .leading, spacing: 6) {
-            PillButton("Open Settings", systemImage: "gearshape", style: .tint) { openSettingsPage(links) }
+            PillButton("Open Settings", systemImage: "gearshape", style: .tint) { openOwnNotificationSettings() }
                 .accessibilityIdentifier("setup-open-settings")
-            Text(settingsWords).font(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6)
+            Text("This app's notification settings.").font(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6)
                 .accessibilityIdentifier("setup-settings-fallback")
         }
     }
+
 
     // MARK: confirm
 

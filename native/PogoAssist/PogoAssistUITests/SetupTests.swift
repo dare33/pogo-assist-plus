@@ -191,7 +191,8 @@ final class SetupTests: XCTestCase {
             XCTAssertEqual(app.descendants(matching: .any)["setup-steps"].firstMatch.exists, n >= 3 && n <= 5, "numbered steps on steps 3 to 5")
             XCTAssertEqual(app.descendants(matching: .any)["setup-siri"].firstMatch.exists, n == 3 || n == 4, "the Siri line only on the Voice Control steps")
             XCTAssertTrue(app.buttons["setup-confirm"].exists)
-            XCTAssertEqual(app.buttons["setup-open-settings"].exists, n != 2, "Open Settings on every step that has a Settings page")
+            // Only step 1 has a page iOS can open (this app's notification settings); nothing reaches the other steps' pages on iOS 26 (7 Oct 2026).
+            XCTAssertEqual(app.buttons["setup-open-settings"].exists, n == 1, "Open Settings only on step 1")
             if n == 3 || n == 6 { XCTAssertEqual(app.buttons["setup-confirm"].label, "I've done it!") }
             if n == 3 { XCTAssertTrue(app.staticTexts["Say \"Hey Siri, open Voice Control settings\"."].exists) }
             back(app)
@@ -205,7 +206,8 @@ final class SetupTests: XCTestCase {
         openChecklist(app)
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         XCTAssertFalse(app.buttons["setup-open-settings"].exists)
-        for n in [1, 3, 4, 5, 6] {
+        // Only step 1 has the button now: iOS offers no link into the other steps' pages (7 Oct 2026).
+        for n in [1] {
             openStep(app, n)
             let open = app.buttons["setup-open-settings"]
             reveal(app, open)
@@ -223,17 +225,14 @@ final class SetupTests: XCTestCase {
         }
     }
 
-    /// The words under "Open Settings" are always shown, since the app cannot know where Settings opened. The button is not tapped: it would leave the app.
+    /// Steps 3 to 6 have no "Open Settings" button (nothing reaches their pages on iOS 26); each page already names its Settings path in its own words.
     func testStep6NamesTheSettingsPageInWords() throws {
         let app = openScan(["-appearance", "light"])
         openChecklist(app)
         openStep(app, 6)
-        let button = app.buttons["setup-open-settings"]
-        reveal(app, button)
-        XCTAssertTrue(button.exists)
-        let line = app.staticTexts["setup-settings-fallback"]
-        XCTAssertTrue(line.exists)
-        XCTAssertEqual(line.label, "If Settings opens on another page, go to Notifications › Screen Sharing.")
+        let line = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Settings › Notifications › Screen Sharing")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["setup-open-settings"].exists)
     }
 
     func testStep5SaysAlarmsStillRing() throws {
