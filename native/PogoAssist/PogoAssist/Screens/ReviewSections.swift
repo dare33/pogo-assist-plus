@@ -190,14 +190,10 @@ struct ReviewLowerSections: View {
     @ViewBuilder private var scanKind: some View {
         Panel(spacing: 10) {
             Text("Scan kind").paText(.rowTitle).foregroundStyle(Theme.ink)
-            Picker("Scan kind", selection: Binding(get: { review.kind }, set: { k in
+            KindSegment(selected: review.kind) { k in
                 // A full scan the advice refused: say why, and ask first.
                 if k == .full, let why = review.advice, !why.fullIsSound, let reason = why.reason { confirmFull = reason } else { Task { await model.setReviewKind(k) } }
-            })) {
-                Text("Full scan").tag(BoxStore.Kind.full)
-                Text("Add and update").tag(BoxStore.Kind.partial)
             }
-            .pickerStyle(.segmented)
         }
     }
 
@@ -268,4 +264,36 @@ struct IdentifiedRow: Identifiable, View {
     let build: () -> AnyView
     init<V: View>(id: String, @ViewBuilder _ build: @escaping () -> V) { self.id = id; self.build = { AnyView(build()) } }
     var body: some View { build() }
+}
+
+/// The two-button kind switch, with the selected kind in the accent colour. The system segmented Picker draws the selection in grey, and the scan options panel's switch is the look Greg asked for here (8 Oct 2026). `ScanOptionsEditor.kindPicker` draws the same control; it is kept separate only because that file belongs to another lane today.
+struct KindSegment: View {
+    @Environment(\.accent) private var accent
+    let selected: BoxStore.Kind
+    let onSelect: (BoxStore.Kind) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            button("Full scan", .full)
+            button("Add and update", .partial)
+        }
+        .padding(4).background(Theme.off, in: Capsule())
+        // .contain keeps the two buttons reachable while the group carries the identifier.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("review-scan-kind")
+    }
+
+    private func button(_ title: String, _ kind: BoxStore.Kind) -> some View {
+        let on = selected == kind
+        return Button { onSelect(kind) } label: {
+            Text(title).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(on ? accent.onSolid : Theme.muted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(on ? accent.solid : Color.clear, in: Capsule())
+                .frame(minHeight: 44).contentShape(Capsule())
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
 }

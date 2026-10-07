@@ -377,6 +377,16 @@ final class ReviewScreensTests: XCTestCase {
         // This seeded scan has rows to check, so step 2 keeps its "Check N in the game" wording; "Nothing to check" is asserted on the sample scan (ScanDoneTests).
         XCTAssertTrue(app.buttons["review-step-check"].label.hasPrefix("Check "))
         shot("clean-01-top")
+        let kind = app.otherElements["review-scan-kind"]
+        XCTAssertTrue(reveal(app, kind), "the scan kind switch is on the result page")
+        XCTAssertTrue(app.buttons["Full scan"].isSelected, "this clean scan is a Full scan")
+        shot("kind-full-selected")
+    }
+
+    func testScanKindSwitchDark() throws {
+        let app = launch(["-appearance", "dark"], variant: "partial+answered")
+        XCTAssertTrue(reveal(app, app.otherElements["review-scan-kind"]), "the scan kind switch is on the result page")
+        shot("kind-partial-selected-dark")
     }
 
     /// Add and update: no Not seen row, and no Mark all.
@@ -386,5 +396,8 @@ final class ReviewScreensTests: XCTestCase {
         for _ in 0..<6 { app.swipeUp() }
         XCTAssertFalse(button(app, beginsWith: "Not seen in this scan").exists)
         shot("partial-lower")
+        XCTAssertTrue(reveal(app, app.otherElements["review-scan-kind"]), "the scan kind switch is on the result page")
+        XCTAssertTrue(app.buttons["Add and update"].isSelected, "this scan is Add and update")
+        shot("kind-partial-selected")
     }
 }
