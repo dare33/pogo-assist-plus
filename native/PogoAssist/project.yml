@@ -15,8 +15,12 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "0.1"
-    CURRENT_PROJECT_VERSION: "1"
+    # The version and build shown to TestFlight and the store; both Info.plists take them from here. Every upload needs a higher build number (1 went up on 8 Oct 2026).
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "2"
+    # An iPhone app is offered on Apple Silicon Macs and Vision Pro unless these say no; nothing is laid out for either (Greg, 8 Oct 2026).
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
     # iPhone only for v1 (Greg, 8 Oct 2026): nothing has been laid out for iPad, and App Store Connect refuses an iPad-capable archive that is portrait-only.
     # Repeated on each target below: xcodegen writes its own iPhone-and-iPad default per target, which would win over this line.
     TARGETED_DEVICE_FAMILY: "1"
@@ -47,6 +51,8 @@ targets:
       path: PogoAssist/Info.plist
       properties:
         CFBundleDisplayName: Pogo Assist+
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         # Figtree (OFL), one variable font: the weight axis gives 400 to 800. See UI/Typography.swift.
@@ -83,6 +89,8 @@ targets:
       path: PogoBroadcast/Info.plist
       properties:
         CFBundleDisplayName: Pogo Broadcast
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         AppGroupID: $(APP_GROUP)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.broadcast-services-upload
