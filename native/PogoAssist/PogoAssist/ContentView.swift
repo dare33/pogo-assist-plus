@@ -51,6 +51,9 @@ struct ContentView: View {
                         Button("Load partial-read sample") { onLoadSample(true) }.disabled(model.live)
                     } footer: { Text("Copies a bundled device log into the app group as if a broadcast had just finished, then shows the finished scan, as it would when you come back to the app. For use where the broadcast cannot run. The partial-read sample is one Staraptor whose CP was read as 182; scan the full sample first and save it, then load this as an add-and-update scan.") }
                 }
+                #if DEBUG
+                if onLoadSample != nil { SettingsLinkTester() }
+                #endif
                 Section("Reader (applies when the broadcast starts)") {
                     Picker("Reader", selection: $model.mode) {
                         ForEach(ReaderMode.allCases) { Text($0.title).tag($0) }
@@ -124,6 +127,44 @@ struct ContentView: View {
 
     private func mb(_ v: Double) -> String { String(format: "%.1f MB", v) }
 }
+
+#if DEBUG
+/// For the owner's phone: every Settings link candidate as a button, with what iOS said, so the one that opens the named page can be reported. The simulators open only the Settings root.
+struct SettingsLinkTester: View {
+    private static let targets: [(name: String, links: [String])] = [
+        ("Notifications list", ["settings-navigation://com.apple.Settings.Notifications", "prefs:root=NOTIFICATIONS_ID", "App-Prefs:NOTIFICATIONS_ID", "App-Prefs:root=NOTIFICATIONS_ID"]),
+        ("Notifications › Screen Sharing", ["settings-navigation://com.apple.Settings.Notifications", "prefs:root=NOTIFICATIONS_ID", "App-Prefs:NOTIFICATIONS_ID",
+                                            "settings-navigation://com.apple.Settings.Notifications/com.apple.ReplayKitNotifications", "App-Prefs:root=NOTIFICATIONS_ID&path=com.apple.ReplayKitNotifications",
+                                            "settings-navigation://com.apple.Settings.Apps"]),
+        ("Accessibility › Voice Control", ["prefs:root=ACCESSIBILITY&path=CommandAndControlTitle", "App-Prefs:root=ACCESSIBILITY&path=CommandAndControlTitle",
+                                           "settings-navigation://com.apple.Settings.Accessibility", "App-Prefs:root=ACCESSIBILITY"]),
+        ("Focus", ["prefs:root=DO_NOT_DISTURB", "App-Prefs:root=DO_NOT_DISTURB", "settings-navigation://com.apple.Settings.Focus"]),
+        ("This app's notifications", [UIApplication.openNotificationSettingsURLString]),
+        ("This app's own page", [UIApplication.openSettingsURLString]),
+    ]
+    @State private var results: [String: String] = [:]
+
+    var body: some View {
+        Section {
+            ForEach(Self.targets, id: \.name) { target in
+                Text(target.name).font(.caption.bold()).foregroundStyle(.secondary)
+                ForEach(target.links, id: \.self) { link in
+                    let key = target.name + "|" + link
+                    VStack(alignment: .leading, spacing: 2) {
+                        Button { tryOpen(link, key: key) } label: { Text(link).font(.footnote.monospaced()) }
+                        if let result = results[key] { Text(result).font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        } header: { Text("Settings links (tester)") } footer: { Text("Tap each; note which one opens the page named. The simulators open only the Settings root.") }
+    }
+
+    private func tryOpen(_ link: String, key: String) {
+        guard let url = URL(string: link) else { results[key] = "refused by iOS"; return }
+        UIApplication.shared.open(url, options: [:]) { opened in results[key] = opened ? "opened" : "refused by iOS" }
+    }
+}
+#endif
 
 struct RowView: View {
     let row: LiveRow
