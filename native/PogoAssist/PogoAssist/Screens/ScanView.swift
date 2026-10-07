@@ -41,7 +41,12 @@ struct ScanView: View {
         #endif
     }
     @StateObject private var markTrigger = BroadcastTrigger()
+    /// Heights of the banner, the setup line and the panel (`FixedHeights`): what the mark button has left to share, so it can shrink on a short phone instead of pushing "Show less" off the screen.
+    @State private var fixedHeights: CGFloat = 0
 
+    /// The least free height above and below the mark button, and the sizes it may take.
+    private static let markGap: CGFloat = 12
+    private static let markMax: CGFloat = 240, markMin: CGFloat = 200
     private var words: ScanWords { ScanWords.current(model) }
     private var visibleSteps: [Int] { ScanSteps.visible(raw: hiddenRaw, help: help) }
     /// The button can start a scan: not while editing, and a Full scan needs its count first.
@@ -51,32 +56,39 @@ struct ScanView: View {
 
     var body: some View {
         GeometryReader { geo in
+            // 240 pt when the card fits under it; down to 200 pt only when the screen is too short for the card (Greg, 7 Oct 2026: "Show less" fully visible).
+            let markSize = max(Self.markMin, min(Self.markMax, geo.size.height - fixedHeights - 8 - 14 - 2 * Self.markGap))
             ScrollViewReader { proxy in
             ScrollView {
-                VStack(spacing: 20) {
+                // No automatic gaps: the start screen's spacers share the free height, and their minimum is the gap, so a full card costs no more than it must.
+                VStack(spacing: 0) {
                     if !SharedStore.containerAvailable {
-                        Panel(tint: .orange) { Text("The app group is not available, so a scan cannot reach the app. Check Signing and Capabilities on both targets.").font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.red) }
+                        Panel(tint: .orange) { Text("The app group is not available, so a scan cannot reach the app. Check Signing and Capabilities on both targets.")
+.font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.red) }.padding(.bottom, 20)
                     }
                     if model.live {
-                        markButton.padding(.top, 24)
+                        markButton(size: Self.markMax).padding(.top, 24).padding(.bottom, 20)
                         liveStatus
                         Spacer(minLength: 0)
                     } else if model.scanDonePending {
                         // A scan has ended and is waiting for the person: its Done state, not the start screen.
                         ScanDoneView()
                     } else {
-                        SetupBanner { setupPage = .checklist }
-                        // With the options open the panel is long: no spare space around the button then.
-                        if !editing { Spacer(minLength: 0) }
+                        SetupBanner { setupPage = .checklist }.measured()
+                        // The same two spacers with the options open or not: the card always ends at the bottom and the button sits centred in what is left, so changing view moves as little as possible.
+                        Spacer(minLength: Self.markGap)
                         // About voice paging, like the sheet: not shown when paging by hand is selected.
-                        if !editing, asksAboutSetup { SetupLeftLine(left: model.setup.stepsLeft) { setupPage = .checklist } }
-                        markButton
-                        if !editing { Spacer(minLength: 0) }
-                        bottomPanel
+                        if !editing, asksAboutSetup { SetupLeftLine(left: model.setup.stepsLeft) { setupPage = .checklist }.padding(.bottom, 12).measured() }
+                        markButton(size: markSize)
+                        Spacer(minLength: Self.markGap)
+                        bottomPanel.measured()
                     }
                 }
                 .padding(.horizontal, Theme.Space.screen).padding(.top, 8).padding(.bottom, 14)
-                .frame(minHeight: geo.size.height)
+                // Top-aligned: with the default centre, content shorter than the screen (the options first) floated down and left a gap under the card.
+                .frame(minHeight: geo.size.height, alignment: .top)
+                .onPreferenceChange(FixedHeights.self) { fixedHeights = $0 }
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: editing)
                 .id("top")
             }
             // Leaving the options would otherwise keep the scroll position the long options panel and the keyboard left behind.
@@ -163,10 +175,10 @@ struct ScanView: View {
 
     // MARK: - ready
 
-    @ViewBuilder private var markButton: some View {
+    @ViewBuilder private func markButton(size: CGFloat) -> some View {
         let live = model.live
         let paused = model.broadcast?.paused == true
-        let face = ScanButtonFace(read: live ? model.broadcast?.readCount : nil, expected: expectedCount, dimmed: !live && !canStart)
+        let face = ScanButtonFace(size: size, read: live ? model.broadcast?.readCount : nil, expected: expectedCount, dimmed: !live && !canStart)
         if live {
             // Only a paused scan can be ended from the app (the request is honoured at a pause); otherwise the button shows the count and is not a control.
             if paused {
@@ -197,7 +209,7 @@ struct ScanView: View {
     }
 
     private var bottomPanel: some View {
-        Panel(spacing: 14) {
+        Panel(spacing: 10) {
             if editing {
                 // The options open first, so the re-scan line must not be left behind them; its own identifier, as only one copy is on screen at a time.
                 rescanLine("rescan-line-editing")
@@ -231,9 +243,11 @@ struct ScanView: View {
                 Image(systemName: stepsCollapsed ? "chevron.down" : "chevron.up").font(.figtree(12, .bold)).accessibilityHidden(true)
             }
             .font(.figtree(14, .semibold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
-            .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+            .frame(maxWidth: .infinity, minHeight: 40).contentShape(Rectangle())
         }
         .buttonStyle(PressStyle())
+        // The panel's own bottom padding stands in for the row's spare height, so "Show less" is fully on screen on the tallest phone without scrolling (Greg, 7 Oct 2026).
+        .padding(.bottom, -10)
         .accessibilityLabel(stepsCollapsed ? "Show more" : "Show less")
         .accessibilityIdentifier("scan-steps-toggle")
     }
@@ -244,6 +258,7 @@ struct ScanView: View {
         if let r = s.runs.first(where: { $0.link != nil })?.range {
             s[r].font = .figtree(15, .heavy, relativeTo: .subheadline)
             s[r].foregroundColor = accent.ink
+            s[r].underlineStyle = .single
         }
         return Text(s)
     }
@@ -251,7 +266,7 @@ struct ScanView: View {
     /// The six steps (Greg, 6 Oct 2026). Paging by hand leaves out the Voice Control step and swipes itself.
     private var steps: some View {
         let byHand = words == .byHand
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 10) {
             step("1", step1Text)
                 .accessibilityAction(named: "Show the appraisal screen") { showAppraisal = true }
                 .accessibilityIdentifier("scan-step-1")
@@ -366,6 +381,8 @@ struct ScanView: View {
 
 /// The 240 pt button: the progress ring (222 pt hole, 200 pt disc) with the scan mark, or the count while scanning.
 struct ScanButtonFace: View {
+    /// 240 pt unless the Scan screen is short of room (never below 200).
+    var size: CGFloat = 240
     /// Pokémon read so far while a scan runs; nil when no scan runs (the mark shows).
     var read: Int?
     var expected: Int?
@@ -395,6 +412,8 @@ struct ScanButtonFace: View {
             }
         }
         .frame(width: 240, height: 240)
+        .scaleEffect(size / 240)
+        .frame(width: size, height: size)
         .opacity(dimmed ? 0.45 : 1)
         .contentShape(Circle())
     }
@@ -425,5 +444,17 @@ struct AppraisalSheet: View {
         .background(Theme.bg.ignoresSafeArea())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("appraisal-sheet")
+    }
+}
+
+/// The heights of the views that do not flex on the start screen, added up (`ScanView.fixedHeights`).
+private struct FixedHeights: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value += nextValue() }
+}
+
+private extension View {
+    func measured() -> some View {
+        background(GeometryReader { Color.clear.preference(key: FixedHeights.self, value: $0.size.height) })
     }
 }

@@ -40,14 +40,6 @@ enum ScanWords: Equatable {
 
     /// The command as the steps show it: 200 only when nothing is known.
     var spoken: String { command ?? "Pogo scan \(AppModel.defaultPartialCount)" }
-
-    /// The size is the person's own (a count, a number or a re-scan), so the walkthrough shows it as it is; otherwise it is an example with an asterisk.
-    var sizeKnown: Bool {
-        switch self {
-        case .size, .aboveLargest: return true
-        default: return false
-        }
-    }
 }
 
 /// The three steps of the guide, and which of them the person has hidden ("Don't show this step again").
@@ -83,7 +75,7 @@ struct ScanWalkthrough: View {
         switch step {
         case 0: return "Open your first Pokémon's appraisal"
         case 1: return "Tap the button, then Start Broadcast"
-        default: return words == .byHand ? "Page through your Pokémon by hand" : words.spoken + (words.sizeKnown ? "" : "*")
+        default: return words == .byHand ? "Page through your Pokémon by hand" : "Say \"\(words.spoken)\"."
         }
     }
     private var body_: String {
@@ -91,7 +83,7 @@ struct ScanWalkthrough: View {
         case 0: return "The scan reads from this screen and moves through your storage in the order it's sorted."
         // "We'll take you back to the game" is true only while opening the game works (`GameOpener`); otherwise the person is told to switch.
         case 1: return "Pick \"Pogo Broadcast\" if asked. " + (takesBack ? "We'll take you back to the game." : GameOpener.fallbackLine)
-        default: return words == .byHand ? "You swipe from one Pokémon to the next yourself. Stop the broadcast from the red bar when the last Pokémon has been read." : "Then leave the phone alone."
+        default: return words == .byHand ? "You swipe from one Pokémon to the next yourself. Stop the broadcast from the red bar when the last Pokémon has been read." : "Then leave the phone alone until the scan is done!"
         }
     }
 
@@ -108,11 +100,8 @@ struct ScanWalkthrough: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 8) {
                         if step == 2, words != .byHand {
-                            // The command and the sentence run on in one line of text, in one style (Greg, 7 Oct 2026); the asterisk is explained below, smaller.
-                            Text(title + " " + body_).font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
-                            if !words.sizeKnown {
-                                Text("* Or the scan size that you choose!").font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-                            }
+                            // The command, the sentence and the note about the number run on as one text in one style (Greg, 7 Oct 2026): the number is the one the chosen scan needs.
+                            Text(title + " " + body_ + " Note- the number will change depending on your chosen scan!").font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
                         } else {
                             Text(title).font(.figtree(28, .heavy, relativeTo: .title)).tracking(-0.02 * 28).foregroundStyle(Theme.ink)
                             Text(body_).font(.figtree(16, .regular, relativeTo: .body)).foregroundStyle(Theme.muted)

@@ -50,25 +50,40 @@ struct ScanOptionsEditor: View {
                 Text("remembered for \(model.account ?? "this account")").font(.secondary).foregroundStyle(Theme.muted)
             }
             kindPicker
-            // One short line per kind (Greg, 6 Oct 2026). The long explanation of the count, the eggs and how a scan ends is no longer shown here.
-            Text(model.scanKind == .full
-                 ? "Put in the number of Pokémon in your storage and scan them all."
-                 : "Scan part of your storage. Nothing is removed from your box." + (model.pagedByHand ? "" : " The voice command you say sets how many."))
-                .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-            if model.scanKind == .full {
-                field("Number of Pokémon in storage", prompt: "Count", text: $model.storageCountText, focus: $countFocused)
-                field("Maximum Eggs", prompt: "Eggs", text: $model.eggText, focus: $eggsFocused)
-                if let problem = model.storageCountProblem ?? model.eggProblem {
-                    Text(problem).font(.secondary).foregroundStyle(Theme.red)
-                } else {
-                    Text(model.eggCount == nil
-                         ? "No egg count typed: the scan allows for up to \(StorageCountRules.maxEggSlots) eggs."
-                         : "Expected Pokémon: the game's count less \(model.eggCount ?? 0) eggs.")
-                        .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                }
+            // Both kinds' sections are laid out in one place and the other one hidden, so the card is as tall for either and switching moves nothing but the fields.
+            ZStack(alignment: .top) {
+                fullSection.opacity(model.scanKind == .full ? 1 : 0).allowsHitTesting(model.scanKind == .full).accessibilityHidden(model.scanKind != .full)
+                partialSection.opacity(model.scanKind == .partial ? 1 : 0).allowsHitTesting(model.scanKind == .partial).accessibilityHidden(model.scanKind != .partial)
             }
+            PillButton("Done", style: .filled) { countFocused = false; eggsFocused = false; partialFocused = false; onDone() }
+        }
+        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Hide keyboard") { countFocused = false; eggsFocused = false; partialFocused = false } } }
+    }
+
+    /// One short line per kind (Greg, 6 Oct 2026), then the fields. The long explanation of the count, the eggs and how a scan ends is no longer shown here.
+    private var fullSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Put in the number of Pokémon in your storage and scan them all.")
+                .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            field("Number of Pokémon in storage", prompt: "Count", text: $model.storageCountText, focus: $countFocused)
+            field("Maximum Eggs", prompt: "Eggs", text: $model.eggText, focus: $eggsFocused)
+            if let problem = model.storageCountProblem ?? model.eggProblem {
+                Text(problem).font(.secondary).foregroundStyle(Theme.red)
+            } else {
+                Text(model.eggCount == nil
+                     ? "No egg count typed: the scan allows for up to \(StorageCountRules.maxEggSlots) eggs."
+                     : "Expected Pokémon: the game's count less \(model.eggCount ?? 0) eggs.")
+                    .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var partialSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Scan part of your storage. Nothing is removed from your box." + (model.pagedByHand ? "" : " The voice command you say sets how many."))
+                .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             // Paging by hand has no command to size, so the number is asked for only when a voice command will be said.
-            if model.scanKind == .partial, !model.pagedByHand {
+            if !model.pagedByHand {
                 field("How many Pokémon to scan?", prompt: "200", text: $model.partialCountText, focus: $partialFocused)
                 if let problem = model.partialCountProblem {
                     Text(problem).font(.secondary).foregroundStyle(Theme.red)
@@ -78,9 +93,7 @@ struct ScanOptionsEditor: View {
                     Text("Left empty, it scans 200.").font(.secondary).foregroundStyle(Theme.muted)
                 }
             }
-            PillButton("Done", style: .filled) { countFocused = false; eggsFocused = false; partialFocused = false; onDone() }
         }
-        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Hide keyboard") { countFocused = false; eggsFocused = false; partialFocused = false } } }
     }
 
     private var kindPicker: some View {

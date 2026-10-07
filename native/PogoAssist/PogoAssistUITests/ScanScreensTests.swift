@@ -152,6 +152,11 @@ final class ScanScreensTests: XCTestCase {
         }
     }
 
+    /// The guide's third page by voice, as one text (over the 128 characters a string subscript allows, so by predicate).
+    private func voiceLine(_ app: XCUIApplication, _ n: Int) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label == %@", "Say \"Pogo scan \(n)\". Then leave the phone alone until the scan is done! Note- the number will change depending on your chosen scan!")).firstMatch
+    }
+
     private let step1 = "In Pokémon Go, open the appraisal of the Pokémon you want to start at."
 
     /// The options card is the first view of every fresh open of the Scan screen, with or without a remembered count; Done then shows the steps.
@@ -214,6 +219,78 @@ final class ScanScreensTests: XCTestCase {
         }
     }
 
+    /// Pages by voice from "More about scanning" (six steps) and picks Add and update, as on the owner's phone (greg-r3-2.png).
+    private func voiceAddAndUpdate(_ app: XCUIApplication) {
+        rememberOptions(app)
+        app.buttons["setup-banner"].tap()
+        app.swipeUp(); app.swipeUp()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More about scanning'")).firstMatch.tap()
+        let voice = app.buttons["Page with the voice command"]
+        for _ in 0..<10 where !voice.exists { app.swipeUp() }
+        voice.tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["Scan Options"].waitForExistence(timeout: 5))
+        app.buttons["Scan Options"].tap()
+        app.buttons["Add and update"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["scan-steps-toggle"].waitForExistence(timeout: 5))
+    }
+
+    /// "Show less" is fully on screen without scrolling, with the setup banner showing, six steps and Add and update (Greg, 7 Oct 2026: "can we resize slightly so its fully visible?").
+    func testShowLessIsFullyVisibleWithoutScrolling() throws {
+        for (name, args) in [("light", ["-appearance", "light"]), ("dark", ["-appearance", "dark"])] {
+            let app = openScan(args)
+            voiceAddAndUpdate(app)
+            XCTAssertTrue(app.staticTexts["Make sure Voice Control is on. Not sure? Say \"Wake up\"."].exists, "six steps")
+            XCTAssertTrue(app.buttons["setup-banner"].exists, "setup is not done")
+            sleep(1)
+            let toggle = app.buttons["scan-steps-toggle"]
+            let window = app.windows.firstMatch.frame
+            // The test phone has no command set, so two warning paragraphs sit in the card that the owner's phone does not show,: take their height out.
+            var warnings: CGFloat = 0
+            for start in ["The command set has not been made", "The scan ends by itself only with the commands"] {
+                let t = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", start)).firstMatch
+                if t.exists { warnings += t.frame.height + 10 }
+            }
+            // Nor does it show "n setup steps left" once setup is done; the banner stays either way.
+            let left = app.buttons["setup-left"]
+            if left.exists { warnings += left.frame.height + 12 }
+            print("TOGGLE-MEASURE \(name) toggle.maxY=\(toggle.frame.maxY) warnings=\(warnings) window=\(window.size) mark=\(app.buttons["Start scan"].frame)")
+            // Only a tall phone (the Pro Max class, 956 pt) has room for all of it: a shorter one scrolls, and the toggle is still reachable.
+            shot("scan-steps-expanded-voice-\(name)")
+            if window.height >= 940 {
+                // (isHittable cannot be asserted: this phone's two warning paragraphs, taken out of the sum above, can still push the row below the screen.)
+                XCTAssertLessThanOrEqual(toggle.frame.maxY - warnings, window.maxY - 20, "Show less is cut off at the bottom")
+            } else {
+                for _ in 0..<4 where !toggle.isHittable { app.swipeUp() }
+                XCTAssertTrue(toggle.isHittable, "a short phone scrolls to it")
+            }
+            app.terminate()
+        }
+    }
+
+    /// Switching Full scan / Add and update moves nothing but the fields: the card's top edge and the mark button stay put.
+    func testSwitchingTheKindMovesNothingButTheFields() throws {
+        let app = openScan(["-appearance", "light"])
+        rememberOptions(app)
+        app.buttons["Scan Options"].tap()
+        XCTAssertTrue(app.textFields["Count"].waitForExistence(timeout: 3))
+        sleep(1)
+        let mark = app.buttons["Start scan"], title = app.staticTexts["Scan options"], done = app.buttons["Done"]
+        let (m, t, d) = (mark.frame.minY, title.frame.minY, done.frame.minY)
+        shot("scan-editor-full-light")
+        app.buttons["Add and update"].tap()
+        // Paging by hand (the default here) has no number to ask for, so only the one-line text shows.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Scan part of your storage'")).firstMatch.waitForExistence(timeout: 3))
+        sleep(1)
+        XCTAssertEqual(mark.frame.minY, m, accuracy: 1)
+        XCTAssertEqual(title.frame.minY, t, accuracy: 1)
+        XCTAssertEqual(done.frame.minY, d, accuracy: 1)
+        XCTAssertFalse(app.textFields["Count"].exists, "the hidden section is not offered")
+        shot("scan-editor-add-light")
+    }
+
     /// "appraisal" in step 1 opens the picture of the game's appraisal screen, inside the app.
     func testTheAppraisalWordOpensThePicture() throws {
         for (name, args) in [("light", ["-appearance", "light"]), ("dark", ["-appearance", "dark"])] {
@@ -236,7 +313,7 @@ final class ScanScreensTests: XCTestCase {
         }
     }
 
-    /// The guide's third page by voice: the command and "Then leave the phone alone." read as one line in one style.
+    /// The guide's third page by voice: the command and "Then leave the phone alone until the scan is done!" read as one line in one style.
     func testTheGuideThirdPageByVoiceIsOneStyle() throws {
         for (name, args) in [("light", ["-appearance", "light"]), ("dark", ["-appearance", "dark"])] {
             let app = openScan(args)
@@ -251,7 +328,7 @@ final class ScanScreensTests: XCTestCase {
             app.navigationBars.buttons.element(boundBy: 0).tap()
             app.buttons["Show the steps again"].tap()
             app.buttons["Next"].tap(); app.buttons["Next"].tap()
-            XCTAssertTrue(app.staticTexts["Pogo scan 2000 Then leave the phone alone."].waitForExistence(timeout: 3))
+            XCTAssertTrue(voiceLine(app, 2000).waitForExistence(timeout: 3))
             shot("scan-walk-3-voice-\(name)")
             app.buttons["OK, I've got it. Let's scan!"].tap()
             app.terminate()
@@ -279,11 +356,10 @@ final class ScanScreensTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Make sure Voice Control is on. Not sure? Say \"Wake up\"."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 2000\"."].exists)
         shot("scan-ready-command")
-        // The guide's third page shows that size, with no asterisk line.
+        // The guide's third page shows that size, with the note in the same text.
         app.buttons["Show the steps again"].tap()
         app.buttons["Next"].tap(); app.buttons["Next"].tap()
-        XCTAssertTrue(app.staticTexts["Pogo scan 2000 Then leave the phone alone."].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["* Or the scan size that you choose!"].exists)
+        XCTAssertTrue(voiceLine(app, 2000).waitForExistence(timeout: 3))
         shot("scan-walk-3-size")
         app.buttons["OK, I've got it. Let's scan!"].tap()
     }
@@ -309,12 +385,11 @@ final class ScanScreensTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["How many Pokémon to scan?"].exists)
         shot("scan-options-add-and-update")
         app.buttons["Done"].tap()
-        // Nothing typed: the default, 200, with the guide's asterisk and its line.
+        // Nothing typed: the default, 200.
         XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 200\"."].waitForExistence(timeout: 3))
         app.buttons["Show the steps again"].tap()
         app.buttons["Next"].tap(); app.buttons["Next"].tap()
-        XCTAssertTrue(app.staticTexts["Pogo scan 200* Then leave the phone alone."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["* Or the scan size that you choose!"].exists)
+        XCTAssertTrue(voiceLine(app, 200).waitForExistence(timeout: 3))
         shot("scan-walk-3-placeholder")
         app.buttons["OK, I've got it. Let's scan!"].tap()
         // 260 is covered by the 300 command.
@@ -326,8 +401,7 @@ final class ScanScreensTests: XCTestCase {
         shot("scan-ready-add-and-update")
         app.buttons["Show the steps again"].tap()
         app.buttons["Next"].tap(); app.buttons["Next"].tap()
-        XCTAssertTrue(app.staticTexts["Pogo scan 300 Then leave the phone alone."].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["* Or the scan size that you choose!"].exists)
+        XCTAssertTrue(voiceLine(app, 300).waitForExistence(timeout: 3))
         app.buttons["OK, I've got it. Let's scan!"].tap()
         // 200 is itself a size; the number is remembered.
         app.buttons["Scan Options"].tap()
