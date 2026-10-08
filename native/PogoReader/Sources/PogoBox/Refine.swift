@@ -33,7 +33,7 @@ public enum Refine {
     public static let minSwipeGap = 0.55
 
     public struct Change: Equatable {
-        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit, fragmentAbsorbed, cpOutlierDropped, barsSplit, formFromStats, ivsChosenByFit }
+        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit, fragmentAbsorbed, cpOutlierDropped, barsSplit, formFromStats, ivsChosenByFit, cpRecovered }
         public var kind: Kind
         /// The row's index in the refined result.
         public var rowIndex: Int
@@ -94,6 +94,10 @@ public enum Refine {
         let forms = formFromStats(r.scan, readings: readings, engine: engine, gameMaster: gameMaster)
         r.scan = forms.scan
         for m in forms.changes { r.changes.append(Change(kind: .formFromStats, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }
+        // and a row whose CP lost its first digit on every frame (rule `cp-recovered` for a leading digit), after the form: a read that fits another form as it stands is not a short one
+        let digits = recoverLeadingDigit(r.scan, readings: readings, engine: engine, gameMaster: gameMaster)
+        r.scan = digits.scan
+        for m in digits.changes { r.changes.append(Change(kind: .cpRecovered, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }
         r.baseRowCount = base.rows.count
         return r
     }

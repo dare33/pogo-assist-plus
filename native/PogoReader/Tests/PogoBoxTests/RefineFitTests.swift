@@ -267,4 +267,63 @@ final class RefineFitTests: XCTestCase {
         XCTAssertEqual(r.speciesId, "meowth_alolan"); XCTAssertEqual(r.solveStatus, "exact"); XCTAssertEqual(r.ivs, v.ivs)
         XCTAssertTrue(r.flags.contains("ivs-chosen-by-fit:\(v.ivs.atk)/\(v.ivs.def)/\(v.ivs.hp)") && r.flags.contains("form-from-stats:meowth_alolan"), "\(r.flags)")
     }
+
+    // MARK: cp-recovered (leading digit)
+
+    /// Frames of one card whose CP reads are these, in turn (the bars are not settled, so the JavaScript's own recovery does not run).
+    private func shortCard(_ name: String, ids: [String], reads: [Int], hp: Int, ivs: IVs, conf: Double = 0.5) -> [FrameReading] {
+        card(name, ids: ids, cp: reads[0], hp: hp, bars: reads.map { _ in (ivs, conf) }, at: 0, tag: "d", cps: reads)
+    }
+
+    func testALeadingDigitCutOffOnEveryFrameIsRecoveredWhenOneCandidateFits() throws {
+        // Moltres 1917 / HP 130 / bars 11/11/12 (run28): every frame read "917" or "17"
+        let ivs = IVs(atk: 11, def: 11, hp: 12)
+        let cp = cpAt(stats("moltres"), ivs, 20), hp = hpAt(stats("moltres"), ivs, 20)
+        XCTAssertEqual(cp, 1917)
+        let (base, out) = try refined(shortCard("Moltres", ids: ["moltres"], reads: [917, 17, 917, 17], hp: hp, ivs: ivs))
+        XCTAssertTrue(base.rows[0].flags.contains("no-level-fits"), "\(base.rows[0].flags)")
+        let r = out.scan.rows[0]
+        XCTAssertEqual(r.cp, 1917); XCTAssertEqual(r.solveStatus, "exact"); XCTAssertEqual(r.level, 20); XCTAssertEqual(r.ivs, ivs)
+        XCTAssertTrue(r.flags.contains("cp-recovered:1917-from-917"), "\(r.flags)")
+        XCTAssertFalse(r.flags.contains("no-level-fits"))
+        XCTAssertTrue(FlagInfo.checkFlags(r.flags, solveStatus: r.solveStatus).filter { !$0.hasPrefix("bars-unsettled") }.isEmpty)
+        XCTAssertEqual(out.changes.filter { $0.kind == .cpRecovered }.count, 1)
+    }
+
+    func testATwoDigitReadGetsAHundredsDigit() throws {
+        // a Pidgey whose CP is three digits and shows only its last two
+        let ivs = IVs(atk: 5, def: 6, hp: 7)
+        let level = try XCTUnwrap(levels.first { cpAt(stats("pidgey"), ivs, $0) >= 100 && cpAt(stats("pidgey"), ivs, $0) < 1000 && cpAt(stats("pidgey"), ivs, $0) % 100 >= 10 && Refine.exactLevels(stats("pidgey"), cp: cpAt(stats("pidgey"), ivs, $0), hp: hpAt(stats("pidgey"), ivs, $0), ivs: ivs).count == 1 })
+        let hp = hpAt(stats("pidgey"), ivs, level), cp = cpAt(stats("pidgey"), ivs, level)
+        let (base, out) = try refined(shortCard("Pidgey", ids: ["pidgey"], reads: [cp % 100, cp % 100, cp % 100], hp: hp, ivs: ivs))
+        XCTAssertTrue(base.rows[0].flags.contains("no-level-fits"), "\(base.rows[0].flags)")
+        let r = out.scan.rows[0]
+        XCTAssertEqual(r.cp, cp, "\(r.flags)")
+        XCTAssertTrue(r.flags.contains("cp-recovered:\(cp)-from-\(cp % 100)"), "\(r.flags)")
+    }
+
+    func testTwoCandidatesThatFitMeanNothingChanges() throws {
+        // two levels with the same HP give two CPs; the frames read the tail of each: both candidates fit, so the digit is not ours to supply
+        let ivs = IVs(atk: 11, def: 11, hp: 12)
+        let st = stats("moltres")
+        var pair: (Int, Int, Int)?
+        for (a, b) in zip(levels, levels.dropFirst()) {
+            let c1 = cpAt(st, ivs, a), c2 = cpAt(st, ivs, b)
+            if hpAt(st, ivs, a) == hpAt(st, ivs, b), c1 / 1000 == c2 / 1000, c1 >= 1000, c2 != c1 { pair = (c1, c2, hpAt(st, ivs, a)); break }
+        }
+        let p = try XCTUnwrap(pair)
+        let (base, out) = try refined(shortCard("Moltres", ids: ["moltres"], reads: [p.0 % 1000, p.1 % 1000, p.0 % 1000, p.1 % 1000], hp: p.2, ivs: ivs))
+        XCTAssertTrue(base.rows.contains { $0.flags.contains("no-level-fits") }, "\(base.rows.map(\.flags))")
+        XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("cp-recovered") } }, "\(out.scan.rows.map { "\($0.cp) \($0.flags)" })")
+    }
+
+    func testNoCandidateThatFitsMeansNothingChanges() throws {
+        // run28's Moltres "939" / "29" with HP 132 and bars 10/15/14: the stats give 1938 at that HP, which is no digit put in front of what was read
+        let ivs = IVs(atk: 10, def: 15, hp: 14)
+        let (base, out) = try refined(shortCard("Moltres", ids: ["moltres"], reads: [29, 939], hp: 132, ivs: ivs, conf: 0.9))
+        XCTAssertTrue(base.rows[0].flags.contains("no-level-fits"))
+        XCTAssertEqual(out.scan.rows[0].cp, base.rows[0].cp)
+        XCTAssertTrue(out.scan.rows[0].flags.contains("no-level-fits"))
+        XCTAssertFalse(out.scan.rows[0].flags.contains { $0.hasPrefix("cp-recovered") })
+    }
 }

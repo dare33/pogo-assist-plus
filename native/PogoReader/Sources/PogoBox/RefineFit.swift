@@ -156,4 +156,45 @@ extension Refine {
         guard !changes.isEmpty else { return (scan, []) }
         return (ScanResult(rows: rows, review: rows.filter { !$0.flags.isEmpty }.map(reviewEntry), unmatched: scan.unmatched), changes)
     }
+
+    /// Rule `cp-recovered`, for a read that lost its leading digit. The JavaScript recovers a short CP read from the HP and bars only when a read of the right length does not exist and
+    /// the bars were settled; here every frame of the stay is short (the model or a thumb covered the first digit: "939" for 1939, with "29" on another frame), the voted CP fits no level,
+    /// and the row says `no-level-fits`. Each CP read is given one digit 1 to 9 in front (d x 1000 + read for a three-digit read; d x 100 + read and d x 1000 + read for a two-digit one),
+    /// up to the most CP the species can have. When EXACTLY ONE of those candidates gives the row's HP and exactly its bars at exactly one level (HP pins the level, so a wrong
+    /// candidate is unlikely to fit), it is the CP: taken with `cp-recovered:<cp>-from-<read>`, the flag the JavaScript's own recovery leaves. Otherwise nothing changes.
+    static func recoverLeadingDigit(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, gameMaster: GameMaster?) -> (scan: ScanResult, changes: [(label: String, detail: String)]) {
+        guard let gm = gameMaster else { return (scan, []) }
+        var labelIndex = [String: Int]()
+        for (i, r) in readings.enumerated() { if let f = r.frame, labelIndex[f] == nil { labelIndex[f] = i } }
+        var rows = scan.rows, changes = [(label: String, detail: String)]()
+        for (n, row) in rows.enumerated() {
+            guard row.solveStatus == "none", row.flags.contains("no-level-fits"), let hp = row.hp, let read = row.ivsRead, !row.flags.contains("name-low-confidence") else { continue }
+            var reads = Set([row.cp])
+            for f in row.frames { if let l = f.frame.flatMap({ labelIndex[$0] }) { reads.formUnion(readings[l].cpReads ?? readings[l].cp.map { [$0] } ?? []) } }
+            var candidates = Set<Int>()
+            for r in reads where r >= 10 && r < 1000 {
+                for d in 1...9 {
+                    if r >= 100 { candidates.insert(d * 1000 + r) } else { candidates.insert(d * 100 + r); candidates.insert(d * 1000 + r) }
+                }
+            }
+            let ids = screenIds(row, readings: readings, labelIndex: labelIndex).filter { gm.byId[$0]?.baseStats != nil }
+            var fits = [(cp: Int, id: String, levels: [Double])]()
+            for cp in candidates.sorted() {
+                for id in ids {
+                    let stats = gm.byId[id]!.baseStats!
+                    guard cp <= cpAt(stats, IVs(atk: 15, def: 15, hp: 15), 51) else { continue }
+                    let l = exactLevels(stats, cp: cp, hp: hp, ivs: read)
+                    if !l.isEmpty { fits.append((cp, id, l)) }
+                }
+            }
+            guard fits.count == 1, fits[0].levels.count == 1, let solved = solvedRow(row, speciesIds: [fits[0].id], cp: fits[0].cp, ivs: read, engine: engine) else { continue }
+            let from = reads.filter { $0 < fits[0].cp && String(fits[0].cp).hasSuffix(String($0)) }.max() ?? row.cp
+            var fixed = adopting(solved, into: row, ivsRead: read)
+            fixed.flags.append("cp-recovered:\(fits[0].cp)-from-\(from)")
+            rows[n] = fixed
+            changes.append((row.frames.first?.frame ?? "", "\(row.display) CP \(row.cp): every reading is short; with HP \(hp) and bars \(read.atk)/\(read.def)/\(read.hp) only CP \(fits[0].cp) fits (level \(fits[0].levels[0]))"))
+        }
+        guard !changes.isEmpty else { return (scan, []) }
+        return (ScanResult(rows: rows, review: rows.filter { !$0.flags.isEmpty }.map(reviewEntry), unmatched: scan.unmatched), changes)
+    }
 }
