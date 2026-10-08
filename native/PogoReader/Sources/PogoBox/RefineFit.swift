@@ -2,7 +2,7 @@ import Foundation
 import PogoReader
 
 extension Refine {
-    /// A form of the screen's species whose base stats differ from every form the screen name already maps to (`meowth_galarian` for "Meowth").
+    /// A regional form of the screen's species whose base stats differ from every form the screen name already maps to (`meowth_galarian` for "Meowth").
     struct AltForm: Equatable { var id: String; var stats: BaseStats }
 
     /// The species ids the screen name mapped to for this row (the grouper's candidates), from the row's own readings; the row's solved id when none were kept.
@@ -34,17 +34,24 @@ extension Refine {
         return false
     }
 
-    /// The other forms of the same dex number whose base stats differ from every screen form's, one per distinct set of stats. Shadow forms share their base's stats, so
-    /// they never count as another form; a Mega or primal form has its own name on screen and is not what a bare name hides. Of several ids with the same stats (costumes) the plainest is used,
-    /// the order the solver ranks equal forms in.
+    /// The suffixes a regional form's id carries in the game master (`meowth_galarian`). The ids themselves are found in the game master by these suffixes, not listed by species.
+    static let regionalSuffixes = ["_alolan", "_galarian", "_hisuian", "_paldean"]
+
+    /// The regional forms of the screen's species whose base stats differ from every screen form's, one per distinct set of stats: an id that is a screen id plus a regional suffix
+    /// (`meowth` and `meowth_galarian`). The rule's claim is "a regional form behind a bare name", so battle-only forms with other stats under the same dex number, Mega and primal forms
+    /// (their own names on screen) and costume or shadow variants (a shadow shares its base's stats) are not alternatives, and a row whose own screen ids are Mega or primal has none.
+    /// Of several ids with the same stats the plainest is used, the order the solver ranks equal forms in.
     static func alternativeForms(of ids: [String], gameMaster gm: GameMaster) -> [AltForm] {
-        let dexes = Set(ids.compactMap { gm.byId[$0]?.dex })
+        guard !ids.contains(where: { $0.contains("_mega") || $0.contains("_primal") }) else { return [] }
         let own = Set(ids.compactMap { gm.byId[$0]?.baseStats })
         var best = [BaseStats: String]()
-        for (id, s) in gm.byId where dexes.contains(s.dex) && !ids.contains(id) {
-            guard let stats = s.baseStats, !own.contains(stats), !["_shadow", "_mega", "_primal"].contains(where: { id.contains($0) }) else { continue }
-            if let b = best[stats], (b.count, b) <= (id.count, id) { continue }
-            best[stats] = id
+        for id in ids {
+            for suffix in regionalSuffixes {
+                let alt = id + suffix
+                guard !ids.contains(alt), let stats = gm.byId[alt]?.baseStats, !own.contains(stats) else { continue }
+                if let b = best[stats], (b.count, b) <= (alt.count, alt) { continue }
+                best[stats] = alt
+            }
         }
         return best.map { AltForm(id: $0.value, stats: $0.key) }.sorted { $0.id < $1.id }
     }

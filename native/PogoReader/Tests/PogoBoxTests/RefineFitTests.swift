@@ -139,6 +139,11 @@ final class RefineFitTests: XCTestCase {
         XCTAssertEqual(Refine.alternativeForms(of: ["charizard"], gameMaster: gm).map(\.id), [], "Mega forms have their own names on screen")
         XCTAssertEqual(Refine.alternativeForms(of: ["vulpix"], gameMaster: gm).map(\.id), [], "Alolan Vulpix has the Kanto stats")
         XCTAssertEqual(Refine.alternativeForms(of: ["pikachu"], gameMaster: gm).map(\.id), [], "costume Pikachu share the stats")
+        XCTAssertEqual(Refine.alternativeForms(of: ["deoxys"], gameMaster: gm).map(\.id), [], "battle-only forms with other stats are not a regional form behind a bare name")
+        XCTAssertEqual(Refine.alternativeForms(of: ["charizard_mega_x"], gameMaster: gm).map(\.id), [], "a Mega row has its own name on screen")
+        XCTAssertEqual(Refine.alternativeForms(of: ["meowth", "charizard_mega_y"], gameMaster: gm).map(\.id), [])
+        XCTAssertEqual(Refine.alternativeForms(of: ["farfetchd"], gameMaster: gm).map(\.id), ["farfetchd_galarian"])
+        XCTAssertEqual(Refine.alternativeForms(of: ["diglett"], gameMaster: gm).map(\.id), ["diglett_alolan"])
     }
 
     func testARowWhoseBarsAreStillMovingIsNotTried() throws {
