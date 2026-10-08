@@ -107,7 +107,7 @@ extension Refine {
 
     /// Rule `ivs-chosen-by-fit`. A stay whose readings hold two or more bar states keeps one: today the vote (a 0.72 reading beats a 0.70 majority of three). A real Pokémon's bars always give its CP and HP at some level, so a state that gives them at none is a misread or a
     /// card sliding in. Each state is asked whether the row's CP and HP are reachable with exactly those bars: when EXACTLY ONE state is, the row is kept whole with it, solved exact,
-    /// with `ivs-chosen-by-fit:<state>`. When none of the states fits the forms the screen name shows, the other forms of the species are asked (as `form-from-stats` does) and a
+    /// with `ivs-chosen-by-fit:<state>` (`:<form id>` after it when the state fits another form). When none of the states fits the forms the screen name shows, the other forms of the species are asked (as `form-from-stats` does) and a
     /// state that fits exactly one of them at exactly one level is taken with that form, unless the screen's own form fits that state within a notch on any bar (`plainFitsNearby`). Two states that both fit are two real Pokémon (or one that cannot be told apart): nil, and the
     /// caller does what it did before. Same when none fits. The state taken must be held by at least two readings: one reading can be the previous card's bars on their way, and
     /// a transient value fitting the CP and HP by chance is too weak a reason to overrule the vote.
@@ -135,7 +135,7 @@ extension Refine {
         guard let solved = solvedRow(row, speciesIds: ids, cp: row.cp, ivs: chosen, engine: engine) else { return nil }
         var fixed = adopting(solved, into: row, ivsRead: chosen)
         let key = "\(chosen.atk)/\(chosen.def)/\(chosen.hp)"
-        fixed.flags.append("ivs-chosen-by-fit:\(key)")
+        fixed.flags.append("ivs-chosen-by-fit:\(key)\(altForm.map { ":" + $0 } ?? "")")
         if let altForm { fixed.flags.append("form-from-stats:\(altForm)") }
         let others = states.filter { $0.ivs != chosen }.map { "\($0.ivs.atk)/\($0.ivs.def)/\($0.ivs.hp) x\($0.count)" }.joined(separator: ", ")
         return (fixed, "\(row.display) CP \(row.cp): bars \(key) x\(states.first { $0.ivs == chosen }!.count) fit the CP and HP, \(others) do not\(altForm.map { " (as \($0))" } ?? ""): kept as one Pokemon with \(key)")

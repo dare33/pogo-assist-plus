@@ -373,7 +373,22 @@ final class RefineFitTests: XCTestCase {
         let (_, out) = try refined(card("Meowth", ids: ["meowth"], cp: v.cp, hp: v.hp, bars: [(wrong, 0.79), (v.ivs, 0.696), (v.ivs, 0.696)], at: 0, tag: "a"))
         let r = out.scan.rows[0]
         XCTAssertEqual(r.speciesId, "meowth_alolan"); XCTAssertEqual(r.solveStatus, "exact"); XCTAssertEqual(r.ivs, v.ivs)
-        XCTAssertTrue(r.flags.contains("ivs-chosen-by-fit:\(v.ivs.atk)/\(v.ivs.def)/\(v.ivs.hp)") && r.flags.contains("form-from-stats:meowth_alolan"), "\(r.flags)")
+        XCTAssertTrue(r.flags.contains("ivs-chosen-by-fit:\(v.ivs.atk)/\(v.ivs.def)/\(v.ivs.hp):meowth_alolan") && r.flags.contains("form-from-stats:meowth_alolan"), "\(r.flags)")
+    }
+
+    func testTheFlagTextsNameTheFormAsTheGameDoesAndSayOnlyWhatIsTrue() {
+        let form = FlagInfo.explain("form-from-stats:farfetchd_galarian")
+        XCTAssertTrue(form.contains("Galarian Farfetch'd"), form)
+        XCTAssertFalse(form.contains("farfetchd") || form.contains("_"), "never an internal id: \(form)")
+        XCTAssertTrue(FlagInfo.explainNote("form-from-stats:diglett_alolan").contains("Alolan Diglett"))
+        let plain = FlagInfo.explain("ivs-chosen-by-fit:13/11/14")
+        XCTAssertTrue(plain.contains("read more than one way") && plain.contains("Of the bar readings seen, only 13/11/14 gives this CP and HP at some level"), plain)
+        XCTAssertFalse(plain.contains("two different ways"))
+        let other = FlagInfo.explain("ivs-chosen-by-fit:10/5/14:diglett_alolan")
+        XCTAssertTrue(other.contains("only 10/5/14 gives this CP and HP as the Alolan Diglett at some level"), other)
+        XCTAssertTrue(FlagInfo.explainNote("ivs-chosen-by-fit:13/11/14").contains("Of the bar readings seen"), "the note keeps the explanation and drops the request to check")
+        XCTAssertFalse(FlagInfo.explainNote("ivs-chosen-by-fit:13/11/14").contains("Check"))
+        XCTAssertEqual(FlagInfo.field(of: "ivs-chosen-by-fit:10/5/14:diglett_alolan"), .ivs)
     }
 
     // MARK: cp-recovered (leading digit)

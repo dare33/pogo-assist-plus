@@ -67,8 +67,13 @@ public enum FlagInfo {
         Entry(prefix: "no-level-fits", field: .ivs) { _ in "No level and IVs fit this CP and HP, so a value was misread. Check the CP, HP and IVs." },
         Entry(prefix: "name-low-confidence", field: .species) { _ in "The name was hard to read and may be a longer name cut short. Check the name." },
         Entry(prefix: "level-ambiguous", field: nil) { _ in "More than one level fits, so the level is shown as a range." },
-        Entry(prefix: "ivs-chosen-by-fit", field: .ivs) { ivs in "The appraisal bars read two different ways. Only the IVs \(ivs) give this CP and HP at some level, so those were kept. Check the IVs in the game." },
-        Entry(prefix: "form-from-stats", field: .species) { id in "The screen shows only the species name. The CP, HP and bars fit the form \(id.replacingOccurrences(of: "_", with: " ")) at exactly one level and no other form, so it was taken as that form." },
+        // The detail is the bars, and after a second ":" the species id when the bars fit another form only (`ivs-chosen-by-fit:10/5/15:diglett_alolan`).
+        Entry(prefix: "ivs-chosen-by-fit", field: .ivs) { detail in
+            let part = detail.split(separator: ":", maxSplits: 1).map(String.init)
+            let asForm = part.count > 1 ? " as the \(formName(part[1]))" : ""
+            return "The appraisal bars were read more than one way. Of the bar readings seen, only \(part.first ?? detail) gives this CP and HP\(asForm) at some level, so those were kept. Check the IVs in the game."
+        },
+        Entry(prefix: "form-from-stats", field: .species) { id in "The screen shows only the species name. The CP, HP and bars fit the \(formName(id)) at exactly one level, and fit neither the plain form (even with a bar read a notch off) nor any other regional form, so it was taken as that form." },
         Entry(prefix: "form-ambiguous", field: .species) { _ in "The screen does not show which form this is. Check the form in the game." },
         Entry(prefix: "hp-computed", field: .hp) { _ in "The HP was not read, so it was worked out from the stats. Check it in the game." },
         Entry(prefix: "hp-unread", field: .hp) { _ in "The HP could not be read or worked out. Check it in the game." },
@@ -78,6 +83,13 @@ public enum FlagInfo {
         Entry(prefix: "ivs-rescan-differs", field: nil) { _ in "The latest scan read other IVs for this Pokémon at the same CP and HP. The saved IVs were kept. Check the IVs in the game." },
         Entry(prefix: "ivs-disagree", field: .ivs) { _ in "The appraisal bars read differently on different frames. Check the IVs in the game." },
     ]
+
+    /// A species id as the game names it: "Galarian Farfetch'd" for `farfetchd_galarian`, from the game master's "Farfetch'd (Galarian)". Never the id.
+    static func formName(_ id: String) -> String {
+        guard let name = (try? GameMaster.bundled())?.byId[id]?.name else { return "form it fits" }
+        let nf = GameMaster.nameAndForm(name)
+        return nf.form.isEmpty ? nf.name : "\(nf.form) \(nf.name)"
+    }
 
     private static func split(_ flag: String) -> (key: String, detail: String) {
         for e in table where flag == e.prefix || flag.hasPrefix(e.prefix + ":") || flag.hasPrefix(e.prefix + "-") {
