@@ -6,14 +6,14 @@ import PogoReader
 final class FlagSeverityTests: XCTestCase {
     func testTheRulesByFlag() {
         func sev(_ f: String, _ status: String = "exact") -> FlagInfo.Severity { FlagInfo.severity(of: f, solveStatus: status) }
-        for f in ["ivs-disagree", "bars-unsettled", "cp-chosen-2641-over-641", "cp-recovered:1966-from-966", "cp-outlier-dropped:12", "absorbed-fragment", "ivs-corrected-from-1/2/3", "hp-computed"] {
+        for f in ["ivs-disagree", "bars-unsettled", "cp-chosen-2641-over-641", "cp-recovered:1966-from-966", "cp-outlier-dropped:12", "absorbed-fragment", "ivs-corrected-from-1/2/3", "hp-computed", "sex-from-stats"] {
             XCTAssertEqual(sev(f), .note, "\(f) on an exact row")
             XCTAssertEqual(sev(f, "ambiguous"), .check, "\(f) on a row that is not exact")
             XCTAssertEqual(sev(f, "none"), .check)
         }
         for f in ["form-ambiguous:a|b", "level-ambiguous:20|20.5"] { XCTAssertEqual(sev(f), .note); XCTAssertEqual(sev(f, "none"), .note) }
         for f in ["no-level-fits", "ivs-unread", "ambiguous-ivs:3-fit", "cp-computed:1994", "hp-unread", "name-low-confidence", "same-as-previous", "split-by-timing", "split-by-bars",
-                  "absorbed-unread", "mega-when-scanned", "sex-from-stats", "sex-not-read", "single-read", "some-flag-nobody-has-seen-yet"] {
+                  "absorbed-unread", "mega-when-scanned", "sex-not-read", "single-read", "some-flag-nobody-has-seen-yet"] {
             XCTAssertEqual(sev(f), .check, f); XCTAssertEqual(sev(f, "exact"), .check, f)
         }
         XCTAssertFalse(FlagInfo.explain("split-by-bars").isEmpty); XCTAssertTrue(FlagInfo.explain("split-by-bars").hasPrefix("Two different Pokémon with the same CP"))

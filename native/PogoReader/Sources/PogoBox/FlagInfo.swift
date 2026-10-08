@@ -16,11 +16,11 @@ public enum FlagInfo {
     /// The rules by flag prefix. A flag not listed here is a `check`.
     static let rules: [String: Rule] = [
         "ivs-disagree": .noteWhenExact, "bars-unsettled": .noteWhenExact, "cp-chosen": .noteWhenExact, "cp-recovered": .noteWhenExact,
-        "cp-outlier-dropped": .noteWhenExact, "absorbed-fragment": .noteWhenExact, "ivs-corrected": .noteWhenExact, "hp-computed": .noteWhenExact,
+        "cp-outlier-dropped": .noteWhenExact, "absorbed-fragment": .noteWhenExact, "ivs-corrected": .noteWhenExact, "hp-computed": .noteWhenExact, "sex-from-stats": .noteWhenExact,
         "form-ambiguous": .note, "level-ambiguous": .note, "form-from-stats": .note, "ivs-chosen-by-fit": .noteWhenExact,
         "no-level-fits": .check, "ivs-unread": .check, "ambiguous-ivs": .check, "cp-computed": .check, "hp-unread": .check, "name-low-confidence": .check,
         "same-as-previous": .check, "split-by-timing": .check, "split-by-bars": .check, "absorbed-unread": .check, "mega-when-scanned": .check,
-        "sex-from-stats": .check, "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check, "absorbed-same-cp": .check, "folded-first-reading": .check, "folded-digit-misread": .check, "misread-of-neighbour": .check,
+        "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check, "absorbed-same-cp": .check, "folded-first-reading": .check, "folded-digit-misread": .check, "misread-of-neighbour": .check,
     ]
 
     public static func severity(of flag: String, solveStatus: String) -> Severity {
