@@ -33,7 +33,7 @@ public enum Refine {
     public static let minSwipeGap = 0.55
 
     public struct Change: Equatable {
-        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit, fragmentAbsorbed, cpOutlierDropped, barsSplit }
+        public enum Kind: String { case twinSplit, hiddenCP, duplicateDropped, timingSplit, fragmentAbsorbed, cpOutlierDropped, barsSplit, formFromStats }
         public var kind: Kind
         /// The row's index in the refined result.
         public var rowIndex: Int
@@ -57,7 +57,7 @@ public enum Refine {
     }
 
     /// Reconcile the JavaScript result with `LiveGrouper` over the same readings and ticks (rules in the type's description).
-    public static func apply(to base: ScanResult, readings: [FrameReading], ticks: [Double], engine: CoreEngine, species: SpeciesTable? = try? SpeciesTable.bundled(), paging: PagingHint? = nil) throws -> Refined {
+    public static func apply(to base: ScanResult, readings: [FrameReading], ticks: [Double], engine: CoreEngine, species: SpeciesTable? = try? SpeciesTable.bundled(), paging: PagingHint? = nil, gameMaster: GameMaster? = try? GameMaster.bundled()) throws -> Refined {
         let live = GrouperDiff.liveRows(readings: readings, ticks: ticks, species: species)
         var base = base, readings = readings
         if readings.contains(where: { $0.frame == nil }) {
@@ -86,6 +86,10 @@ public enum Refine {
         place(fragments.marks, .fragmentAbsorbed); place(outliers.marks, .cpOutlierDropped)
         for m in bars.marks { r.changes.append(Change(kind: .barsSplit, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }
         r.notices += bars.notices
+        // last: a row the solver did not take exactly may be a regional form the screen names plainly (rule `form-from-stats`)
+        let forms = formFromStats(r.scan, readings: readings, engine: engine, gameMaster: gameMaster)
+        r.scan = forms.scan
+        for m in forms.changes { r.changes.append(Change(kind: .formFromStats, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }
         r.baseRowCount = base.rows.count
         return r
     }

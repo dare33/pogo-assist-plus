@@ -814,8 +814,15 @@ public enum BoxMerge {
     private static func values<T: Equatable>(_ current: T, _ fix: Fix<T>?) -> [T] { fix?.was.map { [current, $0] } ?? [current] }
 
     private static func sameSpecies(_ s: ScanRow, _ v: BoxEntry) -> Bool {
-        s.speciesKey == v.speciesKey || (v.corrections.species?.was).map { $0 == s.speciesKey } == true
+        s.speciesKey == v.speciesKey || (v.corrections.species?.was).map { $0 == s.speciesKey } == true || formFromStatsPlain(s, v)
     }
+
+    /// A row whose regional form was taken from its stats (`form-from-stats`: the screen shows "Meowth" for a Galarian Meowth) is the plain species its screen name shows as far as the
+    /// saved entries are concerned: an entry saved before the form could be told (it fitted no level, so its id is the plain species) is the same Pokémon, not another one.
+    private static func formFromStatsPlain(_ s: ScanRow, _ v: BoxEntry) -> Bool {
+        hasFormFromStats(s) && screenNameIds[s.display]?.contains(v.speciesKey) == true
+    }
+    static func hasFormFromStats(_ r: ScanRow) -> Bool { r.flags.contains { $0.hasPrefix("form-from-stats:") } }
 
     /// Every species id a screen name could be (`displayNames`, the table the reader matches names against), by display. One name holds several forms (Morpeko, Giratina, Nidoran).
     private static let screenNameIds: [String: Set<String>] = {
@@ -832,7 +839,8 @@ public enum BoxMerge {
             if read.count == 1, let sex = read.first, v.speciesKey != sex, v.speciesKey == "nidoran_male" || v.speciesKey == "nidoran_female" { return false }
         }
         guard hasNoLevelFits(s), let ids = screenNameIds[s.display] else { return sameSpecies(s, v) }
-        return ids.contains(v.speciesKey) || v.corrections.species?.was.map(ids.contains) == true || sameSpecies(s, v)
+        // An entry whose regional form came from its stats (`form-from-stats`) has an id the screen name does not list; the same Pokémon unread this time still has that name.
+        return ids.contains(v.speciesKey) || v.corrections.species?.was.map(ids.contains) == true || sameSpecies(s, v) || (hasFormFromStats(v.row) && v.row.display == s.display)
     }
     private static func sameIVs(_ s: ScanRow, _ v: BoxEntry) -> Bool {
         guard let si = s.ivs else { return false }
