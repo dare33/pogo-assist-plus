@@ -204,6 +204,7 @@ final class ScanScreensTests: XCTestCase {
             XCTAssertTrue(app.buttons["Scan Options"].exists, "the options row stays")
             sleep(1)
             XCTAssertGreaterThan(app.buttons["Start scan"].frame.minY, before + 40, "the mark button moves down as the card shrinks")
+            XCTAssertFalse(app.descendants(matching: .any)["scan-command-line"].exists, "nothing is shown above the card when paging by hand")
             shot("scan-steps-collapsed-\(name)")
             app.terminate()
             // A relaunch without -uitest-reset keeps it folded; the options open first, Done shows the card.
@@ -220,6 +221,31 @@ final class ScanScreensTests: XCTestCase {
             XCTAssertTrue(again.staticTexts[step1].waitForExistence(timeout: 3), "Show more brings the steps back")
             XCTAssertEqual(again.buttons["scan-steps-toggle"].label, "Show less")
             again.terminate()
+        }
+    }
+
+    /// With the steps folded the live command stays above the card (Greg, 8 Oct 2026); with no number typed it is the set that covers 200.
+    func testTheCommandStaysVisibleWhenTheStepsAreFolded() throws {
+        // VoiceCommandFile.setSizes is [25, 50, 100, 200, ...]: the set covering the default 200 is 200 (the UI test target does not link PogoBox).
+        let expected = "Pogo scan 200"
+        for (name, args) in [("light", ["-appearance", "light"]), ("dark", ["-appearance", "dark"])] {
+            let app = openScan(args)
+            voiceAddAndUpdate(app)
+            let line = app.descendants(matching: .any)["scan-command-line"]
+            XCTAssertFalse(line.exists, "the steps show the command themselves")
+            app.buttons["scan-steps-toggle"].tap()
+            XCTAssertTrue(app.buttons["Show more"].waitForExistence(timeout: 3))
+            XCTAssertTrue(line.waitForExistence(timeout: 3), "the command stays when the steps are folded")
+            sleep(1)
+            XCTAssertEqual(line.label, expected)
+            XCTAssertGreaterThan(line.frame.minY, app.buttons["Start scan"].frame.maxY, "below the mark button")
+            XCTAssertLessThan(line.frame.maxY, app.buttons["Scan Options"].frame.minY, "above the card")
+            shot("scan-command-collapsed-\(name)")
+            app.buttons["Show more"].tap()
+            XCTAssertTrue(app.buttons["Show less"].waitForExistence(timeout: 3))
+            sleep(1)
+            XCTAssertFalse(line.exists, "the steps are back, so the line goes")
+            app.terminate()
         }
     }
 

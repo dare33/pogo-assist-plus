@@ -85,6 +85,15 @@ struct ScanView: View {
                         if !editing, asksAboutSetup { SetupLeftLine(left: model.setup.stepsLeft) { setupPage = .checklist }.padding(.bottom, 12).measured() }
                         markButton(size: markSize)
                         Spacer(minLength: Self.markGap)
+                        // With the steps folded, step 5 (where the command is said) is out of sight: the command stays above the card, large and in the accent colour (Greg, 8 Oct 2026).
+                        // Measured with its bottom padding, so the mark button shrinks for it on a short phone; it comes and goes with the toggle's own animation.
+                        if !editing, stepsCollapsed, words.command != nil {
+                            Text(words.spoken)
+                                .font(.figtree(22, .heavy, relativeTo: .title2)).foregroundStyle(accent.ink)
+                                .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                                .padding(.bottom, 14).measured()
+                                .accessibilityIdentifier("scan-command-line")
+                        }
                         bottomPanel.measured()
                     }
                 }
