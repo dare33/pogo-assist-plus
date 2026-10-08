@@ -176,6 +176,30 @@ final class RefineFitTests: XCTestCase {
         XCTAssertEqual(plan([plain], [before]).new, [0])
     }
 
+    func testASolvedPlainEntryIsAnotherPokemonThanTheRegionalFormFromStats() {
+        // a Kanto Meowth that solved (1/5/11, CP 500) is not the Galarian Meowth 1/5/11 at CP 644: it was a New Pokémon before the rule and stays one
+        let kanto = saved(scanned("meowth", display: "Meowth", cp: 500, hp: 100, ivs: IVs(atk: 1, def: 5, hp: 11), flags: [], status: "exact"), id: "kanto")
+        let now = scanned("meowth_galarian", display: "Meowth", cp: 644, hp: 100, ivs: IVs(atk: 1, def: 5, hp: 11), flags: ["form-from-stats:meowth_galarian"], status: "exact")
+        let p = plan([now], [kanto])
+        XCTAssertEqual(p.new, [0], "\(p)")
+        XCTAssertTrue(p.unsure.isEmpty && p.updated.isEmpty && p.same.isEmpty, "\(p)")
+        // and the automatic unchanged rule (IVs and CP, no HP) cannot pair a Galarian 644 / HP 100 with a solved Kanto 644 / HP 106
+        let kanto644 = saved(scanned("meowth", display: "Meowth", cp: 644, hp: 106, ivs: IVs(atk: 1, def: 5, hp: 11), flags: [], status: "exact"), id: "k644")
+        let q = plan([now], [kanto644])
+        XCTAssertEqual(q.new, [0], "\(q)")
+    }
+
+    func testTheUnsolvedEntryIsPairedAheadOfASolvedPlainOne() {
+        // Diglett 101 solved with 10/5/15 and 102 saved twice with no IVs: the 102 scanned now is the unsolved one, and the solved 101 is not taken as its power-up
+        let solved = saved(scanned("diglett", display: "Diglett", cp: 101, hp: 26, ivs: IVs(atk: 10, def: 5, hp: 15), flags: [], status: "exact"), id: "s101")
+        let unsolved = saved(scanned("diglett", display: "Diglett", cp: 102, hp: 26, ivs: nil, flags: ["ambiguous-ivs:3-fit"], status: "ambiguous"), id: "u102")
+        let now = scanned("diglett_alolan", display: "Diglett", cp: 102, hp: 26, ivs: IVs(atk: 10, def: 5, hp: 15), flags: ["form-from-stats:diglett_alolan"], status: "exact")
+        let p = plan([now], [solved, unsolved])
+        XCTAssertTrue(p.new.isEmpty, "\(p)")
+        XCTAssertEqual(p.same.map(\.savedId) + p.updated.map(\.savedId), ["u102"], "\(p)")
+        XCTAssertEqual(p.gone, ["s101"], "the solved entry is the one left for the Not seen list")
+    }
+
     func testAnUnsolvedRowStillFindsTheEntrySavedWithAFormFromStats() {
         let entry = saved(scanned("meowth_galarian", display: "Meowth", cp: 644, hp: 100, ivs: IVs(atk: 1, def: 5, hp: 11), flags: ["form-from-stats:meowth_galarian"], status: "exact"), id: "e")
         let unread = scanned("meowth", display: "Meowth", cp: 64, hp: 100, ivs: nil, flags: ["no-level-fits"], status: "none")

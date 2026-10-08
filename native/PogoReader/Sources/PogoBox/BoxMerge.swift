@@ -818,9 +818,12 @@ public enum BoxMerge {
     }
 
     /// A row whose regional form was taken from its stats (`form-from-stats`: the screen shows "Meowth" for a Galarian Meowth) is the plain species its screen name shows as far as the
-    /// saved entries are concerned: an entry saved before the form could be told (it fitted no level, so its id is the plain species) is the same Pokémon, not another one.
+    /// saved entries are concerned, but only for an entry the old reader could not tell the form of: one saved with no IVs, or with `no-level-fits` or `ambiguous-ivs` (it fitted no level, so
+    /// its id is the plain species) is the same Pokémon. An entry that solved as the plain species is another Pokémon (a Kanto Meowth 1/5/11 at CP 500 is not a Galarian one at CP 644), and
+    /// leaving it out also keeps it from being taken ahead of the unsolved entry the rule exists for (poweredUp is tried before noIVs).
     private static func formFromStatsPlain(_ s: ScanRow, _ v: BoxEntry) -> Bool {
         hasFormFromStats(s) && screenNameIds[s.display]?.contains(v.speciesKey) == true
+            && (v.row.ivs == nil || v.row.flags.contains { $0 == "no-level-fits" || $0.hasPrefix("no-level-fits:") || $0 == "ambiguous-ivs" || $0.hasPrefix("ambiguous-ivs:") })
     }
     static func hasFormFromStats(_ r: ScanRow) -> Bool { r.flags.contains { $0.hasPrefix("form-from-stats:") } }
 
