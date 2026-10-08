@@ -22,7 +22,7 @@ extension Refine {
     /// is solved again by the JavaScript on its own readings, so it gets its own bars, level and flags; the second row is flagged
     /// `split-by-bars` (not `same-as-previous`: they are different Pokemon).
     /// A single odd reading never splits a row: the first frame after a page is the previous Pokemon's bars moving to the new ones.
-    static func splitByBars(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, hintPeriod: Double? = nil, pauses: [ClosedRange<Double>] = [], maxStates: Int = barsSplitMaxStates, gameMaster: GameMaster? = try? GameMaster.bundled()) throws -> (scan: ScanResult, marks: [(label: String, detail: String)], notices: [String], fits: [(label: String, detail: String)]) {
+    static func splitByBars(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, hintPeriod: Double? = nil, pauses: [ClosedRange<Double>] = [], maxStates: Int = barsSplitMaxStates) throws -> (scan: ScanResult, marks: [(label: String, detail: String)], notices: [String]) {
         var labelIndex = [String: Int]()
         for (i, r) in readings.enumerated() { if let f = r.frame, labelIndex[f] == nil { labelIndex[f] = i } }
         let pace = ScanPace.measure(rows: scan.rows)
@@ -31,7 +31,7 @@ extension Refine {
         let allSpans = spans.allSatisfy { $0 != nil } ? spans.compactMap { $0 } : []
         let boundaries = allSpans.isEmpty ? [] : ScanPace.boundaries(spans: allSpans)
 
-        var out = [ScanRow](), marks = [(label: String, detail: String)](), notices = [String](), fits = [(label: String, detail: String)]()
+        var out = [ScanRow](), marks = [(label: String, detail: String)](), notices = [String]()
         for (n, row) in scan.rows.enumerated() {
             guard row.flags.contains("ivs-disagree") || row.frames.count >= 4 else { out.append(row); continue }
             // Interior rows only have both paging boundaries (the first and the last row have one each).
@@ -60,10 +60,6 @@ extension Refine {
                 // state must have been held for about 0.6 of it; with none known, the row is not split and keeps its `ivs-disagree`.
                 guard let p = hintPeriod, change.held.allSatisfy({ $0 >= barsSplitFallbackHeldPeriods * p }) else { out.append(row); continue }
             }
-            // Two bar states are two Pokemon only when both are possible ones: when exactly one gives the row's CP and HP, the other is a misread and the row stays whole (rule `ivs-chosen-by-fit`).
-            if let fit = chooseByFit(row, readings: readings, labelIndex: labelIndex, engine: engine, gameMaster: gameMaster) {
-                out.append(fit.row); fits.append((row.frames.first?.frame ?? "", fit.detail)); continue
-            }
             // each part solved on its own readings
             var parts = [[FrameLabel]](repeating: [], count: change.cuts.count + 1)
             for f in row.frames { parts[change.cuts.filter { $0.time < f.time! }.count].append(f) }
@@ -88,9 +84,9 @@ extension Refine {
             for part in solved.dropFirst() { marks.append((part.frames.first?.frame ?? "", detail)) }
             out += solved
         }
-        guard !marks.isEmpty || !fits.isEmpty else { return (scan, [], notices, []) }
+        guard !marks.isEmpty else { return (scan, [], notices) }
         for k in out.indices { out[k].index = k + 1 }
-        return (ScanResult(rows: out, review: out.filter { !$0.flags.isEmpty }.map(reviewEntry), unmatched: scan.unmatched), marks, notices, fits)
+        return (ScanResult(rows: out, review: out.filter { !$0.flags.isEmpty }.map(reviewEntry), unmatched: scan.unmatched), marks, notices)
     }
 
     /// Whether row `n` touches a recorded pause, as `splitByTiming`'s `inPause` decides it (the row's first to last reading against each pause).

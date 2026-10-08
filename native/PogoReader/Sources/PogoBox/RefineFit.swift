@@ -82,8 +82,7 @@ extension Refine {
         return out
     }
 
-    /// Rule `ivs-chosen-by-fit`. A stay whose readings hold two or more bar states keeps one: today the vote (a 0.72 reading beats a 0.70 majority of three) or, when the
-    /// states are held long enough, a cut into two Pokémon. A real Pokémon's bars always give its CP and HP at some level, so a state that gives them at none is a misread or a
+    /// Rule `ivs-chosen-by-fit`. A stay whose readings hold two or more bar states keeps one: today the vote (a 0.72 reading beats a 0.70 majority of three). A real Pokémon's bars always give its CP and HP at some level, so a state that gives them at none is a misread or a
     /// card sliding in. Each state is asked whether the row's CP and HP are reachable with exactly those bars: when EXACTLY ONE state is, the row is kept whole with it, solved exact,
     /// with `ivs-chosen-by-fit:<state>`. When none of the states fits the forms the screen name shows, the other forms of the species are asked (as `form-from-stats` does) and a
     /// state that fits exactly one of them at exactly one level is taken with that form. Two states that both fit are two real Pokémon (or one that cannot be told apart): nil, and the
@@ -118,13 +117,34 @@ extension Refine {
         return (fixed, "\(row.display) CP \(row.cp): bars \(key) x\(states.first { $0.ivs == chosen }!.count) fit the CP and HP, \(others) do not\(altForm.map { " (as \($0))" } ?? ""): kept as one Pokemon with \(key)")
     }
 
-    /// `chooseByFit` for the rows the solver did not take exactly whose readings hold more than one bar state and that were not cut by `splitByBars` (the cut chooses for itself).
-    /// Only when the state that fits is not the one the row already has: then the row has the form it needs and `form-from-stats` (run last) says so.
-    static func chooseBarsByFit(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, gameMaster: GameMaster?) -> (scan: ScanResult, marks: [(label: String, detail: String)]) {
+    /// With no beat to judge by, a stay that holds more readings than this is not shown to be one card: one period of the usual 1.2 s command beat at the device's 0.4 s reading step
+    /// (`fragmentFallbackGapSeconds`, the step the fragment rule's no-beat path judges a pair by) holds at most four readings, first and last included. Neither `RefineBars` (it does not
+    /// split with no period known) nor `RefineTiming` (it needs a regular beat) judges one card by a count of readings, so the nearest no-beat rule is the fragment rule's reading step.
+    static let fitStayMaxReadingsWithoutBeat = 4
+
+    /// `chooseByFit` for the rows the solver did not take exactly whose readings hold more than one bar state and that were not cut by `splitByBars` (the cut chooses for itself: a
+    /// part of a cut is left alone here, and so is every row the cut was refused on the beat, which stays as it was). Only when the state that fits is not the one the row already has:
+    /// then the row has the form it needs and `form-from-stats` (run last) says so.
+    ///
+    /// A row that holds two real Pokémon of the same name, CP and HP where one twin's bars are misread by a notch looks exactly like one card with a flickering bar state, so the
+    /// choice is made only for a stay that could be ONE card: the readings of every state, wherever they have a CP, read the row's CP (two cards whose CP read changes with the bars are two Pokémon), and the
+    /// stay lasts at most one period (`barsSplitPartTolerance` over it, the tolerance `splitByBars` gives a part) of the paging beat, taken as `splitByBars` takes it: the measured
+    /// period when the beat is regular, else the command's period. With no beat known the stay holds no more than `fitStayMaxReadingsWithoutBeat` readings. Run27's Staraptor 1951, three
+    /// cards over 2.0 s with bars 11/13/11, 11/12/12 and 11/11/13, is left as it was.
+    static func chooseBarsByFit(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, hintPeriod: Double? = nil, gameMaster: GameMaster?) -> (scan: ScanResult, marks: [(label: String, detail: String)]) {
         var labelIndex = [String: Int]()
         for (i, r) in readings.enumerated() { if let f = r.frame, labelIndex[f] == nil { labelIndex[f] = i } }
+        let pace = ScanPace.measure(rows: scan.rows)
+        let period = (pace?.isRegular ?? false) ? pace?.medianPeriod : hintPeriod
         var rows = scan.rows, marks = [(label: String, detail: String)]()
-        for (n, row) in rows.enumerated() where row.solveStatus != "exact" {
+        for (n, row) in rows.enumerated() where row.solveStatus != "exact" && !row.flags.contains("split-by-bars") {
+            guard row.frames.allSatisfy({ $0.cp == nil || $0.cp == row.cp || $0.ivs == nil }) else { continue }
+            if let p = period {
+                let ts = row.frames.compactMap(\.time)
+                guard ts.count == row.frames.count, let a = ts.min(), let b = ts.max(), b - a <= (1 + barsSplitPartTolerance) * p else { continue }
+            } else {
+                guard row.frames.count <= fitStayMaxReadingsWithoutBeat else { continue }
+            }
             guard let fit = chooseByFit(row, readings: readings, labelIndex: labelIndex, engine: engine, gameMaster: gameMaster), fit.row.ivsRead != row.ivsRead else { continue }
             rows[n] = fit.row
             marks.append((row.frames.first?.frame ?? "", fit.detail))

@@ -235,8 +235,9 @@ final class RefineFitTests: XCTestCase {
         XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(out.scan.rows.map { "\($0.cp) \($0.flags)" })")
     }
 
-    func testTheCutIsNotMadeWhenOnlyOneOfTheTwoStatesFits() throws {
-        // device-run8's two Fidough (CP 768, HP 89, bars 15/4/10 and 15/11/12 on consecutive beats) are two Pokémon: both fit. Make the second's bars ones that fit nowhere: one Pokémon.
+    func testTwoRealTwinsWhoseSecondHasBarsMisreadByANotchStayTwoRows() throws {
+        // device-run8's two Fidough (CP 768, HP 89, bars 15/4/10 and 15/11/12 on consecutive beats) are two Pokémon. Misread the second's bars by one notch (15/11/13, which fit no level) and
+        // it looks exactly like one card with a flickering state, but the cut the beat allowed stays a cut and the second twin asks for its look: choosing by fit would hide a real Pokémon.
         var readings = try ReplayReadings.load(url: Fixture.url("device-run8-fidough-stretch.replay.jsonl")).readings
         let ticks = try ReplayReadings.load(url: Fixture.url("device-run8-fidough-stretch.replay.jsonl")).ticks
         let both = try Refine.apply(to: try sharedEngine.finish(readings: readings), readings: readings, ticks: ticks, engine: sharedEngine, paging: PagingHint(pagedByCommand: true))
@@ -245,16 +246,78 @@ final class RefineFitTests: XCTestCase {
         let misread = IVs(atk: 15, def: 11, hp: 13)
         XCTAssertTrue(Refine.exactLevels(stats("fidough"), cp: 768, hp: 89, ivs: misread).isEmpty)
         for i in readings.indices where readings[i].name == "Fidough" && readings[i].ivs == IVs(atk: 15, def: 11, hp: 12) { readings[i].ivs = misread }
-        // (the second Fidough's CP is partly hidden on some frames in the log: read in full here, since a state with no reading of the row's CP is left alone)
+        // (the second Fidough's CP is partly hidden on some frames in the log: read in full here)
         for i in readings.indices where readings[i].name == "Fidough" && readings[i].hp?.max == 89 { readings[i].cp = 768; readings[i].cpText = "CP768"; readings[i].cpReads = [768] }
         let out = try Refine.apply(to: try sharedEngine.finish(readings: readings), readings: readings, ticks: ticks, engine: sharedEngine, paging: PagingHint(pagedByCommand: true))
         let f = out.scan.rows.filter { $0.display == "Fidough" && $0.cp == 768 }
-        XCTAssertEqual(f.count, 1, "\(out.changes)")
-        XCTAssertEqual(f.first?.ivs, IVs(atk: 15, def: 4, hp: 10))
-        XCTAssertTrue(f.first?.flags.contains("ivs-chosen-by-fit:15/4/10") == true, "\(f.first?.flags ?? [])")
-        XCTAssertFalse(f.contains { $0.flags.contains("split-by-bars") })
-        XCTAssertEqual(out.changes.filter { $0.kind == .barsSplit }.count, 0)
-        XCTAssertEqual(out.changes.filter { $0.kind == .ivsChosenByFit }.count, 1)
+        XCTAssertEqual(f.count, 2, "\(out.changes)")
+        XCTAssertTrue(f.allSatisfy { $0.flags.contains("split-by-bars") })
+        XCTAssertFalse(f.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(f.map(\.flags))")
+        XCTAssertTrue(f.contains { !FlagInfo.checkFlags($0.flags, solveStatus: $0.solveStatus).isEmpty }, "the check stays: \(f.map(\.flags))")
+        XCTAssertEqual(out.changes.filter { $0.kind == .ivsChosenByFit }.count, 0)
+    }
+
+    /// Cards of Togepi at other levels (so other CPs, each its own row) on the 1.2 s beat: three readings 0.4 s apart each, from `start`.
+    private func beat(_ count: Int, from start: Double, tag: String) -> [FrameReading] {
+        let ivs = IVs(atk: 10, def: 10, hp: 10)
+        return (0..<count).flatMap { k -> [FrameReading] in
+            let level = 10.0 + Double(k) * 0.5
+            return card("Togepi", ids: ["togepi"], cp: cpAt(stats("togepi"), ivs, level), hp: hpAt(stats("togepi"), ivs, level), ivs: ivs, at: start + Double(k) * 1.2, n: 3, tag: "\(tag)\(k)-")
+        }
+    }
+
+    /// Run27's Staraptor 1951 / HP 140 (row 35): 11/12/12 gives CP 1952 at HP 140, so only 11/11/13 fits. `stay` readings 0.4 s apart, the first half 11/12/12 and the rest 11/11/13, in the middle of a steady beat.
+    private func staraptorInABeat(stay: Int, cpReads: [Int?]) throws -> Refine.Refined {
+        let a = IVs(atk: 11, def: 12, hp: 12), b = IVs(atk: 11, def: 11, hp: 13)
+        let hp = 140
+        XCTAssertEqual(cpAt(stats("staraptor"), b, 25), 1951); XCTAssertEqual(hpAt(stats("staraptor"), b, 25), hp); XCTAssertNotEqual(cpAt(stats("staraptor"), a, 25), 1951)
+        var star = card("Staraptor", ids: ["staraptor"], cp: 1951, hp: hp, bars: (0..<stay).map { $0 < stay / 2 ? (a, 0.79) : (b, 0.696) }, at: 7 * 1.2, tag: "st")
+        for i in star.indices { let r = cpReads[i % cpReads.count]; star[i].cp = r; star[i].cpText = r.map { "CP\($0)" } ?? ""; star[i].cpReads = r.map { [$0] } }
+        let readings = beat(7, from: 0, tag: "p") + star + beat(7, from: 7 * 1.2 + Double(stay) * 0.4 + 0.4, tag: "q")
+        let base = try sharedEngine.finish(readings: readings)
+        return try Refine.apply(to: base, readings: readings, ticks: [], engine: sharedEngine, paging: nil)
+    }
+
+    func testThreeCardsOverTwoSecondsWithBarsOneNotchApartKeepTheirCheck() throws {
+        // run27's Staraptor: the CP read 1951 once and then hid (or read 951 and 51) while the bars went 11/12/12 to 11/11/13. Two real Pokémon of CP 1952 and 1951 look like one flickering card
+        // once the second is exact; the stay is two seconds on a 1.2 s beat, so choosing the state that fits would hide the first
+        let out = try staraptorInABeat(stay: 6, cpReads: [1951, nil, nil, 1951, 951, 51])
+        let rows = out.scan.rows.filter { $0.display == "Staraptor" }
+        XCTAssertFalse(rows.isEmpty)
+        XCTAssertFalse(rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(rows.map(\.flags))")
+        XCTAssertTrue(rows.contains { !FlagInfo.checkFlags($0.flags, solveStatus: $0.solveStatus).isEmpty }, "the check stays: \(rows.map { "\($0.solveStatus) \($0.flags)" })")
+    }
+
+    func testAStayOfTwoSecondsIsNotChosenEvenWhenEveryCpReadMatches() throws {
+        // the span guard alone: every reading that has a CP reads the row's, the stay is still longer than one card's
+        let out = try staraptorInABeat(stay: 6, cpReads: [1951])
+        XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(out.scan.rows.filter { $0.display == "Staraptor" }.map(\.flags))")
+    }
+
+    func testABarStateWhoseReadingsReadAnotherCpIsNotChosenEvenInOneStay() throws {
+        // the CP guard alone: a stay of one card's length (4 readings), but one reading of the fitting state read 951
+        let out = try staraptorInABeat(stay: 4, cpReads: [1951, 1951, 951, 1951])
+        XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(out.scan.rows.filter { $0.display == "Staraptor" }.map(\.flags))")
+    }
+
+    func testAStayWithNoBeatKnownAndMoreReadingsThanOneCardGivesIsNotChosen() throws {
+        let t = twoStates()
+        let bars: [(IVs, Double)] = [(t.bad, 0.79)] + Array(repeating: (t.good, 0.696), count: 4)
+        let (_, out) = try refined(card("Togepi", ids: ["togepi"], cp: t.cp, hp: t.hp, bars: bars, at: 0, tag: "m"))
+        XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } })
+        let (_, four) = try refined(card("Togepi", ids: ["togepi"], cp: t.cp, hp: t.hp, bars: Array(bars.prefix(4)), at: 0, tag: "f"))
+        XCTAssertTrue(four.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "four readings are one card")
+    }
+
+    func testAnEarlyMisreadAndTwoSettledFittingReadingsInOneBeatAreChosenByFit() throws {
+        // the legitimate case on a known beat: one card (0.8 s of readings on the 1.2 s beat), the previous card's bars on the first frame, the right bars on the next two
+        let t = twoStates("staraptor", level: 25, good: IVs(atk: 11, def: 11, hp: 13))
+        let star = card("Staraptor", ids: ["staraptor"], cp: t.cp, hp: t.hp, bars: [(t.bad, 0.79), (t.good, 0.696), (t.good, 0.696)], at: 7 * 1.2, tag: "ok")
+        let readings = beat(7, from: 0, tag: "p") + star + beat(7, from: 7 * 1.2 + 1.2, tag: "q")
+        let out = try Refine.apply(to: try sharedEngine.finish(readings: readings), readings: readings, ticks: [], engine: sharedEngine, paging: nil)
+        let r = try XCTUnwrap(out.scan.rows.first { $0.display == "Staraptor" })
+        XCTAssertEqual(r.ivs, t.good); XCTAssertEqual(r.solveStatus, "exact")
+        XCTAssertTrue(r.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") }, "\(r.flags)")
     }
 
     func testTheStateThatFitsAnotherFormIsTakenWithThatForm() throws {

@@ -69,11 +69,11 @@ public enum Refine {
         let opening = joinOpeningCard(fragments.scan, period: paging?.pagedByCommand == true ? paging?.expectedPeriod : nil, ticks: ticks.filter { $0.isFinite })
         if !opening.marks.isEmpty { fragments.scan = opening.scan; fragments.marks += opening.marks }
         let outliers = try dropCpOutliers(fragments.scan, readings: readings, engine: engine)
-        var bars = try splitByBars(outliers.scan, readings: readings, engine: engine, hintPeriod: paging?.pagedByCommand == true ? paging?.expectedPeriod : nil, pauses: paging?.pauses ?? [], gameMaster: gameMaster)
+        let hintPeriod = paging?.pagedByCommand == true ? paging?.expectedPeriod : nil
+        let bars = try splitByBars(outliers.scan, readings: readings, engine: engine, hintPeriod: hintPeriod, pauses: paging?.pauses ?? [])
         // a row left whole that the solver did not take exactly, whose readings hold two bar states: the one that fits (rule `ivs-chosen-by-fit`)
-        let chosen = chooseBarsByFit(bars.scan, readings: readings, engine: engine, gameMaster: gameMaster)
-        bars.scan = chosen.scan; bars.fits += chosen.marks
-        var r = try run(bars.scan, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
+        let chosen = chooseBarsByFit(bars.scan, readings: readings, engine: engine, hintPeriod: hintPeriod, gameMaster: gameMaster)
+        var r = try run(chosen.scan, readings: readings, engine: engine, mode: .reconcile(live, ticks.filter { $0.isFinite }.sorted()))
         // then the timing step (off when the app says the player paged by hand)
         let t = splitByTiming(r.scan, readings: readings, paging: paging)
         r.changes = r.changes.map { var c = $0; c.rowIndex = t.indexMap[c.rowIndex] ?? c.rowIndex; return c } + t.changes
@@ -88,7 +88,7 @@ public enum Refine {
         }
         place(fragments.marks, .fragmentAbsorbed); place(outliers.marks, .cpOutlierDropped)
         for m in bars.marks { r.changes.append(Change(kind: .barsSplit, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }
-        for m in bars.fits { r.changes.append(Change(kind: .ivsChosenByFit, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }
+        for m in chosen.marks { r.changes.append(Change(kind: .ivsChosenByFit, rowIndex: r.scan.rows.first { $0.frames.first?.frame == m.label }?.index ?? 0, detail: m.detail)) }
         r.notices += bars.notices
         // last: a row the solver did not take exactly may be a regional form the screen names plainly (rule `form-from-stats`)
         let forms = formFromStats(r.scan, readings: readings, engine: engine, gameMaster: gameMaster)
