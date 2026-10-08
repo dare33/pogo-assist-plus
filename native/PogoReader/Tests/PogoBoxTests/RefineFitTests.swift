@@ -20,6 +20,15 @@ final class RefineFitTests: XCTestCase {
         }
     }
 
+    /// Readings of one card whose frames show these bars in turn (IVs and the reading's confidence).
+    func card(_ name: String, ids: [String], cp: Int, hp: Int, bars: [(IVs, Double)], at t: Double, tag: String, cps: [Int]? = nil) -> [FrameReading] {
+        bars.enumerated().map { i, b in
+            var f = card(name, ids: ids, cp: cps?[i] ?? cp, hp: hp, ivs: b.0, conf: b.1, at: t + Double(i) * 0.4, n: 1, tag: "\(tag)\(i)-")[0]
+            f.frame = "\(tag)\(i)"
+            return f
+        }
+    }
+
     func refined(_ readings: [FrameReading]) throws -> (base: ScanResult, out: Refine.Refined) {
         let base = try sharedEngine.finish(readings: readings)
         return (base, try Refine.apply(to: base, readings: readings, ticks: [], engine: sharedEngine, paging: nil))
@@ -154,5 +163,108 @@ final class RefineFitTests: XCTestCase {
         // an entry of the same species WITHOUT the flag is another Pokémon's form: not offered
         var noFlag = entry; noFlag.row.flags = []
         XCTAssertFalse(plan([unread], [noFlag]).unsure.contains { $0.candidates.contains("e") })
+    }
+
+    // MARK: ivs-chosen-by-fit
+
+    /// A Pokémon of `id` at `level` with `good` bars, and bars one def step off that give its CP and HP at no level.
+    private func twoStates(_ id: String = "togepi", level: Double = 20, good: IVs = IVs(atk: 13, def: 11, hp: 14)) -> (cp: Int, hp: Int, good: IVs, bad: IVs) {
+        let cp = cpAt(stats(id), good, level), hp = hpAt(stats(id), good, level)
+        for d in [-1, 1, -2, 2] {
+            let bad = IVs(atk: good.atk, def: good.def + d, hp: good.hp)
+            if bad.def >= 0, bad.def <= 15, Refine.exactLevels(stats(id), cp: cp, hp: hp, ivs: bad).isEmpty { return (cp, hp, good, bad) }
+        }
+        XCTFail("no off state"); return (cp, hp, good, good)
+    }
+
+    func testTheStateThatFitsIsKeptWhenTheVoteChoseAnother() throws {
+        // Togepi 359 / 74: one reading at 0.79 of the wrong bars, then the right bars three times at 0.696 (below settled), so the solver takes the first
+        let t = twoStates()
+        let readings = card("Togepi", ids: ["togepi"], cp: t.cp, hp: t.hp, bars: [(t.bad, 0.79), (t.good, 0.696), (t.good, 0.696), (t.good, 0.696)], at: 0, tag: "t")
+        let (base, out) = try refined(readings)
+        XCTAssertNotEqual(base.rows[0].solveStatus, "exact", "\(base.rows[0].flags)")
+        XCTAssertEqual(out.scan.rows.count, 1)
+        let r = out.scan.rows[0]
+        XCTAssertEqual(r.ivs, t.good); XCTAssertEqual(r.ivsRead, t.good); XCTAssertEqual(r.solveStatus, "exact"); XCTAssertEqual(r.level, 20)
+        XCTAssertTrue(r.flags.contains("ivs-chosen-by-fit:13/11/14"), "\(r.flags)")
+        XCTAssertFalse(r.flags.contains { $0.hasPrefix("ambiguous-ivs") || $0 == "no-level-fits" || $0.hasPrefix("ivs-corrected") })
+        XCTAssertTrue(FlagInfo.checkFlags(r.flags, solveStatus: r.solveStatus).isEmpty, "a note on an exact row")
+        XCTAssertEqual(out.changes.filter { $0.kind == .ivsChosenByFit }.count, 1)
+    }
+
+    func testTwoStatesThatBothFitChangeNothing() throws {
+        // two real Pokémon with the same name, CP and HP: both states fit, so the choice is not ours
+        let id = "togepi"
+        var pair: (CP: Int, HP: Int, a: IVs, b: IVs)?
+        search: for hpIv in 0...15 { for level in [20.0, 21.0, 22.0] {
+            var byCp = [Int: IVs]()
+            for a in 0...15 { for d in 0...15 {
+                let v = IVs(atk: a, def: d, hp: hpIv), cp = cpAt(stats(id), v, level)
+                if let other = byCp[cp], other != v { pair = (cp, hpAt(stats(id), v, level), other, v); break search }
+                byCp[cp] = v
+            } }
+        } }
+        let p = try XCTUnwrap(pair)
+        let readings = card("Togepi", ids: ["togepi"], cp: p.CP, hp: p.HP, bars: [(p.a, 0.9), (p.a, 0.9), (p.b, 0.9), (p.b, 0.9)], at: 0, tag: "b")
+        let (base, out) = try refined(readings)
+        XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(out.scan.rows.map(\.flags))")
+        XCTAssertEqual(out.scan.rows.map(\.ivs), base.rows.map(\.ivs), "the rows are what the solver and the other passes made of it")
+    }
+
+    func testTwoStatesThatBothFailChangeNothing() throws {
+        let t = twoStates()
+        let worse = IVs(atk: t.bad.atk, def: t.bad.def, hp: t.bad.hp == 0 ? 1 : t.bad.hp - 1)
+        try XCTSkipUnless(Refine.exactLevels(stats("togepi"), cp: t.cp, hp: t.hp, ivs: worse).isEmpty)
+        let (base, out) = try refined(card("Togepi", ids: ["togepi"], cp: t.cp, hp: t.hp, bars: [(t.bad, 0.79), (worse, 0.696), (worse, 0.696)], at: 0, tag: "w"))
+        XCTAssertEqual(out.scan.rows[0].flags, base.rows[0].flags)
+        XCTAssertEqual(out.scan.rows[0].solveStatus, base.rows[0].solveStatus)
+    }
+
+    func testAStateHeldByOneReadingIsNotEnough() throws {
+        let t = twoStates()
+        let (_, out) = try refined(card("Togepi", ids: ["togepi"], cp: t.cp, hp: t.hp, bars: [(t.bad, 0.79), (t.bad, 0.79), (t.good, 0.696)], at: 0, tag: "o"))
+        XCTAssertFalse(out.scan.rows[0].flags.contains { $0.hasPrefix("ivs-chosen-by-fit") })
+    }
+
+    func testBarsThatChangeWithTheCpReadAreTwoPokemonAndNotChosenBetween() throws {
+        // Staraptor 1958 beside 1954: the CP read changes with the bars, so a state fitting "the row's CP" says nothing about the other
+        let t = twoStates("staraptor", level: 25, good: IVs(atk: 12, def: 11, hp: 12))
+        let other = cpAt(stats("staraptor"), t.bad, 25)
+        let readings = card("Staraptor", ids: ["staraptor"], cp: t.cp, hp: t.hp, bars: [(t.good, 0.9), (t.good, 0.9), (t.bad, 0.9), (t.bad, 0.9)], at: 0, tag: "c", cps: [t.cp, t.cp, other, other])
+        let (_, out) = try refined(readings)
+        XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(out.scan.rows.map { "\($0.cp) \($0.flags)" })")
+    }
+
+    func testTheCutIsNotMadeWhenOnlyOneOfTheTwoStatesFits() throws {
+        // device-run8's two Fidough (CP 768, HP 89, bars 15/4/10 and 15/11/12 on consecutive beats) are two Pokémon: both fit. Make the second's bars ones that fit nowhere: one Pokémon.
+        var readings = try ReplayReadings.load(url: Fixture.url("device-run8-fidough-stretch.replay.jsonl")).readings
+        let ticks = try ReplayReadings.load(url: Fixture.url("device-run8-fidough-stretch.replay.jsonl")).ticks
+        let both = try Refine.apply(to: try sharedEngine.finish(readings: readings), readings: readings, ticks: ticks, engine: sharedEngine, paging: PagingHint(pagedByCommand: true))
+        XCTAssertEqual(both.scan.rows.filter { $0.display == "Fidough" && $0.cp == 768 }.count, 2, "both states fit: two rows as before")
+        XCTAssertFalse(both.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } })
+        let misread = IVs(atk: 15, def: 11, hp: 13)
+        XCTAssertTrue(Refine.exactLevels(stats("fidough"), cp: 768, hp: 89, ivs: misread).isEmpty)
+        for i in readings.indices where readings[i].name == "Fidough" && readings[i].ivs == IVs(atk: 15, def: 11, hp: 12) { readings[i].ivs = misread }
+        // (the second Fidough's CP is partly hidden on some frames in the log: read in full here, since a state with no reading of the row's CP is left alone)
+        for i in readings.indices where readings[i].name == "Fidough" && readings[i].hp?.max == 89 { readings[i].cp = 768; readings[i].cpText = "CP768"; readings[i].cpReads = [768] }
+        let out = try Refine.apply(to: try sharedEngine.finish(readings: readings), readings: readings, ticks: ticks, engine: sharedEngine, paging: PagingHint(pagedByCommand: true))
+        let f = out.scan.rows.filter { $0.display == "Fidough" && $0.cp == 768 }
+        XCTAssertEqual(f.count, 1, "\(out.changes)")
+        XCTAssertEqual(f.first?.ivs, IVs(atk: 15, def: 4, hp: 10))
+        XCTAssertTrue(f.first?.flags.contains("ivs-chosen-by-fit:15/4/10") == true, "\(f.first?.flags ?? [])")
+        XCTAssertFalse(f.contains { $0.flags.contains("split-by-bars") })
+        XCTAssertEqual(out.changes.filter { $0.kind == .barsSplit }.count, 0)
+        XCTAssertEqual(out.changes.filter { $0.kind == .ivsChosenByFit }.count, 1)
+    }
+
+    func testTheStateThatFitsAnotherFormIsTakenWithThatForm() throws {
+        // Meowth 317 / 68 of run28: the bars that fit are the Alolan form's, and the vote chose the other state
+        let v = try valuesOf("meowth_alolan", notFitting: "meowth", other: "meowth_galarian")
+        var wrong = v.ivs; wrong.def = wrong.def == 0 ? 1 : wrong.def - 1
+        try XCTSkipUnless(Refine.exactLevels(stats("meowth_alolan"), cp: v.cp, hp: v.hp, ivs: wrong).isEmpty && Refine.exactLevels(stats("meowth"), cp: v.cp, hp: v.hp, ivs: wrong).isEmpty)
+        let (_, out) = try refined(card("Meowth", ids: ["meowth"], cp: v.cp, hp: v.hp, bars: [(wrong, 0.79), (v.ivs, 0.696), (v.ivs, 0.696)], at: 0, tag: "a"))
+        let r = out.scan.rows[0]
+        XCTAssertEqual(r.speciesId, "meowth_alolan"); XCTAssertEqual(r.solveStatus, "exact"); XCTAssertEqual(r.ivs, v.ivs)
+        XCTAssertTrue(r.flags.contains("ivs-chosen-by-fit:\(v.ivs.atk)/\(v.ivs.def)/\(v.ivs.hp)") && r.flags.contains("form-from-stats:meowth_alolan"), "\(r.flags)")
     }
 }

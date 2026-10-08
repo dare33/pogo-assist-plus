@@ -17,7 +17,7 @@ public enum FlagInfo {
     static let rules: [String: Rule] = [
         "ivs-disagree": .noteWhenExact, "bars-unsettled": .noteWhenExact, "cp-chosen": .noteWhenExact, "cp-recovered": .noteWhenExact,
         "cp-outlier-dropped": .noteWhenExact, "absorbed-fragment": .noteWhenExact, "ivs-corrected": .noteWhenExact, "hp-computed": .noteWhenExact,
-        "form-ambiguous": .note, "level-ambiguous": .note, "form-from-stats": .note,
+        "form-ambiguous": .note, "level-ambiguous": .note, "form-from-stats": .note, "ivs-chosen-by-fit": .noteWhenExact,
         "no-level-fits": .check, "ivs-unread": .check, "ambiguous-ivs": .check, "cp-computed": .check, "hp-unread": .check, "name-low-confidence": .check,
         "same-as-previous": .check, "split-by-timing": .check, "split-by-bars": .check, "absorbed-unread": .check, "mega-when-scanned": .check,
         "sex-from-stats": .check, "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check, "absorbed-same-cp": .check, "folded-first-reading": .check, "folded-digit-misread": .check, "misread-of-neighbour": .check,
@@ -67,6 +67,7 @@ public enum FlagInfo {
         Entry(prefix: "no-level-fits", field: .ivs) { _ in "No level and IVs fit this CP and HP, so a value was misread. Check the CP, HP and IVs." },
         Entry(prefix: "name-low-confidence", field: .species) { _ in "The name was hard to read and may be a longer name cut short. Check the name." },
         Entry(prefix: "level-ambiguous", field: nil) { _ in "More than one level fits, so the level is shown as a range." },
+        Entry(prefix: "ivs-chosen-by-fit", field: .ivs) { ivs in "The appraisal bars read two different ways. Only the IVs \(ivs) give this CP and HP at some level, so those were kept. Check the IVs in the game." },
         Entry(prefix: "form-from-stats", field: .species) { id in "The screen shows only the species name. The CP, HP and bars fit the form \(id.replacingOccurrences(of: "_", with: " ")) at exactly one level and no other form, so it was taken as that form." },
         Entry(prefix: "form-ambiguous", field: .species) { _ in "The screen does not show which form this is. Check the form in the game." },
         Entry(prefix: "hp-computed", field: .hp) { _ in "The HP was not read, so it was worked out from the stats. Check it in the game." },
