@@ -21,9 +21,9 @@ settings:
     # An iPhone app is offered on Apple Silicon Macs and Vision Pro unless these say no; nothing is laid out for either (Greg, 8 Oct 2026).
     SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
-    # iPhone only for v1 (Greg, 8 Oct 2026): nothing has been laid out for iPad, and App Store Connect refuses an iPad-capable archive that is portrait-only.
-    # Repeated on each target below: xcodegen writes its own iPhone-and-iPad default per target, which would win over this line.
-    TARGETED_DEVICE_FAMILY: "1"
+    # iPhone and iPad (Greg, 8 Oct 2026): the phone layout in one centred column on iPad (Theme.columnMax), all four orientations there. App Store Connect refuses an iPad-capable archive that is portrait-only, hence the iPad orientations below.
+    # Repeated on each target below: xcodegen writes its own iPhone-and-iPad default per target, which would win over this line, so the two must say the same.
+    TARGETED_DEVICE_FAMILY: "1,2"
 packages:
   PogoReader:
     path: ../PogoReader
@@ -55,6 +55,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # iPad turns freely; no UIRequiresFullScreen (ignored from the iOS 27 SDK, Apple TN3192), so windows can be resized.
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         # Figtree (OFL), one variable font: the weight axis gives 400 to 800. See UI/Typography.swift.
         UIAppFonts: [Figtree-Variable.ttf]
         AppGroupID: $(APP_GROUP)
@@ -68,7 +70,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         GENERATE_INFOPLIST_FILE: NO
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         # AppIcon.appiconset: the 1024 light, dark and tinted icons (design of 7 Oct 2026); iOS 26 renders its glass treatment from the flat light icon.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   PogoBroadcast:
@@ -100,7 +102,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(EXTENSION_BUNDLE_ID)
         GENERATE_INFOPLIST_FILE: NO
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
   PogoAssistUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -112,7 +114,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).uitests
         GENERATE_INFOPLIST_FILE: YES
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
 # Run and Profile build Release: the pixel work is about 40 times slower unoptimised (158 ms against 4 ms a
 # frame), which would make a device run say nothing about the real extension. Release keeps debug symbols
 # (dSYM) and os_log output is visible in Console either way.
