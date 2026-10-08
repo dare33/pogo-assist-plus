@@ -206,7 +206,7 @@ extension Refine {
 
     /// Rule `cp-recovered`, for a read that lost its leading digit. The JavaScript recovers a short CP read from the HP and bars only when a read of the right length does not exist and
     /// the bars were settled; here every frame of the stay is short (the model or a thumb covered the first digit: "939" for 1939, with "29" on another frame), the voted CP fits no level,
-    /// and the row says `no-level-fits`. Each CP read is given one digit 1 to 9 in front (d x 1000 + read for a three-digit read; d x 100 + read and d x 1000 + read for a two-digit one),
+    /// and the row says `no-level-fits`, and no reading of the row carries a four-digit CP read (the grouper and the JavaScript recover only when a read of the right length does not exist). Each CP read is given one digit 1 to 9 in front (d x 1000 + read for a three-digit read; d x 100 + read and d x 1000 + read for a two-digit one),
     /// up to the most CP the species can have. When EXACTLY ONE of those candidates gives the row's HP and exactly its bars at exactly one level (HP pins the level, so a wrong
     /// candidate is unlikely to fit), it is the CP: taken with `cp-recovered:<cp>-from-<read>`, the flag the JavaScript's own recovery leaves. Otherwise nothing changes.
     static func recoverLeadingDigit(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, gameMaster: GameMaster?) -> (scan: ScanResult, changes: [(label: String, detail: String)]) {
@@ -218,6 +218,8 @@ extension Refine {
             guard row.solveStatus == "none", row.flags.contains("no-level-fits"), let hp = row.hp, let read = row.ivsRead, !row.flags.contains("name-low-confidence") else { continue }
             var reads = Set([row.cp])
             for f in row.frames { if let l = f.frame.flatMap({ labelIndex[$0] }) { reads.formUnion(readings[l].cpReads ?? readings[l].cp.map { [$0] } ?? []) } }
+            // A full-length read among the row's readings means the digit was not lost: the grouper and the JavaScript refuse a recovery when one exists, and so does this.
+            guard !reads.contains(where: { $0 >= 1000 }) else { continue }
             var candidates = Set<Int>()
             for r in reads where r >= 10 && r < 1000 {
                 for d in 1...9 {

@@ -398,6 +398,22 @@ final class RefineFitTests: XCTestCase {
         XCTAssertEqual(out.changes.filter { $0.kind == .cpRecovered }.count, 1)
     }
 
+    func testAFourDigitReadAmongTheReadingsMeansNothingIsRecovered() throws {
+        // the same Moltres, but one frame also read a full four-digit CP (1938, on the same frame as "917"): the digit was not lost, so no candidate is put in front of the short reads
+        let ivs = IVs(atk: 11, def: 11, hp: 12)
+        let hp = hpAt(stats("moltres"), ivs, 20)
+        var readings = shortCard("Moltres", ids: ["moltres"], reads: [917, 17, 917, 17], hp: hp, ivs: ivs)
+        readings[2].cpReads = [917, 1938]
+        let base = try sharedEngine.finish(readings: readings)
+        let out = try Refine.apply(to: base, readings: readings, ticks: [], engine: sharedEngine, paging: nil)
+        XCTAssertTrue(base.rows[0].flags.contains("no-level-fits"), "\(base.rows.map(\.flags))")
+        XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("cp-recovered") } }, "\(out.scan.rows.map { "\($0.cp) \($0.flags)" })")
+        XCTAssertTrue(out.scan.rows[0].flags.contains("no-level-fits"))
+        // and without the full-length read the recovery still happens
+        let (_, short) = try refined(shortCard("Moltres", ids: ["moltres"], reads: [917, 17, 917, 17], hp: hp, ivs: ivs))
+        XCTAssertTrue(short.scan.rows.contains { $0.flags.contains("cp-recovered:1917-from-917") })
+    }
+
     func testATwoDigitReadGetsAHundredsDigit() throws {
         // a Pidgey whose CP is three digits and shows only its last two
         let ivs = IVs(atk: 5, def: 6, hp: 7)
