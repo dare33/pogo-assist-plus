@@ -11,12 +11,15 @@ struct ReviewView: View {
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
-            switch model.flow {
-            case .idle: Color.clear
-            case .processing(let what): processing(what)
-            case .failed(let message, _): failed(message)
-            case .review: ReviewFlowScreen()
+            Group {
+                switch model.flow {
+                case .idle: Color.clear
+                case .processing(let what): processing(what)
+                case .failed(let message, _): failed(message)
+                case .review: ReviewFlowScreen()
+                }
             }
+            .contentColumn()
         }
         // The cover is a new presentation: it needs the theme (accent, colour scheme, toast host) of its own.
         .themeRoot()

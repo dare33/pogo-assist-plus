@@ -70,9 +70,9 @@ final class ScanScreensTests: XCTestCase {
         let count = app.textFields["Count"]
         XCTAssertTrue(count.waitForExistence(timeout: 5), "the first scan opens in Edit")
         type(count, "1698")
-        app.buttons["Hide keyboard"].tap()
+        app.hideKeyboard()
         type(app.textFields["Eggs"], "12")
-        app.buttons["Hide keyboard"].tap()
+        app.hideKeyboard()
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Full scan · 1,698 in storage"].waitForExistence(timeout: 5))
     }
@@ -129,10 +129,10 @@ final class ScanScreensTests: XCTestCase {
             shot("scan-edit-\(name)")
             type(app.textFields["Eggs"], "99")
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Type a whole number of eggs'")).firstMatch.waitForExistence(timeout: 3))
-            app.buttons["Hide keyboard"].tap()
+            app.hideKeyboard()
             shot("scan-edit-problem-\(name)")
             type(app.textFields["Eggs"], String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4) + "12")
-            app.buttons["Hide keyboard"].tap()
+            app.hideKeyboard()
             app.buttons["Done"].tap()
             // The guide from the "?": three pages; the last button only closes it.
             app.buttons["Show the steps again"].tap()
@@ -425,7 +425,7 @@ final class ScanScreensTests: XCTestCase {
         // 260 is covered by the 300 command.
         app.buttons["Scan Options"].tap()
         retype(app.textFields["200"], "260")
-        app.buttons["Hide keyboard"].tap()
+        app.hideKeyboard()
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 300\"."].waitForExistence(timeout: 3))
         shot("scan-ready-add-and-update")
@@ -436,13 +436,13 @@ final class ScanScreensTests: XCTestCase {
         // 200 is itself a size; the number is remembered.
         app.buttons["Scan Options"].tap()
         retype(app.textFields["200"], "200")
-        app.buttons["Hide keyboard"].tap()
+        app.hideKeyboard()
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 200\"."].waitForExistence(timeout: 3))
         // Above the largest command: say so.
         app.buttons["Scan Options"].tap()
         retype(app.textFields["200"], "6000")
-        app.buttons["Hide keyboard"].tap()
+        app.hideKeyboard()
         shot("scan-options-above-largest")
         XCTAssertTrue(app.staticTexts["The largest command covers 5,000 Pokémon."].waitForExistence(timeout: 3))
         app.buttons["Done"].tap()
@@ -494,5 +494,58 @@ final class ScanScreensTests: XCTestCase {
         let paused = openScan(["-appearance", "light", "-fake-scan-paused"])
         XCTAssertTrue(paused.buttons["Finish now"].firstMatch.waitForExistence(timeout: 10))
         shot("scan-paused-light")
+    }
+
+    /// On an iPad the phone layout sits in one centred column in both orientations: the Scan screen, its folded steps and the Box behind it.
+    func testIPadScreensInBothOrientations() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad only") }
+        // The simulator keeps its orientation between runs, so a failed run must not leave the next one turned.
+        XCUIDevice.shared.orientation = .portrait
+        addTeardownBlock { XCUIDevice.shared.orientation = .portrait }
+        let app = openScan()
+        rememberOptions(app)
+        for (name, orientation) in [("portrait", UIDeviceOrientation.portrait), ("landscape", UIDeviceOrientation.landscapeLeft)] {
+            XCUIDevice.shared.orientation = orientation
+            sleep(1)
+            shot("ipad-scan-\(name)")
+            XCTAssertTrue(app.buttons["Scan Options"].exists, "turning the iPad does not reopen the options in \(name)")
+            XCTAssertTrue(app.buttons["Start scan"].waitForExistence(timeout: 5), "the mark button is there in \(name)")
+            let toggle = app.buttons["scan-steps-toggle"]
+            XCTAssertTrue(toggle.exists, "the steps toggle is there in \(name)")
+            if toggle.label == "Show less" {
+                toggle.tap()
+                XCTAssertTrue(app.buttons["Show more"].waitForExistence(timeout: 3))
+            }
+            XCTAssertFalse(app.staticTexts[step1].exists, "the steps are folded away in \(name)")
+            sleep(1)
+            shot("ipad-scan-collapsed-\(name)")
+            app.buttons["Show more"].tap()
+            XCTAssertTrue(app.staticTexts[step1].waitForExistence(timeout: 3), "Show more brings the steps back in \(name)")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5), "back at the Box in \(name)")
+            sleep(1)
+            shot("ipad-box-\(name)")
+            if name == "portrait" {
+                // The options open first on every visit; Done shows the card.
+                app.buttons["Scan"].tap()
+                XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
+                app.buttons["Done"].tap()
+                XCTAssertTrue(app.buttons["Scan Options"].waitForExistence(timeout: 5), "Done shows the card")
+            }
+        }
+        XCUIDevice.shared.orientation = .portrait
+    }
+}
+
+extension XCUIApplication {
+    /// Dismisses the number pad. On an iPad the pad floats, the app's toolbar button floats beside it, and the keyboard has a "Hide keyboard" key of its own off screen: the name matches twice and the toolbar button is reported as not hittable, so the match that is inside the window is tapped by its coordinate.
+    func hideKeyboard() {
+        let window = windows.firstMatch.frame
+        let matches = buttons.matching(identifier: "Hide keyboard").allElementsBoundByIndex
+        let target = matches.first { window.contains($0.frame) } ?? matches[0]
+        target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        // Let the keyboard finish going: the field below it is not tappable until it has.
+        let gone = NSPredicate(format: "count == 0")
+        _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: keyboards)], timeout: 5)
     }
 }

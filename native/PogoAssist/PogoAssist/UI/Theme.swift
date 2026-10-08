@@ -16,6 +16,12 @@ enum Theme {
         static let panelGap: CGFloat = 12
     }
 
+    /// Widest the content gets. The screens are laid out as a phone (the widest is about 440 pt); in a regular-width
+    /// iPad window they stay that shape in one centred column and the margins grow with the device, rather than
+    /// stretching to 1000 pt or more. A compact-width window (an iPad split view, a phone) is narrower than this, so
+    /// the column does nothing there and the layout is the phone's as it is.
+    static let columnMax: CGFloat = 640
+
     static let bg = pair(0xF3F5F9, 0x0E1118)
     static let surface = pair(0xFFFFFF, 0x181C26)
     static let surface2 = pair(0xF3F5F9, 0x20242F)

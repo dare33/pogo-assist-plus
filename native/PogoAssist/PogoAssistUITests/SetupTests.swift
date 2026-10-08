@@ -35,7 +35,7 @@ final class SetupTests: XCTestCase {
             }
             usleep(400_000)
             count.typeText("1400")
-            app.buttons["Hide keyboard"].tap()
+            app.hideKeyboard()
             app.buttons["Done"].tap()
             XCTAssertTrue(app.staticTexts["Choose your scan options above."].waitForExistence(timeout: 5))
         }

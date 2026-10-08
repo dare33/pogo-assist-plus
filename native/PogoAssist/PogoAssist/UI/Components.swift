@@ -277,3 +277,11 @@ struct IconButton: View {
         }
     }
 }
+
+extension View {
+    /// Caps the content at `Theme.columnMax` and centres it, while the view itself still fills the width (so a
+    /// background placed behind it, outside this modifier, stays full-bleed).
+    func contentColumn() -> some View {
+        frame(maxWidth: Theme.columnMax).frame(maxWidth: .infinity)
+    }
+}

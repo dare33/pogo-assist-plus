@@ -141,7 +141,7 @@ final class FlowTests: XCTestCase {
         let count = app.textFields["Count"]
         XCTAssertTrue(count.waitForExistence(timeout: 5))
         count.tap(); count.typeText("1400")
-        app.buttons["Hide keyboard"].tap()   // dismiss the number pad
+        app.hideKeyboard()   // dismiss the number pad
         app.buttons["Done"].tap()
         let name = ProcessInfo.processInfo.environment["POGO_SCAN_SHOT"] ?? "14-scan-command"
         XCTAssertTrue(app.staticTexts["Choose your scan options above."].waitForExistence(timeout: 5))

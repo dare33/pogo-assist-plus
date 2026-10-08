@@ -20,20 +20,24 @@ struct RootView: View {
         // tabs stay alive (their scroll position and pushed screens survive a switch); the other is hidden.
         ZStack {
             Theme.bg.ignoresSafeArea()
-            NavigationStack { BoxView().navigationDestination(isPresented: scanBinding(for: .box)) { ScanView().hidesTabBar() } }
-                .opacity(tab == .box ? 1 : 0).allowsHitTesting(tab == .box).accessibilityHidden(tab != .box)
-            NavigationStack { NextView().navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
-                .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)
+            // The two stacks sit in one capped, centred column; the background above stays outside it so it fills the screen.
+            ZStack {
+                NavigationStack { BoxView().navigationDestination(isPresented: scanBinding(for: .box)) { ScanView().hidesTabBar() } }
+                    .opacity(tab == .box ? 1 : 0).allowsHitTesting(tab == .box).accessibilityHidden(tab != .box)
+                NavigationStack { NextView().navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
+                    .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)
+            }
+            .contentColumn()
         }
         .onPreferenceChange(HidesTabBarKey.self) { barHidden = $0 }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !barHidden { Color.clear.frame(height: FloatingTabBar.clearance) }
         }
         .overlay(alignment: .bottom) {
-            if !barHidden { FloatingTabBar(selection: $tab, scanDisabled: model.boxProblem != nil) { scanOpen = true } }
+            if !barHidden { FloatingTabBar(selection: $tab, scanDisabled: model.boxProblem != nil) { scanOpen = true }.contentColumn() }
         }
         .overlay(alignment: .bottom) {
-            if model.scanDonePending && !scanOpen { ScanDonePill { scanOpen = true }.padding(.bottom, FloatingTabBar.clearance) }
+            if model.scanDonePending && !scanOpen { ScanDonePill { scanOpen = true }.padding(.bottom, FloatingTabBar.clearance).contentColumn() }
         }
         .themeRoot()
         .environmentObject(model)
@@ -83,7 +87,10 @@ struct WelcomeView: View {
     @State private var name = ""
 
     var body: some View {
-        NavigationStack {
+        // The grouped background fills the cover; the form itself is the capped column.
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+            NavigationStack {
             Form {
                 Section {
                     Text("Pogo Assist+ keeps one box of Pokémon for each Pokémon GO account you scan. Give the first one a name, such as your trainer name.")
@@ -99,6 +106,8 @@ struct WelcomeView: View {
                 }
             }
             .navigationTitle("Welcome")
+            }
+            .contentColumn()
         }
     }
     private func create() { model.createAccount(name) }
