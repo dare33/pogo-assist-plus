@@ -41,7 +41,8 @@ final class RefineFitTests: XCTestCase {
             let ivs = IVs(atk: a, def: d, hp: h)
             for level in stride(from: 20.0, through: 30.0, by: 1.0) {
                 let cp = cpAt(stats(id), ivs, level), hp = hpAt(stats(id), ivs, level)
-                guard Refine.exactLevels(stats(id), cp: cp, hp: hp, ivs: ivs).count == 1, Refine.exactLevels(stats(plain), cp: cp, hp: hp, ivs: ivs).isEmpty else { continue }
+                guard Refine.exactLevels(stats(id), cp: cp, hp: hp, ivs: ivs).count == 1, Refine.exactLevels(stats(plain), cp: cp, hp: hp, ivs: ivs).isEmpty,
+                      !Refine.plainFitsNearby([plain], cp: cp, hp: hp, ivs: ivs, gameMaster: gm) else { continue }
                 if let other { guard Refine.exactLevels(stats(other), cp: cp, hp: hp, ivs: ivs).isEmpty != otherFits else { continue } }
                 if seen < start { seen += 1; continue }
                 return (cp, hp, ivs, level)
@@ -95,6 +96,21 @@ final class RefineFitTests: XCTestCase {
         let (base, out) = try refined(card("Meowth", ids: ["meowth"], cp: cp, hp: hp, ivs: ivs, at: 0, tag: "k"))
         XCTAssertEqual(out.scan.rows, base.rows.map { var r = $0; r.index = 1; return r })
         XCTAssertEqual(out.scan.rows[0].speciesId, "meowth")
+    }
+
+    func testAKantoPokemonMisreadByANotchIsNotTurnedIntoItsRegionalForm() throws {
+        // a Kanto Sandshrew CP 466 / HP 74 with bars 0/0/3 at level 16, its HP bar read 0/0/4: those bars fit the Alolan form at level 15.5, but the plain form fits with one bar a notch off
+        let kanto = IVs(atk: 0, def: 0, hp: 3), read = IVs(atk: 0, def: 0, hp: 4)
+        XCTAssertEqual(cpAt(stats("sandshrew"), kanto, 16), 466); XCTAssertEqual(hpAt(stats("sandshrew"), kanto, 16), 74)
+        XCTAssertTrue(Refine.exactLevels(stats("sandshrew"), cp: 466, hp: 74, ivs: read).isEmpty)
+        XCTAssertEqual(Refine.exactLevels(stats("sandshrew_alolan"), cp: 466, hp: 74, ivs: read), [15.5])
+        XCTAssertTrue(Refine.plainFitsNearby(["sandshrew"], cp: 466, hp: 74, ivs: read, gameMaster: gm))
+        let (base, out) = try refined(card("Sandshrew", ids: ["sandshrew"], cp: 466, hp: 74, ivs: read, at: 0, tag: "z"))
+        XCTAssertNotEqual(base.rows[0].solveStatus, "exact")
+        XCTAssertEqual(out.scan.rows[0].speciesId, "sandshrew")
+        XCTAssertNotEqual(out.scan.rows[0].solveStatus, "exact")
+        XCTAssertFalse(out.scan.rows[0].flags.contains { $0.hasPrefix("form-from-stats") })
+        XCTAssertFalse(FlagInfo.checkFlags(out.scan.rows[0].flags, solveStatus: out.scan.rows[0].solveStatus).isEmpty, "it still asks for a look")
     }
 
     func testTwoFormsThatFitMeanNothingChanges() throws {

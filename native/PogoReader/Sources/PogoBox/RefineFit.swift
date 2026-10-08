@@ -18,6 +18,22 @@ extension Refine {
         levels.filter { cpAt(stats, ivs, $0) == cp && hpAt(stats, ivs, $0) == hp }
     }
 
+    /// Whether the screen's own form gives this CP and HP at some level with these bars or with any bars one notch off on any of the three (the 27 sets around them, clamped to 0 to 15),
+    /// asked of the stats directly rather than of the solver's nearby list. Near-identical stats make a one-notch misread of the plain form indistinguishable from a regional form (Diglett
+    /// 109/78/67 against Alolan 108/81/67: a plain Diglett read 10/5/15 instead of 10/5/14 fits the Alolan form exactly), so a regional form is taken only when the plain one cannot
+    /// explain the row even with a bar misread by a notch.
+    static func plainFitsNearby(_ ids: [String], cp: Int, hp: Int, ivs: IVs, gameMaster gm: GameMaster) -> Bool {
+        for id in ids {
+            guard let stats = gm.byId[id]?.baseStats else { continue }
+            for da in -1...1 { for dd in -1...1 { for dh in -1...1 {
+                let v = IVs(atk: ivs.atk + da, def: ivs.def + dd, hp: ivs.hp + dh)
+                guard (0...15).contains(v.atk), (0...15).contains(v.def), (0...15).contains(v.hp) else { continue }
+                if !exactLevels(stats, cp: cp, hp: hp, ivs: v).isEmpty { return true }
+            } } }
+        }
+        return false
+    }
+
     /// The other forms of the same dex number whose base stats differ from every screen form's, one per distinct set of stats. Shadow forms share their base's stats, so
     /// they never count as another form; a Mega or primal form has its own name on screen and is not what a bare name hides. Of several ids with the same stats (costumes) the plainest is used,
     /// the order the solver ranks equal forms in.
@@ -85,7 +101,7 @@ extension Refine {
     /// Rule `ivs-chosen-by-fit`. A stay whose readings hold two or more bar states keeps one: today the vote (a 0.72 reading beats a 0.70 majority of three). A real Pokémon's bars always give its CP and HP at some level, so a state that gives them at none is a misread or a
     /// card sliding in. Each state is asked whether the row's CP and HP are reachable with exactly those bars: when EXACTLY ONE state is, the row is kept whole with it, solved exact,
     /// with `ivs-chosen-by-fit:<state>`. When none of the states fits the forms the screen name shows, the other forms of the species are asked (as `form-from-stats` does) and a
-    /// state that fits exactly one of them at exactly one level is taken with that form. Two states that both fit are two real Pokémon (or one that cannot be told apart): nil, and the
+    /// state that fits exactly one of them at exactly one level is taken with that form, unless the screen's own form fits that state within a notch on any bar (`plainFitsNearby`). Two states that both fit are two real Pokémon (or one that cannot be told apart): nil, and the
     /// caller does what it did before. Same when none fits. The state taken must be held by at least two readings: one reading can be the previous card's bars on their way, and
     /// a transient value fitting the CP and HP by chance is too weak a reason to overrule the vote.
     static func chooseByFit(_ row: ScanRow, readings: [FrameReading], labelIndex: [String: Int], engine: CoreEngine, gameMaster: GameMaster?) -> (row: ScanRow, detail: String)? {
@@ -105,7 +121,8 @@ extension Refine {
         } else if fitting.isEmpty {
             let alts = alternativeForms(of: screen, gameMaster: gm)
             let pairs = states.flatMap { s in alts.map { (s.ivs, $0, exactLevels($0.stats, cp: row.cp, hp: hp, ivs: s.ivs)) } }.filter { !$0.2.isEmpty }
-            guard pairs.count == 1, pairs[0].2.count == 1, states.first(where: { $0.ivs == pairs[0].0 })!.count >= 2 else { return nil }
+            guard pairs.count == 1, pairs[0].2.count == 1, states.first(where: { $0.ivs == pairs[0].0 })!.count >= 2,
+                  !plainFitsNearby(screen, cp: row.cp, hp: hp, ivs: pairs[0].0, gameMaster: gm) else { return nil }
             chosen = pairs[0].0; ids = [pairs[0].1.id]; altForm = pairs[0].1.id
         } else { return nil }
         guard let solved = solvedRow(row, speciesIds: ids, cp: row.cp, ivs: chosen, engine: engine) else { return nil }
@@ -155,7 +172,8 @@ extension Refine {
 
     /// Rule `form-from-stats`. The game shows a regional form's bare name ("Meowth" for a Galarian Meowth), so the read bars fit no level of the Kanto stats and the solver gives up
     /// (`no-level-fits`) or offers nearby IV sets (`ambiguous-ivs`). A row the solver did not take exactly, with HP and settled bars read, is tried against the other forms of its species
-    /// (`alternativeForms`): when EXACTLY ONE of them gives this CP and HP with exactly these bars, and at exactly one level, the row is that form. Zero or several: nothing changes.
+    /// (`alternativeForms`): when EXACTLY ONE of them gives this CP and HP with exactly these bars, and at exactly one level, the row is that form. Zero or several: nothing changes. Nor does anything when the screen's own form gives this CP and HP at some level with the bars read or with any bar one notch off
+    /// (`plainFitsNearby`): a misread of the plain form is then as likely as the regional form.
     /// Run last, on the finished rows: it changes one row's values and flags and never its place or its frames.
     static func formFromStats(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, gameMaster: GameMaster?) -> (scan: ScanResult, changes: [(label: String, detail: String)]) {
         guard let gm = gameMaster else { return (scan, []) }
@@ -165,7 +183,9 @@ extension Refine {
         for (n, row) in rows.enumerated() {
             guard ["none", "ambiguous", "corrected"].contains(row.solveStatus), let hp = row.hp, let read = row.ivsRead, row.cp > 0,
                   !row.flags.contains("bars-unsettled"), !row.flags.contains("name-low-confidence") else { continue }
-            let fits = alternativeForms(of: screenIds(row, readings: readings, labelIndex: labelIndex), gameMaster: gm)
+            let screen = screenIds(row, readings: readings, labelIndex: labelIndex)
+            guard !plainFitsNearby(screen, cp: row.cp, hp: hp, ivs: read, gameMaster: gm) else { continue }
+            let fits = alternativeForms(of: screen, gameMaster: gm)
                 .map { ($0, exactLevels($0.stats, cp: row.cp, hp: hp, ivs: read)) }.filter { !$0.1.isEmpty }
             guard fits.count == 1, fits[0].1.count == 1, let solved = solvedRow(row, speciesIds: [fits[0].0.id], cp: row.cp, ivs: read, engine: engine) else { continue }
             var fixed = adopting(solved, into: row, ivsRead: read)
