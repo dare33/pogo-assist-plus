@@ -357,8 +357,10 @@ final class RefineFitTests: XCTestCase {
         let (base, out) = try refined(card("Meowth", ids: ["meowth"], cp: cp, hp: hp, bars: [(plain, 0.9), (plain, 0.9), (gal, 0.9), (gal, 0.9)], at: 0, tag: "c"))
         XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(out.scan.rows.map(\.flags))")
         XCTAssertEqual(out.changes.filter { $0.kind == .ivsChosenByFit }.count, 0)
-        // the later rules see the row as the solver left it, as they did before: the vote's bars are not replaced by the plain state's
-        XCTAssertNotEqual(out.scan.rows.first?.ivs, plain, "base \(base.rows.map { "\($0.solveStatus) \($0.flags)" }) out \(out.scan.rows.map { "\($0.solveStatus) \($0.flags)" })")
+        // form-from-stats stays out too: the plain state seen beside the Galarian one means the stay may hold two Pokemon
+        let rows = out.scan.rows
+        XCTAssertFalse(rows.contains { $0.flags.contains { $0.hasPrefix("form-from-stats") } }, "\(rows.map { "\($0.solveStatus) \($0.flags)" })")
+        XCTAssertTrue(rows.contains { !FlagInfo.checkFlags($0.flags, solveStatus: $0.solveStatus).isEmpty }, "the check stays: \(rows.map { "\($0.solveStatus) \($0.flags)" }) base \(base.rows.map { "\($0.solveStatus) \($0.flags)" })")
     }
 
     func testABarStateWhoseReadingsReadAnotherCpIsNotChosenEvenInOneStay() throws {

@@ -188,7 +188,7 @@ extension Refine {
     /// Rule `form-from-stats`. The game shows a regional form's bare name ("Meowth" for a Galarian Meowth), so the read bars fit no level of the Kanto stats and the solver gives up
     /// (`no-level-fits`) or offers nearby IV sets (`ambiguous-ivs`). A row the solver did not take exactly, with HP and settled bars read, is tried against the other forms of its species
     /// (`alternativeForms`): when EXACTLY ONE of them gives this CP and HP with exactly these bars, and at exactly one level, the row is that form. Zero or several: nothing changes. Nor does anything when the screen's own form gives this CP and HP at some level with the bars read or with any bar one notch off
-    /// (`plainFitsNearby`): a misread of the plain form is then as likely as the regional form.
+    /// (`plainFitsNearby`): a misread of the plain form is then as likely as the regional form. Nor when another bar state seen in the row's readings fits the plain form that way.
     /// Run last, on the finished rows: it changes one row's values and flags and never its place or its frames.
     static func formFromStats(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, gameMaster: GameMaster?) -> (scan: ScanResult, changes: [(label: String, detail: String)]) {
         guard let gm = gameMaster else { return (scan, []) }
@@ -200,6 +200,9 @@ extension Refine {
                   !row.flags.contains("bars-unsettled"), !row.flags.contains("name-low-confidence") else { continue }
             let screen = screenIds(row, readings: readings, labelIndex: labelIndex)
             guard !plainFitsNearby(screen, cp: row.cp, hp: hp, ivs: read, gameMaster: gm) else { continue }
+            // Another bar state seen in the stay (at any confidence) that the plain form fits, exactly or within a notch, means the stay may hold a plain Pokémon beside the regional one
+            // (plain Meowth 4/14/1 and Galarian Meowth 0/0/0 both give CP 506 / HP 85): the two-card hazard again, so the row keeps its check.
+            guard !barStates(row).contains(where: { $0.ivs != read && plainFitsNearby(screen, cp: row.cp, hp: hp, ivs: $0.ivs, gameMaster: gm) }) else { continue }
             let fits = alternativeForms(of: screen, gameMaster: gm)
                 .map { ($0, exactLevels($0.stats, cp: row.cp, hp: hp, ivs: read)) }.filter { !$0.1.isEmpty }
             guard fits.count == 1, fits[0].1.count == 1, let solved = solvedRow(row, speciesIds: [fits[0].0.id], cp: row.cp, ivs: read, engine: engine) else { continue }
