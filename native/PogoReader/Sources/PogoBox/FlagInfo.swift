@@ -70,7 +70,8 @@ public enum FlagInfo {
         // The detail is the bars, and after a second ":" the species id when the bars fit another form only (`ivs-chosen-by-fit:10/5/15:diglett_alolan`).
         Entry(prefix: "ivs-chosen-by-fit", field: .ivs) { detail in
             let part = detail.split(separator: ":", maxSplits: 1).map(String.init)
-            let asForm = part.count > 1 ? " as the \(formName(part[1]))" : ""
+            // An id the game master does not know leaves the form unnamed rather than naming "the form it fits".
+            let asForm = part.count > 1 ? (knownFormName(part[1]).map { " as the \($0)" } ?? " as another form of the species") : ""
             return "The appraisal bars were read more than one way. Of the bar readings seen, only \(part.first ?? detail) gives this CP and HP\(asForm) at some level, so those were kept. Check the IVs in the game."
         },
         Entry(prefix: "form-from-stats", field: .species) { id in "The screen shows only the species name. The CP, HP and bars fit the \(formName(id)) at exactly one level, and fit neither the plain form (even with a bar read a notch off) nor any other regional form, so it was taken as that form." },
@@ -85,8 +86,10 @@ public enum FlagInfo {
     ]
 
     /// A species id as the game names it: "Galarian Farfetch'd" for `farfetchd_galarian`, from the game master's "Farfetch'd (Galarian)". Never the id.
-    static func formName(_ id: String) -> String {
-        guard let name = (try? GameMaster.bundled())?.byId[id]?.name else { return "form it fits" }
+    static func formName(_ id: String) -> String { knownFormName(id) ?? "form it fits" }
+
+    private static func knownFormName(_ id: String) -> String? {
+        guard let name = (try? GameMaster.bundled())?.byId[id]?.name else { return nil }
         let nf = GameMaster.nameAndForm(name)
         return nf.form.isEmpty ? nf.name : "\(nf.form) \(nf.name)"
     }

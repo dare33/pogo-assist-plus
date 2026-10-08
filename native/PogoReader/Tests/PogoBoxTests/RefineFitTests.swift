@@ -339,6 +339,28 @@ final class RefineFitTests: XCTestCase {
         XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(out.scan.rows.filter { $0.display == "Staraptor" }.map(\.flags))")
     }
 
+    func testFiveReadingsOver1Point6SecondsOnTheBeatAreTwoCardsAndKeepTheirCheck() throws {
+        // run28's Bagon 473 / 72: five readings 0.4 s apart span 1.6 s, inside a part's tolerance of the 1.2 s beat but more than one card gives (at most four)
+        let out = try staraptorInABeat(stay: 5, cpReads: [1951])
+        let rows = out.scan.rows.filter { $0.display == "Staraptor" }
+        XCTAssertFalse(rows.isEmpty)
+        XCTAssertFalse(rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(rows.map(\.flags))")
+        XCTAssertTrue(rows.contains { !FlagInfo.checkFlags($0.flags, solveStatus: $0.solveStatus).isEmpty }, "the check stays: \(rows.map { "\($0.solveStatus) \($0.flags)" })")
+    }
+
+    func testOneStateFittingThePlainFormAndAnotherFittingTheGalarianFormAreBothFitting() throws {
+        // plain Meowth 4/14/1 at level 28 and Galarian Meowth 0/0/0 at level 22 both give CP 506 / HP 85: two Pokemon (or two states of one), not a choice
+        let plain = IVs(atk: 4, def: 14, hp: 1), gal = IVs(atk: 0, def: 0, hp: 0)
+        let cp = cpAt(stats("meowth"), plain, 28), hp = hpAt(stats("meowth"), plain, 28)
+        XCTAssertEqual(cp, 506); XCTAssertEqual(hp, 85)
+        XCTAssertEqual(cpAt(stats("meowth_galarian"), gal, 22), cp); XCTAssertEqual(hpAt(stats("meowth_galarian"), gal, 22), hp)
+        let (base, out) = try refined(card("Meowth", ids: ["meowth"], cp: cp, hp: hp, bars: [(plain, 0.9), (plain, 0.9), (gal, 0.9), (gal, 0.9)], at: 0, tag: "c"))
+        XCTAssertFalse(out.scan.rows.contains { $0.flags.contains { $0.hasPrefix("ivs-chosen-by-fit") } }, "\(out.scan.rows.map(\.flags))")
+        XCTAssertEqual(out.changes.filter { $0.kind == .ivsChosenByFit }.count, 0)
+        // the later rules see the row as the solver left it, as they did before: the vote's bars are not replaced by the plain state's
+        XCTAssertNotEqual(out.scan.rows.first?.ivs, plain, "base \(base.rows.map { "\($0.solveStatus) \($0.flags)" }) out \(out.scan.rows.map { "\($0.solveStatus) \($0.flags)" })")
+    }
+
     func testABarStateWhoseReadingsReadAnotherCpIsNotChosenEvenInOneStay() throws {
         // the CP guard alone: a stay of one card's length (4 readings), but one reading of the fitting state read 951
         let out = try staraptorInABeat(stay: 4, cpReads: [1951, 1951, 951, 1951])

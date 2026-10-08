@@ -120,18 +120,23 @@ extension Refine {
         guard states.allSatisfy(\.atRowCp) else { return nil }
         let screen = screenIds(row, readings: readings, labelIndex: labelIndex)
         func screenFits(_ v: IVs) -> [String] { screen.filter { id in gm.byId[id]?.baseStats.map { !exactLevels($0, cp: row.cp, hp: hp, ivs: v).isEmpty } == true } }
-        let fitting = states.filter { !screenFits($0.ivs).isEmpty }
+        let alts = alternativeForms(of: screen, gameMaster: gm)
+        func altFits(_ v: IVs) -> Bool { alts.contains { !exactLevels($0.stats, cp: row.cp, hp: hp, ivs: v).isEmpty } }
+        // A state that fits a regional form counts as fitting too: "A fits the plain form, B fits the Galarian" is two states that both fit (plain Meowth 4/14/1 L28 and Galarian Meowth
+        // 0/0/0 L22 both give CP 506 / HP 85), so the choice is not ours. Only ONE state fitting anything at all lets the row be kept whole.
+        let plainFitting = states.filter { !screenFits($0.ivs).isEmpty }
+        guard states.filter({ !screenFits($0.ivs).isEmpty || altFits($0.ivs) }).count <= 1 else { return nil }
         var chosen: IVs, ids: [String], altForm: String? = nil
-        if fitting.count == 1 {
-            guard fitting[0].count >= 2 else { return nil }
-            chosen = fitting[0].ivs; ids = screenFits(chosen)
-        } else if fitting.isEmpty {
-            let alts = alternativeForms(of: screen, gameMaster: gm)
+        if plainFitting.count == 1 {
+            guard plainFitting[0].count >= 2 else { return nil }
+            chosen = plainFitting[0].ivs; ids = screenFits(chosen)
+        } else {
             let pairs = states.flatMap { s in alts.map { (s.ivs, $0, exactLevels($0.stats, cp: row.cp, hp: hp, ivs: s.ivs)) } }.filter { !$0.2.isEmpty }
+            // Every state is held against the plain form's notch, not only the chosen one: a state the plain form nearly fits is as likely a misread of the plain card as the other state is.
             guard pairs.count == 1, pairs[0].2.count == 1, states.first(where: { $0.ivs == pairs[0].0 })!.count >= 2,
-                  !plainFitsNearby(screen, cp: row.cp, hp: hp, ivs: pairs[0].0, gameMaster: gm) else { return nil }
+                  !states.contains(where: { plainFitsNearby(screen, cp: row.cp, hp: hp, ivs: $0.ivs, gameMaster: gm) }) else { return nil }
             chosen = pairs[0].0; ids = [pairs[0].1.id]; altForm = pairs[0].1.id
-        } else { return nil }
+        }
         guard let solved = solvedRow(row, speciesIds: ids, cp: row.cp, ivs: chosen, engine: engine) else { return nil }
         var fixed = adopting(solved, into: row, ivsRead: chosen)
         let key = "\(chosen.atk)/\(chosen.def)/\(chosen.hp)"
@@ -146,14 +151,18 @@ extension Refine {
     /// split with no period known) nor `RefineTiming` (it needs a regular beat) judges one card by a count of readings, so the nearest no-beat rule is the fragment rule's reading step.
     static let fitStayMaxReadingsWithoutBeat = 4
 
+    /// Seconds a stay may exceed one beat period by: the legitimate stays span 0.80 to 0.82 s of a 1.2 s beat, and five readings at the 0.4 s step span 1.6 s.
+    static let fitStaySpanSlack = 0.05
+
     /// `chooseByFit` for the rows the solver did not take exactly whose readings hold more than one bar state and that were not cut by `splitByBars` (the cut chooses for itself: a
     /// part of a cut is left alone here, and so is every row the cut was refused on the beat, which stays as it was). Only when the state that fits is not the one the row already has:
     /// then the row has the form it needs and `form-from-stats` (run last) says so.
     ///
     /// A row that holds two real Pokémon of the same name, CP and HP where one twin's bars are misread by a notch looks exactly like one card with a flickering bar state, so the
     /// choice is made only for a stay that could be ONE card: the readings of every state, wherever they have a CP, read the row's CP (two cards whose CP read changes with the bars are two Pokémon), and the
-    /// stay lasts at most one period (`barsSplitPartTolerance` over it, the tolerance `splitByBars` gives a part) of the paging beat, taken as `splitByBars` takes it: the measured
-    /// period when the beat is regular, else the command's period. With no beat known the stay holds no more than `fitStayMaxReadingsWithoutBeat` readings. Run27's Staraptor 1951, three
+    /// stay lasts at most one period of the paging beat plus `fitStaySpanSlack`, taken as `splitByBars` takes it: the measured
+    /// period when the beat is regular, else the command's period. One card on the beat gives at most four readings, so the stay holds no more than `fitStayMaxReadingsWithoutBeat` with or without a beat
+    /// (the splitter's wider part tolerance let five readings over 1.6 s through, which is two cards: run28's Bagon 473/72). Run27's Staraptor 1951, three
     /// cards over 2.0 s with bars 11/13/11, 11/12/12 and 11/11/13, is left as it was.
     static func chooseBarsByFit(_ scan: ScanResult, readings: [FrameReading], engine: CoreEngine, hintPeriod: Double? = nil, gameMaster: GameMaster?) -> (scan: ScanResult, marks: [(label: String, detail: String)]) {
         var labelIndex = [String: Int]()
@@ -165,10 +174,9 @@ extension Refine {
             guard row.frames.allSatisfy({ $0.cp == nil || $0.cp == row.cp || $0.ivs == nil }) else { continue }
             if let p = period {
                 let ts = row.frames.compactMap(\.time)
-                guard ts.count == row.frames.count, let a = ts.min(), let b = ts.max(), b - a <= (1 + barsSplitPartTolerance) * p else { continue }
-            } else {
-                guard row.frames.count <= fitStayMaxReadingsWithoutBeat else { continue }
+                guard ts.count == row.frames.count, let a = ts.min(), let b = ts.max(), b - a <= p + fitStaySpanSlack else { continue }
             }
+            guard row.frames.count <= fitStayMaxReadingsWithoutBeat else { continue }
             guard let fit = chooseByFit(row, readings: readings, labelIndex: labelIndex, engine: engine, gameMaster: gameMaster), fit.row.ivsRead != row.ivsRead else { continue }
             rows[n] = fit.row
             marks.append((row.frames.first?.frame ?? "", fit.detail))
