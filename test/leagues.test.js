@@ -95,7 +95,7 @@ test('report: pick agreement with Poke Genie, cost agreement, ranking convention
     lines.push(`${label}: pick agrees ${same}/${n} (${differ} differ); e.g. ${differing.join(', ')}`);
     lines.push(`${label}: cost rows ${costRows}: dust ${dustOk}, candy (power-up only) ${candyOk}, candy (power-up + evolution) ${candyEvoOk}`);
   }
-  lines.push('Rank % = (N - rank) / (N - 1) over the N = 4096 spreads; rank = 1 + spreads with a strictly better stat product (ties share the best rank), products compared to a relative 1e-9; level cap 50; HP floored.');
+  lines.push('Rank % = (N - rank) / (N - 1) over the N = 4096 spreads; rank = 1 + spreads with a strictly better stat product (ties share the best rank), products compared to a relative 1e-12; level cap 50; HP floored.');
   console.log(lines.join('\n'));
 });
 
@@ -317,4 +317,12 @@ test('evolution candy: Sinnoh Stone evolutions cost 100, Wurmple and baby lines 
   assert.equal(candy('applin'), 200);
   assert.equal(candy('gimmighoul'), 0);
   assert.equal(candy('toxel'), 400);
+});
+
+test('rank ties are exact products, not near ones: Ivysaur GL 11/7/14 and 5/5/6 are different spreads', () => {
+  const base = gm.byId.get('ivysaur').baseStats;
+  const a = ivRank('ivysaur', base, { atk: 11, def: 7, hp: 14 }, 'gl');
+  const b = ivRank('ivysaur', base, { atk: 5, def: 5, hp: 6 }, 'gl');
+  assert.notEqual(a.product, b.product);
+  assert.notEqual(a.rank, b.rank);
 });

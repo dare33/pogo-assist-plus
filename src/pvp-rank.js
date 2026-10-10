@@ -8,7 +8,9 @@ import { LEVELS, cpAt, cpm } from './cpm.js';
 export const CAPS = { gl: 1500, ul: 2500, ml: Infinity, lc: 500 };
 export const MAX_LEVEL = 50;
 // Two products closer than this (relative) are the same product: the same arithmetic done in a different order differs by ~1e-16.
-const TIE = 1e-9;
+// 1e-9 was too loose: it merged 129 genuinely different adjacent products across the 3,804 tables (Ivysaur GL 11/7/14 at 35 against
+// 5/5/6 at 39.5), while 1e-12 still reproduces every Poke Genie rank in the fixture.
+const TIE = 1e-12;
 
 /** Best level under the cap for a spread, and its CP and stat product. CP only rises with level, so this bisects. */
 export function bestUnderCap(base, ivs, cap, maxLevel = MAX_LEVEL) {
