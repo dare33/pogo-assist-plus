@@ -152,7 +152,7 @@ async function runExtraction(files, kinds) {
     if (mismatched.length) notes.push(`${mismatched.length} Pokémon had a computed HP replaced by a different read HP when clips were joined (flag hp-mismatch); their IVs and level were solved for the old HP, so check them: ${names(mismatched)}.`);
     if (r.weak) notes.push(`${r.weak} shadow/purified Pokémon were matched on incomplete HP or IV readings and are flagged shadow-match-weak: check them.`);
     if (r.ambiguous) notes.push(`${r.ambiguous} shadow/purified Pokémon matched several identical rows; the first was marked and flagged shadow-match-ambiguous.`);
-    if (merged.unmatched.length) notes.push(`${merged.unmatched.length} frame${merged.unmatched.length === 1 ? '' : 's'} showed a CP but no recognisable species name (a nickname, or a garbled read); they are listed in the review JSON, not in the table.`);
+    if (merged.unmatched.length) notes.push(`${merged.unmatched.length} frame${merged.unmatched.length === 1 ? '' : 's'} showed a Pokémon that could not be read (a nickname, a garbled name, or a CP hidden behind the model); they are listed in the review JSON, not in the table.`);
 
     $('#run').hidden = true;
     $('#results').hidden = false;
@@ -176,7 +176,9 @@ async function runExtraction(files, kinds) {
 // clip's HP disagreed with the one the IVs were solved for) is left out. Ambiguous rows go through
 // with blank IVs (the CSV already leaves them blank).
 export function splitForAdvisor(rows) {
-  const unreconciled = (r) => r.flags.some((f) => f === 'no-level-fits' || f.startsWith('hp-mismatch'));
+  // A one-frame row whose HP was not read rests on a single CP read: a garbled CP that happens to
+  // fit the bars looks like a Pokémon, so it is left out too.
+  const unreconciled = (r) => r.flags.some((f) => f === 'no-level-fits' || f.startsWith('hp-mismatch')) || (r.frames?.length === 1 && r.flags.includes('hp-computed'));
   return { good: rows.filter((r) => !unreconciled(r)), junk: rows.filter(unreconciled) };
 }
 
