@@ -4,6 +4,7 @@ import { evolveCandy, evolutionPath } from './evolve.js';
 import { leaguesFor } from './leagues.js';
 import { powerUpCost, secondMoveCost } from './cost.js';
 import { cpAt } from './cpm.js';
+import { clearRankCache } from './pvp-rank.js';
 
 export const AREA_LABEL = { raids: 'Raids', rocket: 'Rocket', gym: 'Gym', gl: 'GL', ul: 'UL', ml: 'ML', max: 'Max' };
 const TIER_W = { S: 3, A: 2, B: 1 };
@@ -33,6 +34,7 @@ export function analyseBox(box, ctx) {
   const pokemon = [];
   const ownedBase = new Set();       // base species ids present in the box (any variant)
   const ownedIds = new Set();
+  const needLeagues = [];            // entries whose leagues are worked out after the loop, grouped by species
 
   for (const p of box) {
     const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
@@ -59,8 +61,16 @@ export function analyseBox(box, ctx) {
         }
       }
     }
-    pokemon.push({ p, resolved: r, hits, leagues: leaguesFor(p, r, ctx) });
+    const entry = { p, resolved: r, hits, leagues: null };
+    pokemon.push(entry);
+    needLeagues.push(entry);
   }
+
+  // Leagues next, one species at a time: the IV rank tables are the expensive part, and the same species (so the same family)
+  // reuses the tables it just built, which keeps the table cache small however the box is ordered. Results land on the entries,
+  // so pokemon[] keeps the box's order.
+  needLeagues.sort((x, y) => (x.resolved.speciesId < y.resolved.speciesId ? -1 : x.resolved.speciesId > y.resolved.speciesId ? 1 : 0));
+  for (const e of needLeagues) e.leagues = leaguesFor(e.p, e.resolved, ctx);
 
   // Builds: one per (Pokémon, targetId), aggregating the areas it serves.
   const builds = [];
@@ -171,5 +181,7 @@ export function analyseBox(box, ctx) {
   }
   hygiene.sort((a, b) => b.transfer.length - a.transfer.length);
 
+  // The IV rank tables are only worth keeping while this box is being analysed; the app caches the advice per box snapshot.
+  clearRankCache();
   return { pokemon, builds: primaryBuilds, allBuilds: builds, gaps, hygiene };
 }

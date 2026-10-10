@@ -8,7 +8,7 @@ import { resolveSpecies, baseSpeciesId, evolutionsOf, indexGamemaster } from '..
 import { evolutionPath, evolveCandy } from '../src/evolve.js';
 import { analyseBox } from '../src/advise.js';
 import { leaguesFor } from '../src/leagues.js';
-import { ivRank } from '../src/pvp-rank.js';
+import { ivRank, bestUnderCap, CAPS, rankCacheSize, clearRankCache } from '../src/pvp-rank.js';
 import { powerUpCost, step } from '../src/cost.js';
 import { cpAt } from '../src/cpm.js';
 
@@ -213,7 +213,7 @@ test('performance: a 2,000-entry box analyses in well under 5 seconds', () => {
   const t0 = performance.now();
   analyseBox(big, ctx);
   const s = (performance.now() - t0) / 1000;
-  console.log(`analyseBox on ${big.length} entries (fixture rows repeated), caches warm from the tests above: ${s.toFixed(2)} s`);
+  console.log(`analyseBox on ${big.length} entries (fixture rows repeated), cache cleared after each analysis: ${s.toFixed(2)} s`);
   assert.ok(s < 5, `${s.toFixed(2)} s`);
 });
 
@@ -354,4 +354,46 @@ test('the Mega check works on the raw id: a Mega the family walk reaches is neve
   const fake = indexGamemaster({ timestamp: 0, moves: [], pokemon: [mon('a', 100, { evolutions: ['b_mega'] }), mon('b', 100), mon('b_mega', 300)] });
   const fakeCtx = { gm: fake, tiers: ctx.tiers, rankings: { byLeague: { gl: new Map(), ul: new Map(), ml: new Map() } } };
   assert.equal(leaguesFor(entry('A'), { speciesId: 'a' }, fakeCtx).ul.pick.speciesId, 'a');
+});
+
+test('rank tables built by walking from the neighbouring spread equal a fresh bisection per spread', () => {
+  let seed = 99; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+  for (const id of ['mewtwo', 'azumarill', 'stunfisk_galarian', 'tinkaton', 'blissey', 'shuckle']) {
+    const base = gm.byId.get(id).baseStats;
+    for (const league of ['gl', 'ul', 'ml', 'lc']) {
+      const products = [];
+      for (let i = 0; i < 4096; i++) { const b = bestUnderCap(base, { atk: i >> 8, def: (i >> 4) & 15, hp: i & 15 }, CAPS[league]); if (b) products.push(b.product); }
+      products.sort((x, y) => y - x);
+      for (let j = 0; j < 150; j++) {
+        const ivs = { atk: Math.floor(rnd() * 16), def: Math.floor(rnd() * 16), hp: Math.floor(rnd() * 16) };
+        const r = ivRank(`walk_${id}`, base, ivs, league);
+        const p = bestUnderCap(base, ivs, CAPS[league])?.product;
+        if (p === undefined) { assert.equal(r, null); continue; }
+        // brute force: 1 + the spreads whose product is strictly better by more than the tie tolerance
+        const rank = 1 + products.filter((x) => x > p * (1 + 1e-12)).length;
+        assert.equal(r.rank, rank, `${id} ${league} ${JSON.stringify(ivs)}`);
+        assert.equal(r.of, products.length);
+      }
+    }
+  }
+});
+
+test('cold cache, diverse box: 2,000 Pokemon of ~600 species analyse quickly and leave no rank tables behind', () => {
+  // The fixture repeats ~150 species; a real account has many more. Every released first-stage species, random IVs (a fixed seed).
+  const firsts = [...gm.byId.values()].filter((p) => p.released !== false && !p.family?.parent && !/_(shadow|mega|primal)/.test(p.speciesId));
+  let seed = 12345; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+  const diverse = [];
+  for (let i = 0; i < 2000; i++) {
+    diverse.push(entry(firsts[i % firsts.length].speciesName, { index: i + 1, ivs: { atk: Math.floor(rnd() * 16), def: Math.floor(rnd() * 16), hp: Math.floor(rnd() * 16) }, level: 1 + Math.floor(rnd() * 40) }));
+  }
+  clearRankCache();
+  const t0 = performance.now();
+  const out = analyseBox(diverse, ctx);
+  const s = (performance.now() - t0) / 1000;
+  console.log(`analyseBox cold on ${diverse.length} diverse entries (${new Set(out.pokemon.map((e) => e.resolved?.speciesId)).size} species): ${s.toFixed(2)} s`);
+  assert.equal(rankCacheSize(), 0);
+  assert.ok(out.pokemon.every((e, i) => e.p === diverse[i]), 'pokemon[] keeps the box order');
+  assert.ok(out.pokemon.every((e) => e.unresolved || e.leagues.gl), 'every resolved entry has leagues');
+  // About 0.4 s here; the phone runs without a JIT, which is ~5x slower, so this is a guard against a return to ~10 s, not a measurement.
+  assert.ok(s < 5, `${s.toFixed(2)} s`);
 });
