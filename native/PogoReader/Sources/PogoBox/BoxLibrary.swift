@@ -230,7 +230,9 @@ public final class BoxLibrary {
 
     public func loadAdvice(account: String, seq: Int) -> BoxAdvice? {
         guard let f = try? adviceFile(account, seq), let data = try? Data(contentsOf: f) else { return nil }
-        return try? Self.decoder.decode(BoxAdvice.self, from: data)
+        // A file from before the Leagues section (no version, or a lower one) is dropped so the advice is worked out again with leagues.
+        guard let advice = try? Self.decoder.decode(BoxAdvice.self, from: data), advice.version >= BoxAdvice.currentVersion else { return nil }
+        return advice
     }
 
     // MARK: - files

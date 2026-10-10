@@ -68,6 +68,30 @@ public struct BoxAdvice: Codable, Equatable {
         public var transferIds: [String]
     }
 
+    /// One league's rating of one Pokémon, as `src/leagues.js` `leaguesFor` returns it (null becomes nil).
+    public struct LeagueRating: Codable, Equatable {
+        public struct Pick: Codable, Equatable {
+            public var speciesId: String; public var name: String
+            /// The Pokémon itself is the pick (JSON key "self", which Swift cannot use as a property name).
+            public var isSelf: Bool
+            private enum CodingKeys: String, CodingKey { case speciesId, name, isSelf = "self" }
+        }
+        public struct Strength: Codable, Equatable { public var score: Double; public var rank: Int; public var of: Int }
+        public struct Moves: Codable, Equatable { public var fast: String; public var charged: [String] }
+        public struct IV: Codable, Equatable { public var rank: Int; public var pct: Double; public var rankPct: Double; public var level: Double; public var cp: Int }
+        public struct Cost: Codable, Equatable { public var dust: Int; public var candy: Int; public var xl: Int; public var evolveCandy: Int; public var toLevel: Double }
+        public var pick: Pick
+        public var strength: Strength?
+        public var moves: Moves?
+        public var needs: [String]?
+        public var iv: IV?
+        public var overCap: Bool
+        public var cost: Cost?
+    }
+
+    /// 2 since the Leagues section: an advice cached by build 2 or earlier has no leagues, so `BoxLibrary.loadAdvice` drops it and it is recomputed.
+    public static let currentVersion = 2
+    public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
     public var duplicates: [Duplicate]
@@ -96,8 +120,12 @@ public struct BoxAdvice: Codable, Equatable {
     }
     /// entry id -> builds it is a spare copy for (built when decoding is not needed: filled by `make`).
     var spareBuilds: [String: [Build]] = [:]
+    /// entry id -> "gl" | "ul" | "ml" -> that league's rating.
+    public var leagues: [String: [String: LeagueRating]] = [:]
 
-    private enum CodingKeys: String, CodingKey { case builds, gaps, duplicates, unresolved, spareBuilds }
+    public func leagues(for id: String) -> [String: LeagueRating] { leagues[id] ?? [:] }
+
+    private enum CodingKeys: String, CodingKey { case version, builds, gaps, duplicates, unresolved, spareBuilds, leagues }
 
     // MARK: - from the JavaScript's JSON
 
@@ -150,6 +178,15 @@ public struct BoxAdvice: Codable, Equatable {
                                             keepIds: keep.compactMap { id($0) }, transferIds: transfer.compactMap { id($0) }))
         }
         for e in report["pokemon"]?.arrayValue ?? [] where bool(e["unresolved"]) { if let eid = id(e["p"]) { out.unresolved.append(eid) } }
+        for e in report["pokemon"]?.arrayValue ?? [] {
+            guard let eid = id(e["p"]), let l = e["leagues"] else { continue }
+            var byLeague = [String: LeagueRating]()
+            for key in ["gl", "ul", "ml"] {
+                guard let v = l[key], let data = try? JSONEncoder().encode(v), let rating = try? JSONDecoder().decode(LeagueRating.self, from: data) else { continue }
+                byLeague[key] = rating
+            }
+            if !byLeague.isEmpty { out.leagues[eid] = byLeague }
+        }
         return out
     }
 }
