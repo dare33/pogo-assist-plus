@@ -52,7 +52,7 @@ test('acceptance: IV rank, stat product and Rank % match every exact-IV row of t
       if (exclusion) { excluded.push(`${label} ${p.name}: ${exclusion}`); continue; }
       const ours = ivRank(id, gm.byId.get(id).baseStats, p.ivs, league);
       checked++;
-      if (!ours || ours.rank !== c.rank || Math.abs(ours.pct - c.statProd) > 0.0101 || Math.abs(ours.rankPct - c.rankPct) > 0.0101) bad.push(fmt(p, label, c, ours, id));
+      if (!ours || ours.rank !== c.rank || ours.pct !== c.statProd || ours.rankPct !== c.rankPct) bad.push(fmt(p, label, c, ours, id));
     }
   }
   assert.ok(checked > 700, `only ${checked} league ratings checked`);
