@@ -7,6 +7,7 @@ import { resolveSpecies, baseSpeciesId } from '../src/gamemaster.js';
 import { analyseBox } from '../src/advise.js';
 import { leaguesFor } from '../src/leagues.js';
 import { ivRank } from '../src/pvp-rank.js';
+import { powerUpCost, step } from '../src/cost.js';
 
 const ctx = loadContext();
 const { gm, rankings } = ctx;
@@ -219,4 +220,22 @@ test('gender-locked evolutions: a female Kirlia never picks Gallade, a female Le
   for (const p of picked) assert.equal(p.genderLocked, 'male');
   // A male Snorunt never picks Froslass.
   for (const league of ['gl', 'ul', 'ml']) assert.notEqual(leaguesOf(entry('Snorunt', { gender: '♂' }))[league].pick.speciesId, 'froslass');
+});
+
+test('shadow costs round per power-up: the Grubbin row matches Poke Genie to the dust and candy; purified rounds per step too', () => {
+  const g = box.find((p) => p.name === 'Grubbin' && p.shadow);
+  assert.ok(g && g.level === 8);
+  const L = leaguesFor(g, resolveSpecies(gm, g.name, { form: g.form, shadow: true }), ctx);
+  for (const [key, league] of [['great', 'gl'], ['ultra', 'ul']]) {
+    const c = g.pvp[key], cost = L[league].cost;
+    assert.equal(cost.dust, c.dust, key);
+    assert.equal(cost.candy + cost.evolveCandy, c.candy, key);
+  }
+  // Purified is 0.9 of each step, rounded up per step (no fixture row has a purified cost; this pins the rule, it does not verify it).
+  let candy = 0, xl = 0;
+  for (let lv = 30; lv < 45; lv += 0.5) { const s = step(lv); candy += Math.ceil(s.candy * 0.9); xl += Math.ceil(s.xl * 0.9); }
+  const pure = powerUpCost(30, 45, { purified: true });
+  assert.equal(pure.candy, candy);
+  assert.equal(pure.xl, xl);
+  assert.ok(pure.candy > Math.ceil(powerUpCost(30, 45).candy * 0.9) - 1);
 });
