@@ -199,3 +199,24 @@ test('performance: a 2,000-entry box analyses in well under 5 seconds', () => {
   console.log(`analyseBox on ${big.length} entries (fixture rows repeated), caches warm from the tests above: ${s.toFixed(2)} s`);
   assert.ok(s < 5, `${s.toFixed(2)} s`);
 });
+
+test('gender-locked evolutions: a female Kirlia never picks Gallade, a female Lechonk picks Oinkologne (Female), unknown sex says so', () => {
+  const kirlia = (gender) => leaguesOf(entry('Kirlia', { gender }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    assert.notEqual(kirlia('♀')[league].pick.speciesId, 'gallade', league);
+    assert.equal(kirlia('♀')[league].pick.genderLocked, undefined);
+    assert.equal(leaguesOf(entry('Lechonk', { gender: '♀' }))[league].pick.speciesId, 'oinkologne_female', league);
+    assert.equal(leaguesOf(entry('Lechonk', { gender: '♂' }))[league].pick.speciesId, 'oinkologne', league);
+  }
+  // Fixture CSV line 90 (Index 89) is a female Lechonk that Poke Genie rates as Oinkologne (Female).
+  const row = box.find((p) => p.index === 89); // CSV line 90
+  assert.equal(row.name, 'Lechonk');
+  assert.equal(row.gender, '♀');
+  assert.equal(leaguesFor(row, resolveSpecies(gm, row.name, { form: row.form }), ctx).gl.pick.speciesId, 'oinkologne_female');
+  // Unknown sex: Gallade stays a candidate and is labelled where it wins.
+  const picked = ['gl', 'ul', 'ml'].map((l) => kirlia('')[l].pick).filter((p) => p.speciesId === 'gallade');
+  assert.ok(picked.length > 0, 'Gallade should win at least one league for a Kirlia of unknown sex');
+  for (const p of picked) assert.equal(p.genderLocked, 'male');
+  // A male Snorunt never picks Froslass.
+  for (const league of ['gl', 'ul', 'ml']) assert.notEqual(leaguesOf(entry('Snorunt', { gender: '♂' }))[league].pick.speciesId, 'froslass');
+});

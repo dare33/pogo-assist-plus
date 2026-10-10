@@ -1,6 +1,6 @@
 // PvP leagues for one Pokémon: which family member to build for Great, Ultra and Master League, how strong that is,
 // what this exact copy's IVs rank at, and what it costs to get there.
-import { evolutionsOf, baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
+import { evolutionsOf, evolutionLinks, baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
 import { powerUpCost } from './cost.js';
 import { cpAt } from './cpm.js';
 import { ivRank } from './pvp-rank.js';
@@ -10,6 +10,13 @@ const LEAGUES = ['gl', 'ul', 'ml'];
 // Megas and Primals are not allowed in Battle League, so they are never a pick.
 const NOT_ALLOWED = /_(mega(_[xy])?|primal)$/;
 const MAX_IV = { atk: 15, def: 15, hp: 15 };
+// Family members only one sex can become in Pokémon GO. Poke Genie's export carries the sex; a scan does not, so an unknown
+// sex keeps every member and the pick says which sex it needs.
+const GENDER_LOCKED = {
+  gallade: 'male', froslass: 'female', vespiquen: 'female', salazzle: 'female', mothim: 'male',
+  wormadam_plant: 'female', wormadam_sandy: 'female', wormadam_trash: 'female', oinkologne: 'male', oinkologne_female: 'female',
+};
+const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'male' : null);
 
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 const titleCase = (id) => id.toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -21,9 +28,12 @@ const titleCase = (id) => id.toLowerCase().split('_').map((w) => w.charAt(0).toU
 export function leaguesFor(entry, resolved, ctx) {
   const { gm, rankings } = ctx;
   const start = baseSpeciesId(gm, resolved.speciesId);
+  const sex = sexOf(entry.gender);
   const family = [];
   for (const id of [start, ...evolutionsOf(gm, start)]) {
     const base = baseSpeciesId(gm, id);
+    // The Pokémon itself always stays (a misread sex must not hide it); evolutions the other sex cannot become go.
+    if (sex && base !== start && GENDER_LOCKED[base] && GENDER_LOCKED[base] !== sex) continue;
     if (gm.byId.has(base) && !NOT_ALLOWED.test(base) && !family.includes(base)) family.push(base);
   }
   const ivs = entry.ivs ?? null;
@@ -50,7 +60,7 @@ export function leaguesFor(entry, resolved, ctx) {
     if (row) rankId = rankedId(pickBase);
     else {
       // Nothing in the family is ranked here: build the final evolution (the strongest one if the family branches).
-      const finals = family.filter((id) => !(gm.byId.get(id).family?.evolutions ?? []).some((e) => family.includes(baseSpeciesId(gm, e))));
+      const finals = family.filter((id) => !evolutionLinks(gm, id).some((e) => family.includes(baseSpeciesId(gm, e))));
       const top = (id) => cpAt(gm.byId.get(id).baseStats, MAX_IV, 50);
       pickBase = finals.length ? finals.reduce((a, b) => (top(b) > top(a) ? b : a)) : start;
       rankId = pickBase;
@@ -77,7 +87,11 @@ export function leaguesFor(entry, resolved, ctx) {
     }
 
     out[league] = {
-      pick: { speciesId: rankId, name: gm.byId.get(rankId)?.speciesName ?? gm.byId.get(pickBase).speciesName, self: pickBase === start },
+      pick: {
+        speciesId: rankId, name: gm.byId.get(rankId)?.speciesName ?? gm.byId.get(pickBase).speciesName, self: pickBase === start,
+        // Only worth saying when the sex is unknown and the pick is an evolution that one sex cannot become.
+        ...(!sex && pickBase !== start && GENDER_LOCKED[pickBase] ? { genderLocked: GENDER_LOCKED[pickBase] } : {}),
+      },
       strength: row ? { score: row.score, rank: row.rank, of: map.size } : null,
       moves, needs, iv: ivOut, overCap, cost,
     };

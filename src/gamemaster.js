@@ -81,14 +81,26 @@ export function resolveSpecies(index, name, { form = '', shadow = false } = {}) 
   return null;
 }
 
+// Evolutions the game master's family links leave out. Lechonk lists Oinkologne twice and never the female form.
+export const EVOLUTION_OVERRIDES = {
+  lechonk: ['oinkologne_female'],
+};
+
+/** The direct evolutions of one species: the game master's links plus EVOLUTION_OVERRIDES that the game master knows. */
+export function evolutionLinks(index, speciesId) {
+  const links = index.byId.get(speciesId)?.family?.evolutions ?? [];
+  const extra = (EVOLUTION_OVERRIDES[speciesId] ?? []).filter((id) => index.byId.has(id) && !links.includes(id));
+  return extra.length ? [...links, ...extra] : links;
+}
+
 /** All speciesIds reachable by evolution from a species (excluding itself), following the game master's family links. */
 export function evolutionsOf(index, speciesId) {
   const out = [];
   const seen = new Set([speciesId]);
   const stack = [speciesId];
   while (stack.length) {
-    const p = index.byId.get(stack.pop());
-    for (const next of p?.family?.evolutions ?? []) {
+    const id = stack.pop();
+    for (const next of evolutionLinks(index, id)) {
       if (!seen.has(next)) { seen.add(next); out.push(next); stack.push(next); }
     }
   }

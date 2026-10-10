@@ -1,5 +1,5 @@
 // Evolution candy and the path of evolution steps between two species. Shared by the advisor and the PvP leagues function.
-import { baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
+import { baseSpeciesId, evolutionLinks, FORM_CHANGES } from './gamemaster.js';
 
 // Evolution candy: the game master does not carry it. Defaults by position in the family plus known exceptions.
 const EVOLVE_CANDY_OVERRIDES = {
@@ -32,7 +32,7 @@ export function evolutionPath(index, fromId, toId) {
   while (queue.length) {
     const [id, path] = queue.shift();
     if (id === toId) return path;
-    for (const next of [...(index.byId.get(id)?.family?.evolutions ?? []), ...(FORM_CHANGES[id] ?? [])]) {
+    for (const next of [...evolutionLinks(index, id), ...(FORM_CHANGES[id] ?? [])]) {
       if (!seen.has(next)) { seen.add(next); queue.push([next, [...path, [id, next]]]); }
     }
   }
