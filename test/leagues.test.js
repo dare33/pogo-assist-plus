@@ -159,15 +159,19 @@ test('unknown IVs: no IV rank and no cost, but the pick and moves are still give
   }
 });
 
-test('needs names the recommended moves the copy lacks; no moves means no needs', () => {
-  const L = leaguesOf(entry('Mareep', { moves: ['Tackle', 'Discharge'] }));
+test('needs names the recommended moves the copy lacks, only for the Pokémon itself; no moves means no needs', () => {
+  // Ampharos is its own pick in Ultra and Master.
+  const L = leaguesOf(entry('Ampharos', { moves: ['Volt Switch', 'Tackle'] }));
+  assert.equal(L.ul.pick.self, true);
   const rec = [L.ul.moves.fast, ...L.ul.moves.charged];
-  assert.deepEqual(L.ul.needs, rec.filter((m) => !['Tackle', 'Discharge'].includes(m)));
+  assert.deepEqual(L.ul.needs, rec.filter((m) => !['Volt Switch', 'Tackle'].includes(m)));
   assert.ok(L.ul.needs.length >= 2);
-  const has = leaguesOf(entry('Mareep', { moves: [L.ul.moves.fast, ...L.ul.moves.charged] }));
+  const has = leaguesOf(entry('Ampharos', { moves: [L.ul.moves.fast, ...L.ul.moves.charged] }));
   assert.deepEqual(has.ul.needs, []);
-  const none = leaguesOf(entry('Mareep'));
-  for (const league of ['gl', 'ul', 'ml']) assert.equal(none[league].needs, null);
+  for (const league of ['gl', 'ul', 'ml']) assert.equal(leaguesOf(entry('Ampharos'))[league].needs, null);
+  // A Mareep is not the pick (evolving re-rolls moves): needs is null even with moves known.
+  const mareep = leaguesOf(entry('Mareep', { moves: ['Tackle', 'Discharge'] }));
+  for (const league of ['gl', 'ul', 'ml']) { assert.equal(mareep[league].pick.self, false); assert.equal(mareep[league].needs, null); }
 });
 
 test('a family with no ranked member falls back to its final evolution, without strength', () => {

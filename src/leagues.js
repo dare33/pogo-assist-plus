@@ -92,7 +92,8 @@ export function leaguesFor(entry, resolved, ctx) {
     const names = row ? row.moveset.map(moveName).filter((n) => n && n.toLowerCase() !== 'none') : [];
     const moves = row ? { fast: names[0], charged: names.slice(1) } : null;
     let needs = null;
-    if (moves && entry.moves.length) {
+    // Evolving re-rolls a Pokémon's moves, so what a copy lacks only matters when the copy is itself the pick.
+    if (moves && entry.moves.length && pickBase === start) {
       const have = new Set(entry.moves.map(norm));
       needs = [moves.fast, ...moves.charged].filter((m) => !have.has(norm(m)));
     }
