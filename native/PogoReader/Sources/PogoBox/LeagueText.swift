@@ -20,7 +20,11 @@ public enum LeagueText {
     private static func level(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
 
     /// "As Toxapex": only when the best pick is not the Pokémon itself.
-    public static func pick(_ r: BoxAdvice.LeagueRating) -> String? { r.pick.isSelf ? nil : "As \(r.pick.name)" }
+    public static func pick(_ r: BoxAdvice.LeagueRating) -> String? {
+        if r.pick.isSelf { return nil }
+        if let sex = r.pick.genderLocked { return "As \(r.pick.name), if it is \(sex)" }
+        return "As \(r.pick.name)"
+    }
 
     public static func strength(_ r: BoxAdvice.LeagueRating, key: String) -> String {
         guard let s = r.strength else { return "Not ranked in \(name(key)) by PvPoke" }

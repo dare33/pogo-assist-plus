@@ -123,6 +123,8 @@ final class BoxLibraryTests: XCTestCase {
                      iv: .init(rank: 1234, pct: 97.26, rankPct: 70, level: 24.5, cp: 1497), overCap: false,
                      cost: .init(dust: 175000, candy: 1200, xl: 8, evolveCandy: 50, toLevel: 24.5))
         XCTAssertEqual(LeagueText.pick(full), "As Toxapex")
+        var locked = full; locked.pick = .init(speciesId: "gallade", name: "Gallade", isSelf: false, genderLocked: "male")
+        XCTAssertEqual(LeagueText.pick(locked), "As Gallade, if it is male")
         XCTAssertEqual(LeagueText.strength(full, key: "gl"), "PvPoke ranks Toxapex 23rd of 1,152 in Great League, score 91.8")
         XCTAssertEqual(LeagueText.ivs(full, key: "gl"), "IVs rank #1,234 of 4,096 · 97.3% of best")
         XCTAssertEqual(LeagueText.moves(full), "Moves: Poison Jab, Brine, Sludge Wave")

@@ -74,7 +74,9 @@ public struct BoxAdvice: Codable, Equatable {
             public var speciesId: String; public var name: String
             /// The Pokémon itself is the pick (JSON key "self", which Swift cannot use as a property name).
             public var isSelf: Bool
-            private enum CodingKeys: String, CodingKey { case speciesId, name, isSelf = "self" }
+            /// "male" or "female" when the pick is an evolution only one sex can make and the entry's sex is not known (scans carry none).
+            public var genderLocked: String?
+            private enum CodingKeys: String, CodingKey { case speciesId, name, isSelf = "self", genderLocked }
         }
         public struct Strength: Codable, Equatable { public var score: Double; public var rank: Int; public var of: Int }
         public struct Moves: Codable, Equatable { public var fast: String; public var charged: [String] }
