@@ -39,6 +39,18 @@ final class GuideScreensTests: XCTestCase {
 
     // MARK: Appearance
 
+    /// Scrolls the Appearance page until the control is inside it. On the iPad the page is in Settings' form sheet, shorter than the screen, so the lower
+    /// controls start below the sheet's edge: the sheet clips them, but they still report themselves hittable, and a tap there lands on the backdrop. The sheet's
+    /// scroll view is the last one in the tree (the Box's list is behind it) and its frame is the visible area.
+    private func reveal(_ app: XCUIApplication, _ e: XCUIElement) {
+        let page = app.scrollViews.element(boundBy: app.scrollViews.count - 1)
+        for _ in 0..<8 where e.exists {
+            if e.frame.maxY >= page.frame.maxY - 8 { page.swipeUp() }
+            else if e.frame.minY <= page.frame.minY + 8 { page.swipeDown() }
+            else { break }
+        }
+    }
+
     func testAppearanceSettings() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset"]
@@ -71,13 +83,17 @@ final class GuideScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["mode-dark"].isSelected)
         sleep(1)
         shot("a-04-dark")
+        reveal(app, app.buttons["help-guide"])
         app.buttons["help-guide"].tap()
         XCTAssertTrue(app.buttons["help-guide"].isSelected && !app.buttons["help-standard"].isSelected)
         shot("a-05-guide-me")
+        reveal(app, app.buttons["help-essentials"])
         app.buttons["help-essentials"].tap()
         XCTAssertTrue(app.buttons["help-essentials"].isSelected)
         shot("a-06-essentials")
+        reveal(app, app.buttons["mode-light"])
         app.buttons["mode-light"].tap()
+        reveal(app, app.buttons["accent-forest"])
         app.buttons["accent-forest"].tap()
         sleep(1)
         shot("a-07-light-forest")
