@@ -17,7 +17,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     # The version and build shown to TestFlight and the store; both Info.plists take them from here. Every upload needs a higher build number (1 went up on 8 Oct 2026).
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "2"
+    CURRENT_PROJECT_VERSION: "3"
     # An iPhone app is offered on Apple Silicon Macs and Vision Pro unless these say no; nothing is laid out for either (Greg, 8 Oct 2026).
     SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
