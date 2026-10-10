@@ -247,13 +247,13 @@ test('shadow costs round per power-up: the Grubbin row matches Poke Genie to the
     assert.equal(cost.dust, c.dust, key);
     assert.equal(cost.candy + cost.evolveCandy, c.candy, key);
   }
-  // Purified is 0.9 of each step, rounded up per step (no fixture row has a purified cost; this pins the rule, it does not verify it).
+  // Purified is 0.9 of each step, rounded HALF DOWN per step (Bulbapedia, Candy (GO); no fixture row has a purified cost, so this pins the rule, it does not verify it).
   let candy = 0, xl = 0;
-  for (let lv = 30; lv < 45; lv += 0.5) { const s = step(lv); candy += Math.ceil(s.candy * 0.9); xl += Math.ceil(s.xl * 0.9); }
+  for (let lv = 30; lv < 45; lv += 0.5) { const s = step(lv); candy += Math.ceil(s.candy * 0.9 - 0.5); xl += Math.ceil(s.xl * 0.9 - 0.5); }
   const pure = powerUpCost(30, 45, { purified: true });
   assert.equal(pure.candy, candy);
   assert.equal(pure.xl, xl);
-  assert.ok(pure.candy > Math.ceil(powerUpCost(30, 45).candy * 0.9) - 1);
+  assert.ok(pure.candy <= powerUpCost(30, 45).candy);
 });
 
 test('the rank table is keyed by base stats as well as id, so changed stats give different ranks', () => {
