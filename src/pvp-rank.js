@@ -52,13 +52,15 @@ function tableFor(speciesId, base, league, maxLevel) {
 // every IV, so it moves by a step or two instead of a fresh bisection (about 12 CP evaluations) per spread. That matters on a phone
 // whose JavaScript engine runs without a JIT.
 function sortedProducts(base, cap, maxLevel) {
+  // Math is looked up once: in the app's JavaScript context (and a Node vm) every global lookup in a hot loop is a slow path.
+  const { floor, max, sqrt } = Math;
   let top = LEVELS.length - 1;
   while (top > 0 && LEVELS[top] > maxLevel) top--;
   const mult = new Float64Array(top + 1);
   for (let i = 0; i <= top; i++) mult[i] = cpm(LEVELS[i]);
   const sqrtDef = [], sqrtHp = [];
-  for (let i = 0; i <= 15; i++) { sqrtDef.push(Math.sqrt(base.def + i)); sqrtHp.push(Math.sqrt(base.hp + i)); }
-  const cpAtIndex = (atk, sd, sh, i) => Math.max(10, Math.floor((atk * sd * sh * mult[i] * mult[i]) / 10));
+  for (let i = 0; i <= 15; i++) { sqrtDef.push(sqrt(base.def + i)); sqrtHp.push(sqrt(base.hp + i)); }
+  const cpAtIndex = (atk, sd, sh, i) => max(10, floor((atk * sd * sh * mult[i] * mult[i]) / 10));
   const out = new Float64Array(4096);
   let n = 0, rowStart = 0;
   for (let a = 0; a <= 15; a++) {
@@ -73,7 +75,7 @@ function sortedProducts(base, cap, maxLevel) {
         if (h === 0) rowStart = i;
         if (i === 0 && cpAtIndex(atk, sd, sh, 0) > cap) continue; // not even level 1 fits
         const m = mult[i];
-        out[n++] = atk * m * (base.def + d) * m * Math.floor((base.hp + h) * m);
+        out[n++] = atk * m * (base.def + d) * m * floor((base.hp + h) * m);
       }
     }
   }
