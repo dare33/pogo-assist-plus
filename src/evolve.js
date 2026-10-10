@@ -15,6 +15,11 @@ const EVOLVE_CANDY_OVERRIDES = {
   vulpix_alolan: 50, ralts: 25, kirlia: 100, electabuzz: 100, magmar: 100, sneasel: 100, duskull: 25, dusclops: 100, larvesta: 400,
   // Poke Genie's candy costs in the fixture (test/leagues.test.js report) show the position rule is wrong for these; karrablast is shelmet's twin.
   corsola_galarian: 50,
+  // Bulbapedia, "Candy (GO)" and "Sinnoh Stone" (read 10 Oct 2026): every Sinnoh Stone evolution costs 100; the Wurmple line is 12 then 50;
+  // baby lines (Cleffa, Igglybuff) are 25 then 50; the listed one-off costs; Gimmighoul evolves with coins, not candy.
+  yanma: 100, tangela: 100, aipom: 100, misdreavus: 100, gligar: 100, snorunt: 100, silcoon: 50, cascoon: 50, clefairy: 50, jigglypuff: 50,
+  applin: 200, dipplin: 400, gimmighoul: 0, ledyba: 25, sentret: 25, marill: 25, whismur: 12, loudred: 50,
+  noibat: 400, stufful: 400, wimpod: 400, toxel: 400, sinistea: 400, snom: 400,
   pikachu: 50, metapod: 50, kakuna: 50, pidgeotto: 50, tranquill: 50, pidove: 12, shelmet: 200, karrablast: 200, lickitung: 100, murkrow: 100,
 };
 export function evolveCandy(index, fromId, toId) {

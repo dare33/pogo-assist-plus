@@ -5,7 +5,7 @@ import { parseCsv } from '../src/csv.js';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadContext } from '../src/node/load.js';
 import { resolveSpecies, baseSpeciesId, evolutionsOf } from '../src/gamemaster.js';
-import { evolutionPath } from '../src/evolve.js';
+import { evolutionPath, evolveCandy } from '../src/evolve.js';
 import { analyseBox } from '../src/advise.js';
 import { leaguesFor } from '../src/leagues.js';
 import { ivRank } from '../src/pvp-rank.js';
@@ -296,4 +296,13 @@ test('regional families: Cubone picks Marowak not Alolan Marowak; Galarian Meowt
   assert.ok(['gl', 'ul', 'ml'].some((l) => meowth[l].pick.speciesId === 'perrserker'), JSON.stringify(['gl', 'ul', 'ml'].map((l) => meowth[l].pick.speciesId)));
   // A regional parent keeps its own regional children (Alolan Sandshrew -> Alolan Sandslash).
   assert.match(leaguesOf(entry('Sandshrew', { form: 'Alola' })).ul.pick.speciesId, /^sandslash_alolan$/);
+});
+
+test('evolution candy: Sinnoh Stone evolutions cost 100, Wurmple and baby lines 50 for the second stage, Gimmighoul none', () => {
+  const candy = (id) => evolveCandy(gm, id, 'x');
+  for (const id of ['yanma', 'tangela', 'aipom', 'misdreavus', 'gligar', 'snorunt']) assert.equal(candy(id), 100, id);
+  for (const id of ['silcoon', 'cascoon', 'clefairy', 'jigglypuff']) assert.equal(candy(id), 50, id);
+  assert.equal(candy('applin'), 200);
+  assert.equal(candy('gimmighoul'), 0);
+  assert.equal(candy('toxel'), 400);
 });
