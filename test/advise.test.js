@@ -35,6 +35,11 @@ test('Mega hits fold into the base build and a plus-move is not a second charged
   assert.ok(mewtwo[0].viaMega);
   assert.equal(mewtwo[0].cost.secondMove.dust, 0);
   assert.equal(mewtwo[0].cost.dust, 137000);
+  // A Shadow's power-ups round up per step (1.2x in float32 for dust): the shadow Beldum build pins the rule in the advisor too.
+  const beldum = out.builds.find((b) => b.speciesId === 'beldum_shadow' && b.targetId === 'metagross_shadow');
+  assert.ok(beldum, 'shadow Beldum -> Metagross build');
+  assert.equal(beldum.cost.dust, 197772);
+  assert.equal(beldum.cost.candy, 335);
 });
 
 test('gaps list the S-tier things nothing in the box can become, and know when the base is owned', () => {

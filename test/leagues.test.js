@@ -176,7 +176,7 @@ test('needs names the recommended moves the copy lacks, only for the Pokémon it
 
 test('a family with no ranked member falls back to its final evolution, without strength', () => {
   // Chewtle and Toxel have no PvPoke ranking in any league in the current snapshot (checked when this test was written).
-  for (const l of ['gl', 'ul', 'ml']) for (const id of ['chewtle', 'drednaw', 'toxel', 'toxtricity_amped', 'toxtricity_low_key']) assert.ok(!rankings.byLeague[l].has(id), `${id} is now ranked in ${l}: pick another unranked family`);
+  for (const l of ['gl', 'ul', 'ml']) for (const id of ['chewtle', 'drednaw']) assert.ok(!rankings.byLeague[l].has(id), `${id} is now ranked in ${l}: pick another unranked family`);
   // (Chewtle's family is wholly unreleased, so all of it stays eligible and the final form is still Drednaw.)
   const L = leaguesOf(entry('Chewtle'));
   for (const l of ['gl', 'ul', 'ml']) {
@@ -186,10 +186,12 @@ test('a family with no ranked member falls back to its final evolution, without 
     assert.equal(L[l].needs, null);
     assert.ok(L[l].iv);
   }
-  // Unreleased finals are skipped: Toxel's Toxtricity forms are not released, Girafarig's Farigiraf is not.
+  // Unreleased finals are skipped: Girafarig's Farigiraf is not released. Toxel reaches the released plain Toxtricity through EVOLUTION_OVERRIDES
+  // (the game master links only its two unreleased form ids), so its picks are Toxtricity where ranked and in the Master League fallback.
   for (const id of ['toxtricity_amped', 'toxtricity_low_key', 'farigiraf', 'basculegion_male']) assert.equal(gm.byId.get(id).released, false, `${id} is now released: pick another example`);
   assert.ok(!rankings.byLeague.ml.has('toxel') && !rankings.byLeague.ml.has('girafarig') && !rankings.byLeague.ml.has('farigiraf'), 'ranking data changed: pick another example');
-  assert.equal(leaguesOf(entry('Toxel')).ml.pick.speciesId, 'toxel');
+  assert.equal(gm.byId.get('toxtricity').released, true);
+  for (const l of ['gl', 'ul', 'ml']) assert.equal(leaguesOf(entry('Toxel'))[l].pick.speciesId, 'toxtricity', l);
   assert.equal(leaguesOf(entry('Girafarig')).ml.pick.speciesId, 'girafarig');
   // A branching family takes the released final form with the higher CP at level 50 with 15/15/15 (no real family is unranked and branching, so a made-up one).
   const mon = (speciesId, atk, released = true, family = {}) => ({ speciesId, speciesName: speciesId, dex: 1, baseStats: { atk, def: 100, hp: 100 }, types: ['normal'], released, family: { id: 'F', ...family } });
@@ -224,6 +226,11 @@ test('gender-locked evolutions: a female Kirlia never picks Gallade, a female Le
     assert.equal(kirlia('♀')[league].pick.genderLocked, undefined);
     assert.equal(leaguesOf(entry('Lechonk', { gender: '♀' }))[league].pick.speciesId, 'oinkologne_female', league);
     assert.equal(leaguesOf(entry('Lechonk', { gender: '♂' }))[league].pick.speciesId, 'oinkologne', league);
+    // Espurr is the same shape: the game master links it to the male Meowstic twice and never to the female form.
+    // (Espurr itself outscores both Meowstic forms in Great League, so only the sex rule is asserted, not the form.)
+    assert.notEqual(leaguesOf(entry('Espurr', { gender: '♀' }))[league].pick.speciesId, 'meowstic', league);
+    assert.notEqual(leaguesOf(entry('Espurr', { gender: '♂' }))[league].pick.speciesId, 'meowstic_female', league);
+    if (league !== 'gl') assert.equal(leaguesOf(entry('Espurr', { gender: '♀' }))[league].pick.speciesId, 'meowstic_female', league);
   }
   // Fixture CSV line 90 (Index 89) is a female Lechonk that Poke Genie rates as Oinkologne (Female).
   const row = box.find((p) => p.index === 89); // CSV line 90
@@ -247,9 +254,9 @@ test('shadow costs round per power-up: the Grubbin row matches Poke Genie to the
     assert.equal(cost.dust, c.dust, key);
     assert.equal(cost.candy + cost.evolveCandy, c.candy, key);
   }
-  // Purified is 0.9 of each step, rounded HALF DOWN per step (Bulbapedia, Candy (GO); no fixture row has a purified cost, so this pins the rule, it does not verify it).
+  // Purified is 0.9 of each step, rounded up per step (Bulbapedia Shadow Pokémon (GO) and Power up; no fixture row has a purified cost).
   let candy = 0, xl = 0;
-  for (let lv = 30; lv < 45; lv += 0.5) { const s = step(lv); candy += Math.ceil(s.candy * 0.9 - 0.5); xl += Math.ceil(s.xl * 0.9 - 0.5); }
+  for (let lv = 30; lv < 45; lv += 0.5) { const s = step(lv); candy += Math.ceil(s.candy * 0.9); xl += Math.ceil(s.xl * 0.9); }
   const pure = powerUpCost(30, 45, { purified: true });
   assert.equal(pure.candy, candy);
   assert.equal(pure.xl, xl);
@@ -398,9 +405,10 @@ test('cold cache, diverse box: 2,000 Pokemon of ~600 species analyse quickly and
   assert.ok(s < 5, `${s.toFixed(2)} s`);
 });
 
-test('purified costs round half down per power-up, shadow costs round up (manager fold, Bulbapedia Candy (GO))', () => {
-  // 31 -> 33 is four power-ups of 6,000 dust and 6 candy each: purified 0.9x gives 5,400 dust and 5.4 -> 5 candy per step.
-  assert.deepEqual(powerUpCost(31, 33, { purified: true }), { dust: 21600, candy: 20, xl: 0, steps: 4 });
-  assert.equal(powerUpCost(31, 33, { shadow: true }).candy, 32);   // 7.2 -> 8 per step
+test('purified costs round up per power-up like shadow costs (Bulbapedia Shadow Pokémon (GO) and Power up; Fandom example 25 -> 35 = 102 candy)', () => {
+  assert.equal(powerUpCost(25, 35, { purified: true }).candy, 102);
+  assert.equal(powerUpCost(40, 50, { purified: true }).xl, 272);      // GO Hub's purified table
+  assert.equal(powerUpCost(31, 33, { purified: true }).candy, 24);    // 5.4 -> 6 per step, four steps
+  assert.equal(powerUpCost(31, 33, { shadow: true }).candy, 32);      // 7.2 -> 8 per step
   assert.equal(powerUpCost(31, 33).candy, 24);
 });

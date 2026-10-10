@@ -15,6 +15,7 @@ const MAX_IV = { atk: 15, def: 15, hp: 15 };
 const GENDER_LOCKED = {
   gallade: 'male', froslass: 'female', vespiquen: 'female', salazzle: 'female', mothim: 'male',
   wormadam_plant: 'female', wormadam_sandy: 'female', wormadam_trash: 'female', oinkologne: 'male', oinkologne_female: 'female',
+  meowstic: 'male', meowstic_female: 'female',
 };
 // IVs outside 0-15 or not whole numbers (a misread scan) are treated as unknown; a throw here would fail the whole box's advice.
 const validIvs = (ivs) => !!ivs && ['atk', 'def', 'hp'].every((k) => Number.isInteger(ivs[k]) && ivs[k] >= 0 && ivs[k] <= 15);
@@ -93,8 +94,10 @@ export function leaguesFor(entry, resolved, ctx) {
 
     // PvPoke pads short movesets with a "none" placeholder (Unown), and a move the game master lacks has no name to show: drop both.
     const moveName = (id) => gm.moves.get(id)?.name;
-    const names = row ? row.moveset.map(moveName).filter((n) => n && n.toLowerCase() !== 'none') : [];
-    const moves = row ? { fast: names[0], charged: names.slice(1) } : null;
+    // Slots are kept: the fast move is slot 0 only, so an unknown fast id never promotes a charged move.
+    const known = (n) => n && n.toLowerCase() !== 'none';
+    const fast = row ? moveName(row.moveset[0]) : null;
+    const moves = row && known(fast) ? { fast, charged: row.moveset.slice(1).map(moveName).filter(known) } : null;
     let needs = null;
     // Evolving re-rolls a Pokémon's moves, so what a copy lacks only matters when the copy is itself the pick.
     if (moves && have.length && pickBase === start) {

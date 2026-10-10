@@ -86,6 +86,9 @@ export function resolveSpecies(index, name, { form = '', shadow = false } = {}) 
 export const EVOLUTION_OVERRIDES = {
   corsola_galarian: ['cursola'],
   lechonk: ['oinkologne_female'],
+  espurr: ['meowstic_female'],
+  // The game master links Toxel only to the two unreleased form ids; the released plain Toxtricity is the evolution GO gives (a random form, 400 candy).
+  toxel: ['toxtricity'],
 };
 
 /** The direct evolutions of one species: the game master's links plus EVOLUTION_OVERRIDES that the game master knows. */
