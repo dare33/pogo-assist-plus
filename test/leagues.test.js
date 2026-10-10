@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadContext } from '../src/node/load.js';
-import { resolveSpecies, baseSpeciesId } from '../src/gamemaster.js';
+import { resolveSpecies, baseSpeciesId, evolutionsOf } from '../src/gamemaster.js';
+import { evolutionPath } from '../src/evolve.js';
 import { analyseBox } from '../src/advise.js';
 import { leaguesFor } from '../src/leagues.js';
 import { ivRank } from '../src/pvp-rank.js';
@@ -26,8 +27,6 @@ const EXCLUDED = {
   // and no single plausible base-stat tuple reproduces both numbers, so Poke Genie is using Tyrantrum data the game master does not have.
   'ultra|Tyrunt|4/15/14': 'Poke Genie rates Tyrantrum with base stats that differ from the game master',
 };
-// Corsola (Galar) is rated by Poke Genie as Cursola, but the game master has no family on corsola_galarian, so our family walk cannot reach it.
-const KNOWN_PICK_EXCEPTIONS = new Set(['corsola_galarian']);
 
 const sameMember = (a, b) => a === b || [a, b].every((x) => x === 'oinkologne' || x === 'oinkologne_female');
 const pgPick = (p, key) => {
@@ -65,7 +64,7 @@ test('report: pick agreement with Poke Genie, cost agreement, ranking convention
   const lines = [];
   for (const { key, label, league } of PG) {
     if (league === 'lc') continue; // the app computes Great, Ultra and Master only
-    let n = 0, same = 0, differ = 0, exception = 0;
+    let n = 0, same = 0, differ = 0;
     let costRows = 0, dustOk = 0, candyOk = 0, candyEvoOk = 0, zeroCost = 0;
     const differing = [];
     for (const p of box) {
@@ -78,7 +77,6 @@ test('report: pick agreement with Poke Genie, cost agreement, ranking convention
       const ourBase = baseSpeciesId(gm, ours.pick.speciesId);
       const pgBase = baseSpeciesId(gm, pg.speciesId);
       if (sameMember(ourBase, pgBase)) same++;
-      else if (KNOWN_PICK_EXCEPTIONS.has(baseSpeciesId(gm, r.speciesId))) exception++;
       else { differ++; if (differing.length < 6) differing.push(`${p.name}->${ourBase} (PG ${pgBase})`); }
       // Cost: only where it is the same member, the level is exact and the copy is not already past the league's best level.
       if (sameMember(ourBase, pgBase) && p.levelMin === p.levelMax && p.ivs && ours.cost && c.dust != null) {
@@ -89,7 +87,7 @@ test('report: pick agreement with Poke Genie, cost agreement, ranking convention
         if (c.dust === 0) zeroCost++;
       }
     }
-    lines.push(`${label}: pick agrees ${same}/${n} (${differ} differ, ${exception} known exception); e.g. ${differing.join(', ')}`);
+    lines.push(`${label}: pick agrees ${same}/${n} (${differ} differ); e.g. ${differing.join(', ')}`);
     lines.push(`${label}: cost rows ${costRows}: dust ${dustOk}, candy (power-up only) ${candyOk}, candy (power-up + evolution) ${candyEvoOk}`);
   }
   lines.push('Rank % = (N - rank) / (N - 1) over the N = 4096 spreads; rank = 1 + spreads with a strictly better stat product (ties share the best rank), products compared to a relative 1e-9; level cap 50; HP floored.');
@@ -248,4 +246,19 @@ test('the rank table is keyed by base stats as well as id, so changed stats give
   assert.notDeepEqual([a.rank, a.level, a.cp], [b.rank, b.level, b.cp]);
   assert.equal(b.cp, cpAt({ atk: 120, def: 200, hp: 160 }, ivs, b.level));
   assert.deepEqual(ivRank('fake_mon', { atk: 200, def: 150, hp: 180 }, ivs, 'ul'), a);
+});
+
+test('Galarian Corsola evolves to Cursola: it is the Ultra pick (Galarian Corsola itself outscores it in Great), reached by the advisor, and costs 50 candy', () => {
+  const e = entry('Corsola', { form: 'Galar' });
+  const r = resolveSpecies(gm, e.name, { form: e.form });
+  assert.equal(r.speciesId, 'corsola_galarian');
+  const L = leaguesFor(e, r, ctx);
+  // Galarian Corsola itself scores 91.5 in Great against Cursola's 60, and is unranked in Ultra and Master.
+  assert.ok(rankings.byLeague.ul.has('cursola') && !rankings.byLeague.ul.has('corsola_galarian'), 'ranking data changed: pick another example');
+  assert.equal(L.gl.pick.speciesId, 'corsola_galarian');
+  assert.equal(L.ul.pick.speciesId, 'cursola');
+  assert.equal(L.ul.cost.evolveCandy, 50);
+  assert.ok(evolutionsOf(gm, 'corsola_galarian').includes('cursola'));
+  assert.deepEqual(evolutionPath(gm, 'corsola_galarian', 'cursola'), [['corsola_galarian', 'cursola']]);
+  assert.ok(evolutionsOf(gm, 'corsola').every((id) => id !== 'cursola'), 'plain Corsola still has no evolution');
 });

@@ -81,8 +81,10 @@ export function resolveSpecies(index, name, { form = '', shadow = false } = {}) 
   return null;
 }
 
-// Evolutions the game master's family links leave out. Lechonk lists Oinkologne twice and never the female form.
+// Evolutions the game master's family links leave out. Lechonk lists Oinkologne twice and never the female form; Galarian
+// Corsola has no family at all (Cursola's parent is the plain Corsola), though in Pokémon GO it evolves to Cursola for 50 candy.
 export const EVOLUTION_OVERRIDES = {
+  corsola_galarian: ['cursola'],
   lechonk: ['oinkologne_female'],
 };
 

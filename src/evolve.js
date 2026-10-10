@@ -14,6 +14,7 @@ const EVOLVE_CANDY_OVERRIDES = {
   nickit: 50, flabebe: 25, floette: 100, tympole: 25, palpitoad: 100, scorbunny: 25, raboot: 100, grookey: 25, thwackey: 100, vulpix: 50,
   vulpix_alolan: 50, ralts: 25, kirlia: 100, electabuzz: 100, magmar: 100, sneasel: 100, duskull: 25, dusclops: 100, larvesta: 400,
   // Poke Genie's candy costs in the fixture (test/leagues.test.js report) show the position rule is wrong for these; karrablast is shelmet's twin.
+  corsola_galarian: 50,
   pikachu: 50, metapod: 50, kakuna: 50, pidgeotto: 50, tranquill: 50, pidove: 12, shelmet: 200, karrablast: 200, lickitung: 100, murkrow: 100,
 };
 export function evolveCandy(index, fromId, toId) {
