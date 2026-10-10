@@ -262,3 +262,13 @@ test('Galarian Corsola evolves to Cursola: it is the Ultra pick (Galarian Corsol
   assert.deepEqual(evolutionPath(gm, 'corsola_galarian', 'cursola'), [['corsola_galarian', 'cursola']]);
   assert.ok(evolutionsOf(gm, 'corsola').every((id) => id !== 'cursola'), 'plain Corsola still has no evolution');
 });
+
+test("PvPoke's none placeholder (Unown) is never a move or a need", () => {
+  assert.ok(rankings.byLeague.gl.get('unown').moveset.includes('none'), 'Unown no longer has a placeholder move: pick another example');
+  const have = leaguesOf(entry('Unown')).gl.moves;
+  assert.ok(have.charged.length >= 1);
+  for (const m of [have.fast, ...have.charged]) assert.doesNotMatch(m, /^none$/i);
+  const L = leaguesOf(entry('Unown', { moves: [have.fast, ...have.charged] }));
+  assert.deepEqual(L.gl.needs, []);
+  assert.ok(![L.gl.moves.fast, ...L.gl.moves.charged].some((m) => /none/i.test(m)));
+});

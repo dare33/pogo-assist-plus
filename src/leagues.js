@@ -19,7 +19,6 @@ const GENDER_LOCKED = {
 const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'male' : null);
 
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
-const titleCase = (id) => id.toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
 /**
  * Leagues for one imported entry. `resolved` is resolveSpecies' result for it; ctx = { gm, tiers, rankings }.
@@ -66,8 +65,10 @@ export function leaguesFor(entry, resolved, ctx) {
       rankId = pickBase;
     }
 
-    const moveName = (id) => gm.moves.get(id)?.name ?? titleCase(id);
-    const moves = row ? { fast: moveName(row.moveset[0]), charged: row.moveset.slice(1).map(moveName) } : null;
+    // PvPoke pads short movesets with a "none" placeholder (Unown), and a move the game master lacks has no name to show: drop both.
+    const moveName = (id) => gm.moves.get(id)?.name;
+    const names = row ? row.moveset.map(moveName).filter((n) => n && n.toLowerCase() !== 'none') : [];
+    const moves = row ? { fast: names[0], charged: names.slice(1) } : null;
     let needs = null;
     if (moves && entry.moves.length) {
       const have = new Set(entry.moves.map(norm));
