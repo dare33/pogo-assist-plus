@@ -8,6 +8,7 @@ import { analyseBox } from '../src/advise.js';
 import { leaguesFor } from '../src/leagues.js';
 import { ivRank } from '../src/pvp-rank.js';
 import { powerUpCost, step } from '../src/cost.js';
+import { cpAt } from '../src/cpm.js';
 
 const ctx = loadContext();
 const { gm, rankings } = ctx;
@@ -238,4 +239,13 @@ test('shadow costs round per power-up: the Grubbin row matches Poke Genie to the
   assert.equal(pure.candy, candy);
   assert.equal(pure.xl, xl);
   assert.ok(pure.candy > Math.ceil(powerUpCost(30, 45).candy * 0.9) - 1);
+});
+
+test('the rank table is keyed by base stats as well as id, so changed stats give different ranks', () => {
+  const ivs = { atk: 10, def: 12, hp: 14 };
+  const a = ivRank('fake_mon', { atk: 200, def: 150, hp: 180 }, ivs, 'ul');
+  const b = ivRank('fake_mon', { atk: 120, def: 200, hp: 160 }, ivs, 'ul');
+  assert.notDeepEqual([a.rank, a.level, a.cp], [b.rank, b.level, b.cp]);
+  assert.equal(b.cp, cpAt({ atk: 120, def: 200, hp: 160 }, ivs, b.level));
+  assert.deepEqual(ivRank('fake_mon', { atk: 200, def: 150, hp: 180 }, ivs, 'ul'), a);
 });

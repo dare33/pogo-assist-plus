@@ -27,7 +27,8 @@ export function bestUnderCap(base, ivs, cap, maxLevel = MAX_LEVEL) {
 // Per species+cap, kept compact (typed arrays): a large box touches hundreds of these tables. Spread index = atk * 256 + def * 16 + hp.
 const cache = new Map();
 function tableFor(speciesId, base, league, maxLevel) {
-  const key = `${speciesId}|${league}|${maxLevel}`;
+  // The base stats are part of the key: a reloaded game master can change them under the same id.
+  const key = `${speciesId}|${base.atk}/${base.def}/${base.hp}|${league}|${maxLevel}`;
   if (cache.has(key)) return cache.get(key);
   const cap = CAPS[league];
   const product = new Float64Array(4096).fill(NaN);
