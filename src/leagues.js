@@ -1,0 +1,86 @@
+// PvP leagues for one Pokémon: which family member to build for Great, Ultra and Master League, how strong that is,
+// what this exact copy's IVs rank at, and what it costs to get there.
+import { evolutionsOf, baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
+import { powerUpCost } from './cost.js';
+import { cpAt } from './cpm.js';
+import { ivRank } from './pvp-rank.js';
+import { evolveCandy, evolutionPath } from './evolve.js';
+
+const LEAGUES = ['gl', 'ul', 'ml'];
+// Megas and Primals are not allowed in Battle League, so they are never a pick.
+const NOT_ALLOWED = /_(mega(_[xy])?|primal)$/;
+const MAX_IV = { atk: 15, def: 15, hp: 15 };
+
+const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+const titleCase = (id) => id.toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+/**
+ * Leagues for one imported entry. `resolved` is resolveSpecies' result for it; ctx = { gm, tiers, rankings }.
+ * Returns { gl, ul, ml }, each { pick, strength, moves, needs, iv, overCap, cost } (see README).
+ */
+export function leaguesFor(entry, resolved, ctx) {
+  const { gm, rankings } = ctx;
+  const start = baseSpeciesId(gm, resolved.speciesId);
+  const family = [];
+  for (const id of [start, ...evolutionsOf(gm, start)]) {
+    const base = baseSpeciesId(gm, id);
+    if (gm.byId.has(base) && !NOT_ALLOWED.test(base) && !family.includes(base)) family.push(base);
+  }
+  const ivs = entry.ivs ?? null;
+  const out = {};
+  for (const league of LEAGUES) {
+    const map = rankings.byLeague[league];
+    // A Shadow is ranked as the Shadow where PvPoke ranks it; its IV rank is the same either way (identical base stats).
+    const rankedId = (base) => (entry.shadow && map.has(`${base}_shadow`) ? `${base}_shadow` : base);
+    const ivOf = (base) => (ivs ? ivRank(base, gm.byId.get(base).baseStats, ivs, league) : null);
+
+    let pickBase = null, row = null;
+    for (const base of family) {
+      const r = map.get(rankedId(base));
+      if (!r) continue;
+      let better = !row || r.score > row.score;
+      if (row && r.score === row.score) {
+        // Tie on score: the better spread for this copy's IVs, then the later evolution.
+        const a = ivOf(base)?.pct ?? 0, b = ivOf(pickBase)?.pct ?? 0;
+        better = a >= b;
+      }
+      if (better) { pickBase = base; row = r; }
+    }
+    let rankId;
+    if (row) rankId = rankedId(pickBase);
+    else {
+      // Nothing in the family is ranked here: build the final evolution (the strongest one if the family branches).
+      const finals = family.filter((id) => !(gm.byId.get(id).family?.evolutions ?? []).some((e) => family.includes(baseSpeciesId(gm, e))));
+      const top = (id) => cpAt(gm.byId.get(id).baseStats, MAX_IV, 50);
+      pickBase = finals.length ? finals.reduce((a, b) => (top(b) > top(a) ? b : a)) : start;
+      rankId = pickBase;
+    }
+
+    const moveName = (id) => gm.moves.get(id)?.name ?? titleCase(id);
+    const moves = row ? { fast: moveName(row.moveset[0]), charged: row.moveset.slice(1).map(moveName) } : null;
+    let needs = null;
+    if (moves && entry.moves.length) {
+      const have = new Set(entry.moves.map(norm));
+      needs = [moves.fast, ...moves.charged].filter((m) => !have.has(norm(m)));
+    }
+
+    const iv = ivOf(pickBase);
+    const ivOut = iv && { rank: iv.rank, pct: iv.pct, rankPct: iv.rankPct, level: iv.level, cp: iv.cp };
+    const overCap = !!(iv && entry.level != null && entry.level > iv.level);
+    let cost = null;
+    if (iv && entry.level != null && !overCap) {
+      const flags = { shadow: entry.shadow, purified: entry.purified, lucky: entry.lucky };
+      const up = powerUpCost(entry.level, iv.level, flags);
+      const path = evolutionPath(gm, start, pickBase) ?? [];
+      const evo = path.reduce((s, [from, to]) => s + (FORM_CHANGES[from]?.includes(to) ? 0 : evolveCandy(gm, from, to)), 0);
+      cost = { dust: up.dust, candy: up.candy, xl: up.xl, evolveCandy: evo, toLevel: iv.level };
+    }
+
+    out[league] = {
+      pick: { speciesId: rankId, name: gm.byId.get(rankId)?.speciesName ?? gm.byId.get(pickBase).speciesName, self: pickBase === start },
+      strength: row ? { score: row.score, rank: row.rank, of: map.size } : null,
+      moves, needs, iv: ivOut, overCap, cost,
+    };
+  }
+  return out;
+}

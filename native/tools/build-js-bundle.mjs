@@ -22,7 +22,7 @@ import vm from 'node:vm';
 const ENTRIES = ['src/extract/pipeline.js', 'src/extract/batch.js', 'src/gamemaster.js', 'src/data.js', 'src/advise.js', 'src/import/pokegenie.js'];
 const ALLOWED = new Set([
   'src/extract/pipeline.js', 'src/extract/merge.js', 'src/extract/solve.js', 'src/extract/names.js', 'src/extract/batch.js',
-  'src/cpm.js', 'src/cost.js', 'src/gamemaster.js', 'src/advise.js', 'src/data.js', 'src/pvp-rank.js', 'src/csv.js', 'src/import/pokegenie.js',
+  'src/cpm.js', 'src/cost.js', 'src/evolve.js', 'src/leagues.js', 'src/gamemaster.js', 'src/advise.js', 'src/data.js', 'src/pvp-rank.js', 'src/csv.js', 'src/import/pokegenie.js',
 ]);
 const STUBS = { 'src/extract/frame.js': ['readFrame'] };
 const DATA_FILES = ['gamemaster.json', 'tiers.json', 'pvp-rankings.json'];
