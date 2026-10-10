@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { parseCsv } from '../src/csv.js';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadContext } from '../src/node/load.js';
-import { resolveSpecies, baseSpeciesId, evolutionsOf } from '../src/gamemaster.js';
+import { resolveSpecies, baseSpeciesId, evolutionsOf, indexGamemaster } from '../src/gamemaster.js';
 import { evolutionPath, evolveCandy } from '../src/evolve.js';
 import { analyseBox } from '../src/advise.js';
 import { leaguesFor } from '../src/leagues.js';
@@ -173,6 +173,7 @@ test('needs names the recommended moves the copy lacks; no moves means no needs'
 test('a family with no ranked member falls back to its final evolution, without strength', () => {
   // Chewtle and Toxel have no PvPoke ranking in any league in the current snapshot (checked when this test was written).
   for (const l of ['gl', 'ul', 'ml']) for (const id of ['chewtle', 'drednaw', 'toxel', 'toxtricity_amped', 'toxtricity_low_key']) assert.ok(!rankings.byLeague[l].has(id), `${id} is now ranked in ${l}: pick another unranked family`);
+  // (Chewtle's family is wholly unreleased, so all of it stays eligible and the final form is still Drednaw.)
   const L = leaguesOf(entry('Chewtle'));
   for (const l of ['gl', 'ul', 'ml']) {
     assert.equal(L[l].pick.speciesId, 'drednaw');
@@ -181,9 +182,16 @@ test('a family with no ranked member falls back to its final evolution, without 
     assert.equal(L[l].needs, null);
     assert.ok(L[l].iv);
   }
-  // A branching family takes the final form with the higher CP at level 50 with 15/15/15.
-  const toxel = leaguesOf(entry('Toxel')).ml.pick.speciesId;
-  assert.match(toxel, /^toxtricity_(amped|low_key)$/);
+  // Unreleased finals are skipped: Toxel's Toxtricity forms are not released, Girafarig's Farigiraf is not.
+  for (const id of ['toxtricity_amped', 'toxtricity_low_key', 'farigiraf', 'basculegion_male']) assert.equal(gm.byId.get(id).released, false, `${id} is now released: pick another example`);
+  assert.ok(!rankings.byLeague.ml.has('toxel') && !rankings.byLeague.ml.has('girafarig') && !rankings.byLeague.ml.has('farigiraf'), 'ranking data changed: pick another example');
+  assert.equal(leaguesOf(entry('Toxel')).ml.pick.speciesId, 'toxel');
+  assert.equal(leaguesOf(entry('Girafarig')).ml.pick.speciesId, 'girafarig');
+  // A branching family takes the released final form with the higher CP at level 50 with 15/15/15 (no real family is unranked and branching, so a made-up one).
+  const mon = (speciesId, atk, released = true, family = {}) => ({ speciesId, speciesName: speciesId, dex: 1, baseStats: { atk, def: 100, hp: 100 }, types: ['normal'], released, family: { id: 'F', ...family } });
+  const fake = indexGamemaster({ timestamp: 0, moves: [], pokemon: [mon('a', 100, true, { evolutions: ['b', 'c', 'd'] }), mon('b', 150), mon('c', 200), mon('d', 300, false)] });
+  const fakeCtx = { gm: fake, tiers: ctx.tiers, rankings: { byLeague: { gl: new Map(), ul: new Map(), ml: new Map() } } };
+  assert.equal(leaguesFor(entry('A'), { speciesId: 'a' }, fakeCtx).ul.pick.speciesId, 'c');
 });
 
 test('analyseBox: resolved entries carry leagues, unresolved ones do not, and the result is plain JSON', () => {

@@ -78,7 +78,10 @@ export function leaguesFor(entry, resolved, ctx) {
     if (row) rankId = rankedId(pickBase);
     else {
       // Nothing in the family is ranked here: build the final evolution (the strongest one if the family branches).
-      const finals = family.filter((id) => !evolutionLinks(gm, id).some((e) => family.includes(baseSpeciesId(gm, e))));
+      // Unreleased members are skipped (nobody can build Farigiraf yet); a family with none released keeps them all.
+      const released = family.filter((id) => gm.byId.get(id).released !== false);
+      const pool = released.length ? released : family;
+      const finals = pool.filter((id) => !evolutionLinks(gm, id).some((e) => pool.includes(baseSpeciesId(gm, e))));
       const top = (id) => cpAt(gm.byId.get(id).baseStats, MAX_IV, 50);
       pickBase = finals.length ? finals.reduce((a, b) => (top(b) > top(a) ? b : a)) : start;
       rankId = pickBase;
