@@ -397,3 +397,10 @@ test('cold cache, diverse box: 2,000 Pokemon of ~600 species analyse quickly and
   // About 0.4 s here; the phone runs without a JIT, which is ~5x slower, so this is a guard against a return to ~10 s, not a measurement.
   assert.ok(s < 5, `${s.toFixed(2)} s`);
 });
+
+test('purified costs round half down per power-up, shadow costs round up (manager fold, Bulbapedia Candy (GO))', () => {
+  // 31 -> 33 is four power-ups of 6,000 dust and 6 candy each: purified 0.9x gives 5,400 dust and 5.4 -> 5 candy per step.
+  assert.deepEqual(powerUpCost(31, 33, { purified: true }), { dust: 21600, candy: 20, xl: 0, steps: 4 });
+  assert.equal(powerUpCost(31, 33, { shadow: true }).candy, 32);   // 7.2 -> 8 per step
+  assert.equal(powerUpCost(31, 33).candy, 24);
+});

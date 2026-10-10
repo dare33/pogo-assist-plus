@@ -53,12 +53,15 @@ export function powerUpCost(from, to, flags = {}) {
   // Dust is rounded up from a 32-bit float product, which reproduces Poke Genie's shadow dust exactly where a double product is
   // 8 to 18 dust off on a long climb. Candy and XL candy are small integers and match in doubles.
   const dustMult = Math.fround(mult);
+  // A Shadow's 1.2x is rounded up per power-up (fixture-verified); a Purified's 0.9x rounds half DOWN per power-up
+  // (Bulbapedia, Candy (GO): "0.5 or lower rounds down"; not fixture-verified, no purified cost row has a known level).
+  const round = flags.purified ? (x) => Math.ceil(x - 0.5) : Math.ceil;
   let dust = 0, candy = 0, xl = 0, steps = 0;
   for (let lv = from; lv < to; lv += 0.5) {
     const s = step(lv);
-    dust += Math.ceil(Math.fround((flags.lucky ? s.dust * LUCKY_DUST_MULTIPLIER : s.dust) * dustMult));
-    candy += Math.ceil(s.candy * mult);
-    xl += Math.ceil(s.xl * mult);
+    dust += round(Math.fround((flags.lucky ? s.dust * LUCKY_DUST_MULTIPLIER : s.dust) * dustMult));
+    candy += round(s.candy * mult);
+    xl += round(s.xl * mult);
     steps += 1;
   }
   return { dust, candy, xl, steps };
