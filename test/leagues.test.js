@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { parseCsv } from '../src/csv.js';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadContext } from '../src/node/load.js';
 import { resolveSpecies, baseSpeciesId, evolutionsOf } from '../src/gamemaster.js';
@@ -21,25 +22,27 @@ const PG = [
   { key: 'ultra', label: 'Ultra', league: 'ul' },
   { key: 'little', label: 'Little', league: 'lc' },
 ];
-// Rows where our arithmetic is known not to reproduce Poke Genie, each named with the reason.
-const EXCLUDED = {
-  // Index 'Tyrunt 4/15/14, Ultra': Poke Genie rates it as Tyrantrum 98.70% / rank 106; with the game master's Tyrantrum stats it is 97.20% / rank 930,
-  // and no single plausible base-stat tuple reproduces both numbers, so Poke Genie is using Tyrantrum data the game master does not have.
-  'ultra|Tyrunt|4/15/14': 'Poke Genie rates Tyrantrum with base stats that differ from the game master',
+// Poke Genie's `Sha/Pur (G|U|L)` column says how it rated the copy for that league: 0 as it is, 1 as a Shadow, 2 as PURIFIED.
+// A purified Pokémon has each IV raised by 2 (capped at 15) and is set to level 25, so Poke Genie ranks the IVs the copy WOULD have;
+// the one row where this matters is Index 176, a Tyrunt rated as a purified Tyrantrum for Ultra (6/15/15, not the 4/15/14 it is now).
+// The core has no purify option (a product decision that has not been made); only this test models it.
+const rawRows = new Map(parseCsv(readFileSync(new URL('../fixtures/greg-2026-09-25.pokegenie.csv', import.meta.url), 'utf8')).map((r) => [Number(r.Index), r]));
+const ratedIvs = (p, label) => {
+  const purified = rawRows.get(p.index)[`Sha/Pur (${label[0]})`] === '2';
+  return purified ? { atk: Math.min(15, p.ivs.atk + 2), def: Math.min(15, p.ivs.def + 2), hp: Math.min(15, p.ivs.hp + 2) } : p.ivs;
 };
-
 const sameMember = (a, b) => a === b || [a, b].every((x) => x === 'oinkologne' || x === 'oinkologne_female');
 const pgPick = (p, key) => {
   const c = p.pvp[key];
   return c?.name ? resolveSpecies(gm, c.name, { form: c.form }) : null;
 };
-const fmt = (p, label, c, ours, id) =>
-  `${label} ${p.name}${p.form ? ' (' + p.form + ')' : ''} as ${id} ${p.ivs.atk}/${p.ivs.def}/${p.ivs.hp}: Poke Genie rank ${c.rank}, stat prod ${c.statProd}, rank% ${c.rankPct}; ours rank ${ours?.rank}, stat prod ${ours?.pct}, rank% ${ours?.rankPct}`;
+const fmt = (p, label, c, ours, id, ivs) =>
+  `${label} ${p.name}${p.form ? ' (' + p.form + ')' : ''} as ${id} ${ivs.atk}/${ivs.def}/${ivs.hp}: Poke Genie rank ${c.rank}, stat prod ${c.statProd}, rank% ${c.rankPct}; ours rank ${ours?.rank}, stat prod ${ours?.pct}, rank% ${ours?.rankPct}`;
 
 test('acceptance: IV rank, stat product and Rank % match every exact-IV row of the Poke Genie export', () => {
   const bad = [];
   let checked = 0;
-  const excluded = [];
+  let purifiedRows = 0;
   for (const p of box) {
     if (!p.ivs) continue;
     for (const { key, label, league } of PG) {
@@ -48,15 +51,17 @@ test('acceptance: IV rank, stat product and Rank % match every exact-IV row of t
       if (!r || c.rank == null) continue;
       const id = baseSpeciesId(gm, r.speciesId);
       if (!gm.byId.has(id)) continue;
-      const exclusion = EXCLUDED[`${key}|${p.name}|${p.ivs.atk}/${p.ivs.def}/${p.ivs.hp}`];
-      if (exclusion) { excluded.push(`${label} ${p.name}: ${exclusion}`); continue; }
-      const ours = ivRank(id, gm.byId.get(id).baseStats, p.ivs, league);
+      const ivs = ratedIvs(p, label);
+      if (ivs !== p.ivs) purifiedRows++;
+      const ours = ivRank(id, gm.byId.get(id).baseStats, ivs, league);
       checked++;
-      if (!ours || ours.rank !== c.rank || ours.pct !== c.statProd || ours.rankPct !== c.rankPct) bad.push(fmt(p, label, c, ours, id));
+      if (!ours || ours.rank !== c.rank || ours.pct !== c.statProd || ours.rankPct !== c.rankPct) bad.push(fmt(p, label, c, ours, id, ivs));
     }
   }
-  assert.ok(checked > 700, `only ${checked} league ratings checked`);
-  console.log(`acceptance: ${checked} league ratings checked, ${excluded.length} excluded (${excluded.join('; ')})`);
+  // 278 Great + 304 Ultra + 150 Little rated exact-IV rows, none excluded.
+  assert.equal(checked, 732);
+  assert.equal(purifiedRows, 1);
+  console.log(`acceptance: ${checked} league ratings checked, 0 excluded (${purifiedRows} rated as purified)`);
   assert.deepEqual(bad, []);
 });
 
