@@ -45,7 +45,7 @@ final class SetupTests: XCTestCase {
     /// The checklist's last row sits under the Continue button until the page is scrolled.
     private func openMore(_ app: XCUIApplication) {
         let more = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More about scanning'")).firstMatch
-        app.swipeUp(); app.swipeUp()
+        pane(app).swipeUp(); pane(app).swipeUp()
         more.tap()
     }
 
@@ -68,8 +68,8 @@ final class SetupTests: XCTestCase {
     private func openStep(_ app: XCUIApplication, _ n: Int) {
         let row = app.buttons["setup-step-\(n)"]
         // At large text the list is longer than the screen: from the top, short slow swipes until the row can be touched.
-        for _ in 0..<3 where !(row.exists && clear(app, row)) { app.swipeDown() }
-        for _ in 0..<14 where !(row.exists && clear(app, row)) { app.swipeUp(velocity: .slow) }
+        for _ in 0..<3 where !(row.exists && clear(app, row)) { pane(app).swipeDown() }
+        for _ in 0..<14 where !(row.exists && clear(app, row)) { pane(app).swipeUp(velocity: .slow) }
         row.tap()
         XCTAssertTrue(app.navigationBars["Step \(n) of 6"].waitForExistence(timeout: 5))
     }
@@ -78,19 +78,30 @@ final class SetupTests: XCTestCase {
 
     private func done(_ app: XCUIApplication, _ n: Int) -> Bool {
         let label = app.staticTexts["\(n) of 6 done"]
-        for _ in 0..<4 where !label.waitForExistence(timeout: 2) { app.swipeDown() }
+        for _ in 0..<4 where !label.waitForExistence(timeout: 2) { pane(app).swipeDown() }
         return label.exists
     }
 
+    /// What to swipe. On the iPad, Settings is a form sheet (a window smaller than the screen), and a swipe that starts on the dimmed backdrop outside it
+    /// scrolls nothing; so swipe the sheet's own scroll view (the last one in the tree; the Box's list is behind it). On the phone the page fills the screen and the app itself is right.
+    private func pane(_ app: XCUIApplication) -> XCUIElement {
+        UIDevice.current.userInterfaceIdiom == .pad ? app.scrollViews.element(boundBy: app.scrollViews.count - 1) : app
+    }
+
     /// The element is on screen and clear of the navigation bar and of the button pinned at the bottom (which isHittable does not account for).
+    /// The bounds are those of the page, not of the window: in the iPad's form sheet the pinned button sits well above the window's bottom edge.
     private func clear(_ app: XCUIApplication, _ e: XCUIElement) -> Bool {
-        let h = app.windows.firstMatch.frame.height
-        return e.frame.minY > 110 && e.frame.maxY < h - 110
+        var top: CGFloat = 110
+        for bar in app.navigationBars.allElementsBoundByIndex where bar.exists { top = max(top, bar.frame.maxY) }
+        var bottom = app.windows.firstMatch.frame.height - 110
+        let pinned = app.buttons.matching(NSPredicate(format: "identifier == 'setup-confirm' OR label BEGINSWITH 'Continue with step'")).firstMatch
+        if pinned.exists { bottom = min(bottom, pinned.frame.minY - 8) }
+        return e.frame.minY > top && e.frame.maxY < bottom
     }
 
     /// A switch or row lower on a page: scrolls until it can be touched.
     private func reveal(_ app: XCUIApplication, _ e: XCUIElement) {
-        for _ in 0..<14 where !(e.exists && clear(app, e)) { app.swipeUp(velocity: .slow) }
+        for _ in 0..<14 where !(e.exists && clear(app, e)) { pane(app).swipeUp(velocity: .slow) }
     }
 
     /// Selects paging by the voice command on "More about scanning" (the default is by hand until the commands exist), then returns to the Scan screen.
