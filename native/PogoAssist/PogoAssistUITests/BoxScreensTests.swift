@@ -436,4 +436,119 @@ final class BoxScreensTests: XCTestCase {
         print("BENCH: typed search shown after", Date().timeIntervalSince(t), "s")
         shot("box-10c-15000-search")
     }
+
+    // MARK: Leagues
+
+    /// Opens the first Pokémon of the species whose row starts with `name` from the Box; leaves the app on its detail page.
+    private func openLeagueDetail(_ app: XCUIApplication, species name: String) {
+        let search = app.textFields["box-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText(name)
+        let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", "\(name),")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "\(name) is in the sample box")
+        row.tap()
+        let member = app.buttons.matching(identifier: "pokemon-row").firstMatch
+        XCTAssertTrue(member.waitForExistence(timeout: 5))
+        member.tap()
+        XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
+    }
+
+    private func closeLeagueDetail(_ app: XCUIApplication) {
+        app.buttons["Back"].tap()
+        app.buttons["Back"].tap()
+        let clear = app.buttons["Clear search"]
+        if clear.waitForExistence(timeout: 3) { clear.tap() }
+    }
+
+    private func scrollToLeagues(_ app: XCUIApplication, _ element: XCUIElement) {
+        var n = 0
+        while !element.isHittable && n < 8 { app.swipeUp(); n += 1 }
+    }
+
+    /// The labels the Leagues rows must have for the sample scan's Scyther (CP 2071, 7/13/1, level 29): "As Scizor", an over-the-cap Great League, an evolve cost.
+    /// Pinned from `leaguesFor` in the JavaScript core run on that Pokémon (species Scyther, IVs 7/13/1, level 29), not worked out by hand.
+    private static let scytherLabels = [
+        "gl": "Great League. As Scizor. PvPoke ranks Scizor 303rd of 1,152 in Great League, score 79.7. Already above 1,500 CP, so it cannot be used in Great League. Moves: Fury Cutter, Night Slash, Trailblaze",
+        "ul": "Ultra League. As Scizor. PvPoke ranks Scizor 187th of 849 in Ultra League, score 82.4. IVs rank #2,379 of 4,096 · 95.3% of best. Moves: Fury Cutter, Night Slash, Trailblaze. To level 32.5: 38,000 dust, 34 candy (50 to evolve)",
+        "ml": "Master League. As Scizor. PvPoke ranks Scizor 227th of 409 in Master League, score 59.9. IVs rank #2,383 of 4,096 · 88.5% of best. Moves: Bullet Punch, Night Slash, Trailblaze. To level 50: 410,000 dust, 190 candy, 296 XL candy (50 to evolve)",
+    ]
+
+    private func assertScyther(_ app: XCUIApplication) {
+        let header = app.staticTexts["leagues-panel"]
+        scrollToLeagues(app, header)
+        XCTAssertTrue(header.waitForExistence(timeout: 20), "the Leagues section shows once the advice is ready")
+        XCTAssertEqual(header.label, "LEAGUES")
+        for key in ["gl", "ul", "ml"] {
+            let row = app.descendants(matching: .any)["league-\(key)"]
+            XCTAssertTrue(row.exists, "league-\(key)")
+            XCTAssertEqual(row.label, Self.scytherLabels[key])
+        }
+        XCTAssertTrue(app.staticTexts["A scan cannot tell a Shadow Pokémon, so a Shadow is rated as its normal form here."].exists)
+    }
+
+    /// The Leagues section, light and dark, then large text: the sample scan's Scyther with the exact sentences, and a screenshot of each with the section in view.
+    func testLeaguesSectionLightDarkAndLargeText() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        openLeagueDetail(app, species: "Scyther")
+        XCTAssertTrue(app.staticTexts["CP 2071"].exists)
+        assertScyther(app)
+        sleep(1)
+        shot("league-detail-light")
+        app.terminate()
+
+        let dark = XCUIApplication()
+        dark.launchArguments = ["-appearance", "dark"]
+        dark.launch()
+        XCTAssertTrue(dark.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
+        openLeagueDetail(dark, species: "Scyther")
+        assertScyther(dark)
+        sleep(1)
+        shot("league-detail-dark")
+        dark.terminate()
+
+        let large = XCUIApplication()
+        large.launchArguments = ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        large.launch()
+        XCTAssertTrue(large.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
+        openLeagueDetail(large, species: "Scyther")
+        assertScyther(large)
+        sleep(1)
+        shot("league-detail-large-text")
+    }
+
+    /// The section waits while the page shows the Mega form (no Mega in GO Battle League) and comes back on Normal.
+    func testLeaguesSectionIsHiddenOnTheMegaForm() throws {
+        let app = saveMegaPair(["-appearance", "light"])
+        openBlaziken(app)
+        XCTAssertTrue(app.staticTexts["leagues-panel"].waitForExistence(timeout: 20), "the section shows on the Normal form")
+        app.buttons["form-mega"].tap()
+        XCTAssertTrue(app.staticTexts["CP 3970"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["leagues-panel"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["league-gl"].exists)
+        app.swipeUp()
+        XCTAssertFalse(app.staticTexts["leagues-panel"].exists)
+        app.buttons["form-normal"].tap()
+        XCTAssertTrue(app.staticTexts["leagues-panel"].waitForExistence(timeout: 3))
+    }
+
+    /// Settings > About says where the league data comes from.
+    func testAboutCreditsPvPoke() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        app.buttons["More"].tap()
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
+        let credit = app.staticTexts["League ratings and recommended moves come from PvPoke (pvpoke.com), used under its MIT licence."]
+        var n = 0
+        while !credit.exists && n < 10 { app.swipeUp(); n += 1 }
+        XCTAssertTrue(credit.exists)
+        shot("league-about")
+    }
 }

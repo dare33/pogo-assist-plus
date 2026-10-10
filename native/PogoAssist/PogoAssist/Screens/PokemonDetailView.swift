@@ -43,6 +43,8 @@ struct PokemonDetailView: View {
                         if !e.row.checkFlags.isEmpty { checkPanel(e) }
                         ivPanel(e.row)
                         advicePanel(e)
+                        // Megas are not allowed in GO Battle League, so the section waits while the page shows the Mega form.
+                        if megaShown(e) == nil { leaguesPanel(e) }
                         factsPanel(e, mega: megaShown(e))
                         notesPanel(e, mega: megaShown(e))
                         // The search is always the normal form's: the game shows a Mega CP only while the Pokémon is Mega evolved, so a search on it would find nothing the rest of the time.
@@ -199,6 +201,39 @@ struct PokemonDetailView: View {
 
     private var adviceLabel: some View {
         Text("ADVICE").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).accessibilityAddTraits(.isHeader)
+    }
+
+    // MARK: leagues
+
+    /// Great, Ultra and Master League for this Pokémon, all read from the cached advice: nothing is worked out here.
+    @ViewBuilder private func leaguesPanel(_ e: BoxEntry) -> some View {
+        if case .ready(let advice) = model.advice {
+            let ratings = advice.leagues(for: e.id)
+            if !ratings.isEmpty {
+                Panel(padding: 18, spacing: 14) {
+                    Text("LEAGUES").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("leagues-panel")
+                    ForEach(LeagueText.keys, id: \.self) { key in
+                        if let r = ratings[key] { leagueRow(key, r, levelKnown: e.row.level != nil) }
+                    }
+                    Text(LeagueText.footnote).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func leagueRow(_ key: String, _ r: BoxAdvice.LeagueRating, levelKnown: Bool) -> some View {
+        let lines = [LeagueText.pick(r), LeagueText.strength(r, key: key), LeagueText.ivs(r, key: key), LeagueText.moves(r), LeagueText.needs(r), LeagueText.cost(r, levelKnown: levelKnown)].compactMap { $0 }
+        return VStack(alignment: .leading, spacing: 3) {
+            Text(LeagueText.name(key)).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink)
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(line).font(.figtree(15, .regular, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(([LeagueText.name(key)] + lines).joined(separator: ". "))
+        .accessibilityIdentifier("league-\(key)")
     }
 
     // MARK: facts

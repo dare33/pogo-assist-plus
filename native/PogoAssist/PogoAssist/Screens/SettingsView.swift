@@ -103,6 +103,8 @@ struct SettingsView: View {
                     // Trademark notice, needed by Apple's review and fair to the owners of the names: the app reads a player's own screen and is nobody's partner.
                     Text("Pogo Assist+ is not affiliated with, endorsed by or connected to Niantic, Nintendo or The Pokémon Company. Pokémon and Pokémon GO are trademarks of their owners.").font(.footnote)
                         .accessibilityIdentifier("about-affiliation")
+                    Text("League ratings and recommended moves come from PvPoke (pvpoke.com), used under its MIT licence.").font(.footnote)
+                        .accessibilityIdentifier("about-pvpoke")
                 }
             }
             .navigationTitle("Settings")
