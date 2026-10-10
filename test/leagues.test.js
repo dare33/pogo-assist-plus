@@ -287,3 +287,13 @@ test('Master League: a level 51 Best Buddy copy is not over the cap and has noth
   assert.equal(evo.ml.cost.dust, 0);
   assert.ok(evo.ml.cost.evolveCandy > 0);
 });
+
+test('regional families: Cubone picks Marowak not Alolan Marowak; Galarian Meowth still reaches Perrserker', () => {
+  assert.ok(evolutionsOf(gm, 'cubone').includes('marowak_alolan'), 'the game master no longer links Cubone to Alolan Marowak: drop this guard');
+  for (const league of ['gl', 'ul', 'ml']) assert.notEqual(leaguesOf(entry('Cubone'))[league].pick.speciesId, 'marowak_alolan');
+  assert.equal(leaguesOf(entry('Cubone')).ul.pick.speciesId, 'marowak');
+  const meowth = leaguesOf(entry('Meowth', { form: 'Galar' }));
+  assert.ok(['gl', 'ul', 'ml'].some((l) => meowth[l].pick.speciesId === 'perrserker'), JSON.stringify(['gl', 'ul', 'ml'].map((l) => meowth[l].pick.speciesId)));
+  // A regional parent keeps its own regional children (Alolan Sandshrew -> Alolan Sandslash).
+  assert.match(leaguesOf(entry('Sandshrew', { form: 'Alola' })).ul.pick.speciesId, /^sandslash_alolan$/);
+});

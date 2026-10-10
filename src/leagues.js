@@ -1,6 +1,6 @@
 // PvP leagues for one Pokémon: which family member to build for Great, Ultra and Master League, how strong that is,
 // what this exact copy's IVs rank at, and what it costs to get there.
-import { evolutionsOf, evolutionLinks, baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
+import { evolutionLinks, baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
 import { powerUpCost } from './cost.js';
 import { cpAt } from './cpm.js';
 import { ivRank } from './pvp-rank.js';
@@ -18,6 +18,25 @@ const GENDER_LOCKED = {
 };
 const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'male' : null);
 
+const regionOf = (id) => id.match(/_(alolan|galarian|hisuian|paldean)(?:_|$)/)?.[1] ?? null;
+
+// Everything the Pokémon can evolve into by the game master's links, minus the cross-regional links: a Cubone becomes Marowak, not
+// Alolan Marowak (that happens only in special events), while Galarian Meowth still reaches Perrserker, whose id carries no region.
+function descendants(gm, start) {
+  const out = [];
+  const seen = new Set([start]);
+  const stack = [start];
+  while (stack.length) {
+    const parent = stack.pop();
+    for (const next of evolutionLinks(gm, parent)) {
+      const region = regionOf(next);
+      if (seen.has(next) || (region && region !== regionOf(parent))) continue;
+      seen.add(next); out.push(next); stack.push(next);
+    }
+  }
+  return out;
+}
+
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /**
@@ -29,7 +48,7 @@ export function leaguesFor(entry, resolved, ctx) {
   const start = baseSpeciesId(gm, resolved.speciesId);
   const sex = sexOf(entry.gender);
   const family = [];
-  for (const id of [start, ...evolutionsOf(gm, start)]) {
+  for (const id of [start, ...descendants(gm, start)]) {
     const base = baseSpeciesId(gm, id);
     // The Pokémon itself always stays (a misread sex must not hide it); evolutions the other sex cannot become go.
     if (sex && base !== start && GENDER_LOCKED[base] && GENDER_LOCKED[base] !== sex) continue;
