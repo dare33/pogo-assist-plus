@@ -77,7 +77,8 @@ export function leaguesFor(entry, resolved, ctx) {
 
     const iv = ivOf(pickBase);
     const ivOut = iv && { rank: iv.rank, pct: iv.pct, rankPct: iv.rankPct, level: iv.level, cp: iv.cp };
-    const overCap = !!(iv && entry.level != null && entry.level > iv.level);
+    // Master League has no cap: a Best Buddy copy at 51 is simply past the last power-up, with nothing left to pay.
+    const overCap = league !== 'ml' && !!(iv && entry.level != null && entry.level > iv.level);
     let cost = null;
     if (iv && entry.level != null && !overCap) {
       const flags = { shadow: entry.shadow, purified: entry.purified, lucky: entry.lucky };

@@ -272,3 +272,13 @@ test("PvPoke's none placeholder (Unown) is never a move or a need", () => {
   assert.deepEqual(L.gl.needs, []);
   assert.ok(![L.gl.moves.fast, ...L.gl.moves.charged].some((m) => /none/i.test(m)));
 });
+
+test('Master League: a level 51 Best Buddy copy is not over the cap and has nothing left to pay', () => {
+  const L = leaguesOf(entry('Mewtwo', { ivs: { atk: 15, def: 15, hp: 15 }, level: 51 }));
+  assert.equal(L.ml.overCap, false);
+  assert.deepEqual(L.ml.cost, { dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 50 });
+  assert.equal(L.gl.overCap, true);
+  const evo = leaguesOf(entry('Dragonair', { ivs: { atk: 15, def: 15, hp: 15 }, level: 51 }));
+  assert.equal(evo.ml.cost.dust, 0);
+  assert.ok(evo.ml.cost.evolveCandy > 0);
+});
