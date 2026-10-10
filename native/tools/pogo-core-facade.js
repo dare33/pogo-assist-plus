@@ -9,6 +9,10 @@ let ctx = null;
 const need = () => { if (!ctx) throw new Error('PogoCore.load(gamemaster, tiers, rankings) has not been called'); return ctx; };
 const replacer = (k, v) => (v instanceof Map ? Object.fromEntries(v) : v instanceof Set ? [...v] : v);
 const out = (v) => JSON.stringify(v, replacer);
+// The app reads only each Pokémon's CSV index, whether it resolved, and its leagues; the rest of the analysis record (the whole
+// game-master species, every hit) was 5 MB of the 6.7 MB for 2,000 entries and the replacer ran on every value of it. Nothing in
+// the slimmed entries can be a Map or a Set, so they go through plain JSON.stringify.
+const slim = (e) => (e.unresolved ? { p: { index: e.p.index }, unresolved: true } : { p: { index: e.p.index }, speciesId: e.resolved.speciesId, leagues: e.leagues });
 global.PogoCore = {
   // raw module functions (objects in, objects out)
   indexGamemaster: G.indexGamemaster, indexTiers: D.indexTiers, indexRankings: D.indexRankings,
@@ -24,5 +28,8 @@ global.PogoCore = {
   csvJSON(rowsText, scanDateMs) { return P.toPokeGenieCsv(JSON.parse(rowsText), { scanDate: scanDateMs == null ? new Date() : new Date(scanDateMs) }); },
   mergeClipsJSON(clipsText, optionsText) { return out(B.mergeClips(JSON.parse(clipsText), optionsText ? JSON.parse(optionsText) : undefined)); },
   importPokeGenieJSON(csvText) { return out(I.importPokeGenie(csvText)); },
-  adviseJSON(boxText) { const r = A.analyseBox(JSON.parse(boxText), need()); return out({ builds: r.builds, gaps: r.gaps, hygiene: r.hygiene, pokemon: r.pokemon, areaLabel: A.AREA_LABEL }); },
+  adviseJSON(boxText) {
+    const r = A.analyseBox(JSON.parse(boxText), need());
+    return `{"builds":${out(r.builds)},"gaps":${out(r.gaps)},"hygiene":${out(r.hygiene)},"pokemon":${JSON.stringify(r.pokemon.map(slim))},"areaLabel":${out(A.AREA_LABEL)}}`;
+  },
 };
