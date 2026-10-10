@@ -326,3 +326,32 @@ test('rank ties are exact products, not near ones: Ivysaur GL 11/7/14 and 5/5/6 
   assert.notEqual(a.product, b.product);
   assert.notEqual(a.rank, b.rank);
 });
+
+test('bad inputs are treated as unknown instead of throwing: odd IVs, odd levels, missing moves', () => {
+  const ok = leaguesOf(entry('Mareep'));
+  for (const ivs of [{ atk: 1.5, def: 3, hp: 4 }, { atk: 16, def: 3, hp: 4 }, { atk: -1, def: 3, hp: 4 }, { atk: 3, def: 3 }, { atk: '3', def: 3, hp: 4 }, { atk: NaN, def: 3, hp: 4 }]) {
+    const L = leaguesOf(entry('Mareep', { ivs }));
+    for (const league of ['gl', 'ul', 'ml']) {
+      assert.equal(L[league].iv, null, JSON.stringify(ivs));
+      assert.equal(L[league].cost, null);
+      assert.equal(L[league].pick.speciesId, ok[league].pick.speciesId);
+    }
+  }
+  for (const level of [0.5, 52, 20.3, NaN, '20', undefined]) {
+    const L = leaguesOf(entry('Mareep', { level }));
+    for (const league of ['gl', 'ul', 'ml']) { assert.ok(L[league].iv); assert.equal(L[league].cost, null); assert.equal(L[league].overCap, false); }
+  }
+  const e = entry('Mareep');
+  delete e.moves;
+  const L = leaguesOf(e);
+  for (const league of ['gl', 'ul', 'ml']) assert.equal(L[league].needs, null);
+  assert.doesNotThrow(() => analyseBox([entry('Mareep', { ivs: { atk: 99, def: 1, hp: 1 } }), e], ctx));
+});
+
+test('the Mega check works on the raw id: a Mega the family walk reaches is never a pick', () => {
+  const mon = (speciesId, atk, family = {}) => ({ speciesId, speciesName: speciesId, dex: 1, baseStats: { atk, def: 100, hp: 100 }, types: ['normal'], released: true, family: { id: 'F', ...family } });
+  // baseSpeciesId would turn b_mega into b, which is allowed; the raw id must be what is tested.
+  const fake = indexGamemaster({ timestamp: 0, moves: [], pokemon: [mon('a', 100, { evolutions: ['b_mega'] }), mon('b', 100), mon('b_mega', 300)] });
+  const fakeCtx = { gm: fake, tiers: ctx.tiers, rankings: { byLeague: { gl: new Map(), ul: new Map(), ml: new Map() } } };
+  assert.equal(leaguesFor(entry('A'), { speciesId: 'a' }, fakeCtx).ul.pick.speciesId, 'a');
+});

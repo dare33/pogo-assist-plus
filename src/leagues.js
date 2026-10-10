@@ -16,6 +16,8 @@ const GENDER_LOCKED = {
   gallade: 'male', froslass: 'female', vespiquen: 'female', salazzle: 'female', mothim: 'male',
   wormadam_plant: 'female', wormadam_sandy: 'female', wormadam_trash: 'female', oinkologne: 'male', oinkologne_female: 'female',
 };
+// IVs outside 0-15 or not whole numbers (a misread scan) are treated as unknown; a throw here would fail the whole box's advice.
+const validIvs = (ivs) => !!ivs && ['atk', 'def', 'hp'].every((k) => Number.isInteger(ivs[k]) && ivs[k] >= 0 && ivs[k] <= 15);
 const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'male' : null);
 
 const regionOf = (id) => id.match(/_(alolan|galarian|hisuian|paldean)(?:_|$)/)?.[1] ?? null;
@@ -52,9 +54,11 @@ export function leaguesFor(entry, resolved, ctx) {
     const base = baseSpeciesId(gm, id);
     // The Pokémon itself always stays (a misread sex must not hide it); evolutions the other sex cannot become go.
     if (sex && base !== start && GENDER_LOCKED[base] && GENDER_LOCKED[base] !== sex) continue;
-    if (gm.byId.has(base) && !NOT_ALLOWED.test(base) && !family.includes(base)) family.push(base);
+    if (gm.byId.has(base) && !NOT_ALLOWED.test(id) && !NOT_ALLOWED.test(base) && !family.includes(base)) family.push(base);
   }
-  const ivs = entry.ivs ?? null;
+  const ivs = validIvs(entry.ivs) ? entry.ivs : null;
+  const have = entry.moves ?? [];
+  const level = typeof entry.level === 'number' && Number.isInteger(entry.level * 2) && entry.level >= 1 && entry.level <= 51 ? entry.level : null; // a half-level the game has
   const out = {};
   for (const league of LEAGUES) {
     const map = rankings.byLeague[league];
@@ -93,19 +97,19 @@ export function leaguesFor(entry, resolved, ctx) {
     const moves = row ? { fast: names[0], charged: names.slice(1) } : null;
     let needs = null;
     // Evolving re-rolls a Pokémon's moves, so what a copy lacks only matters when the copy is itself the pick.
-    if (moves && entry.moves.length && pickBase === start) {
-      const have = new Set(entry.moves.map(norm));
-      needs = [moves.fast, ...moves.charged].filter((m) => !have.has(norm(m)));
+    if (moves && have.length && pickBase === start) {
+      const known = new Set(have.map(norm));
+      needs = [moves.fast, ...moves.charged].filter((m) => !known.has(norm(m)));
     }
 
     const iv = ivOf(pickBase);
     const ivOut = iv && { rank: iv.rank, pct: iv.pct, rankPct: iv.rankPct, level: iv.level, cp: iv.cp };
     // Master League has no cap: a Best Buddy copy at 51 is simply past the last power-up, with nothing left to pay.
-    const overCap = league !== 'ml' && !!(iv && entry.level != null && entry.level > iv.level);
+    const overCap = league !== 'ml' && !!(iv && level != null && level > iv.level);
     let cost = null;
-    if (iv && entry.level != null && !overCap) {
+    if (iv && level != null && !overCap) {
       const flags = { shadow: entry.shadow, purified: entry.purified, lucky: entry.lucky };
-      const up = powerUpCost(entry.level, iv.level, flags);
+      const up = powerUpCost(level, iv.level, flags);
       const path = evolutionPath(gm, start, pickBase) ?? [];
       const evo = path.reduce((s, [from, to]) => s + (FORM_CHANGES[from]?.includes(to) ? 0 : evolveCandy(gm, from, to)), 0);
       cost = { dust: up.dust, candy: up.candy, xl: up.xl, evolveCandy: evo, toLevel: iv.level };
