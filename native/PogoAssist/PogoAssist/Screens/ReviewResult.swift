@@ -36,7 +36,9 @@ struct ResultScreen: View {
             ReviewTopBar(title: "Scan result", account: review.account)
             Group {
                 ScrollView {
-                    LazyVStack(spacing: Theme.Space.panelGap) {
+                    // Not a LazyVStack: with the questions flattened into one, a fast scroll back up the page left the layout pass running for minutes on the iPad mini
+                    // (iOS 26.5; main thread at 100%, the app never idle). The few fixed sections are cheap; only the question cards, the part that grows, are lazy.
+                    VStack(spacing: Theme.Space.panelGap) {
                         ReviewHeader(ctx: ctx, path: $path).id(Self.headerID)
                         ReviewSavingSection(ctx: ctx, open: $savingOpen).id(Self.savingID)
                         // An empty strip under the segment: the scroll position reports it as the top item once the segment has scrolled out of view.
@@ -108,7 +110,7 @@ struct ResultScreen: View {
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
         }
         // Guide me answers one question per screen (GuideFlow); the other levels show the cards here.
-        if helpLevel == .guide { GuideEntryCard(ctx: ctx, path: $path) } else { ReviewQuestionsView(ctx: ctx, folded: $folded) }
+        if helpLevel == .guide { GuideEntryCard(ctx: ctx, path: $path) } else { LazyVStack(spacing: Theme.Space.panelGap) { ReviewQuestionsView(ctx: ctx, folded: $folded) } }
     }
 
     // MARK: bottom bar
