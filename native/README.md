@@ -817,7 +817,7 @@ The command is made for the phone's language (the device locale); Voice Control'
   date (the broadcast's last update, i.e. when it ended), whether the Done screen was left, a mark for a reading that did not finish, and the broadcast state as the app encoded
   it. The meta decodes tolerantly (an unknown field is ignored, a missing one takes its default), so an app update does not lose a waiting scan.
   - **Whose scan, and what kind.** The extension records the account that was selected and the kind chosen when the broadcast started (`BroadcastState.account` / `.kind`, passed
-    through `ReaderSettings.scanAccount` / `.scanKind`; absent in a state from an older build, then the selected account and preference are used). The scan is copied, reviewed
+    through `ReaderSettings.scanAccount` / `.scanKind`, which `refreshReaderSettings` writes at launch and on every change, so an account chosen in an earlier run counts; absent in a state from an older build, then the selected account and preference are used). If the recorded account has been renamed since, it is followed to its new name (`BoxStore.accountNamed`, from the rename history); if it is gone the scan is not given to the selected account: it shows a failure with Discard. The scan is copied, reviewed
     and saved under that account whatever is selected by the time it ends; the app selects that account when the review opens. Rename is refused while a scan is running, being
     copied or being checked.
   - **One at a time.** At most one scan is kept: a later broadcast is not copied over it. Its newer log stays in the shared log, with a message naming the waiting scan's account;
@@ -836,8 +836,14 @@ The command is made for the phone's language (the device locale); Voice Control'
     set opens as a failure with Try again and Discard, with text that does not call the scan bad.
   - The copy is made off the main actor and checked again when it finishes (a rename or a review that began meanwhile takes it back out; Try again from the failure screen for this
     scan is allowed); if making it fails the app says so once for that scan and tries again after 30 seconds.
-  - A rename that was cut off is repaired when a box loads (`BoxStore.repairInterruptedRename`: a file missing beside its `.renaming-old` backup is restored, a backup beside a live file is
-    deleted, half-written `.renaming` copies are deleted) and before the next rename; a rollback restores only what it set aside.
+  - **A rename cannot be left half done.** Before a rename touches anything it writes a journal (`.rename-journal.json` in the boxes folder: old and new name, a case-only rename's
+    temporary folder, the phase, the waiting scan's signature), synced to disk, and updates it at each phase; it is deleted only when the rename has completed or been rolled
+    back. The waiting scan's account is retargeted inside it. At launch (before accounts are listed) and in every box load (on the worker queue, so never during a rename),
+    `recoverInterruptedRename` finds a leftover journal: if the folder has already moved it puts the remaining rewrites in place (and undoes everything if that fails), otherwise
+    it puts the folder back, removes leftover copies, restores the set-aside originals and points the waiting scan at the account that exists. Names beginning with a dot (the
+    journal, the history, a case-only rename's temporary folder) are never listed as accounts, so a temporary name is never shown. Tested by killing a plain and a case-only rename at
+    eight points and checking a fresh load (`RenameJournalTests`); the file-level repair (`repairInterruptedRename`, a stale backup never replaces a live file) is kept inside it.
+    Build-checked only: the app's use of it (launch recovery, loadBox, the rename's message and selection).
 - **A save is one step.** `BoxLibrary.commitScan` checks the box (changed, newer app) before writing, writes the scan record and log, then the box version, and removes the
   record if the version cannot be written, so a failed save leaves no scan behind and a retry does not make a second. It never makes an account folder (an unknown account is refused) and refuses when the newest version cannot be read.
 - **Boxes are never kept in the temporary folder.** `BoxExportFile.boxesRoot` is nil when Application Support cannot be resolved; the app then shows a box problem (scanning

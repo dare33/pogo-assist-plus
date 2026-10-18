@@ -117,7 +117,7 @@ final class AppModel: ObservableObject {
     private var copyFailureShownFor: String?
     /// A scan kept on disk that is not open for review: left by an earlier run, or finished while its account or box was not ready. No other scan is started until it is saved or
     /// discarded. Read from disk once when found, not every second. `damaged`: something is kept that cannot be opened (the person can only discard it).
-    struct WaitingScan: Equatable { var signature: String; var account: String; var damaged: Bool }
+    struct WaitingScan: Equatable { var signature: String; var account: String; var damaged: Bool; var reason: String? = nil }
     @Published private(set) var waitingScan: WaitingScan?
     private var waitingShownFor: String?
     private var autoSelectedFor: String?
@@ -298,6 +298,7 @@ final class AppModel: ObservableObject {
         // Only a Full scan uses the count and the eggs, and only a Full scan may pause; an Add-and-update scan ends at the end wait and remembers neither.
         ReaderSettings.scanIsFull = scanKind == .full
         ReaderSettings.scanKind = scanKind.rawValue
+        ReaderSettings.scanAccount = account   // an account chosen in an earlier run is set at launch without going through its didSet
         ReaderSettings.storageCount = scanKind == .full ? storageCount : nil
         ReaderSettings.eggCount = scanKind == .full ? eggCount : nil
         ReaderSettings.commandSizes = VoiceCommandFile.setSizes
@@ -498,6 +499,8 @@ final class AppModel: ObservableObject {
         partialCountText = ""
         storageCountText = ""   // read per account by loadVoiceRecord once the account is known
         pagedByHand = true   // restorePaging() below: by hand until the commands exist, unless the person chose
+        // A rename that was cut off by the app being ended is finished or undone before accounts are listed. Nothing else is running yet, so it is safe here.
+        _ = try? library.recoverInterruptedRename(pending: pendingStore)
         account = UserDefaults.standard.string(forKey: Keys.account)
         reloadAccounts()
         // After the account is chosen (reloadAccounts picks the first when none was stored): before the count was per account it was one global value: carry it over to the current account, once.
@@ -508,6 +511,7 @@ final class AppModel: ObservableObject {
         loadBox()
         loadVoiceRecord()
         restorePaging()
+        refreshReaderSettings()
         // A scan left unsaved by an earlier run comes before anything in the shared log: it is known to be waiting before the first look at the log (refreshBroadcast), and opened
         // as soon as its account is chosen and no scan is live.
         Self.removeOldTemporaryCopies()
@@ -564,9 +568,22 @@ final class AppModel: ObservableObject {
         if boxAccount != a { snapshot = nil; advice = .none; boxProblem = nil; boxNeedsNewerApp = false; boxAccount = a }
         boxLoaded = false
         let token = boxToken, lib = library
+        let ps = pendingStore
         Task {
-            let result = await Task.detached(priority: .userInitiated) { () -> BoxLoad in
+            // On the library's queue, so it never overlaps a rename: finish or undo a rename that was cut off, and put right any copies it left.
+            let recovered = (try? await worker.run { _ -> Bool in
+                let did = (try? lib.recoverInterruptedRename(pending: ps)) ?? false
                 _ = try? lib.store.repairInterruptedRename(account: a)
+                return did
+            }) ?? false
+            guard token == boxToken, account == a else { return }
+            if recovered {
+                let disk = (try? lib.accounts()) ?? accounts
+                accounts = disk
+                if waitingScan != nil { adoptWaiting() }
+                if !disk.contains(a) { account = disk.first; loadBox(); loadVoiceRecord(); return }
+            }
+            let result = await Task.detached(priority: .userInitiated) { () -> BoxLoad in
                 // Always asked, not only when the newest version fails to load: any version from a newer app means nothing may be written on top of it.
                 if let n = lib.newerVersion(account: a) { return .newer(n) }
                 do { return .ok(try lib.current(account: a)) } catch { return .damaged(Self.plain(error)) }
@@ -720,26 +737,16 @@ final class AppModel: ObservableObject {
         renaming = true   // a scan that ends while the folder moves waits (checkForFinishedScan), so it is not filed under the old name
         defer { renaming = false; if waitingScan != nil { reopenPendingScan() } }
         let lib = library, name = new.trimmingCharacters(in: .whitespacesAndNewlines)
-        // A scan waiting on disk for this account is retargeted first, so a failure here stops the rename before anything moves; if the rename then fails it is put back.
-        let retarget = waitingScan.map { !$0.damaged && $0.account == old } ?? false
-        if retarget {
-            do { try pendingStore.update { $0.account = name } }
-            catch { return "The scan waiting to be reviewed could not be moved to the new name, so nothing was renamed: \(Self.plain(error))" }
-        }
-        func putBack() -> String? {
-            guard retarget else { return nil }
-            do { try pendingStore.update { $0.account = old }; return nil }
-            catch { return " The scan waiting to be reviewed could not be moved back to \(old); discard it from the Scan screen if it will not open." }
-        }
+        // The waiting scan, if it is this account's, is retargeted inside the rename's journal (BoxStore.renameAccount) and put back with it if the rename fails.
+        let ps = pendingStore
         var actual = name, warning: String?
-        do { try await worker.run { _ in try lib.renameAccount(from: old, to: new) } }
+        do { try await worker.run { _ in try lib.renameAccount(from: old, to: new, pending: ps) } }
         catch BoxStore.Failure.renameIncomplete(let now, let why) {
-            // The rename could not be undone completely: whatever is on disk is the truth, so the lists and the selection follow it.
+            // The rename could not be undone completely: whatever is on disk is the truth, so the lists and the selection follow it, and the next load puts the rest right.
             actual = now; warning = Self.plain(BoxStore.Failure.renameIncomplete(accountNow: now, detail: why))
-            if now == old, let extra = putBack() { warning = (warning ?? "") + extra }
-        } catch { return Self.plain(error) + (putBack() ?? "") }
+        } catch { return Self.plain(error) }
         accounts = (try? library.accounts()) ?? accounts
-        if retarget, actual == name { waitingScan?.account = name }
+        if waitingScan != nil { adoptWaiting() }
         if actual != old {
             for p in VoiceCommandFile.Pace.allCases {
                 let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
@@ -750,7 +757,6 @@ final class AppModel: ObservableObject {
             for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + "."] {
                 if let d = UserDefaults.standard.object(forKey: key + old) { UserDefaults.standard.set(d, forKey: key + actual); UserDefaults.standard.removeObject(forKey: key + old) }
             }
-            if retarget, actual != name { _ = try? pendingStore.update { $0.account = actual }; waitingScan?.account = actual }
         }
         if account == old { if actual != old { account = actual }; loadBox(); loadVoiceRecord() } else { refreshDeviceRecords() }
         return warning
@@ -793,6 +799,8 @@ final class AppModel: ObservableObject {
     }
 
     private func afterCommit(_ snap: BoxSnapshot) {
+        boxToken += 1   // a box read still in flight began before this and must not put an older snapshot back
+        boxLoaded = true
         snapshot = snap
         loadHistory(for: snap.account, withPrevious: true)
         loadAdvice()
@@ -890,13 +898,18 @@ final class AppModel: ObservableObject {
     func checkForFinishedScan() {
         if waitingScan != nil { reopenPendingScan() }
         guard !holdReview, !renaming, !busyWithScan, !isReviewing, !live, let state = broadcast, state.finished || endedWithoutFinish,
-              let sig = ReplayMarker.unprocessedSignature(), let scanAccount = accountOfScan(state) else { return }
+              let sig = ReplayMarker.unprocessedSignature() else { return }
         if waitingScan != nil || scanCopy != nil {
             if waitingScan?.signature != sig, waitingShownFor != sig {
                 waitingShownFor = sig
                 let who = waitingScan.map { $0.damaged ? "a scan from earlier" : "a scan for \($0.account)" } ?? "a scan"
                 message = "Another scan is still waiting to be reviewed (\(who)). Review or discard it first. The newer scan stays in the shared log and is read after it, unless you start another scan before then: that would replace it."
             }
+            return
+        }
+        guard let scanAccount = accountOfScan(state) else {
+            // The account this scan was started under is gone: it is not given to whichever account is selected.
+            if waitingShownFor != sig { waitingShownFor = sig; flow = .failed(message: Self.accountGoneText(state.account ?? "the account"), signature: sig) }
             return
         }
         if let after = copyRetryAfter, Date() < after { return }
@@ -906,7 +919,8 @@ final class AppModel: ObservableObject {
 
     /// The account a scan belongs to: the one selected when its broadcast started (recorded in the state), whatever is selected now; the selected one for a state that does not say.
     private func accountOfScan(_ state: BroadcastState?) -> String? {
-        if let a = state?.account, accounts.contains(a) { return a }
+        // A recorded account that has since been renamed is followed to its new name; one that is gone is nil (not the selected account, which may be someone else's).
+        if let a = state?.account { return (try? library.store.accountNamed(a)) ?? nil }
         return account
     }
 
@@ -918,7 +932,7 @@ final class AppModel: ObservableObject {
         switch pendingStore.load() {
         case .none: waitingScan = nil
         case .ready(let m, _): waitingScan = WaitingScan(signature: m.signature, account: m.account, damaged: false)
-        case .damaged: waitingScan = WaitingScan(signature: "", account: "", damaged: true)
+        case .damaged(let why): waitingScan = WaitingScan(signature: "", account: "", damaged: true, reason: why)
         }
     }
 
@@ -991,11 +1005,13 @@ final class AppModel: ObservableObject {
     func reopenPendingScan(selecting: Bool = false) {
         guard let w = waitingScan, !busyWithScan, !renaming, !isReviewing, scanCopy == nil, !live else { return }
         if w.damaged {
-            flow = .failed(message: "A scan left from earlier cannot be opened: its saved record is damaged. It is still on the phone until you discard it.", signature: Self.damagedPrefix)
+            flow = .failed(message: "A scan left from earlier cannot be opened: \(w.reason ?? "it is damaged") It is still on the phone until you discard it.", signature: Self.damagedPrefix)
             return
         }
         if ReplayMarker.processedSignature() == w.signature { pendingStore.clear(ifSignature: w.signature); waitingScan = nil; return }
         if !accounts.contains(w.account) {
+            // Renamed since it was kept (and not retargeted): follow the rename; otherwise the account is gone.
+            if let now = (try? library.store.accountNamed(w.account)) ?? nil, now != w.account, (try? pendingStore.update { $0.account = now }) != nil { waitingScan?.account = now; reopenPendingScan(selecting: selecting); return }
             guard case .ready(let meta, let copy) = pendingStore.load() else { adoptWaiting(); return }
             scanCopy = ScanCopy(signature: meta.signature, url: copy, state: Self.decode(meta.state), kind: meta.kind, date: meta.scanDate, account: meta.account)
             waitingScan = nil
@@ -1015,7 +1031,7 @@ final class AppModel: ObservableObject {
             // On the library's queue: it may take back a scan record left without its box version.
             let saved = (try? await worker.run { _ in lib.scanAlreadySaved(account: a, signature: sig) }) ?? .unknown
             reopening = false
-            guard !isReviewing, !renaming, scanCopy == nil, account == a, boxProblem == nil, !live else { return }   // still waiting; the next event asks again
+            guard !isReviewing, !renaming, scanCopy == nil, account == a, boxProblem == nil, !live, waitingScan?.signature == sig else { return }   // still waiting (or discarded meanwhile); the next event asks again
             if saved == .saved { ReplayMarker.markProcessed(sig); pendingStore.clear(ifSignature: sig); waitingScan = nil; return }
             waitingScan = nil
             let c = ScanCopy(signature: sig, url: copy, state: Self.decode(meta.state), kind: meta.kind, date: meta.scanDate, account: a)

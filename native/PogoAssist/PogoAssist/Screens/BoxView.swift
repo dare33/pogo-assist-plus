@@ -19,6 +19,7 @@ struct BoxView: View {
 
     @State private var query = ""
     @State private var choosingExport = false
+    @State private var confirmDiscardWaiting = false
     @State private var applied = BoxIndex.Query.none
     @State private var chip = BoxIndex.Chip.all
     @State private var sort = BoxIndex.Sort.name
@@ -56,6 +57,9 @@ struct BoxView: View {
         .onDisappear { searching = false }
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
         .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
+        .confirmationDialog("Discard the waiting scan?", isPresented: $confirmDiscardWaiting, titleVisibility: .visible) {
+            Button("Discard scan", role: .destructive) { model.discardWaitingScan() }
+        } message: { Text(model.waitingScan.map { $0.damaged ? "It is thrown away without being added to any box." : "The scan for \($0.account) is thrown away without being added to its box." } ?? "") }
         .sheet(isPresented: Binding(get: { model.exportURL != nil }, set: { if !$0 { model.exportURL = nil } })) {
             if let url = model.exportURL {
                 ShareSheet(url: url).presentationDetents([.medium, .large])
@@ -119,8 +123,9 @@ struct BoxView: View {
                 Text("Scanning is paused until this is resolved.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                 if model.waitingScan != nil {
                     // A scan waiting for this box would block scanning for good; it can be thrown away without the box being readable.
-                    Text("A scan is also waiting to be reviewed against this box.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-                    PillButton("Discard the waiting scan", style: .plain, isDestructive: true) { model.discardWaitingScan() }.accessibilityIdentifier("discard-waiting-scan")
+                    Text(model.waitingScan.map { $0.damaged ? "A scan left from earlier is also kept on this phone." : "A scan for \($0.account) is also waiting to be reviewed." } ?? "")
+                        .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                    PillButton("Discard the waiting scan", style: .plain, isDestructive: true) { confirmDiscardWaiting = true }.accessibilityIdentifier("discard-waiting-scan")
                 }
             }
             .padding(32)
