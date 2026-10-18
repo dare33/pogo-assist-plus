@@ -252,18 +252,26 @@ final class RenameTests: XCTestCase {
         XCTAssertEqual(try lib.store.repairInterruptedRename(account: "Parents"), 0)
     }
 
-    func testACaseOnlyRenameThatCannotFinishIsUndoneOrReportedWithTheRealName() throws {
+    /// The reviewer's probe: a case-only rename whose second step and undo both fail never shows its temporary folder as an account; the next load puts the account right.
+    func testACaseOnlyRenameThatCannotFinishIsUndoneOrPutRightAtTheNextLoad() throws {
         _ = try seed("Parents")
         lib.store.renameFault = { phase, _ in if phase == "caseSecond" { throw Disk() } }
         XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "PARENTS")) { XCTAssertTrue($0 is Disk) }
         XCTAssertEqual(try lib.accounts(), ["Parents"], "the first step was undone")
-        // the undo fails too: the folder is left under the temporary name, and the error says so
         lib.store.renameFault = { phase, _ in if phase == "caseSecond" || phase == "caseUndo" { throw Disk() } }
         XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "PARENTS")) {
             guard case .renameIncomplete(let now, _)? = $0 as? BoxStore.Failure else { return XCTFail("\($0)") }
-            XCTAssertTrue(now.hasPrefix(".rename-"), now)
-            XCTAssertEqual(try? self.lib.accounts(), [now])
+            XCTAssertEqual(now, "Parents", "the real account name, never the temporary folder's")
         }
+        XCTAssertEqual(try lib.accounts(), [], "the folder is under its temporary name, which is not an account")
+        // a fresh start finds the journal and puts the folder back
+        let fresh = BoxLibrary(root: dir)
+        XCTAssertTrue(try fresh.recoverInterruptedRename())
+        XCTAssertEqual(try fresh.accounts(), ["Parents"])
+        XCTAssertEqual(try fresh.current(account: "Parents")?.entries.count, 1)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path), ["Parents"], "no journal, no temporary folder")
+        try fresh.renameAccount(from: "Parents", to: "PARENTS")
+        XCTAssertEqual(try fresh.accounts(), ["PARENTS"])
     }
 
     func testARenameLeavesAVersionFromANewerAppAsItIsAndRewritesTheRest() throws {

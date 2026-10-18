@@ -73,10 +73,10 @@ public final class BoxLibrary {
     /// Rename an account (see `BoxStore.renameAccount`); its box versions follow, with the new name written into each, in the same all-or-nothing
     /// step as the scans: a rename that cannot rewrite them changes nothing and throws. A version this build cannot read (damaged, or saved by a
     /// newer app) is left as it is.
-    public func renameAccount(from old: String, to new: String) throws {
+    public func renameAccount(from old: String, to new: String, pending: PendingScanStore? = nil) throws {
         let newName = new.trimmingCharacters(in: .whitespacesAndNewlines)
         defer { setVerified(old, nil); setVerified(newName, nil) }   // the folder may have moved even when the answer is an error
-        try store.renameAccount(from: old, to: new) { folder, write in
+        try store.renameAccount(from: old, to: new, pending: pending) { folder, write in
             let dir = folder.appendingPathComponent("box", isDirectory: true)
             guard self.fm.fileExists(atPath: dir.path) else { return }
             for name in try self.fm.contentsOfDirectory(atPath: dir.path).sorted() where name.hasSuffix(".json") && !name.hasSuffix(".advice.json") {
@@ -89,6 +89,13 @@ public final class BoxLibrary {
         }
     }
 
+    /// Finish or undo a rename that was cut off (see `BoxStore.recoverInterruptedRename`); run on the queue the boxes are written from, before accounts are listed.
+    @discardableResult
+    public func recoverInterruptedRename(pending: PendingScanStore? = nil) throws -> Bool {
+        defer { verifiedLock.lock(); verifiedThrough.removeAll(); verifiedLock.unlock() }
+        return try store.recoverInterruptedRename(pending: pending)
+    }
+
     // MARK: - was a scan already saved
 
     public enum SaveState: Equatable { case saved, notSaved, unknown }
@@ -98,7 +105,18 @@ public final class BoxLibrary {
     /// if anything could not be read, nothing is deleted and the answer is `unknown`, because the unreadable file may be the version that points at the record.
     public func scanAlreadySaved(account: String, signature: String) -> SaveState {
         guard let listing = try? store.list(account: account) else { return .unknown }
-        guard let match = listing.scans.first(where: { $0.sourceSignature == signature }) else { return listing.unreadable.isEmpty ? .notSaved : .unknown }
+        guard let match = listing.scans.first(where: { $0.sourceSignature == signature }) else {
+            // An unreadable scan file only matters if it could be this scan: its replay log (kept beside it) is as long as the signature says. Other damaged files are not this scan.
+            let size = signature.prefix(while: { $0 != "-" })
+            let dir = try? store.accountDirectory(account, create: false)
+            let plausible = listing.unreadable.contains { name in
+                guard let dir else { return true }
+                let log = dir.appendingPathComponent(String(name.dropLast(5)) + ".replay.jsonl")
+                guard let attrs = try? fm.attributesOfItem(atPath: log.path), let n = attrs[.size] as? Int else { return true }   // no log to tell by: it could be
+                return String(n) == size
+            }
+            return plausible ? .unknown : .notSaved
+        }
         guard let all = try? seqs(account) else { return .unknown }
         var unreadable = false
         for seq in all {

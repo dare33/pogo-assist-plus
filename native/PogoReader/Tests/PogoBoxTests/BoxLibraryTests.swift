@@ -110,7 +110,11 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertEqual(done.snapshot.scanId, done.scan.id)
         // a listing that cannot be made, or a scan file that cannot be read, is not an answer either
         try Data("not json".utf8).write(to: dir.appendingPathComponent("a/scan-junk.json"))
-        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "nothing-here"), .unknown)
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "nothing-here"), .unknown, "a damaged scan file with no log to tell by could be it")
+        // one whose log is not the length the signature says is another scan's
+        try Data("12345".utf8).write(to: dir.appendingPathComponent("a/scan-junk.replay.jsonl"))
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "99-1"), .notSaved)
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "5-1"), .unknown, "its log is the length of this scan's")
         XCTAssertEqual(lib.scanAlreadySaved(account: "missing", signature: "1-1"), .notSaved)
     }
 

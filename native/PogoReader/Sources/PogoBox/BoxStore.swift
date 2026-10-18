@@ -141,7 +141,8 @@ public final class BoxStore {
 
     public func accounts() throws -> [String] {
         guard fm.fileExists(atPath: root.path) else { return [] }
-        return try fm.contentsOfDirectory(atPath: root.path).compactMap { $0.removingPercentEncoding }.sorted()
+        // A name that begins with a dot is never an account (`accountDirectory` encodes such a name): it is the rename journal, its history or a rename's temporary folder.
+        return try fm.contentsOfDirectory(atPath: root.path).filter { !$0.hasPrefix(".") }.compactMap { $0.removingPercentEncoding }.sorted()
     }
 
     public func list(account: String) throws -> Listing {
@@ -188,18 +189,76 @@ public final class BoxStore {
         try? fm.removeItem(at: file.deletingPathExtension().appendingPathExtension("replay.jsonl"))
     }
 
-    /// For tests: called at each step of a rename ("stage", "swap", "rollback", "moveBack" with the file's path) and may throw to stand in for a disk failure.
+    /// For tests: called at each step of a rename ("stage", "swap", "rollback", "moveBack", "caseSecond", "caseUndo" with the file's path) and may throw to stand in for a disk failure
+    /// the rename then reacts to (it rolls back).
     var renameFault: ((_ phase: String, _ path: String) throws -> Void)?
+    /// For tests: the rename stops dead at this point ("journal", "staged", "retargeted", "moving", "caseTemp", "moved", "swap1", "swapped"), as if the app had been killed there: nothing
+    /// is rolled back, so a fresh `recoverInterruptedRename` has to put the account right.
+    var renameKill: String?
+    private struct RenameKilled: Error {}
+    private func point(_ name: String) throws { if renameKill == name { throw RenameKilled() } }
+
+    // MARK: - rename journal
+
+    /// What a rename is doing, written (and synced) to the boxes root before it touches anything and updated at each phase; deleted only when the rename has completed or been
+    /// rolled back. If the app is ended in the middle, the next load finds it and finishes or undoes the rename (`recoverInterruptedRename`), so the folder's name, every record's
+    /// account and the waiting scan's account cannot be left disagreeing.
+    struct RenameJournal: Codable, Equatable {
+        var old: String
+        var new: String
+        /// The temporary folder name a case-only rename passes through (begins with a dot, so it is never listed as an account).
+        var caseTemp: String?
+        var phase: String
+        /// The waiting scan whose account is being moved along with the rename.
+        var waitingSignature: String?
+    }
+    private var journalURL: URL { root.appendingPathComponent(".rename-journal.json") }
+    private var historyURL: URL { root.appendingPathComponent(".rename-history.json") }
+
+    private func writeJournal(_ j: RenameJournal) throws {
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        try JSONEncoder().encode(j).write(to: journalURL, options: .atomic)
+        let h = try FileHandle(forWritingTo: journalURL)
+        defer { try? h.close() }
+        try h.synchronize()   // on disk before the rename touches anything
+    }
+    private func readJournal() -> RenameJournal? { (try? Data(contentsOf: journalURL)).flatMap { try? JSONDecoder().decode(RenameJournal.self, from: $0) } }
+    private func deleteJournal() throws { if fm.fileExists(atPath: journalURL.path) { try fm.removeItem(at: journalURL) } }
+
+    /// Every completed rename (old name to new name), newest last, so a name recorded earlier (the account a scan was started under) can be followed to what it is called now.
+    private func appendHistory(old: String, new: String) {
+        var all = (try? Data(contentsOf: historyURL)).flatMap { try? JSONDecoder().decode([[String]].self, from: $0) } ?? []
+        if all.last != [old, new] { all.append([old, new]) }
+        try? JSONEncoder().encode(Array(all.suffix(50))).write(to: historyURL, options: .atomic)
+    }
+
+    /// The account a recorded name stands for now: itself if it still exists, else what a completed rename turned it into (followed through several renames), else nil
+    /// (the account is gone).
+    public func accountNamed(_ recorded: String) throws -> String? {
+        let existing = Set(try accounts())
+        if existing.contains(recorded) { return recorded }
+        let all = (try? Data(contentsOf: historyURL)).flatMap { try? JSONDecoder().decode([[String]].self, from: $0) } ?? []
+        var name = recorded
+        for _ in 0..<all.count + 1 {
+            guard let step = all.last(where: { $0.count == 2 && $0[0] == name }) else { return nil }
+            name = step[1]
+            if existing.contains(name) { return name }
+        }
+        return nil
+    }
+
+    // MARK: - rename
 
     /// Rename an account: its folder, and the account name written inside each scan file (and, through `alsoRewrite`, inside other files
-    /// of the folder, which is how `BoxLibrary` rewrites its box versions), so the data, the saved scans and their replay logs all follow.
-    /// Refuses an empty name or another account's name (compared ignoring case and surrounding spaces; a change of capitals alone on the
-    /// same account is allowed). It is all or nothing: each rewritten file is written beside the original as it is made (one in memory at a time),
-    /// then the folder moves, then each original is set aside under a backup name and its rewrite put in its place. A failure while staging leaves
-    /// the account exactly as it was; one in the swap puts the originals and the folder back, and if that cannot be done either, `Failure.renameIncomplete`
-    /// says which name the account now has. A file that cannot be read as a scan (damaged, or from a newer app) is left as it is.
-    /// `alsoRewrite` is given the old folder and a `write(path, data)` to call for each file it rewrites (path relative to the folder).
-    public func renameAccount(from old: String, to new: String, alsoRewrite extra: (_ folder: URL, _ write: (_ path: String, _ data: Data) throws -> Void) throws -> Void = { _, _ in }) throws {
+    /// of the folder, which is how `BoxLibrary` rewrites its box versions), so the data, the saved scans and their replay logs all follow; `pending`, the waiting
+    /// scan (`PendingScanStore`), follows too when it is this account's. Refuses an empty name or another account's name (compared ignoring case and surrounding spaces; a
+    /// change of capitals alone on the same account is allowed). It is all or nothing and crash-safe: a journal is written first (see `RenameJournal`), each rewritten file is
+    /// written beside the original as it is made (one in memory at a time), the waiting scan is retargeted, the folder moves, then each original is set aside under a backup
+    /// name and its rewrite put in its place. A failure while staging or moving leaves the account as it was; one in the swap puts the originals and the folder back, and if that
+    /// cannot be done either, the journal stays for the next load and `Failure.renameIncomplete` says so. A file that cannot be read as a scan (damaged, or from a newer app) is
+    /// left as it is. `alsoRewrite` is given the old folder and a `write(path, data)` to call for each file it rewrites (path relative to the folder).
+    public func renameAccount(from old: String, to new: String, pending: PendingScanStore? = nil,
+                              alsoRewrite extra: (_ folder: URL, _ write: (_ path: String, _ data: Data) throws -> Void) throws -> Void = { _, _ in }) throws {
         let newName = new.trimmingCharacters(in: .whitespacesAndNewlines), oldName = old.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newName.isEmpty else { throw Failure.badAccountName }
         let from = try accountDirectory(oldName, create: false)
@@ -209,10 +268,23 @@ public final class BoxStore {
         let to = try accountDirectory(newName, create: false)
         let caseOnly = newName.lowercased() == oldName.lowercased()
         if !caseOnly { guard !fm.fileExists(atPath: to.path) else { throw Failure.accountExists(newName) } }
-
-        // Leftovers of an earlier rename that was cut off are put right first, so a stale backup can never be mistaken for this rename's.
+        // A rename that was cut off earlier is finished or undone first, so nothing it left can be mistaken for this one's.
+        try recoverInterruptedRename(pending: pending)
         _ = try repairInterruptedRename(account: oldName)
-        let temp = Self.renamingSuffix, backup = Self.renamingOldSuffix
+
+        let temp = Self.renamingSuffix
+        var waiting: String?
+        if let pending, case .ready(let m, _) = pending.load(), m.account == oldName { waiting = m.signature }
+        var journal = RenameJournal(old: oldName, new: newName, caseTemp: caseOnly ? ".rename-\(UUID().uuidString)" : nil, phase: "staging", waitingSignature: waiting)
+        try writeJournal(journal)
+        try point("journal")
+        func advance(_ phase: String) throws { journal.phase = phase; try writeJournal(journal) }
+        func abandon(_ error: Error) throws -> Never {   // nothing has moved: take the journal away and report
+            if error is RenameKilled { throw error }
+            try? deleteJournal()
+            throw error
+        }
+
         var staged = [String]()
         func removeTemps(in folder: URL) { for p in staged { try? fm.removeItem(at: folder.appendingPathComponent(p + temp)) } }
         func stage(_ path: String, _ data: Data) throws {
@@ -227,23 +299,78 @@ public final class BoxStore {
                 try stage(name, try Self.encoder.encode(scan))
             }
             try extra(from, stage)
-        } catch { removeTemps(in: from); throw error }
-        do { try moveFolder(from, to, caseOnly: caseOnly) } catch { removeTemps(in: from); throw error }
+            try advance("staged")
+            try point("staged")
+        } catch { if !(error is RenameKilled) { removeTemps(in: from) }; try abandon(error) }
 
-        var touched = [String]()   // swapped, or started to be
+        if let pending, waiting != nil {
+            do { try pending.update { $0.account = newName } } catch { removeTemps(in: from); try abandon(error) }
+        }
+        do { try point("retargeted"); try advance("moving"); try point("moving") } catch { if !(error is RenameKilled) { removeTemps(in: from); try? retarget(pending, to: oldName, ifSignature: waiting) }; try abandon(error) }
+
+        do { try moveFolder(from, to, journal: journal) }
+        catch {
+            if error is RenameKilled { throw error }
+            // The folder did not move (or could not be put back): undo what was done before it.
+            if case Failure.renameIncomplete = error { throw error }
+            removeTemps(in: from)
+            try? retarget(pending, to: oldName, ifSignature: waiting)
+            try abandon(error)
+        }
+        try advance("moved")
+        try point("moved")
+
+        do { try swapIn(to, staged); try advance("swapped"); try point("swapped") }
+        catch {
+            if error is RenameKilled { throw error }
+            let problems = (error as? SwapFailure)?.problems ?? []
+            let cause = (error as? SwapFailure)?.cause ?? error
+            removeTemps(in: to)
+            do {
+                try renameFault?("moveBack", to.lastPathComponent)
+                try moveFolder(to, from, journal: journal)
+            } catch let back {
+                if case Failure.renameIncomplete(let now, let why) = back { throw Failure.renameIncomplete(accountNow: now, detail: (problems + [why]).joined(separator: "; ")) }
+                throw Failure.renameIncomplete(accountNow: newName, detail: (problems + ["the folder could not be moved back: \(back.localizedDescription)"]).joined(separator: "; "))
+            }
+            try? retarget(pending, to: oldName, ifSignature: waiting)
+            if !problems.isEmpty { throw Failure.renameIncomplete(accountNow: oldName, detail: problems.joined(separator: "; ")) }
+            try? deleteJournal()
+            throw cause
+        }
+        appendHistory(old: oldName, new: newName)
+        for p in staged { try? fm.removeItem(at: to.appendingPathComponent(p + Self.renamingOldSuffix)) }
+        try deleteJournal()
+    }
+
+    private func retarget(_ pending: PendingScanStore?, to name: String, ifSignature sig: String?) throws {
+        guard let pending, let sig, case .ready(let m, _) = pending.load(), m.signature == sig, m.account != name else { return }
+        try pending.update { $0.account = name }
+    }
+
+    private struct SwapFailure: Error { var cause: Error; var problems: [String] }
+
+    /// Put each staged rewrite (`<path>.renaming`) in place of its original, which is set aside as `<path>.renaming-old` first. A file is recorded as touched only after its original
+    /// is moved aside, and a failure puts back exactly those; what cannot be put back is reported in the thrown `SwapFailure`.
+    private func swapIn(_ folder: URL, _ paths: [String]) throws {
+        var touched = [String](), done = 0
         do {
-            for p in staged {
+            for p in paths {
                 try renameFault?("swap", p)
-                let file = to.appendingPathComponent(p)
-                try fm.moveItem(at: file, to: to.appendingPathComponent(p + backup))
-                touched.append(p)   // only after its original is safely set aside: rollback puts back what it set aside, nothing else
-                try fm.moveItem(at: to.appendingPathComponent(p + temp), to: file)
+                let file = folder.appendingPathComponent(p), saved = folder.appendingPathComponent(p + Self.renamingOldSuffix), tmp = folder.appendingPathComponent(p + Self.renamingSuffix)
+                if fm.fileExists(atPath: file.path) {
+                    try fm.moveItem(at: file, to: saved)
+                    touched.append(p)
+                }
+                try fm.moveItem(at: tmp, to: file)
+                done += 1
+                if done == 1 { try point("swap1") }
             }
         } catch {
-            // Put every original back, report anything that cannot be, then move the folder back.
+            if error is RenameKilled { throw error }
             var problems = [String]()
             for p in touched.reversed() {
-                let file = to.appendingPathComponent(p), saved = to.appendingPathComponent(p + backup)
+                let file = folder.appendingPathComponent(p), saved = folder.appendingPathComponent(p + Self.renamingOldSuffix)
                 do {
                     try renameFault?("rollback", p)
                     if fm.fileExists(atPath: saved.path) {
@@ -252,39 +379,78 @@ public final class BoxStore {
                     }
                 } catch { problems.append("\(p): \(error.localizedDescription)") }
             }
-            removeTemps(in: to)
-            do {
-                try renameFault?("moveBack", to.lastPathComponent)
-                try moveFolder(to, from, caseOnly: caseOnly)
-            } catch {
-                if case Failure.renameIncomplete(let now, let why) = error { throw Failure.renameIncomplete(accountNow: now, detail: (problems + [why]).joined(separator: "; ")) }
-                throw Failure.renameIncomplete(accountNow: newName, detail: (problems + ["the folder could not be moved back: \(error.localizedDescription)"]).joined(separator: "; "))
-            }
-            if !problems.isEmpty { throw Failure.renameIncomplete(accountNow: oldName, detail: problems.joined(separator: "; ")) }
-            throw error
+            throw SwapFailure(cause: error, problems: problems)
         }
-        for p in staged { try? fm.removeItem(at: to.appendingPathComponent(p + backup)) }
     }
 
-    /// Move an account folder. On a case-insensitive disk a change of capitals alone goes through a temporary name; if the second step fails the first is undone.
-    private func moveFolder(_ from: URL, _ to: URL, caseOnly: Bool) throws {
-        guard caseOnly else { try fm.moveItem(at: from, to: to); return }
-        let temp = root.appendingPathComponent(".rename-\(UUID().uuidString)", isDirectory: true)
+    /// Move an account folder. A change of capitals alone goes through the journal's temporary name; if the second step fails the first is undone, and if that fails too the
+    /// journal stays and the next load puts the folder back (the temporary name is never shown as an account).
+    private func moveFolder(_ from: URL, _ to: URL, journal: RenameJournal?) throws {
+        let caseTemp = journal?.caseTemp ?? (from.lastPathComponent.lowercased() == to.lastPathComponent.lowercased() ? ".rename-\(UUID().uuidString)" : nil)
+        guard let caseTemp else { try fm.moveItem(at: from, to: to); return }
+        let temp = root.appendingPathComponent(caseTemp, isDirectory: true)
         try fm.moveItem(at: from, to: temp)
+        try point("caseTemp")
         do {
             try renameFault?("caseSecond", to.lastPathComponent)
             try fm.moveItem(at: temp, to: to)
         } catch {
-            // Undo the first step; if that fails too the folder is left under the temporary name, and that is what the account is now called.
+            if error is RenameKilled { throw error }
             do {
                 try renameFault?("caseUndo", from.lastPathComponent)
                 try fm.moveItem(at: temp, to: from)
             } catch let undo {
-                throw Failure.renameIncomplete(accountNow: temp.lastPathComponent.removingPercentEncoding ?? temp.lastPathComponent,
-                                               detail: "the folder could not be renamed (\(error.localizedDescription)) or put back (\(undo.localizedDescription))")
+                throw Failure.renameIncomplete(accountNow: from.lastPathComponent.removingPercentEncoding ?? from.lastPathComponent,
+                                               detail: "the folder could not be renamed (\(error.localizedDescription)) or put back (\(undo.localizedDescription)); it is put right the next time the box is loaded")
             }
             throw error
         }
+    }
+
+    /// Finish or undo a rename that was cut off (the journal is still there): if the folder has already moved to the new name, the remaining rewrites are put in place (and if that
+    /// fails, everything is undone); if not, the folder (and a case-only rename's temporary folder) goes back to the old name, leftover copies are removed and the waiting scan
+    /// is pointed at the old account again. Either way the folder's name, every record's account and the waiting scan agree afterwards, and the journal is deleted. Run it on the
+    /// one queue the boxes are written from, never while a rename is running. Returns whether there was anything to do.
+    @discardableResult
+    public func recoverInterruptedRename(pending: PendingScanStore? = nil) throws -> Bool {
+        guard fm.fileExists(atPath: journalURL.path) else { return false }
+        guard let j = readJournal() else { try deleteJournal(); return true }   // not a journal this build wrote: nothing to go by
+        let names = Set((try? fm.contentsOfDirectory(atPath: root.path)) ?? [])
+        let oldDir = try accountDirectory(j.old, create: false), newDir = try accountDirectory(j.new, create: false)
+        let tempThere = j.caseTemp.map { names.contains($0) } ?? false
+        let moved = names.contains(newDir.lastPathComponent) && (j.caseTemp != nil ? !tempThere : !names.contains(oldDir.lastPathComponent))
+        let caseOnly = j.caseTemp != nil
+        if moved {
+            // Roll forward: every rewrite still waiting beside its original goes in.
+            var staged = [String]()
+            for dir in ["", "box/"] {
+                for n in ((try? fm.contentsOfDirectory(atPath: newDir.appendingPathComponent(dir).path)) ?? []).sorted() where n.hasSuffix(Self.renamingSuffix) {
+                    staged.append(dir + String(n.dropLast(Self.renamingSuffix.count)))
+                }
+            }
+            do { try swapIn(newDir, staged) }
+            catch {
+                let problems = (error as? SwapFailure)?.problems ?? []
+                guard problems.isEmpty else { throw Failure.renameIncomplete(accountNow: j.new, detail: problems.joined(separator: "; ")) }
+                // Could not finish: undo it all.
+                for p in staged { try? fm.removeItem(at: newDir.appendingPathComponent(p + Self.renamingSuffix)) }
+                try moveFolder(newDir, oldDir, journal: j)
+                try retarget(pending, to: j.old, ifSignature: j.waitingSignature)
+                _ = try repairInterruptedRenameFiles(oldDir, preferBackups: true)
+                try deleteJournal()
+                return true
+            }
+            _ = try repairInterruptedRenameFiles(newDir)
+            try retarget(pending, to: j.new, ifSignature: j.waitingSignature)
+            appendHistory(old: j.old, new: j.new)
+            try deleteJournal()
+        } else {
+            if let t = j.caseTemp, tempThere { try fm.moveItem(at: root.appendingPathComponent(t, isDirectory: true), to: oldDir) }
+            _ = try repairInterruptedRenameFiles(oldDir, preferBackups: true)
+            try retarget(pending, to: j.old, ifSignature: j.waitingSignature)
+            try deleteJournal()
+        }
+        return true
     }
 
     static let renamingSuffix = ".renaming", renamingOldSuffix = ".renaming-old"
@@ -294,8 +460,15 @@ public final class BoxStore {
     /// deleted. Returns how many files it touched. Safe to run at any time except during a rename (the app runs it at load, before one starts).
     @discardableResult
     public func repairInterruptedRename(account: String) throws -> Int {
+        // While a journal is there the rename it describes is finished or undone first (`recoverInterruptedRename`): its copies are not leftovers.
+        guard !fm.fileExists(atPath: journalURL.path) else { return 0 }
         let folder = try accountDirectory(account, create: false)
         guard fm.fileExists(atPath: folder.path) else { return 0 }
+        return try repairInterruptedRenameFiles(folder)
+    }
+
+    /// `preferBackups`: the rename is being undone, so an original set aside as `.renaming-old` is the truth and replaces what is in its place (which may be the rewrite).
+    private func repairInterruptedRenameFiles(_ folder: URL, preferBackups: Bool = false) throws -> Int {
         var touched = 0
         for dir in [folder, folder.appendingPathComponent("box", isDirectory: true)] {
             guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { continue }
@@ -303,7 +476,9 @@ public final class BoxStore {
                 let url = dir.appendingPathComponent(n)
                 if n.hasSuffix(Self.renamingOldSuffix) {
                     let live = dir.appendingPathComponent(String(n.dropLast(Self.renamingOldSuffix.count)))
-                    if fm.fileExists(atPath: live.path) { try fm.removeItem(at: url) } else { try fm.moveItem(at: url, to: live) }
+                    if fm.fileExists(atPath: live.path) {
+                        if preferBackups { try fm.removeItem(at: live); try fm.moveItem(at: url, to: live) } else { try fm.removeItem(at: url) }
+                    } else { try fm.moveItem(at: url, to: live) }
                     touched += 1
                 } else if n.hasSuffix(Self.renamingSuffix) {
                     try fm.removeItem(at: url); touched += 1
