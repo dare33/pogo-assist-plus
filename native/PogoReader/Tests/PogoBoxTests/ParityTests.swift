@@ -18,15 +18,15 @@ final class ParityTests: XCTestCase {
     }
 
     /// Opt-in (POGO_PARITY=1): every real readings file under pogo-frames/_out gives the rows `finish-readings.mjs`
-    /// gives under Node. Needs node on PATH and the reference checkout (POGO_REF, default below). Slow: the JS is
+    /// gives under Node. Needs node on PATH. The reference is the checkout this test is in (the bundle is built from its src/; POGO_REF overrides). Slow: the JS is
     /// quadratic-ish and darentas-02 alone takes about half a minute.
     func testRealReadingsMatchNode() throws {
         let env = ProcessInfo.processInfo.environment
         try XCTSkipUnless(env["POGO_PARITY"] == "1", "set POGO_PARITY=1 to run the real-readings parity check")
-        let ref = env["POGO_REF"] ?? "/Users/greg-mb/Developer/personal/pogo-assist-plus-ref"
         let framesOut = URL(fileURLWithPath: env["POGO_FRAMES_OUT"] ?? "/Users/greg-mb/Developer/personal/pogo-frames/_out")
         // .../native/PogoReader/Tests/PogoBoxTests/ParityTests.swift -> .../native
         let native = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let ref = env["POGO_REF"] ?? native.deletingLastPathComponent().path
         let tool = native.appendingPathComponent("tools/finish-readings.mjs").path
         let names = ["marathon-phone", "marathon-ipad-mini", "v3", "pogo-test-fast", "pogo-test-phone", "pogo-test-tablet", "darentas-01", "darentas-02", "darentas-03", "screenrec-2149"]
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-parity-\(UUID().uuidString)")
