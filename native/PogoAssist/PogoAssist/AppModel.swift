@@ -590,12 +590,14 @@ final class AppModel: ObservableObject {
                 if waitingScan != nil { adoptWaiting() }
                 applyRecovered(r)   // the settings and the selection follow a rename the recovery finished
             }
-            guard token == boxToken else { return }
+            // A recovery that moved the selection, or left it on an account that is not there, is followed by a fresh load even if this one is no longer the latest (the new one supersedes
+            // it; its own recovery finds nothing to do, so it does not reload again).
             if recovered != nil, account != a || !disk.contains(account ?? "") {
                 if let acc = account, !disk.contains(acc) { account = disk.first }
                 loadBox(); loadVoiceRecord(); return
             }
-            guard account == a else { return }
+            guard token == boxToken else { return }   // a newer load is already running
+            guard account == a else { loadBox(); return }   // the selection moved under this load without asking for one
             let result = await Task.detached(priority: .userInitiated) { () -> BoxLoad in
                 // Always asked, not only when the newest version fails to load: any version from a newer app means nothing may be written on top of it.
                 if let n = lib.newerVersion(account: a) { return .newer(n) }
@@ -778,7 +780,13 @@ final class AppModel: ObservableObject {
         var actual = name, warning: String?
         let renameResult: Result<Void, Error> = await { do { try await worker.run { _ in try lib.renameAccount(from: old, to: new, pending: ps) }; return .success(()) } catch { return .failure(error) } }()
         // An earlier cut-off rename that this one finished first: its settings move too, whatever became of this rename.
-        if let r = try? await worker.run({ _ in lib.takeRecoveredByRename() }) { applyRecovered(r) }
+        if let r = try? await worker.run({ _ in lib.takeRecoveredByRename() }) {
+            let before = account
+            applyRecovered(r)
+            accounts = (try? library.accounts()) ?? accounts
+            if waitingScan != nil { adoptWaiting() }
+            if account != before { loadBox(); loadVoiceRecord() }   // before this rename's own error is handled
+        }
         do { try renameResult.get() }
         catch BoxStore.Failure.renameIncomplete(let now, let why) {
             // The rename could not be undone completely: whatever is on disk is the truth, so the lists and the selection follow it, and the next load puts the rest right.
@@ -945,7 +953,7 @@ final class AppModel: ObservableObject {
         case .storageProblem:
             if waitingShownFor != sig {
                 waitingShownFor = sig
-                message = storageMissing ? BoxExportFile.storageUnavailableText : "The accounts on this phone could not be read, so the finished scan cannot be opened yet. It is kept, and the app tries again."
+                message = accountUnknownText
             }
             return
         case .gone(let name):
@@ -998,7 +1006,7 @@ final class AppModel: ObservableObject {
             if FileManager.default.fileExists(atPath: c.url.path) {
                 switch library.store.lookupAccount(c.account) {
                 case .gone: flow = .failed(message: Self.accountGoneText(c.account), signature: signature); return
-                case .unknown: return   // cannot tell: not "gone"
+                case .unknown: message = accountUnknownText; return   // cannot tell: not "gone", and the person is told why nothing happened
                 case .found(let now):
                     if now != c.account { scanCopy?.account = now; _ = try? pendingStore.update { $0.account = now } }
                 }
@@ -1053,6 +1061,22 @@ final class AppModel: ObservableObject {
 
     private static func accountGoneText(_ name: String) -> String { "The account this scan belonged to (\(name)) is no longer on this phone, so the scan cannot be reviewed. Discard it." }
 
+    private var reopenAgain = false
+    /// `reopenPendingScan` once more, but never from inside that second call: the depth is one.
+    private func reopenOnce(selecting: Bool) {
+        guard !reopenAgain else { return }
+        reopenAgain = true; defer { reopenAgain = false }
+        reopenPendingScan(selecting: selecting)
+    }
+
+    /// Why a scan's account cannot be told right now, in words (a retry or the message about a finished scan says it).
+    private var accountUnknownText: String {
+        if storageMissing { return BoxExportFile.storageUnavailableText }
+        if let p = recoveryProblem { return p }
+        if library.store.renameJournalExists { return "A rename of an account is being finished, so the account this scan belongs to cannot be told yet. Try again in a moment." }
+        return "The accounts on this phone could not be read, so this scan cannot be opened yet. Try again in a moment."
+    }
+
     /// A scan kept on disk is opened for review (by an earlier run, or after the account or the box was not ready): before anything in the shared log, once no scan is live, its
     /// account is selected (it is selected for it) and that box has been read. It is not read on its own again if the last reading of it never finished (the app was ended during
     /// it): it opens as a failure with Try again and Discard. A scan already saved (the app was ended between the save and the note that it had been) is not saved twice; if that
@@ -1065,15 +1089,17 @@ final class AppModel: ObservableObject {
         }
         if ReplayMarker.processedSignature() == w.signature { pendingStore.clear(ifSignature: w.signature); waitingScan = nil; return }
         if !accounts.contains(w.account) {
+            // The cached list may only be stale: read it again first, and go on if the account is there. (Asked again at most once, `reopenOnce`.)
+            accounts = (try? library.accounts()) ?? accounts
+            if accounts.contains(w.account) { reopenOnce(selecting: selecting); return }
             // Renamed since it was kept (and not retargeted): follow the rename; otherwise the account is gone.
             switch library.store.lookupAccount(w.account) {
             case .unknown: return   // the accounts cannot be listed: say nothing, ask again later
             case .found(let now):
-                // Only a real change is followed, and it asks again only when the refreshed list holds the new name, so the next call cannot come back here.
+                // Only a real change is followed, and it asks again only when the refreshed list holds the new name.
                 if now != w.account, (try? pendingStore.update { $0.account = now }) != nil {
                     waitingScan?.account = now
-                    accounts = (try? library.accounts()) ?? accounts
-                    if accounts.contains(now) { reopenPendingScan(selecting: selecting) }
+                    if accounts.contains(now) { reopenOnce(selecting: selecting) }
                 }
                 return
             case .gone: break
