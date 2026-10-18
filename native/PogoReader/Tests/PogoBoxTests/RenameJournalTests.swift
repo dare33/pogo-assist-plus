@@ -117,4 +117,103 @@ final class RenameJournalTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent(".rename-history.json").path))
         XCTAssertEqual(try lib.accounts(), ["B"])
     }
+
+    private struct Disk: Error {}
+
+    /// The Opus probe: the swap fails, the move back fails, the app is ended; a fresh load leaves the old name with records naming the old account.
+    func testASwapFailureWhoseMoveBackFailsIsUndoneByTheNextLoad() throws {
+        let lib = BoxLibrary(root: dir)
+        try seed(lib, "Parents")
+        lib.store.renameFault = { phase, path in
+            if phase == "swap", path == "box/000002.json" { throw Disk() }
+            if phase == "moveBack" { throw Disk() }
+        }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "darentas", pending: pending))
+        let fresh = BoxLibrary(root: dir)
+        XCTAssertEqual(try fresh.store.recoverRename(pending: pending), BoxStore.RecoveredRename(old: "Parents", new: "darentas", finished: false))
+        try check(fresh, expecting: ["Parents"])
+    }
+
+    func testARecoveryThatIsItselfKilledDuringItsUndoIsSimplyRunAgain() throws {
+        for point in ["recoverUndo1", "recoverUndo2"] {
+            try? FileManager.default.removeItem(at: dir); try? FileManager.default.removeItem(at: pendingDir)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let lib = BoxLibrary(root: dir)
+            try seed(lib, "Parents")
+            lib.store.renameFault = { phase, path in
+                if phase == "swap", path == "box/000002.json" { throw Disk() }
+                if phase == "moveBack" { throw Disk() }
+            }
+            XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "darentas", pending: pending))
+            let dying = BoxLibrary(root: dir)
+            dying.store.renameKill = point
+            XCTAssertThrowsError(try dying.recoverInterruptedRename(pending: pending), point)
+            let fresh = BoxLibrary(root: dir)
+            _ = try fresh.recoverInterruptedRename(pending: pending)
+            try check(fresh, expecting: ["Parents"])
+        }
+    }
+
+    func testAJournalWriteThatFailsAfterTheMoveOrTheSwapDoesNotSpoilTheRename() throws {
+        for phase in ["moved", "swapped"] {
+            try? FileManager.default.removeItem(at: dir); try? FileManager.default.removeItem(at: pendingDir)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let lib = BoxLibrary(root: dir)
+            try seed(lib, "Parents")
+            lib.store.renameFault = { p, path in if p == "journal", path == phase { throw Disk() } }
+            try lib.renameAccount(from: "Parents", to: "darentas", pending: pending)   // informational phases: the rename is a success
+            try check(lib, expecting: ["darentas"])
+        }
+        // a journal that cannot be written at the start stops the rename before anything is touched
+        let lib = BoxLibrary(root: dir)
+        lib.store.renameFault = { p, path in if p == "journal", path == "staging" { throw Disk() } }
+        XCTAssertThrowsError(try lib.renameAccount(from: "darentas", to: "Third", pending: pending))
+        try check(lib, expecting: ["darentas"])
+    }
+
+    func testIfTheUndoCannotBeRecordedNothingIsUndoneAndTheNextLoadFinishesTheRename() throws {
+        let lib = BoxLibrary(root: dir)
+        try seed(lib, "Parents")
+        lib.store.renameFault = { phase, path in
+            if phase == "swap", path == "box/000002.json" { throw Disk() }
+            if phase == "journal", path == "undoing" { throw Disk() }
+        }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "darentas", pending: pending)) {
+            guard case .renameIncomplete(let now, _)? = $0 as? BoxStore.Failure else { return XCTFail("\($0)") }
+            XCTAssertEqual(now, "darentas")
+        }
+        let fresh = BoxLibrary(root: dir)
+        XCTAssertEqual(try fresh.store.recoverRename(pending: pending)?.finished, true)
+        try check(fresh, expecting: ["darentas"])
+    }
+
+    func testAJournalThatCannotBeReadIsKeptWhenARenameMayBeInFlightAndClearedWhenNothingIs() throws {
+        let lib = BoxLibrary(root: dir)
+        try seed(lib, "Parents")
+        let journal = dir.appendingPathComponent(".rename-journal.json")
+        try Data("{ not a journal".utf8).write(to: journal)
+        // nothing in flight on disk: safe to clear
+        XCTAssertFalse(try lib.recoverInterruptedRename(pending: pending))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: journal.path))
+        // a half-written copy beside a version: not safe, nothing is deleted
+        try Data("{ not a journal".utf8).write(to: journal)
+        let copy = dir.appendingPathComponent("Parents/box/000001.json.renaming")
+        try Data("half".utf8).write(to: copy)
+        XCTAssertThrowsError(try lib.recoverInterruptedRename(pending: pending)) { XCTAssertEqual($0 as? BoxStore.Failure, .renameJournalUnreadable) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: journal.path)); XCTAssertTrue(FileManager.default.fileExists(atPath: copy.path))
+        // a temporary folder of a case-only rename is also "in flight"
+        try FileManager.default.removeItem(at: copy)
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent(".rename-ABC"), withIntermediateDirectories: true)
+        XCTAssertThrowsError(try lib.recoverInterruptedRename(pending: pending))
+    }
+
+    func testALookupSaysGoneOnlyWhenTheListingWorked() throws {
+        let lib = BoxLibrary(root: dir)
+        try seed(lib, "A")
+        XCTAssertEqual(lib.store.lookupAccount("A"), .found("A"))
+        XCTAssertEqual(lib.store.lookupAccount("Nobody"), .gone)
+        // the boxes "folder" is a file: it cannot be listed, so nothing can be said
+        let broken = BoxStore(root: dir.appendingPathComponent("A/box/000001.json"))
+        XCTAssertEqual(broken.lookupAccount("A"), .unknown)
+    }
 }

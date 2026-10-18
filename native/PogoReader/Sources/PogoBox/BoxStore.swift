@@ -30,6 +30,8 @@ public final class BoxStore {
         case notImplemented(String)
         /// A rename could not be completed and could not be fully undone either: the account is now called `accountNow`, and `detail` says what is wrong.
         case renameIncomplete(accountNow: String, detail: String)
+        /// A rename journal exists that cannot be read, and the disk shows a rename may have been cut off: nothing is guessed or deleted.
+        case renameJournalUnreadable
 
         public var errorDescription: String? {
             switch self {
@@ -39,6 +41,7 @@ public final class BoxStore {
             case .accountExists(let n): return "There is already an account called \(n). Choose a different name."
             case .noSuchAccount(let n): return "There is no account called \(n)."
             case .notImplemented(let m): return "not implemented: \(m)"
+            case .renameJournalUnreadable: return "An earlier rename was cut off and its record cannot be read, so it cannot be finished or undone automatically. Nothing has been changed or deleted."
             case .renameIncomplete(let now, let why): return "The account could not be renamed cleanly (\(why)). It is now called \(now). Check that your boxes and scans are all there."
             }
         }
@@ -216,6 +219,7 @@ public final class BoxStore {
     private var historyURL: URL { root.appendingPathComponent(".rename-history.json") }
 
     private func writeJournal(_ j: RenameJournal) throws {
+        try renameFault?("journal", j.phase)
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         try JSONEncoder().encode(j).write(to: journalURL, options: .atomic)
         let h = try FileHandle(forWritingTo: journalURL)
@@ -232,18 +236,33 @@ public final class BoxStore {
         try? JSONEncoder().encode(Array(all.suffix(50))).write(to: historyURL, options: .atomic)
     }
 
-    /// The account a recorded name stands for now: itself if it still exists, else what a completed rename turned it into (followed through several renames), else nil
-    /// (the account is gone).
-    public func accountNamed(_ recorded: String) throws -> String? {
-        let existing = Set(try accounts())
-        if existing.contains(recorded) { return recorded }
+    public enum AccountLookup: Equatable {
+        case found(String)
+        /// The listing worked and the name is neither an account nor the result of a recorded rename: positively gone.
+        case gone
+        /// The accounts could not be listed (a storage problem): nothing can be said about the name.
+        case unknown
+    }
+
+    /// The account a recorded name stands for now: itself if it still exists, else what a completed rename turned it into (followed through several renames), else `gone`; `unknown`
+    /// when the folder cannot be listed, which is not the same as the account being gone.
+    public func lookupAccount(_ recorded: String) -> AccountLookup {
+        guard let list = try? accounts() else { return .unknown }
+        let existing = Set(list)
+        if existing.contains(recorded) { return .found(recorded) }
         let all = (try? Data(contentsOf: historyURL)).flatMap { try? JSONDecoder().decode([[String]].self, from: $0) } ?? []
         var name = recorded
         for _ in 0..<all.count + 1 {
-            guard let step = all.last(where: { $0.count == 2 && $0[0] == name }) else { return nil }
+            guard let step = all.last(where: { $0.count == 2 && $0[0] == name }) else { return .gone }
             name = step[1]
-            if existing.contains(name) { return name }
+            if existing.contains(name) { return .found(name) }
         }
+        return .gone
+    }
+
+    /// `lookupAccount` as a name or nil (gone, or not known).
+    public func accountNamed(_ recorded: String) throws -> String? {
+        if case .found(let n) = lookupAccount(recorded) { return n }
         return nil
     }
 
@@ -317,14 +336,18 @@ public final class BoxStore {
             try? retarget(pending, to: oldName, ifSignature: waiting)
             try abandon(error)
         }
-        try advance("moved")
+        // The phases "moved" and "swapped" only inform: recovery works from what is on disk, so a journal write that fails here changes nothing (the swap goes on, and a completed
+        // swap is a success). "undoing" is different: it must be on disk before anything is undone (see `swapIn`).
+        try? advance("moved")
         try point("moved")
 
-        do { try swapIn(to, staged); try advance("swapped"); try point("swapped") }
+        do { try swapIn(to, staged, beforeUndo: { try advance("undoing") }); try? advance("swapped"); try point("swapped") }
         catch {
             if error is RenameKilled { throw error }
             let problems = (error as? SwapFailure)?.problems ?? []
             let cause = (error as? SwapFailure)?.cause ?? error
+            // The undo could not be recorded, so nothing was undone: the rename stays finishable and the next load finishes it.
+            if (error as? SwapFailure)?.notStarted == true { throw Failure.renameIncomplete(accountNow: newName, detail: (problems).joined(separator: "; ")) }
             removeTemps(in: to)
             do {
                 try renameFault?("moveBack", to.lastPathComponent)
@@ -348,11 +371,11 @@ public final class BoxStore {
         try pending.update { $0.account = name }
     }
 
-    private struct SwapFailure: Error { var cause: Error; var problems: [String] }
+    private struct SwapFailure: Error { var cause: Error; var problems: [String]; var notStarted = false }
 
     /// Put each staged rewrite (`<path>.renaming`) in place of its original, which is set aside as `<path>.renaming-old` first. A file is recorded as touched only after its original
     /// is moved aside, and a failure puts back exactly those; what cannot be put back is reported in the thrown `SwapFailure`.
-    private func swapIn(_ folder: URL, _ paths: [String]) throws {
+    private func swapIn(_ folder: URL, _ paths: [String], beforeUndo: () throws -> Void) throws {
         var touched = [String](), done = 0
         do {
             for p in paths {
@@ -368,6 +391,11 @@ public final class BoxStore {
             }
         } catch {
             if error is RenameKilled { throw error }
+            // Undoing a swap destroys the rewrites already put in place, so the journal says "undoing" first: from then on recovery only ever goes back. If that cannot be written
+            // nothing is touched, and the rename is still finishable.
+            do { try beforeUndo() } catch let mark {
+                throw SwapFailure(cause: error, problems: ["the rename could not be marked as being undone (\(mark.localizedDescription)); it is finished the next time the box loads"], notStarted: true)
+            }
             var problems = [String]()
             for p in touched.reversed() {
                 let file = folder.appendingPathComponent(p), saved = folder.appendingPathComponent(p + Self.renamingOldSuffix)
@@ -407,51 +435,87 @@ public final class BoxStore {
         }
     }
 
-    /// Finish or undo a rename that was cut off (the journal is still there): if the folder has already moved to the new name, the remaining rewrites are put in place (and if that
-    /// fails, everything is undone); if not, the folder (and a case-only rename's temporary folder) goes back to the old name, leftover copies are removed and the waiting scan
-    /// is pointed at the old account again. Either way the folder's name, every record's account and the waiting scan agree afterwards, and the journal is deleted. Run it on the
-    /// one queue the boxes are written from, never while a rename is running. Returns whether there was anything to do.
+    public struct RecoveredRename: Equatable {
+        public var old: String, new: String
+        /// True: the rename was finished (the account now has the new name); false: it was undone (the old name).
+        public var finished: Bool
+    }
+
+    /// Finish or undo a rename that was cut off (the journal is still there). The rule: a journal whose phase is "undoing" is always rolled back, never forward (the undo had begun,
+    /// so some rewrites may already be gone); any other journal is rolled forward if the folder has already moved to the new name (the remaining rewrites are put in place, and
+    /// if that fails everything is undone, "undoing" first) and rolled back if it has not. Rolling back puts the folder (and a case-only rename's temporary folder) back under
+    /// the old name, restores every original set aside as `.renaming-old` over whatever is in its place, removes leftover copies and points the waiting scan at the old account.
+    /// Either way the folder's name, every record's account and the waiting scan agree afterwards, and the journal is deleted last, so a recovery that is itself cut off is simply
+    /// run again. A journal that cannot be read is never deleted unless the disk shows nothing in flight (no rename temporary folder, no `.renaming` or `.renaming-old` file in
+    /// any account); otherwise `Failure.renameJournalUnreadable` is thrown and everything is left alone. Run it on the one queue the boxes are written from, never while a rename
+    /// is running. Returns what it did, or nil when there was nothing to do.
     @discardableResult
-    public func recoverInterruptedRename(pending: PendingScanStore? = nil) throws -> Bool {
-        guard fm.fileExists(atPath: journalURL.path) else { return false }
-        guard let j = readJournal() else { try deleteJournal(); return true }   // not a journal this build wrote: nothing to go by
+    public func recoverRename(pending: PendingScanStore? = nil) throws -> RecoveredRename? {
+        guard fm.fileExists(atPath: journalURL.path) else { return nil }
+        guard let j = readJournal() else {
+            if try diskShowsNothingInFlight() { try deleteJournal(); return nil }
+            throw Failure.renameJournalUnreadable
+        }
         let names = Set((try? fm.contentsOfDirectory(atPath: root.path)) ?? [])
         let oldDir = try accountDirectory(j.old, create: false), newDir = try accountDirectory(j.new, create: false)
         let tempThere = j.caseTemp.map { names.contains($0) } ?? false
         let moved = names.contains(newDir.lastPathComponent) && (j.caseTemp != nil ? !tempThere : !names.contains(oldDir.lastPathComponent))
-        let caseOnly = j.caseTemp != nil
-        if moved {
-            // Roll forward: every rewrite still waiting beside its original goes in.
-            var staged = [String]()
-            for dir in ["", "box/"] {
-                for n in ((try? fm.contentsOfDirectory(atPath: newDir.appendingPathComponent(dir).path)) ?? []).sorted() where n.hasSuffix(Self.renamingSuffix) {
-                    staged.append(dir + String(n.dropLast(Self.renamingSuffix.count)))
-                }
-            }
-            do { try swapIn(newDir, staged) }
-            catch {
-                let problems = (error as? SwapFailure)?.problems ?? []
-                guard problems.isEmpty else { throw Failure.renameIncomplete(accountNow: j.new, detail: problems.joined(separator: "; ")) }
-                // Could not finish: undo it all.
-                for p in staged { try? fm.removeItem(at: newDir.appendingPathComponent(p + Self.renamingSuffix)) }
+
+        func rollBack() throws -> RecoveredRename {
+            if moved {
+                _ = try repairInterruptedRenameFiles(newDir, preferBackups: true)
+                try point("recoverUndo1")
                 try moveFolder(newDir, oldDir, journal: j)
-                try retarget(pending, to: j.old, ifSignature: j.waitingSignature)
+            } else {
+                if let t = j.caseTemp, tempThere { try fm.moveItem(at: root.appendingPathComponent(t, isDirectory: true), to: oldDir) }
                 _ = try repairInterruptedRenameFiles(oldDir, preferBackups: true)
-                try deleteJournal()
-                return true
             }
-            _ = try repairInterruptedRenameFiles(newDir)
-            try retarget(pending, to: j.new, ifSignature: j.waitingSignature)
-            appendHistory(old: j.old, new: j.new)
-            try deleteJournal()
-        } else {
-            if let t = j.caseTemp, tempThere { try fm.moveItem(at: root.appendingPathComponent(t, isDirectory: true), to: oldDir) }
-            _ = try repairInterruptedRenameFiles(oldDir, preferBackups: true)
+            try point("recoverUndo2")
             try retarget(pending, to: j.old, ifSignature: j.waitingSignature)
             try deleteJournal()
+            return RecoveredRename(old: j.old, new: j.new, finished: false)
+        }
+
+        if !moved || j.phase == "undoing" { return try rollBack() }
+        // Roll forward: every rewrite still waiting beside its original goes in.
+        var staged = [String]()
+        for dir in ["", "box/"] {
+            for n in ((try? fm.contentsOfDirectory(atPath: newDir.appendingPathComponent(dir).path)) ?? []).sorted() where n.hasSuffix(Self.renamingSuffix) {
+                staged.append(dir + String(n.dropLast(Self.renamingSuffix.count)))
+            }
+        }
+        do { try swapIn(newDir, staged, beforeUndo: { var u = j; u.phase = "undoing"; try writeJournal(u) }) }
+        catch {
+            if error is RenameKilled { throw error }
+            let f = error as? SwapFailure
+            // Could not finish and could not even record that it is being undone: leave it for the next load.
+            if f?.notStarted == true { throw Failure.renameIncomplete(accountNow: j.new, detail: (f?.problems ?? []).joined(separator: "; ")) }
+            // Undoing has begun (the journal says so): finish it.
+            return try rollBack()
+        }
+        _ = try repairInterruptedRenameFiles(newDir)
+        try retarget(pending, to: j.new, ifSignature: j.waitingSignature)
+        appendHistory(old: j.old, new: j.new)
+        try deleteJournal()
+        return RecoveredRename(old: j.old, new: j.new, finished: true)
+    }
+
+    /// Whether the disk shows no rename in flight: no `.rename-` temporary folder in the boxes folder and no `.renaming` / `.renaming-old` file in any account.
+    private func diskShowsNothingInFlight() throws -> Bool {
+        let top = try fm.contentsOfDirectory(atPath: root.path)
+        if top.contains(where: { $0.hasPrefix(".rename-") && $0 != ".rename-journal.json" && $0 != ".rename-history.json" }) { return false }
+        for a in try accounts() {
+            let folder = try accountDirectory(a, create: false)
+            for dir in [folder, folder.appendingPathComponent("box", isDirectory: true)] {
+                if ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).contains(where: { $0.hasSuffix(Self.renamingSuffix) || $0.hasSuffix(Self.renamingOldSuffix) }) { return false }
+            }
         }
         return true
     }
+
+    /// `recoverRename` as a yes/no: whether there was anything to do.
+    @discardableResult
+    public func recoverInterruptedRename(pending: PendingScanStore? = nil) throws -> Bool { try recoverRename(pending: pending) != nil }
 
     static let renamingSuffix = ".renaming", renamingOldSuffix = ".renaming-old"
 

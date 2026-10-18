@@ -91,9 +91,13 @@ public final class BoxLibrary {
 
     /// Finish or undo a rename that was cut off (see `BoxStore.recoverInterruptedRename`); run on the queue the boxes are written from, before accounts are listed.
     @discardableResult
-    public func recoverInterruptedRename(pending: PendingScanStore? = nil) throws -> Bool {
+    public func recoverInterruptedRename(pending: PendingScanStore? = nil) throws -> Bool { try recoverRename(pending: pending) != nil }
+
+    /// As `recoverInterruptedRename`, saying what was done (so the app can move its per-account settings along with a rename it finished).
+    @discardableResult
+    public func recoverRename(pending: PendingScanStore? = nil) throws -> BoxStore.RecoveredRename? {
         defer { verifiedLock.lock(); verifiedThrough.removeAll(); verifiedLock.unlock() }
-        return try store.recoverInterruptedRename(pending: pending)
+        return try store.recoverRename(pending: pending)
     }
 
     // MARK: - was a scan already saved
