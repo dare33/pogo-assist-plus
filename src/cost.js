@@ -40,25 +40,31 @@ export function step(level) {
  * Total cost to go from `from` to `to` (both half-levels, to > from).
  * flags: { shadow, purified, lucky } apply the standard multipliers.
  * Shadow multiplies dust and candy; purified multiplies dust and candy; lucky halves dust only.
+ * The game charges and rounds each power-up on its own, so the multipliers are applied per step and the rounded steps summed
+ * (rounding the total instead understates a shadow's candy: Grubbin level 8 to its Great level is 224 candy per step, not 197 x 1.2).
+ * Verified against Poke Genie's export for shadows only (dust, candy and the Great/Ultra totals of the six shadow rows);
+ * the purified, lucky and XL forms use the same per-step rule and have no fixture rows to check them against.
  */
 export function powerUpCost(from, to, flags = {}) {
   if (to <= from) return { dust: 0, candy: 0, xl: 0, steps: 0 };
-  let dust = 0, candy = 0, xl = 0, steps = 0;
-  for (let lv = from; lv < to; lv += 0.5) {
-    const s = step(lv);
-    dust += s.dust; candy += s.candy; xl += s.xl; steps += 1;
-  }
   let mult = 1;
   if (flags.shadow) mult *= SHADOW_MULTIPLIER;
   if (flags.purified) mult *= PURIFIED_MULTIPLIER;
-  let dustMult = mult;
-  if (flags.lucky) dustMult *= LUCKY_DUST_MULTIPLIER;
-  return {
-    dust: Math.round(dust * dustMult),
-    candy: Math.ceil(candy * mult),
-    xl: Math.ceil(xl * mult),
-    steps,
-  };
+  // Dust is rounded up from a 32-bit float product, which reproduces Poke Genie's shadow dust exactly where a double product is
+  // 8 to 18 dust off on a long climb. Candy and XL candy are small integers and match in doubles.
+  const dustMult = Math.fround(mult);
+  // A Shadow's 1.2x and a Purified's 0.9x are both rounded UP per power-up (shadow: fixture-verified on six rows; purified:
+  // Bulbapedia "Shadow Pokémon (GO)" and "Power up", and the Fandom worked example 25 -> 35 = 102 candy; not fixture-verified).
+  const round = Math.ceil;
+  let dust = 0, candy = 0, xl = 0, steps = 0;
+  for (let lv = from; lv < to; lv += 0.5) {
+    const s = step(lv);
+    dust += round(Math.fround((flags.lucky ? s.dust * LUCKY_DUST_MULTIPLIER : s.dust) * dustMult));
+    candy += round(s.candy * mult);
+    xl += round(s.xl * mult);
+    steps += 1;
+  }
+  return { dust, candy, xl, steps };
 }
 
 /** Second charged move cost from the game master's thirdMoveCost (stardust); candy is dust / 1000. Shadows pay 1.2×. */

@@ -1,0 +1,40 @@
+{"ms":9.6155,"ivConfidence":0,"nameText":"","hpText":"","cpText":"","k":"r","t":57727.129739125,"flags":["no-cp-text"]}
+{"ivConfidence":0,"k":"r","ms":6.3645,"flags":["no-cp-text"],"t":57727.396429791,"nameText":"","hpText":"","cpText":""}
+{"k":"d","t":57727.813133958}
+{"k":"d","t":57728.021486041}
+{"k":"d","t":57728.221504041}
+{"hp":{"max":190,"current":190},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":694.892875,"flags":["no-bars"],"t":57727.613115958,"ivConfidence":0,"hpText":"190 \/ 190 HP","cpText":"CP4262","speciesIds":["rayquaza"],"name":"Rayquaza","cp":4262}
+{"hpText":"","t":57728.421522041,"k":"r","ivConfidence":0,"cpText":"","flags":["no-cp-text"],"nameText":"","ms":7.162125}
+{"hpText":"","t":57728.629874125,"k":"r","ivConfidence":0,"cpText":"","flags":["no-cp-text"],"nameText":"","ms":6.897166}
+{"k":"d","t":57729.046578291}
+{"hp":{"current":190,"max":190},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":303.749917,"flags":["no-bars"],"t":57728.829892125,"ivConfidence":0,"hpText":"190 \/ 190 HP","cpText":"CP< 262","speciesIds":["rayquaza"],"name":"Rayquaza","cp":262}
+{"t":57729.446614291,"k":"d"}
+{"hp":{"current":190,"max":190},"ivs":{"hp":9,"def":9,"atk":9},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":307.49,"flags":[],"t":57729.246596291,"ivConfidence":0.9370752646212352,"hpText":"190 \/ 190 HP","cpText":"CP4262","speciesIds":["rayquaza"],"name":"Rayquaza","cp":4262}
+{"k":"d","t":57729.863318458}
+{"k":"d","t":57730.063336458}
+{"hp":{"current":190,"max":190},"ivs":{"hp":14,"atk":13,"def":12},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":441.376542,"flags":[],"t":57729.646632291,"ivConfidence":0.8921107004378754,"hpText":"190 \/ 190 HP","cpText":"CP4260","speciesIds":["rayquaza"],"name":"Rayquaza","cp":4260}
+{"t":57730.513376958,"k":"d"}
+{"hp":{"max":190,"current":190},"ivs":{"def":12,"atk":13,"hp":14},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":419.549125,"flags":[],"t":57730.296690791,"ivConfidence":0.8921107004378754,"hpText":"190 \/ 190 HP","cpText":"CP1262","speciesIds":["rayquaza"],"name":"Rayquaza","cp":1262}
+{"k":"d","t":57730.946749291}
+{"hp":{"max":190,"current":190},"ivs":{"atk":13,"def":12,"hp":14},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":346.114,"flags":[],"t":57730.730063125,"ivConfidence":0.8921107004378754,"hpText":"190 \/ 190 HP","cpText":"CF4262","speciesIds":["rayquaza"],"name":"Rayquaza","cp":4262}
+{"k":"d","t":57731.396789791}
+{"hp":{"current":190,"max":190},"ivs":{"def":12,"atk":13,"hp":14},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":412.731417,"flags":[],"t":57731.163435458,"ivConfidence":0.8921107004378754,"hpText":"190 \/ 190 HP","cpText":"CR4262","speciesIds":["rayquaza"],"name":"Rayquaza","cp":4262}
+{"k":"d","t":57731.796825791}
+{"hp":{"current":190,"max":190},"ivs":{"hp":14,"def":12,"atk":13},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":406.184709,"flags":[],"t":57731.596807791,"ivConfidence":0.8921107004378754,"hpText":"190 \/ 190 HP","cpText":"CP4262","speciesIds":["rayquaza"],"name":"Rayquaza","cp":4262}
+{"k":"d","t":57732.213529958}
+{"hp":{"max":190,"current":190},"ivs":{"def":12,"atk":13,"hp":14},"nameWeak":false,"nameText":"Rayquaza","k":"r","ms":326.471208,"flags":[],"t":57732.013511958,"ivConfidence":0.8921107004378754,"hpText":"190 \/ 190 HP","cpText":"CP-·262","speciesIds":["rayquaza"],"name":"Rayquaza","cp":262}
+{"t":57732.613565958,"k":"d"}
+{"hp":{"max":167,"current":167},"ivs":{"def":15,"hp":14,"atk":15},"nameWeak":false,"nameText":"Mega Staraptor","k":"r","ms":252.624542,"flags":[],"t":57732.413547958,"ivConfidence":0.9176171352074967,"hpText":"167 \/ 167 HP","cpText":"3970","speciesIds":["staraptor_mega"],"name":"Mega Staraptor","cp":3970}
+{"k":"d","t":57733.013601958}
+{"hp":{"current":167,"max":167},"nameWeak":false,"ivs":{"hp":14,"atk":15,"def":15},"nameText":"Mega Staraptor","k":"r","ms":250.439334,"flags":[],"t":57732.813583958,"ivConfidence":0.9176171352074967,"hpText":"167 \/ 167 HP","cpText":"3970","speciesIds":["staraptor_mega"],"name":"Mega Staraptor","cp":3970}
+{"k":"d","t":57733.413637958}
+{"hp":{"current":167,"max":167},"ivs":{"atk":15,"def":15,"hp":14},"nameWeak":false,"nameText":"Mega Staraptor","k":"r","ms":246.711292,"flags":[],"t":57733.213619958,"ivConfidence":0.9176171352074967,"hpText":"167 \/ 167 HP","cpText":"3970","speciesIds":["staraptor_mega"],"name":"Mega Staraptor","cp":3970}
+{"t":57733.813673958,"k":"d"}
+{"hp":{"current":154,"max":154},"nameWeak":false,"ivs":{"def":13,"atk":14,"hp":12},"nameText":"Lucario","k":"r","ms":331.575583,"flags":[],"t":57733.613655958,"ivConfidence":0.8692190816988585,"hpText":"154 \/ 154 HP","cpText":"CP3000","speciesIds":["lucario"],"name":"Lucario","cp":3000}
+{"t":57734.213709958,"k":"d"}
+{"hp":{"max":154,"current":154},"ivs":{"hp":12,"def":13,"atk":14},"nameWeak":false,"nameText":"Lucario","k":"r","ms":355.003708,"flags":[],"t":57734.013691958,"ivConfidence":0.8692190816988585,"hpText":"154 \/ 154 HP","cpText":"CR3000","speciesIds":["lucario"],"name":"Lucario","cp":3000}
+{"k":"d","t":57734.613745958}
+{"hp":{"current":154,"max":154},"nameWeak":false,"ivs":{"hp":12,"def":13,"atk":14},"nameText":"Lucario","k":"r","ms":358.61875,"flags":["cp-unread"],"t":57734.413727958,"ivConfidence":0.8692190816988585,"hpText":"154 \/ 154 HP","cpText":"CP3.000","speciesIds":["lucario"],"name":"Lucario"}
+{"t":57735.013781958,"k":"d"}
+{"hp":{"max":135,"current":135},"nameWeak":false,"ivs":{"hp":11,"atk":13,"def":10},"nameText":"Zamazenta","k":"r","ms":239.134333,"flags":[],"t":57734.813763958,"ivConfidence":0.7283266398929094,"hpText":"135 \/ 135 HP","cpText":"CP2661","speciesIds":["zamazenta_crowned_shield","zamazenta_hero"],"name":"Zamazenta","cp":2661}
+{"k":"d","t":57735.413817958}

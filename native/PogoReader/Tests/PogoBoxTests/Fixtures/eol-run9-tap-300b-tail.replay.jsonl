@@ -1,0 +1,200 @@
+{"t":15329.491653375,"k":"d"}
+{"name":"Nacli","nameWeak":false,"ms":242.642042,"cp":697,"ivConfidence":0.2128552456839259,"cpText":"CP697","hpText":"104 \/ 104 HP","ivs":{"def":14,"atk":15,"hp":7},"nameText":"Nacli","speciesIds":["nacli"],"flags":[],"t":15329.291635375,"hp":{"max":104,"current":104},"k":"r"}
+{"k":"d","t":15329.891721916}
+{"name":"Nacli","nameWeak":false,"ms":299.505584,"cp":697,"ivConfidence":0.9490305444887106,"cpText":"CP697","hpText":"104 \/ 104 HP","ivs":{"def":14,"hp":7,"atk":15},"nameText":"Nacli","speciesIds":["nacli"],"flags":[],"t":15329.691671375,"hp":{"current":104,"max":104},"k":"r"}
+{"k":"d","t":15330.291757916}
+{"name":"Nacli","nameWeak":false,"ms":321.629834,"cp":697,"ivConfidence":0.9490305444887106,"cpText":"CP697","hpText":"104 \/ 104 HP","ivs":{"def":14,"hp":7,"atk":15},"nameText":"Nacli","speciesIds":["nacli"],"flags":[],"t":15330.091739916,"hp":{"current":104,"max":104},"k":"r"}
+{"cpText":"","k":"r","hpText":"","nameText":"","flags":["mid-swipe"],"ivConfidence":0,"t":15330.508444083,"ms":7.533959}
+{"k":"d","t":15330.92514825}
+{"name":"Kecleon","nameWeak":false,"ms":296.892083,"cp":697,"ivConfidence":0.7250730411686597,"cpText":"CP697","hpText":"76 \/ 76 HP","ivs":{"atk":8,"def":11,"hp":3},"nameText":"Kecleon","speciesIds":["kecleon"],"flags":[],"t":15330.72513025,"hp":{"max":76,"current":76},"k":"r"}
+{"t":15331.32518425,"k":"d"}
+{"name":"Kecleon","nameWeak":false,"ms":241.354792,"cp":697,"ivConfidence":0.7250730411686597,"cpText":"CP697","hpText":"76 \/ 76 HP","ivs":{"def":11,"atk":8,"hp":3},"nameText":"Kecleon","speciesIds":["kecleon"],"flags":[],"t":15331.12516625,"hp":{"max":76,"current":76},"k":"r"}
+{"name":"Kecleon","nameWeak":false,"ms":189.317125,"cp":697,"ivConfidence":0.7250730411686597,"cpText":"CP697","hpText":"76 \/ 76 HP","ivs":{"def":11,"atk":8,"hp":3},"nameText":"Kecleon","speciesIds":["kecleon"],"flags":[],"t":15331.52520225,"hp":{"max":76,"current":76},"k":"r"}
+{"k":"d","t":15331.941906416}
+{"name":"Charmander","nameWeak":false,"ms":286.98225,"cp":695,"ivConfidence":0.41671504077398325,"cpText":"CP695","hpText":"90 \/ 90 HP","ivs":{"def":10,"hp":9,"atk":12},"nameText":"Charmande","speciesIds":["charmander"],"flags":[],"t":15331.72522025,"hp":{"current":90,"max":90},"k":"r"}
+{"k":"d","t":15332.341942416}
+{"name":"Charmander","nameWeak":false,"ms":307.550834,"cp":695,"ivConfidence":0.8095297376365522,"cpText":"CP695","hpText":"90 \/ 90 HP","ivs":{"atk":12,"def":10,"hp":15},"nameText":"Charmander","speciesIds":["charmander"],"flags":[],"t":15332.141924416,"hp":{"max":90,"current":90},"k":"r"}
+{"t":15332.758646583,"k":"d"}
+{"name":"Charmander","nameWeak":false,"ms":297.520417,"cp":695,"ivConfidence":0.8095297376365522,"cpText":"CP695","hpText":"90 \/ 90 HP","ivs":{"def":10,"hp":15,"atk":12},"nameText":"Charmander","speciesIds":["charmander"],"flags":[],"t":15332.558628583,"hp":{"current":90,"max":90},"k":"r"}
+{"k":"d","t":15333.158682583}
+{"name":"Voltorb","nameWeak":false,"ms":271.8695,"cp":695,"ivConfidence":0.38374501992031895,"cpText":"CP695","hpText":"85 \/ 85 HP","ivs":{"def":15,"atk":7,"hp":8},"nameText":"Voltorb","speciesIds":["voltorb"],"flags":[],"t":15332.958664583,"hp":{"max":85,"current":85},"k":"r"}
+{"k":"d","t":15333.57538675}
+{"name":"Voltorb","nameWeak":false,"ms":310.264959,"cp":695,"ivConfidence":0.8318682940196878,"cpText":"CP695","hpText":"85 \/ 85 HP","ivs":{"def":15,"hp":3,"atk":7},"nameText":"Voltorb","speciesIds":["voltorb"],"flags":[],"t":15333.358700583,"hp":{"current":85,"max":85},"k":"r"}
+{"k":"d","t":15333.992090916}
+{"name":"Voltorb","nameWeak":false,"ms":290.520042,"cp":695,"ivConfidence":0.8318682940196878,"cpText":"CP695","hpText":"85 \/ 85 HP","ivs":{"atk":7,"def":15,"hp":3},"nameText":"Voltorb","speciesIds":["voltorb"],"flags":[],"t":15333.792072916,"hp":{"max":85,"current":85},"k":"r"}
+{"t":15334.392126916,"k":"d"}
+{"name":"Charmander","nameWeak":false,"ms":256.857958,"cp":694,"ivConfidence":0.8095297376365522,"cpText":"CP694","hpText":"90 \/ 90 HP","ivs":{"def":10,"hp":10,"atk":5},"nameText":"Charmander","speciesIds":["charmander"],"flags":[],"t":15334.192108916,"hp":{"current":90,"max":90},"k":"r"}
+{"k":"d","t":15334.792162916}
+{"name":"Charmander","nameWeak":false,"ms":293.686,"cp":694,"ivConfidence":0.8095297376365522,"cpText":"CP694","hpText":"90 \/ 90 HP","ivs":{"def":10,"atk":5,"hp":10},"nameText":"Charmander","speciesIds":["charmander"],"flags":[],"t":15334.592144916,"hp":{"max":90,"current":90},"k":"r"}
+{"k":"d","t":15335.192198916}
+{"name":"Charmander","nameWeak":false,"ms":306.14,"cp":694,"ivConfidence":0.8095297376365522,"cpText":"CP694","hpText":"90 \/ 90 HP","ivs":{"def":10,"hp":10,"atk":5},"nameText":"Charmander","speciesIds":["charmander"],"flags":[],"t":15334.992180916,"hp":{"current":90,"max":90},"k":"r"}
+{"k":"d","t":15335.592234916}
+{"name":"Rhyhorn","nameWeak":false,"ms":257.684,"cp":693,"ivConfidence":0.9223638778220469,"cpText":"CP693","hpText":"109 \/ 109 HP","ivs":{"atk":7,"def":7,"hp":14},"nameText":"Rhyhorn","speciesIds":["rhyhorn"],"flags":[],"t":15335.392216916,"hp":{"max":109,"current":109},"k":"r"}
+{"t":15335.992270916,"k":"d"}
+{"name":"Rhyhorn","nameWeak":false,"ms":209.983042,"cp":693,"ivConfidence":0.9223638778220469,"cpText":"CP693","hpText":"109 \/ 109 HP","ivs":{"def":7,"hp":14,"atk":7},"nameText":"Rhyhorn","speciesIds":["rhyhorn"],"flags":[],"t":15335.792252916,"hp":{"current":109,"max":109},"k":"r"}
+{"k":"d","t":15336.392306916}
+{"name":"Rhyhorn","nameWeak":false,"ms":287.947958,"cp":693,"ivConfidence":0.9223638778220469,"cpText":"CP693","hpText":"109 \/ 109 HP","ivs":{"def":7,"atk":7,"hp":14},"nameText":"Rhyhorn","speciesIds":["rhyhorn"],"flags":[],"t":15336.192288916,"hp":{"max":109,"current":109},"k":"r"}
+{"k":"d","t":15336.792342916}
+{"name":"Chansey","nameWeak":false,"ms":281.902542,"cp":693,"ivConfidence":0.773891102257636,"cpText":"CP693","hpText":"308 \/ 308 HP","ivs":{"def":5,"hp":6,"atk":9},"nameText":"Chansey","speciesIds":["chansey"],"flags":[],"t":15336.592324916,"hp":{"current":308,"max":308},"k":"r"}
+{"k":"d","t":15337.192378916}
+{"name":"Chansey","nameWeak":false,"ms":315.892708,"cp":693,"ivConfidence":0.9200531208499338,"cpText":"CP693","hpText":"308 \/ 308 HP","ivs":{"atk":9,"def":5,"hp":6},"nameText":"Chansey","speciesIds":["chansey"],"flags":[],"t":15336.992360916,"hp":{"max":308,"current":308},"k":"r"}
+{"t":15337.592414916,"k":"d"}
+{"name":"Chansey","nameWeak":false,"ms":289.522917,"cp":693,"ivConfidence":0.9200531208499338,"cpText":"CP693","hpText":"308 \/ 308 HP","ivs":{"def":5,"hp":6,"atk":9},"nameText":"Chansey","speciesIds":["chansey"],"flags":[],"t":15337.392396916,"hp":{"current":308,"max":308},"k":"r"}
+{"k":"d","t":15337.992450916}
+{"name":"Growlithe","nameWeak":false,"ms":285.779042,"cp":692,"ivConfidence":0.649614873837983,"cpText":"CP692","hpText":"93 \/ 93 HP","ivs":{"def":13,"atk":13,"hp":11},"nameText":"Growlithe","speciesIds":["growlithe"],"flags":[],"t":15337.792432916,"hp":{"max":93,"current":93},"k":"r"}
+{"k":"d","t":15338.392486916}
+{"name":"Growlithe","nameWeak":false,"ms":314.813125,"cp":692,"ivConfidence":0.7250996015936266,"cpText":"CP692","hpText":"93 \/ 93 HP","ivs":{"def":15,"hp":11,"atk":13},"nameText":"Growlithe","speciesIds":["growlithe"],"flags":[],"t":15338.192468916,"hp":{"current":93,"max":93},"k":"r"}
+{"k":"d","t":15338.792522916}
+{"name":"Growlithe","nameWeak":false,"ms":291.963583,"cp":692,"ivConfidence":0.7250996015936266,"cpText":"CP692","hpText":"93 \/ 93 HP","ivs":{"atk":13,"def":15,"hp":11},"nameText":"Growlithe","speciesIds":["growlithe"],"flags":[],"t":15338.592504916,"hp":{"max":93,"current":93},"k":"r"}
+{"name":"Fidough","nameWeak":false,"ms":167.868375,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15338.992540916,"hp":{"max":82,"current":82},"k":"r"}
+{"name":"Fidough","nameWeak":false,"ms":182.586625,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15339.192558916,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15339.592594916,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":304.7355,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15339.392576916,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15339.992630916}
+{"name":"Fidough","nameWeak":false,"ms":283.739333,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15339.792612916,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15340.392666916}
+{"name":"Fidough","nameWeak":false,"ms":296.869792,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15340.192648916,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15340.792702916}
+{"name":"Fidough","nameWeak":false,"ms":291.733333,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15340.592684916,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15341.192738916,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":271.269875,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15340.992720916,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15341.592774916}
+{"name":"Fidough","nameWeak":false,"ms":287.782209,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15341.392756916,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15341.992810916}
+{"name":"Fidough","nameWeak":false,"ms":285.004959,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15341.792792916,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15342.392846916}
+{"name":"Fidough","nameWeak":false,"ms":290.560041,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15342.192828916,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15342.792882916,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":291.227084,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15342.592864916,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15343.192918916}
+{"name":"Fidough","nameWeak":false,"ms":302.188958,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"a 690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15342.992900916,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15343.592954916}
+{"name":"Fidough","nameWeak":false,"ms":291.4295,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15343.392936916,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15343.992990916}
+{"name":"Fidough","nameWeak":false,"ms":291.997333,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15343.792972916,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15344.393026916,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":289.914542,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP.690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15344.193008916,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15344.793062916}
+{"name":"Fidough","nameWeak":false,"ms":299.302041,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15344.593044916,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15345.193098916}
+{"name":"Fidough","nameWeak":false,"ms":300.259958,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CР690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15344.993080916,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15345.593134916}
+{"name":"Fidough","nameWeak":false,"ms":295.851875,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15345.393116916,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15345.993170916,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":291.605333,"ivConfidence":0.8182181278723526,"cpText":"CP6.90","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"flags":["cp-unread"],"nameText":"Fidough","speciesIds":["fidough"],"t":15345.793152916,"hp":{"current":82,"max":82},"k":"r"}
+{"t":15346.393206916,"k":"d"}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","cp":690,"speciesIds":["fidough"],"ms":294.823458,"flags":[],"ivs":{"def":10,"hp":7,"atk":14},"t":15346.193188916,"hp":{"current":82,"max":82},"cpText":"CP690","nameText":"Fidough","nameWeak":false}
+{"k":"d","t":15346.793242916}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","cp":690,"speciesIds":["fidough"],"ms":294.481167,"flags":[],"ivs":{"def":10,"hp":7,"atk":14},"t":15346.593224916,"hp":{"current":82,"max":82},"cpText":"CP690","nameText":"Fidough","nameWeak":false}
+{"k":"d","t":15347.193278916}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","cp":690,"speciesIds":["fidough"],"ms":298.575166,"flags":[],"ivs":{"def":10,"atk":14,"hp":7},"t":15346.993260916,"hp":{"max":82,"current":82},"cpText":"CP690","nameText":"Fidough","nameWeak":false}
+{"k":"d","t":15347.593314916}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","cp":690,"speciesIds":["fidough"],"ms":261.340541,"flags":[],"ivs":{"atk":14,"def":10,"hp":7},"t":15347.393296833,"hp":{"max":82,"current":82},"cpText":"CP690","nameText":"Fidough","nameWeak":false}
+{"t":15347.9933835,"k":"d"}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","ms":208.781875,"speciesIds":["fidough"],"flags":["no-cp-text"],"ivs":{"def":10,"hp":7,"atk":14},"t":15347.793332916,"hp":{"current":82,"max":82},"cpText":"","nameText":"Fidough","nameWeak":false}
+{"t":15348.3934195,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":293.48825,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15348.1934015,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15348.7934555}
+{"name":"Fidough","nameWeak":false,"ms":290.174416,"ivConfidence":0.8182181278723526,"cpText":"CP690:","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"flags":["cp-unread"],"nameText":"Fidough","speciesIds":["fidough"],"t":15348.5934375,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15349.1934915}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","ms":313.743917,"speciesIds":["fidough"],"flags":["cp-unread"],"ivs":{"def":10,"atk":14,"hp":7},"t":15348.9934735,"hp":{"max":82,"current":82},"cpText":"CP690:","nameText":"Fidough","nameWeak":false}
+{"k":"d","t":15349.610195666}
+{"name":"Fidough","nameWeak":false,"ms":268.476708,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15349.3935095,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15350.026899833}
+{"name":"Fidough","nameWeak":false,"ms":316.662334,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15349.82688175,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15350.42693575}
+{"name":"Fidough","nameWeak":false,"ms":298.361625,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15350.226917833,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15350.826971833,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":293.574833,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15350.626953833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15351.227007833}
+{"name":"Fidough","nameWeak":false,"ms":256.833125,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15351.026989833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15351.627043833}
+{"name":"Fidough","nameWeak":false,"ms":283.367166,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15351.427025833,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15352.027079833}
+{"name":"Fidough","nameWeak":false,"ms":300.410709,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15351.827061833,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15352.427115833,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":280.94025,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15352.227097833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15352.82715175}
+{"name":"Fidough","nameWeak":false,"ms":299.199792,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15352.627133833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15353.227187833}
+{"name":"Fidough","nameWeak":false,"ms":298.745833,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15353.027169833,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15353.627223833}
+{"name":"Fidough","nameWeak":false,"ms":267.95175,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15353.427205833,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15354.060596166,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":287.417542,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15353.84391,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15354.460632166}
+{"name":"Fidough","nameWeak":false,"ms":279.572375,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15354.260614166,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15354.877336333}
+{"name":"Fidough","nameWeak":false,"ms":272.654541,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15354.660650166,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15355.2940405}
+{"name":"Fidough","nameWeak":false,"ms":257.5545,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15355.0940225,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15355.6940765,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":278.427333,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15355.4940585,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15356.127448833}
+{"name":"Fidough","nameWeak":false,"ms":294.544792,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15355.910762666,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15356.527484833}
+{"name":"Fidough","nameWeak":false,"ms":284.035833,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15356.327466833,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15356.944189}
+{"name":"Fidough","nameWeak":false,"ms":299.389334,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15356.727502833,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15357.360893166,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":291.079709,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15357.160875166,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15357.760929166}
+{"name":"Fidough","nameWeak":false,"ms":287.373917,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15357.560911166,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15358.160965166}
+{"name":"Fidough","nameWeak":false,"ms":298.11675,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15357.960947166,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15358.561001166}
+{"name":"Fidough","nameWeak":false,"ms":280.903416,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15358.360983166,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15358.961037166,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":300.612167,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15358.761019166,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15359.3944095}
+{"name":"Fidough","nameWeak":false,"ms":289.320292,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15359.177723333,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15359.7944455}
+{"name":"Fidough","nameWeak":false,"ms":279.040333,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15359.5944275,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15360.1944815}
+{"name":"Fidough","nameWeak":false,"ms":281.433583,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15359.9944635,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15360.5945175,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":279.358292,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15360.3944995,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15360.9945535}
+{"name":"Fidough","nameWeak":false,"ms":291.449167,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15360.7945355,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15361.3945895}
+{"name":"Fidough","nameWeak":false,"ms":286.908208,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15361.1945715,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15361.794625416}
+{"name":"Fidough","nameWeak":false,"ms":278.886042,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15361.5946075,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15362.211329666,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":307.941833,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15362.011311666,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15362.628033833}
+{"name":"Fidough","nameWeak":false,"ms":281.851333,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15362.428015833,"hp":{"current":82,"max":82},"k":"r"}
+{"name":"Fidough","nameWeak":false,"ms":172.9885,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15362.828051833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15363.228087833}
+{"name":"Fidough","nameWeak":false,"ms":255.777333,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15363.028069833,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15363.628123833,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":284.979917,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15363.428105833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15364.028159833}
+{"name":"Fidough","nameWeak":false,"ms":298.252958,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15363.828141833,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15364.428195833}
+{"name":"Fidough","nameWeak":false,"ms":306.446,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15364.228177833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15364.828231833}
+{"name":"Fidough","nameWeak":false,"ms":293.297167,"cp":690,"ivConfidence":0.8182181278723526,"cpText":": CP.690","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15364.628213833,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15365.228267833,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":287.776584,"cp":690,"ivConfidence":0.8182181278723526,"cpText":": CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15365.028249833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15365.628303833}
+{"name":"Fidough","nameWeak":false,"ms":302.685083,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15365.428285833,"hp":{"max":82,"current":82},"k":"r"}
+{"k":"d","t":15366.028372458}
+{"name":"Fidough","nameWeak":false,"ms":301.077334,"ivConfidence":0.8182181278723526,"cpText":"CP090","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"flags":["cp-unread"],"nameText":"Fidough","speciesIds":["fidough"],"t":15365.828321833,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15366.428408458}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","ms":289.390875,"speciesIds":["fidough"],"flags":["cp-unread"],"ivs":{"atk":14,"def":10,"hp":7},"t":15366.228390458,"hp":{"max":82,"current":82},"cpText":"069ф","nameText":"Fidough","nameWeak":false}
+{"k":"d","t":15366.828444458}
+{"name":"Fidough","nameWeak":false,"ms":289.716,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15366.628426458,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15367.228480458}
+{"name":"Fidough","nameWeak":false,"ms":295.037167,"ivConfidence":0.8182181278723526,"cpText":"CP6.90","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"flags":["cp-unread"],"nameText":"Fidough","speciesIds":["fidough"],"t":15367.028462458,"hp":{"max":82,"current":82},"k":"r"}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","ms":189.9825,"speciesIds":["fidough"],"flags":["no-cp-text"],"ivs":{"def":10,"hp":7,"atk":14},"t":15367.428498458,"hp":{"current":82,"max":82},"cpText":"","nameText":"Fidough","nameWeak":false}
+{"k":"d","t":15367.828534458}
+{"name":"Fidough","nameWeak":false,"ms":216.958708,"ivConfidence":0.8182181278723526,"cpText":"","hpText":"82 \/ 82 HP","ivs":{"atk":14,"def":10,"hp":7},"flags":["no-cp-text"],"nameText":"Fidough","speciesIds":["fidough"],"t":15367.628516458,"hp":{"max":82,"current":82},"k":"r"}
+{"t":15368.228570458,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":292.327,"ivConfidence":0.8182181278723526,"cpText":"","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"flags":["cp-unread"],"nameText":"Fidough","speciesIds":["fidough"],"t":15368.028552458,"hp":{"current":82,"max":82},"k":"r"}
+{"t":15368.628606458,"k":"d"}
+{"hpText":"82 \/ 82 HP","k":"r","ivConfidence":0.8182181278723526,"name":"Fidough","ms":235.10275,"speciesIds":["fidough"],"flags":["no-cp-text"],"ivs":{"def":10,"atk":14,"hp":7},"t":15368.428588458,"hp":{"max":82,"current":82},"cpText":"","nameText":"Fidough","nameWeak":false}
+{"t":15369.028642458,"k":"d"}
+{"name":"Fidough","nameWeak":false,"ms":305.90675,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"hp":7,"atk":14},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15368.828624458,"hp":{"current":82,"max":82},"k":"r"}
+{"k":"d","t":15369.428678458}
+{"name":"Fidough","nameWeak":false,"ms":328.287584,"cp":690,"ivConfidence":0.8182181278723526,"cpText":"CP690","hpText":"82 \/ 82 HP","ivs":{"def":10,"atk":14,"hp":7},"nameText":"Fidough","speciesIds":["fidough"],"flags":[],"t":15369.228660458,"hp":{"max":82,"current":82},"k":"r"}

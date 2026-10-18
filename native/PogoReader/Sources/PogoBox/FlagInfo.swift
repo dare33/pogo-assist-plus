@@ -1,0 +1,129 @@
+import Foundation
+
+/// What each flag the reader and the solver put on a Pokémon means in plain words, and which hand-corrected value
+/// answers it. A flag is a prefix up to the first ":" or "-from"/"-over" detail; `cp-chosen-1960-over-60` is the flag
+/// `cp-chosen` with detail.
+public enum FlagInfo {
+    public enum Field { case cp, hp, ivs, species }
+
+    /// Whether a flag asks the person to look in the game (`check`) or only records how the value was read (`note`).
+    public enum Severity: Equatable { case check, note }
+
+    /// A flag's severity rule: always one or the other, or a note only when the row's solver status is `exact` (CP, HP and bars all fit one
+    /// level, so the vote and the solver settled what the flag is about) and a check on any other row.
+    enum Rule { case check, note, noteWhenExact }
+
+    /// The rules by flag prefix. A flag not listed here is a `check`.
+    static let rules: [String: Rule] = [
+        "ivs-disagree": .noteWhenExact, "bars-unsettled": .noteWhenExact, "cp-chosen": .noteWhenExact, "cp-recovered": .noteWhenExact,
+        "cp-outlier-dropped": .noteWhenExact, "absorbed-fragment": .noteWhenExact, "ivs-corrected": .noteWhenExact, "hp-computed": .noteWhenExact, "sex-from-stats": .noteWhenExact,
+        "form-ambiguous": .note, "level-ambiguous": .note, "form-from-stats": .note, "ivs-chosen-by-fit": .noteWhenExact,
+        "no-level-fits": .check, "ivs-unread": .check, "ambiguous-ivs": .check, "cp-computed": .check, "hp-unread": .check, "name-low-confidence": .check,
+        "same-as-previous": .check, "split-by-timing": .check, "split-by-bars": .check, "absorbed-unread": .check, "mega-when-scanned": .check,
+        "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check, "absorbed-same-cp": .check, "folded-first-reading": .check, "folded-digit-misread": .check, "misread-of-neighbour": .check,
+    ]
+
+    public static func severity(of flag: String, solveStatus: String) -> Severity {
+        switch rules[split(flag).key] ?? .check {
+        case .check: return .check
+        case .note: return .note
+        case .noteWhenExact: return solveStatus == "exact" ? .note : .check
+        }
+    }
+
+    /// The flags of a row that ask for a look, and the ones that only record how it was read.
+    public static func checkFlags(_ flags: [String], solveStatus: String) -> [String] { flags.filter { severity(of: $0, solveStatus: solveStatus) == .check } }
+    public static func noteFlags(_ flags: [String], solveStatus: String) -> [String] { flags.filter { severity(of: $0, solveStatus: solveStatus) == .note } }
+
+    /// The sentence for a note: the same explanation without the request to check in the game.
+    public static func explainNote(_ flag: String) -> String {
+        explain(flag).split(separator: ".").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.hasPrefix("Check") && !$0.isEmpty }.joined(separator: ". ") + "."
+    }
+
+    struct Entry { var prefix: String; var field: Field?; var text: (String) -> String }
+
+    static let table: [Entry] = [
+        Entry(prefix: "cp-computed", field: .cp) { _ in "The CP was not on screen, so it was worked out from the HP and the bars. Check it in the game." },
+        Entry(prefix: "cp-recovered", field: .cp) { _ in "The CP was partly hidden on screen and was worked out from the HP and the bars. Check it in the game." },
+        Entry(prefix: "cp-chosen", field: .cp) { _ in "The CP was read two different ways. The one that fits the stats was chosen. Check it in the game." },
+        Entry(prefix: "split-by-timing", field: nil) { _ in "Looked like two identical Pokémon in a row, judged from the paging beat. Check in the game that there are two." },
+        Entry(prefix: "cp-outlier-dropped", field: .cp) { _ in "One early reading of the CP disagreed with the rest and was set aside. Check the CP in the game." },
+        Entry(prefix: "absorbed-fragment", field: nil) { _ in "A stray first reading of this Pokémon was folded into it. Nothing to do unless the values look wrong." },
+        Entry(prefix: "read-once-beside", field: nil) { cp in "This Pokémon was read only once, right beside CP \(cp) of the same species and HP. It may be part of that Pokémon or another one. Check both in the game." },
+        Entry(prefix: "absorbed-same-cp", field: nil) { cp in "One reading of an identical Pokémon (CP \(cp)) was folded into this one. If you have two, one was missed. Check in the game." },
+        Entry(prefix: "folded-first-reading", field: nil) { cp in "A first reading with another CP (\(cp)) and other bars was folded into this Pokémon as its card slid in. If you own two of these, one was missed. Check in the game." },
+        Entry(prefix: "folded-digit-misread", field: nil) { cp in "A reading with a CP one digit different (\(cp)) was folded into this Pokémon. If you own two of these with the same HP, one was missed. Check in the game." },
+        Entry(prefix: "misread-of-neighbour", field: nil) { cp in "This was read once, with no bars, beside a Pokémon of the same species and HP whose CP (\(cp)) is one digit different. It may be a misread of that Pokémon. If it is, leave it out. Check in the game." },
+        Entry(prefix: "absorbed-other-cp", field: nil) { cp in "A Pokémon read as CP \(cp) was folded into this one. Check whether another one exists beside it." },
+        Entry(prefix: "absorbed-unread", field: nil) { _ in "A reading without a CP was treated as this same Pokémon. Check that you do not own a second identical one." },
+        Entry(prefix: "split-by-bars", field: nil) { _ in "Two different Pokémon with the same CP were read one after the other. Check both." },
+        Entry(prefix: "single-read", field: nil) { _ in "Only one frame showed this Pokémon, so a value may be misread. Check it in the game." },
+        Entry(prefix: "sex-not-read", field: .species) { _ in "Nidoran male and female look the same on screen and the sex was not read. Check it in the game." },
+        Entry(prefix: "same-as-previous", field: nil) { _ in "An identical copy of the Pokémon before it, found by the swipe between them. Check that you own two." },
+        Entry(prefix: "ivs-unread", field: .ivs) { _ in "The appraisal bars could not be read, so the IVs are unknown. Open the appraisal and check." },
+        Entry(prefix: "ambiguous-ivs", field: .ivs) { _ in "More than one set of IVs fits what was read, so none is saved. Check the appraisal." },
+        Entry(prefix: "ivs-corrected", field: .ivs) { _ in "The bars read as IVs that cannot happen at this CP, so they were adjusted to ones that can. Check the appraisal." },
+        Entry(prefix: "bars-unsettled", field: .ivs) { _ in "The appraisal bars were still moving when they were read. Check the IVs in the game." },
+        Entry(prefix: "no-level-fits", field: .ivs) { _ in "No level and IVs fit this CP and HP, so a value was misread. Check the CP, HP and IVs." },
+        Entry(prefix: "name-low-confidence", field: .species) { _ in "The name was hard to read and may be a longer name cut short. Check the name." },
+        Entry(prefix: "level-ambiguous", field: nil) { _ in "More than one level fits, so the level is shown as a range." },
+        // The detail is the bars, and after a second ":" the species id when the bars fit another form only (`ivs-chosen-by-fit:10/5/15:diglett_alolan`).
+        Entry(prefix: "ivs-chosen-by-fit", field: .ivs) { detail in
+            let part = detail.split(separator: ":", maxSplits: 1).map(String.init)
+            // An id the game master does not know leaves the form unnamed rather than naming "the form it fits".
+            let asForm = part.count > 1 ? (knownFormName(part[1]).map { " as the \($0)" } ?? " as another form of the species") : ""
+            return "The appraisal bars were read more than one way. Of the bar readings seen, only \(part.first ?? detail) gives this CP and HP\(asForm) at some level, so those were kept. Check the IVs in the game."
+        },
+        Entry(prefix: "form-from-stats", field: .species) { id in "The screen shows only the species name. The CP, HP and bars fit the \(formName(id)) at exactly one level, and fit neither the plain form (even with a bar read a notch off) nor any other regional form, so it was taken as that form." },
+        Entry(prefix: "form-ambiguous", field: .species) { _ in "The screen does not show which form this is. Check the form in the game." },
+        Entry(prefix: "hp-computed", field: .hp) { _ in "The HP was not read, so it was worked out from the stats. Check it in the game." },
+        Entry(prefix: "hp-unread", field: .hp) { _ in "The HP could not be read or worked out. Check it in the game." },
+        Entry(prefix: "sex-from-stats", field: .species) { _ in "Nidoran male and female look the same on screen. The one whose stats fit was chosen." },
+        Entry(prefix: "mega-when-scanned", field: .cp) { _ in "This Pokémon was Mega evolved when it was scanned, so its CP, HP and level were not saved (the Mega values are temporary). Scan it again when it is not Mega evolved." },
+        // Not tied to the IVs field: the person may have corrected the IVs, and the later scan still read others.
+        Entry(prefix: "ivs-rescan-differs", field: nil) { _ in "The latest scan read other IVs for this Pokémon at the same CP and HP. The saved IVs were kept. Check the IVs in the game." },
+        Entry(prefix: "ivs-disagree", field: .ivs) { _ in "The appraisal bars read differently on different frames. Check the IVs in the game." },
+    ]
+
+    /// A species id as the game names it: "Galarian Farfetch'd" for `farfetchd_galarian`, from the game master's "Farfetch'd (Galarian)". Never the id.
+    static func formName(_ id: String) -> String { knownFormName(id) ?? "form it fits" }
+
+    private static func knownFormName(_ id: String) -> String? {
+        guard let name = (try? GameMaster.bundled())?.byId[id]?.name else { return nil }
+        let nf = GameMaster.nameAndForm(name)
+        return nf.form.isEmpty ? nf.name : "\(nf.form) \(nf.name)"
+    }
+
+    private static func split(_ flag: String) -> (key: String, detail: String) {
+        for e in table where flag == e.prefix || flag.hasPrefix(e.prefix + ":") || flag.hasPrefix(e.prefix + "-") {
+            return (e.prefix, String(flag.dropFirst(e.prefix.count).drop { $0 == ":" || $0 == "-" }))
+        }
+        return (flag, "")
+    }
+
+    /// One plain sentence for a flag, with a generic one for a flag this table does not know.
+    public static func explain(_ flag: String) -> String {
+        let (key, detail) = split(flag)
+        if let e = table.first(where: { $0.prefix == key }) { return e.text(detail) }
+        return "The reader marked this Pokémon for a check (\(flag)). Check it in the game."
+    }
+
+    /// The value a hand correction of which would answer this flag, or nil for a flag no correction answers.
+    public static func field(of flag: String) -> Field? {
+        let (key, _) = split(flag)
+        return table.first { $0.prefix == key }?.field
+    }
+
+    /// The flags left after the given values were corrected by hand.
+    public static func remaining(_ flags: [String], corrected: Corrections) -> [String] {
+        flags.filter { flag in
+            switch field(of: flag) {
+            case .cp?: return corrected.cp == nil
+            case .hp?: return corrected.hp == nil
+            case .ivs?: return corrected.ivs == nil
+            case .species?: return corrected.species == nil
+            case nil: return true
+            }
+        }
+    }
+}

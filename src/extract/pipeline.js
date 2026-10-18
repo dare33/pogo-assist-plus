@@ -4,9 +4,10 @@
 
 import { readFrame } from './frame.js';
 import { displayNames, nameAndForm } from './names.js';
-import { groupRuns, collapseRun, dedupeAdjacent, SETTLED } from './merge.js';
+import { groupRuns, collapseRun, dedupeAdjacent, cpSimilar, ivsCompatible, vote, SETTLED } from './merge.js';
 import { solve, speciesFor } from './solve.js';
 import { step as dustStep } from '../cost.js';
+import { cpAt, hpAt, LEVELS } from '../cpm.js';
 
 /**
  * @param frames    async iterable of { index, time, image, label }
@@ -30,30 +31,130 @@ export async function extract(frames, { ocr, gm, onProgress = () => {}, total = 
   return { ...finish(readings, gm), readings };
 }
 
-/** Everything after the frames are read: group, vote, solve, dedupe, flag. */
+/**
+ * Everything after the frames are read: group, vote, solve, dedupe, flag.
+ *
+ * Names read without OCR confidence (`nameWeak`, frame.js) are kept apart from the rest. The rows
+ * of every Pokémon with a confidently named frame are built from the confident frames alone, by
+ * exactly the steps used before weak names were read (group, collapse, dedupe), so a weak frame
+ * can neither outvote such a row's CP nor split it. Weak frames then add rows only where no
+ * confident row could be theirs (weakRows), and those rows are flagged `name-low-confidence`.
+ */
 export function finish(readings, gm) {
-  const runs = groupRuns(readings);
-  const collapsed = runs.map(collapseRun);
-  const rows = dedupeAdjacent(collapsed).map((row, i) => resolveRow(row, gm, i + 1));
-  // Frames that showed a CP but no species name (a nickname, or a garbled read) never become a
-  // row; list them so a Pokémon that was on screen and not read is not silently missing.
-  const unmatched = readings.filter((r) => r.cp && !r.name).map((r) => ({ frame: r.frame, cp: r.cp, nameText: r.nameText, hp: r.hp?.max ?? null }));
+  const named = readings.map((r, i) => (r?.name ? i : -1)).filter((i) => i >= 0);
+  // "Nidoran" with a letter stuck to it, next to a Nidorina or Nidorino frame, is that Pokémon's
+  // name misread by a letter: unreadable, so it cannot split the run.
+  const nidorStray = (r, i) => {
+    if (r?.name !== 'Nidoran' || !r.nameAttached) return false;
+    const at = named.indexOf(i);
+    return [named[at - 1], named[at + 1]].some((j) => j !== undefined && /^Nidorin[ao]$/.test(readings[j].name));
+  };
+  const strong = readings.map((r, i) => (r?.nameWeak || nidorStray(r, i) ? { ...r, name: null, cp: null, nameWeak: false } : r));
+  const runs = groupRuns(strong);
+  const at = new Map(strong.map((r, i) => [r, i]));
+  const runSpans = runs.map((run) => [at.get(run.frames[0]), at.get(run.frames[run.frames.length - 1])]);
+  const strongRows = dedupeAdjacent(runs.map((run, k) => ({ ...collapseRun(run), order: runSpans[k][0] })));
+  // Where each row's Pokémon was on screen. dedupeAdjacent can join two runs into one row, whose
+  // span is then first frame to last frame; that needs frame labels to find them again, so
+  // without unique labels the spans stay those of the runs.
+  const labels = new Map();
+  let unique = true;
+  strong.forEach((r, i) => { const key = r?.frame; if (key === null || key === undefined || labels.has(key)) unique = false; else labels.set(key, i); });
+  const spans = unique
+    ? strongRows.map((row) => ({ name: row.name, a: labels.get(row.frames[0].frame), b: labels.get(row.frames[row.frames.length - 1].frame) }))
+    : runs.map((run, k) => ({ name: run.frames[0].name, a: runSpans[k][0], b: runSpans[k][1] }));
+  if (unique) strongRows.forEach((row, k) => { row.order = spans[k].a; });
+  const { rows: weak, setAside } = weakRows(readings, spans);
+  const collapsed = [...strongRows, ...weak].sort((a, b) => a.order - b.order);
+  const { rows, absorbed } = absorbStrays(collapsed.map((row) => resolveRow(row, gm)));
+  rows.forEach((r, i) => { r.index = i + 1; });
+  // What was on screen and did not become a row is listed, so it is not silently missing: frames
+  // that showed a CP but no species name (a nickname, or a garbled read: two frames or more in a
+  // row with the same CP, so a single frame caught mid-change is not listed); a named Pokémon whose
+  // CP was never read (hidden behind its model), with the CPs its HP and bars allow; and a
+  // one-frame row folded into its neighbour.
+  const view = strong.map((r, i) => (setAside.has(i) ? { ...readings[i], name: null, nameWeak: false, flags: [...(readings[i].flags ?? []), 'name-unsupported'] } : r));
+  const unmatched = [...unnamedEntries(view), ...hiddenEntries(view, runs, gm), ...absorbed];
   const review = rows.filter((r) => r.flags.length).map((r) => ({ index: r.index, name: r.name, cp: r.cp, hp: r.hp, ivs: r.ivs, ivsRead: r.ivsRead, ivsGuess: r.ivsGuess, level: r.level, levelMax: r.levelMax, flags: r.flags, frames: r.frames }));
   return { rows, review, unmatched };
 }
 
-function resolveRow(row, gm, index) {
+/**
+ * The CPs a Pokémon could have, from what a model in front of the CP text cannot hide: its HP and
+ * its settled bars. Each level whose HP matches gives one CP. `reads` are the partial CP reads
+ * (the model usually covers the leading digits, so a read is the tail of the real number).
+ * Returns { options, supported, tailOf }: every CP that fits, those a partial read is the tail
+ * of, and for each of those the read that supports it.
+ */
+export function cpOptions(species, { hp, ivs, ivConfidence = 1 }, reads = []) {
+  if (!hp || !ivs || ivConfidence < SETTLED) return { options: [], supported: [], tailOf: new Map() };
+  const options = new Set();
+  for (const sp of species) for (const level of LEVELS) if (hpAt(sp.baseStats, ivs, level) === hp) options.add(cpAt(sp.baseStats, ivs, level));
+  const tails = reads.filter((r) => r >= 10).map(String);
+  const all = [...options].sort((a, b) => a - b);
+  const tailOf = new Map();
+  for (const cp of all) { const t = tails.find((x) => x.length < String(cp).length && String(cp).endsWith(x)); if (t) tailOf.set(cp, Number(t)); }
+  return { options: all, supported: [...tailOf.keys()], tailOf };
+}
+
+/**
+ * Rows for Pokémon read only with weak names. `spans` are the confident rows' times on screen
+ * ({ name, a, b }, in order). A weak frame with a CP:
+ * - between the first and last frame of a confident row belongs to that Pokémon's time on
+ *   screen. With its name it is dropped (as before weak names were read); with another name
+ *   ("Paras" in the middle of a Parasect) it is set aside to be listed as unread;
+ * - between two confident rows is dropped when it has the name of the row on either side, since
+ *   it may be that Pokémon's first or last frame; otherwise it is a Pokémon no confident frame
+ *   accounts for, and such frames are grouped into rows;
+ * - before the first confident row or after the last is dropped: a clip is joined to the next
+ *   by matching its last rows to the next clip's first rows (batch.js), and a row that only one
+ *   of the two clips has there would hide the overlap. A clip with no confident row at all keeps
+ *   its weak rows.
+ * Returns { rows: collapsed rows with nameWeak and order, setAside: Set of reading indices }.
+ */
+function weakRows(readings, spans) {
+  const setAside = new Set();
+  const gaps = new Map(); // index of the confident row after the gap -> weak readings in it
+  readings.forEach((r, i) => {
+    if (!r?.nameWeak || !r.name || !r.cp) return;
+    const inside = spans.find((s) => i > s.a && i < s.b);
+    if (inside) { if (r.name !== inside.name) setAside.add(i); return; }
+    let next = spans.findIndex((s) => s.a > i);
+    if (next < 0) next = spans.length;
+    if (spans.length && (next === 0 || next === spans.length)) return;
+    if (r.name === spans[next - 1]?.name || r.name === spans[next]?.name) return;
+    if (!gaps.has(next)) gaps.set(next, []);
+    gaps.get(next).push({ r, i });
+  });
+  const rows = [];
+  for (const members of gaps.values()) {
+    const first = new Map(members.map(({ r, i }) => [r, i]));
+    for (const run of groupRuns(members.map(({ r }) => r))) rows.push({ ...collapseRun(run), nameWeak: true, order: first.get(run.frames[0]) });
+  }
+  return { rows, setAside };
+}
+
+function resolveRow(row, gm) {
   const species = speciesFor(gm, row.speciesIds ?? []);
   const flags = [];
   // The CP: the first candidate read (ranked by how many frames read it) that the solver can
   // reconcile with the HP and bars; failing that, the most-read one.
+  const candidates = row.cpCandidates ?? [row.cp];
   let cp = row.cp, result = null;
-  for (const candidate of row.cpCandidates ?? [row.cp]) {
+  for (const candidate of candidates) {
     const r = solve({ species, cp: candidate, hp: row.hp, ivs: row.ivs });
     if (r.solutions.length && (!row.ivs || r.solutions[0].tier <= 1)) { cp = candidate; result = r; break; }
   }
-  if (!result) result = solve({ species, cp, hp: row.hp, ivs: row.ivs });
-  if (cp !== row.cp) flags.push(`cp-chosen-${cp}-over-${row.cp}`);
+  if (result) { if (cp !== row.cp) flags.push(`cp-chosen-${cp}-over-${row.cp}`); }
+  else {
+    // No read fits. When the model covered the leading digits, the reads are the tail of the real
+    // CP: work the CP out from the HP and the settled bars, and take it when exactly one such CP
+    // ends in a read and no read at all is as long as it (a full-length read that does not fit
+    // means misread bars, not a hidden digit). The row stays flagged for a check in the game.
+    const { supported, tailOf } = cpOptions(species, row, candidates);
+    if (supported.length === 1 && !candidates.some((c) => String(c).length >= String(supported[0]).length)) { cp = supported[0]; flags.push(`cp-recovered:${cp}-from-${tailOf.get(cp)}`); }
+    result = solve({ species, cp, hp: row.hp, ivs: row.ivs });
+  }
   let ivs = row.ivs, level = null, levelMax = null, speciesId = species[0]?.speciesId ?? null, hp = row.hp;
   const s = result.solutions[0];
   const take = () => { ivs = s.ivs; level = s.level; levelMax = s.level; speciesId = s.speciesId; if (hp === null) { hp = s.hp; flags.push('hp-computed'); } };
@@ -76,6 +177,7 @@ function resolveRow(row, gm, index) {
     }
     case 'unknown-ivs': {
       ivs = null;
+      if (s) speciesId = s.speciesId; // the species that fits, not just the first the name could be
       const levels = result.solutions.map((x) => x.level);
       if (levels.length) { level = Math.min(...levels); levelMax = Math.max(...levels); }
       flags.push('ivs-unread');
@@ -85,6 +187,12 @@ function resolveRow(row, gm, index) {
   }
   if (result.forms?.length > 1) flags.push(`form-ambiguous:${result.forms.join('|')}`);
   if (row.ivsDisagree) flags.push('ivs-disagree');
+  // Every frame's name was read without OCR confidence: it can be a longer name cut short by an
+  // overlay ("Paras" from "Parasect"), so the row is for a check in the game.
+  if (row.nameWeak) flags.push('name-low-confidence');
+  // The screen cannot tell Nidoran♀ from Nidoran♂ here (the symbol is not read): the sex is the
+  // one whose stats fit the CP, HP and bars, so a misread CP could also pick the wrong one.
+  if (row.name === 'Nidoran') flags.push('sex-from-stats');
   if (hp === null) flags.push('hp-unread');
   if (row.ivs && row.ivConfidence < SETTLED) flags.push('bars-unsettled');
   // Name and form as Poke Genie writes them, from the species the solver settled on (the screen
@@ -92,11 +200,91 @@ function resolveRow(row, gm, index) {
   const sp = speciesId ? gm.byId.get(speciesId) : null;
   const nf = sp ? nameAndForm(sp) : { name: row.baseName ?? row.name, form: row.form ?? '' };
   return {
-    index, name: nf.name, display: row.name, form: nf.form, speciesId, dex: sp?.dex ?? null,
+    index: null, name: nf.name, display: row.name, form: nf.form, speciesId, dex: sp?.dex ?? null,
     cp, hp, ivs, ivsRead: row.ivs, ivsGuess: ivs === null && s ? s.ivs : null, level, levelMax,
     dust: level ? dustStep(level).dust : null,
     solveStatus: result.status, flags, frames: row.frames, merged: row.merged ?? 1,
   };
+}
+
+/**
+ * Frames that showed a CP but no species name, as entries for `unmatched`: one per stretch of
+ * two or more such frames in a row whose CPs agree, or of any length when the name was read
+ * without confidence and set aside (weakRows). { frame, cp, nameText, hp: null, frames, reason }.
+ */
+function unnamedEntries(readings) {
+  const out = [];
+  let cur = null;
+  const close = () => { if (cur && (cur.frames >= 2 || cur.setAside)) out.push({ frame: cur.frame, cp: vote(cur.cps), nameText: vote(cur.texts) ?? '', hp: null, frames: cur.frames, reason: 'name-not-read' }); cur = null; };
+  for (const r of readings) {
+    if (!r.cp || r.name) { close(); continue; }
+    const setAside = Boolean(r.flags?.includes('name-unsupported'));
+    if (cur && cur.cps.some((c) => cpSimilar(c, r.cp))) { cur.cps.push(r.cp); cur.texts.push(r.nameText || null); cur.frames++; cur.setAside ||= setAside; }
+    else { close(); cur = { frame: r.frame, cps: [r.cp], texts: [r.nameText || null], frames: 1, setAside }; }
+  }
+  close();
+  return out;
+}
+
+/**
+ * Pokémon that were on screen with a name but no CP on any frame (the model covered it), as
+ * entries for `unmatched`: name, HP, settled bars and the CPs those allow, for a check in the
+ * game. Such frames never join a run (rows are built exactly as if they were unreadable); a
+ * stretch of them is one entry, unless it sits right beside a run of the same Pokémon (same name,
+ * HP not different, bars not contradicting, no unreadable frame between), which is that Pokémon
+ * with its model in front of the CP for a moment.
+ */
+function hiddenEntries(readings, runs, gm) {
+  const runOf = new Map();
+  for (const run of runs) for (const f of run.frames) runOf.set(f, run);
+  const settledIvs = (frames) => vote(frames.filter((f) => f.ivs && f.ivConfidence >= SETTLED).map((f) => f.ivs), (x) => `${x.atk}/${x.def}/${x.hp}`);
+  const stretches = [];
+  let cur = null, prevRun = null, gap = false;
+  for (const r of readings) {
+    const run = runOf.get(r);
+    if (run) {
+      if (cur) { cur.next = run; cur.gapAfter = gap; cur = null; }
+      prevRun = run; gap = false;
+    } else if (r.name && !r.cp) {
+      const hp = r.hp?.max ?? null;
+      const ivs = r.ivs && r.ivConfidence >= SETTLED ? r.ivs : null;
+      const same = cur && cur.name === r.name && (cur.hp === null || hp === null || cur.hp === hp) && (!gap || ivsCompatible(settledIvs(cur.frames), ivs));
+      if (same) { cur.frames.push(r); cur.hp ??= hp; }
+      else { cur = { name: r.name, hp, frames: [r], prev: prevRun, gapBefore: gap || cur !== null, next: null, gapAfter: true }; stretches.push(cur); }
+      gap = false;
+    } else gap = true;
+  }
+  const beside = (s, run, gapBetween) => run && !gapBetween && run.frames[0].name === s.name && (s.hp === null || !run.hp || run.hp.max === s.hp) && ivsCompatible(run.ivs, settledIvs(s.frames));
+  // One or two frames with no HP read are a card caught sliding in or out, not a Pokémon to list.
+  const substantial = (s) => s.hp !== null || s.frames.length >= 3;
+  return stretches.filter((s) => substantial(s) && !beside(s, s.prev, s.gapBefore) && !beside(s, s.next, s.gapAfter)).map((s) => {
+    const ivs = settledIvs(s.frames);
+    return {
+      frame: s.frames[0].frame, cp: null, name: s.name, nameText: s.frames[0].nameText, hp: s.hp, ivs,
+      cpOptions: cpOptions(speciesFor(gm, s.frames[0].speciesIds ?? []), { hp: s.hp, ivs }).options, frames: s.frames.length, reason: 'cp-not-read',
+    };
+  });
+}
+
+/**
+ * A one-frame row with no HP and no settled bars that did not solve, next to a row of the same
+ * Pokémon with a similar CP, is almost always that Pokémon caught on the frame before its screen
+ * settled (one digit misread, HP not yet drawn). Its frame goes to the neighbour, and because it
+ * could be a Pokémon of its own it is also listed in `unmatched`.
+ * Returns { rows, absorbed }.
+ */
+function absorbStrays(rows) {
+  const out = [], absorbed = [];
+  const bare = (r) => (r.flags.includes('hp-computed') || r.flags.includes('hp-unread')) && (!r.ivsRead || r.flags.includes('bars-unsettled'));
+  const stray = (r, other) => r.frames.length === 1 && bare(r) && r.solveStatus !== 'exact' && other && other.frames.length > 1 && other.display === r.display && cpSimilar(r.cp, other.cp);
+  const note = (r, other) => absorbed.push({ frame: r.frames[0].frame, cp: r.cp, name: r.display, nameText: r.frames[0].name, hp: null, reason: 'absorbed', into: other.cp });
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], prev = out[out.length - 1], next = rows[i + 1];
+    if (stray(r, prev)) { note(r, prev); prev.frames = [...prev.frames, ...r.frames]; continue; }
+    if (stray(r, next)) { note(r, next); next.frames = [...r.frames, ...next.frames]; continue; }
+    out.push(r);
+  }
+  return { rows: out, absorbed };
 }
 
 /** Poke Genie's column layout, so src/import/pokegenie.js reads the result back. */

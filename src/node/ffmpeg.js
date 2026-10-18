@@ -4,7 +4,7 @@
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join, sep, win32 } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { naturalCompare } from '../extract/batch.js';
 
@@ -60,6 +60,7 @@ export function findFfmpeg({ explicit = null, env = process.env, platform = proc
   const candidates = [];
   const add = (source, pattern) => candidates.push({ source, pattern });
   if (platform === 'win32') {
+    const join = win32.join;   // Windows paths whatever platform this runs on (the tests pass platform: 'win32' on a Mac or Linux)
     const local = env.LOCALAPPDATA, roaming = env.APPDATA;
     if (local) {
       add('winget', join(local, 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe'));

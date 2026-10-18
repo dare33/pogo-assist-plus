@@ -1,0 +1,57 @@
+{
+ "_note": "scanned = the part-read row cut from the owner's run3-fast-swipe scan result (frames removed); saved = the Xerneas CP 2611, HP 170, IVs 12/10/10 it belongs to (rebuilt from the row, as the first scan's file is not kept)",
+ "scanned": {
+  "cp": 281,
+  "dex": 716,
+  "display": "Xerneas",
+  "dust": null,
+  "flags": [
+   "no-level-fits"
+  ],
+  "form": "",
+  "frames": [],
+  "hp": 170,
+  "index": 4,
+  "ivs": null,
+  "ivsGuess": null,
+  "ivsRead": {
+   "atk": 12,
+   "def": 10,
+   "hp": 10
+  },
+  "level": null,
+  "levelMax": null,
+  "merged": 1,
+  "name": "Xerneas",
+  "solveStatus": "none",
+  "speciesId": "xerneas"
+ },
+ "saved": {
+  "cp": 2611,
+  "dex": 716,
+  "display": "Xerneas",
+  "dust": 4000,
+  "flags": [],
+  "form": "",
+  "frames": [],
+  "hp": 170,
+  "index": 1,
+  "ivs": {
+   "atk": 12,
+   "def": 10,
+   "hp": 10
+  },
+  "ivsGuess": null,
+  "ivsRead": {
+   "atk": 12,
+   "def": 10,
+   "hp": 10
+  },
+  "level": 25.0,
+  "levelMax": 25.0,
+  "merged": 1,
+  "name": "Xerneas",
+  "solveStatus": "exact",
+  "speciesId": "xerneas"
+ }
+}

@@ -1,5 +1,7 @@
 // CP multipliers by level (1 to 51 in half steps) and the CP / HP formulas.
 // Values are the public game constants; test/cpm.test.js checks them against real exports.
+// Half levels above 40 are sqrt((lo^2 + hi^2) / 2) of the two whole levels either side, as in every lower half level
+// (the table once held their plain averages, which put PvP stat products off by ~1e-5 and reordered near-ties).
 const CPM = {
   1: 0.094, 1.5: 0.1351374318, 2: 0.16639787, 2.5: 0.192650919, 3: 0.21573247, 3.5: 0.2365726613,
   4: 0.25572005, 4.5: 0.2735303812, 5: 0.29024988, 5.5: 0.3060573775, 6: 0.3210876, 6.5: 0.3354450362,
@@ -14,16 +16,21 @@ const CPM = {
   31: 0.7377695, 31.5: 0.7407855938, 32: 0.74378943, 32.5: 0.7467812109, 33: 0.74976104, 33.5: 0.7527290867,
   34: 0.7556855, 34.5: 0.7586303683, 35: 0.76156384, 35.5: 0.7644860647, 36: 0.76739717, 36.5: 0.7702972656,
   37: 0.7731865, 37.5: 0.7760649616, 38: 0.77893275, 38.5: 0.7817900548, 39: 0.784637, 39.5: 0.7874736075,
-  40: 0.7903, 40.5: 0.792803968, 41: 0.79530001, 41.5: 0.797800015, 42: 0.8003, 42.5: 0.802799995,
-  43: 0.8053, 43.5: 0.8078, 44: 0.81029999, 44.5: 0.812799985, 45: 0.81529999, 45.5: 0.81779999,
-  46: 0.82029999, 46.5: 0.82279999, 47: 0.82529999, 47.5: 0.82779999, 48: 0.83029999, 48.5: 0.83279999,
-  49: 0.83529999, 49.5: 0.83779999, 50: 0.84029999, 50.5: 0.84279999, 51: 0.84529999,
+  40: 0.7903, 40.5: 0.792803968, 41: 0.79530001, 41.5: 0.797803922, 42: 0.8003, 42.5: 0.802803893,
+  43: 0.8053, 43.5: 0.807803864, 44: 0.81029999, 44.5: 0.812803835, 45: 0.81529999, 45.5: 0.817803811,
+  46: 0.82029999, 46.5: 0.822803788, 47: 0.82529999, 47.5: 0.827803765, 48: 0.83029999, 48.5: 0.832803742,
+  49: 0.83529999, 49.5: 0.837803720, 50: 0.84029999, 50.5: 0.842803698, 51: 0.84529999,
 };
 
 export const LEVELS = Object.keys(CPM).map(Number).sort((a, b) => a - b);
 
+// Lookup by Map: `CPM[12.5]` turns the number into a string key on every call, and the solver calls this
+// millions of times on a large box. Same values, same RangeError for a level that has no multiplier.
+const CPM_BY_LEVEL = new Map(Object.entries(CPM).map(([k, v]) => [Number(k), v]));
+
 export function cpm(level) {
-  const v = CPM[level];
+  // A level given as a string worked with the object lookup (`CPM['25']`): keep that, for exactly the strings a key would match.
+  const v = CPM_BY_LEVEL.get(typeof level === 'string' ? (String(Number(level)) === level ? Number(level) : NaN) : level);
   if (v === undefined) throw new RangeError(`no CP multiplier for level ${level}`);
   return v;
 }

@@ -1,0 +1,451 @@
+import XCTest
+
+/// "Get ready to scan" and what points at it: the banner, the checklist, the one-screen steps, "My phone is set up", the gentle sheet before a scan, the
+/// "N setup steps left · Finish" line, and taking the player back to the game (a recorded request in the simulator, which has neither the game nor a broadcast).
+/// `-fake-notifications notAsked` makes the notification permission the same on every run. Screenshots go to POGO_SCREENS.
+final class SetupTests: XCTestCase {
+    private func shot(_ name: String) {
+        let dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
+    }
+
+    private static let base = ["-fake-notifications", "notAsked"]
+
+    /// A fresh install with an account, on the Scan screen with the options remembered (so the steps and the line above the button show).
+    private func openScan(_ extra: [String] = [], reset: Bool = true, remember: Bool = true) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = (reset ? ["-uitest-reset"] : []) + Self.base + extra
+        app.launch()
+        if reset {
+            let field = app.textFields["Trainer name"]
+            XCTAssertTrue(field.waitForExistence(timeout: 10))
+            field.tap(); field.typeText("Greg main")
+            app.buttons["Create account"].tap()
+        }
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 10))
+        app.buttons["Scan"].tap()
+        XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
+        if reset && remember {
+            let count = app.textFields["Count"]
+            XCTAssertTrue(count.waitForExistence(timeout: 5))
+            for _ in 0..<3 {
+                count.tap()
+                if app.keyboards.firstMatch.waitForExistence(timeout: 2) { break }
+            }
+            usleep(400_000)
+            count.typeText("1400")
+            app.hideKeyboard()
+            app.buttons["Done"].tap()
+            XCTAssertTrue(app.staticTexts["Choose your scan options above."].waitForExistence(timeout: 5))
+        }
+        return app
+    }
+
+    /// The checklist's last row sits under the Continue button until the page is scrolled.
+    private func openMore(_ app: XCUIApplication) {
+        let more = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More about scanning'")).firstMatch
+        pane(app).swipeUp(); pane(app).swipeUp()
+        more.tap()
+    }
+
+    /// The ticks of step 4 are switches for VoiceOver.
+    private func sw(_ app: XCUIApplication, _ i: Int) -> XCUIElement { app.descendants(matching: .any)["setup-switch-\(i)"].firstMatch }
+
+    private func toggleSetUp(_ app: XCUIApplication) {
+        let t = app.switches["My phone is set up"]
+        reveal(app, t)
+        t.tap()
+    }
+
+    private func back(_ app: XCUIApplication) { app.navigationBars.buttons.element(boundBy: 0).tap() }
+
+    private func openChecklist(_ app: XCUIApplication) {
+        app.buttons["setup-banner"].tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5))
+    }
+
+    private func openStep(_ app: XCUIApplication, _ n: Int) {
+        let row = app.buttons["setup-step-\(n)"]
+        // At large text the list is longer than the screen: from the top, short slow swipes until the row can be touched.
+        for _ in 0..<3 where !(row.exists && clear(app, row)) { pane(app).swipeDown() }
+        for _ in 0..<14 where !(row.exists && clear(app, row)) { pane(app).swipeUp(velocity: .slow) }
+        row.tap()
+        XCTAssertTrue(app.navigationBars["Step \(n) of 6"].waitForExistence(timeout: 5))
+    }
+
+    private func confirm(_ app: XCUIApplication) { app.buttons["setup-confirm"].tap() }
+
+    private func done(_ app: XCUIApplication, _ n: Int) -> Bool {
+        let label = app.staticTexts["\(n) of 6 done"]
+        for _ in 0..<4 where !label.waitForExistence(timeout: 2) { pane(app).swipeDown() }
+        return label.exists
+    }
+
+    /// What to swipe. On the iPad, Settings is a form sheet (a window smaller than the screen), and a swipe that starts on the dimmed backdrop outside it
+    /// scrolls nothing; so swipe the sheet's own scroll view (the last one in the tree; the Box's list is behind it). On the phone the page fills the screen and the app itself is right.
+    private func pane(_ app: XCUIApplication) -> XCUIElement {
+        UIDevice.current.userInterfaceIdiom == .pad ? app.scrollViews.element(boundBy: app.scrollViews.count - 1) : app
+    }
+
+    /// The element is on screen and clear of the navigation bar and of the button pinned at the bottom (which isHittable does not account for).
+    /// The bounds are those of the page, not of the window: in the iPad's form sheet the pinned button sits well above the window's bottom edge.
+    private func clear(_ app: XCUIApplication, _ e: XCUIElement) -> Bool {
+        var top: CGFloat = 110
+        for bar in app.navigationBars.allElementsBoundByIndex where bar.exists { top = max(top, bar.frame.maxY) }
+        var bottom = app.windows.firstMatch.frame.height - 110
+        let pinned = app.buttons.matching(NSPredicate(format: "identifier == 'setup-confirm' OR label BEGINSWITH 'Continue with step'")).firstMatch
+        if pinned.exists { bottom = min(bottom, pinned.frame.minY - 8) }
+        return e.frame.minY > top && e.frame.maxY < bottom
+    }
+
+    /// A switch or row lower on a page: scrolls until it can be touched.
+    private func reveal(_ app: XCUIApplication, _ e: XCUIElement) {
+        for _ in 0..<14 where !(e.exists && clear(app, e)) { pane(app).swipeUp(velocity: .slow) }
+    }
+
+    /// Selects paging by the voice command on "More about scanning" (the default is by hand until the commands exist), then returns to the Scan screen.
+    private func chooseVoicePaging(_ app: XCUIApplication) {
+        openChecklist(app)
+        openMore(app)
+        let voice = app.buttons["Page with the voice command"]
+        XCTAssertTrue(voice.waitForExistence(timeout: 8))
+        voice.tap()
+        XCTAssertEqual(voice.isSelected, true)
+        back(app); back(app)
+        XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
+    }
+
+    // MARK: banner
+
+    func testBannerOpensTheChecklist() throws {
+        let app = openScan()
+        let banner = app.buttons["setup-banner"]
+        XCTAssertTrue(banner.exists)
+        XCTAssertEqual(banner.label, "Important! Before you start your scan please ensure that you have opened your first Pokémon's appraisal in Pokémon GO. For first time users, set your device up to work with Pogo Assist by tapping this banner.")
+        shot("banner-setup-not-done")
+        XCTAssertFalse(app.buttons["Scan setup"].exists, "the old Scan setup link is gone")
+        XCTAssertTrue(app.buttons["Start scan"].isHittable, "the banner does not push the mark button off the screen")
+        banner.tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(done(app, 0))
+        XCTAssertTrue(app.buttons["Continue with step 1"].exists)
+        for n in 1...6 { XCTAssertTrue(app.buttons["setup-step-\(n)"].exists, "row \(n)") }
+    }
+
+    // MARK: the steps
+
+    func testWalkTheSixStepsAndTheTicksPersist() throws {
+        let app = openScan(["-appearance", "light"])
+        openChecklist(app)
+        // Step 1: notifications are not allowed yet, so the person says it is done (in the simulator the permission cannot be given).
+        app.buttons["Continue with step 1"].tap()
+        XCTAssertTrue(app.navigationBars["Step 1 of 6"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Allow notifications"].exists)
+        XCTAssertTrue(app.images["setup-picture"].exists || app.otherElements["setup-picture"].exists)
+        confirm(app)
+        XCTAssertTrue(done(app, 1))
+        // Step 2 cannot be confirmed before the commands are made; making them hands the file to the share sheet.
+        app.buttons["Continue with step 2"].tap()
+        XCTAssertTrue(app.navigationBars["Step 2 of 6"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["setup-confirm"].isEnabled)
+        app.buttons["Get the commands"].tap()
+        let close = app.buttons["Close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 15), "the share sheet did not appear")
+        close.tap()
+        XCTAssertTrue(app.buttons["setup-confirm"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["setup-confirm"].label, "Continue", "the app's own record says the commands were made")
+        sleep(2)   // iOS 27 can swallow a tap while the share sheet is still leaving: tap again if the page did not close
+        confirm(app)
+        if app.buttons["setup-confirm"].waitForExistence(timeout: 2) { confirm(app) }
+        XCTAssertTrue(done(app, 2))
+        for n in 3...6 {
+            XCTAssertTrue(app.buttons["Continue with step \(n)"].waitForExistence(timeout: 5))
+            app.buttons["Continue with step \(n)"].tap()
+            XCTAssertTrue(app.navigationBars["Step \(n) of 6"].waitForExistence(timeout: 5))
+            if n == 4 { for i in 0..<3 { sw(app, i).tap() } }
+            confirm(app)
+            XCTAssertTrue(done(app, n))
+        }
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Continue with step'")).firstMatch.exists, "nothing is left to continue with")
+        // The Scan screen no longer shows the line.
+        back(app)
+        XCTAssertTrue(app.buttons["Start scan"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["setup-left"].exists)
+        app.terminate()
+        // A relaunch keeps the ticks (no reset).
+        let again = openScan(["-appearance", "light"], reset: false)
+        again.buttons["setup-banner"].tap()
+        XCTAssertTrue(done(again, 6), "the ticks survived the relaunch")
+    }
+
+    func testSettingsPictureAndStepWordsForEveryStep() throws {
+        let app = openScan(["-appearance", "light"])
+        openChecklist(app)
+        for n in 1...6 {
+            openStep(app, n)
+            let picture = app.descendants(matching: .any)["setup-picture"].firstMatch
+            if n == 3 || n == 4 {
+                // The picture is behind "See where it is", not on the page; the numbered steps are.
+                XCTAssertFalse(picture.exists, "step \(n): the picture is not on the page")
+                XCTAssertTrue(app.descendants(matching: .any)["setup-steps"].firstMatch.exists, "step \(n) has its numbered steps")
+                let see = app.buttons["setup-see"]
+                reveal(app, see)
+                see.tap()
+                XCTAssertTrue(picture.waitForExistence(timeout: 5), "step \(n) has its picture in the sheet")
+                app.buttons["setup-picture-done"].tap()
+                XCTAssertTrue(app.buttons["setup-confirm"].waitForExistence(timeout: 5))
+                XCTAssertFalse(picture.exists)
+            } else {
+                XCTAssertTrue(picture.exists, "step \(n) has its picture")
+            }
+            XCTAssertEqual(app.descendants(matching: .any)["setup-steps"].firstMatch.exists, n >= 3 && n <= 5, "numbered steps on steps 3 to 5")
+            XCTAssertEqual(app.descendants(matching: .any)["setup-siri"].firstMatch.exists, n == 3 || n == 4, "the Siri line only on the Voice Control steps")
+            XCTAssertTrue(app.buttons["setup-confirm"].exists)
+            // Only step 1 has a page iOS can open (this app's notification settings); nothing reaches the other steps' pages on iOS 26 (7 Oct 2026).
+            XCTAssertEqual(app.buttons["setup-open-settings"].exists, n == 1, "Open Settings only on step 1")
+            if n == 3 || n == 6 { XCTAssertEqual(app.buttons["setup-confirm"].label, "I've done it!") }
+            if n == 3 { XCTAssertTrue(app.staticTexts["Say \"Hey Siri, open Voice Control settings\"."].exists) }
+            back(app)
+        }
+    }
+
+    /// "Open Settings" on each step page that has a Settings page: the private Settings link must take the app to the background and Settings must come up. The page it
+    /// lands on is printed (the navigation bar title) so each iOS version's result can be read.
+    func testOpenSettingsLinksLeaveTheApp() throws {
+        let app = openScan(["-appearance", "light"])
+        openChecklist(app)
+        let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        XCTAssertFalse(app.buttons["setup-open-settings"].exists)
+        // Only step 1 has the button now: iOS offers no link into the other steps' pages (7 Oct 2026).
+        for n in [1] {
+            openStep(app, n)
+            let open = app.buttons["setup-open-settings"]
+            reveal(app, open)
+            open.tap()
+            let landed = settings.wait(for: .runningForeground, timeout: 15)
+            sleep(2)
+            let titles = settings.navigationBars.allElementsBoundByIndex.map(\.identifier)
+            print("SETTINGS-LINK step \(n): foreground=\(landed) bars=\(titles)")
+            XCTAssertTrue(landed, "step \(n): Settings came up")
+            XCTAssertNotEqual(app.state, .runningForeground, "step \(n): the app went to the background")
+            settings.terminate()
+            app.activate()
+            XCTAssertTrue(app.navigationBars["Step \(n) of 6"].waitForExistence(timeout: 10))
+            back(app)
+        }
+    }
+
+    /// Steps 3 to 6 have no "Open Settings" button (nothing reaches their pages on iOS 26); each page already names its Settings path in its own words.
+    func testStep6NamesTheSettingsPageInWords() throws {
+        let app = openScan(["-appearance", "light"])
+        openChecklist(app)
+        openStep(app, 6)
+        let line = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Settings › Notifications › Screen Sharing")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["setup-open-settings"].exists)
+    }
+
+    func testStep5SaysAlarmsStillRing() throws {
+        let app = openScan()
+        openChecklist(app)
+        openStep(app, 5)
+        let line = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Alarms and timers still ring through Do Not Disturb, so check none is due during a scan.'")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 5), "the alarm warning is visible text on step 5, not in the disclosure")
+        shot("setup-step5-alarms")
+    }
+
+    func testSettingsHasGetReadyToScan() throws {
+        let app = openScan()
+        back(app)   // the Scan screen is pushed over Box
+        app.buttons["More"].tap()
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
+        let row = app.buttons["settings-get-ready"]
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        XCTAssertTrue(row.label.contains("0 of 6 done"), row.label)
+        shot("settings-get-ready")
+        row.tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5), "the same checklist")
+        XCTAssertTrue(done(app, 0))
+        toggleSetUp(app)
+        XCTAssertTrue(done(app, 6))
+        back(app)
+        XCTAssertTrue(app.buttons["settings-get-ready"].label.contains("Done"))
+    }
+
+    func testThreeSwitchStep() throws {
+        let app = openScan()
+        openChecklist(app)
+        openStep(app, 4)
+        let confirmButton = app.buttons["setup-confirm"]
+        XCTAssertEqual(confirmButton.label, "Done · 0 of 3 ticked")
+        XCTAssertFalse(confirmButton.isEnabled)
+        sw(app, 0).tap()
+        XCTAssertEqual(confirmButton.label, "Done · 1 of 3 ticked")
+        sw(app, 1).tap(); sw(app, 2).tap()
+        XCTAssertEqual(confirmButton.label, "Done · 3 of 3 ticked")
+        XCTAssertTrue(confirmButton.isEnabled)
+        // A tick can be taken back.
+        sw(app, 1).tap()
+        XCTAssertFalse(confirmButton.isEnabled)
+        sw(app, 1).tap()
+        confirm(app)
+        XCTAssertTrue(done(app, 1))
+    }
+
+    func testMyPhoneIsSetUp() throws {
+        let app = openScan()
+        chooseVoicePaging(app)
+        XCTAssertTrue(app.buttons["setup-left"].exists)
+        openChecklist(app)
+        let toggle = app.switches["My phone is set up"]
+        XCTAssertTrue(toggle.exists)
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.tap()
+        XCTAssertTrue(done(app, 6))
+        XCTAssertFalse(app.buttons["Continue with step 1"].exists)
+        XCTAssertEqual(app.buttons["setup-step-3"].value as? String, "Marked complete")
+        shot("setup-checklist-said-done")
+        back(app)
+        XCTAssertFalse(app.buttons["setup-left"].exists, "setup is done: no line above the button")
+        // Once setup is done the banner keeps only its first sentence, and still opens the checklist.
+        XCTAssertEqual(app.buttons["setup-banner"].label, "Important! Before you start your scan please ensure that you have opened your first Pokémon's appraisal in Pokémon GO.")
+        shot("banner-setup-done")
+        app.buttons["setup-banner"].tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5))
+        toggleSetUp(app)
+        XCTAssertTrue(done(app, 0), "turning it off again brings the steps back")
+        XCTAssertTrue(app.buttons["Continue with step 1"].exists)
+    }
+
+    // MARK: the line and the sheet
+
+    func testStepsLeftLineOpensTheChecklist() throws {
+        let app = openScan()
+        XCTAssertFalse(app.buttons["setup-left"].exists, "paging by hand is selected: the line is about voice paging")
+        chooseVoicePaging(app)
+        let line = app.buttons["setup-left"]
+        XCTAssertTrue(line.exists)
+        XCTAssertEqual(line.label, "6 setup steps left · Finish")
+        line.tap()
+        XCTAssertTrue(app.staticTexts["Get ready to scan"].waitForExistence(timeout: 5))
+        openStep(app, 3); confirm(app)
+        XCTAssertTrue(done(app, 1))
+        back(app)
+        XCTAssertEqual(app.buttons["setup-left"].label, "5 setup steps left · Finish")
+    }
+
+    func testGentleSheetOnlyWhenSetupIsNotDoneAndPagingIsByVoice() throws {
+        let app = openScan(["-appearance", "light"])
+        // Paging by hand (the default until the commands exist): no sheet, and starting never opens the guide (it goes to the system picker, which the simulator cannot show).
+        XCTAssertFalse(app.staticTexts["Set your phone up first?"].exists)
+        // Paging by voice, setup not done: the sheet comes first.
+        chooseVoicePaging(app)
+        app.buttons["Start scan"].tap()
+        XCTAssertTrue(app.staticTexts["Set your phone up first?"].waitForExistence(timeout: 5))
+        shot("setup-sheet-light")
+        app.buttons["setup-sheet-anyway"].tap()
+        XCTAssertTrue(app.staticTexts["Set your phone up first?"].waitForNonExistence(timeout: 5), "Scan anyway closes the sheet")
+        XCTAssertFalse(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 2), "Scan anyway goes to the system picker, not to the guide")
+        // Open Scan setup lands on the next unfinished step.
+        app.buttons["Start scan"].tap()
+        XCTAssertTrue(app.buttons["setup-sheet-open"].waitForExistence(timeout: 5))
+        app.buttons["setup-sheet-open"].tap()
+        XCTAssertTrue(app.navigationBars["Step 1 of 6"].waitForExistence(timeout: 8), "the checklist opens at the next unfinished step")
+        confirm(app)
+        XCTAssertTrue(done(app, 1))
+        // When setup is done the sheet never appears.
+        toggleSetUp(app)
+        back(app)
+        XCTAssertFalse(app.staticTexts["Set your phone up first?"].exists)
+        XCTAssertFalse(app.staticTexts["Step 1 of 3"].exists)
+    }
+
+    // MARK: the game
+
+    private func logLabel(_ app: XCUIApplication) -> String { app.descendants(matching: .any)["game-open-log"].firstMatch.label }
+
+    func testTheGameIsOpenedOnceWhenTheBroadcastGoesLive() throws {
+        let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "15", "-fake-start-press-after", "5", "-fake-open-game", "ok"])
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ENDSWITH %@", "We'll take you back to the game.")).firstMatch.exists)   // the apostrophe cannot sit inside a quoted format string
+        XCTAssertEqual(logLabel(app), "0 ", "nothing is opened before a broadcast starts")
+        XCTAssertTrue(app.staticTexts["Scan in progress"].waitForExistence(timeout: 40))
+        sleep(4)   // the state is rewritten every second: it must not be asked again
+        XCTAssertEqual(logLabel(app), "1 pokemongo://", "exactly one request, for exactly pokemongo://")
+        XCTAssertFalse(app.staticTexts["game-fallback"].exists)
+    }
+
+    func testTheFallbackLineWhenTheGameCannotBeOpened() throws {
+        let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "15", "-fake-start-press-after", "5", "-fake-open-game", "fail"])
+        XCTAssertTrue(app.staticTexts["Scan in progress"].waitForExistence(timeout: 40))
+        XCTAssertTrue(app.staticTexts["game-fallback"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["game-fallback"].label, "Now switch to Pokémon GO.")
+        XCTAssertEqual(logLabel(app), "1 pokemongo://")
+        shot("scan-scanning-fallback")
+    }
+
+    /// A broadcast that goes live without this screen's start control having been pressed (started from Control Centre) opens nothing.
+    func testABroadcastStartedWithoutPressingThisScreensControlDoesNotOpenTheGame() throws {
+        let app = openScan(["-appearance", "light", "-fake-scan", "-fake-scan-after", "10", "-fake-open-game", "ok"])
+        XCTAssertEqual(logLabel(app), "0 ")
+        XCTAssertTrue(app.staticTexts["Scan in progress"].waitForExistence(timeout: 40))
+        sleep(4)
+        XCTAssertEqual(logLabel(app), "0 ", "no press of this screen's start control, so the game is not opened")
+        XCTAssertFalse(app.staticTexts["game-fallback"].exists)
+    }
+
+    func testAScanAlreadyRunningWhenTheScreenOpensDoesNotOpenTheGame() throws {
+        let app = openScan(["-fake-scan", "-fake-open-game", "ok"], remember: false)
+        XCTAssertTrue(app.staticTexts["Scan in progress"].waitForExistence(timeout: 10))
+        sleep(2)
+        XCTAssertEqual(logLabel(app), "0 ")
+    }
+
+    // MARK: screenshots
+
+    func testSetupScreenshots() throws {
+        let runs: [(String, [String])] = [
+            ("light", ["-appearance", "light"]),
+            ("dark", ["-appearance", "dark"]),
+            ("large", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]),
+        ]
+        for (name, args) in runs {
+            let app = openScan(args)
+            shot("setup-scan-banner-\(name)")
+            openChecklist(app)
+            shot("setup-checklist-0-\(name)")
+            for n in 1...6 {
+                openStep(app, n)
+                shot("setup-step\(n)-\(name)")
+                if n == 4 { for i in 0..<2 { sw(app, i).tap() }; shot("setup-step4-ticked-\(name)") }
+                back(app)
+            }
+            // At large text the screens above are the point (each row is a screen high); the rest is looked at in light and dark.
+            if name == "large" { app.terminate(); continue }
+            // Two done: steps 1 and 3.
+            openStep(app, 1); confirm(app)
+            openStep(app, 3); confirm(app)
+            XCTAssertTrue(done(app, 2))
+            shot("setup-checklist-2-\(name)")
+            toggleSetUp(app)
+            XCTAssertTrue(done(app, 6))
+            shot("setup-checklist-6-\(name)")
+            toggleSetUp(app)
+            openMore(app)
+            XCTAssertTrue(app.staticTexts["More about scanning"].waitForExistence(timeout: 5))
+            shot("setup-more-\(name)")
+            back(app); back(app)
+            XCTAssertTrue(app.buttons["setup-banner"].waitForExistence(timeout: 5))
+            do {
+                chooseVoicePaging(app)
+                app.buttons["Start scan"].tap()
+                XCTAssertTrue(app.staticTexts["Set your phone up first?"].waitForExistence(timeout: 5))
+                shot("setup-sheet-\(name)")
+            }
+            app.terminate()
+        }
+    }
+}

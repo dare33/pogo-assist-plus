@@ -4,12 +4,18 @@
 // picks between those by CP and HP.
 
 const REGIONAL = { alolan: 'Alola', galarian: 'Galar', hisuian: 'Hisui', paldean: 'Paldea' };
+// The game prints "Nidoran♀" and "Nidoran♂". The OCR cannot read the symbol (it is not in the
+// whitelist and comes out as nothing or one stray letter), so both share the display name
+// "Nidoran" and the solver tells them apart by their stats. The export uses Poke Genie's names.
+const NIDORAN = { nidoran_female: 'Nidoran♀', nidoran_male: 'Nidoran♂' };
 
 /** Base name and Poke Genie style form ("", "Hero", "Mega Y", "Alola") of a game-master species. */
 export function nameAndForm(species) {
   const m = species.speciesName.match(/^(.*?)\s*\((.*)\)$/);
   const base = m ? m[1] : species.speciesName;
   const form = m ? m[2] : '';
+  const nidoran = NIDORAN[species.speciesId];
+  if (nidoran) return { name: nidoran, form: '' };
   return { name: base, form: REGIONAL[form.toLowerCase()] ?? form };
 }
 
@@ -23,6 +29,7 @@ export function displayNames(gm) {
   };
   for (const p of gm.byId.values()) {
     if (p.speciesId.endsWith('_shadow')) continue; // same name on screen; the shadow flag is elsewhere
+    if (NIDORAN[p.speciesId]) { add('Nidoran', 'Nidoran', '', p.speciesId); continue; }
     const m = p.speciesName.match(/^(.*?)\s*\((.*)\)$/);
     const base = m ? m[1] : p.speciesName;
     const form = m ? m[2] : '';
@@ -54,7 +61,8 @@ export function distance(a, b) {
 /**
  * Best candidate for an OCR'd name. Tries the whole text, then the text with stray one-letter or
  * punctuation tokens dropped (the edit-pencil icon often reads as a dot or a letter). Returns
- * { candidate, distance, text } or null when nothing is close enough.
+ * { candidate, distance, text, whole } or null when nothing is close enough; `whole` says the match
+ * used the whole text (trailing one-letter tokens aside), not the text with a word dropped.
  */
 export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   const variants = new Set();
@@ -63,7 +71,21 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
   variants.add(norm);
   const tokens = norm.split(' ');
   variants.add(tokens.filter((t) => t.length > 1).join(' '));
+  // The pencil icon sits after the name, so only trailing one-letter tokens may be dropped from a
+  // "whole" match; a stray token in front could be what is left of "Alolan".
+  const trimmed = [...tokens];
+  while (trimmed.length > 1 && trimmed[trimmed.length - 1].length === 1) trimmed.pop();
+  const wholeText = new Set([norm, trimmed.join(' ')]);
   if (tokens.length > 1) { variants.add(tokens.slice(1).join(' ')); variants.add(tokens.slice(0, -1).join(' ')); }
+  // "Nidoran" plus at most one stray character is Nidoran with its gender symbol misread; without
+  // this it is as close to "Nidorino" as to "Nidoran". Checked on the whole text first, then on
+  // the text with a word dropped (an overlay can add a word after the name).
+  // `attached`: a letter stuck to the name ("Nidorano"), which a misread Nidorino or Nidorina
+  // also gives; the pipeline does not let such a frame interrupt a run of either.
+  const nidoran = candidates.find((c) => normalise(c.display) === 'nidoran');
+  if (nidoran) for (const v of variants) {
+    if (/^nidoran ?[a-z0-9]?$/.test(v)) return { candidate: nidoran, distance: 0, text: 'nidoran', whole: wholeText.has(v), symbol: true, attached: v.length === 8 && !v.includes(' ') };
+  }
   let best = null;
   for (const v of variants) {
     if (!v) continue;
@@ -71,7 +93,9 @@ export function matchName(text, candidates, { maxRatio = 0.25 } = {}) {
       const key = normalise(c.display);
       const d = distance(v, key);
       const limit = Math.max(1, Math.floor(key.length * maxRatio));
-      if (d <= limit && (!best || d < best.distance || (d === best.distance && v.length > best.text.length))) best = { candidate: c, distance: d, text: v };
+      // Equally near, "Nidoran" gives way ("Nidorin" is Nidorina or Nidorino with a letter lost).
+      const yields = best && d === best.distance && best.candidate.display === 'Nidoran' && c.display !== 'Nidoran';
+      if (d <= limit && (!best || d < best.distance || yields || (d === best.distance && v.length > best.text.length && c.display !== 'Nidoran'))) best = { candidate: c, distance: d, text: v, whole: wholeText.has(v) };
     }
   }
   return best;

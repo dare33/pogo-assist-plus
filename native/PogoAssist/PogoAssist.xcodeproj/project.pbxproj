@@ -1,0 +1,934 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2851EAE92D472650A78CD032 /* SampleHandler.swift */; };
+		011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */; };
+		0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */; };
+		07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */; };
+		097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		0A3EC8BBA5B78347A0413F5C /* ReviewWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B793340E977374E8287D10D /* ReviewWording.swift */; };
+		0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4B281BB0B64267189CDB87 /* SetupProgress.swift */; };
+		0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052B76A429D7B08291119B9 /* ReviewResult.swift */; };
+		1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 00436FF3692616EF8377125B /* PogoReader */; };
+		1DF267CCE4D1096881873210 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
+		205415EE687703C0379569F7 /* GuideFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C5D5C5A5E06415BB056093 /* GuideFlow.swift */; };
+		262F06295009225A5291CD5A /* BoxChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853199DAE4157490F71A25E8 /* BoxChrome.swift */; };
+		29D9364DF6997E6C296892EC /* GameOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = C317D4A35524B2870E2635E8 /* GameOpener.swift */; };
+		31CA236599307F00B33A65CA /* SetupStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B7030AC596BFDD03757B5C /* SetupStepView.swift */; };
+		31DDB5EE5F7E61CF3A468735 /* ReviewScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */; };
+		3612921432E15343B1E195EA /* FlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAA375CD0561890BDC48B2 /* FlowTests.swift */; };
+		371C03D06719ECB18761E0D6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4C1077B425FFEEFAFBFA9570 /* Assets.xcassets */; };
+		373A9DA32DD806383DC6106A /* ComponentGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */; };
+		3A0CEB8C4C1831E05411C6FB /* BoxExportFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CBC04B3E82BBE8BB3DC034 /* BoxExportFile.swift */; };
+		408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFAC0B18897FB5A85E55764 /* Theme.swift */; };
+		44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */; };
+		4802DD98D7286E310F86378A /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D08E55E9B50EC09258EFF1 /* AppModel.swift */; };
+		5143F741547AF0FBD8D7A675 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */; };
+		53E565D8D2134740F880785D /* StateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9E2F476A7C0759293BCB1F /* StateModel.swift */; };
+		55CD9F47DF14E817FF7A91C5 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = B08D9DBF1BA823A3FB1BD6BA /* OFL.txt */; };
+		590D6523FF4E5A4A47A05349 /* ReviewToCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6C431800FF0BBA252331DB /* ReviewToCheck.swift */; };
+		5A7CFEDBCAD05B096C12CA05 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
+		676B795352FD800C5AC8AD78 /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 16E6951D5A5A38B33745BA2B /* PogoReader */; };
+		68A28061D9146D4EA5A538CC /* GameSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */; };
+		6C36CD15ECE70F69B86AD66A /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
+		6DB5DFC73A34D88596B2949B /* SampleScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2174CAD06ADF7ECC068B88FD /* SampleScan.swift */; };
+		767B78A46C867ABB726341EE /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */; };
+		7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */; };
+		8195313A1A5D36E07D5E0BA8 /* sample-partial-cp.replay.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = 485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */; };
+		83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */; };
+		877CD9FE721D96DF464F3FD7 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6AA316B422945EDE86A699 /* Formatting.swift */; };
+		88B726BE30F7E106A63BC75E /* QuestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */; };
+		8DCC1E40BCAA03A119A1ECC8 /* sample-scan.replay.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = 50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */; };
+		8E62CA1C22FF97368E5B9F14 /* FloatingTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 943D02DD923AE19E5F63128C /* FloatingTabBar.swift */; };
+		8EF4EB6711143884E09716FE /* ReviewSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7658A29BC83D760022D1FB3A /* ReviewSeed.swift */; };
+		8FC06A9C9116928BD339C75B /* ScanBroadcastButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */; };
+		909DB6E9FEFFF98EFE57CDEB /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6875B047C21F1CC4B7701507 /* Components.swift */; };
+		93DC471F59BEADA19D7B80B8 /* GuideScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4553543BAEE1146FEB5BC7F /* GuideScreensTests.swift */; };
+		948718A42F4443D1612CB6B5 /* ScanMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 769F24027EB56D5A4BB8154F /* ScanMark.swift */; };
+		953581AE09525FD904E92745 /* PokemonDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */; };
+		979478DD306DC7F1C90E9131 /* PogoBox in Frameworks */ = {isa = PBXBuildFile; productRef = 2E478313CE5E32E23930E4C8 /* PogoBox */; };
+		9975DFDD41FE07B384C77B88 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1222BDC1C6F45E94BECD7F63 /* ScanView.swift */; };
+		998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */; };
+		9D59AE77A0468643F441B2C8 /* ReviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF2F19209145E4C035F933E /* ReviewSupport.swift */; };
+		9F51E8805AFDD803B6C15033 /* ReviewQuestionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 936229D5CE5AD592DA498B16 /* ReviewQuestionViews.swift */; };
+		A0129EF312F80693A11F6889 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7BBE6B4B350600CD9DBB146 /* ContentView.swift */; };
+		A0A130F029BD88C97D55D93B /* ScanNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */; };
+		ADAE04D49BAC4D1D07726C7B /* BoxIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AA7DC367A1E8DE143CF1386 /* BoxIndex.swift */; };
+		AF7D163058C2BCD0E1E66334 /* NextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55460A514386DA8E46320B36 /* NextView.swift */; };
+		B097AAC5F43E6BBBD3CF938B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF799334CCB9D208123457E5 /* SettingsView.swift */; };
+		B23E335C55433BBEBD9E3DA2 /* ScanNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */; };
+		B479602EBFB3CC0006AE63E3 /* BoxIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972B5D573E425B7C4A866181 /* BoxIntents.swift */; };
+		B71EB8981CA7EF438CDCB67F /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF23F6FB7C812B78963625C3 /* RootView.swift */; };
+		BB5FFC989BC424882CE9E129 /* AppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F588B630BAB0C78B337D8139 /* AppearanceView.swift */; };
+		C08B608A460725E2E5529AFB /* ScanSetupPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E142247214BEF767388106 /* ScanSetupPrompts.swift */; };
+		C0A0118C2725F58B90F1E11A /* SetupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */; };
+		C46DCAB7C3935BB722DFEBF9 /* ScanMoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D59DA0D8FD3A81C5286A75 /* ScanMoreView.swift */; };
+		C5654EA7CCA44CBCF1DDD285 /* ReviewSaving.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */; };
+		C65013B44F62BBA96FF5B144 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE84346ABF38B9C9DFB8259 /* Toast.swift */; };
+		C875980798B1206FF0A644E8 /* BoxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17BAAA30DB1A885E5BC14BF /* BoxView.swift */; };
+		CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
+		D4D21195EE5DE09BDCAE9BE0 /* ReviewNotSeen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61B527C762D4C808D507072 /* ReviewNotSeen.swift */; };
+		DB7F0F261F579F598E2F94B8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9A7F76950DF8ED2D50218072 /* PrivacyInfo.xcprivacy */; };
+		DF232EF5A04B4ADA4B79527B /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6261F1BB3C75D905222CC61 /* Typography.swift */; };
+		E6247625CABEEE77FEB55C70 /* Figtree-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 60BF710F03812439C395ED03 /* Figtree-Variable.ttf */; };
+		E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83DD8DD5AEC769BBE964440 /* ScanDone.swift */; };
+		EDABA9EEAC727744599A9E39 /* ReportSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F5275BA12DBF318D759175 /* ReportSupport.swift */; };
+		F4EC58D5E187857BA98309EC /* BarsAndAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */; };
+		F8C6E92B9CF663047CCCC108 /* SetupChecklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F723B7B2F32D040376093D /* SetupChecklistView.swift */; };
+		F9863E5471B04F338208E6E9 /* ReviewSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */; };
+		F9C0DA47B6D99ED2A742185D /* BoxScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */; };
+		FCC6A2B1D4B58BED4B8BA355 /* SpeciesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D6CBB60EDDFC066527674173 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABF508185C418D773A2E16EA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1F7F526800B6D63AAD20F8D3;
+			remoteInfo = PogoBroadcast;
+		};
+		DEAB3E5EF4014EFB31864DD9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABF508185C418D773A2E16EA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 282114AC3DFA08D4C66E6E04;
+			remoteInfo = PogoAssist;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		624150CED5EC66A79A7FD39D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		00027E9C738C8485EF328388 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		00B7030AC596BFDD03757B5C /* SetupStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepView.swift; sourceTree = "<group>"; };
+		01F723B7B2F32D040376093D /* SetupChecklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistView.swift; sourceTree = "<group>"; };
+		09D08E55E9B50EC09258EFF1 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		1222BDC1C6F45E94BECD7F63 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
+		1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSearch.swift; sourceTree = "<group>"; };
+		1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesListView.swift; sourceTree = "<group>"; };
+		1FFAC0B18897FB5A85E55764 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarsAndAccounts.swift; sourceTree = "<group>"; };
+		2174CAD06ADF7ECC068B88FD /* SampleScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleScan.swift; sourceTree = "<group>"; };
+		2851EAE92D472650A78CD032 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
+		2E3538488989AE3C1ABAA66B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonDetailView.swift; sourceTree = "<group>"; };
+		36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBroadcastButton.swift; sourceTree = "<group>"; };
+		3AA7DC367A1E8DE143CF1386 /* BoxIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxIndex.swift; sourceTree = "<group>"; };
+		3EF2F19209145E4C035F933E /* ReviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSupport.swift; sourceTree = "<group>"; };
+		3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanOptionsPanel.swift; sourceTree = "<group>"; };
+		444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxScreensTests.swift; sourceTree = "<group>"; };
+		45CBC04B3E82BBE8BB3DC034 /* BoxExportFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxExportFile.swift; sourceTree = "<group>"; };
+		485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */ = {isa = PBXFileReference; path = "sample-partial-cp.replay.jsonl"; sourceTree = "<group>"; };
+		4C1077B425FFEEFAFBFA9570 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4C694C91A68984883C8CC317 /* PogoAssist.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoAssist.entitlements; sourceTree = "<group>"; };
+		4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupTests.swift; sourceTree = "<group>"; };
+		4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSaving.swift; sourceTree = "<group>"; };
+		50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */ = {isa = PBXFileReference; path = "sample-scan.replay.jsonl"; sourceTree = "<group>"; };
+		51C5D5C5A5E06415BB056093 /* GuideFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideFlow.swift; sourceTree = "<group>"; };
+		5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PogoBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		55460A514386DA8E46320B36 /* NextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextView.swift; sourceTree = "<group>"; };
+		55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PogoAssistApp.swift; sourceTree = "<group>"; };
+		58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSettings.swift; sourceTree = "<group>"; };
+		5A6C431800FF0BBA252331DB /* ReviewToCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewToCheck.swift; sourceTree = "<group>"; };
+		5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewScreensTests.swift; sourceTree = "<group>"; };
+		5C6AA316B422945EDE86A699 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
+		5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeScansBetterSheet.swift; sourceTree = "<group>"; };
+		60BF710F03812439C395ED03 /* Figtree-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Figtree-Variable.ttf"; sourceTree = "<group>"; };
+		6875B047C21F1CC4B7701507 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		6B793340E977374E8287D10D /* ReviewWording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewWording.swift; sourceTree = "<group>"; };
+		6B9E2F476A7C0759293BCB1F /* StateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateModel.swift; sourceTree = "<group>"; };
+		6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSteps.swift; sourceTree = "<group>"; };
+		72D59DA0D8FD3A81C5286A75 /* ScanMoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanMoreView.swift; sourceTree = "<group>"; };
+		7658A29BC83D760022D1FB3A /* ReviewSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSeed.swift; sourceTree = "<group>"; };
+		769F24027EB56D5A4BB8154F /* ScanMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanMark.swift; sourceTree = "<group>"; };
+		853199DAE4157490F71A25E8 /* BoxChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxChrome.swift; sourceTree = "<group>"; };
+		936229D5CE5AD592DA498B16 /* ReviewQuestionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewQuestionViews.swift; sourceTree = "<group>"; };
+		943D02DD923AE19E5F63128C /* FloatingTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingTabBar.swift; sourceTree = "<group>"; };
+		972B5D573E425B7C4A866181 /* BoxIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxIntents.swift; sourceTree = "<group>"; };
+		9A7F76950DF8ED2D50218072 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
+		9DD3B9B348BAD6411BC1C01A /* SharedState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedState.swift; sourceTree = "<group>"; };
+		A052B76A429D7B08291119B9 /* ReviewResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewResult.swift; sourceTree = "<group>"; };
+		A0F17C7995A34F075324B10F /* PogoAssistUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PogoAssistUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionCard.swift; sourceTree = "<group>"; };
+		AF23F6FB7C812B78963625C3 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		B08D9DBF1BA823A3FB1BD6BA /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		B3F5275BA12DBF318D759175 /* ReportSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportSupport.swift; sourceTree = "<group>"; };
+		B4553543BAEE1146FEB5BC7F /* GuideScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideScreensTests.swift; sourceTree = "<group>"; };
+		B61B527C762D4C808D507072 /* ReviewNotSeen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewNotSeen.swift; sourceTree = "<group>"; };
+		B6261F1BB3C75D905222CC61 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
+		B7BBE6B4B350600CD9DBB146 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Identifiers.xcconfig; sourceTree = "<group>"; };
+		C317D4A35524B2870E2635E8 /* GameOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameOpener.swift; sourceTree = "<group>"; };
+		C6F031A6C112AFF16F56C17A /* PogoReader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PogoReader; path = ../PogoReader; sourceTree = SOURCE_ROOT; };
+		CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoBroadcast.entitlements; sourceTree = "<group>"; };
+		D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSections.swift; sourceTree = "<group>"; };
+		D7EAA375CD0561890BDC48B2 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
+		E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentGallery.swift; sourceTree = "<group>"; };
+		E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanNotifier.swift; sourceTree = "<group>"; };
+		EC4B281BB0B64267189CDB87 /* SetupProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupProgress.swift; sourceTree = "<group>"; };
+		EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDebug.swift; sourceTree = "<group>"; };
+		EEE84346ABF38B9C9DFB8259 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
+		F17BAAA30DB1A885E5BC14BF /* BoxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxView.swift; sourceTree = "<group>"; };
+		F391C1A79CF135A501834207 /* PogoAssist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PogoAssist.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F588B630BAB0C78B337D8139 /* AppearanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceView.swift; sourceTree = "<group>"; };
+		F7E142247214BEF767388106 /* ScanSetupPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSetupPrompts.swift; sourceTree = "<group>"; };
+		F83DD8DD5AEC769BBE964440 /* ScanDone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDone.swift; sourceTree = "<group>"; };
+		F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDoneTests.swift; sourceTree = "<group>"; };
+		FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanScreensTests.swift; sourceTree = "<group>"; };
+		FF799334CCB9D208123457E5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		43C7191C0D0E29B8721FAF17 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */,
+				979478DD306DC7F1C90E9131 /* PogoBox in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2B9BC1BE8EBC5FE0C4A37FE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				676B795352FD800C5AC8AD78 /* PogoReader in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		136978DFB9C1E3E522338822 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		33DC935E8680C780EF432B5E /* PogoBroadcast */ = {
+			isa = PBXGroup;
+			children = (
+				2E3538488989AE3C1ABAA66B /* Info.plist */,
+				CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */,
+				9A7F76950DF8ED2D50218072 /* PrivacyInfo.xcprivacy */,
+				2851EAE92D472650A78CD032 /* SampleHandler.swift */,
+			);
+			path = PogoBroadcast;
+			sourceTree = "<group>";
+		};
+		4A22D7B44AB27CD127531B1A /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */,
+				E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */,
+				9DD3B9B348BAD6411BC1C01A /* SharedState.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		5411364665689D6D065557A6 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				4C1077B425FFEEFAFBFA9570 /* Assets.xcassets */,
+				485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */,
+				50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */,
+				6FF996B3012A44A445145B1D /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		5D6EDB9C210D9187585D781D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F391C1A79CF135A501834207 /* PogoAssist.app */,
+				A0F17C7995A34F075324B10F /* PogoAssistUITests.xctest */,
+				5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6FF996B3012A44A445145B1D /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				60BF710F03812439C395ED03 /* Figtree-Variable.ttf */,
+				B08D9DBF1BA823A3FB1BD6BA /* OFL.txt */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		80C169478E600852506F6E05 /* PogoAssistUITests */ = {
+			isa = PBXGroup;
+			children = (
+				444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */,
+				D7EAA375CD0561890BDC48B2 /* FlowTests.swift */,
+				B4553543BAEE1146FEB5BC7F /* GuideScreensTests.swift */,
+				5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */,
+				F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */,
+				FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */,
+				4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */,
+			);
+			path = PogoAssistUITests;
+			sourceTree = "<group>";
+		};
+		83D4555883DC4E6375E28D61 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				C6F031A6C112AFF16F56C17A /* PogoReader */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		A6DD4DFF546C8659517B4EF3 = {
+			isa = PBXGroup;
+			children = (
+				136978DFB9C1E3E522338822 /* Config */,
+				83D4555883DC4E6375E28D61 /* Packages */,
+				D1230AB8CB500A6F206667F1 /* PogoAssist */,
+				80C169478E600852506F6E05 /* PogoAssistUITests */,
+				33DC935E8680C780EF432B5E /* PogoBroadcast */,
+				4A22D7B44AB27CD127531B1A /* Shared */,
+				5D6EDB9C210D9187585D781D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B3C22E7F5FE1EAB4570AE24A /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */,
+				E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */,
+				6875B047C21F1CC4B7701507 /* Components.swift */,
+				943D02DD923AE19E5F63128C /* FloatingTabBar.swift */,
+				A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */,
+				769F24027EB56D5A4BB8154F /* ScanMark.swift */,
+				1FFAC0B18897FB5A85E55764 /* Theme.swift */,
+				EEE84346ABF38B9C9DFB8259 /* Toast.swift */,
+				B6261F1BB3C75D905222CC61 /* Typography.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		B742F829A8255904EA56099B /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				F588B630BAB0C78B337D8139 /* AppearanceView.swift */,
+				853199DAE4157490F71A25E8 /* BoxChrome.swift */,
+				F17BAAA30DB1A885E5BC14BF /* BoxView.swift */,
+				C317D4A35524B2870E2635E8 /* GameOpener.swift */,
+				1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */,
+				51C5D5C5A5E06415BB056093 /* GuideFlow.swift */,
+				5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */,
+				55460A514386DA8E46320B36 /* NextView.swift */,
+				33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */,
+				B61B527C762D4C808D507072 /* ReviewNotSeen.swift */,
+				936229D5CE5AD592DA498B16 /* ReviewQuestionViews.swift */,
+				A052B76A429D7B08291119B9 /* ReviewResult.swift */,
+				4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */,
+				D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */,
+				7658A29BC83D760022D1FB3A /* ReviewSeed.swift */,
+				3EF2F19209145E4C035F933E /* ReviewSupport.swift */,
+				5A6C431800FF0BBA252331DB /* ReviewToCheck.swift */,
+				9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */,
+				6B793340E977374E8287D10D /* ReviewWording.swift */,
+				AF23F6FB7C812B78963625C3 /* RootView.swift */,
+				36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */,
+				EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */,
+				F83DD8DD5AEC769BBE964440 /* ScanDone.swift */,
+				72D59DA0D8FD3A81C5286A75 /* ScanMoreView.swift */,
+				3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */,
+				F7E142247214BEF767388106 /* ScanSetupPrompts.swift */,
+				6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */,
+				1222BDC1C6F45E94BECD7F63 /* ScanView.swift */,
+				FF799334CCB9D208123457E5 /* SettingsView.swift */,
+				01F723B7B2F32D040376093D /* SetupChecklistView.swift */,
+				EC4B281BB0B64267189CDB87 /* SetupProgress.swift */,
+				00B7030AC596BFDD03757B5C /* SetupStepView.swift */,
+				1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+		D1230AB8CB500A6F206667F1 /* PogoAssist */ = {
+			isa = PBXGroup;
+			children = (
+				09D08E55E9B50EC09258EFF1 /* AppModel.swift */,
+				45CBC04B3E82BBE8BB3DC034 /* BoxExportFile.swift */,
+				3AA7DC367A1E8DE143CF1386 /* BoxIndex.swift */,
+				972B5D573E425B7C4A866181 /* BoxIntents.swift */,
+				B7BBE6B4B350600CD9DBB146 /* ContentView.swift */,
+				5C6AA316B422945EDE86A699 /* Formatting.swift */,
+				00027E9C738C8485EF328388 /* Info.plist */,
+				4C694C91A68984883C8CC317 /* PogoAssist.entitlements */,
+				55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */,
+				E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */,
+				B3F5275BA12DBF318D759175 /* ReportSupport.swift */,
+				2174CAD06ADF7ECC068B88FD /* SampleScan.swift */,
+				6B9E2F476A7C0759293BCB1F /* StateModel.swift */,
+				5411364665689D6D065557A6 /* Resources */,
+				B742F829A8255904EA56099B /* Screens */,
+				B3C22E7F5FE1EAB4570AE24A /* UI */,
+			);
+			path = PogoAssist;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1F7F526800B6D63AAD20F8D3 /* PogoBroadcast */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 601830ECC46122AAE0399C36 /* Build configuration list for PBXNativeTarget "PogoBroadcast" */;
+			buildPhases = (
+				E3E4F8E83C4C7E6BC24510AA /* Sources */,
+				57A38079DE99D5A666F30749 /* Resources */,
+				A2B9BC1BE8EBC5FE0C4A37FE /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PogoBroadcast;
+			packageProductDependencies = (
+				16E6951D5A5A38B33745BA2B /* PogoReader */,
+			);
+			productName = PogoBroadcast;
+			productReference = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		282114AC3DFA08D4C66E6E04 /* PogoAssist */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5487725AE03AB7A6D39EB43E /* Build configuration list for PBXNativeTarget "PogoAssist" */;
+			buildPhases = (
+				DF6ACB2D44293C40A2B1BC47 /* Sources */,
+				B47A81455E0680E2F2E985A2 /* Resources */,
+				43C7191C0D0E29B8721FAF17 /* Frameworks */,
+				624150CED5EC66A79A7FD39D /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2D012D71862B1D676EA51A5 /* PBXTargetDependency */,
+			);
+			name = PogoAssist;
+			packageProductDependencies = (
+				00436FF3692616EF8377125B /* PogoReader */,
+				2E478313CE5E32E23930E4C8 /* PogoBox */,
+			);
+			productName = PogoAssist;
+			productReference = F391C1A79CF135A501834207 /* PogoAssist.app */;
+			productType = "com.apple.product-type.application";
+		};
+		4B49FD7AA675776B5AA780D6 /* PogoAssistUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 328366BCE46DB78F73C764DA /* Build configuration list for PBXNativeTarget "PogoAssistUITests" */;
+			buildPhases = (
+				D3BE7B2F1E1FC244F871B954 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				26C94AD54F695CC8937B5746 /* PBXTargetDependency */,
+			);
+			name = PogoAssistUITests;
+			packageProductDependencies = (
+			);
+			productName = PogoAssistUITests;
+			productReference = A0F17C7995A34F075324B10F /* PogoAssistUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		ABF508185C418D773A2E16EA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					1F7F526800B6D63AAD20F8D3 = {
+						ProvisioningStyle = Automatic;
+					};
+					282114AC3DFA08D4C66E6E04 = {
+						ProvisioningStyle = Automatic;
+					};
+					4B49FD7AA675776B5AA780D6 = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = 282114AC3DFA08D4C66E6E04;
+					};
+				};
+			};
+			buildConfigurationList = 169BDF417580650D1D1C1947 /* Build configuration list for PBXProject "PogoAssist" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = A6DD4DFF546C8659517B4EF3;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				FD0F4D83FBF63D631A6AAE65 /* XCLocalSwiftPackageReference "../PogoReader" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5D6EDB9C210D9187585D781D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				282114AC3DFA08D4C66E6E04 /* PogoAssist */,
+				1F7F526800B6D63AAD20F8D3 /* PogoBroadcast */,
+				4B49FD7AA675776B5AA780D6 /* PogoAssistUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		57A38079DE99D5A666F30749 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB7F0F261F579F598E2F94B8 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B47A81455E0680E2F2E985A2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				371C03D06719ECB18761E0D6 /* Assets.xcassets in Resources */,
+				E6247625CABEEE77FEB55C70 /* Figtree-Variable.ttf in Resources */,
+				55CD9F47DF14E817FF7A91C5 /* OFL.txt in Resources */,
+				5143F741547AF0FBD8D7A675 /* PrivacyInfo.xcprivacy in Resources */,
+				8195313A1A5D36E07D5E0BA8 /* sample-partial-cp.replay.jsonl in Resources */,
+				8DCC1E40BCAA03A119A1ECC8 /* sample-scan.replay.jsonl in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D3BE7B2F1E1FC244F871B954 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9C0DA47B6D99ED2A742185D /* BoxScreensTests.swift in Sources */,
+				3612921432E15343B1E195EA /* FlowTests.swift in Sources */,
+				93DC471F59BEADA19D7B80B8 /* GuideScreensTests.swift in Sources */,
+				31DDB5EE5F7E61CF3A468735 /* ReviewScreensTests.swift in Sources */,
+				07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */,
+				998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */,
+				C0A0118C2725F58B90F1E11A /* SetupTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF6ACB2D44293C40A2B1BC47 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4802DD98D7286E310F86378A /* AppModel.swift in Sources */,
+				BB5FFC989BC424882CE9E129 /* AppearanceView.swift in Sources */,
+				F4EC58D5E187857BA98309EC /* BarsAndAccounts.swift in Sources */,
+				262F06295009225A5291CD5A /* BoxChrome.swift in Sources */,
+				3A0CEB8C4C1831E05411C6FB /* BoxExportFile.swift in Sources */,
+				ADAE04D49BAC4D1D07726C7B /* BoxIndex.swift in Sources */,
+				B479602EBFB3CC0006AE63E3 /* BoxIntents.swift in Sources */,
+				C875980798B1206FF0A644E8 /* BoxView.swift in Sources */,
+				373A9DA32DD806383DC6106A /* ComponentGallery.swift in Sources */,
+				909DB6E9FEFFF98EFE57CDEB /* Components.swift in Sources */,
+				A0129EF312F80693A11F6889 /* ContentView.swift in Sources */,
+				8E62CA1C22FF97368E5B9F14 /* FloatingTabBar.swift in Sources */,
+				877CD9FE721D96DF464F3FD7 /* Formatting.swift in Sources */,
+				29D9364DF6997E6C296892EC /* GameOpener.swift in Sources */,
+				68A28061D9146D4EA5A538CC /* GameSearch.swift in Sources */,
+				205415EE687703C0379569F7 /* GuideFlow.swift in Sources */,
+				7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */,
+				AF7D163058C2BCD0E1E66334 /* NextView.swift in Sources */,
+				83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */,
+				953581AE09525FD904E92745 /* PokemonDetailView.swift in Sources */,
+				88B726BE30F7E106A63BC75E /* QuestionCard.swift in Sources */,
+				5A7CFEDBCAD05B096C12CA05 /* ReaderSettings.swift in Sources */,
+				EDABA9EEAC727744599A9E39 /* ReportSupport.swift in Sources */,
+				D4D21195EE5DE09BDCAE9BE0 /* ReviewNotSeen.swift in Sources */,
+				9F51E8805AFDD803B6C15033 /* ReviewQuestionViews.swift in Sources */,
+				0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */,
+				C5654EA7CCA44CBCF1DDD285 /* ReviewSaving.swift in Sources */,
+				F9863E5471B04F338208E6E9 /* ReviewSections.swift in Sources */,
+				8EF4EB6711143884E09716FE /* ReviewSeed.swift in Sources */,
+				9D59AE77A0468643F441B2C8 /* ReviewSupport.swift in Sources */,
+				590D6523FF4E5A4A47A05349 /* ReviewToCheck.swift in Sources */,
+				767B78A46C867ABB726341EE /* ReviewView.swift in Sources */,
+				0A3EC8BBA5B78347A0413F5C /* ReviewWording.swift in Sources */,
+				B71EB8981CA7EF438CDCB67F /* RootView.swift in Sources */,
+				6DB5DFC73A34D88596B2949B /* SampleScan.swift in Sources */,
+				8FC06A9C9116928BD339C75B /* ScanBroadcastButton.swift in Sources */,
+				0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */,
+				E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */,
+				948718A42F4443D1612CB6B5 /* ScanMark.swift in Sources */,
+				C46DCAB7C3935BB722DFEBF9 /* ScanMoreView.swift in Sources */,
+				A0A130F029BD88C97D55D93B /* ScanNotifier.swift in Sources */,
+				44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */,
+				C08B608A460725E2E5529AFB /* ScanSetupPrompts.swift in Sources */,
+				011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */,
+				9975DFDD41FE07B384C77B88 /* ScanView.swift in Sources */,
+				B097AAC5F43E6BBBD3CF938B /* SettingsView.swift in Sources */,
+				F8C6E92B9CF663047CCCC108 /* SetupChecklistView.swift in Sources */,
+				0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */,
+				31CA236599307F00B33A65CA /* SetupStepView.swift in Sources */,
+				CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */,
+				FCC6A2B1D4B58BED4B8BA355 /* SpeciesListView.swift in Sources */,
+				53E565D8D2134740F880785D /* StateModel.swift in Sources */,
+				408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */,
+				C65013B44F62BBA96FF5B144 /* Toast.swift in Sources */,
+				DF232EF5A04B4ADA4B79527B /* Typography.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E3E4F8E83C4C7E6BC24510AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1DF267CCE4D1096881873210 /* ReaderSettings.swift in Sources */,
+				010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */,
+				B23E335C55433BBEBD9E3DA2 /* ScanNotifier.swift in Sources */,
+				6C36CD15ECE70F69B86AD66A /* SharedState.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		26C94AD54F695CC8937B5746 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 282114AC3DFA08D4C66E6E04 /* PogoAssist */;
+			targetProxy = DEAB3E5EF4014EFB31864DD9 /* PBXContainerItemProxy */;
+		};
+		B2D012D71862B1D676EA51A5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1F7F526800B6D63AAD20F8D3 /* PogoBroadcast */;
+			targetProxy = D6CBB60EDDFC066527674173 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0783FFBF9F716AB9E2E37355 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID).uitests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = PogoAssist;
+			};
+			name = Debug;
+		};
+		1C10D3E9536419D0432FC30A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID).uitests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = PogoAssist;
+			};
+			name = Release;
+		};
+		443FCD486119C4E24EC55995 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PogoBroadcast/PogoBroadcast.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PogoBroadcast/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(EXTENSION_BUNDLE_ID)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		87987F379C67731CA24E27C0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PogoAssist/PogoAssist.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PogoAssist/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		99B724FD294EE3CC8D97D75A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PogoBroadcast/PogoBroadcast.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PogoBroadcast/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(EXTENSION_BUNDLE_ID)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9B920A69E5E0B972DCC12E91 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 3;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E3C3CC2CF33FC005565D4E41 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PogoAssist/PogoAssist.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PogoAssist/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E9BFF95E228A3ABD0DAE8991 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 3;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		169BDF417580650D1D1C1947 /* Build configuration list for PBXProject "PogoAssist" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9B920A69E5E0B972DCC12E91 /* Debug */,
+				E9BFF95E228A3ABD0DAE8991 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		328366BCE46DB78F73C764DA /* Build configuration list for PBXNativeTarget "PogoAssistUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0783FFBF9F716AB9E2E37355 /* Debug */,
+				1C10D3E9536419D0432FC30A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5487725AE03AB7A6D39EB43E /* Build configuration list for PBXNativeTarget "PogoAssist" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E3C3CC2CF33FC005565D4E41 /* Debug */,
+				87987F379C67731CA24E27C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		601830ECC46122AAE0399C36 /* Build configuration list for PBXNativeTarget "PogoBroadcast" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				99B724FD294EE3CC8D97D75A /* Debug */,
+				443FCD486119C4E24EC55995 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		FD0F4D83FBF63D631A6AAE65 /* XCLocalSwiftPackageReference "../PogoReader" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../PogoReader;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		00436FF3692616EF8377125B /* PogoReader */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PogoReader;
+		};
+		16E6951D5A5A38B33745BA2B /* PogoReader */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PogoReader;
+		};
+		2E478313CE5E32E23930E4C8 /* PogoBox */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PogoBox;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = ABF508185C418D773A2E16EA /* Project object */;
+}

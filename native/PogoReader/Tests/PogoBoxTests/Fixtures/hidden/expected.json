@@ -1,0 +1,393 @@
+{
+ "rows": [
+  {
+   "index": 1,
+   "name": "Staraptor",
+   "display": "Staraptor",
+   "form": "",
+   "speciesId": "staraptor",
+   "dex": 398,
+   "cp": 1982,
+   "hp": 142,
+   "ivs": {
+    "atk": 13,
+    "def": 12,
+    "hp": 15
+   },
+   "ivsRead": {
+    "atk": 13,
+    "def": 12,
+    "hp": 15
+   },
+   "ivsGuess": null,
+   "level": 25,
+   "levelMax": 25,
+   "dust": 4000,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0297.png",
+     "time": 59.2,
+     "cp": 1982,
+     "cpText": "CP1982",
+     "name": "Staraptor i",
+     "hp": "142/142",
+     "ivs": "13/12/15",
+     "ivConfidence": 0.8380223023250934,
+     "sharpness": 273.34819314080096
+    },
+    {
+     "frame": "f0298.png",
+     "time": 59.4,
+     "cp": 1182,
+     "cpText": "CP1182",
+     "name": "Staraptor i",
+     "hp": "142/142",
+     "ivs": "13/12/15",
+     "ivConfidence": 0.8380223023250934,
+     "sharpness": 300.61271146994324
+    },
+    {
+     "frame": "f0299.png",
+     "time": 59.6,
+     "cp": 1182,
+     "cpText": "CP1182",
+     "name": "Staraptor i",
+     "hp": "142/142",
+     "ivs": "13/12/15",
+     "ivConfidence": 0.8380223023250934,
+     "sharpness": 342.218346734272
+    },
+    {
+     "frame": "f0300.png",
+     "time": 59.8,
+     "cp": 1982,
+     "cpText": "·1982",
+     "name": "Staraptor i",
+     "hp": "142/142",
+     "ivs": "13/12/15",
+     "ivConfidence": 0.8380223023250934,
+     "sharpness": 354.87462601772535
+    },
+    {
+     "frame": "f0301.png",
+     "time": 60,
+     "cp": 1982,
+     "cpText": "1982",
+     "name": "Staraptor i",
+     "hp": "142/142",
+     "ivs": "13/12/15",
+     "ivConfidence": 0.8645831488859343,
+     "sharpness": 360.8395454559972
+    },
+    {
+     "frame": "f0302.png",
+     "time": 60.2,
+     "cp": 1982,
+     "cpText": "CP1982",
+     "name": "Staraptor i",
+     "hp": "142/142",
+     "ivs": "13/12/15",
+     "ivConfidence": 0.8645831488859343,
+     "sharpness": 360.77053479001376
+    },
+    {
+     "frame": "f0303.png",
+     "time": 60.4,
+     "cp": 1182,
+     "cpText": "CP1182",
+     "name": "Staraptor i",
+     "hp": "142/142",
+     "ivs": "13/12/15",
+     "ivConfidence": 0.8645831488859343,
+     "sharpness": 283.32778510294105
+    }
+   ],
+   "merged": 1
+  },
+  {
+   "index": 2,
+   "name": "Pinsir",
+   "display": "Pinsir",
+   "form": "",
+   "speciesId": "pinsir",
+   "dex": 127,
+   "cp": 1978,
+   "hp": 111,
+   "ivs": {
+    "atk": 9,
+    "def": 11,
+    "hp": 4
+   },
+   "ivsRead": {
+    "atk": 9,
+    "def": 11,
+    "hp": 4
+   },
+   "ivsGuess": null,
+   "level": 25,
+   "levelMax": 25,
+   "dust": 4000,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0308.png",
+     "time": 61.4,
+     "cp": 1978,
+     "cpText": "CP1978",
+     "name": "Pinsir",
+     "hp": "111/111",
+     "ivs": "9/11/4",
+     "ivConfidence": 0.7493705600876908,
+     "sharpness": 158.25925679891566
+    },
+    {
+     "frame": "f0309.png",
+     "time": 61.6,
+     "cp": 1978,
+     "cpText": "CP1978",
+     "name": "Pinsir /",
+     "hp": "111/111",
+     "ivs": "9/11/4",
+     "ivConfidence": 0.7493705600876908,
+     "sharpness": 179.53408984633822
+    },
+    {
+     "frame": "f0310.png",
+     "time": 61.8,
+     "cp": 1978,
+     "cpText": "CP1978",
+     "name": "Pinsir /(",
+     "hp": "111/111",
+     "ivs": "9/11/4",
+     "ivConfidence": 0.7493705600876908,
+     "sharpness": 207.91764786639638
+    },
+    {
+     "frame": "f0311.png",
+     "time": 62,
+     "cp": 1978,
+     "cpText": "CP1978",
+     "name": "Pinsir /(",
+     "hp": "111/111",
+     "ivs": "9/11/4",
+     "ivConfidence": 0.7227306646430165,
+     "sharpness": 219.87588288599028
+    },
+    {
+     "frame": "f0312.png",
+     "time": 62.2,
+     "cp": 1978,
+     "cpText": "CP1978",
+     "name": "Pinsir /(",
+     "hp": "111/111",
+     "ivs": "9/11/4",
+     "ivConfidence": 0.7227306646430165,
+     "sharpness": 219.9231070436021
+    },
+    {
+     "frame": "f0313.png",
+     "time": 62.4,
+     "cp": 1978,
+     "cpText": "CP1978",
+     "name": "Pinsir /(",
+     "hp": "111/111",
+     "ivs": "9/11/4",
+     "ivConfidence": 0.7227306646430165,
+     "sharpness": 219.9231070436021
+    },
+    {
+     "frame": "f0314.png",
+     "time": 62.6,
+     "cp": 1978,
+     "cpText": "CP1978",
+     "name": "Pinsir /",
+     "hp": "111/111",
+     "ivs": "9/11/4",
+     "ivConfidence": 0.7227306646430165,
+     "sharpness": 159.04335347047402
+    }
+   ],
+   "merged": 1
+  },
+  {
+   "index": 3,
+   "name": "Staraptor",
+   "display": "Staraptor",
+   "form": "",
+   "speciesId": "staraptor",
+   "dex": 398,
+   "cp": 1968,
+   "hp": 140,
+   "ivs": {
+    "atk": 13,
+    "def": 12,
+    "hp": 12
+   },
+   "ivsRead": {
+    "atk": 13,
+    "def": 12,
+    "hp": 12
+   },
+   "ivsGuess": null,
+   "level": 25,
+   "levelMax": 25,
+   "dust": 4000,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0330.png",
+     "time": 65.8,
+     "cp": 1968,
+     "cpText": "CP1968",
+     "name": "Staraptor i",
+     "hp": "140/140",
+     "ivs": "13/12/12",
+     "ivConfidence": 0.8485621535023924,
+     "sharpness": 294.710095564319
+    },
+    {
+     "frame": "f0332.png",
+     "time": 66.2,
+     "cp": 1268,
+     "cpText": "CP1268",
+     "name": "Staraptor i",
+     "hp": "140/140",
+     "ivs": "13/12/12",
+     "ivConfidence": 0.8723075950167605,
+     "sharpness": 342.96311828947654
+    },
+    {
+     "frame": "f0333.png",
+     "time": 66.4,
+     "cp": 1968,
+     "cpText": "c 1968",
+     "name": "Staraptor i",
+     "hp": "140/140",
+     "ivs": "13/12/12",
+     "ivConfidence": 0.8723075950167605,
+     "sharpness": 355.78059618575713
+    },
+    {
+     "frame": "f0334.png",
+     "time": 66.6,
+     "cp": 1968,
+     "cpText": "1968",
+     "name": "Staraptor i",
+     "hp": "140/140",
+     "ivs": "13/12/12",
+     "ivConfidence": 0.8723075950167605,
+     "sharpness": 355.8585906108927
+    },
+    {
+     "frame": "f0335.png",
+     "time": 66.8,
+     "cp": 1968,
+     "cpText": "CP1968",
+     "name": "Staraptor i",
+     "hp": "140/140",
+     "ivs": "13/12/12",
+     "ivConfidence": 0.8723075950167605,
+     "sharpness": 355.8585906108927
+    },
+    {
+     "frame": "f0336.png",
+     "time": 67,
+     "cp": 1968,
+     "cpText": "CP1968",
+     "name": "Staraptor i",
+     "hp": "140/140",
+     "ivs": "13/12/12",
+     "ivConfidence": 0.8473235101920373,
+     "sharpness": 275.07837002656214
+    }
+   ],
+   "merged": 1
+  },
+  {
+   "index": 4,
+   "name": "Zapdos",
+   "display": "Zapdos",
+   "form": "",
+   "speciesId": "zapdos",
+   "dex": 145,
+   "cp": 1968,
+   "hp": 131,
+   "ivs": {
+    "atk": 12,
+    "def": 12,
+    "hp": 13
+   },
+   "ivsRead": {
+    "atk": 12,
+    "def": 12,
+    "hp": 13
+   },
+   "ivsGuess": null,
+   "level": 20,
+   "levelMax": 20,
+   "dust": 2500,
+   "solveStatus": "exact",
+   "flags": [],
+   "frames": [
+    {
+     "frame": "f0341.png",
+     "time": 68,
+     "cp": 194,
+     "cpText": "CP194",
+     "name": "Zapdos i",
+     "hp": "131/131",
+     "ivs": "12/12/13",
+     "ivConfidence": 0.8325942789687808,
+     "sharpness": 234.27932072298938
+    },
+    {
+     "frame": "f0342.png",
+     "time": 68.2,
+     "cp": 1968,
+     "cpText": "1968",
+     "name": "Zapdos /",
+     "hp": "131/131",
+     "ivs": "12/12/13",
+     "ivConfidence": 0.8325942789687808,
+     "sharpness": 251.44772900471054
+    },
+    {
+     "frame": "f0343.png",
+     "time": 68.4,
+     "cp": 1968,
+     "cpText": "CP1968",
+     "name": "Zapdos /",
+     "hp": "131/131",
+     "ivs": "12/12/13",
+     "ivConfidence": 0.8325942789687808,
+     "sharpness": 284.4149091789308
+    }
+   ],
+   "merged": 1
+  }
+ ],
+ "review": [],
+ "unmatched": [
+  {
+   "frame": "f0319.png",
+   "cp": null,
+   "name": "Zapdos",
+   "nameText": "Zapdos /",
+   "hp": 129,
+   "ivs": {
+    "atk": 15,
+    "def": 12,
+    "hp": 10
+   },
+   "cpOptions": [
+    1977
+   ],
+   "frames": 7,
+   "reason": "cp-not-read"
+  }
+ ]
+}

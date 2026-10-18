@@ -22,36 +22,59 @@ export async function readFrame(img, ocr, names, { frame = null, time = null, wa
   const hpBar = findHpBar(img, rect);
   const regions = regionsFrom(rect, cpText, hpBar);
   const out = { frame, time, rect, cp: null, cpText: '', name: null, nameText: '', nameConfidence: 0, hp: null, hpText: '', ivs: null, ivConfidence: 0, fills: null, sharpness: 0, flags: [] };
-  if (!cpText || !hpBar) { out.flags.push(!cpText ? 'no-cp-text' : 'no-hp-bar'); return out; }
-  if (!cpText.centred) { out.flags.push('mid-swipe'); return out; }
+  if (!hpBar) { out.flags.push(!cpText ? 'no-cp-text' : 'no-hp-bar'); return out; }
+  if (cpText && !cpText.centred) { out.flags.push('mid-swipe'); return out; }
+  // A tall model (Zapdos, Moltres) can cover the CP completely. The name, HP and bars are still
+  // on screen, and the pipeline can work the CP out from them, so read on when the HP bar sits
+  // where a settled card puts it (its left edge does not move when the Pokémon is damaged).
+  if (!cpText) {
+    out.flags.push('no-cp-text');
+    const left = (hpBar.x0 - rect.x) / rect.w;
+    if (left < 0.2 || left > 0.4) return out;
+  }
+  if (cpText) await readCp(img, ocr, regions, cpText, out);
 
-  // Tesseract drops or invents a digit now and then in any one mode, so read the CP twice
-  // (single line, single word) and take the read they agree on, else the single-line one.
-  const cpCrop = crop(img, regions.cp);
-  const cpOpts = { whitelist: WHITELIST.digits, binarise: CP_MASKS[cpText.mask], scale: scaleFor(cpCrop.height, 40), pad: 0.3 };
-  const cpReads = [await ocr.read(cpCrop, { ...cpOpts, psm: 7 }), await ocr.read(cpCrop, { ...cpOpts, psm: 8 })];
-  const cpValues = cpReads.map((r) => parseCp(r.text));
-  out.cpText = cpReads.map((r) => r.text).join('|');
-  out.cp = cpValues[0] !== null && cpValues[0] === cpValues[1] ? cpValues[0] : cpValues[0] ?? cpValues[1];
-  out.cpReads = cpValues.filter((v) => v !== null);
-
-  const nameCrop = crop(img, regions.name);
-  out.sharpness = laplacianVariance(nameCrop);
-  const nameRead = await ocr.read(nameCrop, { whitelist: WHITELIST.name, psm: 7, scale: scaleFor(nameCrop.height, 70) });
+  // Tesseract reports confidence 0 for a line with anything it could not place (the gender
+  // symbol, the leader's hair on the iPad) even when the word itself is right, so a read whose
+  // whole text is exactly a species name (of four letters or more) is taken whatever the
+  // confidence; a near miss, or a match that dropped a word, still needs confidence.
+  const readName = async (region) => {
+    const nameCrop = crop(img, region);
+    const read = await ocr.read(nameCrop, { whitelist: WHITELIST.name, psm: 7, scale: scaleFor(nameCrop.height, 70) });
+    const letterWords = read.words.filter((w) => /[a-z]{2,}/i.test(w.text));
+    const confidence = letterWords.length ? letterWords.reduce((s, w) => s + w.confidence, 0) / letterWords.length : 0;
+    const found = matchName(read.text, names);
+    const ok = found && (confidence >= 40 || (found.distance === 0 && found.whole && found.text.length >= 4));
+    return { text: read.text, confidence, match: ok ? found : null, sharpness: laplacianVariance(nameCrop) };
+  };
+  let nameRead = await readName(regions.name);
+  // A Lucky Pokémon has a "LUCKY POKÉMON" line between its name and the HP bar, so the name sits
+  // higher: when nothing matched, look one line up. That line is the model's feet on any other
+  // screen, so only a confident, exact, whole read of four letters or more counts there.
+  if (!nameRead.match) {
+    const lucky = await readName({ ...regions.name, y: regions.name.y - 0.025 * rect.h });
+    if (lucky.match && lucky.confidence >= 40 && lucky.match.distance === 0 && lucky.match.whole && lucky.match.text.length >= 4) nameRead = lucky;
+  }
+  out.sharpness = nameRead.sharpness;
   out.nameText = nameRead.text;
-  const letterWords = nameRead.words.filter((w) => /[a-z]{2,}/i.test(w.text));
-  out.nameConfidence = letterWords.length ? letterWords.reduce((s, w) => s + w.confidence, 0) / letterWords.length : 0;
-  const match = out.nameConfidence >= 40 ? matchName(nameRead.text, names) : null;
+  out.nameConfidence = nameRead.confidence;
+  const match = nameRead.match;
   if (match) {
     out.name = match.candidate.display;
     out.baseName = match.candidate.name;
     out.form = match.candidate.form;
     out.speciesIds = match.candidate.speciesIds;
     out.nameDistance = match.distance;
+    // A name taken without OCR confidence (Nidoran aside: its symbol is what Tesseract could not
+    // place). The pipeline uses such a frame only when a neighbouring frame agrees on the name.
+    out.nameWeak = nameRead.confidence < 40 && !match.symbol;
+    if (match.attached) out.nameAttached = true;
   } else if (nameRead.text) out.flags.push('name-unmatched');
 
-  if (!out.cp) out.flags.push('cp-unread');
-  if (!out.name) { out.cp = null; return out; } // a frame without an identifiable Pokémon is not a reading
+  if (!out.cp && cpText) out.flags.push('cp-unread');
+  // A frame without an identifiable Pokémon is not a reading (merge.js asks for a name), but it
+  // keeps its CP so the pipeline can list a Pokémon that was on screen under a nickname.
+  if (!out.name) return out;
 
   if (wantHp) {
     const hpCrop = crop(img, regions.hp);
@@ -66,4 +89,16 @@ export async function readFrame(img, ocr, names, { frame = null, time = null, wa
     else out.flags.push('no-bars');
   }
   return out;
+}
+
+async function readCp(img, ocr, regions, cpText, out) {
+  // Tesseract drops or invents a digit now and then in any one mode, so read the CP twice
+  // (single line, single word) and take the read they agree on, else the single-line one.
+  const cpCrop = crop(img, regions.cp);
+  const cpOpts = { whitelist: WHITELIST.digits, binarise: CP_MASKS[cpText.mask], scale: scaleFor(cpCrop.height, 40), pad: 0.3 };
+  const cpReads = [await ocr.read(cpCrop, { ...cpOpts, psm: 7 }), await ocr.read(cpCrop, { ...cpOpts, psm: 8 })];
+  const cpValues = cpReads.map((r) => parseCp(r.text));
+  out.cpText = cpReads.map((r) => r.text).join('|');
+  out.cp = cpValues[0] !== null && cpValues[0] === cpValues[1] ? cpValues[0] : cpValues[0] ?? cpValues[1];
+  out.cpReads = cpValues.filter((v) => v !== null);
 }

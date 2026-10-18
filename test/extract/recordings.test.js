@@ -16,7 +16,7 @@ import { findFfmpeg as locateFfmpeg } from '../../src/node/ffmpeg.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const path = (p) => join(root, p);
-// tesseract.js is not installed where the Pages workflow runs npm test; skip rather than fail there.
+// Skip rather than fail where tesseract.js or pngjs is not installed (a copy run without npm ci).
 const tesseract = await import('tesseract.js').catch(() => null);
 const nodeIo = await import('../../src/extract/node.js').catch(() => null); // needs pngjs
 const readPng = (p) => nodeIo.readPng(p);

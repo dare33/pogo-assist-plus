@@ -1,0 +1,120 @@
+{"cpText":"CP961","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43458.245560041,"ivs":{"hp":8,"atk":12,"def":4},"ivConfidence":0.8878064484659305,"hp":{"current":124,"max":124},"hpText":"124 \/ 124 HP","cp":961,"ms":241.908833,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43458.845614041,"k":"d"}
+{"cpText":"CP961","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43458.645596041,"ivs":{"hp":8,"atk":12,"def":4},"ivConfidence":0.8878064484659305,"hp":{"current":124,"max":124},"hpText":"124 \/ 124 HP","cp":961,"ms":267.738959,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43459.245650041,"k":"d"}
+{"cpText":"CP955","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43459.045632041,"ivs":{"hp":13,"atk":11,"def":1},"ivConfidence":0.7210092732603854,"hp":{"current":127,"max":127},"hpText":"127 \/ 127 HP","cp":955,"ms":243.198125,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43459.645686041,"k":"d"}
+{"cpText":"CP955","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43459.445667958,"ivs":{"hp":13,"atk":11,"def":1},"ivConfidence":0.7210092732603854,"hp":{"current":127,"max":127},"hpText":"127 \/ 127 HP","cp":955,"ms":261.471792,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43460.045722041,"k":"d"}
+{"cpText":"CP955","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43459.845704041,"ivs":{"hp":13,"atk":11,"def":1},"ivConfidence":0.7210092732603854,"hp":{"current":127,"max":127},"hpText":"127 \/ 127 HP","cp":955,"ms":284.723375,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43460.445758041,"k":"d"}
+{"cpText":"CP94.9","nameText":"Scyther","flags":["cp-unread"],"k":"r","name":"Scyther","t":43460.245739958,"ivs":{"hp":13,"atk":10,"def":4},"ivConfidence":0.8099652134116688,"hp":{"current":89,"max":89},"hpText":"89 \/ 89 HP","ms":237.433542,"nameWeak":false,"speciesIds":["scyther"]}
+{"t":43460.845794041,"k":"d"}
+{"cpText":"CP949","nameText":"Scyther","flags":[],"k":"r","name":"Scyther","t":43460.645776041,"ivs":{"hp":13,"atk":10,"def":4},"ivConfidence":0.8099652134116688,"hp":{"current":89,"max":89},"hpText":"89 \/ 89 HP","cp":949,"ms":256.419083,"nameWeak":false,"speciesIds":["scyther"]}
+{"t":43461.245830041,"k":"d"}
+{"cpText":"СР949","nameText":"Scyther","flags":[],"k":"r","name":"Scyther","t":43461.045812041,"ivs":{"hp":13,"atk":10,"def":4},"ivConfidence":0.8099652134116688,"hp":{"current":89,"max":89},"hpText":"89 \/ 89 HP","cp":949,"ms":246.20125,"nameWeak":false,"speciesIds":["scyther"]}
+{"t":43461.645866041,"k":"d"}
+{"cpText":"CP943","nameText":"Skarmory","flags":[],"k":"r","name":"Skarmory","t":43461.445848041,"ivs":{"hp":6,"atk":8,"def":9},"ivConfidence":0.8476345427978469,"hp":{"current":93,"max":93},"hpText":"93 \/ 93 HP","cp":943,"ms":240.501833,"nameWeak":false,"speciesIds":["skarmory"]}
+{"t":43462.045902041,"k":"d"}
+{"cpText":"CP943","nameText":"Skarmory","flags":[],"k":"r","name":"Skarmory","t":43461.845884041,"ivs":{"hp":6,"atk":8,"def":9},"ivConfidence":0.8476345427978469,"hp":{"current":93,"max":93},"hpText":"93 \/ 93 HP","cp":943,"ms":252.136791,"nameWeak":false,"speciesIds":["skarmory"]}
+{"t":43462.462606208,"k":"d"}
+{"cpText":"CP943","nameText":"Skarmory","flags":[],"k":"r","name":"Skarmory","t":43462.262588125,"ivs":{"hp":6,"atk":8,"def":9},"ivConfidence":0.8476345427978469,"hp":{"current":93,"max":93},"hpText":"93 \/ 93 HP","cp":943,"ms":292.317333,"nameWeak":false,"speciesIds":["skarmory"]}
+{"t":43462.879310375,"k":"d"}
+{"cpText":"CP942","nameText":"Orthworm","flags":[],"k":"r","name":"Orthworm","t":43462.662624208,"ivs":{"hp":11,"atk":11,"def":10},"ivConfidence":0.7187627225691564,"hp":{"current":94,"max":94},"hpText":"94 \/ 94 HP","cp":942,"ms":253.806417,"nameWeak":false,"speciesIds":["orthworm"]}
+{"t":43463.279346291,"k":"d"}
+{"cpText":"CP942","nameText":"Orthworm","flags":[],"k":"r","name":"Orthworm","t":43463.079328375,"ivs":{"hp":11,"atk":11,"def":10},"ivConfidence":0.7187627225691564,"hp":{"current":94,"max":94},"hpText":"94 \/ 94 HP","cp":942,"ms":249.231042,"nameWeak":false,"speciesIds":["orthworm"]}
+{"t":43463.679382375,"k":"d"}
+{"cpText":"CP942","nameText":"Orthworm","flags":[],"k":"r","name":"Orthworm","t":43463.479364375,"ivs":{"hp":11,"atk":11,"def":10},"ivConfidence":0.7187627225691564,"hp":{"current":94,"max":94},"hpText":"94 \/ 94 HP","cp":942,"ms":231.188458,"nameWeak":false,"speciesIds":["orthworm"]}
+{"t":43464.079418375,"k":"d"}
+{"cpText":"CP924","nameText":"Houndour","flags":[],"k":"r","name":"Houndour","t":43463.879400375,"ivs":{"hp":2,"atk":2,"def":15},"ivConfidence":0.9830158934155855,"hp":{"current":95,"max":95},"hpText":"95 \/ 95 HP","cp":924,"ms":251.405625,"nameWeak":false,"speciesIds":["houndour"]}
+{"t":43464.479454375,"k":"d"}
+{"cpText":"CP924","nameText":"Houndour","flags":[],"k":"r","name":"Houndour","t":43464.279436375,"ivs":{"hp":2,"atk":1,"def":15},"ivConfidence":0.9844102470718905,"hp":{"current":95,"max":95},"hpText":"95 \/ 95 HP","cp":924,"ms":252.31225,"nameWeak":false,"speciesIds":["houndour"]}
+{"t":43464.879490375,"k":"d"}
+{"cpText":"CP924","nameText":"Houndour","flags":[],"k":"r","name":"Houndour","t":43464.679472375,"ivs":{"hp":2,"atk":1,"def":15},"ivConfidence":0.9844102470718905,"hp":{"current":95,"max":95},"hpText":"95 \/ 95 HP","cp":924,"ms":273.739875,"nameWeak":false,"speciesIds":["houndour"]}
+{"t":43465.279526375,"k":"d"}
+{"cpText":"CP922","nameText":"Starmie","flags":[],"k":"r","name":"Starmie","t":43465.079508375,"ivs":{"hp":2,"atk":10,"def":15},"ivConfidence":0.8099652134116688,"hp":{"current":75,"max":75},"hpText":"75 \/ 75 HP","cp":922,"ms":260.843417,"nameWeak":false,"speciesIds":["starmie"]}
+{"t":43465.679562375,"k":"d"}
+{"cpText":"CP922","nameText":"Starmie","flags":[],"k":"r","name":"Starmie","t":43465.479544375,"ivs":{"hp":2,"atk":15,"def":15},"ivConfidence":0.9550000000000018,"hp":{"current":75,"max":75},"hpText":"75 \/ 75 HP","cp":922,"ms":252.545834,"nameWeak":false,"speciesIds":["starmie"]}
+{"t":43466.079598375,"k":"d"}
+{"cpText":"CP922","nameText":"Starmie","flags":[],"k":"r","name":"Starmie","t":43465.879580375,"ivs":{"hp":2,"atk":15,"def":15},"ivConfidence":0.9550000000000018,"hp":{"current":75,"max":75},"hpText":"75 \/ 75 HP","cp":922,"ms":281.429375,"nameWeak":false,"speciesIds":["starmie"]}
+{"t":43466.479634375,"k":"d"}
+{"cpText":"919","nameText":"Charizard","flags":[],"k":"r","name":"Charizard","t":43466.279616375,"ivs":{"hp":11,"atk":7,"def":6},"ivConfidence":0.7187627225691564,"hp":{"current":91,"max":91},"hpText":"91 \/ 91 HP","cp":919,"ms":241.372959,"nameWeak":false,"speciesIds":["charizard"]}
+{"t":43466.879670375,"k":"d"}
+{"cpText":"","nameText":"Charizard","flags":["no-cp-text"],"k":"r","name":"Charizard","t":43466.679652375,"ivs":{"hp":12,"atk":7,"def":3},"ivConfidence":0.8364240392925648,"hp":{"current":91,"max":91},"hpText":"91 \/ 91 HP","ms":210.480541,"nameWeak":false,"speciesIds":["charizard"]}
+{"t":43467.279706375,"k":"d"}
+{"cpText":"CP919","nameText":"Charizard","flags":[],"k":"r","name":"Charizard","t":43467.079688375,"ivs":{"hp":12,"atk":7,"def":3},"ivConfidence":0.8364240392925648,"hp":{"current":91,"max":91},"hpText":"91 \/ 91 HP","cp":919,"ms":240.540209,"nameWeak":false,"speciesIds":["charizard"]}
+{"t":43467.679742375,"k":"d"}
+{"cpText":"CP910","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43467.479724375,"ivs":{"hp":10,"atk":12,"def":12},"ivConfidence":0.7970362071799784,"hp":{"current":119,"max":119},"hpText":"119 \/ 119 HP","cp":910,"ms":249.373375,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43468.079778375,"k":"d"}
+{"cpText":"CP910","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43467.879760291,"ivs":{"hp":10,"atk":12,"def":14},"ivConfidence":0.7970362071799784,"hp":{"current":119,"max":119},"hpText":"119 \/ 119 HP","cp":910,"ms":251.802917,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43468.479814375,"k":"d"}
+{"cpText":"CP910","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43468.279796375,"ivs":{"hp":10,"atk":12,"def":14},"ivConfidence":0.7970362071799784,"hp":{"current":119,"max":119},"hpText":"119 \/ 119 HP","cp":910,"ms":256.0475,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43468.879850375,"k":"d"}
+{"cpText":"CP910","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43468.679832375,"ivs":{"hp":11,"atk":11,"def":15},"ivConfidence":0.7187627225691564,"hp":{"current":120,"max":120},"hpText":"120 \/ 120 HP","cp":910,"ms":241.512958,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43469.279886375,"k":"d"}
+{"cpText":"CP910","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43469.079868375,"ivs":{"hp":11,"atk":11,"def":15},"ivConfidence":0.7187627225691564,"hp":{"current":120,"max":120},"hpText":"120 \/ 120 HP","cp":910,"ms":240.217459,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43469.679922375,"k":"d"}
+{"cpText":"CP910","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43469.479904375,"ivs":{"hp":11,"atk":11,"def":15},"ivConfidence":0.7187627225691564,"hp":{"current":120,"max":120},"hpText":"120 \/ 120 HP","cp":910,"ms":267.031084,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43470.079958375,"k":"d"}
+{"cpText":"CP906","nameText":"Oricorio","flags":[],"k":"r","name":"Oricorio","t":43469.879940375,"ivs":{"hp":7,"atk":9,"def":7},"ivConfidence":0.8945179922878754,"hp":{"current":97,"max":97},"hpText":"97 \/ 97 HP","cp":906,"ms":236.828583,"nameWeak":false,"speciesIds":["oricorio_baile","oricorio_pau","oricorio_pom_pom","oricorio_sensu"]}
+{"t":43470.479994375,"k":"d"}
+{"cpText":"CP906","nameText":"Oricorio","flags":[],"k":"r","name":"Oricorio","t":43470.279976375,"ivs":{"hp":7,"atk":9,"def":0},"ivConfidence":0.9370752646212352,"hp":{"current":97,"max":97},"hpText":"97 \/ 97 HP","cp":906,"ms":269.637792,"nameWeak":false,"speciesIds":["oricorio_baile","oricorio_pau","oricorio_pom_pom","oricorio_sensu"]}
+{"t":43470.880030375,"k":"d"}
+{"cpText":"CP906","nameText":"Oricorio","flags":[],"k":"r","name":"Oricorio","t":43470.680012375,"ivs":{"hp":7,"atk":9,"def":0},"ivConfidence":0.9370752646212352,"hp":{"current":97,"max":97},"hpText":"97 \/ 97 HP","cp":906,"ms":287.063583,"nameWeak":false,"speciesIds":["oricorio_baile","oricorio_pau","oricorio_pom_pom","oricorio_sensu"]}
+{"t":43471.280066375,"k":"d"}
+{"cpText":"CP902","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43471.080048375,"ivs":{"hp":12,"atk":12,"def":8},"ivConfidence":0.7277692976420962,"hp":{"current":120,"max":120},"hpText":"120 \/ 120 HP","cp":902,"ms":243.880959,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43471.680102375,"k":"d"}
+{"cpText":"CP902","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43471.480084375,"ivs":{"hp":12,"atk":12,"def":10},"ivConfidence":0.7949274070874601,"hp":{"current":120,"max":120},"hpText":"120 \/ 120 HP","cp":902,"ms":256.648875,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43472.080138375,"k":"d"}
+{"cpText":"CP902","nameText":"Rhyhorn","flags":[],"k":"r","name":"Rhyhorn","t":43471.880120375,"ivs":{"hp":12,"atk":12,"def":10},"ivConfidence":0.7949274070874601,"hp":{"current":120,"max":120},"hpText":"120 \/ 120 HP","cp":902,"ms":252.946208,"nameWeak":false,"speciesIds":["rhyhorn"]}
+{"t":43472.480174375,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":[],"k":"r","name":"Stunfisk","t":43472.280156375,"ivs":{"hp":10,"atk":14,"def":11},"ivConfidence":0.6957365717851509,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":253.630625,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43472.880210375,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":[],"k":"r","name":"Stunfisk","t":43472.680192375,"ivs":{"hp":10,"atk":14,"def":11},"ivConfidence":0.6957365717851509,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":271.480084,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43473.296947083,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43473.096929083,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":265.398417,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43473.696983083,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43473.496965083,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":268.087541,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43474.097019083,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43473.897001083,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":309.938541,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43474.497055083,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43474.297037083,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":312.386959,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43474.897091083,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43474.697073083,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":286.77675,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43475.330463416,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43475.11377725,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":297.52125,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43475.747167583,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43475.547149583,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":296.963,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43476.147203583,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43475.947185583,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":295.6095,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43476.547239583,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43476.347221583,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":294.234667,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43476.947275583,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43476.747257583,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":321.293583,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43477.347311583,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43477.1472935,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":296.405667,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43477.747347583,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43477.547329583,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":283.256,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43478.1473835,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43477.947365583,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":317.6825,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43478.547419583,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43478.347401583,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":304.827833,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43478.947455583,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43478.747437583,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":319.418792,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43479.36415975,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43479.164141666,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":318.736875,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43479.76419575,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43479.56417775,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":310.255458,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43480.16423175,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43479.96421375,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":321.912166,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43480.580935916,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43480.380917916,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":322.794917,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43480.980971916,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43480.780953916,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":317.778209,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43481.397676083,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43481.197658083,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":317.431709,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43481.797712083,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43481.597694083,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":299.666,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43482.21441625,"k":"d"}
+{"cpText":"CP902","nameText":"Stunfisk","flags":["no-bars"],"k":"r","name":"Stunfisk","t":43481.997730083,"ivConfidence":0,"hp":{"current":129,"max":129},"hpText":"129 \/ 129 HP","cp":902,"ms":297.265042,"nameWeak":false,"speciesIds":["stunfisk"]}
+{"t":43481.997730083,"k":"e","last":43472.280156375}

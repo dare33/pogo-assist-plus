@@ -33,9 +33,10 @@ export function importPokeGenie(csvText) {
       dust: num(r.Dust),                    // power-up dust at current level, as shown in game
       scanDate: r['Scan Date'] || '',
       pvp: {
-        great: { rankPct: pct(r['Rank % (G)']), rank: num(r['Rank # (G)']), name: r['Name (G)'], form: r['Form (G)'], dust: num(r['Dust Cost (G)']), candy: num(r['Candy Cost (G)']) },
-        ultra: { rankPct: pct(r['Rank % (U)']), rank: num(r['Rank # (U)']), name: r['Name (U)'], form: r['Form (U)'], dust: num(r['Dust Cost (U)']), candy: num(r['Candy Cost (U)']) },
-        master: { rankPct: pct(r['Rank % (L)']), rank: num(r['Rank # (L)']), name: r['Name (L)'], form: r['Form (L)'], dust: num(r['Dust Cost (L)']), candy: num(r['Candy Cost (L)']) },
+        great: { rankPct: pct(r['Rank % (G)']), statProd: pct(r['Stat Prod (G)']), rank: num(r['Rank # (G)']), name: r['Name (G)'], form: r['Form (G)'], dust: num(r['Dust Cost (G)']), candy: num(r['Candy Cost (G)']) },
+        ultra: { rankPct: pct(r['Rank % (U)']), statProd: pct(r['Stat Prod (U)']), rank: num(r['Rank # (U)']), name: r['Name (U)'], form: r['Form (U)'], dust: num(r['Dust Cost (U)']), candy: num(r['Candy Cost (U)']) },
+        // little is Little Cup (CP 500), which the app never shows; Poke Genie exports no Master League columns.
+        little: { rankPct: pct(r['Rank % (L)']), statProd: pct(r['Stat Prod (L)']), rank: num(r['Rank # (L)']), name: r['Name (L)'], form: r['Form (L)'], dust: num(r['Dust Cost (L)']), candy: num(r['Candy Cost (L)']) },
       },
       markedForPvp: (r['Marked for PvP use'] || '').trim() !== '',
     };
