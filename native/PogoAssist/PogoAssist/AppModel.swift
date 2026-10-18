@@ -672,9 +672,20 @@ final class AppModel: ObservableObject {
 
     @Published var scans: [BoxStore.Summary] = []
 
+    private var scansToken = 0
+    private var scansAccount: String?
+
+    /// The saved scans' summaries, read off the main actor (each file's header and array lengths only, `BoxStore.list`); the list fills in a moment later. A newer call, or another
+    /// account, makes an older read's answer unwanted.
     func loadScans() {
-        guard let a = account else { scans = []; return }
-        scans = (try? library.store.list(account: a).scans) ?? []
+        scansToken += 1
+        guard let a = account else { scans = []; scansAccount = nil; return }
+        if scansAccount != a { scans = []; scansAccount = a }
+        let token = scansToken, store = library.store
+        Task {
+            let list = await Task.detached(priority: .userInitiated) { (try? store.list(account: a).scans) ?? [] }.value
+            if token == scansToken { scans = list }
+        }
     }
 
     /// The saved scan's result file and its replay log, copied to the temporary folder under names that say what they are.

@@ -80,7 +80,7 @@ public final class BoxStore {
         public var reportSentAt: Date?
     }
 
-    /// `scans` newest first by scan date; `unreadable` the file names that could not be read.
+    /// `scans` newest first by scan date (read from each file's header fields and array lengths only, not the rows); `unreadable` the file names that could not be read.
     public struct Listing: Equatable {
         public var scans: [Summary]
         public var unreadable: [String]
@@ -141,7 +141,7 @@ public final class BoxStore {
         guard fm.fileExists(atPath: dir.path) else { return Listing(scans: [], unreadable: []) }
         var scans: [Summary] = [], bad: [String] = []
         for name in try fm.contentsOfDirectory(atPath: dir.path).sorted() where name.hasSuffix(".json") {
-            if let scan = try? read(dir.appendingPathComponent(name)) { scans.append(Self.summary(scan)) } else { bad.append(name) }
+            if let summary = try? readSummary(dir.appendingPathComponent(name)) { scans.append(summary) } else { bad.append(name) }
         }
         scans.sort { ($0.scanDate, $0.savedAt, $0.id) > ($1.scanDate, $1.savedAt, $1.id) }
         return Listing(scans: scans, unreadable: bad)
@@ -286,6 +286,24 @@ public final class BoxStore {
             let scan = try Self.decoder.decode(StoredScan.self, from: Data(contentsOf: file))
             guard scan.schema <= Self.schemaVersion else { throw Failure.corrupt(file: file.lastPathComponent, reason: "written by a newer version (schema \(scan.schema))") }
             return scan
+        } catch let f as Failure { throw f }
+        catch { throw Failure.corrupt(file: file.lastPathComponent, reason: "\(error)") }
+    }
+
+    /// What the list needs from a scan file, without building its rows: the arrays are only counted. A file whose rows are damaged but whose header is fine is listed here
+    /// and fails when it is opened (`load`), which says so in words.
+    private struct SummaryOnly: Decodable {
+        struct Skipped: Decodable { init(from decoder: Decoder) throws {} }
+        var schema: Int, id: String, scanDate: Date, savedAt: Date, source: String, kind: Kind
+        var rows: [Skipped], review: [Skipped], unmatched: [Skipped]
+        var lastReread: Date?, reportSentAt: Date?
+    }
+
+    private func readSummary(_ file: URL) throws -> Summary {
+        do {
+            let s = try Self.decoder.decode(SummaryOnly.self, from: Data(contentsOf: file))
+            guard s.schema <= Self.schemaVersion else { throw Failure.corrupt(file: file.lastPathComponent, reason: "written by a newer version (schema \(s.schema))") }
+            return Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count, lastReread: s.lastReread, reportSentAt: s.reportSentAt)
         } catch let f as Failure { throw f }
         catch { throw Failure.corrupt(file: file.lastPathComponent, reason: "\(error)") }
     }
