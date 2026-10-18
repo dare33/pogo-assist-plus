@@ -26,6 +26,9 @@ enum BoxExportFile {
             .appendingPathComponent("PogoAssist", isDirectory: true).appendingPathComponent("boxes", isDirectory: true)
     }
 
+    /// Where the one scan left unsaved is kept (`PendingScanStore`), beside the boxes.
+    static var pendingDirectory: URL? { boxesRoot?.deletingLastPathComponent().appendingPathComponent("pending-scan", isDirectory: true) }
+
     /// Said when `boxesRoot` is nil.
     static let storageUnavailableText = "This device would not give Pogo Assist+ a place to keep your boxes, so nothing can be saved. Restart the phone and open the app again. If this stays, free some storage."
 
