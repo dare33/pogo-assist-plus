@@ -94,11 +94,13 @@ struct SettingsView: View {
                     Text(previousFooter)
                 }
                 Section {
-                    if model.history.isEmpty { Text("No saved versions yet.").foregroundStyle(.secondary) }
+                    if !model.historyLoaded { Text("Loading…").foregroundStyle(.secondary) }
+                    else if model.history.isEmpty { Text("No saved versions yet.").foregroundStyle(.secondary) }
                     ForEach(model.history, id: \.seq) { h in historyRow(h) }
                 } header: { Text("History") } footer: { Text("Every scan and every correction is kept as a version. Swipe a version to restore it; the current box stays in the history.") }
                 Section {
-                    if model.scans.isEmpty { Text("No saved scans yet.").foregroundStyle(.secondary) }
+                    if !model.scansLoaded { Text("Loading…").foregroundStyle(.secondary) }
+                    else if model.scans.isEmpty { Text("No saved scans yet.").foregroundStyle(.secondary) }
                     ForEach(model.scans, id: \.id) { scan in scanRow(scan) }
                 } header: { Text("Scans") } footer: { Text("Share a scan's replay log and result to send them for diagnosis.") }
                 Section("About") {

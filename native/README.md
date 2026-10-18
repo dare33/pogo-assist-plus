@@ -812,17 +812,25 @@ The command is made for the phone's language (the device locale); Voice Control'
 
 ### App fold: unsaved scans, saving, storage, re-scan size
 
-- **An unsaved scan survives a relaunch.** The review's private copy of `replay.jsonl` lives in `Application Support/PogoAssist/pending/` (`PendingScanStore`), with a
-  meta file: the signature, the account and the broadcast state the scan ended with. On launch `AppModel.reopenPendingScan` opens it before the shared log is looked at;
-  it is deleted only when the review is saved or discarded (or if its signature is the one already marked reviewed). The signature is still checked before and after the
-  read and the length must match it. The copy is made off the main actor; if it fails the app says so once for that scan and tries again after 30 seconds.
+- **An unsaved scan survives a relaunch.** The review's private copy of `replay.jsonl` lives in `Application Support/PogoAssist/pending-scan/` (`PendingScanStore` in PogoBox)
+  with a `meta.json` made in the same step (log and meta are written in a temporary folder that is then moved into place): the signature, the account, the kind asked, the
+  scan's date (the broadcast's last update, i.e. when it ended), whether the Done screen was left, a count of readings that did not finish, and the broadcast state as the
+  app encoded it. The meta decodes tolerantly (an unknown field is ignored, a missing one takes its default), so an app update does not lose a waiting scan. At most one scan is
+  kept: a later broadcast is not copied over it and waits, with a message, until the kept one is saved or discarded. The copy is deleted only by that Save or Discard, by
+  noticing that its signature is already marked reviewed, or by noticing the account already holds a scan read from that signature together with its box version (the app was
+  ended between the save and the marker; `BoxStore.StoredScan.sourceSignature`). A kept scan that cannot be opened (damaged meta, log of the wrong length) is never deleted
+  for you: it opens as a failed review whose Discard removes it. A scan whose last reading never finished (the app was ended during it) opens as a failure with Try again and
+  Discard instead of being read again at once. On launch the scan is opened before the shared log is looked at, once its account is selected, no scan is live and the box
+  can be read; until then it waits (and reopens when the box is restored, the account selected or the broadcast ends). Its account follows a rename. The copy is made off the main actor and checked again when it
+  finishes (a rename, another account or a review that began meanwhile take it back out); if making it fails the app says so once for that scan and tries again after 30 seconds.
+  Rename is refused while a copy is being made.
 - **A save is one step.** `BoxLibrary.commitScan` checks the box (changed, newer app) before writing, writes the scan record and log, then the box version, and removes the
-  record if the version cannot be written, so a failed save leaves no scan behind and a retry does not make a second.
+  record if the version cannot be written, so a failed save leaves no scan behind and a retry does not make a second. It never makes an account folder (an unknown account is refused) and refuses when the newest version cannot be read.
 - **Boxes are never kept in the temporary folder.** `BoxExportFile.boxesRoot` is nil when Application Support cannot be resolved; the app then shows a box problem (scanning
   paused, no account can be made) and the Shortcuts action throws the same sentence.
 - **Re-scan N** sizes its voice command from what the copied search shows (the to-check Pokémon it covers plus the others with the same name and CP or HP) plus the margin
-  (`VoiceCommandFile.rescanSize`). The size is held with the transient re-scan count; the remembered Add and update number is not written.
-- **Saved-scan summaries** (`BoxStore.list`) read each file's header fields and array lengths only, and the app loads them off the main actor. A scan file whose rows are damaged
+  (`VoiceCommandFile.rescanSize`). The size is held with the transient re-scan count; the remembered Add and update number is not written. While the re-scan lasts the options say that size ("N for this re-scan: the search shows X") instead of showing the field.
+- **Saved-scan summaries** (`BoxStore.list`) parse each file but build only its header fields and array lengths, not the rows (it does not skip the parse), and the app loads them off the main actor. The version history is read once, off the main actor, and `previous` is taken from it (`BoxLibrary.previous(in:)`); Settings says "Loading…" until each has been read. A scan file whose rows are damaged
   but whose header reads is listed and fails when opened. The on-disk format is unchanged.
 - Privacy manifests: both targets declare UserDefaults reason 1C8F.1 (the app group's defaults); the app also CA92.1 (its own defaults) and file timestamps C617.1 (the replay
   marker's modification date in its own container); the extension reads no standard defaults and no file dates.
