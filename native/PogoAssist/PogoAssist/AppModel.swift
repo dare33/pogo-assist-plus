@@ -66,7 +66,7 @@ final class AppModel: ObservableObject {
         var kindNote: String?
         /// What `ScanKindAdvice` said about a full scan of this result (nil for a saved scan read again).
         var advice: ScanKindAdvice.Decision?
-        /// This review's own copy of the scan's replay log (`AppModel.takeCopy`): the review reads, saves, reports and shares only from it, because the shared log is
+        /// This review's own copy of the scan's replay log (`PendingScanStore.take`, kept on disk until the review is saved or discarded): the review reads, saves, reports and shares only from it, because the shared log is
         /// rewritten by the next broadcast. Nil for a saved scan read again (its log is the saved one) and for the DEBUG seeded reviews.
         var log: URL?
         /// Where a scan the extension ended itself stopped and what to do (`ScanStop.summary`), shown once at the top of the review.
@@ -102,8 +102,13 @@ final class AppModel: ObservableObject {
     @Published var snapshot: BoxSnapshot?
     @Published var advice: AdviceState = .none
     @Published var flow: ScanFlow = .idle { didSet { if case .idle = flow { scanDonePending = false; dropCopy() } } }
-    /// The private copy of the log of the scan being reviewed, kept while that review (or its failure, for a retry) lasts.
-    private var scanCopy: (signature: String, url: URL)?
+    /// The private copy of the log of the scan being reviewed, kept (on disk, in `PendingScanStore`'s folder) until that review is saved or discarded, so it survives a relaunch.
+    /// `state` is the broadcast's state file as it was when the scan ended, which the next broadcast overwrites.
+    private var scanCopy: (signature: String, url: URL, state: BroadcastState?)?
+    /// A copy is being made off the main actor, so the one-second timer does not start a second one; and a copy that failed is not retried before `copyRetryAfter`.
+    private var copying = false
+    private var copyRetryAfter: Date?
+    private var copyFailureShownFor: String?
     /// A scan that has just ended is being read or has been read, and its Done screen has not been left for the review yet (`ScanDone`): the review cover stays
     /// closed until `openReview()`. Cleared when the flow ends, and when reading fails (the failed state goes straight to the cover). Other entries to the review
     /// (a saved scan read again, retry after a failure) never set it.
@@ -464,6 +469,7 @@ final class AppModel: ObservableObject {
         if CommandLine.arguments.contains("-uitest-reset") {
             if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
             if let root { try? FileManager.default.removeItem(at: root) }
+            PendingScanStore.clear()
             SharedStore.clear()
             if let c = SharedStore.containerURL { try? FileManager.default.removeItem(at: c.appendingPathComponent("replay.processed")) }
         }
@@ -483,6 +489,7 @@ final class AppModel: ObservableObject {
         loadBox()
         loadVoiceRecord()
         restorePaging()
+        reopenPendingScan()   // before the shared log is looked at (refreshBroadcast): a scan left unsaved comes first
         refreshBroadcast()
         CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(), { _, observer, _, _, _ in
             guard let observer else { return }
@@ -773,33 +780,65 @@ final class AppModel: ObservableObject {
     func checkForFinishedScan() {
         guard !holdReview, !renaming, account != nil, boxProblem == nil, !isReviewing, !live, let state = broadcast, state.finished || endedWithoutFinish,
               let sig = ReplayMarker.unprocessedSignature() else { return }
-        startReview(signature: sig, doneFirst: true)
+        if let after = copyRetryAfter, Date() < after { return }
+        startReview(signature: sig, doneFirst: true, state: state)
     }
 
     /// `doneFirst`: a scan that has just ended shows its Done screen before the review opens (`scanDonePending`); a retry after a failure opens the review directly.
-    func startReview(signature: String, doneFirst: Bool = false) {
-        guard let shared = SharedStore.replayURL, let a = account, boxProblem == nil else { return }
+    /// `state` is the broadcast's state for this scan (nil: the copy's own, else the current one).
+    func startReview(signature: String, doneFirst: Bool = false, state: BroadcastState? = nil) {
+        guard let shared = SharedStore.replayURL, let a = account, boxProblem == nil, !copying else { return }
         // The review works from its own copy of the log: the next broadcast truncates and rewrites the shared one, and a finished scan can wait for the person for a long time.
         // A retry after a failure reuses the copy it made. If the shared log is no longer this scan's (a newer broadcast has rewritten it), nothing is presented: the newer
         // scan is picked up on its own when it has finished.
-        let url: URL
         if let c = scanCopy, c.signature != signature || !FileManager.default.fileExists(atPath: c.url.path) { dropCopy() }
-        if let c = scanCopy { url = c.url }
-        else if let copy = Self.takeCopy(of: shared, signature: signature) { scanCopy = (signature, copy); url = copy }
-        else {
-            if case .failed = flow { flow = .failed(message: "The log of this scan has been replaced by a newer scan, so it cannot be read again. Discard it.", signature: signature) }
-            return
+        if let c = scanCopy { beginReading(signature: signature, doneFirst: doneFirst, account: a, url: c.url, state: state ?? c.state ?? broadcast); return }
+        let st = state ?? broadcast
+        copying = true
+        Task {
+            // Up to 16 MB is read and written: not on the main actor.
+            let result = await Task.detached(priority: .userInitiated) { PendingScanStore.take(of: shared, signature: signature, account: a, state: st) }.value
+            copying = false
+            switch result {
+            case .copied(let url):
+                copyRetryAfter = nil
+                scanCopy = (signature, url, st)
+                beginReading(signature: signature, doneFirst: doneFirst, account: a, url: url, state: st)
+            case .replaced:
+                if case .failed = flow { flow = .failed(message: "The log of this scan has been replaced by a newer scan, so it cannot be read again. Discard it.", signature: signature) }
+            case .failed(let why):
+                // Said once per scan; the copy is tried again after a pause, not every second.
+                copyRetryAfter = Date().addingTimeInterval(30)
+                if copyFailureShownFor != signature {
+                    copyFailureShownFor = signature
+                    message = "The finished scan could not be kept for review: \(why) The app will try again."
+                }
+            }
         }
+    }
+
+    /// A scan left unsaved by an earlier run of the app is opened again before anything is read from the shared log (which a later broadcast may have rewritten).
+    func reopenPendingScan() {
+        guard let (pending, copy) = PendingScanStore.load() else { PendingScanStore.clear(); return }
+        // Saved, but the copy was not removed before the app ended: nothing to reopen.
+        if ReplayMarker.processedSignature() == pending.signature || !accounts.contains(pending.account) { PendingScanStore.clear(); return }
+        if account != pending.account { select(pending.account) }
+        guard boxProblem == nil else { return }   // kept for a later launch; the box has to be readable to review against it
+        scanCopy = (pending.signature, copy, pending.state)
+        startReview(signature: pending.signature, doneFirst: false, state: pending.state)
+    }
+
+    private func beginReading(signature: String, doneFirst: Bool, account a: String, url: URL, state: BroadcastState?) {
         flow = .processing("Reading the scan")
         scanDonePending = doneFirst
         let asked = scanKind, date = Date(), lib = library
         // How the scan was paged is what the extension was told when it started (a command at its period, or by hand), not a setting changed since.
-        let period: Double? = { if let b = broadcast { return b.commandPeriod }; return pagedByHand ? nil : pace.every }()
+        let period: Double? = { if let b = state { return b.commandPeriod }; return pagedByHand ? nil : pace.every }()
         let paging = period == nil ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: period, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
-        let ended = broadcast?.endedAtListEnd ?? false, byPerson = broadcast?.stoppedByPerson ?? false, byTimeout = broadcast?.stoppedByTimeout ?? false, logFull = broadcast?.replayLogTruncated ?? false, logFailed = broadcast?.replayLogFailed ?? false
+        let ended = state?.endedAtListEnd ?? false, byPerson = state?.stoppedByPerson ?? false, byTimeout = state?.stoppedByTimeout ?? false, logFull = state?.replayLogTruncated ?? false, logFailed = state?.replayLogFailed ?? false
         // The count the scan was started with (captured in its state), not the field as it reads now: it may have been edited since.
-        let typed = broadcast.map { $0.storageCount } ?? storageCount
-        let eggs = broadcast.map { $0.eggCount } ?? eggCount
+        let typed = state.map { $0.storageCount } ?? storageCount
+        let eggs = state.map { $0.eggCount } ?? eggCount
         Task {
             do {
                 let (outcome, plan, seconds, base, seq, kind, note, advice, stop) = try await worker.run { engine -> (ScanPipeline.Outcome, BoxMerge.Plan, Double, [BoxEntry], Int?, BoxStore.Kind, String?, ScanKindAdvice.Decision, String?) in
@@ -943,25 +982,11 @@ final class AppModel: ObservableObject {
 
     private static let rereadPrefix = "reread:"
 
-    private static let copyPrefix = "pogo-review-"
-
-    /// A copy of the shared replay log in the app's temporary directory, named by the scan's signature, or nil when the shared log is not (any longer) the scan with that
-    /// signature: its signature is checked before the read and after it, and the bytes read must be as long as the signature says, so a log rewritten underneath never gives a mixed copy.
-    nonisolated static func takeCopy(of shared: URL, signature: String) -> URL? {
-        guard ReplayMarker.signature() == signature, let data = try? Data(contentsOf: shared),
-              String(data.count) == signature.prefix { $0 != "-" }, ReplayMarker.signature() == signature else { return nil }
-        let dir = FileManager.default.temporaryDirectory
-        // Copies left by an earlier run of the app are of no use: a relaunch reads the shared log again.
-        for f in (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [] where f.hasPrefix(copyPrefix) { try? FileManager.default.removeItem(at: dir.appendingPathComponent(f)) }
-        let dest = dir.appendingPathComponent("\(copyPrefix)\(signature).jsonl")
-        do { try data.write(to: dest, options: .atomic) } catch { return nil }
-        return dest
-    }
-
-    /// The review has ended (saved or discarded) or is replaced: its copy goes.
+    /// The review has ended (saved or discarded) or is replaced: its copy goes, from memory and from disk.
     private func dropCopy() {
         if let c = scanCopy { try? FileManager.default.removeItem(at: c.url) }
         scanCopy = nil
+        PendingScanStore.clear()
     }
 
     /// Read a saved scan again with the latest rules, against the box as it was before that scan was saved. Opens the normal review
@@ -1016,11 +1041,13 @@ enum ReplayMarker {
         return "\(size)-\(Int(date.timeIntervalSince1970 * 1000))"
     }
 
+    /// The signature of the log last marked as reviewed, if any.
+    static func processedSignature() -> String? { markerURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) } }
+
     /// The signature of a replay log that exists and has not been reviewed, else nil.
     static func unprocessedSignature() -> String? {
         guard let sig = signature() else { return nil }
-        let done = markerURL.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
-        return done == sig ? nil : sig
+        return processedSignature() == sig ? nil : sig
     }
 
     static func markProcessed(_ signature: String) {

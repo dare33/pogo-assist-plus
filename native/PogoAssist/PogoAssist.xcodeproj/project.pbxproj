@@ -32,6 +32,7 @@
 		5143F741547AF0FBD8D7A675 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */; };
 		53E565D8D2134740F880785D /* StateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9E2F476A7C0759293BCB1F /* StateModel.swift */; };
 		55CD9F47DF14E817FF7A91C5 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = B08D9DBF1BA823A3FB1BD6BA /* OFL.txt */; };
+		563E02FEE2EE28ED96280335 /* PendingScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4288D4FBEE7B953228E03A66 /* PendingScan.swift */; };
 		590D6523FF4E5A4A47A05349 /* ReviewToCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6C431800FF0BBA252331DB /* ReviewToCheck.swift */; };
 		5A7CFEDBCAD05B096C12CA05 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
 		676B795352FD800C5AC8AD78 /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 16E6951D5A5A38B33745BA2B /* PogoReader */; };
@@ -135,6 +136,7 @@
 		3AA7DC367A1E8DE143CF1386 /* BoxIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxIndex.swift; sourceTree = "<group>"; };
 		3EF2F19209145E4C035F933E /* ReviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSupport.swift; sourceTree = "<group>"; };
 		3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanOptionsPanel.swift; sourceTree = "<group>"; };
+		4288D4FBEE7B953228E03A66 /* PendingScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingScan.swift; sourceTree = "<group>"; };
 		444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxScreensTests.swift; sourceTree = "<group>"; };
 		45CBC04B3E82BBE8BB3DC034 /* BoxExportFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxExportFile.swift; sourceTree = "<group>"; };
 		485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */ = {isa = PBXFileReference; path = "sample-partial-cp.replay.jsonl"; sourceTree = "<group>"; };
@@ -380,6 +382,7 @@
 				B7BBE6B4B350600CD9DBB146 /* ContentView.swift */,
 				5C6AA316B422945EDE86A699 /* Formatting.swift */,
 				00027E9C738C8485EF328388 /* Info.plist */,
+				4288D4FBEE7B953228E03A66 /* PendingScan.swift */,
 				4C694C91A68984883C8CC317 /* PogoAssist.entitlements */,
 				55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */,
 				E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */,
@@ -563,6 +566,7 @@
 				205415EE687703C0379569F7 /* GuideFlow.swift in Sources */,
 				7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */,
 				AF7D163058C2BCD0E1E66334 /* NextView.swift in Sources */,
+				563E02FEE2EE28ED96280335 /* PendingScan.swift in Sources */,
 				83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */,
 				953581AE09525FD904E92745 /* PokemonDetailView.swift in Sources */,
 				88B726BE30F7E106A63BC75E /* QuestionCard.swift in Sources */,
