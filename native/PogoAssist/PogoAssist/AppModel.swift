@@ -1073,8 +1073,8 @@ final class AppModel: ObservableObject {
     private var accountUnknownText: String {
         if storageMissing { return BoxExportFile.storageUnavailableText }
         if let p = recoveryProblem { return p }
-        if library.store.renameJournalExists { return "A rename of an account is being finished, so the account this scan belongs to cannot be told yet. Try again in a moment." }
-        return "The accounts on this phone could not be read, so this scan cannot be opened yet. Try again in a moment."
+        if library.store.renameJournalExists { return "A rename of an account was not finished, so the account this scan belongs to cannot be told yet. Open the account's box or restart the app to finish the rename; the scan is kept and is opened by itself once the account is known. Do not start another scan until then: it would replace this one." }
+        return "The account this scan belongs to cannot be told right now: the list of accounts or the record of renamed accounts could not be read. The scan is kept and the app keeps trying by itself. Do not start another scan until then: it would replace this one."
     }
 
     /// A scan kept on disk is opened for review (by an earlier run, or after the account or the box was not ready): before anything in the shared log, once no scan is live, its
