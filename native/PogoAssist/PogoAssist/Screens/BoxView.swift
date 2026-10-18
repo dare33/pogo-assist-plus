@@ -230,7 +230,7 @@ struct BoxView: View {
                         PillButton("Copy search", systemImage: "doc.on.doc", style: .tint) { UIPasteboard.general.string = text; showToast("Copied") }
                             .accessibilityIdentifier("copy-check-search").accessibilityValue(text)
                     }
-                    PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount) }
+                    PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount, shown: search.text == nil ? index.toCheckCount : search.covered + search.extra) }
                         .accessibilityIdentifier("rescan-button")
                 }
                 if let line = Self.searchLine(search) {

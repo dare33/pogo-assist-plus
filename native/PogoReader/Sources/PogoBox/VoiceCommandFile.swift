@@ -228,6 +228,10 @@ public enum VoiceCommandFile {
     /// second scan with Add and update).
     public static func setSize(covering count: Int) -> Int? { setSizes.first { $0 >= count } }
 
+    /// The command size for a re-scan whose game search shows `shown` Pokémon (the ones to check it covers plus the others with the same name and CP or HP):
+    /// the smallest size covering them and a margin of a tenth, at least 2, since the game can show a few more than the box knows of. nil above the largest.
+    public static func rescanSize(shown: Int) -> Int? { setSize(covering: shown + max(2, shown / 10)) }
+
     /// The file the app offers: "Pogo scan commands (440x956 iPhone).voicecontrolcommands" for tap (it carries the screen), without for swipe.
     public static func setFileName(kind: SetKind, screen: String? = nil) -> String {
         "Pogo scan commands" + ((kind == .tap && screen != nil) ? " (\(screen!))" : "") + ".voicecontrolcommands"

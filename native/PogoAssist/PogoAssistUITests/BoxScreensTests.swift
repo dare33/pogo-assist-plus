@@ -239,7 +239,10 @@ final class BoxScreensTests: XCTestCase {
         shot("rescan-02-to-check-chip")
 
         let sizes = [25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000]
-        let command = "Pogo scan \(sizes.first { $0 >= n + max(2, n / 10) }!)"
+        // The command is sized from what the search shows (the to-check ones it covers plus the others it also matches), not from N alone.
+        let shownNumbers = savedLine.split(whereSeparator: { !$0.isNumber && $0 != "," }).compactMap { Int($0.replacingOccurrences(of: ",", with: "")) }
+        let shown = shownNumbers[0]   // "shows at least <total> ..." or "finds the <covered> ..."
+        let command = "Pogo scan \(sizes.first { $0 >= shown + max(2, shown / 10) }!)"
         button.tap()
         XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
         // The Scan screen opens on the options (Add and update chosen, the number set); the re-scan line sits above them, not behind them.
@@ -256,14 +259,14 @@ final class BoxScreensTests: XCTestCase {
         sleep(1)
         shot("rescan-03-scan-screen")
 
-        // Scan Options drops the re-scan line; the covering number stays in "How many Pokémon to scan?", so the steps still name the same command.
+        // Scan Options drops the re-scan line and its command size: the remembered number (none here, so 200) names the command again, and the re-scan never wrote into it.
         app.buttons["Scan Options"].tap()
         XCTAssertTrue(app.staticTexts["How many Pokémon to scan?"].waitForExistence(timeout: 3) || app.textFields.firstMatch.exists)
         XCTAssertFalse(app.staticTexts["rescan-line-editing"].exists)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["rescan-line"].exists)
-        XCTAssertTrue(app.staticTexts["Back in the game, say \"\(command)\"."].exists)
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 200\"."].exists)
     }
 
     /// Changing the scan kind, or closing the Scan screen, drops the suggestion; the screen opened later from the tab bar does not meet it.

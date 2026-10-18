@@ -128,13 +128,15 @@ final class AppModel: ObservableObject {
     @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind); refreshReaderSettings(); if scanKind != oldValue { rescanCount = nil } } }
     /// "Re-scan N" was pressed in the Box: how many Pokémon are to be checked. Held only for the next scan and never saved. It goes when a scan starts, when the scan kind or the
     /// options change, when the account changes and when the Scan screen closes (see `startRescan`), so it cannot name a command for a later, unrelated scan.
-    @Published var rescanCount: Int?
-    /// Sets Add and update and records N; the root view opens the Scan screen on the change. The kind is set first because changing it drops the count.
-    /// The covering command size goes into the Add and update number as well, so the steps and the field agree (the number is set before `rescanCount`, since changing it drops the count).
-    func startRescan(count: Int) {
+    @Published var rescanCount: Int? { didSet { if rescanCount == nil { rescanShown = nil } } }
+    /// How many Pokémon the re-scan's game search shows (the ones to check it covers plus the others it also matches); the command is sized from this. Lives and dies with `rescanCount`.
+    private(set) var rescanShown: Int?
+    /// Sets Add and update and records the re-scan; the root view opens the Scan screen on the change. The kind is set first because changing it drops the count.
+    /// `shown` sizes the command (`ScanWords.current`) without writing into the remembered Add and update number, so the next ordinary scan is not sized for this one.
+    func startRescan(count: Int, shown: Int) {
         scanKind = .partial
-        partialCountText = String(ScanWords.rescanSize(toCheck: count) ?? count + max(2, count / 10))
         rescanCount = count
+        rescanShown = shown
     }
     /// The storage count of a full scan, remembered per account (editable); it picks which command to say.
     @Published var storageCountText: String { didSet { if let a = account { UserDefaults.standard.set(storageCountText, forKey: Keys.count + "." + a) }; refreshReaderSettings(); if storageCountText != oldValue { rescanCount = nil } } }
