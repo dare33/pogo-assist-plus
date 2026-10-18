@@ -581,18 +581,21 @@ final class AppModel: ObservableObject {
                 _ = try? lib.store.repairInterruptedRename(account: a)
                 return (did, problem)
             }) ?? (nil, nil)
-            guard token == boxToken, account == a else { return }
+            // What the recovery did is applied whether or not this load is still the latest: a finished rename's settings are never thrown away.
             recoveryProblem = problem
+            var disk = accounts
             if let r = recovered {
-                let disk = (try? lib.accounts()) ?? accounts
+                disk = (try? lib.accounts()) ?? accounts
                 accounts = disk
                 if waitingScan != nil { adoptWaiting() }
                 applyRecovered(r)   // the settings and the selection follow a rename the recovery finished
-                if account != a || !disk.contains(account ?? "") {
-                    if let acc = account, !disk.contains(acc) { account = disk.first }
-                    loadBox(); loadVoiceRecord(); return
-                }
             }
+            guard token == boxToken else { return }
+            if recovered != nil, account != a || !disk.contains(account ?? "") {
+                if let acc = account, !disk.contains(acc) { account = disk.first }
+                loadBox(); loadVoiceRecord(); return
+            }
+            guard account == a else { return }
             let result = await Task.detached(priority: .userInitiated) { () -> BoxLoad in
                 // Always asked, not only when the newest version fails to load: any version from a newer app means nothing may be written on top of it.
                 if let n = lib.newerVersion(account: a) { return .newer(n) }
@@ -773,7 +776,10 @@ final class AppModel: ObservableObject {
         // The waiting scan, if it is this account's, is retargeted inside the rename's journal (BoxStore.renameAccount) and put back with it if the rename fails.
         let ps = pendingStore
         var actual = name, warning: String?
-        do { try await worker.run { _ in try lib.renameAccount(from: old, to: new, pending: ps) } }
+        let renameResult: Result<Void, Error> = await { do { try await worker.run { _ in try lib.renameAccount(from: old, to: new, pending: ps) }; return .success(()) } catch { return .failure(error) } }()
+        // An earlier cut-off rename that this one finished first: its settings move too, whatever became of this rename.
+        if let r = try? await worker.run({ _ in lib.takeRecoveredByRename() }) { applyRecovered(r) }
+        do { try renameResult.get() }
         catch BoxStore.Failure.renameIncomplete(let now, let why) {
             // The rename could not be undone completely: whatever is on disk is the truth, so the lists and the selection follow it, and the next load puts the rest right.
             actual = now; warning = Self.plain(BoxStore.Failure.renameIncomplete(accountNow: now, detail: why))
@@ -964,7 +970,7 @@ final class AppModel: ObservableObject {
         switch library.store.lookupAccount(recorded) {
         case .found(let name): return .account(name)
         case .gone: return .gone(recorded)
-        case .unknown: return .storageProblem
+        case .unknown: return recoveryProblem != nil ? .waiting : .storageProblem   // an unresolved rename is already shown as a box problem
         }
     }
 
@@ -990,8 +996,13 @@ final class AppModel: ObservableObject {
         if let c = scanCopy {
             if c.signature != signature { return }   // one scan at a time
             if FileManager.default.fileExists(atPath: c.url.path) {
-                if !accounts.contains(c.account) { flow = .failed(message: Self.accountGoneText(c.account), signature: signature); return }
-                beginReading(signature: signature, doneFirst: doneFirst, copy: c, state: state ?? c.state ?? broadcast)
+                switch library.store.lookupAccount(c.account) {
+                case .gone: flow = .failed(message: Self.accountGoneText(c.account), signature: signature); return
+                case .unknown: return   // cannot tell: not "gone"
+                case .found(let now):
+                    if now != c.account { scanCopy?.account = now; _ = try? pendingStore.update { $0.account = now } }
+                }
+                beginReading(signature: signature, doneFirst: doneFirst, copy: scanCopy ?? c, state: state ?? c.state ?? broadcast)
                 return
             }
             dropCopy()
@@ -1058,7 +1069,12 @@ final class AppModel: ObservableObject {
             switch library.store.lookupAccount(w.account) {
             case .unknown: return   // the accounts cannot be listed: say nothing, ask again later
             case .found(let now):
-                if (try? pendingStore.update { $0.account = now }) != nil { waitingScan?.account = now; reopenPendingScan(selecting: selecting) }
+                // Only a real change is followed, and it asks again only when the refreshed list holds the new name, so the next call cannot come back here.
+                if now != w.account, (try? pendingStore.update { $0.account = now }) != nil {
+                    waitingScan?.account = now
+                    accounts = (try? library.accounts()) ?? accounts
+                    if accounts.contains(now) { reopenPendingScan(selecting: selecting) }
+                }
                 return
             case .gone: break
             }

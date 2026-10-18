@@ -216,4 +216,35 @@ final class RenameJournalTests: XCTestCase {
         let broken = BoxStore(root: dir.appendingPathComponent("A/box/000001.json"))
         XCTAssertEqual(broken.lookupAccount("A"), .unknown)
     }
+
+    func testAMissingAccountIsNotCalledGoneWhileARenameIsUnresolvedOrTheHistoryCannotBeRead() throws {
+        let lib = BoxLibrary(root: dir)
+        try seed(lib, "A")
+        try lib.renameAccount(from: "A", to: "B")
+        XCTAssertEqual(lib.store.lookupAccount("A"), .found("B"))
+        XCTAssertEqual(lib.store.lookupAccount("Nobody"), .gone)
+        // the record of renames exists but cannot be read: a missing name cannot be followed, so it is not gone
+        let history = dir.appendingPathComponent(".rename-history.json")
+        let good = try Data(contentsOf: history)
+        try Data("{ broken".utf8).write(to: history)
+        XCTAssertEqual(lib.store.lookupAccount("Nobody"), .unknown)
+        XCTAssertEqual(lib.store.lookupAccount("B"), .found("B"), "an account that is there needs no history")
+        try good.write(to: history)
+        // a rename journal on disk: an account that looks missing may be mid-rename
+        try Data("{}".utf8).write(to: dir.appendingPathComponent(".rename-journal.json"))
+        XCTAssertEqual(lib.store.lookupAccount("Nobody"), .unknown)
+    }
+
+    func testARenameThatFinishesAnEarlierCutOffOneSaysSo() throws {
+        let lib = BoxLibrary(root: dir)
+        try seed(lib, "Parents")
+        try seed(lib, "Other")
+        lib.store.renameKill = "swap1"
+        XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "darentas", pending: pending))
+        let fresh = BoxLibrary(root: dir)   // the app was relaunched, but a rename of another account starts before any load recovers it
+        try fresh.renameAccount(from: "Other", to: "Third")
+        XCTAssertEqual(fresh.takeRecoveredByRename(), BoxStore.RecoveredRename(old: "Parents", new: "darentas", finished: true))
+        XCTAssertNil(fresh.takeRecoveredByRename(), "taken once")
+        XCTAssertEqual(Set(try fresh.accounts()), ["darentas", "Third"])
+    }
 }

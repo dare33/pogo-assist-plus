@@ -100,6 +100,9 @@ public final class BoxLibrary {
         return try store.recoverRename(pending: pending)
     }
 
+    /// The earlier cut-off rename that the last `renameAccount` finished or undid first, if any (see `BoxStore.takeRecoveredByRename`).
+    public func takeRecoveredByRename() -> BoxStore.RecoveredRename? { store.takeRecoveredByRename() }
+
     // MARK: - was a scan already saved
 
     public enum SaveState: Equatable { case saved, notSaved, unknown }

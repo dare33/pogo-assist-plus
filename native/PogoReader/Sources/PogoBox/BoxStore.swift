@@ -199,6 +199,11 @@ public final class BoxStore {
     /// is rolled back, so a fresh `recoverInterruptedRename` has to put the account right.
     var renameKill: String?
     private struct RenameKilled: Error {}
+    private var recoveredByRename: RecoveredRename?
+    /// The earlier cut-off rename that `renameAccount` finished or undid before starting its own, once (nil if none). Read on the same queue.
+    public func takeRecoveredByRename() -> RecoveredRename? { defer { recoveredByRename = nil }; return recoveredByRename }
+    /// A rename journal is on disk: a rename is unresolved, so an account that looks missing may be mid-rename.
+    public var renameJournalExists: Bool { fm.fileExists(atPath: journalURL.path) }
     private func point(_ name: String) throws { if renameKill == name { throw RenameKilled() } }
 
     // MARK: - rename journal
@@ -250,7 +255,13 @@ public final class BoxStore {
         guard let list = try? accounts() else { return .unknown }
         let existing = Set(list)
         if existing.contains(recorded) { return .found(recorded) }
-        let all = (try? Data(contentsOf: historyURL)).flatMap { try? JSONDecoder().decode([[String]].self, from: $0) } ?? []
+        // While a rename is unresolved, or if the record of renames exists and cannot be read, a missing account cannot be called gone.
+        if renameJournalExists { return .unknown }
+        var all = [[String]]()
+        if fm.fileExists(atPath: historyURL.path) {
+            guard let data = try? Data(contentsOf: historyURL), let decoded = try? JSONDecoder().decode([[String]].self, from: data) else { return .unknown }
+            all = decoded
+        }
         var name = recorded
         for _ in 0..<all.count + 1 {
             guard let step = all.last(where: { $0.count == 2 && $0[0] == name }) else { return .gone }
@@ -288,7 +299,8 @@ public final class BoxStore {
         let caseOnly = newName.lowercased() == oldName.lowercased()
         if !caseOnly { guard !fm.fileExists(atPath: to.path) else { throw Failure.accountExists(newName) } }
         // A rename that was cut off earlier is finished or undone first, so nothing it left can be mistaken for this one's.
-        try recoverInterruptedRename(pending: pending)
+        // Remembered for the caller (`takeRecoveredByRename`): finishing an earlier rename here moves that account, and the app moves its settings for it.
+        recoveredByRename = try recoverRename(pending: pending) ?? recoveredByRename
         _ = try repairInterruptedRename(account: oldName)
 
         let temp = Self.renamingSuffix
