@@ -34,6 +34,8 @@ struct BroadcastState: Codable, Equatable {
     var storageCount: Int?           // the count the scan was started with (nil: none known, or not a Full scan)
     var eggCount: Int?               // the eggs typed for it (nil: none, the flat allowance applies)
     var pausesAllowed = false        // the scan was started as a Full scan, the only kind that pauses
+    var account: String?             // the account selected when the scan started: the scan is reviewed and saved under it whatever is selected later (nil: an older build)
+    var kind: String?                // "full" or "partial": what the person chose when the scan started (nil: an older build)
     /// Counts each pause and each end of a command scan; the notification's identifier carries it, so the extension's notification and the app's fallback are the same one.
     var eventSeq = 0
     /// This scan's id: its start time in whole seconds. Notification identifiers and the finish request carry it.
@@ -88,6 +90,8 @@ extension BroadcastState {
         storageCount = try c.decodeIfPresent(Int.self, forKey: .storageCount)
         eggCount = try c.decodeIfPresent(Int.self, forKey: .eggCount)
         pausesAllowed = try c.decodeIfPresent(Bool.self, forKey: .pausesAllowed) ?? false
+        account = try c.decodeIfPresent(String.self, forKey: .account)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind)
         eventSeq = try c.decodeIfPresent(Int.self, forKey: .eventSeq) ?? 0
         scanId = try c.decodeIfPresent(Int.self, forKey: .scanId) ?? 0
         stoppedByPerson = try c.decodeIfPresent(Bool.self, forKey: .stoppedByPerson) ?? false

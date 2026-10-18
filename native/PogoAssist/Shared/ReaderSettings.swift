@@ -28,6 +28,16 @@ enum ReaderSettings {
         get { defaults?.bool(forKey: "scanIsFull") ?? false }
         set { defaults?.set(newValue, forKey: "scanIsFull") }
     }
+    /// The account selected in the app and the kind chosen, captured by the extension at broadcast start into `BroadcastState.account` / `.kind`, so the finished scan belongs to
+    /// them whatever the app has selected by the time it ends.
+    static var scanAccount: String? {
+        get { defaults?.string(forKey: "scanAccount") }
+        set { if let newValue { defaults?.set(newValue, forKey: "scanAccount") } else { defaults?.removeObject(forKey: "scanAccount") } }
+    }
+    static var scanKind: String? {
+        get { defaults?.string(forKey: "scanKind") }
+        set { if let newValue { defaults?.set(newValue, forKey: "scanKind") } else { defaults?.removeObject(forKey: "scanKind") } }
+    }
     /// The command sizes ("Pogo scan N"), from the app's one table, for the pause notification's suggested command.
     static var commandSizes: [Int] {
         get { (defaults?.array(forKey: "commandSizes") as? [Int]) ?? [] }

@@ -15,7 +15,7 @@ struct ReviewView: View {
                 switch model.flow {
                 case .idle: Color.clear
                 case .processing(let what): processing(what)
-                case .failed(let message, _): failed(message)
+                case .failed(let message, let sig): failed(message, canRetry: sig != AppModel.damagedScanSignature)
                 case .review: ReviewFlowScreen()
                 }
             }
@@ -36,12 +36,12 @@ struct ReviewView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func failed(_ message: String) -> some View {
+    private func failed(_ message: String, canRetry: Bool = true) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle").font(.system(size: 40)).foregroundStyle(Theme.orange)
             Text("The scan could not be read").paText(.screenTitle).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
             Text(message).paText(.secondary).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
-            PillButton("Try again", style: .filled) { model.retryReview() }
+            if canRetry { PillButton("Try again", style: .filled) { model.retryReview() } }   // a damaged record cannot be read again: discarding is the only way on
             PillButton("Discard scan", style: .plain, isDestructive: true) { confirmDiscard = true }
         }
         .padding(32)

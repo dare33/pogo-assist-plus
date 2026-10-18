@@ -43,6 +43,7 @@ struct BoxView: View {
             header
             Group {
                 if let problem = model.boxProblem { problemState(problem) }
+                else if !model.boxLoaded && model.entries.isEmpty && !synthetic { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
                 else if model.entries.isEmpty && !synthetic { emptyState }
                 else { list }
             }
@@ -116,6 +117,11 @@ struct BoxView: View {
                     PillButton("Restore the latest readable version", style: .filled) { Task { await model.restoreLatestReadable() } }
                 }
                 Text("Scanning is paused until this is resolved.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                if model.waitingScan != nil {
+                    // A scan waiting for this box would block scanning for good; it can be thrown away without the box being readable.
+                    Text("A scan is also waiting to be reviewed against this box.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                    PillButton("Discard the waiting scan", style: .plain, isDestructive: true) { model.discardWaitingScan() }.accessibilityIdentifier("discard-waiting-scan")
+                }
             }
             .padding(32)
             .frame(maxWidth: .infinity)
