@@ -67,6 +67,36 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertEqual(try scanFiles("a"), [])
     }
 
+    func testAScanIsNeverSavedIntoAnAccountFolderThatDoesNotExist() throws {
+        let result = ScanResult(rows: entries([100]).map { $0.row }, review: [], unmatched: [])
+        XCTAssertThrowsError(try lib.commitScan(result, entries: [], account: "Ghost", scanDate: date(1), source: "broadcast", kind: .full, note: "x", expectedCurrentSeq: .some(nil))) {
+            XCTAssertEqual($0 as? BoxStore.Failure, .noSuchAccount("Ghost"))
+        }
+        XCTAssertEqual(try lib.accounts(), [], "no folder was made")
+        // an account that was made, and has no version yet, takes its first scan
+        try lib.createAccount("New")
+        XCTAssertEqual(try lib.commitScan(result, entries: [], account: "New", scanDate: date(1), source: "broadcast", kind: .full, note: "x", expectedCurrentSeq: .some(nil), sourceSignature: "12-345").snapshot.seq, 1)
+        XCTAssertEqual(try lib.store.list(account: "New").scans.first?.sourceSignature, "12-345")
+    }
+
+    func testAScanIsNotSavedOnTopOfANewestVersionThatCannotBeRead() throws {
+        _ = try lib.commit(account: "a", entries: entries([100]), reason: .scan, note: "one", now: date(1))
+        _ = try lib.commit(account: "a", entries: entries([100, 200]), reason: .scan, note: "two", now: date(2))
+        try Data("{ broken".utf8).write(to: dir.appendingPathComponent("a/box/000002.json"))
+        let result = ScanResult(rows: entries([100]).map { $0.row }, review: [], unmatched: [])
+        XCTAssertThrowsError(try lib.commitScan(result, entries: [], account: "a", scanDate: date(3), source: "broadcast", kind: .full, note: "x", expectedCurrentSeq: .some(2), replayLog: Data("x".utf8)))
+        XCTAssertEqual(try scanFiles("a"), [], "nothing was written")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("a/box").path).sorted(), ["000001.json", "000002.json"])
+    }
+
+    func testThePreviousVersionCanBeTakenFromAHistoryAlreadyRead() throws {
+        for i in 1...3 { _ = try lib.commit(account: "a", entries: entries([i]), reason: .scan, note: "v\(i)", now: date(i)) }
+        let h = try lib.history(account: "a")
+        XCTAssertEqual(BoxLibrary.previous(in: h)?.seq, 2)
+        XCTAssertEqual(BoxLibrary.previous(in: h), try lib.previousVersion(account: "a"))
+        XCTAssertNil(BoxLibrary.previous(in: []))
+    }
+
     func testRestorePreviousBringsBackTheEarlierBoxAsANewVersion() throws {
         _ = try lib.commit(account: "a", entries: entries([100]), reason: .scan, note: "one", now: date(1))
         _ = try lib.commit(account: "a", entries: entries([100, 200, 300]), reason: .scan, note: "two", now: date(2))

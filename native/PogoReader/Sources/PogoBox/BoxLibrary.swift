@@ -75,20 +75,18 @@ public final class BoxLibrary {
     /// newer app) is left as it is.
     public func renameAccount(from old: String, to new: String) throws {
         let newName = new.trimmingCharacters(in: .whitespacesAndNewlines)
-        try store.renameAccount(from: old, to: new) { folder in
+        defer { setVerified(old, nil); setVerified(newName, nil) }   // the folder may have moved even when the answer is an error
+        try store.renameAccount(from: old, to: new) { folder, write in
             let dir = folder.appendingPathComponent("box", isDirectory: true)
-            guard self.fm.fileExists(atPath: dir.path) else { return [] }
-            var edits = [BoxStore.RenameEdit]()
+            guard self.fm.fileExists(atPath: dir.path) else { return }
             for name in try self.fm.contentsOfDirectory(atPath: dir.path).sorted() where name.hasSuffix(".json") && !name.hasSuffix(".advice.json") {
                 let data = try Data(contentsOf: dir.appendingPathComponent(name))
                 if let schema = Self.schema(of: data), schema > Self.schemaVersion { continue }
                 guard var snap = try? Self.decoder.decode(BoxSnapshot.self, from: data) else { continue }
                 snap.account = newName
-                edits.append(BoxStore.RenameEdit(path: "box/" + name, data: try Self.encoder.encode(snap)))
+                try write("box/" + name, try Self.encoder.encode(snap))
             }
-            return edits
         }
-        setVerified(old, nil); setVerified(newName, nil)
     }
 
     // MARK: - versions
@@ -140,15 +138,19 @@ public final class BoxLibrary {
 
     /// Save a reviewed scan and the box version it made as one step: the scan record (with its replay log) is written first because the version points at it,
     /// and if the version cannot be written the record is removed again, so a failed save leaves no scan behind and a retry does not pile up a second one. The
-    /// checks a commit makes (the box changed, a newer app's version) are made before anything is written. `commitFailure` is for tests: it runs just before the
-    /// version is written and may throw.
+    /// checks a commit makes are made before anything is written: the account's folder must exist (a save never makes one, so a renamed or removed account cannot be
+    /// brought back by a scan that still carries its old name), a newer app's version, a newest version that cannot be read, and the box having changed.
+    /// `commitFailure` is for tests: it runs just before the version is written and may throw.
     public func commitScan(_ result: ScanResult, entries: [BoxEntry], account: String, scanDate: Date, source: String, kind: BoxStore.Kind, note: String,
                            expectedCurrentSeq: Int??, storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil, refineChanges: [String]? = nil,
-                           reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil, commitFailure: (() throws -> Void)? = nil) throws -> (scan: BoxStore.Summary, snapshot: BoxSnapshot) {
+                           reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil, sourceSignature: String? = nil,
+                           commitFailure: (() throws -> Void)? = nil) throws -> (scan: BoxStore.Summary, snapshot: BoxSnapshot) {
+        guard fm.fileExists(atPath: try store.accountDirectory(account, create: false).path) else { throw BoxStore.Failure.noSuchAccount(account) }
         try refuseOverNewer(account)
-        if let expected = expectedCurrentSeq, expected != (try seqs(account).last) { throw Failure.boxChanged }
+        let cur = try current(account: account)   // throws when the newest version is damaged: nothing is written on top of it
+        if let expected = expectedCurrentSeq, expected != cur?.seq { throw Failure.boxChanged }
         let scan = try store.save(result, account: account, scanDate: scanDate, source: source, kind: kind, storageCount: storageCount, replayLog: replayLog, paging: paging,
-                                  refineChanges: refineChanges, reviewActions: reviewActions, reportSentAt: reportSentAt, reportHash: reportHash)
+                                  refineChanges: refineChanges, reviewActions: reviewActions, reportSentAt: reportSentAt, reportHash: reportHash, sourceSignature: sourceSignature)
         do {
             try commitFailure?()
             let snap = try commit(account: account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: kind, scanDate: scanDate, expectedCurrentSeq: expectedCurrentSeq)
@@ -238,10 +240,12 @@ public final class BoxLibrary {
     /// The version "Restore previous box" would restore: the one just before the current version, which holds the content that was current
     /// before the latest change (after [1 scan, 2 edit, 3 restore of 1, 4 scan] it is 3, which has the content of 1). Pressing it again
     /// from a restore goes back to what the restore replaced.
-    public func previousVersion(account: String) throws -> BoxSnapshot.Header? {
-        let all = try history(account: account)
-        guard let cur = all.first else { return nil }
-        return all.first { $0.seq < cur.seq }
+    public func previousVersion(account: String) throws -> BoxSnapshot.Header? { Self.previous(in: try history(account: account)) }
+
+    /// The version before the newest in a history (newest first), so a caller that has the history does not read it again.
+    public static func previous(in history: [BoxSnapshot.Header]) -> BoxSnapshot.Header? {
+        guard let cur = history.first else { return nil }
+        return history.first { $0.seq < cur.seq }
     }
 
     @discardableResult

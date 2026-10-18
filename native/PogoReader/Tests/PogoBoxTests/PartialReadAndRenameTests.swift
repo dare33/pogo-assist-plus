@@ -164,6 +164,56 @@ final class RenameTests: XCTestCase {
         XCTAssertFalse(left.contains { $0.hasSuffix(".renaming") }, "no half-made copy is left behind")
     }
 
+    private struct Disk: Error {}
+
+    private func leftovers(_ account: String) throws -> [String] {
+        let base = dir.appendingPathComponent(account)
+        let top = try FileManager.default.contentsOfDirectory(atPath: base.path)
+        let box = try FileManager.default.contentsOfDirectory(atPath: base.appendingPathComponent("box").path)
+        return (top + box).filter { $0.contains(".renaming") }
+    }
+
+    func testAFailureInTheSwapAfterTheFolderMovedPutsEverythingBack() throws {
+        let (scanId, seq) = try seed("Parents")
+        lib.store.renameFault = { phase, path in if phase == "swap", path == "box/000002.json" { throw Disk() } }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "darentas")) { XCTAssertTrue($0 is Disk) }
+        XCTAssertEqual(try lib.accounts(), ["Parents"], "the folder is back under its old name")
+        XCTAssertEqual(try lib.load(account: "Parents", seq: seq).account, "Parents")
+        XCTAssertEqual(try lib.load(account: "Parents", seq: seq + 1).account, "Parents", "the file whose swap failed is the original")
+        XCTAssertEqual(try lib.store.load(account: "Parents", id: scanId).account, "Parents", "a file already swapped is the original again")
+        XCTAssertEqual(try leftovers("Parents"), [])
+        // and the same rename works once the disk is well
+        lib.store.renameFault = nil
+        try lib.renameAccount(from: "Parents", to: "darentas")
+        XCTAssertEqual(try lib.load(account: "darentas", seq: seq + 1).account, "darentas")
+        XCTAssertEqual(try leftovers("darentas"), [])
+    }
+
+    func testARollbackThatCannotFinishSaysWhichNameTheAccountNowHas() throws {
+        _ = try seed("Parents")
+        // the folder goes back but one original cannot be put back: the account is still Parents, and the error says so
+        lib.store.renameFault = { phase, path in
+            if phase == "swap", path == "box/000002.json" { throw Disk() }
+            if phase == "rollback", path == "box/000001.json" { throw Disk() }
+        }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "darentas")) {
+            guard case .renameIncomplete(let now, let why)? = $0 as? BoxStore.Failure else { return XCTFail("\($0)") }
+            XCTAssertEqual(now, "Parents"); XCTAssertTrue(why.contains("box/000001.json"), why)
+        }
+        XCTAssertEqual(try lib.accounts(), ["Parents"])
+        // the folder cannot go back either: the account is now darentas, which is what is on disk
+        let (_, _) = try seed("Other")
+        lib.store.renameFault = { phase, path in
+            if phase == "swap", path == "box/000002.json" { throw Disk() }
+            if phase == "moveBack" { throw Disk() }
+        }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Other", to: "renamed")) {
+            guard case .renameIncomplete(let now, _)? = $0 as? BoxStore.Failure else { return XCTFail("\($0)") }
+            XCTAssertEqual(now, "renamed")
+        }
+        XCTAssertEqual(try lib.accounts(), ["Parents", "renamed"])
+    }
+
     func testARenameLeavesAVersionFromANewerAppAsItIsAndRewritesTheRest() throws {
         let (_, seq) = try seed("Parents")
         let f = dir.appendingPathComponent("Parents/box").appendingPathComponent(String(format: "%06d.json", seq + 1))
