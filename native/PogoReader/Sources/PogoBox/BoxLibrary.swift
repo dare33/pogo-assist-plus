@@ -138,6 +138,27 @@ public final class BoxLibrary {
         return snap
     }
 
+    /// Save a reviewed scan and the box version it made as one step: the scan record (with its replay log) is written first because the version points at it,
+    /// and if the version cannot be written the record is removed again, so a failed save leaves no scan behind and a retry does not pile up a second one. The
+    /// checks a commit makes (the box changed, a newer app's version) are made before anything is written. `commitFailure` is for tests: it runs just before the
+    /// version is written and may throw.
+    public func commitScan(_ result: ScanResult, entries: [BoxEntry], account: String, scanDate: Date, source: String, kind: BoxStore.Kind, note: String,
+                           expectedCurrentSeq: Int??, storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil, refineChanges: [String]? = nil,
+                           reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil, commitFailure: (() throws -> Void)? = nil) throws -> (scan: BoxStore.Summary, snapshot: BoxSnapshot) {
+        try refuseOverNewer(account)
+        if let expected = expectedCurrentSeq, expected != (try seqs(account).last) { throw Failure.boxChanged }
+        let scan = try store.save(result, account: account, scanDate: scanDate, source: source, kind: kind, storageCount: storageCount, replayLog: replayLog, paging: paging,
+                                  refineChanges: refineChanges, reviewActions: reviewActions, reportSentAt: reportSentAt, reportHash: reportHash)
+        do {
+            try commitFailure?()
+            let snap = try commit(account: account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: kind, scanDate: scanDate, expectedCurrentSeq: expectedCurrentSeq)
+            return (scan, snap)
+        } catch {
+            try? store.delete(account: account, id: scan.id)
+            throw error
+        }
+    }
+
     /// Change the box: `transform` is given the CURRENT entries, read here, and what it returns is written as the next version, all in
     /// one call, so two quick actions each see the other's result and neither drops it. A `transform` that throws writes nothing. Run it
     /// on the one queue the box is written from.

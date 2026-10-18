@@ -33,6 +33,40 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertEqual(try lib.load(account: "Greg main", seq: 1).entries.count, 1, "an earlier version is untouched")
     }
 
+    private func scanFiles(_ account: String) throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent(account).path).filter { $0.hasPrefix("scan-") }
+    }
+
+    func testAScanWhoseVersionCannotBeWrittenLeavesNoScanRecordAndARetryMakesOne() throws {
+        let es = entries([100, 200])
+        let result = ScanResult(rows: es.map { $0.row }, review: [], unmatched: [])
+        let log = Data("{\"k\":\"t\",\"t\":1}\n".utf8)
+        _ = try lib.commit(account: "a", entries: entries([100]), reason: .scan, note: "one", now: date(1))
+        struct Boom: Error {}
+        // the version write fails after the scan record is down (the hook), then for real (a box folder that takes no new file)
+        XCTAssertThrowsError(try lib.commitScan(result, entries: es, account: "a", scanDate: date(2), source: "broadcast", kind: .full, note: "two", expectedCurrentSeq: .some(1), replayLog: log, commitFailure: { throw Boom() }))
+        XCTAssertEqual(try scanFiles("a"), [], "the record and its log were taken back out")
+        let box = dir.appendingPathComponent("a/box")
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: box.path)
+        XCTAssertThrowsError(try lib.commitScan(result, entries: es, account: "a", scanDate: date(2), source: "broadcast", kind: .full, note: "two", expectedCurrentSeq: .some(1), replayLog: log))
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: box.path)
+        XCTAssertEqual(try scanFiles("a"), [])
+        XCTAssertEqual(try lib.current(account: "a")?.seq, 1, "the box did not move")
+        // the retry makes one scan and one version
+        let done = try lib.commitScan(result, entries: es, account: "a", scanDate: date(2), source: "broadcast", kind: .full, note: "two", expectedCurrentSeq: .some(1), replayLog: log)
+        XCTAssertEqual(done.snapshot.seq, 2); XCTAssertEqual(done.snapshot.scanId, done.scan.id)
+        XCTAssertEqual(try scanFiles("a").sorted(), ["\(done.scan.id).json", "\(done.scan.id).replay.jsonl"])
+    }
+
+    func testAScanSavedOverAChangedBoxIsRefusedBeforeAnythingIsWritten() throws {
+        _ = try lib.commit(account: "a", entries: entries([100]), reason: .scan, note: "one", now: date(1))
+        let result = ScanResult(rows: entries([100]).map { $0.row }, review: [], unmatched: [])
+        XCTAssertThrowsError(try lib.commitScan(result, entries: [], account: "a", scanDate: date(2), source: "broadcast", kind: .full, note: "x", expectedCurrentSeq: .some(0), replayLog: Data("x".utf8))) {
+            XCTAssertEqual($0 as? BoxLibrary.Failure, .boxChanged)
+        }
+        XCTAssertEqual(try scanFiles("a"), [])
+    }
+
     func testRestorePreviousBringsBackTheEarlierBoxAsANewVersion() throws {
         _ = try lib.commit(account: "a", entries: entries([100]), reason: .scan, note: "one", now: date(1))
         _ = try lib.commit(account: "a", entries: entries([100, 200, 300]), reason: .scan, note: "two", now: date(2))

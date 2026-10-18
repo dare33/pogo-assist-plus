@@ -883,15 +883,14 @@ final class AppModel: ObservableObject {
                 // A scan read again: a new box version from the earlier box plus the new read; the scan itself is not saved twice.
                 if let plan = r.reread { return try lib.commitReread(plan, entries: entries, account: r.account, expectedCurrentSeq: .some(r.boxSeq)) }
                 let log = r.log.flatMap { try? Data(contentsOf: $0) }
-                let current = try lib.current(account: r.account)
-                guard current?.seq == r.boxSeq else { throw BoxLibrary.Failure.boxChanged }
-                let scan = try lib.store.save(r.outcome.scan, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, storageCount: r.storageCount, replayLog: log, paging: r.paging,
-                                           refineChanges: r.outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" },
-                                           reviewActions: ScanReportBuilder.reviewLines(plan: r.plan, resolutions: r.resolutions, keepGone: r.keepGone, base: r.base),
-                                           reportSentAt: r.reportSentAt, reportHash: r.reportHash)
                 let n = r.outcome.scan.rows.count
                 let note = (r.kind == .full ? "Full scan" : "Add and update") + ", \(n) Pokémon"
-                return try lib.commit(account: r.account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: r.kind, scanDate: r.plan.scanDate, expectedCurrentSeq: .some(r.boxSeq))
+                // The scan record and the box version go in as one step: a version that cannot be written takes the record back out (BoxLibrary.commitScan).
+                return try lib.commitScan(r.outcome.scan, entries: entries, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, note: note,
+                                          expectedCurrentSeq: .some(r.boxSeq), storageCount: r.storageCount, replayLog: log, paging: r.paging,
+                                          refineChanges: r.outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" },
+                                          reviewActions: ScanReportBuilder.reviewLines(plan: r.plan, resolutions: r.resolutions, keepGone: r.keepGone, base: r.base),
+                                          reportSentAt: r.reportSentAt, reportHash: r.reportHash).snapshot
             }
             if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
             // A scan paged by the voice command is saved: setup counts as done (`SetupProgress.pagedScanSaved`).
