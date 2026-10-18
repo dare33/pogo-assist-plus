@@ -628,8 +628,13 @@ final class AppModel: ObservableObject {
 
     // MARK: - rename, saved scans
 
+    private var renaming = false
+
     /// Returns nil on success, else the reason in plain words.
     func renameAccount(_ old: String, to new: String) async -> String? {
+        // A pending review holds the old name (`Review.account`): saving it after the rename would file the scan under a folder that no longer exists.
+        if isReviewing { return "Finish or discard the open scan first, then rename the account." }
+        renaming = true; defer { renaming = false }   // a scan that ends while the folder moves waits (checkForFinishedScan), so it is not filed under the old name
         let lib = library
         do {
             try await worker.run { _ in try lib.renameAccount(from: old, to: new) }
@@ -641,7 +646,7 @@ final class AppModel: ObservableObject {
             }
             // The one-time set record and the remembered counts follow the name; the old-name records go, so a stale tap-set record under
             // the old name cannot keep the wrong-screen warning on.
-            for key in [Keys.set, Keys.count + ".", Keys.partial + "."] {
+            for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + "."] {
                 if let d = UserDefaults.standard.object(forKey: key + old) { UserDefaults.standard.set(d, forKey: key + name); UserDefaults.standard.removeObject(forKey: key + old) }
             }
             if account == old { account = name; loadBox(); loadVoiceRecord() } else { refreshDeviceRecords() }
@@ -757,7 +762,7 @@ final class AppModel: ObservableObject {
 
     /// A broadcast has finished (or died without saying so) and its replay log has not been through review yet: read it.
     func checkForFinishedScan() {
-        guard !holdReview, account != nil, boxProblem == nil, !isReviewing, !live, let state = broadcast, state.finished || endedWithoutFinish,
+        guard !holdReview, !renaming, account != nil, boxProblem == nil, !isReviewing, !live, let state = broadcast, state.finished || endedWithoutFinish,
               let sig = ReplayMarker.unprocessedSignature() else { return }
         startReview(signature: sig, doneFirst: true)
     }

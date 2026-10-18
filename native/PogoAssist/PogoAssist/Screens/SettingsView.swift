@@ -83,8 +83,11 @@ struct SettingsView: View {
                     }
                 }
                 Section {
-                    Button("Rename account") { newName = model.account ?? ""; renaming = true }.disabled(model.account == nil)
-                } footer: { if let p = renameProblem { Text(p).foregroundStyle(.red) } }
+                    Button("Rename account") { newName = model.account ?? ""; renaming = true }.disabled(model.account == nil || model.isReviewing)
+                } footer: {
+                    if let p = renameProblem { Text(p).foregroundStyle(.red) }
+                    else if model.isReviewing { Text("A scan is open. Save or discard it before renaming the account.") }
+                }
                 Section {
                     Button("Restore previous box") { confirmPrevious = true }.disabled(model.previous == nil || model.boxNeedsNewerApp)
                 } header: { Text("Box for \(model.account ?? "this account")") } footer: {

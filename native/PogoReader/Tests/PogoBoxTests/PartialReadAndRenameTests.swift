@@ -150,6 +150,39 @@ final class RenameTests: XCTestCase {
         XCTAssertEqual(try lib.commit(account: "darentas", entries: [], reason: .edit, note: "z").seq, 3)
     }
 
+    func testARenameThatCannotRewriteTheVersionsChangesNothingAndSaysSo() throws {
+        let (scanId, seq) = try seed("Parents")
+        let box = dir.appendingPathComponent("Parents/box")
+        // A folder that cannot take a new file stands in for a full disk: the rewritten copy of a version cannot be written.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: box.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: box.path) }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "darentas"))
+        XCTAssertEqual(try lib.accounts(), ["Parents"], "the folder did not move")
+        XCTAssertEqual(try lib.load(account: "Parents", seq: seq).account, "Parents")
+        XCTAssertEqual(try lib.store.load(account: "Parents", id: scanId).account, "Parents")
+        let left = try FileManager.default.contentsOfDirectory(atPath: box.path) + FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("Parents").path)
+        XCTAssertFalse(left.contains { $0.hasSuffix(".renaming") }, "no half-made copy is left behind")
+    }
+
+    func testARenameLeavesAVersionFromANewerAppAsItIsAndRewritesTheRest() throws {
+        let (_, seq) = try seed("Parents")
+        let f = dir.appendingPathComponent("Parents/box").appendingPathComponent(String(format: "%06d.json", seq + 1))
+        var obj = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: f)) as? [String: Any])
+        obj["schema"] = BoxLibrary.schemaVersion + 1
+        let newer = try JSONSerialization.data(withJSONObject: obj)
+        try newer.write(to: f)
+        try lib.renameAccount(from: "Parents", to: "darentas")
+        XCTAssertEqual(try lib.load(account: "darentas", seq: seq).account, "darentas")
+        XCTAssertEqual(try Data(contentsOf: dir.appendingPathComponent("darentas/box").appendingPathComponent(f.lastPathComponent)), newer)
+    }
+
+    func testAdviceWorkedOutForTheOldNameAfterARenameDoesNotBringTheOldFolderBack() throws {
+        let (_, seq) = try seed("Parents")
+        try lib.renameAccount(from: "Parents", to: "darentas")
+        XCTAssertThrowsError(try lib.saveAdvice(BoxAdvice(), account: "Parents", seq: seq + 5))
+        XCTAssertEqual(try lib.accounts(), ["darentas"])
+    }
+
     func testRenameRefusesEmptyAndExistingNamesInPlainWords() throws {
         _ = try seed("One"); _ = try seed("Two")
         XCTAssertThrowsError(try lib.renameAccount(from: "One", to: "   ")) { XCTAssertEqual($0 as? BoxStore.Failure, .badAccountName); XCTAssertEqual(($0 as? LocalizedError)?.errorDescription, "The account name is empty. Type a name.") }

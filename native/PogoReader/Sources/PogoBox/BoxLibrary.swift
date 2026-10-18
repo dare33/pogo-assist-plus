@@ -70,16 +70,25 @@ public final class BoxLibrary {
     /// Make an account (an empty folder). Fine to call for one that exists.
     public func createAccount(_ name: String) throws { _ = try store.accountDirectory(name, create: true) }
 
-    /// Rename an account (see `BoxStore.renameAccount`); its box versions follow, with the new name written into each.
+    /// Rename an account (see `BoxStore.renameAccount`); its box versions follow, with the new name written into each, in the same all-or-nothing
+    /// step as the scans: a rename that cannot rewrite them changes nothing and throws. A version this build cannot read (damaged, or saved by a
+    /// newer app) is left as it is.
     public func renameAccount(from old: String, to new: String) throws {
-        try store.renameAccount(from: old, to: new)
-        setVerified(old, nil); setVerified(new.trimmingCharacters(in: .whitespacesAndNewlines), nil)
         let newName = new.trimmingCharacters(in: .whitespacesAndNewlines)
-        for seq in (try? seqs(newName)) ?? [] {
-            guard let f = try? file(newName, seq), var snap = try? load(account: newName, seq: seq) else { continue }
-            snap.account = newName
-            try? Self.encoder.encode(snap).write(to: f, options: .atomic)
+        try store.renameAccount(from: old, to: new) { folder in
+            let dir = folder.appendingPathComponent("box", isDirectory: true)
+            guard self.fm.fileExists(atPath: dir.path) else { return [] }
+            var edits = [BoxStore.RenameEdit]()
+            for name in try self.fm.contentsOfDirectory(atPath: dir.path).sorted() where name.hasSuffix(".json") && !name.hasSuffix(".advice.json") {
+                let data = try Data(contentsOf: dir.appendingPathComponent(name))
+                if let schema = Self.schema(of: data), schema > Self.schemaVersion { continue }
+                guard var snap = try? Self.decoder.decode(BoxSnapshot.self, from: data) else { continue }
+                snap.account = newName
+                edits.append(BoxStore.RenameEdit(path: "box/" + name, data: try Self.encoder.encode(snap)))
+            }
+            return edits
         }
+        setVerified(old, nil); setVerified(newName, nil)
     }
 
     // MARK: - versions
@@ -224,6 +233,8 @@ public final class BoxLibrary {
 
     /// The advisor's report for a version, kept beside it so the Next tab opens at once.
     public func saveAdvice(_ advice: BoxAdvice, account: String, seq: Int) throws {
+        // Only for an account that exists: advice worked out in the background for a name that has since been renamed must not bring the old folder back.
+        guard fm.fileExists(atPath: try store.accountDirectory(account, create: false).path) else { throw BoxStore.Failure.noSuchAccount(account) }
         try fm.createDirectory(at: try boxFolder(account), withIntermediateDirectories: true)
         try Self.encoder.encode(advice).write(to: try adviceFile(account, seq), options: .atomic)
     }

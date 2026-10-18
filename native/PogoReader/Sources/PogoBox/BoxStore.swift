@@ -180,11 +180,20 @@ public final class BoxStore {
         try? fm.removeItem(at: file.deletingPathExtension().appendingPathExtension("replay.jsonl"))
     }
 
-    /// Rename an account: its folder, and the account name written inside each scan file, so the data, the saved scans and their
-    /// replay logs all follow. Refuses an empty name or another account's name (compared ignoring case and surrounding spaces; a
-    /// change of capitals alone on the same account is allowed). The folder is moved in one step; if rewriting a file's name then
-    /// fails, the file keeps the old name inside and still loads (nothing reads that field to find a scan).
-    public func renameAccount(from old: String, to new: String) throws {
+    /// A file inside an account's folder that a rename has to rewrite: its path relative to the folder and what it should say afterwards.
+    public struct RenameEdit {
+        public var path: String
+        public var data: Data
+        public init(path: String, data: Data) { self.path = path; self.data = data }
+    }
+
+    /// Rename an account: its folder, and the account name written inside each scan file (and, through `alsoRewrite`, inside other files
+    /// of the folder, which is how `BoxLibrary` rewrites its box versions), so the data, the saved scans and their replay logs all follow.
+    /// Refuses an empty name or another account's name (compared ignoring case and surrounding spaces; a change of capitals alone on the
+    /// same account is allowed). It is all or nothing: every rewritten file is first written beside the original, then the folder moves,
+    /// then each is swapped in; a failure in the first step leaves the account exactly as it was, and one in the last puts the files and the
+    /// folder back. A file that cannot be read as a scan (damaged, or from a newer app) is left as it is.
+    public func renameAccount(from old: String, to new: String, alsoRewrite extra: (_ folder: URL) throws -> [RenameEdit] = { _ in [] }) throws {
         let newName = new.trimmingCharacters(in: .whitespacesAndNewlines), oldName = old.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newName.isEmpty else { throw Failure.badAccountName }
         let from = try accountDirectory(oldName, create: false)
@@ -192,21 +201,45 @@ public final class BoxStore {
         for other in try accounts() where other != oldName && other.lowercased() == newName.lowercased() { throw Failure.accountExists(other) }
         if newName == oldName { return }
         let to = try accountDirectory(newName, create: false)
-        if newName.lowercased() == oldName.lowercased() {
-            // Same folder on a case-insensitive disk: go through a temporary name.
-            let temp = root.appendingPathComponent(".rename-\(UUID().uuidString)", isDirectory: true)
-            try fm.moveItem(at: from, to: temp)
-            try fm.moveItem(at: temp, to: to)
-        } else {
-            guard !fm.fileExists(atPath: to.path) else { throw Failure.accountExists(newName) }
-            try fm.moveItem(at: from, to: to)
-        }
-        for name in (try? fm.contentsOfDirectory(atPath: to.path)) ?? [] where name.hasSuffix(".json") {
-            let file = to.appendingPathComponent(name)
-            guard var scan = try? read(file) else { continue }
+        let caseOnly = newName.lowercased() == oldName.lowercased()
+        if !caseOnly { guard !fm.fileExists(atPath: to.path) else { throw Failure.accountExists(newName) } }
+
+        var edits = [RenameEdit]()
+        for name in try fm.contentsOfDirectory(atPath: from.path).sorted() where name.hasSuffix(".json") {
+            guard var scan = try? read(from.appendingPathComponent(name)) else { continue }
             scan.account = newName
-            try? Self.encoder.encode(scan).write(to: file, options: .atomic)
+            edits.append(RenameEdit(path: name, data: try Self.encoder.encode(scan)))
         }
+        edits += try extra(from)
+
+        let suffix = ".renaming"
+        func removeTemps(in folder: URL) { for e in edits { try? fm.removeItem(at: folder.appendingPathComponent(e.path + suffix)) } }
+        do { for e in edits { try e.data.write(to: from.appendingPathComponent(e.path + suffix), options: .atomic) } }
+        catch { removeTemps(in: from); throw error }
+        do { try moveFolder(from, to, caseOnly: caseOnly) } catch { removeTemps(in: from); throw error }
+
+        var replaced = [(file: URL, original: Data)]()
+        do {
+            for e in edits {
+                let file = to.appendingPathComponent(e.path), temp = to.appendingPathComponent(e.path + suffix)
+                let original = try Data(contentsOf: file)
+                _ = try fm.replaceItemAt(file, withItemAt: temp)
+                replaced.append((file, original))
+            }
+        } catch {
+            for r in replaced { try? r.original.write(to: r.file, options: .atomic) }
+            removeTemps(in: to)
+            try? moveFolder(to, from, caseOnly: caseOnly)
+            throw error
+        }
+    }
+
+    /// Move an account folder. On a case-insensitive disk a change of capitals alone goes through a temporary name; if the second step fails the first is undone.
+    private func moveFolder(_ from: URL, _ to: URL, caseOnly: Bool) throws {
+        guard caseOnly else { try fm.moveItem(at: from, to: to); return }
+        let temp = root.appendingPathComponent(".rename-\(UUID().uuidString)", isDirectory: true)
+        try fm.moveItem(at: from, to: temp)
+        do { try fm.moveItem(at: temp, to: to) } catch { try? fm.moveItem(at: temp, to: from); throw error }
     }
 
     /// Where a saved scan's files are, for sharing: the result file and the replay log (nil if that scan kept none).
