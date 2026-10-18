@@ -839,11 +839,26 @@ The command is made for the phone's language (the device locale); Voice Control'
   - **A rename cannot be left half done.** Before a rename touches anything it writes a journal (`.rename-journal.json` in the boxes folder: old and new name, a case-only rename's
     temporary folder, the phase, the waiting scan's signature), synced to disk, and updates it at each phase; it is deleted only when the rename has completed or been rolled
     back. The waiting scan's account is retargeted inside it. At launch (before accounts are listed) and in every box load (on the worker queue, so never during a rename),
-    `recoverInterruptedRename` finds a leftover journal: if the folder has already moved it puts the remaining rewrites in place (and undoes everything if that fails), otherwise
-    it puts the folder back, removes leftover copies, restores the set-aside originals and points the waiting scan at the account that exists. Names beginning with a dot (the
-    journal, the history, a case-only rename's temporary folder) are never listed as accounts, so a temporary name is never shown. Tested by killing a plain and a case-only rename at
-    eight points and checking a fresh load (`RenameJournalTests`); the file-level repair (`repairInterruptedRename`, a stale backup never replaces a live file) is kept inside it.
-    Build-checked only: the app's use of it (launch recovery, loadBox, the rename's message and selection).
+    `recoverRename` finds a leftover journal and applies one rule: a journal whose phase is `undoing` is always rolled back (restore every original set aside as `.renaming-old`
+    over whatever is in its place, remove leftover copies, move the folder to the old name, point the waiting scan back); any other journal is rolled forward if the folder has
+    already moved (the remaining rewrites go in place) and rolled back if not. `undoing` is written to disk before anything is undone, because undoing destroys rewrites already
+    swapped in; if it cannot be written nothing is undone and the rename stays finishable. The `moved` and `swapped` phases only inform (recovery reads the disk), so a failed write
+    there changes nothing, and a swap that completed is a success. The journal is deleted last, so a recovery that is itself cut off is just run again. A journal that cannot be
+    decoded is never deleted unless the disk shows nothing in flight (no `.rename-` temporary folder, no `.renaming` / `.renaming-old` file in any account); otherwise
+    `renameJournalUnreadable` is reported and nothing is touched. A recovery that fails is shown as a box problem ("A rename is unfinished": scanning and saving paused, no
+    rename can start, the recovery is retried at each box load). When a recovery finishes a rename forward the app moves the settings across exactly as for a rename made here
+    (`AppModel.moveAccountKeys`: voice records, set record, count, partial count, eggs) and the selection follows the new name. Names beginning with a dot (the journal, the history, a case-only
+    rename's temporary folder) are never listed as accounts. Tested (`RenameJournalTests`): a plain and a case-only rename killed at eight points; swap failure then move-back
+    failure then a fresh load; recovery itself killed during its undo; journal write failures at each phase; an unreadable journal. The file-level repair
+    (`repairInterruptedRename`, a stale backup never replaces a live file) is kept inside it. Build-checked only: the app's use of it (launch recovery, `loadBox`, the problem panel,
+    the settings move).
+  - **Scans started before an account exists, or when accounts cannot be listed.** A scan whose state records no account, with no account selected (a first-time user starting from
+    Control Center), waits silently in the shared log and is picked up once an account exists. If the accounts cannot be listed the app says there is a storage problem; "no
+    longer on this phone" with Discard is shown only when the listing worked and the recorded account is neither there nor the result of a recorded rename
+    (`BoxStore.lookupAccount`: found, gone, unknown).
+  - **Known limits.** Accounts are identified by name. A scan records the name of the account it was started under, so if that account is deleted and another is later made with the
+    same name before the scan is read, the scan is read into the new one; a stable account id is planned separately. An app ended after a rename finished in the box folder but before
+    the app moved its own settings (the voice records, counts and so on) leaves those under the old name.
 - **A save is one step.** `BoxLibrary.commitScan` checks the box (changed, newer app) before writing, writes the scan record and log, then the box version, and removes the
   record if the version cannot be written, so a failed save leaves no scan behind and a retry does not make a second. It never makes an account folder (an unknown account is refused) and refuses when the newest version cannot be read.
 - **Boxes are never kept in the temporary folder.** `BoxExportFile.boxesRoot` is nil when Application Support cannot be resolved; the app then shows a box problem (scanning

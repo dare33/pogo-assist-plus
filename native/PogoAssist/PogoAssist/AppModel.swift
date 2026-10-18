@@ -144,6 +144,10 @@ final class AppModel: ObservableObject {
     @Published var boxNeedsNewerApp = false
     /// Application Support could not be resolved at launch, so there is nowhere to keep a box (`BoxExportFile.boxesRoot`). Shown as a box problem.
     private(set) var storageMissing = false
+    /// A rename that was cut off could not be finished or undone (`BoxStore.recoverRename` failed): shown as a box problem, scanning is paused, and no new rename starts. The journal
+    /// is kept and the recovery tried again at every box load.
+    @Published private(set) var recoveryProblem: String?
+    nonisolated static func recoveryText(_ error: Error) -> String { "A rename of an account was cut off and could not be finished yet (\(plain(error))) Your boxes have not been deleted. The app tries again each time it opens a box." }
 
     @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind); refreshReaderSettings(); if scanKind != oldValue { rescanCount = nil } } }
     /// "Re-scan N" was pressed in the Box: how many Pokémon are to be checked. Held only for the next scan and never saved. It goes when a scan starts, when the scan kind or the
@@ -500,7 +504,7 @@ final class AppModel: ObservableObject {
         storageCountText = ""   // read per account by loadVoiceRecord once the account is known
         pagedByHand = true   // restorePaging() below: by hand until the commands exist, unless the person chose
         // A rename that was cut off by the app being ended is finished or undone before accounts are listed. Nothing else is running yet, so it is safe here.
-        _ = try? library.recoverInterruptedRename(pending: pendingStore)
+        do { if let r = try library.recoverRename(pending: pendingStore) { applyRecovered(r) } } catch { recoveryProblem = Self.recoveryText(error) }
         account = UserDefaults.standard.string(forKey: Keys.account)
         reloadAccounts()
         // After the account is chosen (reloadAccounts picks the first when none was stored): before the count was per account it was one global value: carry it over to the current account, once.
@@ -571,17 +575,23 @@ final class AppModel: ObservableObject {
         let ps = pendingStore
         Task {
             // On the library's queue, so it never overlaps a rename: finish or undo a rename that was cut off, and put right any copies it left.
-            let recovered = (try? await worker.run { _ -> Bool in
-                let did = (try? lib.recoverInterruptedRename(pending: ps)) ?? false
+            let (recovered, problem) = (try? await worker.run { _ -> (BoxStore.RecoveredRename?, String?) in
+                var did: BoxStore.RecoveredRename?, problem: String?
+                do { did = try lib.recoverRename(pending: ps) } catch { problem = Self.recoveryText(error) }
                 _ = try? lib.store.repairInterruptedRename(account: a)
-                return did
-            }) ?? false
+                return (did, problem)
+            }) ?? (nil, nil)
             guard token == boxToken, account == a else { return }
-            if recovered {
+            recoveryProblem = problem
+            if let r = recovered {
                 let disk = (try? lib.accounts()) ?? accounts
                 accounts = disk
                 if waitingScan != nil { adoptWaiting() }
-                if !disk.contains(a) { account = disk.first; loadBox(); loadVoiceRecord(); return }
+                applyRecovered(r)   // the settings and the selection follow a rename the recovery finished
+                if account != a || !disk.contains(account ?? "") {
+                    if let acc = account, !disk.contains(acc) { account = disk.first }
+                    loadBox(); loadVoiceRecord(); return
+                }
             }
             let result = await Task.detached(priority: .userInitiated) { () -> BoxLoad in
                 // Always asked, not only when the newest version fails to load: any version from a newer app means nothing may be written on top of it.
@@ -604,6 +614,7 @@ final class AppModel: ObservableObject {
                 boxNeedsNewerApp = false
                 boxProblem = "The newest saved version of the box for \(a) cannot be read (\(why)). Your earlier versions are still on this device."
             }
+            if let p = recoveryProblem { boxProblem = p }   // an unfinished rename pauses scanning and saving like any box problem
             boxLoaded = true
             loadAdvice()
             loadScans()
@@ -727,11 +738,33 @@ final class AppModel: ObservableObject {
 
     private var renaming = false
 
+    /// The per-account settings follow the account's name: the voice records, the one-time set record and the remembered counts and eggs. The old-name records go, so a stale tap-set
+    /// record under the old name cannot keep the wrong-screen warning on. Used by a rename made here and by one that a recovery finished.
+    static func moveAccountKeys(from old: String, to new: String) {
+        let d = UserDefaults.standard
+        for p in VoiceCommandFile.Pace.allCases {
+            let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
+            if let v = d.data(forKey: k(old)) { d.set(v, forKey: k(new)); d.removeObject(forKey: k(old)) }
+        }
+        for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + "."] {
+            if let v = d.object(forKey: key + old) { d.set(v, forKey: key + new); d.removeObject(forKey: key + old) }
+        }
+    }
+
+    /// A recovery finished a rename: the settings and the selection follow it exactly as for a rename made here. (An undone rename changes nothing here: nothing had moved.)
+    private func applyRecovered(_ r: BoxStore.RecoveredRename) {
+        guard r.finished else { return }
+        Self.moveAccountKeys(from: r.old, to: r.new)
+        if UserDefaults.standard.string(forKey: Keys.account) == r.old { UserDefaults.standard.set(r.new, forKey: Keys.account) }   // at launch, before `account` is read
+        if account == r.old { account = r.new }
+    }
+
     /// Returns nil on success, else the reason in plain words (also when the rename could not be fully undone: the sentence then says which name the account has).
     func renameAccount(_ old: String, to new: String) async -> String? {
         // A pending review holds the old name (`Review.account`): saving it after the rename would file the scan under a folder that no longer exists.
         if isReviewing { return "Finish or discard the open scan first, then rename the account." }
         if live { return "A scan is running. Rename the account when it has finished." }
+        if recoveryProblem != nil { return "An earlier rename of an account has not been finished yet, so no account can be renamed now. The app tries again each time it opens a box." }
         if copying { return "A finished scan is being kept for review. Try again in a moment." }
         if reopening { return "A waiting scan is being checked. Try again in a moment." }
         renaming = true   // a scan that ends while the folder moves waits (checkForFinishedScan), so it is not filed under the old name
@@ -747,18 +780,10 @@ final class AppModel: ObservableObject {
         } catch { return Self.plain(error) }
         accounts = (try? library.accounts()) ?? accounts
         if waitingScan != nil { adoptWaiting() }
-        if actual != old {
-            for p in VoiceCommandFile.Pace.allCases {
-                let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
-                if let d = UserDefaults.standard.data(forKey: k(old)) { UserDefaults.standard.set(d, forKey: k(actual)); UserDefaults.standard.removeObject(forKey: k(old)) }
-            }
-            // The one-time set record and the remembered counts follow the name; the old-name records go, so a stale tap-set record under
-            // the old name cannot keep the wrong-screen warning on.
-            for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + "."] {
-                if let d = UserDefaults.standard.object(forKey: key + old) { UserDefaults.standard.set(d, forKey: key + actual); UserDefaults.standard.removeObject(forKey: key + old) }
-            }
-        }
-        if account == old { if actual != old { account = actual }; loadBox(); loadVoiceRecord() } else { refreshDeviceRecords() }
+        // Only a rename that went through moves the settings and the selection. One that could not be completed or undone is settled by the recovery the next box load runs (which moves
+        // them itself if it finishes the rename), so they are not moved to a name that may be undone.
+        if warning == nil, actual != old { Self.moveAccountKeys(from: old, to: actual) }
+        if account == old { if warning == nil, actual != old { account = actual }; loadBox(); loadVoiceRecord() } else { refreshDeviceRecords() }
         return warning
     }
 
@@ -907,9 +932,19 @@ final class AppModel: ObservableObject {
             }
             return
         }
-        guard let scanAccount = accountOfScan(state) else {
-            // The account this scan was started under is gone: it is not given to whichever account is selected.
-            if waitingShownFor != sig { waitingShownFor = sig; flow = .failed(message: Self.accountGoneText(state.account ?? "the account"), signature: sig) }
+        let scanAccount: String
+        switch accountOfScan(state) {
+        case .account(let name): scanAccount = name
+        case .waiting: return   // no account yet: the scan stays in the shared log and is picked up once there is one
+        case .storageProblem:
+            if waitingShownFor != sig {
+                waitingShownFor = sig
+                message = storageMissing ? BoxExportFile.storageUnavailableText : "The accounts on this phone could not be read, so the finished scan cannot be opened yet. It is kept, and the app tries again."
+            }
+            return
+        case .gone(let name):
+            // The account this scan was started under is positively gone: it is not given to whichever account is selected.
+            if waitingShownFor != sig { waitingShownFor = sig; flow = .failed(message: Self.accountGoneText(name), signature: sig) }
             return
         }
         if let after = copyRetryAfter, Date() < after { return }
@@ -917,11 +952,20 @@ final class AppModel: ObservableObject {
         startReview(signature: sig, doneFirst: true, state: state)
     }
 
-    /// The account a scan belongs to: the one selected when its broadcast started (recorded in the state), whatever is selected now; the selected one for a state that does not say.
-    private func accountOfScan(_ state: BroadcastState?) -> String? {
-        // A recorded account that has since been renamed is followed to its new name; one that is gone is nil (not the selected account, which may be someone else's).
-        if let a = state?.account { return (try? library.store.accountNamed(a)) ?? nil }
-        return account
+    /// Which account a finished scan belongs to. `waiting`: no account is known yet (a first-time user started a broadcast before creating one): nothing is said, the scan is
+    /// picked up once an account exists. `storageProblem`: the accounts cannot be listed, which says nothing about the recorded account. `gone`: the listing worked and the
+    /// recorded account is neither there nor the result of a recorded rename.
+    private enum ScanAccount { case account(String), waiting, storageProblem, gone(String) }
+
+    /// The one selected when its broadcast started (recorded in the state), whatever is selected now, followed through renames; the selected one for a state that does not say.
+    private func accountOfScan(_ state: BroadcastState?) -> ScanAccount {
+        guard let recorded = state?.account else { return account.map { .account($0) } ?? .waiting }
+        if storageMissing { return .storageProblem }
+        switch library.store.lookupAccount(recorded) {
+        case .found(let name): return .account(name)
+        case .gone: return .gone(recorded)
+        case .unknown: return .storageProblem
+        }
     }
 
     private static func encode(_ state: BroadcastState?) -> Data? { state.flatMap { try? JSONEncoder().encode($0) } }
@@ -953,7 +997,7 @@ final class AppModel: ObservableObject {
             dropCopy()
         }
         let st = state ?? broadcast
-        guard let a = accountOfScan(st) else { return }
+        guard case .account(let a) = accountOfScan(st) else { return }
         if a == account, !boxLoaded || boxProblem != nil { return }
         let kind = st?.kind.flatMap(BoxStore.Kind.init(rawValue:)) ?? scanKind   // what the scan was started as, not the preference now
         let meta = PendingScanMeta(signature: signature, account: a, kind: kind, scanDate: st?.updated, doneFirst: doneFirst, attempts: 0, state: Self.encode(st))
@@ -1011,7 +1055,13 @@ final class AppModel: ObservableObject {
         if ReplayMarker.processedSignature() == w.signature { pendingStore.clear(ifSignature: w.signature); waitingScan = nil; return }
         if !accounts.contains(w.account) {
             // Renamed since it was kept (and not retargeted): follow the rename; otherwise the account is gone.
-            if let now = (try? library.store.accountNamed(w.account)) ?? nil, now != w.account, (try? pendingStore.update { $0.account = now }) != nil { waitingScan?.account = now; reopenPendingScan(selecting: selecting); return }
+            switch library.store.lookupAccount(w.account) {
+            case .unknown: return   // the accounts cannot be listed: say nothing, ask again later
+            case .found(let now):
+                if (try? pendingStore.update { $0.account = now }) != nil { waitingScan?.account = now; reopenPendingScan(selecting: selecting) }
+                return
+            case .gone: break
+            }
             guard case .ready(let meta, let copy) = pendingStore.load() else { adoptWaiting(); return }
             scanCopy = ScanCopy(signature: meta.signature, url: copy, state: Self.decode(meta.state), kind: meta.kind, date: meta.scanDate, account: meta.account)
             waitingScan = nil
