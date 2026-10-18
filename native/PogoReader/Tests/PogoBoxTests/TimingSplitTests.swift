@@ -234,9 +234,9 @@ final class TimingSplitTests: XCTestCase {
 
     // MARK: real clips (opt-in)
 
-    /// Hand-tapped and mixed clips gain no timing split with no hint. The counts are the fragment step's (FragmentTests), not ground truth for
-    /// screenrec-2149: its 578 became 588, 589 and 594 with the fragment rules of bf12a12, ee3fc04 and fde5be6 (3 Oct; found by bisect 18 Oct),
-    /// every changed row being a Staraptor 1999 / 141 or one of its part reads (666, 99) with ivs-unread; no export exists for that clip.
+    /// Hand-tapped and mixed clips gain no timing split with no hint. The counts are the whole `Refine.apply` as of 18 Oct, guards rather than ground
+    /// truth: darentas-01 is one short of the box (see FragmentTests); screenrec-2149's 578 became 588, 589 and 594 with the fragment rules of bf12a12,
+    /// ee3fc04 and fde5be6 (3 Oct; bisected 18 Oct), and only its Staraptor HP 141 rows changed (1999 and its part reads 666, 99); no export exists for it.
     func testRealClipsGainNoTimingSplit() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["POGO_PARITY"] == "1", "set POGO_PARITY=1 to run the real-data checks")
         let dir = ProcessInfo.processInfo.environment["POGO_FRAMES_OUT"] ?? "/Users/greg-mb/Developer/personal/pogo-frames/_out"
