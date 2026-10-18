@@ -498,7 +498,7 @@ none is deleted; Settings restores any of them (as a new version). The replay lo
 
 - Account names: the fields turn off autocorrection, spell checking and automatic capitals; Settings has Rename account (refuses an
   empty name or another account's name, compared ignoring case; the folder, the name inside every scan and box version, the
-  replay logs and the cached advice all follow: `BoxLibrary.renameAccount`).
+  replay logs and the cached advice all follow: `BoxLibrary.renameAccount`). Rename is all-or-nothing on disk (every rewritten file is written beside the original, the folder moves, then each is swapped in; a failure puts it back) and is disabled, and refused by `AppModel.renameAccount`, while a scan is open.
 - Merge rule 7 (part-read CP): a scanned Pokemon that matched nothing, has the `no-level-fits` flag or unread IVs, and whose CP
   digits are a subsequence of a saved same-species CP (182 in 1982) with the same HP (or HP unread) is Unsure with those saved
   Pokemon as candidates. The answers are "It is this one" (only marks it seen; the part-read values are not copied over), "It is new"
@@ -809,6 +809,23 @@ The command is made for the phone's language (the device locale); Voice Control'
 - The swipe fallback's path on small screens is untested.
 - Two or more saved Pokemon with the same species and IVs cannot be told apart without unique ids: when they were powered up since the last scan
   the merge pairs them only if exactly one assignment is consistent, else it asks (`BoxMerge.plan`, M6).
+
+### App fold: unsaved scans, saving, storage, re-scan size
+
+- **An unsaved scan survives a relaunch.** The review's private copy of `replay.jsonl` lives in `Application Support/PogoAssist/pending/` (`PendingScanStore`), with a
+  meta file: the signature, the account and the broadcast state the scan ended with. On launch `AppModel.reopenPendingScan` opens it before the shared log is looked at;
+  it is deleted only when the review is saved or discarded (or if its signature is the one already marked reviewed). The signature is still checked before and after the
+  read and the length must match it. The copy is made off the main actor; if it fails the app says so once for that scan and tries again after 30 seconds.
+- **A save is one step.** `BoxLibrary.commitScan` checks the box (changed, newer app) before writing, writes the scan record and log, then the box version, and removes the
+  record if the version cannot be written, so a failed save leaves no scan behind and a retry does not make a second.
+- **Boxes are never kept in the temporary folder.** `BoxExportFile.boxesRoot` is nil when Application Support cannot be resolved; the app then shows a box problem (scanning
+  paused, no account can be made) and the Shortcuts action throws the same sentence.
+- **Re-scan N** sizes its voice command from what the copied search shows (the to-check Pokémon it covers plus the others with the same name and CP or HP) plus the margin
+  (`VoiceCommandFile.rescanSize`). The size is held with the transient re-scan count; the remembered Add and update number is not written.
+- **Saved-scan summaries** (`BoxStore.list`) read each file's header fields and array lengths only, and the app loads them off the main actor. A scan file whose rows are damaged
+  but whose header reads is listed and fails when opened. The on-disk format is unchanged.
+- Privacy manifests: both targets declare UserDefaults reason 1C8F.1 (the app group's defaults); the app also CA92.1 (its own defaults) and file timestamps C617.1 (the replay
+  marker's modification date in its own container); the extension reads no standard defaults and no file dates.
 
 ## What this app sends
 
