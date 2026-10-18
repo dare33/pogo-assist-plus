@@ -110,9 +110,9 @@ struct BoxView: View {
         ScrollView {
             VStack(spacing: 14) {
                 Image(systemName: "exclamationmark.triangle").font(.figtree(44, .regular, relativeTo: .largeTitle)).foregroundStyle(Theme.orange).accessibilityHidden(true)
-                Text(model.boxNeedsNewerApp ? "This box needs a newer version of the app" : "This box could not be read").paText(.questionTitle).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
+                Text(model.boxNeedsNewerApp ? "This box needs a newer version of the app" : model.storageMissing ? "There is nowhere to keep your box" : "This box could not be read").paText(.questionTitle).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
                 Text(text).paText(.secondary).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
-                if !model.boxNeedsNewerApp {
+                if !model.boxNeedsNewerApp && !model.storageMissing {
                     PillButton("Restore the latest readable version", style: .filled) { Task { await model.restoreLatestReadable() } }
                 }
                 Text("Scanning is paused until this is resolved.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)

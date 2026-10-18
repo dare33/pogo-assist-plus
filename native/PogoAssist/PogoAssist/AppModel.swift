@@ -122,6 +122,8 @@ final class AppModel: ObservableObject {
     @Published var boxProblem: String?
     /// The newest version came from a newer app: no restore is offered (it would roll the box back), only "update the app".
     @Published var boxNeedsNewerApp = false
+    /// Application Support could not be resolved at launch, so there is nowhere to keep a box (`BoxExportFile.boxesRoot`). Shown as a box problem.
+    private(set) var storageMissing = false
 
     @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind); refreshReaderSettings(); if scanKind != oldValue { rescanCount = nil } } }
     /// "Re-scan N" was pressed in the Box: how many Pokémon are to be checked. Held only for the next scan and never saved. It goes when a scan starts, when the scan kind or the
@@ -453,14 +455,17 @@ final class AppModel: ObservableObject {
 
     init() {
         let root = BoxExportFile.boxesRoot
+        // No place for the boxes: the library points at a path nothing can be written to (never the temporary folder), and `loadBox` shows the problem.
+        storageMissing = root == nil
+        let libraryRoot = root ?? URL(fileURLWithPath: "/dev/null/pogo-assist-boxes", isDirectory: true)
         // The UI test starts from a clean install each time: it passes this argument and the app forgets everything first.
         if CommandLine.arguments.contains("-uitest-reset") {
             if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
-            try? FileManager.default.removeItem(at: root)
+            if let root { try? FileManager.default.removeItem(at: root) }
             SharedStore.clear()
             if let c = SharedStore.containerURL { try? FileManager.default.removeItem(at: c.appendingPathComponent("replay.processed")) }
         }
-        library = BoxLibrary(root: root)
+        library = BoxLibrary(root: libraryRoot)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
         eggText = ""
         partialCountText = ""
@@ -494,6 +499,7 @@ final class AppModel: ObservableObject {
 
     func createAccount(_ raw: String) {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !storageMissing else { message = BoxExportFile.storageUnavailableText; return }
         guard !name.isEmpty else { message = "Type a name for the account, such as your trainer name."; return }
         if accounts.contains(where: { $0.lowercased() == name.lowercased() }) { message = "There is already an account called \(name). Choose a different name."; return }
         do { try library.createAccount(name) } catch { message = "The account could not be created: \(Self.plain(error))"; return }
@@ -512,6 +518,7 @@ final class AppModel: ObservableObject {
 
     /// Read the selected account's current box (and its cached advice, or start computing it).
     func loadBox() {
+        if storageMissing { snapshot = nil; advice = .none; history = []; previous = nil; scans = []; boxNeedsNewerApp = false; boxProblem = BoxExportFile.storageUnavailableText; return }
         guard let a = account else { snapshot = nil; advice = .none; history = []; previous = nil; boxProblem = nil; boxNeedsNewerApp = false; return }
         // Always asked, not only when the newest version fails to load: any version from a newer app means nothing may be written on top of it.
         if let n = library.newerVersion(account: a) {
