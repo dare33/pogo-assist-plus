@@ -214,6 +214,58 @@ final class RenameTests: XCTestCase {
         XCTAssertEqual(try lib.accounts(), ["Parents", "renamed"])
     }
 
+    /// The reviewer's probe: a backup left beside a live version by an earlier cut-off rename must never replace that live version.
+    func testAStaleBackupBesideALiveVersionNeverReplacesIt() throws {
+        let (_, seq) = try seed("Y")   // two versions, the second holding the same entry
+        let v1 = dir.appendingPathComponent("Y/box/000001.json"), v2 = dir.appendingPathComponent("Y/box/000002.json")
+        var obj = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: v2)) as? [String: Any])
+        obj["note"] = "live v2"
+        try JSONSerialization.data(withJSONObject: obj).write(to: v2)
+        try FileManager.default.copyItem(at: v1, to: URL(fileURLWithPath: v2.path + ".renaming-old"))   // old content
+        // a failure in the swap, which used to delete the live file and put the stale one back
+        lib.store.renameFault = { phase, path in if phase == "swap", path == "box/000001.json" { throw Disk() } }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Y", to: "Z"))
+        XCTAssertEqual(try lib.load(account: "Y", seq: seq + 1).note, "live v2")
+        XCTAssertEqual(try leftovers("Y"), [])
+        // and a rename that goes through keeps the live content too
+        lib.store.renameFault = nil
+        try FileManager.default.copyItem(at: v1, to: URL(fileURLWithPath: v2.path + ".renaming-old"))
+        try lib.renameAccount(from: "Y", to: "Z")
+        XCTAssertEqual(try lib.load(account: "Z", seq: seq + 1).note, "live v2")
+        XCTAssertEqual(try lib.load(account: "Z", seq: seq + 1).account, "Z")
+        XCTAssertEqual(try leftovers("Z"), [])
+    }
+
+    func testAnInterruptedSwapIsRepairedAtLoad() throws {
+        let (scanId, seq) = try seed("Parents")
+        let v2 = dir.appendingPathComponent("Parents/box/000002.json")
+        // cut off after the original was set aside and before the rewrite was put in place; another rewrite is half written
+        try FileManager.default.moveItem(at: v2, to: URL(fileURLWithPath: v2.path + ".renaming-old"))
+        try Data("half".utf8).write(to: URL(fileURLWithPath: dir.appendingPathComponent("Parents/box/000001.json").path + ".renaming"))
+        // and a finished swap whose backup was not cleaned up
+        let scan = dir.appendingPathComponent("Parents/\(scanId).json")
+        try FileManager.default.copyItem(at: scan, to: URL(fileURLWithPath: scan.path + ".renaming-old"))
+        XCTAssertEqual(try lib.store.repairInterruptedRename(account: "Parents"), 3)
+        XCTAssertEqual(try lib.load(account: "Parents", seq: seq + 1).note, "y", "the original was put back")
+        XCTAssertEqual(try leftovers("Parents"), [])
+        XCTAssertEqual(try lib.store.load(account: "Parents", id: scanId).id, scanId)
+        XCTAssertEqual(try lib.store.repairInterruptedRename(account: "Parents"), 0)
+    }
+
+    func testACaseOnlyRenameThatCannotFinishIsUndoneOrReportedWithTheRealName() throws {
+        _ = try seed("Parents")
+        lib.store.renameFault = { phase, _ in if phase == "caseSecond" { throw Disk() } }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "PARENTS")) { XCTAssertTrue($0 is Disk) }
+        XCTAssertEqual(try lib.accounts(), ["Parents"], "the first step was undone")
+        // the undo fails too: the folder is left under the temporary name, and the error says so
+        lib.store.renameFault = { phase, _ in if phase == "caseSecond" || phase == "caseUndo" { throw Disk() } }
+        XCTAssertThrowsError(try lib.renameAccount(from: "Parents", to: "PARENTS")) {
+            guard case .renameIncomplete(let now, _)? = $0 as? BoxStore.Failure else { return XCTFail("\($0)") }
+            XCTAssertTrue(now.hasPrefix(".rename-"), now)
+            XCTAssertEqual(try? self.lib.accounts(), [now])
+        }
+    }
+
     func testARenameLeavesAVersionFromANewerAppAsItIsAndRewritesTheRest() throws {
         let (_, seq) = try seed("Parents")
         let f = dir.appendingPathComponent("Parents/box").appendingPathComponent(String(format: "%06d.json", seq + 1))

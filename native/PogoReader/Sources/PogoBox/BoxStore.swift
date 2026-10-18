@@ -210,7 +210,9 @@ public final class BoxStore {
         let caseOnly = newName.lowercased() == oldName.lowercased()
         if !caseOnly { guard !fm.fileExists(atPath: to.path) else { throw Failure.accountExists(newName) } }
 
-        let temp = ".renaming", backup = ".renaming-old"
+        // Leftovers of an earlier rename that was cut off are put right first, so a stale backup can never be mistaken for this rename's.
+        _ = try repairInterruptedRename(account: oldName)
+        let temp = Self.renamingSuffix, backup = Self.renamingOldSuffix
         var staged = [String]()
         func removeTemps(in folder: URL) { for p in staged { try? fm.removeItem(at: folder.appendingPathComponent(p + temp)) } }
         func stage(_ path: String, _ data: Data) throws {
@@ -233,8 +235,8 @@ public final class BoxStore {
             for p in staged {
                 try renameFault?("swap", p)
                 let file = to.appendingPathComponent(p)
-                touched.append(p)
                 try fm.moveItem(at: file, to: to.appendingPathComponent(p + backup))
+                touched.append(p)   // only after its original is safely set aside: rollback puts back what it set aside, nothing else
                 try fm.moveItem(at: to.appendingPathComponent(p + temp), to: file)
             }
         } catch {
@@ -255,6 +257,7 @@ public final class BoxStore {
                 try renameFault?("moveBack", to.lastPathComponent)
                 try moveFolder(to, from, caseOnly: caseOnly)
             } catch {
+                if case Failure.renameIncomplete(let now, let why) = error { throw Failure.renameIncomplete(accountNow: now, detail: (problems + [why]).joined(separator: "; ")) }
                 throw Failure.renameIncomplete(accountNow: newName, detail: (problems + ["the folder could not be moved back: \(error.localizedDescription)"]).joined(separator: "; "))
             }
             if !problems.isEmpty { throw Failure.renameIncomplete(accountNow: oldName, detail: problems.joined(separator: "; ")) }
@@ -268,7 +271,46 @@ public final class BoxStore {
         guard caseOnly else { try fm.moveItem(at: from, to: to); return }
         let temp = root.appendingPathComponent(".rename-\(UUID().uuidString)", isDirectory: true)
         try fm.moveItem(at: from, to: temp)
-        do { try fm.moveItem(at: temp, to: to) } catch { try? fm.moveItem(at: temp, to: from); throw error }
+        do {
+            try renameFault?("caseSecond", to.lastPathComponent)
+            try fm.moveItem(at: temp, to: to)
+        } catch {
+            // Undo the first step; if that fails too the folder is left under the temporary name, and that is what the account is now called.
+            do {
+                try renameFault?("caseUndo", from.lastPathComponent)
+                try fm.moveItem(at: temp, to: from)
+            } catch let undo {
+                throw Failure.renameIncomplete(accountNow: temp.lastPathComponent.removingPercentEncoding ?? temp.lastPathComponent,
+                                               detail: "the folder could not be renamed (\(error.localizedDescription)) or put back (\(undo.localizedDescription))")
+            }
+            throw error
+        }
+    }
+
+    static let renamingSuffix = ".renaming", renamingOldSuffix = ".renaming-old"
+
+    /// Put right what a rename that was cut off (a crash, a kill) left in the account's folder and its `box` folder: an original set aside under `<name>.renaming-old` whose file
+    /// is missing is put back; a backup beside a file that exists is deleted (the file is the live one, a backup never overwrites it); half-written `<name>.renaming` copies are
+    /// deleted. Returns how many files it touched. Safe to run at any time except during a rename (the app runs it at load, before one starts).
+    @discardableResult
+    public func repairInterruptedRename(account: String) throws -> Int {
+        let folder = try accountDirectory(account, create: false)
+        guard fm.fileExists(atPath: folder.path) else { return 0 }
+        var touched = 0
+        for dir in [folder, folder.appendingPathComponent("box", isDirectory: true)] {
+            guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { continue }
+            for n in names.sorted() {
+                let url = dir.appendingPathComponent(n)
+                if n.hasSuffix(Self.renamingOldSuffix) {
+                    let live = dir.appendingPathComponent(String(n.dropLast(Self.renamingOldSuffix.count)))
+                    if fm.fileExists(atPath: live.path) { try fm.removeItem(at: url) } else { try fm.moveItem(at: url, to: live) }
+                    touched += 1
+                } else if n.hasSuffix(Self.renamingSuffix) {
+                    try fm.removeItem(at: url); touched += 1
+                }
+            }
+        }
+        return touched
     }
 
     /// Where a saved scan's files are, for sharing: the result file and the replay log (nil if that scan kept none).

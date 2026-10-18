@@ -89,6 +89,31 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.appendingPathComponent("a/box").path).sorted(), ["000001.json", "000002.json"])
     }
 
+    func testAScanSavedTwiceIsRecognisedAndAnOrphanOnlyRemovedWhenEverythingWasReadable() throws {
+        let es = entries([100])
+        let result = ScanResult(rows: es.map { $0.row }, review: [], unmatched: [])
+        _ = try lib.commit(account: "a", entries: [], reason: .scan, note: "one", now: date(1))
+        let done = try lib.commitScan(result, entries: es, account: "a", scanDate: date(2), source: "broadcast", kind: .full, note: "two", expectedCurrentSeq: .some(1), sourceSignature: "9-1")
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "9-1"), .saved)
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "other"), .notSaved)
+        // a record with no version pointing at it (cut off between the writes), everything readable: taken back
+        let orphan = try lib.store.save(result, account: "a", scanDate: date(3), source: "broadcast", sourceSignature: "7-2")
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "7-2"), .notSaved)
+        XCTAssertThrowsError(try lib.store.load(account: "a", id: orphan.id))
+        // the same, but a version file cannot be read: it may be the one that points at the record, so nothing is deleted
+        let orphan2 = try lib.store.save(result, account: "a", scanDate: date(4), source: "broadcast", sourceSignature: "6-3")
+        try Data("{ broken".utf8).write(to: dir.appendingPathComponent("a/box/000001.json"))
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "6-3"), .unknown)
+        XCTAssertNoThrow(try lib.store.load(account: "a", id: orphan2.id), "not deleted")
+        // a version that points at the record is found even though another version is damaged
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "9-1"), .saved)
+        XCTAssertEqual(done.snapshot.scanId, done.scan.id)
+        // a listing that cannot be made, or a scan file that cannot be read, is not an answer either
+        try Data("not json".utf8).write(to: dir.appendingPathComponent("a/scan-junk.json"))
+        XCTAssertEqual(lib.scanAlreadySaved(account: "a", signature: "nothing-here"), .unknown)
+        XCTAssertEqual(lib.scanAlreadySaved(account: "missing", signature: "1-1"), .notSaved)
+    }
+
     func testThePreviousVersionCanBeTakenFromAHistoryAlreadyRead() throws {
         for i in 1...3 { _ = try lib.commit(account: "a", entries: entries([i]), reason: .scan, note: "v\(i)", now: date(i)) }
         let h = try lib.history(account: "a")

@@ -89,6 +89,29 @@ public final class BoxLibrary {
         }
     }
 
+    // MARK: - was a scan already saved
+
+    public enum SaveState: Equatable { case saved, notSaved, unknown }
+
+    /// Whether the account already holds the scan that was read from the log with this signature, together with its box version. Only a clear answer is acted on: a scan record
+    /// with no version pointing at it, when every version and every scan file could be read, is a save that was cut off between the two writes, and is removed (`notSaved`);
+    /// if anything could not be read, nothing is deleted and the answer is `unknown`, because the unreadable file may be the version that points at the record.
+    public func scanAlreadySaved(account: String, signature: String) -> SaveState {
+        guard let listing = try? store.list(account: account) else { return .unknown }
+        guard let match = listing.scans.first(where: { $0.sourceSignature == signature }) else { return listing.unreadable.isEmpty ? .notSaved : .unknown }
+        guard let all = try? seqs(account) else { return .unknown }
+        var unreadable = false
+        for seq in all {
+            guard let f = try? file(account, seq), let data = try? Data(contentsOf: f), let h = try? Self.headerDecoder.decode(ScanIdOnly.self, from: data) else { unreadable = true; continue }
+            if h.scanId == match.id { return .saved }
+        }
+        if unreadable { return .unknown }
+        try? store.delete(account: account, id: match.id)
+        return .notSaved
+    }
+    private struct ScanIdOnly: Decodable { var scanId: String? }
+    private static let headerDecoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
+
     // MARK: - versions
 
     public func current(account: String) throws -> BoxSnapshot? {
