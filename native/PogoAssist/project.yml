@@ -40,7 +40,12 @@ targets:
       # The app core (JavaScript engine, box, merge). App target only: the extension must stay small.
       - package: PogoReader
         product: PogoBox
+      # The screenshot import types the app itself uses (the queue the share extension fills).
+      - package: PogoReader
+        product: PogoImport
       - target: PogoBroadcast
+        embed: true
+      - target: PogoShare
         embed: true
     entitlements:
       path: PogoAssist/PogoAssist.entitlements
@@ -101,6 +106,40 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(EXTENSION_BUNDLE_ID)
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+  # "Share, then Pogo Assist+" from Photos: copies the screenshots and a manifest into the app group's queue and says they are queued. No reader, no Vision, no box code, so it
+  # stays small; the app reads the queue the next time it comes to the front. Only the queue's types (PogoImport) are linked.
+  PogoShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - PogoShare
+    dependencies:
+      - package: PogoReader
+        product: PogoImport
+    entitlements:
+      path: PogoShare/PogoShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP)
+    info:
+      path: PogoShare/Info.plist
+      properties:
+        CFBundleDisplayName: Pogo Assist+
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        AppGroupID: $(APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            # Images only, up to the batch size (ImportQueue.maxImagesPerBatch).
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsImageWithMaxCount: 50
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(SHARE_EXTENSION_BUNDLE_ID)
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
   PogoAssistUITests:
