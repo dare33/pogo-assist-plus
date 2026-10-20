@@ -204,7 +204,7 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ul"]?.strength); XCTAssertNil(l["ul"]?.iv); XCTAssertNil(l["ul"]?.cost)
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
-        XCTAssertEqual(advice.version, 7)
+        XCTAssertEqual(advice.version, 8)
 
         // The options list decodes in order; the experimental member is a different index.
         let gl = try XCTUnwrap(l["gl"])
@@ -220,7 +220,7 @@ final class BoxLibraryTests: XCTestCase {
         try lib.saveAdvice(advice, account: "a", seq: 1)
         XCTAssertEqual(lib.loadAdvice(account: "a", seq: 1), advice)
         // Versions 2 (leagues only) and 3 (the first options shape, the old pick rule) are recomputed too.
-        for v in [1, 2, 3, 4, 5, 6] {
+        for v in [1, 2, 3, 4, 5, 6, 7] {
             var old = advice; old.version = v
             try lib.saveAdvice(old, account: "a", seq: 1)
             XCTAssertNil(lib.loadAdvice(account: "a", seq: 1), "version \(v)")
@@ -306,7 +306,7 @@ final class BoxLibraryTests: XCTestCase {
         func build(powerUp: Bool = true, _ steps: [S]?) -> BoxAdvice.Build {
             BoxAdvice.Build(entryId: "e", title: "Xurkitree", cp: 3000, level: 40, ivs: nil, targetId: powerUp ? "x" : "y", targetName: "Y", powerUp: powerUp,
                             formChange: false, viaMega: false, needsDynamax: false, spares: 0, areas: ["Raids"], tier: "S", targetLevel: nil, dust: 0, candy: 0, xl: 0,
-                            eliteTMs: 0, communityDayMove: false, pvp: nil, score: 1, steps: steps)
+                            pvp: nil, score: 1, steps: steps)
         }
         XCTAssertEqual(build([]).action, "Already built", "an empty list is already built")
         XCTAssertEqual(build([S(kind: "powerUp", toLevel: 35, areas: ["raids"])]).action, "Power up to level 35 (Raids)")
@@ -317,6 +317,10 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertEqual(build([S(kind: "secondMove", certain: false)]).action, "Second move (if it doesn't have it)")
         // The Dynamax requirement is Max's alone: it does not make the build unfinished, and it is not hidden.
         XCTAssertEqual(build([S(kind: "needsDynamaxCopy")]).action, "Already built (Max needs a Dynamax copy)")
+        var maxOnly = build([S(kind: "needsDynamaxCopy")]); maxOnly.areas = ["Max"]
+        XCTAssertEqual(maxOnly.action, "Needs a Dynamax copy")
+        maxOnly.steps = [S(kind: "powerUp", toLevel: 45, areas: ["max"]), S(kind: "needsDynamaxCopy")]
+        XCTAssertEqual(maxOnly.action, "Power up to level 45 (Max; needs a Dynamax copy)")
         XCTAssertEqual(build([S(kind: "megaEvolve"), S(kind: "needsDynamaxCopy")]).action, "Mega evolve (Max needs a Dynamax copy)")
         XCTAssertEqual(build(powerUp: false, [S(kind: "evolve", to: "Gengar", candy: 100), S(kind: "megaEvolve"), S(kind: "eliteTM", count: 2), S(kind: "cdMove")]).action,
                        "Evolve to Gengar + Mega evolve + 2 Elite TMs + Community Day move")
@@ -324,9 +328,9 @@ final class BoxLibraryTests: XCTestCase {
         // A step this version does not know (or one with no kind) is still something to do.
         XCTAssertEqual(build([S(kind: "somethingNew")]).action, "More to do")
         XCTAssertEqual(BoxAdvice.Build.Step(json: .object(["to": .string("x")])).kind, "unknown")
-        // The cost line no longer repeats Elite TMs and the Community Day move (they are steps).
-        var withElite = build([]); withElite.dust = 5000; withElite.eliteTMs = 2; withElite.communityDayMove = true
-        XCTAssertEqual(withElite.costText, "5k dust")
+        // The cost line carries dust, candy and XL only (Elite TMs and the Community Day move are steps).
+        var withDust = build([]); withDust.dust = 5000
+        XCTAssertEqual(withDust.costText, "5k dust")
         // A build read without the engine's steps falls back to the plain wording (never "Already built").
         XCTAssertEqual(build(nil).action, "Power up")
         XCTAssertEqual(build(powerUp: false, nil).action, "Evolve to Y")
@@ -345,9 +349,9 @@ final class BoxLibraryTests: XCTestCase {
             """
             return try! JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
         }
-        let rows = [record(1, "Xurkitree", 40, (15, 15, 15)), record(2, "Squirtle", 45, (0, 7, 14)), record(3, "Cramorant", 51, (15, 15, 15)), record(4, "Mankey", 12, (15, 15, 15))]
+        let rows = [record(1, "Xurkitree", 40, (15, 15, 15)), record(2, "Squirtle", 45, (0, 7, 14)), record(3, "Cramorant", 51, (15, 15, 15)), record(4, "Mankey", 12, (15, 15, 15)), record(5, "Snorlax", 10, (15, 15, 15))]
         let report = try CoreEngine().advise(box: .array(rows))
-        try lib.commit(account: "a", entries: entries([100, 200, 300, 400]), reason: .scan, note: "four", now: date(1))
+        try lib.commit(account: "a", entries: entries([100, 200, 300, 400, 500]), reason: .scan, note: "five", now: date(1))
         let box = try XCTUnwrap(lib.current(account: "a")).entries
         let advice = BoxAdvice.make(from: report, entries: box)
         func build(_ i: Int, _ target: String) throws -> BoxAdvice.Build { try XCTUnwrap(advice.builds.first { $0.entryId == box[i].id && $0.targetId == target }, target) }
@@ -361,6 +365,15 @@ final class BoxLibraryTests: XCTestCase {
         let climbing = try build(3, "annihilape")
         XCTAssertEqual(climbing.steps?.last, .init(kind: "powerUp", toLevel: 16, areas: ["gl"]))
         XCTAssertEqual(climbing.action, "Evolve to Annihilape + Power up to level 16 (GL)")
+        // Snorlax climbs to 30 for Gym/Max: that goes past the best level of two leagues, which the app says (and the export repeats).
+        let snor = try build(4, "snorlax")
+        XCTAssertEqual(snor.steps?.first { $0.kind == "powerUp" }, .init(kind: "powerUp", toLevel: 30, areas: ["gym", "max"]))
+        XCTAssertEqual(snor.leavesLeague, [.init(league: "UL", bestLevel: 27), .init(league: "GL", bestLevel: 16)])
+        XCTAssertEqual(snor.leavesLeagueText, "going past 27 leaves UL, going past 16 leaves GL")
+        XCTAssertEqual(snor.action, "Power up to level 30 (Gym/Max; needs a Dynamax copy)")
+        XCTAssertNil(xurk.leavesLeagueText)
+        let exported = BoxExport.adviceText(advice.entries(for: box[4].id))
+        XCTAssertTrue(exported.contains("going past 27 leaves UL, going past 16 leaves GL"), exported)
         XCTAssertEqual(cram.steps, [.init(kind: "secondMove", certain: false)])
         XCTAssertEqual(cram.action, "Second move (if it doesn't have it)")
         // A report whose first build has no `steps` key (not what the current engine produces) reads as nil, not as an empty list.

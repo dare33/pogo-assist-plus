@@ -308,9 +308,10 @@ struct BuildRow: View {
     }
     var costLine: String {
         let from = build.level.map { "Level \(Fmt.number($0))" } ?? ""
-        let to = build.targetLevel.map { $0 > (build.level ?? 0) ? " to \(Fmt.number($0))" : "" } ?? ""
-        let cost = build.dust == 0 && build.candy == 0 && build.xl == 0 ? "nothing to spend" : build.costText
-        return (from.isEmpty ? "" : from + to + ": ") + cost
+        let to = build.climbLevel.map { $0 > (build.level ?? 0) ? " to \(Fmt.number($0))" : "" } ?? ""
+        let cost = build.dust == 0 && build.candy == 0 && build.xl == 0 ? "no dust or candy to spend" : build.costText
+        let line = (from.isEmpty ? "" : from + to + ": ") + cost
+        return build.leavesLeagueText.map { line + "; " + $0 } ?? line
     }
 }
 

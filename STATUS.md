@@ -31,7 +31,7 @@ unlocked (Poke Genie's Charge Move 2 is filled; kept by position as `chargedMove
 it doesn't have it)" and is still charged, as before. Elite TM and Community Day move steps are dropped when the recorded moves already hold
 the move, and Elite TMs are counted by distinct move name in the step text. The fixture records moves for one Pokémon only (a Mareep whose
 second charged slot is empty), so scores, costs and order are byte-identical to 7c43c85 on the fixture and 11 variants. A spare reads "spare
-for the X build". The app decodes the data (`BoxAdvice.LeagueRating`, `Build.steps`; advice cache version 7). Not verified on a device.
+for the X build". The app decodes the data (`BoxAdvice.LeagueRating`, `Build.steps`; advice cache version 8). Not verified on a device.
 
 **Known limits / follow-up (league options branch; not changed here, scores must stay as they are).**
 - Costing is single-area: a build is costed to ONE target (the league's best level for a league-only build, else the highest non-league
@@ -41,7 +41,14 @@ for the X build". The app decodes the data (`BoxAdvice.LeagueRating`, `Build.ste
   entries counts more than once; the step text counts distinct moves. Fix together with the costing above, then re-check the order.
 - Community Day and Elite flags come from the tier tables' text, not from the game data; a table entry that names them differently is missed.
 - The second-move charge is a flat third-move cost; a copy with an unlocked slot may still need a TM for the recommended move (no step for that).
-- Master League is never a cost area or a league note: it keeps a neutral weight (0.6) and no cost.
+- Master League has no cap and no per-league cost from `leaguesFor`: it keeps a neutral quality weight (0.6) and is never the `pvpCost`
+  league or a "going past N leaves X" note. A build for Master League ALONE is costed like a non-league one, to the table's level 50
+  (e.g. a level-30 Lugia: "L30 → 50 (ML)", 500k dust); with other areas it follows their target.
+- Behaviour that DOES differ from `main` and from 7c43c85 on exports that record moves: a copy whose Charge Move 2 (second charged slot) is
+  filled is no longer charged the third-move cost and has no "Second move" step (intended: the slot is unlocked). Probe: a level-40
+  Charizard (Rocket, Raids) scores 9.73 and costs 10,000 dust with no recorded moves, and 13.23 and 0 dust with both charged slots filled.
+  The fixture and its 11 variants (levels, Shadow/Lucky/Purified, no level, no moves, other moves) are byte-identical to 7c43c85, because
+  the fixture records moves for one Pokémon only and not a second charged slot.
 - Not verified on a device: the app's screens with the new wording.
 
 **20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,

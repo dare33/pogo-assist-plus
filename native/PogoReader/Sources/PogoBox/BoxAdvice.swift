@@ -26,8 +26,6 @@ public struct BoxAdvice: Codable, Equatable {
         public var dust: Int
         public var candy: Int
         public var xl: Int
-        public var eliteTMs: Int
-        public var communityDayMove: Bool
         /// "GL rank 12" when the build is a league one.
         public var pvp: String?
         public var score: Double
@@ -60,14 +58,30 @@ public struct BoxAdvice: Codable, Equatable {
         /// What is left to do, in order. nil only for a build read without the engine's `steps` (then `action` falls back to the plain
         /// "Power up" / "Evolve to"); an EMPTY list means the copy is already built.
         public var steps: [Step]? = nil
+        /// A league the climb goes past (`leavesLeague` in `src/advise.js`): going past `bestLevel` leaves `league` (a label such as "UL").
+        public struct LeaguePast: Codable, Equatable {
+            public var league: String
+            public var bestLevel: Double
+            public init(league: String, bestLevel: Double) { self.league = league; self.bestLevel = bestLevel }
+        }
+        public var leavesLeague: [LeaguePast] = []
+        /// "going past 27 leaves UL, going past 16 leaves GL", or nil when the climb leaves no league.
+        public var leavesLeagueText: String? {
+            leavesLeague.isEmpty ? nil : leavesLeague.map { "going past \(levelText($0.bestLevel)) leaves \($0.league)" }.joined(separator: ", ")
+        }
+        /// The level the power-up step climbs to, if there is one.
+        public var climbLevel: Double? { steps?.first { $0.kind == "powerUp" }?.toLevel }
 
         private func areaText(_ keys: [String]?) -> String { (keys ?? []).map { BoxAdvice.areaLabel[$0] ?? $0 }.joined(separator: "/") }
         private func levelText(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
 
-        /// What is left to do, worded as `actionText` in `src/advise.js` does: the steps joined with " + ". "Already built" when nothing is left
-        /// except the Max-only Dynamax requirement, which is appended in brackets whenever it applies.
+        /// What is left to do, worded as `actionText` in `src/advise.js` does: the steps joined with " + ". The Dynamax requirement is Max's
+        /// alone: it goes inside the Max power-up bracket, or after the rest in brackets; a Max-only build that lacks nothing else reads
+        /// "Needs a Dynamax copy", and a build with other areas and nothing left "Already built (Max needs a Dynamax copy)".
         public var action: String {
             guard let steps else { return powerUp ? "Power up" : "\(formChange ? "Form change to" : "Evolve to") \(targetName)" }
+            let dynamax = steps.contains { $0.kind == "needsDynamaxCopy" }
+            var inlined = false
             var parts = [String]()
             for st in steps {
                 switch st.kind {
@@ -75,7 +89,9 @@ public struct BoxAdvice: Codable, Equatable {
                 case "formChange": parts.append("Form change to \(st.to ?? targetName)")
                 case "megaEvolve": parts.append("Mega evolve")
                 case "powerUp":
-                    let areas = areaText(st.areas)
+                    let say = dynamax && (st.areas ?? []).contains("max")
+                    inlined = inlined || say
+                    let areas = areaText(st.areas) + (say ? "; needs a Dynamax copy" : "")
                     if let level = st.toLevel { parts.append("Power up to level \(levelText(level))" + (areas.isEmpty ? "" : " (\(areas))")) } else { parts.append("Power up") }
                 case "secondMove": parts.append(st.certain == false ? "Second move (if it doesn't have it)" : "Second move")
                 case "eliteTM": parts.append((st.count ?? 1) == 1 ? "1 Elite TM" : "\(st.count ?? 1) Elite TMs")
@@ -84,8 +100,9 @@ public struct BoxAdvice: Codable, Equatable {
                 default: parts.append("More to do") // a step this version does not know: still something left, never "Already built"
                 }
             }
-            let base = parts.isEmpty ? "Already built" : parts.joined(separator: " + ")
-            return steps.contains { $0.kind == "needsDynamaxCopy" } ? base + " (Max needs a Dynamax copy)" : base
+            if parts.isEmpty { return dynamax ? (areas == ["Max"] ? "Needs a Dynamax copy" : "Already built (Max needs a Dynamax copy)") : "Already built" }
+            let base = parts.joined(separator: " + ")
+            return dynamax && !inlined ? base + " (Max needs a Dynamax copy)" : base
         }
         /// "120k dust, 150 candy, 8 XL". Elite TMs and the Community Day move are steps of `action`, not repeated here.
         public var costText: String {
@@ -265,10 +282,11 @@ public struct BoxAdvice: Codable, Equatable {
     /// 2 since the Leagues section: an advice cached by build 2 or earlier has no leagues, so `BoxLibrary.loadAdvice` drops it and it is recomputed.
     /// 3 since the league options; 4 since their shape became { options, pick, experimental, source } and the shown pick copies Poke Genie.
     /// 5 since `overCap` became "CP at the current level exceeds the cap" (0/0/0 when the IVs are unknown) and the shown pick avoids over-cap members.
-    /// 6 since a build carried `powerUpNeeded` and `secondMoveDue`; 7 since those became the list of `steps` (evolve, Mega, power up per area, second move,
-    /// Elite TM, Community Day move, Dynamax copy), which the action is worded from. Advice cached at 2 to 6 has the old shape or the old rules, so it is
-    /// dropped and recomputed too.
-    public static let currentVersion = 7
+    /// 6 since a build carried `powerUpNeeded` and `secondMoveDue`; 7 since those became the list of `steps` (evolve, Mega, power up, second move,
+    /// Elite TM, Community Day move, Dynamax copy), which the action is worded from; 8 since the power-up step is the climb the cost covers, builds carry
+    /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone. Advice cached at 2 to 7 has the
+    /// old shape or the old rules, so it is dropped and recomputed too.
+    public static let currentVersion = 8
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -324,7 +342,7 @@ public struct BoxAdvice: Codable, Equatable {
         var out = BoxAdvice()
         for b in report["builds"]?.arrayValue ?? [] {
             guard let p = b["pokemon"], let eid = id(p) else { continue }
-            let cost = b["cost"], flags = b["moveFlags"]
+            let cost = b["cost"]
             var ivs: String?
             if let i = p["ivs"], case .number(let a)? = i["atk"], case .number(let d)? = i["def"], case .number(let h)? = i["hp"] { ivs = "\(Int(a))/\(Int(d))/\(Int(h))" }
             var pvp: String?
@@ -335,8 +353,12 @@ public struct BoxAdvice: Codable, Equatable {
                               formChange: bool(b["formChange"]), viaMega: bool(b["viaMega"]), needsDynamax: bool(b["needsDynamax"]), spares: spares.count,
                               areas: (b["areas"]?.arrayValue ?? []).compactMap { str($0) }.map { areaLabel[$0] ?? $0 },
                               tier: str(b["bestTier"]) ?? "", targetLevel: num(b["targetLevel"]), dust: int(cost?["dust"]), candy: int(cost?["candy"]), xl: int(cost?["xl"]),
-                              eliteTMs: int(flags?["elite"]), communityDayMove: bool(flags?["cd"]), pvp: pvp, score: num(b["score"]) ?? 0,
-                              steps: b["steps"]?.arrayValue.map { $0.map(Build.Step.init(json:)) })
+                              pvp: pvp, score: num(b["score"]) ?? 0,
+                              steps: b["steps"]?.arrayValue.map { $0.map(Build.Step.init(json:)) },
+                              leavesLeague: (b["leavesLeague"]?.arrayValue ?? []).compactMap { v in
+                                  guard case .string(let l)? = v["league"], case .number(let at)? = v["bestLevel"] else { return nil }
+                                  return Build.LeaguePast(league: areaLabel[l] ?? l, bestLevel: at)
+                              })
             out.builds.append(build)
             for s in spares { out.spareBuilds[s, default: []].append(build) }
         }
