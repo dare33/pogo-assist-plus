@@ -57,16 +57,60 @@ test('hygiene keeps the best copy and counts transfers', () => {
   assert.equal(zapdos.keep[0].cp, 1991);
 });
 
-test('league build scoring reads leaguesFor (Our pick), not the Poke Genie columns: a scan with no pvp columns scores the same', () => {
+const template = box.find((p) => !p.shadow && !p.purified && !p.lucky && (!p.form || p.form === 'Normal'));
+const one = (name, o = {}) => analyseBox([{ ...template, name, form: '', pvp: undefined, ...o }], ctx);
+const buildTo = (res, target) => res.builds.find((b) => b.targetId === target);
+
+test("league builds are rated by the build target's OWN option, even when it is not the shown pick (Squirtle -> Blastoise)", () => {
+  // The fixture Squirtle at level 15: Poke Genie's Great League pick is Wartortle, so Blastoise is not the shown pick there.
+  const squirtle = box.find((p) => p.name === 'Squirtle' && p.level === 15 && p.ivs.atk === 14 && p.ivs.def === 14 && p.ivs.hp === 12);
+  assert.ok(squirtle);
+  const res = analyseBox([{ ...squirtle, pvp: undefined }], ctx);
+  const b = buildTo(res, 'blastoise');
+  assert.ok(b.areas.includes('gl') || b.areas.includes('ul'));
+  assert.ok(b.pvpCost, 'a league cost from the Blastoise option');
+  assert.ok(['gl', 'ul'].includes(b.pvpCost.league));
+  const L = res.pokemon[0].leagues[b.pvpCost.league];
+  const own = L.options.find((o) => o.speciesId === 'blastoise');
+  assert.equal(b.pvpCost.rankPct, own.iv.rankPct);
+  assert.equal(b.pvpCost.dust, own.cost.dust);
+  assert.equal(b.pvpCost.candy, own.cost.candy + own.cost.evolveCandy);
+  assert.equal(b.pvpCost.xl, own.cost.xl);
+});
+
+test('across the fixture box, many league builds carry a league cost, none from Master League', () => {
+  const withCost = out.builds.filter((b) => b.pvpCost);
+  assert.ok(withCost.length >= 20, `${withCost.length} builds carry a league cost`);
+  for (const b of withCost) {
+    assert.ok(['gl', 'ul'].includes(b.pvpCost.league), b.pvpCost.league);
+    assert.ok(b.pvpCost.rankPct >= 0 && b.pvpCost.rankPct <= 100);
+  }
+  // Builds do not depend on Poke Genie's columns at all: a scan scores identically.
   const scan = analyseBox(box.map((p) => ({ ...p, pvp: undefined })), ctx);
   const sig = (o) => o.builds.map((b) => [b.speciesId, b.targetId, b.value, b.score, b.pvpCost, b.cost]);
   assert.deepEqual(sig(scan), sig(out));
-  const withCost = out.builds.filter((b) => b.pvpCost);
-  assert.ok(withCost.length >= 10, `${withCost.length} builds carry a league cost`);
-  for (const b of withCost) {
-    assert.ok(['gl', 'ul', 'ml'].includes(b.pvpCost.league));
-    assert.ok(b.pvpCost.rankPct >= 0 && b.pvpCost.rankPct <= 100);
-  }
+});
+
+test('a copy already past the league cap as the target gets no league rating (Rookidee L35 -> Corviknight in Great League)', () => {
+  const rookidee = (level) => one('Rookidee', { level, levelMin: level, levelMax: level, ivs: { atk: 10, def: 12, hp: 14 } });
+  const high = buildTo(rookidee(35), 'corviknight');
+  const L = rookidee(35).pokemon[0].leagues.gl;
+  assert.equal(L.options.find((o) => o.speciesId === 'corviknight').overCap, true, 'level 35 is past Corviknight\'s Great League level');
+  assert.ok(!high.pvpCost || high.pvpCost.league !== 'gl');
+  const low = buildTo(rookidee(5), 'corviknight');
+  assert.ok(low.pvpCost, 'at level 5 it is rated');
+});
+
+test('Master League keeps the neutral weight and is never the cost league (a hundo Melmetal at level 10)', () => {
+  const res = one('Melmetal', { level: 10, levelMin: 10, levelMax: 10, ivs: { atk: 15, def: 15, hp: 15 } });
+  const b = buildTo(res, 'melmetal');
+  assert.ok(b.areas.includes('ml'));
+  assert.ok(!b.pvpCost || b.pvpCost.league !== 'ml');
+  const withUnknown = buildTo(one('Melmetal', { level: 10, levelMin: 10, levelMax: 10, ivs: null }), 'melmetal');
+  // ML's weight is 0.6 whether or not the IVs are known (any difference would come from GL or UL).
+  const ml = (bb) => bb.hits.filter((h) => h.area === 'ml').length;
+  assert.ok(ml(b) >= 1 && ml(withUnknown) >= 1);
+  assert.ok(b.cost.dust < 400000, `${b.cost.dust} dust`);
 });
 
 test("a league build is weighted by this copy's Rank % as Our pick, and neutrally (0.6) when the IVs are unknown", () => {
