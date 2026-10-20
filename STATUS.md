@@ -16,12 +16,13 @@ fold (PR #3). App and engine detail: `native/README.md` (the "App fold" section 
   unit tests). Before the next TestFlight upload, on a phone: finish a scan, kill the app, reopen; start a second scan
   while one waits; rename an account; re-scan from the Box; check the "Try again" explanation shows over the review screen.
 
-**Open decisions (Greg):**
-1. **Report upload.** Do the TestFlight builds include `SCAN_REPORT_URL` / `SCAN_REPORT_KEY`? If yes, the privacy
-   manifest's `NSPrivacyCollectedDataTypes` (and the App Privacy answers) must declare the upload (scan log, device
-   model, locale). Check: in the installed app, Settings > saved scans shows a "Make scans better" (paper plane) button
-   only when the build has them; or look for `SCAN_REPORT_` lines in the old Mac's `native/PogoAssist/Config/Signing.local.xcconfig`.
-2. **Build 3:** whether it is in App Store Connect (build 1 went up 8 Oct). The next upload needs build 4 (`project.yml`).
+**Open decisions and checks (Greg):**
+1. **Report upload: settled 20 Oct.** The TestFlight builds include it ("Make scans better" shows) and use a publishable key
+   (all four signing files on greg-mac-14 checked by Greg). The app's privacy manifest declares what a report sends from
+   build 4 on (PR #5: Gameplay Content, Other Diagnostic Data, Performance Data, Product Interaction, Other User Content;
+   not linked, no tracking) and App Store Connect's App Privacy answers match (Greg, 20 Oct). Not checked: that the
+   Supabase `scan-reports` bucket allows uploads only (no read or list with that key).
+2. **Build 3 is in App Store Connect** (Greg, 20 Oct). The next upload is build 4 (`project.yml`), after the phone checks above.
 3. **Stable account IDs:** plan written, not approved: `docs/stable-account-ids-plan.md` on local branch
    `claude/great-moore-21a56d` (commit 1b276fb, not pushed), with 10 open decisions at its top. Accounts are identified by
    name today, which is why rename needed a journal and why reusing an old account name can misfile a scan.
