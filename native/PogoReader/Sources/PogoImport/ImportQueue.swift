@@ -319,7 +319,8 @@ extension ImportQueue {
     @discardableResult
     public func markDuplicates(_ batchId: String, now: Date = Date(), owner: @escaping (ImportManifest) -> String? = { $0.account },
                                ledgerAccount: @escaping (ImportLedger.Entry) -> String? = { $0.account }) throws -> ImportManifest {
-        let others = try list().manifests.filter { $0.batchId != batchId && $0.savedAt == nil }
+        // A batch whose last save is unfinished is not an earlier copy of anything: its screenshots are in the box already, and a share of the same screenshot must not wait behind it.
+        let others = try list().manifests.filter { $0.batchId != batchId && $0.savedAt == nil && $0.pendingSave == nil }
         let ledger = self.ledger()
         return try update(batchId, now: now) { m in
             // Batches are compared by whose box they are for NOW (`owner`, from the rename history), never by the name each happened to record; a batch with no known owner is compared with all.
@@ -382,7 +383,7 @@ extension ImportQueue {
         let m = try update(batchId, now: now) { m in
             gone = m.items.first { $0.id == id }
             m.items.removeAll { $0.id == id }
-            for i in m.items.indices where m.items[i].repeatOf == id { m.items[i].repeatOf = nil }
+            for i in m.items.indices where m.items[i].repeatOf == id { m.items[i].repeatOf = nil; m.items[i].holdLifted = true }
         }
         if let gone { try? fm.removeItem(at: stagedURL(batch: batchId, item: gone)) }
         if m.items.isEmpty { try? remove(batchId); return nil }
