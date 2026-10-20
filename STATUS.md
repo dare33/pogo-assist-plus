@@ -18,8 +18,16 @@ for, unless every member is (then it is the shown pick). Greg swaps the shown pi
 the threshold sit together at the top of `src/leagues.js`. The advisor rates league builds from the build target's own option
 (scans have no Poke Genie columns); a league where the copy is already past the cap as the target is not an area of that build, and
 a build left with no area is dropped; "past the cap" means the copy's CP at its current level (0/0/0 if its IVs are unknown) is over it, so a level-51 Best Buddy copy that still fits stays. A level-35 Rookidee no longer outranks a usable level-5 one for Corviknight. Master League
-keeps its neutral 0.6 weight and is never the cost league. XL candy now counts towards a build's effort for GL and UL (the league cost carries it; before, it was taken as 0). The display for the options is being designed separately: no screen
-changed, the app decodes the data (`BoxAdvice.LeagueRating`, advice cache version 6). Not verified on a device.
+keeps its neutral 0.6 weight and is never the cost league. XL candy now counts towards a build's effort for GL and UL (the league cost carries it; before, it was taken as 0). The display for the league options is being designed separately: the Leagues
+section still shows the shown pick only. What DID change on screen and in the exports is the wording of each build: every build now carries
+`steps`, the list of things still to do (evolve or form change, Mega evolve, power up per group of areas, second move, Elite TM, Community
+Day move, needs a Dynamax copy), and its action, the web table, `scripts/advise.mjs`, the Pokémon page and the export's Advice column all
+word it from that list ("Evolve to Blastoise + Mega evolve + Power up to level 49.5 (UL) + needs a Dynamax copy"); "Already built" only
+when the list is empty. The level text names the level and the area it is for ("L36 → 40 (UL)", "L45 → 35 (Raids), 49.5 (UL)", several
+areas on the same target level all named: "(Gym/Max)"), or says the copy is "already at (or past)" it. The second move is charged and listed
+only if the copy's recorded moves lack what the table entry asks for (a scan records none, so it reads "Second move (if it doesn't have
+it)" and is still charged, as before; the fixture records none, so its scores and order did not change). A spare reads "spare for the X
+build". The app decodes the data (`BoxAdvice.LeagueRating`, `Build.steps`; advice cache version 7). Not verified on a device.
 
 **20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,
 merged from `native-ui-v1` in PR #2), the shared JavaScript changes (extractor read fixes, CP recovery, PvP leagues,

@@ -31,15 +31,60 @@ public struct BoxAdvice: Codable, Equatable {
         /// "GL rank 12" when the build is a league one.
         public var pvp: String?
         public var score: Double
-        /// For a power-up build: whether there is anything left to power up, and whether only the second move is due. Both decide the wording of `action`.
-        public var powerUpNeeded: Bool = true
-        public var secondMoveDue: Bool = false
+        /// One thing still to do, as `steps` in `src/advise.js` lists them. `kind` is evolve (to, candy), formChange (to), megaEvolve,
+        /// powerUp (toLevel, areas: the area keys that share that level), secondMove (certain: false when the copy's moves are unknown),
+        /// eliteTM (count), cdMove or needsDynamaxCopy.
+        public struct Step: Codable, Equatable {
+            public var kind: String
+            public var to: String?
+            public var candy: Int?
+            public var toLevel: Double?
+            public var areas: [String]?
+            public var certain: Bool?
+            public var count: Int?
+            public init(kind: String, to: String? = nil, candy: Int? = nil, toLevel: Double? = nil, areas: [String]? = nil, certain: Bool? = nil, count: Int? = nil) {
+                self.kind = kind; self.to = to; self.candy = candy; self.toLevel = toLevel; self.areas = areas; self.certain = certain; self.count = count
+            }
+            /// Reads one step from the engine's JSON; nil for a step without a kind.
+            init?(json v: JSONValue) {
+                guard case .string(let k)? = v["kind"] else { return nil }
+                kind = k
+                if case .string(let t)? = v["to"] { to = t }
+                if case .number(let c)? = v["candy"], let n = LeagueRating.whole(c) { candy = n }
+                if case .number(let l)? = v["toLevel"] { toLevel = l }
+                if let arr = v["areas"]?.arrayValue { areas = arr.compactMap { if case .string(let a) = $0 { return a } else { return nil } } }
+                if case .bool(let c)? = v["certain"] { certain = c }
+                if case .number(let c)? = v["count"], let n = LeagueRating.whole(c) { count = n }
+            }
+        }
+        /// What is left to do, in order. nil only for a build read without the engine's `steps` (then `action` falls back to the plain
+        /// "Power up" / "Evolve to"); an EMPTY list means the copy is already built.
+        public var steps: [Step]? = nil
 
-        /// What to do, as `actionText` in `src/advise.js` words it: "Power up" only when there is something to power up, else "Second move" or "Already built".
+        private func areaText(_ keys: [String]?) -> String { (keys ?? []).map { BoxAdvice.areaLabel[$0] ?? $0 }.joined(separator: "/") }
+        private func levelText(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
+
+        /// What is left to do, worded as `actionText` in `src/advise.js` does: every step joined with " + ", and "Already built" only when there are none.
         public var action: String {
-            let base = powerUp ? (powerUpNeeded ? "Power up" : secondMoveDue ? "Second move" : "Already built")
-                               : "\(formChange ? "Form change to" : "Evolve to") \(targetName)"
-            return base + (viaMega ? " and Mega evolve" : "")
+            guard let steps else { return powerUp ? "Power up" : "\(formChange ? "Form change to" : "Evolve to") \(targetName)" }
+            if steps.isEmpty { return "Already built" }
+            let ups = steps.filter { $0.kind == "powerUp" }
+            var parts = [String]()
+            for st in steps {
+                switch st.kind {
+                case "evolve": parts.append("Evolve to \(st.to ?? targetName)")
+                case "formChange": parts.append("Form change to \(st.to ?? targetName)")
+                case "megaEvolve": parts.append("Mega evolve")
+                case "powerUp":
+                    if st == ups.first { parts.append("Power up to level " + ups.map { "\(levelText($0.toLevel ?? 0)) (\(areaText($0.areas)))" }.joined(separator: " and ")) }
+                case "secondMove": parts.append(st.certain == false ? "Second move (if it doesn't have it)" : "Second move")
+                case "eliteTM": parts.append((st.count ?? 1) == 1 ? "1 Elite TM" : "\(st.count ?? 1) Elite TMs")
+                case "cdMove": parts.append("Community Day move")
+                case "needsDynamaxCopy": parts.append("needs a Dynamax copy")
+                default: break
+                }
+            }
+            return parts.joined(separator: " + ")
         }
         /// "120k dust, 150 candy, 8 XL, 1 Elite TM".
         public var costText: String {
@@ -221,9 +266,10 @@ public struct BoxAdvice: Codable, Equatable {
     /// 2 since the Leagues section: an advice cached by build 2 or earlier has no leagues, so `BoxLibrary.loadAdvice` drops it and it is recomputed.
     /// 3 since the league options; 4 since their shape became { options, pick, experimental, source } and the shown pick copies Poke Genie.
     /// 5 since `overCap` became "CP at the current level exceeds the cap" (0/0/0 when the IVs are unknown) and the shown pick avoids over-cap members.
-    /// 6 since a build carries `powerUpNeeded` and `secondMoveDue` (its action reads "Already built" / "Second move" when nothing is left to power up).
-    /// Advice cached at 2 to 5 has the old shape or the old rules, so it is dropped and recomputed too.
-    public static let currentVersion = 6
+    /// 6 since a build carried `powerUpNeeded` and `secondMoveDue`; 7 since those became the list of `steps` (evolve, Mega, power up per area, second move,
+    /// Elite TM, Community Day move, Dynamax copy), which the action is worded from. Advice cached at 2 to 6 has the old shape or the old rules, so it is
+    /// dropped and recomputed too.
+    public static let currentVersion = 7
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -291,7 +337,7 @@ public struct BoxAdvice: Codable, Equatable {
                               areas: (b["areas"]?.arrayValue ?? []).compactMap { str($0) }.map { areaLabel[$0] ?? $0 },
                               tier: str(b["bestTier"]) ?? "", targetLevel: num(b["targetLevel"]), dust: int(cost?["dust"]), candy: int(cost?["candy"]), xl: int(cost?["xl"]),
                               eliteTMs: int(flags?["elite"]), communityDayMove: bool(flags?["cd"]), pvp: pvp, score: num(b["score"]) ?? 0,
-                              powerUpNeeded: b["powerUpNeeded"] == nil ? true : bool(b["powerUpNeeded"]), secondMoveDue: bool(b["secondMoveDue"]))
+                              steps: b["steps"]?.arrayValue.map { $0.compactMap(Build.Step.init(json:)) })
             out.builds.append(build)
             for s in spares { out.spareBuilds[s, default: []].append(build) }
         }

@@ -183,7 +183,7 @@ struct PokemonDetailView: View {
                 if a.isEmpty { Text("The advisor has nothing for this Pokémon.").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
                 ForEach(Array(a.builds.enumerated()), id: \.element.id) { n, b in
                     if n > 0 { Rectangle().fill(accent.ink.opacity(0.18)).frame(height: 1).padding(.vertical, 4) }
-                    Text(b.action + (b.needsDynamax ? " (Max needs a Dynamax copy)" : "") + (b.pvp.map { " (\($0))" } ?? "")).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
+                    Text(b.action + (b.pvp.map { " (\($0))" } ?? "")).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
                     HStack(spacing: 6) {
                         ForEach(b.areas, id: \.self) { tag($0) }
                         if !b.tier.isEmpty { tag("Tier \(b.tier)") }
@@ -297,7 +297,7 @@ struct BuildRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             if showName { Text(build.title).font(.callout.weight(.medium)) }
-            Text(build.action + (build.needsDynamax ? " (Max needs a Dynamax copy)" : "") + (build.pvp.map { " (\($0))" } ?? "")).font(showName ? .callout : .callout.weight(.medium))
+            Text(build.action + (build.pvp.map { " (\($0))" } ?? "")).font(showName ? .callout : .callout.weight(.medium))
             if showName {
                 Text("CP \(build.cp)" + (build.ivs.map { ", IVs \($0)" } ?? "") + (build.level.map { ", level \(Fmt.number($0))" } ?? "")).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
             }
