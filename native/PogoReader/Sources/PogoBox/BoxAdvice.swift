@@ -68,48 +68,108 @@ public struct BoxAdvice: Codable, Equatable {
         public var transferIds: [String]
     }
 
-    /// One league's rating of one Pokémon, as `src/leagues.js` `leaguesFor` returns it (null becomes nil).
+    /// One league's ratings of one Pokémon, as `src/leagues.js` `leaguesFor` returns them (null becomes nil).
+    ///
+    /// `options` lists every allowed member of the Pokémon's family (strongest PvPoke score first, then the members PvPoke does not
+    /// rank), each rated for this exact copy. `pick` (JSON "pick") is the index of the member to show, which copies Poke Genie;
+    /// `experimental` is the index of the CLOSE_SCORE rule's member, carried but not shown. The accessors below (`pick`, `strength`,
+    /// `moves`, `needs`, `iv`, `overCap`, `cost`) read the SHOWN member, so a screen written for one rating per league keeps working.
     public struct LeagueRating: Codable, Equatable {
         public struct Pick: Codable, Equatable {
             public var speciesId: String; public var name: String
-            /// The Pokémon itself is the pick (JSON key "self", which Swift cannot use as a property name).
+            /// The Pokémon itself is the pick.
             public var isSelf: Bool
             /// "male" or "female" when the pick is an evolution only one sex can make and the entry's sex is not known (scans carry none).
             public var genderLocked: String?
-            private enum CodingKeys: String, CodingKey { case speciesId, name, isSelf = "self", genderLocked }
         }
         public struct Strength: Codable, Equatable { public var score: Double; public var rank: Int; public var of: Int }
         public struct Moves: Codable, Equatable { public var fast: String; public var charged: [String] }
         public struct IV: Codable, Equatable { public var rank: Int; public var pct: Double; public var rankPct: Double; public var level: Double; public var cp: Int }
         public struct Cost: Codable, Equatable { public var dust: Int; public var candy: Int; public var xl: Int; public var evolveCandy: Int; public var toLevel: Double }
-        /// One family member rated for this league, in the same shape as the rating itself (a rating is Our pick's option without
-        /// `ours`). `leaguesFor` lists every PvPoke-ranked member, strongest score first (then better spread, then later evolution);
-        /// a family with nothing ranked has one option, the fallback pick, with no `strength`.
+
+        /// One family member rated for this league. `strength` is nil when PvPoke does not rank it in this league (then `moves` is nil too).
         public struct Option: Codable, Equatable {
-            public var pick: Pick
+            public var speciesId: String; public var name: String
+            /// JSON key "self", which Swift cannot use as a property name.
+            public var isSelf: Bool
+            public var genderLocked: String?
             public var strength: Strength?
             public var moves: Moves?
             public var needs: [String]?
             public var iv: IV?
             public var overCap: Bool
             public var cost: Cost?
-            /// True on exactly one option: the member Our pick chose (the rule is `CLOSE_SCORE` in `src/leagues.js`).
-            public var ours: Bool
+            private enum CodingKeys: String, CodingKey { case speciesId, name, isSelf = "self", genderLocked, strength, moves, needs, iv, overCap, cost }
+            public init(speciesId: String, name: String, isSelf: Bool = false, genderLocked: String? = nil, strength: Strength? = nil, moves: Moves? = nil,
+                        needs: [String]? = nil, iv: IV? = nil, overCap: Bool = false, cost: Cost? = nil) {
+                self.speciesId = speciesId; self.name = name; self.isSelf = isSelf; self.genderLocked = genderLocked; self.strength = strength
+                self.moves = moves; self.needs = needs; self.iv = iv; self.overCap = overCap; self.cost = cost
+            }
         }
-        public var pick: Pick
-        public var strength: Strength?
-        public var moves: Moves?
-        public var needs: [String]?
-        public var iv: IV?
-        public var overCap: Bool
-        public var cost: Cost?
-        /// Every option, Our pick included; nil only for advice cached before version 3 (which is recomputed, so screens see it always).
-        public var options: [Option]?
+
+        public var options: [Option]
+        /// Index into `options` of the member to show.
+        public var pickIndex: Int
+        /// Index into `options` of the experimental member (may equal `pickIndex`).
+        public var experimentalIndex: Int
+        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (IVs unknown: PvPoke score).
+        public var source: String
+
+        private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source }
+
+        /// The indexes are clamped into range, so the accessors never trap. `options` must not be empty.
+        public init(options: [Option], pick: Int = 0, experimental: Int? = nil, source: String = "ranked") {
+            precondition(!options.isEmpty, "a league rating has at least one option")
+            self.options = options
+            self.pickIndex = min(max(pick, 0), options.count - 1)
+            self.experimentalIndex = min(max(experimental ?? pick, 0), options.count - 1)
+            self.source = source
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let options = try c.decode([Option].self, forKey: .options)
+            let pick = try c.decode(Int.self, forKey: .pickIndex)
+            guard options.indices.contains(pick) else { throw DecodingError.dataCorruptedError(forKey: .pickIndex, in: c, debugDescription: "pick is not an index of options") }
+            self.init(options: options, pick: pick, experimental: try c.decodeIfPresent(Int.self, forKey: .experimentalIndex), source: try c.decodeIfPresent(String.self, forKey: .source) ?? "ranked")
+        }
+
+        /// Decodes the engine's JSON for one league, tolerating a bad option: an option that does not decode is dropped and the
+        /// indexes are re-pointed, so one odd member never loses the league. Returns nil only when there is no usable shown option.
+        /// A bad experimental option falls back to the shown one.
+        public static func decode(_ v: JSONValue) -> LeagueRating? {
+            guard case .number(let p)? = v["pick"], let raw = v["options"]?.arrayValue else { return nil }
+            var kept = [Option](), newIndex = [Int: Int]()
+            for (i, o) in raw.enumerated() {
+                guard let data = try? JSONEncoder().encode(o), let option = try? JSONDecoder().decode(Option.self, from: data) else { continue }
+                newIndex[i] = kept.count; kept.append(option)
+            }
+            guard let pick = newIndex[Int(p)] else { return nil }
+            var experimental = pick
+            if case .number(let x)? = v["experimental"], let j = newIndex[Int(x)] { experimental = j }
+            var source = "ranked"
+            if case .string(let s)? = v["source"] { source = s }
+            return LeagueRating(options: kept, pick: pick, experimental: experimental, source: source)
+        }
+
+        /// The member to show.
+        public var shown: Option { options[pickIndex] }
+        /// The experimental member (not shown).
+        public var experimental: Option { options[experimentalIndex] }
+
+        public var pick: Pick { Pick(speciesId: shown.speciesId, name: shown.name, isSelf: shown.isSelf, genderLocked: shown.genderLocked) }
+        public var strength: Strength? { shown.strength }
+        public var moves: Moves? { shown.moves }
+        public var needs: [String]? { shown.needs }
+        public var iv: IV? { shown.iv }
+        public var overCap: Bool { shown.overCap }
+        public var cost: Cost? { shown.cost }
     }
 
     /// 2 since the Leagues section: an advice cached by build 2 or earlier has no leagues, so `BoxLibrary.loadAdvice` drops it and it is recomputed.
-    /// 3 since the league options (and Our pick's CLOSE_SCORE rule, which changes which member is picked): advice cached at 2 has neither.
-    public static let currentVersion = 3
+    /// 3 since the league options; 4 since their shape became { options, pick, experimental, source } and the shown pick copies Poke Genie.
+    /// Advice cached at 2 or 3 has the old shape or the old pick rule, so it is dropped and recomputed too.
+    public static let currentVersion = 4
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -201,7 +261,8 @@ public struct BoxAdvice: Codable, Equatable {
             guard let eid = id(e["p"]), let l = e["leagues"] else { continue }
             var byLeague = [String: LeagueRating]()
             for key in ["gl", "ul", "ml"] {
-                guard let v = l[key], let data = try? JSONEncoder().encode(v), let rating = try? JSONDecoder().decode(LeagueRating.self, from: data) else { continue }
+                // Per option, so one member the decoder cannot read does not take the league (and the shown pick) with it.
+                guard let v = l[key], let rating = LeagueRating.decode(v) else { continue }
                 byLeague[key] = rating
             }
             if !byLeague.isEmpty { out.leagues[eid] = byLeague }
