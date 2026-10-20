@@ -7,7 +7,8 @@ import PogoImport
 /// and the hand-over to the review. The rules about what a screenshot may add are `ScreenshotImporter`'s, in the package, where they are tested; this class only runs it on
 /// the engine's queue, keeps what the screens show, and decides WHEN (processing starts by itself, a review never opens over another, nothing is saved without the person).
 ///
-/// Every write to a batch's manifest goes through `app.worker`, the one serial queue, so the main actor and the reader never write the same file at once; the main actor only reads.
+/// Manifest writes are made on `app.worker`, the one serial queue; `ImportQueue.update` is one step under a lock, which is what lets the main thread hand back an interrupted read's attempt
+/// (`ScreenshotImporter.refundInterruptedRead`, from the background task's expiry handler) while the queue is reading. Everything else the main actor does to a manifest is a read.
 @MainActor
 final class ImportModel: ObservableObject {
     struct Progress: Equatable { var batch: String; var done: Int; var total: Int }
@@ -31,6 +32,7 @@ final class ImportModel: ObservableObject {
     /// Reading is paused because the app is not in front. It carries on when it is.
     @Published private(set) var paused = false
     private var gate = ReadingGate() { didSet { paused = gate.paused } }
+    private var planner = ReadPlanner()
     /// One line for the sheet: what went wrong or what was done for the person without asking.
     @Published var notice: String?
 
@@ -72,6 +74,8 @@ final class ImportModel: ObservableObject {
         Task {
             let report = try? await serial { importer.queue.cleanup() }
             if let n = report?.removedAbandoned, n > 0 { notice = "\(n) batch\(n == 1 ? "" : "es") of screenshots that you were shown and left alone for two weeks \(n == 1 ? "was" : "were") removed from the phone. The screenshots are still in Photos." }
+            // looked at first: a share is stamped with its account's rename record the first time it is seen, and copies of a batch that has gone are found
+            _ = try? await app.worker.run { engine in try importer.prepareAll(engine: engine) }
             refresh()
             guard !batches.isEmpty else { return }
             startReading()
@@ -155,18 +159,16 @@ final class ImportModel: ObservableObject {
         let importer = self.importer
         readerTask = Task {
             defer { reading = nil; readerTask = nil; refresh() }
-            // Look again after each round: finishing one batch (or the person discarding one meanwhile) can make another readable, and nothing should be left waiting for a nudge.
-            var done = Set<String>()
+            // Looked at again after each round: finishing one batch, or the person discarding one meanwhile, can make another readable, and nothing should be left waiting for a nudge.
+            // `planner` offers a batch again whenever what is waiting in it has changed, and `rescanRequested` asks for another pass if something happened while this one ran.
+            planner = ReadPlanner()
             while !Task.isCancelled, gate.mayRead {
-                let waiting = (try? await serial { try importer.prepareAll() }) ?? []
+                _ = try? await app.worker.run { engine in try importer.prepareAll(engine: engine) }
                 refresh()
-                let loose = ((try? queue.list())?.manifests ?? []).filter { !$0.isRead || $0.account == nil }.map(\.batchId)
-                var seen = Set<String>()
-                let next = (waiting.map(\.batchId) + loose).filter { seen.insert($0).inserted && !done.contains($0) }
-                guard !next.isEmpty else { break }
+                let next = planner.next(from: (try? queue.list())?.manifests ?? [])
+                if next.isEmpty { if planner.takeRescan() { continue }; break }
                 for id in next {
                     if Task.isCancelled || !gate.mayRead { break }
-                    done.insert(id)
                     await read(batch: id)
                     if (try? queue.load(id))?.isRead == false { break }   // stopped, paused or failed outright: leave it queued
                 }
@@ -255,7 +257,9 @@ final class ImportModel: ObservableObject {
         Task {
             try? await serial { try importer.discard(batch: batch) }
             refresh()
-            if batches.isEmpty { app.sheet = nil } else { startReading() }   // what was a copy of it can be read now
+            if batches.isEmpty { app.sheet = nil }
+            else if readerTask != nil { planner.requestRescan() }   // the reader is running: it goes round once more before it stops
+            else { startReading() }   // what was a copy of it can be read now
         }
     }
 
