@@ -271,6 +271,42 @@ public final class BoxStore {
         return .gone
     }
 
+    /// The renames recorded so far (old name, new name, in order), or nil when the record cannot be read. Its length is the account "epoch" a binding can be stamped with.
+    public var renameCount: Int? {
+        guard fm.fileExists(atPath: historyURL.path) else { return 0 }
+        guard let data = try? Data(contentsOf: historyURL), let all = try? JSONDecoder().decode([[String]].self, from: data) else { return nil }
+        return all.count
+    }
+
+    public enum AccountResolution: Equatable {
+        case found(String)
+        case gone
+        case unknown
+        /// `old` was renamed to `renamedTo` after the binding was made, and an account called `old` exists again: which of the two the binding means cannot be told, so the person says.
+        case ambiguous(old: String, renamedTo: String)
+    }
+
+    /// Whose account a name recorded at rename-count `since` means NOW. Renames made after `since` are followed first, before asking whether the name exists, because a name that was
+    /// renamed away and then used for a new account is not the same account. With `since` nil (an older record) this is `lookupAccount`.
+    public func resolveAccount(_ recorded: String, since: Int?) -> AccountResolution {
+        guard let since else {
+            switch lookupAccount(recorded) { case .found(let n): return .found(n); case .gone: return .gone; case .unknown: return .unknown }
+        }
+        guard let list = try? accounts() else { return .unknown }
+        if renameJournalExists { return .unknown }
+        var all = [[String]]()
+        if fm.fileExists(atPath: historyURL.path) {
+            guard let data = try? Data(contentsOf: historyURL), let decoded = try? JSONDecoder().decode([[String]].self, from: data) else { return .unknown }
+            all = decoded
+        }
+        var name = recorded, moved = false
+        for step in all.dropFirst(min(since, all.count)) where step.count == 2 && step[0] == name { name = step[1]; moved = true }
+        let existing = Set(list)
+        guard moved else { return existing.contains(recorded) ? .found(recorded) : .gone }
+        guard existing.contains(name) else { return .gone }
+        return existing.contains(recorded) && recorded != name ? .ambiguous(old: recorded, renamedTo: name) : .found(name)
+    }
+
     /// `lookupAccount` as a name or nil (gone, or not known).
     public func accountNamed(_ recorded: String) throws -> String? {
         if case .found(let n) = lookupAccount(recorded) { return n }

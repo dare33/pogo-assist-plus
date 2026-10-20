@@ -31,7 +31,7 @@ final class ImportQueueTests: XCTestCase {
         if metadata {
             props[kCGImagePropertyGPSDictionary] = [kCGImagePropertyGPSLatitude: 51.5, kCGImagePropertyGPSLatitudeRef: "N", kCGImagePropertyGPSLongitude: 0.12, kCGImagePropertyGPSLongitudeRef: "W"]
             props[kCGImagePropertyExifDictionary] = [kCGImagePropertyExifUserComment: "secret place", kCGImagePropertyExifDateTimeOriginal: "2026:10:20 10:00:00"]
-            props[kCGImagePropertyTIFFDictionary] = [kCGImagePropertyTIFFModel: "iPhone Test", kCGImagePropertyTIFFMake: "Apple"]
+            props[kCGImagePropertyTIFFDictionary] = [kCGImagePropertyTIFFModel: "iPhone Test", kCGImagePropertyTIFFSoftware: "Camera app"]
         }
         if let orientation { props[kCGImagePropertyOrientation] = orientation }
         CGImageDestinationAddImage(dest, cg, props as CFDictionary)
@@ -67,11 +67,33 @@ final class ImportQueueTests: XCTestCase {
         XCTAssertEqual(item.assetId, "ASSET-1/L0/001")
     }
 
-    func testStagingAppliesTheOrientationTag() throws {
+    func testStagingAppliesTheOrientationTagToThePixels() throws {
+        // An upright 500 x 900 picture with a red block at its top-left, stored sideways (900 x 500, turned a quarter counter-clockwise) and tagged "right" (6).
+        func draw(_ w: Int, _ h: Int, _ body: (CGContext) -> Void) throws -> CGImage {
+            let ctx = try XCTUnwrap(CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+            body(ctx); return try XCTUnwrap(ctx.makeImage())
+        }
+        let upright = try draw(500, 900) { c in
+            c.setFillColor(CGColor(red: 0.2, green: 0.3, blue: 0.8, alpha: 1)); c.fill(CGRect(x: 0, y: 0, width: 500, height: 900))
+            c.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1)); c.fill(CGRect(x: 0, y: 900 - 120, width: 120, height: 120))   // top-left in the picture
+        }
+        let sideways = try draw(900, 500) { c in c.translateBy(x: 900, y: 0); c.rotate(by: .pi / 2); c.draw(upright, in: CGRect(x: 0, y: 0, width: 500, height: 900)) }
+        let out = NSMutableData()
+        let dest = try XCTUnwrap(CGImageDestinationCreateWithData(out, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, sideways, [kCGImagePropertyOrientation: 6] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
         let b = try queue.beginBatch(origin: .photoPicker, account: nil)
-        // 900 x 500 pixels stored, tagged "right" (6): shown 500 x 900.
-        let item = try b.add(data: try picture(2, w: 900, h: 500, type: .jpeg, orientation: 6))
+        let item = try b.add(data: out as Data)
         XCTAssertEqual(item.width, 500); XCTAssertEqual(item.height, 900)
+        let m = try b.commit()
+        let staged = try XCTUnwrap(CGImageSourceCreateWithURL(queue.stagedURL(batch: m.batchId, item: item) as CFURL, nil))
+        let cg = try XCTUnwrap(CGImageSourceCreateImageAtIndex(staged, 0, nil))
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: cg.width, height: cg.height, bitsPerComponent: 8, bytesPerRow: cg.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+        let px = try XCTUnwrap(ctx.data).assumingMemoryBound(to: UInt8.self)
+        func at(_ x: Int, _ yFromTop: Int) -> (Int, Int, Int) { let i = (yFromTop * cg.width + x) * 4; return (Int(px[i]), Int(px[i + 1]), Int(px[i + 2])) }
+        XCTAssertGreaterThan(at(20, 20).0, 200, "the red block is at the top-left of the upright picture"); XCTAssertLessThan(at(20, 20).2, 60)
+        XCTAssertLessThan(at(400, 800).0, 100, "and the rest is the blue background")
     }
 
     func testBytesAndStagedHashesAreRecordedAndAreTheSameForTheSameFile() throws {
@@ -256,16 +278,18 @@ final class ImportQueueTests: XCTestCase {
     func testCleanupRemovesWhatIsDeadAndKeepsWhatIsAlive() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let live = try makeBatch([80], now: now.addingTimeInterval(-3600))
-        let old = try makeBatch([81], now: now.addingTimeInterval(-15 * 24 * 3600))
+        let old = try makeBatch([81], now: now.addingTimeInterval(-40 * 24 * 3600))
+        let neverShown = try makeBatch([85], now: now.addingTimeInterval(-60 * 24 * 3600))
         let saved = try makeBatch([82], now: now.addingTimeInterval(-60))
+        queue.markSeen([live.batchId], now: now.addingTimeInterval(-3600))
+        queue.markSeen([old.batchId], now: now.addingTimeInterval(-15 * 24 * 3600))   // shown, then left alone for fifteen days
         _ = try queue.update(saved.batchId, now: now) { $0.savedAt = now }
-        _ = try queue.update(live.batchId, now: now.addingTimeInterval(-3600)) { _ in }
         // a half-made batch from a process that died, an hour and a bit ago, and a fresh one that is still being made
         let stale = queue.root.appendingPathComponent(".staging-stale"), fresh = queue.root.appendingPathComponent(".staging-fresh")
         for d in [stale, fresh] { try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
         try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-7200)], ofItemAtPath: stale.path)
         try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-60)], ofItemAtPath: fresh.path)
-        // a damaged batch that has sat for a month, a newer-version one that has too
+        // a damaged batch and a newer-version one, a month old: neither is removed
         let damaged = try makeBatch([83]), newer = try makeBatch([84])
         try Data("{".utf8).write(to: queue.batchDirectory(damaged.batchId).appendingPathComponent("manifest.json"))
         var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: queue.batchDirectory(newer.batchId).appendingPathComponent("manifest.json"))) as? [String: Any])
@@ -274,11 +298,97 @@ final class ImportQueueTests: XCTestCase {
         for d in [damaged, newer] { try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-30 * 24 * 3600)], ofItemAtPath: queue.batchDirectory(d.batchId).path) }
 
         let report = queue.cleanup(now: now)
-        XCTAssertEqual(report, ImportQueue.CleanupReport(removedStaging: 1, removedSaved: 1, removedAbandoned: 1, removedDamaged: 1))
-        XCTAssertEqual(try queue.list().manifests.map(\.batchId), [live.batchId])
+        XCTAssertEqual(report, ImportQueue.CleanupReport(removedStaging: 1, removedSaved: 1, removedAbandoned: 1, removedDamaged: 0))
+        XCTAssertEqual(Set(try queue.list().manifests.map(\.batchId)), [live.batchId, neverShown.batchId], "a batch nobody was shown is never removed, however old")
         XCTAssertTrue(FileManager.default.fileExists(atPath: fresh.path)); XCTAssertFalse(FileManager.default.fileExists(atPath: stale.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: queue.batchDirectory(newer.batchId).path), "a newer app's batch is never deleted for the person")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queue.batchDirectory(damaged.batchId).path), "nor is a damaged one: the person is told it is there")
         XCTAssertFalse(FileManager.default.fileExists(atPath: queue.batchDirectory(old.batchId).path))
+    }
+
+    func testTheFortnightIsCountedFromWhenTheBatchWasLastShown() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let m = try makeBatch([86], now: now.addingTimeInterval(-90 * 24 * 3600))
+        queue.markSeen([m.batchId], now: now.addingTimeInterval(-2 * 24 * 3600))   // shown two days ago, though made three months ago
+        XCTAssertEqual(queue.cleanup(now: now).removedAbandoned, 0)
+        XCTAssertEqual(queue.cleanup(now: now.addingTimeInterval(13 * 24 * 3600)).removedAbandoned, 1)
+    }
+
+    // MARK: size, cameras, retiring
+
+    func testAScreenshotLargerThanTheReaderNeedsIsScaledDownWhenStaged() throws {
+        let b = try queue.beginBatch(origin: .photoPicker, account: "Main")
+        let item = try b.add(data: try picture(40, w: 3200, h: 6400))
+        XCTAssertEqual(max(item.width, item.height), ImageNormalising.stagedMaxLongSide)
+        XCTAssertEqual(Double(item.width) / Double(item.height), 0.5, accuracy: 0.01)
+        let phone = try b.add(data: try picture(41, w: 1320, h: 2868))
+        XCTAssertEqual(phone.height, 2868, "a phone's own screenshot is not touched")
+    }
+
+    func testACameraPhotoIsRefusedBeforeItIsStaged() throws {
+        let b = try queue.beginBatch(origin: .shareExtension, account: "Main")
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 600, height: 800, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        ctx.setFillColor(CGColor(red: 0.3, green: 0.4, blue: 0.5, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 800))
+        let out = NSMutableData()
+        let dest = try XCTUnwrap(CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, try XCTUnwrap(ctx.makeImage()), [kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Apple"], kCGImagePropertyExifDictionary: [kCGImagePropertyExifLensModel: "iPhone back camera"]] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        XCTAssertThrowsError(try b.add(data: out as Data)) { XCTAssertEqual($0 as? ImageStagingError, .cameraPhoto) }
+        XCTAssertNoThrow(try b.add(data: try picture(42)), "a screenshot has no camera make")
+    }
+
+    func testTheQueueHasAByteCapAsWellAsAnImageCap() throws {
+        _ = try makeBatch([43, 44])
+        let bytes = queue.stagedBytes()
+        XCTAssertGreaterThan(bytes, 0)
+        queue.maxQueuedBytes = bytes + 10
+        let b = try queue.beginBatch(origin: .photoPicker, account: "Main"); try b.add(data: try picture(45))
+        XCTAssertThrowsError(try b.commit()) { XCTAssertEqual($0 as? ImportQueueError, .queueTooLarge(maxMB: (bytes + 10) / 1_000_000)) }
+        XCTAssertEqual(try queue.list().manifests.count, 1, "nothing was queued")
+    }
+
+    func testRetiringKeepsOnlyWhatStillNeedsThePersonAndGivesTheNextSaveItsOwnSignature() throws {
+        var m = try makeBatch([46, 47, 48, 49])
+        m = try queue.update(m.batchId) {
+            $0.items[0].state = .read; $0.items[1].state = .read; $0.items[1].repeatOf = $0.items[0].id   // held back
+            $0.items[2].state = .failed; $0.items[3].state = .unsupported
+        }
+        let first = m.signature
+        let left = try XCTUnwrap(try queue.retire(m.batchId, saved: [m.items[0].id]))
+        XCTAssertEqual(left.items.map(\.id), [m.items[1].id, m.items[2].id], "held back and failed stay; the saved and the not-actionable go")
+        XCTAssertNotEqual(left.signature, first)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.stagedURL(batch: m.batchId, item: m.items[0]).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queue.stagedURL(batch: m.batchId, item: m.items[1]).path))
+        XCTAssertNil(try queue.retire(m.batchId, saved: [m.items[1].id, m.items[2].id]), "nothing left: the batch goes")
+        XCTAssertEqual(try queue.list().manifests.count, 0)
+    }
+
+    func testAnEarlierFailureDoesNotClaimItsScreenshotSoSharingItAgainIsTheRetry() throws {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = try makeBatch([50], now: t0)
+        _ = try queue.update(first.batchId) { $0.items[0].state = .failed }
+        let again = try makeBatch([50], now: t0.addingTimeInterval(30))
+        XCTAssertNil(try queue.markDuplicates(again.batchId).items[0].duplicateOf)
+        _ = try queue.update(first.batchId) { $0.items[0].state = .ivsMissing }   // a verdict, not a fault: now it claims it
+        XCTAssertNotNil(try queue.markDuplicates(again.batchId).items[0].duplicateOf)
+    }
+
+    func testABatchsOwnLedgerEntriesNeverMakeItsScreenshotsLookAlreadyImported() throws {
+        // a save cut off after the ledger was written and before the batch was removed
+        let m = try makeBatch([51])
+        try queue.recordSaved(m.items, batchId: m.batchId, account: "Main")
+        XCTAssertNil(try queue.markDuplicates(m.batchId).items[0].alreadyImported)
+        let other = try makeBatch([51], now: Date(timeIntervalSinceNow: 5))
+        XCTAssertNotNil(try queue.markDuplicates(other.batchId).items[0].alreadyImported, "but another batch's is")
+    }
+
+    func testTheLedgerFollowsAnAccountThroughItsNameOrNotAtAll() throws {
+        let m = try makeBatch([52])
+        try queue.recordSaved(m.items, batchId: m.batchId, account: "Old", epoch: 3)
+        let l = queue.ledger()
+        XCTAssertNotNil(l.savedAt(account: "New", keys: m.items[0].keys, currentName: { _ in "New" }))
+        XCTAssertNil(l.savedAt(account: "New", keys: m.items[0].keys, currentName: { _ in nil }), "an entry whose account can no longer be told is not counted")
+        XCTAssertNil(l.savedAt(account: "Other", keys: m.items[0].keys, currentName: { _ in "New" }))
     }
 
     func testRemovingABatchRemovesItsImages() throws {

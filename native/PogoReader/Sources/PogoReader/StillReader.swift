@@ -11,13 +11,15 @@ public enum StillOutcome: Equatable {
     case unsupported(String)
     /// Looks like a detail screen, but a part that identifies the Pokémon could not be read.
     case unreadable(String)
+    /// The recogniser failed while reading: nothing is known about the screenshot. Worth trying again.
+    case fault(String)
 
     /// The words shown to the person.
     public var message: String {
         switch self {
         case .read: return "Read."
         case .ivsMissing(_, let why): return why.message
-        case .unsupported(let m), .unreadable(let m): return m
+        case .unsupported(let m), .unreadable(let m), .fault(let m): return m
         }
     }
 }
@@ -49,7 +51,13 @@ public final class StillReader {
     }
 
     public func read(_ image: RGBAImage, label: String = "image") -> StillOutcome {
-        Self.judge(processor.process(image, time: 0, frame: label))
+        let before = (processor.reader.text as? FaultReporting)?.faultCount ?? 0
+        let reading = processor.process(image, time: 0, frame: label)
+        // A recogniser that failed gives empty text, which would be judged as "not a Pokémon screen": say it was a fault instead.
+        if let reporter = processor.reader.text as? FaultReporting, reporter.faultCount > before {
+            return .fault("The text recogniser failed while reading this screenshot. Try again.")
+        }
+        return Self.judge(reading)
     }
 
     /// Decode a staged image and read it. A file that cannot be opened is the caller's `StillImageError`, not an outcome: it is a fault of the file, not of the screen.
@@ -71,7 +79,7 @@ public final class StillReader {
                 return .unsupported("This does not look like a Pokémon GO detail screen. Use an uncropped screenshot of a Pokémon's appraisal screen.")
             }
             if r.flags.contains("no-hp-bar") { return .unreadable("The card was found but not its HP bar, so it could not be read. A special background or a cropped screenshot can cause this.") }
-            return .unreadable("The Pokémon's name could not be read (a nickname does not matter, but a banner or a cropped screenshot can hide it).")
+            return .unreadable("The Pokémon's name could not be read. A Pokémon with a nickname cannot be read from a screenshot yet (the species name is not shown), and a banner or a cropped screenshot can hide the name too.")
         }
         if r.nameWeak == true {
             return .unreadable("The Pokémon's name was read too faintly to be sure of it. Take the screenshot again.")

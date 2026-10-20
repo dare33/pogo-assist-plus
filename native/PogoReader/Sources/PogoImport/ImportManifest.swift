@@ -86,6 +86,13 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
     public var items: [ImportItem]
     /// Set just before a batch's files are removed after a successful save, so a removal that was cut off is finished by the next cleanup, never repeated as a save.
     public var savedAt: Date?
+    /// How many times part of this batch has been saved and the rest kept (held-back and unreadable screenshots stay queued). Each save is its own scan record, so each has its own signature.
+    public var generation: Int = 0
+    /// How many account renames the box had recorded when the batch was bound to its account. A name that was renamed away AFTER this, and is now used by another account, is ambiguous
+    /// (`BoxStore.resolveAccount`). nil: not stamped yet (a share, until the app first sees it).
+    public var renameMark: Int?
+    /// When the batch was first shown to the person (the sheet opened with it in the list), and last acted on. Clean-up never removes a batch that has not been shown.
+    public var seenAt: Date?
 
     public var id: String { batchId }
 
@@ -95,7 +102,7 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
     }
 
     /// The source tag a saved scan carries: also what makes a repeated save of this batch recognisable.
-    public var signature: String { "import:" + batchId }
+    public var signature: String { "import:" + batchId + (generation > 0 ? ".\(generation)" : "") }
 
     public var pending: [ImportItem] { items.filter(\.needsReading) }
     public var isRead: Bool { pending.isEmpty }
@@ -104,7 +111,7 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
     public var heldBack: [ImportItem] { items.filter(\.heldBack) }
     public var duplicates: [ImportItem] { items.filter { $0.duplicateOf != nil } }
 
-    private enum CodingKeys: String, CodingKey { case version, batchId, createdAt, updatedAt, origin, account, items, savedAt }
+    private enum CodingKeys: String, CodingKey { case version, batchId, createdAt, updatedAt, origin, account, items, savedAt, generation, renameMark, seenAt }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -116,6 +123,9 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
         account = try c.decodeIfPresent(String.self, forKey: .account)
         items = try c.decodeIfPresent([ImportItem].self, forKey: .items) ?? []
         savedAt = try c.decodeIfPresent(Date.self, forKey: .savedAt)
+        generation = try c.decodeIfPresent(Int.self, forKey: .generation) ?? 0
+        renameMark = try c.decodeIfPresent(Int.self, forKey: .renameMark)
+        seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
     }
 }
 

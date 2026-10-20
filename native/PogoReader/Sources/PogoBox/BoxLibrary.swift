@@ -118,6 +118,11 @@ public final class BoxLibrary {
             let dir = try? store.accountDirectory(account, create: false)
             let plausible = listing.unreadable.contains { name in
                 guard let dir else { return true }
+                // A screenshot import's signature (`import:<batch>`) names no log size: an unreadable file can be that save only if it still carries the signature text.
+                if signature.hasPrefix("import:") {
+                    guard let data = try? Data(contentsOf: dir.appendingPathComponent(name)) else { return true }
+                    return data.range(of: Data(("\"" + signature + "\"").utf8)) != nil
+                }
                 let log = dir.appendingPathComponent(String(name.dropLast(5)) + ".replay.jsonl")
                 guard let attrs = try? fm.attributesOfItem(atPath: log.path), let n = attrs[.size] as? Int else { return true }   // no log to tell by: it could be
                 return String(n) == size

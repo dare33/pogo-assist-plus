@@ -45,6 +45,11 @@ final class StillReaderTests: XCTestCase {
         let data = try encode(sideways, type: "public.png", orientation: 6)
         let img = try StillImage.decode(data: data)
         XCTAssertEqual(img.width, 750); XCTAssertEqual(img.height, 1629)
+        // and the content is upright, not merely the right shape: it matches the picture decoded as it was
+        let upright = try StillImage.decode(contentsOf: fixture("rayquaza-damaged-19of190.png"))
+        var different = 0
+        for i in stride(from: 0, to: img.bytes.count, by: 4 * 97) where abs(Int(img.bytes[i]) - Int(upright.bytes[i])) > 8 { different += 1 }
+        XCTAssertLessThan(different, img.bytes.count / (4 * 97) / 50, "\(different) sampled pixels differ")
     }
 
     func testAHugeImageIsScaledDownWhileDecodedAndASmallOneIsNotScaledUp() throws {
@@ -124,6 +129,30 @@ final class StillReaderTests: XCTestCase {
         XCTAssertEqual(reading.name, "Nickit"); XCTAssertEqual(reading.cp, 212)
         XCTAssertEqual(why, .barsNotVisible)
         XCTAssertNil(reading.ivs)
+    }
+
+    // MARK: a recogniser fault is not a verdict
+
+    final class FailingText: TextReader, FaultReporting {
+        var faultCount = 0
+        func read(_ image: RGBAImage, kind: TextKind) -> TextRead { faultCount += 1; return .empty }
+    }
+
+    func testARecogniserThatFailsIsAFaultNotAnUnsupportedScreen() throws {
+        let failing = try StillReader(textReader: FailingText())
+        let img = try StillImage.decode(contentsOf: fixture("normal-nickit-212.png"))
+        guard case .fault = failing.read(img) else { return XCTFail("\(failing.read(img))") }
+        // the same card with a recogniser that simply finds no text is a verdict about the screenshot
+        final class Silent: TextReader { func read(_ image: RGBAImage, kind: TextKind) -> TextRead { .empty } }
+        let silent = try StillReader(textReader: Silent())
+        if case .fault = silent.read(img) { XCTFail("an empty read is not a fault") }
+    }
+
+    func testANicknamedPokemonIsUnreadableAndTheMessageSaysSo() {
+        var r = FrameReading(frame: "f", time: 0)
+        r.cp = 500; r.cpText = "CP500"; r.nameText = "Sparky"; r.flags = ["name-unmatched"]
+        guard case .unreadable(let why) = StillReader.judge(r) else { return XCTFail() }
+        XCTAssertTrue(why.contains("nickname"), why); XCTAssertFalse(why.contains("does not matter"), why)
     }
 
     // MARK: the rules

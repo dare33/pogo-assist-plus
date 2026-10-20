@@ -26,8 +26,24 @@ public enum StillImport {
             if row.solveStatus == "none" { return .unreadable("The CP, HP and appraisal bars do not fit any level of that Pokémon, so one of them was misread. Take the screenshot again.") }
             return .ivsMissing("The appraisal bars did not give one set of IVs for this CP and HP.")
         }
+        // A value the solver had to correct or work out is an inference, not a read: from a screenshot nothing is added or updated on that footing.
+        if let why = inferred(row) { return .unreadable("\(why) A value was worked out rather than read, so nothing is added from this screenshot. Take it again with the whole screen showing.") }
         row.index = 1
         return .row(row)
+    }
+
+    /// What in a solved row was inferred rather than read (the solver's correction of the IVs, a CP worked out from HP and bars, a species picked by stats), or nil.
+    static func inferred(_ row: ScanRow) -> String? {
+        if row.solveStatus == "corrected" { return "The bars did not fit the CP and HP, so the solver changed the IVs." }
+        for flag in row.flags {
+            if flag.hasPrefix("ivs-corrected") { return "The IVs were corrected." }
+            if flag.hasPrefix("cp-recovered") || flag.hasPrefix("cp-chosen") { return "The CP was recovered from other values." }
+            if flag == "hp-computed" { return "The HP was computed." }
+            if flag == "sex-from-stats" { return "The Pokémon's sex (Nidoran) was taken from its stats." }
+            if flag.hasPrefix("form-ambiguous") { return "The form could not be told apart." }
+            if flag == "ivs-disagree" || flag == "name-low-confidence" { return "The reading was uncertain." }
+        }
+        return nil
     }
 
     /// Rows for the review, in the order given, numbered from 1. Each row's single frame label is the item's id, so a row can always be traced to its screenshot.

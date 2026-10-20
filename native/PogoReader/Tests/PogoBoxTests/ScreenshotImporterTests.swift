@@ -81,7 +81,7 @@ final class ScreenshotImporterTests: XCTestCase {
 
     @discardableResult
     func stage(_ pictures: [Data], assets: [String?]? = nil, account: String? = "Main", origin: ImportManifest.Origin = .photoPicker, now: Date = Date()) throws -> ImportManifest {
-        let b = try queue.beginBatch(origin: origin, account: account, now: now)
+        let b = try queue.beginBatch(origin: origin, account: account, renameMark: lib.store.renameCount, now: now)
         for (i, p) in pictures.enumerated() { try b.add(data: p, assetId: assets?[i]) }
         return try b.commit(now: now)
     }
@@ -244,6 +244,7 @@ final class ScreenshotImporterTests: XCTestCase {
         let second = try stage([try retake(try nickit)])
         let p = try review(second)
         XCTAssertEqual(p.plan.same.count, 1); XCTAssertTrue(p.plan.new.isEmpty); XCTAssertTrue(p.plan.unsure.isEmpty)
+        // BoxMerge pairs it with the saved one as unchanged, exactly as for Auto Scan: no question, nothing added.
         guard case .saved(let v2) = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
         XCTAssertEqual(v2.entries.count, 1); XCTAssertEqual(v2.entries[0].id, v1.entries[0].id)
     }
@@ -419,13 +420,29 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertNotNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys))
     }
 
+    func testASaveCutOffAfterTheLedgerWasWrittenDoesNotHoldItsOwnScreenshotsBack() throws {
+        // The crash the earlier test did not model: box written, ledger written, batch not yet retired. On relaunch the batch's own screenshots must not look "already imported".
+        let m = try stage([try nickit, try rayquaza])
+        let p = try review(m)
+        let entries = try BoxMerge.apply(p.plan, to: p.base, engine: sharedEngine)
+        _ = try lib.commitScan(p.outcome.scan, entries: entries, account: "Main", scanDate: p.plan.scanDate, source: "screenshot import", kind: .partial, note: "cut off",
+                               expectedCurrentSeq: .some(nil), sourceSignature: m.signature)
+        try queue.recordSaved(m.items, batchId: m.batchId, account: "Main", epoch: lib.store.renameCount)
+        importer = makeImporter()
+        let again = try review(m)   // would throw nothingToImport if both were held back as already imported
+        XCTAssertEqual(again.outcome.scan.rows.count, 2)
+        guard case .alreadySaved = try importer.save(again, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+        XCTAssertEqual(try queue.list().manifests.count, 0)
+    }
+
     func testARemovalCutOffAfterSavingIsFinishedByCleanupNotRepeatedAsASave() throws {
         let m = try stage([try nickit])
         let p = try review(m)
-        guard case .saved = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
-        // put the batch back as it would be if the removal had been cut off after `savedAt` was written
-        let b = try queue.beginBatch(origin: .photoPicker, account: "Main"); try b.add(data: try nickit); let leftover = try b.commit()
-        try queue.update(leftover.batchId) { $0.savedAt = Date() }
+        let entries = try BoxMerge.apply(p.plan, to: p.base, engine: sharedEngine)
+        _ = try lib.commitScan(p.outcome.scan, entries: entries, account: "Main", scanDate: p.plan.scanDate, source: "screenshot import", kind: .partial, note: "x", expectedCurrentSeq: .some(nil), sourceSignature: m.signature)
+        try queue.recordSaved(m.items, batchId: m.batchId, account: "Main")
+        _ = try queue.update(m.batchId) { $0.savedAt = Date() }   // ...and the app ended before the folder was removed
         XCTAssertEqual(queue.cleanup().removedSaved, 1)
         XCTAssertEqual(try queue.list().manifests.count, 0)
         XCTAssertEqual(try lib.history(account: "Main").count, 1)
@@ -451,5 +468,160 @@ final class ScreenshotImporterTests: XCTestCase {
         guard case .saved(let snap) = try importer.save(try review(b), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
         XCTAssertEqual(snap.entries.map { $0.row.name }.sorted(), ["Nickit", "Rayquaza"])
         XCTAssertEqual(try lib.history(account: "Main").count, 2)
+    }
+
+    // MARK: the fold of review round 1
+
+    /// 1. A value the solver corrected or worked out is not a read.
+    func testACorrectedOrRecoveredValueIsNeverAddedAsARead() throws {
+        guard case .read(let nick) = try Self.vision.read(contentsOf: Self.fixtures.appendingPathComponent("normal-nickit-212.png")),
+              case .read(let rayq) = try Self.vision.read(contentsOf: Self.fixtures.appendingPathComponent("rayquaza-damaged-19of190.png")) else { return XCTFail() }
+        guard case .row = StillImport.solve(nick, engine: sharedEngine) else { return XCTFail("the clean read is a row") }
+        // bars one step off what CP and HP allow: the solver would "correct" the IVs
+        var off = nick, found = false
+        search: for (da, dd, dh) in [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1), (1, 1, 0), (-1, -1, 0), (0, 1, 1), (0, -1, -1), (1, 0, 1), (-1, 0, -1)] {
+            var t = nick; t.ivs = IVs(atk: 9 + da, def: 2 + dd, hp: 13 + dh)
+            guard let raw = try? sharedEngine.finish(readings: [t]).rows.first else { continue }
+            if raw.solveStatus == "corrected" || raw.flags.contains(where: { $0.hasPrefix("ivs-corrected") }) { off = t; found = true; break search }
+        }
+        XCTAssertTrue(found, "the setup must find bars the solver corrects")
+        guard case .unreadable(let why) = StillImport.solve(off, engine: sharedEngine) else { return XCTFail("a corrected IV set was taken as read") }
+        XCTAssertTrue(why.contains("changed the IVs") || why.contains("corrected"), why)
+        // the leading digit of the CP lost: the JavaScript recovers 4262 from 262
+        var tail = rayq; tail.cp = 262; tail.cpReads = [262]
+        let rawTail = try sharedEngine.finish(readings: [tail]).rows[0]
+        XCTAssertTrue(rawTail.flags.contains { $0.hasPrefix("cp-recovered") }, "setup: \(rawTail.flags)")
+        guard case .unreadable = StillImport.solve(tail, engine: sharedEngine) else { return XCTFail("a recovered CP was taken as read") }
+        // and through the importer: nothing is added, the screenshot says why
+        let m = try stage([try nickit])
+        importer = ScreenshotImporter(queue: queue, library: lib) { _, _ in .read(off) }
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(try queue.load(m.batchId).items[0].state, .unreadable)
+        XCTAssertThrowsError(try importer.prepareReview(batch: m.batchId, engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .nothingToImport) }
+    }
+
+    /// 2. A name renamed away and then reused is ambiguous; the person chooses; the ledger does not follow the wrong account.
+    func testARenamedAwayNameThatIsUsedAgainIsAskedAboutNotGuessed() throws {
+        let m = try stage([try nickit, try rayquaza], account: "Main")
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        try lib.renameAccount(from: "Main", to: "Renamed")
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .account("Renamed"), "followed first")
+        try lib.createAccount("Main")   // a new account takes the old name
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .ambiguous(old: "Main", renamedTo: "Renamed"))
+        XCTAssertThrowsError(try importer.prepareReview(batch: m.batchId, engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .accountAmbiguous(old: "Main", renamedTo: "Renamed")) }
+        XCTAssertNil(try lib.current(account: "Main")); XCTAssertNil(try lib.current(account: "Renamed"))
+        try importer.assign(batch: m.batchId, to: "Renamed")
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .account("Renamed"))
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertEqual(try lib.current(account: "Renamed")?.entries.count, 2); XCTAssertNil(try lib.current(account: "Main"))
+        // The ledger: what was saved into "Renamed" is not "already imported" for the new account called "Main"
+        let again = try stage([try nickit], account: "Main")
+        XCTAssertNil(try importer.prepare(batch: again.batchId).items[0].alreadyImported)
+        let toRenamed = try stage([try nickit], account: "Renamed")
+        XCTAssertNotNil(try importer.prepare(batch: toRenamed.batchId).items[0].alreadyImported)
+    }
+
+    func testASaveIntoAnAccountRenamedAfterwardsStillCountsInTheLedgerOfItsNewName() throws {
+        let m = try stage([try nickit])
+        guard case .saved = try importer.save(try review(m), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        try lib.renameAccount(from: "Main", to: "Renamed")
+        let again = try stage([try nickit], account: "Renamed")
+        XCTAssertNotNil(try importer.prepare(batch: again.batchId).items[0].alreadyImported)
+    }
+
+    /// 3. Saving keeps what still needs the person.
+    func testSavingKeepsTheHeldBackAndFailedScreenshotsQueued() throws {
+        let m = try stage([try nickit, try rayquaza, try rayquazaFainted, try stationed])
+        failing = [m.items[3].id]
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        let p = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(rowNames(p), ["Nickit 212", "Rayquaza 4262"])   // the fainted one is held back as a possible repeat; the last failed
+        guard case .saved = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        let left = try queue.load(m.batchId)
+        XCTAssertEqual(left.items.map(\.id), [m.items[2].id, m.items[3].id])
+        XCTAssertEqual(left.items.map(\.state), [.read, .failed])
+        XCTAssertNotEqual(left.signature, m.signature)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.stagedURL(batch: m.batchId, item: m.items[0]).path))
+        // the held-back one can still be included; saving it is a second scan record and the batch then goes
+        failing = []
+        try importer.setIncluded(batch: m.batchId, item: m.items[2].id, true)
+        _ = try importer.retryAll(batch: m.batchId)
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        let second = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(rowNames(second), ["Rayquaza 4262"], "the retried stationed card adds nothing; the included twin is a row")
+        guard case .saved(let snap) = try importer.save(second, resolutions: [:], engine: sharedEngine) else { return XCTFail("the second save was taken for the first") }
+        XCTAssertEqual(snap.entries.count, 2, "the twin matched the saved Rayquaza as unchanged")
+        XCTAssertEqual(try lib.store.list(account: "Main").scans.count, 2)
+        XCTAssertEqual(try queue.list().manifests.count, 0, "the stationed card is not actionable, so nothing is left")
+    }
+
+    /// 4. (the reviewer's reproduction) a copy of a screenshot in a batch that was never saved is not "already imported".
+    func testTheLedgerRecordsOnlyWhatWasSaved() throws {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let older = try stage([try nickit], origin: .shareExtension, now: t0)
+        let newer = try stage([try nickit, try rayquaza], origin: .shareExtension, now: t0.addingTimeInterval(60))
+        guard case .saved = try importer.save(try review(newer), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertNil(try lib.current(account: "Main")?.entries.first { $0.row.name == "Nickit" }, "Nickit was not saved")
+        try importer.readAll(batch: older.batchId, engine: sharedEngine)
+        let m = try queue.load(older.batchId)
+        XCTAssertNil(m.items[0].alreadyImported, "a never-saved screenshot was marked already imported")
+        XCTAssertEqual(rowNames(try importer.prepareReview(batch: older.batchId, engine: sharedEngine)), ["Nickit 212"])
+        // a copy IN the batch of one that was saved is recorded; a screenshot the person left out is not
+        let both = try stage([try rayquaza, try retake(try nickit)])
+        let p = try review(both)
+        guard case .saved = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertNotNil(queue.ledger().savedAt(account: "Main", keys: both.items[1].keys))
+    }
+
+    /// 5. A reader fault is retryable and a re-share while it is failed is the retry.
+    func testAReaderFaultIsRetryableAndAReshareWhileFailedIsReadNormally() throws {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let m = try stage([try nickit], now: t0)
+        importer = ScreenshotImporter(queue: queue, library: lib) { _, _ in .fault("recogniser failed") }
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        var item = try queue.load(m.batchId).items[0]
+        XCTAssertEqual(item.state, .failed); XCTAssertTrue(item.canRetry)
+        // shared again while the old one is failed: not a copy, it is read on its own
+        importer = makeImporter()
+        let again = try stage([try nickit], origin: .shareExtension, now: t0.addingTimeInterval(60))
+        try importer.readAll(batch: again.batchId, engine: sharedEngine)
+        item = try queue.load(again.batchId).items[0]
+        XCTAssertNil(item.duplicateOf); XCTAssertEqual(item.state, .read)
+        XCTAssertEqual(rowNames(try importer.prepareReview(batch: again.batchId, engine: sharedEngine)), ["Nickit 212"])
+    }
+
+    /// 6. Screenshots that were copies of a batch that went away are read without anyone asking.
+    func testACopyOnlyBatchIsReadAgainWhenTheBatchItCopiedIsDiscarded() throws {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = try stage([try nickit], origin: .shareExtension, now: t0)
+        let second = try stage([try nickit], origin: .shareExtension, now: t0.addingTimeInterval(60))
+        try importer.readAll(batch: second.batchId, engine: sharedEngine)
+        XCTAssertTrue(try queue.load(second.batchId).isRead, "all copies: nothing to read, so it looks finished")
+        XCTAssertEqual(try importer.prepareAll().map(\.batchId), [first.batchId], "only the older batch has anything to read")
+        try importer.discard(batch: first.batchId)
+        let waiting = try importer.prepareAll()
+        XCTAssertEqual(waiting.map(\.batchId), [second.batchId], "it has something to read now")
+        XCTAssertEqual(waiting[0].items[0].state, .pending)
+        try importer.readAll(batch: second.batchId, engine: sharedEngine)
+        XCTAssertEqual(rowNames(try importer.prepareReview(batch: second.batchId, engine: sharedEngine)), ["Nickit 212"])
+    }
+
+    /// 12. One unreadable scan file does not make every later import refuse to save.
+    func testAnUnreadableScanFileOnlyBlocksTheImportItCouldBe() throws {
+        let first = try stage([try nickit])
+        guard case .saved = try importer.save(try review(first), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        // damage that scan's file (text added to the end: it no longer decodes, but it still says which import it was)
+        let account = dir.appendingPathComponent("boxes/Main")
+        let file = try XCTUnwrap(try FileManager.default.contentsOfDirectory(atPath: account.path).first { name in
+            name.hasSuffix(".json") && (try? Data(contentsOf: account.appendingPathComponent(name)))?.range(of: Data(first.signature.utf8)) != nil
+        })
+        let handle = try FileHandle(forWritingTo: account.appendingPathComponent(file)); try handle.seekToEnd(); try handle.write(contentsOf: Data("{{garbage".utf8)); try handle.close()
+        XCTAssertEqual(try lib.store.list(account: "Main").unreadable, [file])
+        // another import is not refused for it...
+        XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: "import:some-other-batch"), .notSaved)
+        let second = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(second), resolutions: [:], engine: sharedEngine) else { return XCTFail("a damaged earlier scan blocked a new save") }
+        // ...but the batch that damaged file could be IS: nothing is saved over a possible earlier save
+        XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: first.signature), .unknown)
     }
 }
