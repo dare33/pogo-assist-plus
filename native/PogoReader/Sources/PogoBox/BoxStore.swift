@@ -324,7 +324,7 @@ public final class BoxStore {
         let first = max(0, total - all.count)   // the position, in all renames ever, of the first one still held
         if since < first { return .indeterminate }
         var name = recorded, moved = false
-        for step in all.dropFirst(min(since - first, all.count)) where step.count == 2 && step[0] == name { name = step[1]; moved = true }
+        for step in all.dropFirst(max(0, min(since - first, all.count))) where step.count == 2 && step[0] == name { name = step[1]; moved = true }
         let existing = Set(list)
         guard moved else { return existing.contains(recorded) ? .found(recorded) : .gone }
         guard existing.contains(name) else { return .gone }

@@ -42,6 +42,8 @@ public struct ImportItem: Codable, Equatable, Identifiable {
     public var repeatOf: String?
     /// The person's answer to a held-back item ("this is another Pokémon" / "import it again").
     public var includeAnyway: Bool?
+    /// A hold on this repeat was lifted because its source was saved or left out: the box merge decides what it is now, and it is not held again against the others.
+    public var holdLifted: Bool?
 
     public init(id: String, file: String, assetId: String? = nil, sourceHash: String, stagedHash: String, width: Int, height: Int, state: State = .pending, detail: String? = nil,
                 reading: Data? = nil, attempts: Int = 0, duplicateOf: String? = nil, alreadyImported: Date? = nil, repeatOf: String? = nil, includeAnyway: Bool? = nil) {
@@ -69,6 +71,17 @@ public struct ImportItem: Codable, Equatable, Identifiable {
     public var hasHold: Bool { state == .read && duplicateOf == nil && (repeatOf != nil || alreadyImported != nil) }
     /// A Pokémon this item will contribute to the review: read in full, not a copy of another item, not held back.
     public var isIncluded: Bool { state == .read && duplicateOf == nil && !heldBack }
+}
+
+/// What a save contains, written down BEFORE the box is written: the screenshots whose Pokémon it puts in the box, the ones the person left out, and the account it goes into (its name
+/// and the folder's birth date, which survives a rename). A save found already made after a cut-off, or after the ledger could not be written, is finished from this and against
+/// THIS account, whatever the batch's owner is by then; nothing else can send the same Pokémon to another box.
+public struct PendingSave: Codable, Equatable {
+    public var items: [String]
+    public var leftOut: [String]
+    public var account: String
+    public var born: Double?
+    public init(items: [String], leftOut: [String], account: String, born: Double?) { self.items = items; self.leftOut = leftOut; self.account = account; self.born = born }
 }
 
 /// A batch of screenshots waiting in the queue: one share or one pick. Written whole and atomically beside its staged files (`ImportQueue`).
@@ -99,7 +112,7 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
     public var accountBorn: Double?
     /// The screenshots (item ids) whose Pokémon the person's answers put in the save, written BEFORE the box is written, so a save found already made on relaunch is finished with
     /// exactly what was saved, not with a guess. Cleared once the batch has been retired.
-    public var pendingSave: [String]?
+    public var pendingSave: PendingSave?
 
     public var id: String { batchId }
 
@@ -134,13 +147,13 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
         renameMark = try c.decodeIfPresent(Int.self, forKey: .renameMark)
         seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
         accountBorn = try c.decodeIfPresent(Double.self, forKey: .accountBorn)
-        pendingSave = try c.decodeIfPresent([String].self, forKey: .pendingSave)
+        pendingSave = try? c.decodeIfPresent(PendingSave.self, forKey: .pendingSave)
     }
 }
 
 extension ImportItem {
     private enum CodingKeys: String, CodingKey {
-        case id, file, assetId, sourceHash, stagedHash, width, height, state, detail, reading, attempts, duplicateOf, alreadyImported, repeatOf, includeAnyway
+        case id, file, assetId, sourceHash, stagedHash, width, height, state, detail, reading, attempts, duplicateOf, alreadyImported, repeatOf, includeAnyway, holdLifted
     }
 
     /// Tolerant: a field a later build added is ignored, one this build expects but the file lacks takes its default, an unknown state reads as pending (read again).
@@ -161,5 +174,6 @@ extension ImportItem {
         alreadyImported = try c.decodeIfPresent(Date.self, forKey: .alreadyImported)
         repeatOf = try c.decodeIfPresent(String.self, forKey: .repeatOf)
         includeAnyway = try c.decodeIfPresent(Bool.self, forKey: .includeAnyway)
+        holdLifted = try c.decodeIfPresent(Bool.self, forKey: .holdLifted)
     }
 }

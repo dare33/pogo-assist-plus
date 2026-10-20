@@ -411,13 +411,15 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine, afterCommit: { throw Cut() }))
         XCTAssertEqual(try lib.current(account: "Main")?.entries.count, 2)
         XCTAssertTrue(FileManager.default.fileExists(atPath: queue.batchDirectory(m.batchId).path))
-        // relaunch: a fresh importer reviews the same batch and saves it
+        // relaunch: the next look at the queue finishes it from the note the save wrote down, and the box is not written again
         importer = makeImporter()
-        let again = try review(m)
-        guard case .alreadySaved = try importer.save(again, resolutions: [:], engine: sharedEngine) else { return XCTFail("saved a second time") }
+        _ = try importer.prepareAll(engine: sharedEngine)
         XCTAssertEqual(try lib.history(account: "Main").count, 1); XCTAssertEqual(try lib.current(account: "Main")?.entries.count, 2)
         XCTAssertFalse(FileManager.default.fileExists(atPath: queue.batchDirectory(m.batchId).path), "the clean-up that was cut off is finished")
         XCTAssertNotNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys), "what was saved is in the ledger")
+        // and a second tap on the review that was open saves nothing more
+        guard case .alreadySaved = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail("saved a second time") }
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
     }
 
     /// (round 2) The recovery used to guess that every row was saved. A row the person left out must not be recorded as saved.
@@ -430,11 +432,12 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertEqual(p.plan.unsure.count, 1)
         struct Cut: Error {}
         XCTAssertThrowsError(try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine, afterCommit: { throw Cut() }))
-        XCTAssertEqual(try queue.load(m.batchId).pendingSave, [], "what the save contained was written down before the box")
+        let written = try XCTUnwrap(try queue.load(m.batchId).pendingSave, "what the save contained was written down before the box")
+        XCTAssertEqual(written.items, []); XCTAssertEqual(written.leftOut, [m.items[0].id]); XCTAssertEqual(written.account, "Main")
         importer = makeImporter()
-        let again = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
-        guard case .alreadySaved = try importer.save(again, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try importer.prepareAll(engine: sharedEngine)
         XCTAssertNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys), "a left-out screenshot is not in the ledger as saved")
+        XCTAssertThrowsError(try queue.load(m.batchId), "and it is not kept to be asked about again")
     }
 
     func testASaveCutOffAfterTheLedgerWasWrittenDoesNotHoldItsOwnScreenshotsBack() throws {
@@ -826,8 +829,9 @@ final class ScreenshotImporterTests: XCTestCase {
         importer = makeImporter()
         guard case .saved = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
         XCTAssertEqual(try lib.history(account: "Main").count, 1)
-        var kept = try queue.load(m.batchId)
+        let kept = try queue.load(m.batchId)
         XCTAssertNotNil(kept.pendingSave); XCTAssertEqual(kept.items.count, 2, "not retired")
+        XCTAssertEqual(kept.pendingSave?.account, "Main")
         XCTAssertTrue(queue.ledger().entries.isEmpty)
         // the disk is fine again; the app looks at the queue
         queue.ledgerFailure = nil
@@ -836,7 +840,6 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertThrowsError(try queue.load(m.batchId), "retired now")
         XCTAssertNotNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys))
         XCTAssertEqual(try lib.history(account: "Main").count, 1, "the box was not written again")
-        kept = m
     }
 
     /// 4. Stamps: a batch the app has not stamped is never followed through renames to another account without asking.
@@ -907,7 +910,6 @@ final class ScreenshotImporterTests: XCTestCase {
         try lib.createAccount("Alt")
         let b = try queue.beginBatch(origin: .shareExtension, account: nil); try b.add(data: try nickit)
         let m = try b.commit()
-        try lib.createAccount("Alt")
         XCTAssertNil(try importer.assign(batch: m.batchId, to: "Alt").items[0].alreadyImported, "Alt never had it")
         let after = try importer.assign(batch: m.batchId, to: "Main")
         XCTAssertNotNil(after.items[0].alreadyImported, "Main did: worked out again on choosing it")
@@ -948,5 +950,103 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertTrue(item.state == .unsupported || item.state == .unreadable, "\(item.state) \(item.detail ?? "")")
         XCTAssertNil(item.reading.flatMap { _ in StillImport.title(of: item) }, "no Pokémon was named")
         XCTAssertThrowsError(try importer.prepareReview(batch: m.batchId, engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .nothingToImport) }
+    }
+
+    // MARK: review round 4
+
+    func retake(_ data: Data, _ k: UInt8) throws -> Data {
+        var img = try StillImage.decode(data: data); img.bytes[0] = img.bytes[0] &+ k; return try png(img)
+    }
+
+    /// D1. The ledger write fails and the batch is kept. An answer given meanwhile is not lost, and nothing is done to the batch until the last save is finished.
+    func testAnAnswerGivenWhileTheLastSaveIsUnfinishedIsRefusedThenKept() throws {
+        let m = try stage([try nickit, try retake(try nickit, 7)])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertTrue(try queue.load(m.batchId).items[1].heldBack)
+        struct DiskFull: Error {}
+        queue.ledgerFailure = { throw DiskFull() }; importer = makeImporter()
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertNotNil(try queue.load(m.batchId).pendingSave)
+        // while the ledger still cannot be written, nothing may be done to the batch
+        XCTAssertThrowsError(try importer.setIncluded(batch: m.batchId, item: m.items[1].id, true)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .finishingLastSave) }
+        XCTAssertThrowsError(try importer.prepareReview(batch: m.batchId, engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .finishingLastSave) }
+        XCTAssertThrowsError(try importer.discard(batch: m.batchId)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .finishingLastSave) }
+        XCTAssertNotNil(try? queue.load(m.batchId))
+        // the disk recovers: the answer finishes the last save first, and is kept
+        queue.ledgerFailure = nil; importer = makeImporter()
+        try importer.setIncluded(batch: m.batchId, item: m.items[1].id, true)
+        let left = try queue.load(m.batchId)
+        XCTAssertNil(left.pendingSave); XCTAssertEqual(left.items.map(\.id), [m.items[1].id], "the answered screenshot stays for a later save")
+        XCTAssertEqual(left.items[0].includeAnyway, true)
+        let p = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(p.rowItems, [m.items[1].id])
+    }
+
+    /// D1 (retire keeps what the save did not contain, and drops what the person left out).
+    func testRetireKeepsAnAnsweredIncludeThatWasNotInTheSaveAndDropsALeftOutOne() throws {
+        var m = try stage([try nickit, try rayquaza, try rayquazaFainted])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        m = try queue.update(m.batchId) { $0.items[2].includeAnyway = true }   // answered after the save was written down
+        let left = try XCTUnwrap(try queue.retire(m.batchId, saved: [m.items[0].id], dropped: [m.items[1].id]))
+        XCTAssertEqual(left.items.map(\.id), [m.items[2].id])
+    }
+
+    /// D2. A batch whose save is unfinished is not saved again into another account by choosing one, or after a rename and reuse of its name.
+    func testAnUnfinishedSaveIsNeverSavedAgainIntoAnotherAccount() throws {
+        try lib.createAccount("Alt")
+        let m = try stage([try nickit])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        struct DiskFull: Error {}
+        queue.ledgerFailure = { throw DiskFull() }; importer = makeImporter()
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertThrowsError(try importer.assign(batch: m.batchId, to: "Alt")) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .finishingLastSave) }
+        queue.ledgerFailure = nil; importer = makeImporter()
+        // the batch is finished against the account the save went into; there is nothing left to assign
+        XCTAssertThrowsError(try importer.assign(batch: m.batchId, to: "Alt"))
+        XCTAssertThrowsError(try queue.load(m.batchId))
+        XCTAssertEqual(try lib.history(account: "Alt").count, 0, "the same Pokémon went into a second box")
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+    }
+
+    func testAnUnfinishedSaveIsFinishedAgainstItsOwnAccountAfterARenameAndReuseOfTheName() throws {
+        let m = try stage([try nickit])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        struct DiskFull: Error {}
+        queue.ledgerFailure = { throw DiskFull() }; importer = makeImporter()
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        queue.ledgerFailure = nil; importer = makeImporter()
+        try lib.renameAccount(from: "Main", to: "Moved"); try lib.createAccount("Main")   // the owner is ambiguous now
+        guard case .ambiguous = importer.owner(of: try queue.load(m.batchId)) else { return XCTFail() }
+        _ = try importer.prepareAll(engine: sharedEngine)
+        XCTAssertThrowsError(try queue.load(m.batchId), "finished")
+        XCTAssertNotNil(queue.ledger().savedAt(account: "Moved", keys: m.items[0].keys), "recorded against the account the save went into")
+        XCTAssertNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys))
+        XCTAssertEqual(try lib.history(account: "Moved").count, 1); XCTAssertEqual(try lib.history(account: "Main").count, 0)
+    }
+
+    func testANoteForASaveThatNeverReachedTheBoxIsClearedAndDoesNotBlockTheBatch() throws {
+        let m = try stage([try nickit])
+        let p = try review(m)
+        struct Boom: Error {}
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine, commitFailure: { throw Boom() }))
+        XCTAssertNotNil(try queue.load(m.batchId).pendingSave, "written before the attempt")
+        let again = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)   // settles: the box has nothing of it, so the note goes
+        XCTAssertNil(try queue.load(m.batchId).pendingSave)
+        guard case .saved = try importer.save(again, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+    }
+
+    /// L1. A lifted hold does not come back against the other repeats.
+    func testALiftedHoldIsNotReplacedByAHoldAmongTheRemainingRepeats() throws {
+        let m = try stage([try nickit, try retake(try nickit, 7), try retake(try nickit, 13)])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(try queue.load(m.batchId).items.map(\.heldBack), [false, true, true])
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try importer.prepareAll(engine: sharedEngine)
+        let left = try queue.load(m.batchId)
+        XCTAssertEqual(left.items.count, 2)
+        XCTAssertTrue(left.items.allSatisfy { !$0.heldBack && $0.repeatOf == nil && $0.holdLifted == true }, "held again against each other: \(left.items.map(\.repeatOf))")
+        // a retried screenshot is new again
+        try queue.update(m.batchId) { $0.items[0].state = .failed }
+        XCTAssertNil(try importer.retry(batch: m.batchId, item: m.items[1].id).items[0].holdLifted)
     }
 }

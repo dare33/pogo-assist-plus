@@ -438,9 +438,10 @@ final class ImportQueueTests: XCTestCase {
             for i in 0..<3 { $0.items[i].state = .read }
             $0.items[1].repeatOf = $0.items[0].id; $0.items[2].repeatOf = $0.items[0].id
         }
-        // the first was read and then dropped from the batch without being saved (the person left it out): nothing lists it as saved
-        let left = try XCTUnwrap(try queue.retire(m.batchId, saved: []))
-        XCTAssertTrue(left.items.isEmpty || left.items.allSatisfy { $0.repeatOf == nil }, "no hold may point at a screenshot that is gone")
+        // the first was read and then left out by the person
+        let left = try XCTUnwrap(try queue.retire(m.batchId, saved: [], dropped: [m.items[0].id]))
+        XCTAssertEqual(left.items.count, 2)
+        XCTAssertTrue(left.items.allSatisfy { $0.repeatOf == nil && $0.holdLifted == true }, "no hold may point at a screenshot that is gone")
         let n = try makeBatch([73, 74])
         let kept = try queue.update(n.batchId) { $0.items[0].state = .failed; $0.items[1].state = .read; $0.items[1].repeatOf = $0.items[0].id }
         let after = try XCTUnwrap(try queue.retire(kept.batchId, saved: []))

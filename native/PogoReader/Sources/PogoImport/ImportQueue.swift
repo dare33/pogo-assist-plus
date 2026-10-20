@@ -340,25 +340,30 @@ extension ImportQueue {
         }
     }
 
-    /// After a save: keep only the screenshots that still need the person (held back, waiting to be read, or failed and worth trying again, and the copies that follow them), and
-    /// delete the staged files of the rest. When nothing is left the whole batch goes. The next save of what is kept is a new scan, so it gets its own signature (`generation`).
-    /// Returns the manifest that is left, or nil when the batch was removed.
+    /// After a save: keep what still needs the person, delete the staged files of the rest, and remove the batch when nothing is left. Kept: screenshots waiting to be read, failed or
+    /// unreadable ones (worth another try), held-back ones, copies that follow a kept one, and any screenshot that was NOT part of the save and was not left out (one the person said to
+    /// include after the save was written down stays for the next save). Cleared: what was saved (`saved`), what the person left out (`dropped`), copies of those, screenshots without IVs and
+    /// unsupported screens. The next save of what is kept is a new scan, so it gets its own signature (`generation`). Returns the manifest that is left, or nil when the batch was removed.
     @discardableResult
-    public func retire(_ batchId: String, saved: Set<String>, now: Date = Date()) throws -> ImportManifest? {
+    public func retire(_ batchId: String, saved: Set<String>, dropped: Set<String> = [], now: Date = Date()) throws -> ImportManifest? {
         var gone = [ImportItem]()
         let m = try update(batchId, now: now) { m in
-            var keep = Set(m.items.filter { !saved.contains($0.id) && ($0.needsReading || $0.canRetry || $0.heldBack) }.map(\.id))
-            // a copy of a screenshot that stays follows it; a copy of one in another batch waits on that batch; a copy of one that was saved is finished
-            for item in m.items where !saved.contains(item.id) && !keep.contains(item.id) {
+            let finished = saved.union(dropped)
+            var keep = Set(m.items.filter { item in
+                guard !finished.contains(item.id) else { return false }
+                return item.needsReading || item.canRetry || item.heldBack || (item.state == .read && item.duplicateOf == nil)
+            }.map(\.id))
+            // a copy of a screenshot that stays follows it; a copy of one in another batch waits on that batch; a copy of one that was saved or left out is finished
+            for item in m.items where !finished.contains(item.id) && !keep.contains(item.id) {
                 if let of = item.duplicateOf, of.contains("/") || keep.contains(of) { keep.insert(item.id) }
             }
             gone = m.items.filter { !keep.contains($0.id) }
             m.items = m.items.filter { keep.contains($0.id) }
-            // A hold on a repeat is lifted whenever the screenshot it was a repeat of is no longer in the batch, whether it was saved or left out (an unsure row answered "leave it out"):
-            // a hold pointing at a screenshot that is gone can never be answered. What the repeat is, then, is the box merge's to say (an exact match to a saved Pokémon is that
-            // Pokémon, unchanged; a power-up is a question), as for Auto Scan.
+            // A hold on a repeat is lifted whenever the screenshot it was a repeat of is no longer in the batch, whether it was saved or left out: a hold pointing at a screenshot that
+            // is gone can never be answered. What the repeat is, then, is the box merge's to say (an exact match to a saved Pokémon is that Pokémon, unchanged; a power-up is a
+            // question), as for Auto Scan. It is marked, so the repeats are not held against each other again at the next look.
             let kept = Set(m.items.map(\.id))
-            for i in m.items.indices { if let r = m.items[i].repeatOf, !kept.contains(r) { m.items[i].repeatOf = nil } }
+            for i in m.items.indices { if let r = m.items[i].repeatOf, !kept.contains(r) { m.items[i].repeatOf = nil; m.items[i].holdLifted = true } }
             m.generation += 1
             m.pendingSave = nil
             if m.items.isEmpty { m.savedAt = now }
