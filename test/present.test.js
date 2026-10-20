@@ -192,6 +192,8 @@ test('Elite and Community Day moves are read from every part of an entry, the fa
   // An entry the parser cannot attach to a name still counts, once per marker, and does not hide or inflate another entry.
   const odd = markedMoves(['Weird (Elite) (Elite)', 'Geomancy (Elite fast) / Moonblast']);
   assert.equal(odd.elite.size, 3);
+  assert.equal(markedMoves(['Geomancy (Elite fast) / Moonblast', '(Elite) (Elite)']).elite.size, 3, 'an unreadable entry after a readable one still counts');
+  assert.equal(markedMoves(['(CD)']).cd.size, 1, 'an unreadable Community Day marker still counts');
   assert.ok(odd.elite.has('Geomancy'));
   assert.equal(markedMoves(['Fast / Charge']).elite.size, 0);
   // A 'Community Day' qualifier is read like (CD).

@@ -370,6 +370,8 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertEqual(snor.steps?.first { $0.kind == "powerUp" }, .init(kind: "powerUp", toLevel: 30, areas: ["gym", "max"]))
         XCTAssertEqual(snor.leavesLeague, [.init(league: "UL", bestLevel: 27), .init(league: "GL", bestLevel: 16)])
         XCTAssertEqual(snor.leavesLeagueText, "going past 27 leaves UL, going past 16 leaves GL")
+        XCTAssertEqual(snor.climbLevel, 30)
+        XCTAssertNil(xurk.climbLevel)
         XCTAssertEqual(snor.action, "Power up to level 30 (Gym/Max; needs a Dynamax copy)")
         XCTAssertNil(xurk.leavesLeagueText)
         let exported = BoxExport.adviceText(advice.entries(for: box[4].id))
