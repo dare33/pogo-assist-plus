@@ -20,14 +20,29 @@ the threshold sit together at the top of `src/leagues.js`. The advisor rates lea
 a build left with no area is dropped; "past the cap" means the copy's CP at its current level (0/0/0 if its IVs are unknown) is over it, so a level-51 Best Buddy copy that still fits stays. A level-35 Rookidee no longer outranks a usable level-5 one for Corviknight. Master League
 keeps its neutral 0.6 weight and is never the cost league. XL candy now counts towards a build's effort for GL and UL (the league cost carries it; before, it was taken as 0). The display for the league options is being designed separately: the Leagues
 section still shows the shown pick only. What DID change on screen and in the exports is the wording of each build: every build now carries
-`steps`, the list of things still to do (evolve or form change, Mega evolve, power up per group of areas, second move, Elite TM, Community
-Day move, needs a Dynamax copy), and its action, the web table, `scripts/advise.mjs`, the Pokémon page and the export's Advice column all
-word it from that list ("Evolve to Blastoise + Mega evolve + Power up to level 49.5 (UL) + needs a Dynamax copy"); "Already built" only
-when the list is empty. The level text names the level and the area it is for ("L36 → 40 (UL)", "L45 → 35 (Raids), 49.5 (UL)", several
-areas on the same target level all named: "(Gym/Max)"), or says the copy is "already at (or past)" it. The second move is charged and listed
-only if the copy's recorded moves lack what the table entry asks for (a scan records none, so it reads "Second move (if it doesn't have
-it)" and is still charged, as before; the fixture records none, so its scores and order did not change). A spare reads "spare for the X
-build". The app decodes the data (`BoxAdvice.LeagueRating`, `Build.steps`; advice cache version 7). Not verified on a device.
+`steps`, the list of things still to do (evolve or form change, Mega evolve, one power-up step, second move, Elite TM, Community Day move,
+and the Max-only "needs a Dynamax copy"), and its action, the web table, `scripts/advise.mjs`, the Pokémon page and the export's Advice
+column all word it from that list ("Evolve to Annihilape + Power up to level 16 (GL)"). The power-up step is exactly the climb the shown
+cost pays for: a league-only build climbs to the cost league's best level, any other build to its highest non-league target level (areas
+tied on it are all named, "(Gym/Max)"); another league's best level is never a step, only a note when the climb goes past it ("going past
+27 leaves UL"). "Already built" means nothing is left; a Dynamax requirement belongs to the Max area alone, so it reads "Already built (Max
+needs a Dynamax copy)" when that is all. The second charged move is a step (and charged) unless the copy's second charged slot is already
+unlocked (Poke Genie's Charge Move 2 is filled; kept by position as `chargedMoves`); a scan records no moves, so it reads "Second move (if
+it doesn't have it)" and is still charged, as before. Elite TM and Community Day move steps are dropped when the recorded moves already hold
+the move, and Elite TMs are counted by distinct move name in the step text. The fixture records moves for one Pokémon only (a Mareep whose
+second charged slot is empty), so scores, costs and order are byte-identical to 7c43c85 on the fixture and 11 variants. A spare reads "spare
+for the X build". The app decodes the data (`BoxAdvice.LeagueRating`, `Build.steps`; advice cache version 7). Not verified on a device.
+
+**Known limits / follow-up (league options branch; not changed here, scores must stay as they are).**
+- Costing is single-area: a build is costed to ONE target (the league's best level for a league-only build, else the highest non-league
+  target), so a league whose best level is above that target is not paid for, and the cost does not reach other leagues (they appear only
+  as the "going past N leaves X" note).
+- The effort figure counts Elite TMs by mentions in the tier tables (`(Elite)` markers across entries), so one Elite move named in several
+  entries counts more than once; the step text counts distinct moves. Fix together with the costing above, then re-check the order.
+- Community Day and Elite flags come from the tier tables' text, not from the game data; a table entry that names them differently is missed.
+- The second-move charge is a flat third-move cost; a copy with an unlocked slot may still need a TM for the recommended move (no step for that).
+- Master League is never a cost area or a league note: it keeps a neutral weight (0.6) and no cost.
+- Not verified on a device: the app's screens with the new wording.
 
 **20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,
 merged from `native-ui-v1` in PR #2), the shared JavaScript changes (extractor read fixes, CP recovery, PvP leagues,

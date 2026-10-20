@@ -45,10 +45,10 @@ public struct BoxAdvice: Codable, Equatable {
             public init(kind: String, to: String? = nil, candy: Int? = nil, toLevel: Double? = nil, areas: [String]? = nil, certain: Bool? = nil, count: Int? = nil) {
                 self.kind = kind; self.to = to; self.candy = candy; self.toLevel = toLevel; self.areas = areas; self.certain = certain; self.count = count
             }
-            /// Reads one step from the engine's JSON; nil for a step without a kind.
-            init?(json v: JSONValue) {
-                guard case .string(let k)? = v["kind"] else { return nil }
-                kind = k
+            /// Reads one step from the engine's JSON. A step without a kind is kept as kind "unknown" (never dropped: dropping it could turn
+            /// a build with something left to do into "Already built").
+            init(json v: JSONValue) {
+                if case .string(let k)? = v["kind"] { kind = k } else { kind = "unknown" }
                 if case .string(let t)? = v["to"] { to = t }
                 if case .number(let c)? = v["candy"], let n = LeagueRating.whole(c) { candy = n }
                 if case .number(let l)? = v["toLevel"] { toLevel = l }
@@ -64,11 +64,10 @@ public struct BoxAdvice: Codable, Equatable {
         private func areaText(_ keys: [String]?) -> String { (keys ?? []).map { BoxAdvice.areaLabel[$0] ?? $0 }.joined(separator: "/") }
         private func levelText(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
 
-        /// What is left to do, worded as `actionText` in `src/advise.js` does: every step joined with " + ", and "Already built" only when there are none.
+        /// What is left to do, worded as `actionText` in `src/advise.js` does: the steps joined with " + ". "Already built" when nothing is left
+        /// except the Max-only Dynamax requirement, which is appended in brackets whenever it applies.
         public var action: String {
             guard let steps else { return powerUp ? "Power up" : "\(formChange ? "Form change to" : "Evolve to") \(targetName)" }
-            if steps.isEmpty { return "Already built" }
-            let ups = steps.filter { $0.kind == "powerUp" }
             var parts = [String]()
             for st in steps {
                 switch st.kind {
@@ -76,24 +75,24 @@ public struct BoxAdvice: Codable, Equatable {
                 case "formChange": parts.append("Form change to \(st.to ?? targetName)")
                 case "megaEvolve": parts.append("Mega evolve")
                 case "powerUp":
-                    if st == ups.first { parts.append("Power up to level " + ups.map { "\(levelText($0.toLevel ?? 0)) (\(areaText($0.areas)))" }.joined(separator: " and ")) }
+                    let areas = areaText(st.areas)
+                    if let level = st.toLevel { parts.append("Power up to level \(levelText(level))" + (areas.isEmpty ? "" : " (\(areas))")) } else { parts.append("Power up") }
                 case "secondMove": parts.append(st.certain == false ? "Second move (if it doesn't have it)" : "Second move")
                 case "eliteTM": parts.append((st.count ?? 1) == 1 ? "1 Elite TM" : "\(st.count ?? 1) Elite TMs")
                 case "cdMove": parts.append("Community Day move")
-                case "needsDynamaxCopy": parts.append("needs a Dynamax copy")
-                default: break
+                case "needsDynamaxCopy": break
+                default: parts.append("More to do") // a step this version does not know: still something left, never "Already built"
                 }
             }
-            return parts.joined(separator: " + ")
+            let base = parts.isEmpty ? "Already built" : parts.joined(separator: " + ")
+            return steps.contains { $0.kind == "needsDynamaxCopy" } ? base + " (Max needs a Dynamax copy)" : base
         }
-        /// "120k dust, 150 candy, 8 XL, 1 Elite TM".
+        /// "120k dust, 150 candy, 8 XL". Elite TMs and the Community Day move are steps of `action`, not repeated here.
         public var costText: String {
             var parts = [String]()
             parts.append(dust >= 1000 ? "\(Int((Double(dust) / 1000).rounded()))k dust" : "\(dust) dust")
             if candy > 0 { parts.append("\(candy) candy") }
             if xl > 0 { parts.append("\(xl) XL candy") }
-            if eliteTMs > 0 { parts.append(eliteTMs == 1 ? "1 Elite TM" : "\(eliteTMs) Elite TMs") }
-            if communityDayMove { parts.append("Community Day move") }
             return parts.joined(separator: ", ")
         }
     }
@@ -337,7 +336,7 @@ public struct BoxAdvice: Codable, Equatable {
                               areas: (b["areas"]?.arrayValue ?? []).compactMap { str($0) }.map { areaLabel[$0] ?? $0 },
                               tier: str(b["bestTier"]) ?? "", targetLevel: num(b["targetLevel"]), dust: int(cost?["dust"]), candy: int(cost?["candy"]), xl: int(cost?["xl"]),
                               eliteTMs: int(flags?["elite"]), communityDayMove: bool(flags?["cd"]), pvp: pvp, score: num(b["score"]) ?? 0,
-                              steps: b["steps"]?.arrayValue.map { $0.compactMap(Build.Step.init(json:)) })
+                              steps: b["steps"]?.arrayValue.map { $0.map(Build.Step.init(json:)) })
             out.builds.append(build)
             for s in spares { out.spareBuilds[s, default: []].append(build) }
         }

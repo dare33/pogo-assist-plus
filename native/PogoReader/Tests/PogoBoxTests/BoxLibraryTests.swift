@@ -308,16 +308,25 @@ final class BoxLibraryTests: XCTestCase {
                             formChange: false, viaMega: false, needsDynamax: false, spares: 0, areas: ["Raids"], tier: "S", targetLevel: nil, dust: 0, candy: 0, xl: 0,
                             eliteTMs: 0, communityDayMove: false, pvp: nil, score: 1, steps: steps)
         }
-        XCTAssertEqual(build([]).action, "Already built", "only an empty list is already built")
+        XCTAssertEqual(build([]).action, "Already built", "an empty list is already built")
         XCTAssertEqual(build([S(kind: "powerUp", toLevel: 35, areas: ["raids"])]).action, "Power up to level 35 (Raids)")
-        XCTAssertEqual(build([S(kind: "powerUp", toLevel: 35, areas: ["raids"]), S(kind: "powerUp", toLevel: 49.5, areas: ["ul"])]).action, "Power up to level 35 (Raids) and 49.5 (UL)")
         XCTAssertEqual(build([S(kind: "powerUp", toLevel: 30, areas: ["gym", "max"])]).action, "Power up to level 30 (Gym/Max)")
+        XCTAssertEqual(build([S(kind: "powerUp", toLevel: 16, areas: ["gl"])]).action, "Power up to level 16 (GL)")
+        XCTAssertEqual(build([S(kind: "powerUp")]).action, "Power up", "a power-up step without a level never reads 'to level 0'")
         XCTAssertEqual(build([S(kind: "secondMove", certain: true)]).action, "Second move")
         XCTAssertEqual(build([S(kind: "secondMove", certain: false)]).action, "Second move (if it doesn't have it)")
-        XCTAssertEqual(build([S(kind: "needsDynamaxCopy")]).action, "needs a Dynamax copy")
+        // The Dynamax requirement is Max's alone: it does not make the build unfinished, and it is not hidden.
+        XCTAssertEqual(build([S(kind: "needsDynamaxCopy")]).action, "Already built (Max needs a Dynamax copy)")
+        XCTAssertEqual(build([S(kind: "megaEvolve"), S(kind: "needsDynamaxCopy")]).action, "Mega evolve (Max needs a Dynamax copy)")
         XCTAssertEqual(build(powerUp: false, [S(kind: "evolve", to: "Gengar", candy: 100), S(kind: "megaEvolve"), S(kind: "eliteTM", count: 2), S(kind: "cdMove")]).action,
                        "Evolve to Gengar + Mega evolve + 2 Elite TMs + Community Day move")
         XCTAssertEqual(build([S(kind: "eliteTM", count: 1)]).action, "1 Elite TM")
+        // A step this version does not know (or one with no kind) is still something to do.
+        XCTAssertEqual(build([S(kind: "somethingNew")]).action, "More to do")
+        XCTAssertEqual(BoxAdvice.Build.Step(json: .object(["to": .string("x")])).kind, "unknown")
+        // The cost line no longer repeats Elite TMs and the Community Day move (they are steps).
+        var withElite = build([]); withElite.dust = 5000; withElite.eliteTMs = 2; withElite.communityDayMove = true
+        XCTAssertEqual(withElite.costText, "5k dust")
         // A build read without the engine's steps falls back to the plain wording (never "Already built").
         XCTAssertEqual(build(nil).action, "Power up")
         XCTAssertEqual(build(powerUp: false, nil).action, "Evolve to Y")
@@ -336,19 +345,22 @@ final class BoxLibraryTests: XCTestCase {
             """
             return try! JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
         }
-        let rows = [record(1, "Xurkitree", 40, (15, 15, 15)), record(2, "Squirtle", 45, (0, 7, 14)), record(3, "Cramorant", 51, (15, 15, 15))]
+        let rows = [record(1, "Xurkitree", 40, (15, 15, 15)), record(2, "Squirtle", 45, (0, 7, 14)), record(3, "Cramorant", 51, (15, 15, 15)), record(4, "Mankey", 12, (15, 15, 15))]
         let report = try CoreEngine().advise(box: .array(rows))
-        try lib.commit(account: "a", entries: entries([100, 200, 300]), reason: .scan, note: "three", now: date(1))
+        try lib.commit(account: "a", entries: entries([100, 200, 300, 400]), reason: .scan, note: "four", now: date(1))
         let box = try XCTUnwrap(lib.current(account: "a")).entries
         let advice = BoxAdvice.make(from: report, entries: box)
         func build(_ i: Int, _ target: String) throws -> BoxAdvice.Build { try XCTUnwrap(advice.builds.first { $0.entryId == box[i].id && $0.targetId == target }, target) }
         let xurk = try build(0, "xurkitree"), squirtle = try build(1, "blastoise"), cram = try build(2, "cramorant")
         XCTAssertEqual(xurk.steps, [])
         XCTAssertEqual(xurk.action, "Already built")
-        XCTAssertEqual(squirtle.steps?.map(\.kind), ["evolve", "megaEvolve", "powerUp", "needsDynamaxCopy"])
-        XCTAssertEqual(squirtle.steps?.first { $0.kind == "powerUp" }, .init(kind: "powerUp", toLevel: 49.5, areas: ["ul"]))
+        // Ultra League's best level (49.5) is not what the Raids cost pays for, so there is no power-up step; Dynamax is Max's alone.
+        XCTAssertEqual(squirtle.steps?.map(\.kind), ["evolve", "megaEvolve", "needsDynamaxCopy"])
         XCTAssertEqual(squirtle.steps?.first { $0.kind == "evolve" }?.candy, 125)
-        XCTAssertEqual(squirtle.action, "Evolve to Blastoise + Mega evolve + Power up to level 49.5 (UL) + needs a Dynamax copy")
+        XCTAssertEqual(squirtle.action, "Evolve to Blastoise + Mega evolve (Max needs a Dynamax copy)")
+        let climbing = try build(3, "annihilape")
+        XCTAssertEqual(climbing.steps?.last, .init(kind: "powerUp", toLevel: 16, areas: ["gl"]))
+        XCTAssertEqual(climbing.action, "Evolve to Annihilape + Power up to level 16 (GL)")
         XCTAssertEqual(cram.steps, [.init(kind: "secondMove", certain: false)])
         XCTAssertEqual(cram.action, "Second move (if it doesn't have it)")
         // A report whose first build has no `steps` key (not what the current engine produces) reads as nil, not as an empty list.

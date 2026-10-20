@@ -37,7 +37,7 @@ public enum BoxExport {
         out.append("- To check: \"yes\" means the scan could not read at least one value for sure, so the CP, HP, IVs or level may be wrong until the owner checks it in the game. \"no\" means the values were read cleanly or were confirmed.")
         out.append("- Mega CP: when the scan has seen this Pokémon Mega evolved, the CP it had then (the Mega CP is temporary). The other columns are the Pokémon's own, un-evolved form, and its IVs are the same in both forms. Blank when never seen as a Mega.")
         if advice != nil {
-            out.append("- Advice: what the app suggests for this Pokémon. Each build lists what is still to do, joined with +: for example \"Evolve to X + Mega evolve + Power up to level 35 (Raids)\", then Second move, Elite TM, Community Day move or \"needs a Dynamax copy\" when those apply, or \"Already built\" when nothing is left; then in brackets the tier, the areas it is for and the cost. Tier is the best rank this build's target has in the app's tier lists for those areas (S is the best, then A, then B). Areas are where the build is useful: Raids, Rocket, Gym, GL (Great League), UL (Ultra League), ML (Master League), Max (Max battles). The cost is dust, candy, XL candy and Elite TMs. \"spare for the X build\" means this Pokémon is an extra copy of a build better served by another one, and \"duplicate\" says whether the app would keep it or transfer it. A blank Advice cell means the app suggests nothing for that Pokémon.")
+            out.append("- Advice: what the app suggests for this Pokémon. Each build lists what is still to do, joined with +: for example \"Evolve to X + Mega evolve + Power up to level 35 (Raids)\", then Second move, Elite TM or Community Day move when those apply, and \"(Max needs a Dynamax copy)\" when the Max area needs a Dynamax-capable copy; \"Already built\" means nothing is left except possibly that Max requirement. The level after \"Power up to\" is the one the cost covers, with the areas it is for; then in brackets the tier, the areas it is for and the cost. Tier is the best rank this build's target has in the app's tier lists for those areas (S is the best, then A, then B). Areas are where the build is useful: Raids, Rocket, Gym, GL (Great League), UL (Ultra League), ML (Master League), Max (Max battles). The cost is dust, candy and XL candy (Elite TMs and Community Day moves are listed in the steps, not in the cost). \"spare for the X build\" means this Pokémon is an extra copy of a build better served by another one, and \"duplicate\" says whether the app would keep it or transfer it. A blank Advice cell means the app suggests nothing for that Pokémon.")
         }
         out.append("")
         let head = ["#", "Pokémon", "CP", "Level", "HP", "IVs", "IV %", "Dust", "Flags", "First seen", "Last seen", "To check", "Mega CP"] + (advice == nil ? [] : ["Advice"])
@@ -86,7 +86,7 @@ public enum BoxExport {
             if !b.tier.isEmpty { detail.append("tier \(b.tier)") }
             if !b.areas.isEmpty { detail.append(b.areas.joined(separator: ", ")) }
             if let p = b.pvp { detail.append(p) }
-            detail.append(b.dust == 0 && b.candy == 0 && b.xl == 0 && b.eliteTMs == 0 ? "nothing to spend" : b.costText)
+            detail.append(b.dust == 0 && b.candy == 0 && b.xl == 0 ? "nothing to spend" : b.costText)
             if b.spares > 0 { detail.append("\(b.spares) spare \(b.spares == 1 ? "copy" : "copies")") }
             parts.append("\(what) [\(detail.joined(separator: "; "))]")
         }
