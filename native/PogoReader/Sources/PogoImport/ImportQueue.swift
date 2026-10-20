@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+@_exported import PogoImage
 
 public enum ImportQueueError: Error, Equatable, LocalizedError {
     case tooManyInBatch(max: Int)
@@ -76,7 +77,7 @@ public struct ImportQueue {
     // MARK: - making a batch
 
     /// A batch being staged. Add images one at a time (bounded memory), then `commit`; `abort` removes what was staged.
-    public final class Builder {
+    public final class Builder: @unchecked Sendable {   // used by one caller at a time (the share extension stages in turn); the lock is that discipline
         public let batchId: String
         public let origin: ImportManifest.Origin
         public let account: String?
@@ -154,6 +155,7 @@ public struct ImportQueue {
         public var manifests: [ImportManifest]
         /// Batch folders whose manifest cannot be read (damaged, or written by a newer app): kept, never deleted for the person.
         public var unreadable: [String]
+        public init(manifests: [ImportManifest], unreadable: [String]) { self.manifests = manifests; self.unreadable = unreadable }
     }
 
     public func list() throws -> Listing {

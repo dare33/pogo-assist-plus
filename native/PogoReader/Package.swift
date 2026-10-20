@@ -8,7 +8,7 @@ let package = Package(
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "PogoReader", targets: ["PogoReader"]),
-        // The screenshot queue (staging, manifests, duplicate ledger). ImageIO and CryptoKit only: the share extension links this and nothing larger.
+        // The screenshot queue (staging, manifests, duplicate ledger). The share extension links this and nothing larger.
         .library(name: "PogoImport", targets: ["PogoImport"]),
         .executable(name: "pogo-read", targets: ["pogo-read"]),
         .executable(name: "pogo-drop", targets: ["pogo-drop"]),
@@ -19,9 +19,11 @@ let package = Package(
         .executable(name: "pogo-voice", targets: ["pogo-voice"]),
     ],
     targets: [
-        .target(name: "PogoImport"),
+        // Decoding, orienting, stripping and hashing one image: ImageIO and CryptoKit, nothing that touches file dates. The broadcast extension links it through PogoReader.
+        .target(name: "PogoImage"),
+        .target(name: "PogoImport", dependencies: ["PogoImage"]),
         .testTarget(name: "PogoImportTests", dependencies: ["PogoImport"]),
-        .target(name: "PogoReader", dependencies: ["PogoImport"], resources: [.copy("Resources/species.json")]),
+        .target(name: "PogoReader", dependencies: ["PogoImage"], resources: [.copy("Resources/species.json")]),
         .executableTarget(name: "pogo-read", dependencies: ["PogoReader"]),
         .executableTarget(name: "pogo-drop", dependencies: ["PogoReader"]),
         .testTarget(name: "PogoReaderTests", dependencies: ["PogoReader"]),

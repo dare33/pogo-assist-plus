@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 import ImageIO
-import PogoImport
+import PogoImage
 
 public enum StillImageError: Error, Equatable, CustomStringConvertible {
     /// ImageIO cannot decode it (not an image, truncated, or an encoding this system does not read).
