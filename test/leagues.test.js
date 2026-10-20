@@ -73,9 +73,8 @@ test('acceptance: IV rank, stat product and Rank % match every exact-IV row of t
   assert.deepEqual(bad, []);
 });
 
-// Floors for the emulation of Poke Genie's pick, measured WITHOUT reading the export's pick (270/278 Great and 298/304 Ultra
-// when the manager fitted it; the counts here are over all rows that resolve, see the printed report). A drop below these means the
-// emulation, the IV rank or the family walk changed.
+// Regression pins (not evidence it generalises: the fixture is the data it was fitted on) for the emulation of Poke Genie's pick, measured WITHOUT reading the export's pick: currently 271/280 Great and 300/306 Ultra rows (the 270/278 and 298/304 counted earlier were the
+// cost-check subsets, a different row count; the printed report is the reference). A drop below these means the emulation, the IV rank or the family walk changed.
 const EMULATION_FLOOR = { gl: 270, ul: 298 };
 
 test('report: pick agreement with Poke Genie (emulated without its pick, and the experimental rule), cost agreement, ranking convention', () => {
@@ -95,7 +94,7 @@ test('report: pick agreement with Poke Genie (emulated without its pick, and the
       const baseOf = (o) => baseSpeciesId(gm, o.speciesId);
       // (a) the emulation: the same entry with Poke Genie's columns removed, so it cannot read the answer.
       const blind = leaguesFor({ ...p, pvp: undefined }, r, ctx)[league];
-      assert.equal(blind.source, p.ivs ? 'emulated' : 'ranked');
+      assert.ok(p.ivs ? blind.source === 'emulated' : ['ranked', 'fallback'].includes(blind.source));
       if (sameMember(baseOf(blind.options[blind.pick]), pgBase)) emulated++;
       else if (emulatedMiss.length < 6) emulatedMiss.push(`${p.name}->${baseOf(blind.options[blind.pick])} (PG ${pgBase})`);
       // (b) the experimental CLOSE_SCORE rule (also computed blind: it never reads the columns).
@@ -156,7 +155,7 @@ test('the data shape: options plus two indexes and a source; no per-option pick 
     assert.deepEqual(Object.keys(l), ['options', 'pick', 'experimental', 'source']);
     assert.ok(Number.isInteger(l.pick) && l.pick >= 0 && l.pick < l.options.length);
     assert.ok(Number.isInteger(l.experimental) && l.experimental < l.options.length);
-    assert.ok(['export', 'emulated', 'ranked'].includes(l.source));
+    assert.ok(['export', 'emulated', 'ranked', 'fallback'].includes(l.source));
     for (const o of l.options) {
       const keys = Object.keys(o);
       for (const k of ['speciesId', 'name', 'self', 'strength', 'moves', 'needs', 'iv', 'overCap', 'cost']) assert.ok(keys.includes(k), k);
@@ -182,7 +181,7 @@ test('the shown pick copies Poke Genie: its own pick from the export when it is 
   assert.equal(shownOf(L.gl).speciesId, 'flareon');
   assert.equal(L.gl.source, 'export');
   assert.equal(shownOf(L.ul).speciesId, 'vaporeon');
-  assert.equal(L.ml.source, 'emulated'); // Poke Genie has no Master League column
+  assert.equal(L.ml.source, 'ranked'); // Poke Genie has no Master League column: the PvPoke score decides, not the emulation
   // A pick that is not in the family (or no pick: an app scan has empty columns) is emulated.
   for (const pvp of [{ great: { name: 'Pikachu', form: '' } }, { great: { name: '', form: '' } }, undefined]) {
     assert.equal(rawOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, pvp })).gl.source, 'emulated');
@@ -252,7 +251,7 @@ test('experimental pick: Magnemite GL takes the better spread of two close membe
   // Lillipup at a level past Stoutland's Great League best level: it is not the experimental pick there either.
   const lillipup = rawOf(entry('Lillipup', { level: 30, ivs: { atk: 13, def: 13, hp: 11 } })).gl;
   assert.equal(lillipup.options.find((o) => o.speciesId === 'stoutland').overCap, true);
-  assert.notEqual(expOf(lillipup).speciesId, 'stoutland');
+  assert.equal(expOf(lillipup).overCap, false);
 });
 
 test('Eevee UL experimental: a far weaker member (Flareon 66.8 against Sylveon 85.9) never wins on spread', () => {
@@ -404,7 +403,7 @@ test('a family with no ranked member and unknown IVs falls back to its final evo
     assert.equal(L[l].strength, null);
     assert.equal(L[l].moves, null);
     assert.equal(L[l].needs, null);
-    assert.equal(L[l].raw.source, 'ranked');
+    assert.equal(L[l].raw.source, 'fallback');
     assert.equal(L[l].raw.options.length, 2); // both stages are listed, neither ranked
   }
   // Unreleased finals are skipped: Girafarig's Farigiraf is not released. Toxel reaches the released plain Toxtricity through EVOLUTION_OVERRIDES
@@ -632,4 +631,43 @@ test('purified costs round up per power-up like shadow costs (Bulbapedia Shadow 
   assert.equal(powerUpCost(31, 33, { purified: true }).candy, 24);    // 5.4 -> 6 per step, four steps
   assert.equal(powerUpCost(31, 33, { shadow: true }).candy, 32);      // 7.2 -> 8 per step
   assert.equal(powerUpCost(31, 33).candy, 24);
+});
+
+test('Master League: the shown pick is the highest PvPoke score, not the stat-product emulation (Poke Genie exports no Master League pick)', () => {
+  let rows = 0;
+  for (const p of box) {
+    const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
+    if (!r) continue;
+    const l = leaguesFor({ ...p, pvp: undefined }, r, ctx).ml;
+    const ranked = l.options.filter((o) => o.strength);
+    if (!ranked.length) { assert.equal(l.source, 'fallback'); continue; }
+    assert.equal(l.source, 'ranked', p.name);
+    assert.equal(l.options[l.pick].strength.score, Math.max(...ranked.map((o) => o.strength.score)), `${p.name} ${p.form}`);
+    rows++;
+  }
+  assert.ok(rows > 100, `${rows} rows checked`);
+  // Scyther: Scizor, not Kleavor (which the stat-product emulation preferred by ~0.07%); Great League is still emulated.
+  const scyther = rawOf(entry('Scyther', { ivs: { atk: 6, def: 7, hp: 12 }, level: 17 }));
+  assert.equal(shownOf(scyther.ml).speciesId, 'scizor');
+  assert.equal(scyther.ml.source, 'ranked');
+  assert.equal(scyther.gl.source, 'emulated');
+});
+
+test('experimental is never a member the copy is already too strong for; only a family with every member over the cap takes the shown pick', () => {
+  let checked = 0;
+  for (const p of box) {
+    const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
+    if (!r) continue;
+    const L = leaguesFor({ ...p, pvp: undefined }, r, ctx);
+    for (const league of ['gl', 'ul', 'ml']) {
+      const l = L[league];
+      if (l.options.some((o) => !o.overCap)) { assert.equal(l.options[l.experimental].overCap, false, `${p.name} ${league}`); checked++; }
+      else assert.equal(l.experimental, l.pick, `${p.name} ${league}`);
+    }
+  }
+  assert.ok(checked > 700, `${checked} leagues checked`);
+  // Magnezone (a family of one) at level 40 is past the Great League cap: nothing fits, so the experimental pick is the shown pick.
+  const all = rawOf(entry('Magnezone', { ivs: { atk: 2, def: 5, hp: 11 }, level: 40 })).gl;
+  assert.ok(all.options.every((o) => o.overCap));
+  assert.equal(all.experimental, all.pick);
 });
