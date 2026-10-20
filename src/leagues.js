@@ -28,7 +28,7 @@ const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'mal
 //
 // SHOWN pick (`pokeGeniePick`): copies Poke Genie, which is what Greg's family and friends use and trust. PROVISIONAL: fitted
 // against fixtures/greg-2026-09-25.pokegenie.csv and checked only on it, so the agreement figures are IN-SAMPLE (test/leagues.test.js
-// prints them: currently 271/280 Great and 300/306 Ultra rows where the export names a pick; the cost checks count the 278 and 304
+// prints them: currently 272/280 Great and 300/306 Ultra rows where the export names a pick; the cost checks count the 278 and 304
 // rows with an exact level, a different subset). The test floors are regression pins, not evidence it generalises; do not overfit.
 // The misses are not only near-ties where Poke Genie prefers the later evolution (Fidough -> Dachsbun, Gossifleur -> Eldegoss):
 // Crocalor stays Crocalor where Poke Genie picks Skeledirge, and Magmar becomes Magmortar where Poke Genie keeps Magmar. Fitting the
@@ -57,8 +57,9 @@ export const CLOSE_SCORE = 3.0;
 /**
  * The shown pick's emulation of Poke Genie (steps 2 and 3 above). `members` = [{ id, depth, score, iv, overCap }] for every allowed
  * member: score = PvPoke score or null when unranked; iv = ivRank() result or null (unknown IVs, or the member cannot fit under
- * the cap); overCap = this copy's CP at its current level (0/0/0 when its IVs are unknown) already exceeds the league's cap as that member. Returns the member, or null when
- * the IVs are unknown and nothing is ranked (the caller then takes the final evolution).
+ * the cap); overCap = this copy's CP at its current level (0/0/0 when its IVs are unknown) already exceeds the league's cap as that member.
+ * Returns the member, or null when the score rule has no ranked member to choose among the ones that fit (nothing ranked, or every ranked
+ * member is over the cap): the caller then takes the final evolution if it fits, else the first member that fits (source 'fallback').
  */
 export function pokeGeniePick(members) {
   const rated = members.filter((m) => m.iv);
@@ -132,8 +133,7 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
  * CLOSE_SCORE rule's member (not shown); they may be the same index. `experimental` is never a member the copy is already past the
  * cap for, unless every member is, and then it is the shown pick. `source` says how `pick` was decided: 'export' = Poke Genie's own
  * pick from the entry, 'emulated' = the stat-product emulation (Great and Ultra only), 'ranked' = the highest PvPoke score (Master
- * League, or unknown IVs), 'fallback' = the PvPoke-score rule applied (Master League, or unknown IVs) and no member of the family is ranked
- * here, so the final evolution. A copy with known IVs in Great or Ultra League and nothing ranked is still 'emulated'.
+ * League, or unknown IVs), 'fallback' = the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). A copy with known IVs in Great or Ultra League and nothing ranked is still 'emulated'.
  * Option = { speciesId, name, self, genderLocked?, strength, moves, needs, iv, overCap, cost }:
  *   speciesId, name: the member (the _shadow id and name where the entry is a Shadow and PvPoke ranks the Shadow);
  *   self: it is the Pokémon itself; genderLocked: 'male'|'female', only when the sex is unknown and one sex can become it;
@@ -141,7 +141,8 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
  *   moves: { fast, charged[] } on the SHOWN and the EXPERIMENTAL option only when PvPoke ranks them, else null (trimmed to keep the payload small); needs: the recommended moves this copy lacks, only on the Pokémon itself, else null;
  *   iv: { rank, pct, rankPct, level, cp } for this copy's IVs as this member, or null (unknown IVs or cannot fit under the cap);
  *   overCap: this copy's CP at its current level (0/0/0 if its IVs are unknown) already exceeds the cap as the member (never when the level is unknown, or in Master League); cost: dust/candy/xl to that level plus the
- *   candy to evolve there (evolveCandy), or null (no IVs, no level, over the cap).
+ *   candy to evolve there (evolveCandy), or null (no IVs, no level, over the cap). A copy whose best level is BELOW its current one (a
+ *   level-51 Best Buddy copy, in any league) costs nothing to power up: dust/candy/xl 0, toLevel its best level, evolveCandy still due.
  * Options are every allowed family member: ranked ones first (score, then Rank %, then later evolution), then unranked ones
  * (later evolution first). Unreleased members are left out unless the whole family is unreleased.
  */
@@ -204,8 +205,9 @@ export function leaguesFor(entry, resolved, ctx) {
       const ivOut = iv && { rank: iv.rank, pct: iv.pct, rankPct: iv.rankPct, level: iv.level, cp: iv.cp };
       const overCap = overCapOf(base);
       let cost = null;
-      // A best level below the current one (a level-51 Best Buddy copy that still fits the cap) leaves nothing to build towards.
-      if (iv && level != null && !overCap && (league === 'ml' || iv.level >= level)) {
+      // A best level below the current one (a level-51 Best Buddy copy, in any league) leaves nothing to power up, so the cost is the
+      // same zero as for a copy already at its best level (powerUpCost goes backwards to nothing), with the evolution candy still due.
+      if (iv && level != null && !overCap) {
         const flags = { shadow: entry.shadow, purified: entry.purified, lucky: entry.lucky };
         const up = powerUpCost(level, iv.level, flags);
         const path = evolutionPath(gm, start, base) ?? [];

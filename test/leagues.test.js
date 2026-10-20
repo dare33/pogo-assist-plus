@@ -73,9 +73,9 @@ test('acceptance: IV rank, stat product and Rank % match every exact-IV row of t
   assert.deepEqual(bad, []);
 });
 
-// Regression pins (not evidence it generalises: the fixture is the data it was fitted on) for the emulation of Poke Genie's pick, measured WITHOUT reading the export's pick: currently 271/280 Great and 300/306 Ultra rows (the 270/278 and 298/304 counted earlier were the
+// Regression pins (not evidence it generalises: the fixture is the data it was fitted on) for the emulation of Poke Genie's pick, measured WITHOUT reading the export's pick: currently 272/280 Great and 300/306 Ultra rows (the 270/278 and 298/304 counted earlier were the
 // cost-check subsets, a different row count; the printed report is the reference). A drop below these means the emulation, the IV rank or the family walk changed.
-const EMULATION_FLOOR = { gl: 271, ul: 300 };
+const EMULATION_FLOOR = { gl: 272, ul: 300 };
 
 test('report: pick agreement with Poke Genie (emulated without its pick, and the experimental rule), cost agreement, ranking convention', () => {
   const lines = [];
@@ -703,7 +703,7 @@ test('a level 51 Best Buddy copy is over the cap only if its CP at 51 is: Cramor
   for (const [name, id] of [['Cramorant', 'cramorant'], ['Seaking', 'seaking']]) {
     const o = ul(name).options.find((x) => x.speciesId === id);
     assert.equal(o.overCap, false, name);
-    assert.equal(o.cost, null, `${name}: its best level (50) is below the current one, so there is nothing to build towards`);
+    assert.deepEqual(o.cost, { dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 50 }, `${name}: its best level (50) is below the current one, so nothing is left to pay`);
   }
   assert.equal(ul('Talonflame').options.find((x) => x.speciesId === 'talonflame').overCap, true);
   // The same CP rule at level 50 and below.
@@ -735,4 +735,30 @@ test('the shown pick is never a member the copy is past the cap for while anothe
     }
   }
   assert.ok(checked > 1500, `${checked} leagues checked`);
+});
+
+test('a CP exactly at the cap fits; one point over does not', () => {
+  // Find a single-stage species and a level whose CP with 15/15/15 is exactly the Great League cap (1500), then one whose CP is 1501+.
+  const hundo = { atk: 15, def: 15, hp: 15 };
+  let exact = null;
+  for (const s of gm.species ?? [...gm.byId.values()]) {
+    if (!s.baseStats || evolutionsOf(gm, s.speciesId).length || s.speciesId.includes('_')) continue;
+    for (let level = 1; level <= 50 && !exact; level += 0.5) if (cpAt(s.baseStats, hundo, level) === 1500) exact = { id: s.speciesId, name: s.speciesName, level };
+    if (exact) break;
+  }
+  assert.ok(exact, 'no species reaches exactly 1500 CP at some level with 15/15/15');
+  const at = rawOf(entry(exact.name, { ivs: hundo, level: exact.level })).gl.options.find((o) => o.speciesId === exact.id);
+  assert.equal(at.overCap, false);
+  const over = rawOf(entry(exact.name, { ivs: hundo, level: exact.level + 0.5 })).gl.options.find((o) => o.speciesId === exact.id);
+  assert.equal(over.overCap, cpAt(gm.byId.get(exact.id).baseStats, hundo, exact.level + 0.5) > 1500);
+});
+
+test("'fallback' also covers ranked members that are all past the cap: a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League", () => {
+  const ul = rawOf(entry('Bulbasaur', { ivs: null, level: 50 })).ul;
+  const ranked = ul.options.filter((o) => o.strength);
+  assert.ok(ranked.length && ranked.every((o) => o.overCap), 'every ranked member is past the cap');
+  assert.equal(ul.source, 'fallback');
+  assert.equal(shownOf(ul).overCap, false);
+  assert.equal(shownOf(ul).speciesId, 'ivysaur');
+  assert.equal(shownOf(ul).strength, null);
 });
