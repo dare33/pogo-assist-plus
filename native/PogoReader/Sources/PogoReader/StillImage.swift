@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import ImageIO
+import PogoImport
 
 public enum StillImageError: Error, Equatable, CustomStringConvertible {
     /// ImageIO cannot decode it (not an image, truncated, or an encoding this system does not read).
@@ -24,9 +25,9 @@ public enum StillImageError: Error, Equatable, CustomStringConvertible {
 /// Orientation is applied (a screenshot is upright already; a photo may carry an EXIF turn), and an image longer than `maxLongSide` is scaled down while it is
 /// decoded, never up, so a 48 MP picture costs the same memory as a screenshot. Alpha is dropped (drawn over black; a screenshot has none).
 public enum StillImage {
-    public static let maxLongSide = 4096
+    public static let maxLongSide = ImageNormalising.maxLongSide
     /// A Pokémon GO detail screen is never read below this on its short side: the CP text would be a few pixels high.
-    public static let minShortSide = 300
+    public static let minShortSide = ImageNormalising.minShortSide
 
     public static func decode(contentsOf url: URL) throws -> RGBAImage {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { throw StillImageError.cannotDecode }
@@ -38,24 +39,8 @@ public enum StillImage {
         return try decode(source: src)
     }
 
-    /// The upright, size-limited image ImageIO makes of the first frame of a source (no pixels are converted yet).
-    public static func uprightImage(from src: CGImageSource) -> CGImage? {
-        guard CGImageSourceGetCount(src) > 0 else { return nil }
-        // The longest side of the stored image decides the limit: a smaller image is not enlarged (the thumbnail size is a ceiling).
-        var limit = maxLongSide
-        if let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
-           let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int { limit = min(maxLongSide, max(w, h)) }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: limit,
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary)
-    }
-
     private static func decode(source src: CGImageSource) throws -> RGBAImage {
-        guard let cg = uprightImage(from: src), cg.width > 0, cg.height > 0 else { throw StillImageError.cannotDecode }
+        guard let cg = ImageNormalising.uprightImage(from: src), cg.width > 0, cg.height > 0 else { throw StillImageError.cannotDecode }
         guard min(cg.width, cg.height) >= minShortSide else { throw StillImageError.tooSmall(width: cg.width, height: cg.height) }
         return try rgba(from: cg)
     }
