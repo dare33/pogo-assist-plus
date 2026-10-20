@@ -185,5 +185,5 @@ test('a copy above the only area\'s target level has no target level and nothing
   assert.equal(b.targetLevel, null);
   assert.equal(b.pvpCost, null);
   assert.equal(b.cost.dust - b.cost.secondMove.dust, 0);
-  assert.equal(b.powerUpNeeded, false);
+  assert.ok(!b.steps.some((x) => x.kind === 'powerUp'));
 });

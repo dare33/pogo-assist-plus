@@ -52,11 +52,8 @@ function render() {
 
 function renderBuilds() {
   const rows = result.builds.map((b, i) => {
-    const what = (b.targetId === b.speciesId ? actionText(b) : `${b.formChange ? 'Form change to' : 'Evolve to'} <strong>${esc(b.targetName)}</strong>`) + (b.viaMega ? ' + Mega' : '');
+    const what = esc(actionText(b)); // every step still to do: evolve, Mega, power up, second move, Elite TM, Community Day move, Dynamax copy
     const flags = [
-      b.needsDynamax ? '<span class="flag flag-warn">Max needs a Dynamax copy</span>' : '',
-      b.moveFlags.elite ? `<span class="flag flag-bad">${b.moveFlags.elite} Elite TM</span>` : '',
-      b.moveFlags.cd ? '<span class="flag flag-warn">Community Day move</span>' : '',
       b.moveFlags.legacy ? '<span class="flag flag-locked">Legacy move</span>' : '',
       b.spares.length ? `<span class="flag flag-good">+${b.spares.length} spare</span>` : '',
     ].join('');
