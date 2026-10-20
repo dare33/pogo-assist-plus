@@ -26,7 +26,7 @@ column all word it from that list ("Evolve to Annihilape + Power up to level 16 
 cost pays for: a league-only build climbs to the cost league's best level, any other build to its highest non-league target level (areas
 tied on it are all named, "(Gym/Max)"); another league's best level is never a step, only a note when the climb goes past it ("going past
 27 leaves UL"). "Already built" means nothing is left; a Dynamax requirement belongs to the Max area alone, so it reads "Already built (Max
-needs a Dynamax copy)" when that is all. The second charged move is a step (and charged) unless the copy's second charged slot is already
+needs a Dynamax copy)" when that is all (a build for Max alone reads "Needs a Dynamax copy"). The second charged move is a step (and charged) unless the copy's second charged slot is already
 unlocked (Poke Genie's Charge Move 2 is filled; kept by position as `chargedMoves`); a scan records no moves, so it reads "Second move (if
 it doesn't have it)" and is still charged, as before. Elite TM and Community Day move steps are dropped when the recorded moves already hold
 the move, and Elite TMs are counted by distinct move name in the step text. The fixture records moves for one Pokémon only (a Mareep whose
