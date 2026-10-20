@@ -170,6 +170,8 @@ final class ImportModel: ObservableObject {
                 for id in next {
                     if Task.isCancelled || !gate.mayRead { break }
                     await read(batch: id)
+                    // only a batch actually dealt with is marked: the ones after a stop are still waiting to be offered
+                    if let m = try? queue.load(id) { planner.markTried(m) }
                     if (try? queue.load(id))?.isRead == false { break }   // stopped, paused or failed outright: leave it queued
                 }
             }
@@ -235,13 +237,22 @@ final class ImportModel: ObservableObject {
 
     func setIncluded(batch: String, item: String, _ include: Bool) {
         let importer = self.importer
-        Task { _ = try? await serial { try importer.setIncluded(batch: batch, item: item, include) }; refresh() }
+        Task {
+            do { _ = try await serial { try importer.setIncluded(batch: batch, item: item, include) } } catch { notice = AppModel.plain(error) }
+            refresh()
+        }
     }
 
     /// Throw one screenshot away (a held-back leftover, say); the batch goes with its last one.
     func discardItem(batch: String, item: String) {
         let importer = self.importer
-        Task { _ = try? await serial { try importer.discardItem(batch: batch, item: item) }; refresh(); if batches.isEmpty { app.sheet = nil } }
+        Task {
+            do { _ = try await serial { try importer.discardItem(batch: batch, item: item) } } catch { notice = AppModel.plain(error) }
+            refresh()
+            if batches.isEmpty { app.sheet = nil }
+            else if readerTask != nil { planner.requestRescan() }   // what was a copy of it can be read now, as when a whole batch is discarded
+            else { startReading() }
+        }
     }
 
     func assign(batch: String, to account: String) {
@@ -255,7 +266,7 @@ final class ImportModel: ObservableObject {
     func discard(batch: String) {
         let importer = self.importer
         Task {
-            try? await serial { try importer.discard(batch: batch) }
+            do { try await serial { try importer.discard(batch: batch) } } catch { notice = AppModel.plain(error) }
             refresh()
             if batches.isEmpty { app.sheet = nil }
             else if readerTask != nil { planner.requestRescan() }   // the reader is running: it goes round once more before it stops

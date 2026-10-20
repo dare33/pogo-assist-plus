@@ -72,7 +72,11 @@ private struct BatchSection: View {
 
     var body: some View {
         Section {
-            accountRow
+            if batch.pendingSave != nil {
+                Label("Finishing the last save…", systemImage: "hourglass").foregroundStyle(.secondary).accessibilityIdentifier("import-finishing")
+            } else {
+                accountRow
+            }
             if working, let r = imports.reading {
                 VStack(alignment: .leading, spacing: 6) {
                     ProgressView(value: Double(r.done), total: Double(max(r.total, 1)))
@@ -136,7 +140,7 @@ private struct BatchSection: View {
         let held = batch.heldBack.count
         let noIVs = batch.items.filter { $0.state == .ivsMissing }.count
         let other = batch.items.filter { $0.state == .unsupported || $0.state == .unreadable || $0.state == .failed }.count
-        var parts = ["\(added) Pokémon can be added"]
+        var parts = ["\(ReviewFormat.count(added, "screenshot", "screenshots")) ready to review"]
         if held > 0 { parts.append("\(held) held back for your say") }
         if copies > 0 { parts.append("\(copies) the same screenshot as another") }
         if noIVs > 0 { parts.append("\(noIVs) without IVs") }
@@ -147,7 +151,7 @@ private struct BatchSection: View {
     }
 
     @ViewBuilder private var actions: some View {
-        let ready = batch.isRead && !working && imports.preparing == nil
+        let ready = batch.isRead && !working && imports.preparing == nil && batch.pendingSave == nil
         if ready, batch.items.contains(where: \.canRetry) {
             Button("Try the failed ones again") { imports.retry(batch: batch.batchId) }
         }
@@ -160,7 +164,7 @@ private struct BatchSection: View {
         .disabled(!ready || n == 0 || { if case .account = owner { return false } else { return true } }())
         .accessibilityIdentifier("import-review")
         Button("Discard these screenshots", role: .destructive) { discarding = batch.batchId }
-            .disabled(working)
+            .disabled(working || batch.pendingSave != nil)
     }
 }
 
