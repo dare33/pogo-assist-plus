@@ -133,8 +133,8 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
  * Option = { speciesId, name, self, genderLocked?, strength, moves, needs, iv, overCap, cost }:
  *   speciesId, name: the member (the _shadow id and name where the entry is a Shadow and PvPoke ranks the Shadow);
  *   self: it is the Pokémon itself; genderLocked: 'male'|'female', only when the sex is unknown and one sex can become it;
- *   strength: { score, rank, of } from PvPoke, or null when PvPoke does not rank it in this league (then moves is null too);
- *   moves: { fast, charged[] } | null; needs: the recommended moves this copy lacks, only on the Pokémon itself, else null;
+ *   strength: { score, rank, of } from PvPoke, or null when PvPoke does not rank it in this league;
+ *   moves: { fast, charged[] } on the SHOWN and the EXPERIMENTAL option only when PvPoke ranks them, else null (trimmed to keep the payload small); needs: the recommended moves this copy lacks, only on the Pokémon itself, else null;
  *   iv: { rank, pct, rankPct, level, cp } for this copy's IVs as this member, or null (unknown IVs or cannot fit under the cap);
  *   overCap: this copy's level is already past the league's best level for the member; cost: dust/candy/xl to that level plus the
  *   candy to evolve there (evolveCandy), or null (no IVs, no level, over the cap).
@@ -246,7 +246,10 @@ export function leaguesFor(entry, resolved, ctx) {
     let expBase = win && fits(win.id) ? win.id : null;
     if (!expBase && !win && fits(finalEvolution)) expBase = finalEvolution; // nothing ranked at all: the final evolution
     if (!expBase) expBase = fits(pickBase) ? pickBase : (shown.find((m) => !m.overCap)?.base ?? pickBase);
-    out[league] = { options, pick: indexOf(pickBase), experimental: indexOf(expBase), source };
+    const pick = indexOf(pickBase), experimental = indexOf(expBase);
+    // Moves are about a third of an option's bytes and only the shown and the experimental member are ever displayed with them.
+    options.forEach((o, i) => { if (i !== pick && i !== experimental) o.moves = null; });
+    out[league] = { options, pick, experimental, source };
   }
   return out;
 }

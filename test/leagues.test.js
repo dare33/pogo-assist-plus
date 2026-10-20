@@ -671,3 +671,15 @@ test('experimental is never a member the copy is already too strong for; only a 
   assert.ok(all.options.every((o) => o.overCap));
   assert.equal(all.experimental, all.pick);
 });
+
+test('moves are carried only on the shown and the experimental option', () => {
+  const L = rawOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, level: 17 }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    const l = L[league];
+    l.options.forEach((o, i) => {
+      if (i === l.pick || i === l.experimental) assert.ok(o.strength ? o.moves : o.moves === null, `${league} ${o.speciesId}`);
+      else assert.equal(o.moves, null, `${league} ${o.speciesId}`);
+    });
+    assert.ok(l.options.filter((o) => o.moves).length <= 2);
+  }
+});
