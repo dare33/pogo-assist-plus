@@ -148,7 +148,7 @@ public struct BoxAdvice: Codable, Equatable {
         public var pickIndex: Int
         /// Index into `options` of the experimental member (may equal `pickIndex`).
         public var experimentalIndex: Int
-        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (nothing in the family is ranked: the final evolution).
+        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the score rule ran, Master League or IVs unknown, and no member is ranked: the final evolution).
         public var source: String
 
         private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source }
@@ -167,7 +167,11 @@ public struct BoxAdvice: Codable, Equatable {
             let options = try c.decode([Option].self, forKey: .options)
             let pick = try c.decode(Int.self, forKey: .pickIndex)
             guard options.indices.contains(pick) else { throw DecodingError.dataCorruptedError(forKey: .pickIndex, in: c, debugDescription: "pick is not an index of options") }
-            self.init(options: options, pick: pick, experimental: try c.decodeIfPresent(Int.self, forKey: .experimentalIndex), source: try c.decodeIfPresent(String.self, forKey: .source) ?? "ranked")
+            // Odd experimental or source values are not fatal, exactly as in `decode(_:)`: an experimental index that is missing, not a whole
+            // number or out of range is the shown pick, and a source that is missing or not a string is "ranked".
+            let experimental = (try? c.decodeIfPresent(Int.self, forKey: .experimentalIndex)).flatMap { $0 }.flatMap { options.indices.contains($0) ? $0 : nil }
+            let source = (try? c.decodeIfPresent(String.self, forKey: .source)).flatMap { $0 } ?? "ranked"
+            self.init(options: options, pick: pick, experimental: experimental, source: source)
         }
 
         /// A whole number that fits an Int, or nil (NaN, infinite, fractional or huge values: `Int(_:)` would trap on them).

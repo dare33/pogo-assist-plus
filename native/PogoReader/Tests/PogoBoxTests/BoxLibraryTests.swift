@@ -272,6 +272,35 @@ final class BoxLibraryTests: XCTestCase {
         }
     }
 
+    /// The two league readers (the cache's Codable one and the engine-JSON one) must give the same answer on odd league-level shapes.
+    func testLeagueReadersAgreeOnOddShapes() throws {
+        let good = #"{"speciesId":"a","name":"a","self":false,"strength":null,"moves":null,"needs":null,"iv":null,"overCap":false,"cost":null}"#
+        let other = good.replacingOccurrences(of: #""a""#, with: #""b""#)
+        func rating(_ tail: String) -> (json: BoxAdvice.LeagueRating?, codable: BoxAdvice.LeagueRating?) {
+            let text = #"{"options":[\#(good),\#(other)],\#(tail)}"#
+            let value = try! JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+            return (BoxAdvice.LeagueRating.decode(value), try? JSONDecoder().decode(BoxAdvice.LeagueRating.self, from: Data(text.utf8)))
+        }
+        let cases = [
+            #""pick":1,"experimental":0,"source":"export""#,
+            #""pick":1,"source":"export""#,
+            #""pick":1,"experimental":5,"source":"export""#, #""pick":1,"experimental":-1,"source":"export""#,
+            #""pick":1,"experimental":1.5,"source":"export""#, #""pick":1,"experimental":1e300,"source":"export""#,
+            #""pick":1,"experimental":"0","source":"export""#, #""pick":1,"experimental":null,"source":"export""#,
+            #""pick":1,"experimental":0,"source":7"#, #""pick":1,"experimental":0,"source":null"#, #""pick":1,"experimental":0"#,
+            #""pick":2,"experimental":0,"source":"export""#, #""pick":1.5,"source":"export""#, #""pick":"1","source":"export""#, #""pick":1e300"#,
+        ]
+        for tail in cases {
+            let (a, b) = rating(tail)
+            XCTAssertEqual(a, b, tail)
+        }
+        // The values themselves, not only the agreement.
+        XCTAssertEqual(rating(#""pick":1,"experimental":1.5,"source":7"#).json?.experimentalIndex, 1)
+        XCTAssertEqual(rating(#""pick":1,"experimental":1.5,"source":7"#).json?.source, "ranked")
+        XCTAssertEqual(rating(#""pick":1,"experimental":0,"source":"export""#).json?.experimentalIndex, 0)
+        XCTAssertNil(rating(#""pick":2"#).json)
+    }
+
     func testLeagueSentences() {
         typealias R = BoxAdvice.LeagueRating
         typealias O = R.Option
