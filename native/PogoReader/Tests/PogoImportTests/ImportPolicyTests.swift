@@ -18,15 +18,17 @@ final class ImportPolicyTests: XCTestCase {
         var gate = ReadingGate()
         XCTAssertTrue(gate.mayRead)
         XCTAssertFalse(gate.scenePhaseChanged(background: false), "active when it already was: nothing to restart")
-        gate.scenePhaseChanged(background: true)
+        XCTAssertFalse(gate.scenePhaseChanged(background: true), "leaving: nothing to start")
         XCTAssertFalse(gate.mayRead)
-        // something else looking at the queue while backgrounded (a review ending) has no way to lift it: only the scene phase does
+        XCTAssertFalse(gate.scenePhaseChanged(background: true), "still in the background")
         XCTAssertFalse(gate.mayRead)
         XCTAssertTrue(gate.scenePhaseChanged(background: false), "back in front: start again")
         XCTAssertTrue(gate.mayRead)
+        XCTAssertFalse(gate.scenePhaseChanged(background: false), "already reading: no second start")
         gate.timeExpired()
         XCTAssertFalse(gate.mayRead, "the system took the time away mid-read")
-        XCTAssertTrue(gate.scenePhaseChanged(background: false))
+        XCTAssertTrue(gate.scenePhaseChanged(background: false), "and only coming back starts it again")
+        XCTAssertFalse(gate.scenePhaseChanged(background: false))
     }
 
     // MARK: a pick that is cancelled

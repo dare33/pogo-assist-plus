@@ -238,16 +238,20 @@ public final class BoxStore {
     private func appendHistory(old: String, new: String) {
         var all = (try? Data(contentsOf: historyURL)).flatMap { try? JSONDecoder().decode([[String]].self, from: $0) } ?? []
         // The history keeps only the last 50 renames, so a position in it is not a stable number: `renameSequence` counts every rename ever recorded and never goes down.
-        var total = renameSequence ?? all.count
+        // A counter that cannot be read must not send the sequence backwards (a stamp already made would then point at the wrong place): it restarts a million above anything the history
+        // can say, so every earlier stamp is older than the oldest rename on record and is asked about. The counter is written BEFORE the history: a failure between the two leaves it one
+        // too high, which also only makes stamps look older (asked about), never newer.
+        var total = renameSequence ?? (all.count + Self.counterRecoveryJump)
         if all.last != [old, new] { all.append([old, new]); total += 1 }
         try? Data(String(total).utf8).write(to: sequenceURL, options: .atomic)
         try? JSONEncoder().encode(Array(all.suffix(50))).write(to: historyURL, options: .atomic)
     }
 
+    static let counterRecoveryJump = 1_000_000
     private var sequenceURL: URL { root.appendingPathComponent(".renames-recorded") }
     /// How many renames have ever been recorded (nil: the record cannot be read). Absent counter: the length of the history (a store from before the counter).
     var renameSequence: Int? {
-        if let data = try? Data(contentsOf: sequenceURL) { return Int(String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) }
+        if let data = try? Data(contentsOf: sequenceURL) { return Int(String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0 >= 0 ? $0 : nil } }
         guard fm.fileExists(atPath: historyURL.path) else { return 0 }
         guard let data = try? Data(contentsOf: historyURL), let all = try? JSONDecoder().decode([[String]].self, from: data) else { return nil }
         return all.count
@@ -316,7 +320,7 @@ public final class BoxStore {
             guard let data = try? Data(contentsOf: historyURL), let decoded = try? JSONDecoder().decode([[String]].self, from: data) else { return .unknown }
             all = decoded
         }
-        guard let total = renameSequence else { return .unknown }
+        guard let total = renameSequence else { return .indeterminate }   // the counter cannot be read: nothing can be followed, so the person is asked
         let first = max(0, total - all.count)   // the position, in all renames ever, of the first one still held
         if since < first { return .indeterminate }
         var name = recorded, moved = false

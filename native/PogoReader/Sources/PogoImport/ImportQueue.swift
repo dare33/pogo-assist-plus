@@ -50,6 +50,8 @@ public struct ImportQueue {
     public let root: URL
     /// A test lowers it.
     public var maxQueuedBytes = ImportQueue.defaultMaxQueuedBytes
+    /// Tests: runs at the start of every ledger write and may throw.
+    public var ledgerFailure: (() throws -> Void)?
     private var fm: FileManager { .default }
 
     public init(root: URL) { self.root = root }
@@ -274,6 +276,8 @@ public struct ImportLedger: Codable, Equatable {
         public var savedAt: Date
         /// How many renames the box had recorded when this was saved, so the account name can be followed to what it is called now (nil: an older entry, taken by name).
         public var epoch: Int?
+        /// The account folder's birth date when this was saved: an account made again under the same name is another account and does not inherit what was saved into the old one.
+        public var born: Double?
     }
     public var version = 1
     public var entries: [Entry] = []
@@ -297,11 +301,12 @@ extension ImportQueue {
     }
 
     /// Remember that these items were saved into `account`. Called after the box write succeeded; a failure here only means the same screenshot is not recognised later.
-    public func recordSaved(_ items: [ImportItem], batchId: String, account: String, epoch: Int? = nil, now: Date = Date()) throws {
+    public func recordSaved(_ items: [ImportItem], batchId: String, account: String, epoch: Int? = nil, born: Double? = nil, now: Date = Date()) throws {
+        try ledgerFailure?()
         var l = ledger()
         l.entries.removeAll { now.timeIntervalSince($0.savedAt) > ImportLedger.keepFor }
         let known = Set(l.entries.filter { $0.account == account }.map(\.key))
-        for item in items { for k in item.keys where !known.contains(k) { l.entries.append(.init(account: account, key: k, batchId: batchId, savedAt: now, epoch: epoch)) } }
+        for item in items { for k in item.keys where !known.contains(k) { l.entries.append(.init(account: account, key: k, batchId: batchId, savedAt: now, epoch: epoch, born: born)) } }
         if l.entries.count > ImportLedger.maxEntries { l.entries.removeFirst(l.entries.count - ImportLedger.maxEntries) }
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
@@ -349,9 +354,11 @@ extension ImportQueue {
             }
             gone = m.items.filter { !keep.contains($0.id) }
             m.items = m.items.filter { keep.contains($0.id) }
-            // A held-back repeat whose first screenshot was just saved is no longer a repeat of anything in the batch: whether it is that Pokémon (an exact match, unchanged), a power-up
-            // or something new is the box merge's to say (`BoxMerge`, as for Auto Scan), so the hold is lifted rather than left pointing at a screenshot that is gone.
-            for i in m.items.indices { if let r = m.items[i].repeatOf, saved.contains(r) { m.items[i].repeatOf = nil } }
+            // A hold on a repeat is lifted whenever the screenshot it was a repeat of is no longer in the batch, whether it was saved or left out (an unsure row answered "leave it out"):
+            // a hold pointing at a screenshot that is gone can never be answered. What the repeat is, then, is the box merge's to say (an exact match to a saved Pokémon is that
+            // Pokémon, unchanged; a power-up is a question), as for Auto Scan.
+            let kept = Set(m.items.map(\.id))
+            for i in m.items.indices { if let r = m.items[i].repeatOf, !kept.contains(r) { m.items[i].repeatOf = nil } }
             m.generation += 1
             m.pendingSave = nil
             if m.items.isEmpty { m.savedAt = now }

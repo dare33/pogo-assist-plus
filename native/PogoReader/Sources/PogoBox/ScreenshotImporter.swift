@@ -70,11 +70,17 @@ public final class ScreenshotImporter {
     /// account renamed away and a new one given its old name are told apart by asking the person (`.ambiguous`). Never the account that happens to be selected.
     public func owner(of m: ImportManifest) -> Owner {
         guard let recorded = m.account else { return .unassigned }
-        switch library.store.resolveAccount(recorded, since: m.renameMark) {
+        // A batch that was never stamped with the renames and the account's birth date (a share the app has not looked at yet) is trusted only while its name is still an account's own:
+        // it is never followed through renames to some other account without asking.
+        guard let mark = m.renameMark, m.accountBorn != nil else {
+            if case .found(let n) = library.store.lookupAccount(recorded), n == recorded { return .account(recorded) }
+            return .unconfirmed(name: recorded, why: "These screenshots were queued for \(recorded), which is not an account on this phone under that name. Choose which box they belong to.")
+        }
+        switch library.store.resolveAccount(recorded, since: mark) {
         case .found(let name):
             // A folder made again under the same name is another account, even though no rename happened.
             if let born = m.accountBorn, let now = library.store.accountCreated(name), abs(now - born) > 0.001 {
-                return .unconfirmed(name: name, why: "The account \(name) was deleted and made again since these screenshots were queued, so they may belong to another box. Choose which one.")
+                return .unconfirmed(name: name, why: "The box called \(name) looks different from when these screenshots were queued. Which box should they go into?")
             }
             return .account(name)
         case .indeterminate: return .unconfirmed(name: recorded, why: "It is too long since these screenshots were queued to tell what has happened to the account \(recorded) since. Choose which box they belong to.")
@@ -87,41 +93,62 @@ public final class ScreenshotImporter {
     /// Give the batch to an account that exists (a share made before the first account, or an account that has gone). Refused for one that does not.
     @discardableResult
     public func assign(batch: String, to account: String) throws -> ImportManifest {
-        guard case .found(let name) = library.store.lookupAccount(account), let mark = library.store.renameCount else { throw Failure.accountGone(account) }
+        guard case .found(let name) = library.store.lookupAccount(account) else { throw Failure.accountGone(account) }
+        guard let mark = library.store.renameCount else { throw Failure.accountUnknown }   // the rename record cannot be read: not "gone"
         let born = library.store.accountCreated(name)
-        return try queue.update(batch) { $0.account = name; $0.renameMark = mark; $0.accountBorn = born }   // bound again, to this account, as the renames stand now
+        try queue.update(batch) { $0.account = name; $0.renameMark = mark; $0.accountBorn = born }   // bound again, to this account, as the renames stand now
+        return try prepare(batch: batch)   // copies and already-imported marks are worked out again against the account chosen
     }
 
     // MARK: reading
 
-    /// Before a batch is read: mark the screenshots that are copies of others, and of earlier saved imports.
+    /// What a ledger entry's account is called now, or nil when that cannot be said: its name followed through the renames since it was saved, and only if the folder is the one it was saved into.
+    private func ledgerOwner(_ e: ImportLedger.Entry) -> String? {
+        guard case .found(let name) = library.store.resolveAccount(e.account, since: e.epoch) else { return nil }
+        if let born = e.born, let now = library.store.accountCreated(name), abs(now - born) > 0.001 { return nil }
+        return name
+    }
+
+    /// Before a batch is read: mark the screenshots that are copies of others, and of earlier saved imports; give a share the rename sequence and the account's birth date the first time
+    /// the app sees it; drop a hold on a repeat of a screenshot that is no longer there; and, given the engine, work the repeats out again for a batch that has been read in full.
     @discardableResult
-    public func prepare(batch: String) throws -> ImportManifest {
+    public func prepare(batch: String, engine: CoreEngine? = nil) throws -> ImportManifest {
         let store = library.store
-        try queue.markDuplicates(batch, owner: { [unowned self] in self.owner(of: $0).name }, ledgerAccount: { e in
-            // What the entry's account is called now; an entry whose account name has become ambiguous or gone is not counted.
-            if case .found(let name) = store.resolveAccount(e.account, since: e.epoch) { return name }
-            return nil
-        })
-        // A share is bound to its account's rename history when the app first sees it.
-        if let m = try? queue.load(batch), m.renameMark == nil, let a = m.account, let mark = store.renameCount {
+        // Stamped first, so everything below compares by the account the batch really belongs to.
+        if let m = try? queue.load(batch), m.renameMark == nil || m.accountBorn == nil, let a = m.account, case .found(let n) = store.lookupAccount(a), n == a, let mark = store.renameCount {
             let born = store.accountCreated(a)
-            try queue.update(batch) { $0.renameMark = mark; $0.accountBorn = $0.accountBorn ?? born }
+            try queue.update(batch) { $0.renameMark = $0.renameMark ?? mark; $0.accountBorn = $0.accountBorn ?? born }
         }
+        try queue.markDuplicates(batch, owner: { [unowned self] in self.owner(of: $0).name }, ledgerAccount: { [unowned self] in self.ledgerOwner($0) })
         // A screenshot that was passed over as a copy of one in another batch and is not a copy any more (that batch was discarded) was never read: it is read now.
-        return try queue.update(batch) { m in
+        var m = try queue.update(batch) { m in
             for i in m.items.indices where m.items[i].duplicateOf == nil && m.items[i].state == .read && m.items[i].reading == nil {
                 m.items[i].state = .pending; m.items[i].detail = nil; m.items[i].attempts = 0
             }
+            let ids = Set(m.items.map(\.id))
+            for i in m.items.indices { if let r = m.items[i].repeatOf, !ids.contains(r) { m.items[i].repeatOf = nil } }
         }
+        if let engine, m.isRead { m = try markRepeats(m, engine: engine) }
+        return m
     }
 
     /// `prepare` for every queued batch, returning those that now have something to read. A batch whose screenshots were all copies of another queued batch's is read as soon as that
-    /// batch is discarded or saved, with nobody having to ask.
-    public func prepareAll() throws -> [ImportManifest] {
-        try queue.list().manifests.compactMap { m in
-            guard let p = try? prepare(batch: m.batchId) else { return nil }
+    /// batch is discarded or saved, with nobody having to ask. Saves whose clean-up could not be finished are finished first (`completeInterruptedSaves`).
+    public func prepareAll(engine: CoreEngine? = nil) throws -> [ImportManifest] {
+        completeInterruptedSaves()
+        return try queue.list().manifests.compactMap { m in
+            guard let p = try? prepare(batch: m.batchId, engine: engine) else { return nil }
             return p.isRead && p.account != nil ? nil : p
+        }
+    }
+
+    /// A batch whose save reached the box but whose ledger entry or clean-up did not (the ledger write failed, or the app ended): finished from what the save wrote down. The save itself is
+    /// never repeated.
+    public func completeInterruptedSaves() {
+        for m in ((try? queue.list().manifests) ?? []) {
+            guard let ids = m.pendingSave, case .account(let account) = owner(of: m) else { continue }
+            guard library.scanAlreadySaved(account: account, signature: m.signature) == .saved else { continue }
+            _ = finish(account: account, manifest: m, saved: ids, now: Date())
         }
     }
 
@@ -332,13 +359,20 @@ public final class ScreenshotImporter {
     }
 
     /// After a save (or the discovery that one was made): remember the screenshots that were saved, then keep only what still needs the person and remove the rest of the batch
-    /// (`ImportQueue.retire`). `saved` is what was written down before the box was written; nil (no such record) saves nothing in the ledger and keeps every screenshot, which can
-    /// only make the person look at them again. Neither failing undoes the save; a removal cut off is finished by `cleanup`.
-    private func finish(_ p: Prepared, saved: [String]?, now: Date) {
-        let m = p.manifest
+    /// (`ImportQueue.retire`). `saved` is what was written down before the box was written; nil (no such record, a save made before it existed) records nothing in the ledger and retires the
+    /// batch with nothing marked saved, which keeps only what still needs the person. If the ledger cannot be written the batch is NOT retired: it keeps its `pendingSave`, and
+    /// `completeInterruptedSaves` tries again at the next look at the queue (the box save is done and is never repeated). A removal cut off is finished by `cleanup`.
+    private func finish(_ p: Prepared, saved: [String]?, now: Date) { _ = finish(account: p.account, manifest: p.manifest, saved: saved, now: now) }
+
+    @discardableResult
+    private func finish(account: String, manifest m: ImportManifest, saved: [String]?, now: Date) -> Bool {
         let ids = Set(saved ?? [])
-        if let account = m.account, !ids.isEmpty { try? queue.recordSaved(m.items.filter { ids.contains($0.id) }, batchId: m.batchId, account: account, epoch: library.store.renameCount, now: now) }
+        if !ids.isEmpty {
+            do { try queue.recordSaved(m.items.filter { ids.contains($0.id) }, batchId: m.batchId, account: account, epoch: library.store.renameCount, born: library.store.accountCreated(account), now: now) }
+            catch { return false }
+        }
         _ = try? queue.retire(m.batchId, saved: ids, now: now)
+        return true
     }
 
     /// The person threw the batch away: nothing is added and nothing is remembered.

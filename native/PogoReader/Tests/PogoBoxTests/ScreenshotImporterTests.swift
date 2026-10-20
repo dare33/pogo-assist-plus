@@ -771,4 +771,182 @@ final class ScreenshotImporterTests: XCTestCase {
         try importer.discardItem(batch: again.batchId, item: again.items[0].id)
         XCTAssertEqual(try queue.list().manifests.count, 0)
     }
+
+    // MARK: review round 3
+
+    /// 1. (the reviewer's reproduction) The source of a held-back repeat is an unsure row the person LEAVES OUT: the repeat must not stay held against a screenshot that is gone.
+    func testALeftOutSourceDoesNotLeaveItsRepeatHeldAgainstAScreenshotThatIsGone() throws {
+        let saved = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try lib.mutate(account: "Main", reason: .edit, note: "lower CP") { e in var e = e; e[0].row.cp = 3900; return e }
+        try FileManager.default.removeItem(at: queue.root.appendingPathComponent("ledger.json"))   // the box was filled some other way
+        let m = try stage([try rayquaza, try rayquazaFainted], now: Date().addingTimeInterval(5))
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(try queue.load(m.batchId).items[1].repeatOf, m.items[0].id, "held as a repeat of the first")
+        let p = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
+        let u = try XCTUnwrap(p.plan.unsure.first)
+        guard case .saved = try importer.save(p, resolutions: [u.scanned: .leaveOut], engine: sharedEngine) else { return XCTFail() }
+        let left = try queue.load(m.batchId)
+        let ids = Set(left.items.map(\.id))
+        XCTAssertFalse(left.items.contains { $0.repeatOf.map { !ids.contains($0) } ?? false }, "held back as a repeat of a screenshot that is no longer in the batch")
+        XCTAssertFalse(left.items.contains { $0.heldBack })
+    }
+
+    func testAStaleHoldIsLiftedWhenTheBatchIsLookedAt() throws {
+        let m = try stage([try rayquaza, try rayquazaFainted])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        try queue.update(m.batchId) { $0.items[1].repeatOf = "an-id-that-is-not-there" }
+        XCTAssertTrue(try queue.load(m.batchId).items[1].heldBack)
+        XCTAssertNil(try importer.prepare(batch: m.batchId).items[1].repeatOf)
+        // and with the engine, the repeat check runs again for a batch read in full: a real repeat is held again, a false one is not
+        try queue.update(m.batchId) { $0.items[1].repeatOf = nil }
+        XCTAssertEqual(try importer.prepare(batch: m.batchId, engine: sharedEngine).items[1].repeatOf, m.items[0].id)
+    }
+
+    /// 2. The refund is real: while the read is in progress the attempt is back to what it was.
+    func testRefundingAnInterruptedReadLowersTheAttemptCountOnDisk() throws {
+        let m = try stage([try nickit])
+        var before = -1, after = -1
+        importer = ScreenshotImporter(queue: queue, library: lib) { [unowned self] url, _ in
+            before = try queue.load(m.batchId).items[0].attempts
+            importer.refundInterruptedRead()
+            after = try queue.load(m.batchId).items[0].attempts
+            return try Self.vision.read(contentsOf: url)
+        }
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(before, 1); XCTAssertEqual(after, 0)
+    }
+
+    /// 3. A failed ledger write keeps the batch (with what the save wrote down) and the next look finishes it, without saving again.
+    func testAFailedLedgerWriteKeepsTheBatchAndIsRetriedWithoutSavingAgain() throws {
+        let m = try stage([try nickit, try rayquaza])
+        let p = try review(m)
+        struct DiskFull: Error {}
+        queue.ledgerFailure = { throw DiskFull() }
+        importer = makeImporter()
+        guard case .saved = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+        var kept = try queue.load(m.batchId)
+        XCTAssertNotNil(kept.pendingSave); XCTAssertEqual(kept.items.count, 2, "not retired")
+        XCTAssertTrue(queue.ledger().entries.isEmpty)
+        // the disk is fine again; the app looks at the queue
+        queue.ledgerFailure = nil
+        importer = makeImporter()
+        _ = try importer.prepareAll()
+        XCTAssertThrowsError(try queue.load(m.batchId), "retired now")
+        XCTAssertNotNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys))
+        XCTAssertEqual(try lib.history(account: "Main").count, 1, "the box was not written again")
+        kept = m
+    }
+
+    /// 4. Stamps: a batch the app has not stamped is never followed through renames to another account without asking.
+    func testAnUnstampedBatchIsNotFollowedThroughARename() throws {
+        let b = try queue.beginBatch(origin: .shareExtension, account: "Main")   // no rename mark, no birth date: a share the app has not seen
+        try b.add(data: try nickit)
+        let m = try b.commit()
+        XCTAssertEqual(importer.owner(of: m), .account("Main"), "its own name, as it stands")
+        try lib.renameAccount(from: "Main", to: "Renamed")
+        guard case .unconfirmed = importer.owner(of: try queue.load(m.batchId)) else { return XCTFail("followed the rename: \(importer.owner(of: try queue.load(m.batchId)))") }
+        // first sight stamps it while the name is still the account's own
+        let fresh = try queue.beginBatch(origin: .shareExtension, account: "Renamed"); try fresh.add(data: try rayquaza)
+        let n = try fresh.commit()
+        let stamped = try importer.prepare(batch: n.batchId)
+        XCTAssertNotNil(stamped.renameMark); XCTAssertNotNil(stamped.accountBorn)
+        try lib.renameAccount(from: "Renamed", to: "Again")
+        XCTAssertEqual(importer.owner(of: try queue.load(n.batchId)), .account("Again"), "stamped: followed")
+    }
+
+    func testSeveralRenamesAfterABatchWasBoundAreFollowedAndAReusedNameIsStillAsked() throws {
+        let m = try stage([try nickit])
+        try lib.renameAccount(from: "Main", to: "B")
+        try lib.renameAccount(from: "B", to: "C")
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .account("C"))
+        try lib.createAccount("B")
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .account("C"), "a middle name being reused does not matter: the chain ends at C")
+        try lib.createAccount("Main")
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .ambiguous(old: "Main", renamedTo: "C"), "but the name it was made for being reused does")
+    }
+
+    func testAnUnreadableRenameCounterNeverSendsTheSequenceBackAndEarlierStampsAreAsked() throws {
+        let m = try stage([try nickit])
+        for i in 0..<5 { try lib.createAccount("T\(i)"); try lib.renameAccount(from: "T\(i)", to: "U\(i)") }
+        let before = try XCTUnwrap(lib.store.renameCount)
+        try Data("garbage".utf8).write(to: dir.appendingPathComponent("boxes/.renames-recorded"))
+        XCTAssertNil(lib.store.renameCount)
+        // nothing can be followed while it is unreadable: asked, not "gone" or "unknown", and assigning says the record is the problem
+        guard case .unconfirmed = importer.owner(of: try queue.load(m.batchId)) else { return XCTFail("\(importer.owner(of: try queue.load(m.batchId)))") }
+        XCTAssertThrowsError(try importer.assign(batch: m.batchId, to: "Main")) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .accountUnknown) }
+        // the next rename recovers it, above everything before
+        try lib.createAccount("X"); try lib.renameAccount(from: "X", to: "Y")
+        XCTAssertGreaterThan(try XCTUnwrap(lib.store.renameCount), before)
+        guard case .unconfirmed = importer.owner(of: try queue.load(m.batchId)) else { return XCTFail("a stamp from before the recovery was trusted") }
+        try importer.assign(batch: m.batchId, to: "Main")
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .account("Main"))
+    }
+
+    /// 6 + 7. The message is neutral, and the ledger does not carry into a folder made again under the same name.
+    func testAnAccountMadeAgainDoesNotInheritWhatWasSavedIntoTheOldOne() throws {
+        let first = try stage([try nickit])
+        guard case .saved = try importer.save(try review(first), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        try lib.store.deleteAccount("Main"); Thread.sleep(forTimeInterval: 0.01); try lib.createAccount("Main")
+        let again = try stage([try nickit])
+        try importer.readAll(batch: again.batchId, engine: sharedEngine)
+        XCTAssertEqual(importer.owner(of: try queue.load(again.batchId)), .account("Main"))
+        XCTAssertNil(try queue.load(again.batchId).items[0].alreadyImported, "a fresh box does not hold back a screenshot as imported into the deleted one")
+        // and an old batch for the old folder is asked about, in words that do not claim what happened
+        let old = try stage([try rayquaza], account: "Main")
+        try lib.store.deleteAccount("Main"); Thread.sleep(forTimeInterval: 0.01); try lib.createAccount("Main")
+        guard case .unconfirmed(_, let why) = importer.owner(of: try queue.load(old.batchId)) else { return XCTFail() }
+        XCTAssertFalse(why.contains("deleted")); XCTAssertTrue(why.contains("looks different"), why)
+    }
+
+    /// 8. Choosing the account recomputes what is already imported for it.
+    func testChoosingTheAccountWorksOutAlreadyImportedAgainstIt() throws {
+        let first = try stage([try nickit])
+        guard case .saved = try importer.save(try review(first), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        try lib.createAccount("Alt")
+        let b = try queue.beginBatch(origin: .shareExtension, account: nil); try b.add(data: try nickit)
+        let m = try b.commit()
+        try lib.createAccount("Alt")
+        XCTAssertNil(try importer.assign(batch: m.batchId, to: "Alt").items[0].alreadyImported, "Alt never had it")
+        let after = try importer.assign(batch: m.batchId, to: "Main")
+        XCTAssertNotNil(after.items[0].alreadyImported, "Main did: worked out again on choosing it")
+    }
+
+    /// The crash path with no record of what the save held (a save made before that was written down): nothing is invented.
+    func testRecoveryWithNoRecordOfTheSaveRecordsNothingAndKeepsNothingRead() throws {
+        let m = try stage([try nickit, try rayquaza])
+        let p = try review(m)
+        let entries = try BoxMerge.apply(p.plan, resolutions: [:], keepGone: [], to: p.base, engine: sharedEngine)
+        _ = try lib.commitScan(p.outcome.scan, entries: entries, account: "Main", scanDate: p.plan.scanDate, source: "screenshot import", kind: .partial, note: "old build", expectedCurrentSeq: .some(p.boxSeq), sourceSignature: m.signature)
+        let again = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
+        guard case .alreadySaved = try importer.save(again, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertThrowsError(try queue.load(m.batchId))
+        XCTAssertTrue(queue.ledger().entries.isEmpty)
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+    }
+
+    /// 10. A photo from a camera (a screenshot scaled into a noisy 4:3 frame) is never a guessed Pokémon.
+    func testACameraStylePhotoOfAScreenshotGivesNoPokemon() throws {
+        let src = try StillImage.decode(contentsOf: Self.fixtures.appendingPathComponent("normal-nickit-212.png"))
+        var seed: UInt64 = 12345
+        var canvas = RGBAImage(width: 2000, height: 1500)
+        for i in stride(from: 0, to: canvas.bytes.count, by: 4) {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            let v = UInt8(truncatingIfNeeded: seed >> 56)
+            canvas.bytes[i] = v / 2 + 40; canvas.bytes[i + 1] = v / 3 + 60; canvas.bytes[i + 2] = v / 2 + 30; canvas.bytes[i + 3] = 255
+        }
+        // the screenshot, shrunk to 40% and put in the middle of the frame
+        let tw = src.width * 2 / 5, th = src.height * 2 / 5, ox = (2000 - tw) / 2, oy = (1500 - th) / 2
+        for y in 0..<th { for x in 0..<tw {
+            let s = ((y * 5 / 2) * src.width + (x * 5 / 2)) * 4, d = ((oy + y) * 2000 + ox + x) * 4
+            canvas.bytes[d] = src.bytes[s]; canvas.bytes[d + 1] = src.bytes[s + 1]; canvas.bytes[d + 2] = src.bytes[s + 2]
+        } }
+        let m = try stage([try png(canvas)])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        let item = try queue.load(m.batchId).items[0]
+        XCTAssertTrue(item.state == .unsupported || item.state == .unreadable, "\(item.state) \(item.detail ?? "")")
+        XCTAssertNil(item.reading.flatMap { _ in StillImport.title(of: item) }, "no Pokémon was named")
+        XCTAssertThrowsError(try importer.prepareReview(batch: m.batchId, engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .nothingToImport) }
+    }
 }
