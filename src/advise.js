@@ -136,6 +136,8 @@ export function analyseBox(box, ctx) {
       let targetLevel = otherAreas.length ? Math.max(...otherAreas.map((a) => TARGET_LEVEL[a])) : Math.max(...pvpAreas.map((a) => TARGET_LEVEL[a]));
       let cost = powerUpCost(level, Math.max(level, targetLevel), flags);
       if (pvpCost && !otherAreas.length) { cost = { dust: pvpCost.dust, candy: pvpCost.candy, xl: pvpCost.xl, steps: 0 }; targetLevel = null; }
+      // A copy already at or above its target level has nothing to power up to: no target level to show (screens say "already there").
+      if (targetLevel != null && targetLevel <= level) targetLevel = null;
       const mf = moveFlags(ths.map((h) => h.moves).join(' '));
       const secondMove = mf.plusMove ? secondMoveCost(gm.byId.get(stepTarget)?.thirdMoveCost ?? 50000, flags) : { dust: 0, candy: 0 };
       const totalDust = cost.dust + secondMove.dust;

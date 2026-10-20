@@ -61,7 +61,7 @@ function renderBuilds() {
       b.spares.length ? `<span class="flag flag-good">+${b.spares.length} spare</span>` : '',
     ].join('');
     const cost = [`${k(b.cost.dust)} dust`, b.cost.candy ? `${b.cost.candy} candy` : '', b.cost.xl ? `${b.cost.xl} XL` : ''].filter(Boolean).join(', ');
-    const lv = b.targetLevel ? `L${b.level} → ${b.targetLevel}` : `L${b.level} → best ${b.pvpCost.league.toUpperCase()} level`;
+    const lv = b.targetLevel ? `L${b.level} → ${b.targetLevel}` : b.pvpCost ? `L${b.level} → best ${b.pvpCost.league.toUpperCase()} level` : `L${b.level} · already at its target level`;
     const pvp = b.pvpCost ? ` · ${b.pvpCost.league.toUpperCase()} IV rank #${b.pvpCost.rank}` : '';
     const hits = b.hits.map((h) => `<li>${h.tier} ${AREA_LABEL[h.area]}${h.section ? ` / ${esc(h.section)}` : ''}: ${esc(h.name)}${h.moves ? ` — ${esc(h.moves)}` : ''}${h.rank ? ` (PvPoke #${h.rank}, ${h.score})` : ''}</li>`).join('');
     return `<tr data-areas="${b.areas.join(' ')}"><td class="num">${i + 1}</td><td class="name">${esc(label(b.pokemon))}<span class="sub">CP ${b.pokemon.cp} · L${b.pokemon.level} · ${iv(b.pokemon)}${pvp}</span></td><td>${what}${flags ? `<div>${flags}</div>` : ''}<details class="hits"><summary>why</summary><ul>${hits}</ul></details></td><td>${areaChips(b.areas)}</td><td>${badge(b.bestTier)}</td><td class="muted">${lv}<span class="sub">${cost}</span></td><td class="num">${b.score}</td></tr>`;

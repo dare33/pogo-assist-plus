@@ -166,3 +166,15 @@ test('level 51 Best Buddy copies keep Ultra League when their CP fits (Cramorant
   for (const [name, id] of [['Cramorant', 'cramorant'], ['Seaking', 'seaking']]) assert.ok(buildTo(hundo51(name), id)?.areas.includes('ul'), name);
   assert.ok(!buildTo(hundo51('Talonflame'), 'talonflame')?.areas.includes('ul'));
 });
+
+test('a build never carries a target level at or below the copy\'s own level (a level-51 copy that fits is already at its best level)', () => {
+  for (const b of out.allBuilds) assert.ok(b.targetLevel == null || b.targetLevel > b.level, `${b.speciesId}->${b.targetId} L${b.level} -> ${b.targetLevel}`);
+  const res = one('Cramorant', { level: 51, levelMin: 51, levelMax: 51, ivs: { atk: 15, def: 15, hp: 15 } });
+  const b = buildTo(res, 'cramorant');
+  assert.ok(b.areas.includes('ul'));
+  assert.equal(b.targetLevel, null);
+  assert.equal(b.cost.dust - b.cost.secondMove.dust, 0, "no power-up dust");
+  // A copy above an area's target level (a level-38 power-up for a Gym target of 30) shows none either, with the cost still zero.
+  const high = analyseBox([{ ...template, name: 'Cramorant', form: '', pvp: undefined, level: 38, levelMin: 38, levelMax: 38, ivs: { atk: 15, def: 15, hp: 15 } }], ctx);
+  for (const x of high.allBuilds) assert.ok(x.targetLevel == null || x.targetLevel > 38);
+});
