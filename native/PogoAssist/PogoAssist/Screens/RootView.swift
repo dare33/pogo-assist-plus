@@ -77,6 +77,7 @@ struct RootView: View {
         .onChange(of: model.isReviewing) { _, reviewing in if !reviewing && doneRun { doneRun = false; scanOpen = false } }
         .onChange(of: phase) { _, p in
             if p == .active { model.refreshBroadcast(); model.startTimer() } else { model.stopTimer() }
+            if p == .active || p == .background { model.scenePhaseChanged(background: p == .background) }
         }
     }
 }

@@ -498,7 +498,7 @@ none is deleted; Settings restores any of them (as a new version). The replay lo
 
 - Account names: the fields turn off autocorrection, spell checking and automatic capitals; Settings has Rename account (refuses an
   empty name or another account's name, compared ignoring case; the folder, the name inside every scan and box version, the
-  replay logs and the cached advice all follow: `BoxLibrary.renameAccount`).
+  replay logs and the cached advice all follow: `BoxLibrary.renameAccount`). Rename is all-or-nothing on disk (every rewritten file is written beside the original, the folder moves, then each is swapped in; a failure puts it back) and is disabled, and refused by `AppModel.renameAccount`, while a scan is open.
 - Merge rule 7 (part-read CP): a scanned Pokemon that matched nothing, has the `no-level-fits` flag or unread IVs, and whose CP
   digits are a subsequence of a saved same-species CP (182 in 1982) with the same HP (or HP unread) is Unsure with those saved
   Pokemon as candidates. The answers are "It is this one" (only marks it seen; the part-read values are not copied over), "It is new"
@@ -809,6 +809,66 @@ The command is made for the phone's language (the device locale); Voice Control'
 - The swipe fallback's path on small screens is untested.
 - Two or more saved Pokemon with the same species and IVs cannot be told apart without unique ids: when they were powered up since the last scan
   the merge pairs them only if exactly one assignment is consistent, else it asks (`BoxMerge.plan`, M6).
+
+### App fold: unsaved scans, saving, storage, re-scan size
+
+- **An unsaved scan survives a relaunch.** The review's private copy of `replay.jsonl` lives in `Application Support/PogoAssist/pending-scan/` (`PendingScanStore` in PogoBox)
+  with a `meta.json` made in the same step (log and meta are written in a temporary folder that is then moved into place): the signature, the account, the kind, the scan's
+  date (the broadcast's last update, i.e. when it ended), whether the Done screen was left, a mark for a reading that did not finish, and the broadcast state as the app encoded
+  it. The meta decodes tolerantly (an unknown field is ignored, a missing one takes its default), so an app update does not lose a waiting scan.
+  - **Whose scan, and what kind.** The extension records the account that was selected and the kind chosen when the broadcast started (`BroadcastState.account` / `.kind`, passed
+    through `ReaderSettings.scanAccount` / `.scanKind`, which `refreshReaderSettings` writes at launch and on every change, so an account chosen in an earlier run counts; absent in a state from an older build, then the selected account and preference are used). If the recorded account has been renamed since, it is followed to its new name (`BoxStore.accountNamed`, from the rename history); if it is gone the scan is not given to the selected account: it shows a failure with Discard. The scan is copied, reviewed
+    and saved under that account whatever is selected by the time it ends; the app selects that account when the review opens. Rename is refused while a scan is running, being
+    copied or being checked.
+  - **One at a time.** At most one scan is kept: a later broadcast is not copied over it. Its newer log stays in the shared log, with a message naming the waiting scan's account;
+    it is read after that scan is saved or discarded, unless another broadcast replaces the shared log first (a broadcast started from Control Center can). The in-app Start is
+    disabled while a scan waits, with a line naming its account and "Review it" / "Discard it" (`ScanView`).
+  - **Opening it.** On launch, and again when its account is selected, its box has been read (`boxLoaded`), the box is restored or the live broadcast ends, the scan opens: it is
+    opened before the shared log is looked at. It waits while a scan is live or its box cannot be read; a waiting scan can always be thrown away from the Scan screen and from the
+    box-problem panel (`discardWaitingScan`), without the box being readable. If its account was renamed it follows (the meta is rewritten before the folder moves and put back if the
+    rename fails); if its account is gone it opens as a failure with Discard.
+  - **Deleting it.** The copy is deleted only by Save or Discard, by noticing its signature is already marked reviewed, or by `BoxLibrary.scanAlreadySaved` answering `saved` (the account
+    holds a scan read from that signature together with its box version; `StoredScan.sourceSignature`). That check removes a scan record that no version points at only when every
+    version and scan file could be read; if any could not, it answers `unknown`, deletes nothing, and the review opens with a line saying it may already be saved.
+    A kept scan that cannot be opened (damaged meta, log of the wrong length) is never deleted for you: it opens as a failure with Discard only (no Try again).
+  - **A reading that never finished.** The mark is set on disk before a reading and cleared when it ends; if it cannot be written the reading does not start by itself. It is held
+    only while the app is in front (a background kill, usual on iOS, is cleared when the scene goes to the background and set again when it returns). A scan opened with the mark
+    set opens as a failure with Try again and Discard, with text that does not call the scan bad.
+  - The copy is made off the main actor and checked again when it finishes (a rename or a review that began meanwhile takes it back out; Try again from the failure screen for this
+    scan is allowed); if making it fails the app says so once for that scan and tries again after 30 seconds.
+  - **A rename cannot be left half done.** Before a rename touches anything it writes a journal (`.rename-journal.json` in the boxes folder: old and new name, a case-only rename's
+    temporary folder, the phase, the waiting scan's signature), synced to disk, and updates it at each phase; it is deleted only when the rename has completed or been rolled
+    back. The waiting scan's account is retargeted inside it. At launch (before accounts are listed) and in every box load (on the worker queue, so never during a rename),
+    `recoverRename` finds a leftover journal and applies one rule: a journal whose phase is `undoing` is always rolled back (restore every original set aside as `.renaming-old`
+    over whatever is in its place, remove leftover copies, move the folder to the old name, point the waiting scan back); any other journal is rolled forward if the folder has
+    already moved (the remaining rewrites go in place) and rolled back if not. `undoing` is written to disk before anything is undone, because undoing destroys rewrites already
+    swapped in; if it cannot be written nothing is undone and the rename stays finishable. The `moved` and `swapped` phases only inform (recovery reads the disk), so a failed write
+    there changes nothing, and a swap that completed is a success. The journal is deleted last, so a recovery that is itself cut off is just run again. A journal that cannot be
+    decoded is never deleted unless the disk shows nothing in flight (no `.rename-` temporary folder, no `.renaming` / `.renaming-old` file in any account); otherwise
+    `renameJournalUnreadable` is reported and nothing is touched. A recovery that fails is shown as a box problem ("A rename is unfinished": scanning and saving paused, no
+    rename can start, the recovery is retried at each box load). When a recovery finishes a rename forward the app moves the settings across exactly as for a rename made here
+    (`AppModel.moveAccountKeys`: voice records, set record, count, partial count, eggs) and the selection follows the new name. Names beginning with a dot (the journal, the history, a case-only
+    rename's temporary folder) are never listed as accounts. Tested (`RenameJournalTests`): a plain and a case-only rename killed at eight points; swap failure then move-back
+    failure then a fresh load; recovery itself killed during its undo; journal write failures at each phase; an unreadable journal. The file-level repair
+    (`repairInterruptedRename`, a stale backup never replaces a live file) is kept inside it. Build-checked only: the app's use of it (launch recovery, `loadBox`, the problem panel,
+    the settings move).
+  - **Scans started before an account exists, or when accounts cannot be listed.** A scan whose state records no account, with no account selected (a first-time user starting from
+    Control Center), waits silently in the shared log and is picked up once an account exists. If the accounts cannot be listed the app says there is a storage problem; "no
+    longer on this phone" with Discard is shown only when the listing worked and the recorded account is neither there nor the result of a recorded rename
+    (`BoxStore.lookupAccount`: found, gone, unknown).
+  - **Known limits.** Accounts are identified by name. A scan records the name of the account it was started under, so if that account is deleted and another is later made with the
+    same name before the scan is read, the scan is read into the new one; a stable account id is planned separately. An app ended after a rename finished in the box folder but before
+    the app moved its own settings (the voice records, counts and so on) leaves those under the old name.
+- **A save is one step.** `BoxLibrary.commitScan` checks the box (changed, newer app) before writing, writes the scan record and log, then the box version, and removes the
+  record if the version cannot be written, so a failed save leaves no scan behind and a retry does not make a second. It never makes an account folder (an unknown account is refused) and refuses when the newest version cannot be read.
+- **Boxes are never kept in the temporary folder.** `BoxExportFile.boxesRoot` is nil when Application Support cannot be resolved; the app then shows a box problem (scanning
+  paused, no account can be made) and the Shortcuts action throws the same sentence.
+- **Re-scan N** sizes its voice command from what the copied search shows (the to-check Pokémon it covers plus the others with the same name and CP or HP) plus the margin
+  (`VoiceCommandFile.rescanSize`). The size is held with the transient re-scan count; the remembered Add and update number is not written. While the re-scan lasts the options say that size ("N for this re-scan: the search shows X") instead of showing the field.
+- **Saved-scan summaries** (`BoxStore.list`) parse each file but build only its header fields and array lengths, not the rows (it does not skip the parse), and the app loads them off the main actor. The version history is read once, off the main actor, and `previous` is taken from it (`BoxLibrary.previous(in:)`); Settings says "Loading…" until each has been read. The box itself is read off the main actor too (`boxLoaded`; the Box shows a spinner until then). A scan file whose rows are damaged
+  but whose header reads is listed and fails when opened. The on-disk format is unchanged.
+- Privacy manifests: both targets declare UserDefaults reason 1C8F.1 (the app group's defaults); the app also CA92.1 (its own defaults) and file timestamps C617.1 (the replay
+  marker's modification date in its own container); the extension reads no standard defaults and no file dates.
 
 ## What this app sends
 

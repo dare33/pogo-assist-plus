@@ -19,6 +19,7 @@ struct BoxView: View {
 
     @State private var query = ""
     @State private var choosingExport = false
+    @State private var confirmDiscardWaiting = false
     @State private var applied = BoxIndex.Query.none
     @State private var chip = BoxIndex.Chip.all
     @State private var sort = BoxIndex.Sort.name
@@ -43,6 +44,7 @@ struct BoxView: View {
             header
             Group {
                 if let problem = model.boxProblem { problemState(problem) }
+                else if !model.boxLoaded && model.entries.isEmpty && !synthetic { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
                 else if model.entries.isEmpty && !synthetic { emptyState }
                 else { list }
             }
@@ -55,6 +57,9 @@ struct BoxView: View {
         .onDisappear { searching = false }
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
         .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
+        .confirmationDialog("Discard the waiting scan?", isPresented: $confirmDiscardWaiting, titleVisibility: .visible) {
+            Button("Discard scan", role: .destructive) { model.discardWaitingScan() }
+        } message: { Text(model.waitingScan.map { $0.damaged ? "It is thrown away without being added to any box." : "The scan for \($0.account) is thrown away without being added to its box." } ?? "") }
         .sheet(isPresented: Binding(get: { model.exportURL != nil }, set: { if !$0 { model.exportURL = nil } })) {
             if let url = model.exportURL {
                 ShareSheet(url: url).presentationDetents([.medium, .large])
@@ -110,12 +115,18 @@ struct BoxView: View {
         ScrollView {
             VStack(spacing: 14) {
                 Image(systemName: "exclamationmark.triangle").font(.figtree(44, .regular, relativeTo: .largeTitle)).foregroundStyle(Theme.orange).accessibilityHidden(true)
-                Text(model.boxNeedsNewerApp ? "This box needs a newer version of the app" : "This box could not be read").paText(.questionTitle).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
+                Text(model.boxNeedsNewerApp ? "This box needs a newer version of the app" : model.storageMissing ? "There is nowhere to keep your box" : model.recoveryProblem != nil ? "A rename is unfinished" : "This box could not be read").paText(.questionTitle).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
                 Text(text).paText(.secondary).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
-                if !model.boxNeedsNewerApp {
+                if !model.boxNeedsNewerApp && !model.storageMissing && model.recoveryProblem == nil {
                     PillButton("Restore the latest readable version", style: .filled) { Task { await model.restoreLatestReadable() } }
                 }
                 Text("Scanning is paused until this is resolved.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                if model.waitingScan != nil {
+                    // A scan waiting for this box would block scanning for good; it can be thrown away without the box being readable.
+                    Text(model.waitingScan.map { $0.damaged ? "A scan left from earlier is also kept on this phone." : "A scan for \($0.account) is also waiting to be reviewed." } ?? "")
+                        .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                    PillButton("Discard the waiting scan", style: .plain, isDestructive: true) { confirmDiscardWaiting = true }.accessibilityIdentifier("discard-waiting-scan")
+                }
             }
             .padding(32)
             .frame(maxWidth: .infinity)
@@ -230,7 +241,7 @@ struct BoxView: View {
                         PillButton("Copy search", systemImage: "doc.on.doc", style: .tint) { UIPasteboard.general.string = text; showToast("Copied") }
                             .accessibilityIdentifier("copy-check-search").accessibilityValue(text)
                     }
-                    PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount) }
+                    PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount, shown: search.text == nil ? index.toCheckCount : search.covered + search.extra) }
                         .accessibilityIdentifier("rescan-button")
                 }
                 if let line = Self.searchLine(search) {

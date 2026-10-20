@@ -376,6 +376,16 @@ final class VoiceCommandFileTests: XCTestCase {
         XCTAssertEqual(VoiceCommandFile.SetKind.forScreen(tapAvailable: true), .tap); XCTAssertEqual(VoiceCommandFile.SetKind.forScreen(tapAvailable: false), .swipe)
     }
 
+    func testARescanIsSizedFromWhatTheSearchShowsPlusTheMargin() {
+        // 20 to check, 40 others share their name and CP: the search shows 60, so 60 + 6 -> 100, not the 20 + 2 -> 25 of before
+        XCTAssertEqual(VoiceCommandFile.rescanSize(shown: 60), 100)
+        XCTAssertEqual(VoiceCommandFile.rescanSize(shown: 20), 25)
+        XCTAssertEqual(VoiceCommandFile.rescanSize(shown: 23), 25, "23 + 2 = 25 still fits")
+        XCTAssertEqual(VoiceCommandFile.rescanSize(shown: 24), 50, "24 + 2 = 26 does not")
+        XCTAssertEqual(VoiceCommandFile.rescanSize(shown: 100), 200, "100 + 10")
+        XCTAssertNil(VoiceCommandFile.rescanSize(shown: 4999))
+    }
+
     func testTheTapSetSizingIsTheOldSizingAndTheSwipeSetIsCapped() {
         for size in VoiceCommandFile.setSizes {
             XCTAssertEqual(VoiceCommandFile.setSizing(size: size, kind: .tap), VoiceCommandFile.sizing(storageCount: size, pace: .tapNormal), "the tap set is unchanged (size \(size))")

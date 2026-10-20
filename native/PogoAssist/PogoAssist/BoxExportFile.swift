@@ -19,11 +19,23 @@ enum BoxExportFile {
         }
     }
 
-    /// Where `AppModel` keeps the boxes. One place, so the Shortcuts action reads the folder the app writes.
-    static var boxesRoot: URL {
+    /// Where `AppModel` keeps the boxes. One place, so the Shortcuts action reads the folder the app writes. nil when Application Support cannot be resolved:
+    /// boxes are never kept anywhere else (the temporary folder is emptied by the system without warning), so the callers say there is a problem instead.
+    static var boxesRoot: URL? {
         (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))?
             .appendingPathComponent("PogoAssist", isDirectory: true).appendingPathComponent("boxes", isDirectory: true)
-            ?? FileManager.default.temporaryDirectory.appendingPathComponent("boxes", isDirectory: true)
+    }
+
+    /// Where the one scan left unsaved is kept (`PendingScanStore`), beside the boxes.
+    static var pendingDirectory: URL? { boxesRoot?.deletingLastPathComponent().appendingPathComponent("pending-scan", isDirectory: true) }
+
+    /// Said when `boxesRoot` is nil.
+    static let storageUnavailableText = "This device would not give Pogo Assist+ a place to keep your boxes, so nothing can be saved. Restart the phone and open the app again. If this stays, free some storage."
+
+    /// The library for the Shortcuts action, or the plain reason there is none.
+    static func library() throws -> BoxLibrary {
+        guard let root = boxesRoot else { throw Failure.unreadable(storageUnavailableText) }
+        return BoxLibrary(root: root)
     }
 
     /// The account the app has selected (`AppModel`'s key), or the only one there is.

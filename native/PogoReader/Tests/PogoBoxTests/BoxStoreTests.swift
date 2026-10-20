@@ -30,6 +30,28 @@ final class BoxStoreTests: XCTestCase {
         XCTAssertEqual(try store.accounts(), ["Greg main"])
     }
 
+    func testTheListReadsHeadersAndCountsAndMatchesTheFullRead() throws {
+        let r = try result()
+        var smaller = r; smaller.rows = Array(r.rows.prefix(2)); smaller.review = []
+        let a = try store.save(r, account: "A", scanDate: date(0), source: "broadcast", reportSentAt: date(3), reportHash: "h")
+        let b = try store.save(smaller, account: "A", scanDate: date(1), source: "broadcast", kind: .partial)
+        try store.markReread(account: "A", id: a.id, at: date(5))
+        let listed = try store.list(account: "A")
+        XCTAssertEqual(listed.scans.map { $0.id }, [b.id, a.id], "newest scan first")
+        let listedA = try XCTUnwrap(listed.scans.last)
+        XCTAssertEqual([listedA.rows, listedA.flagged, listedA.unmatched], [r.rows.count, r.review.count, r.unmatched.count])
+        XCTAssertEqual(listedA.lastReread, date(5)); XCTAssertEqual(listedA.reportSentAt, date(3))
+        XCTAssertEqual([listed.scans[0].rows, listed.scans[0].flagged, listed.scans[0].kind == .partial ? 1 : 0], [2, 0, 1])
+        // a file from a newer app, and one that is not a scan at all, are listed as unreadable
+        let newer = dir.appendingPathComponent("A/scan-newer.json")
+        var obj = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("A/\(a.id).json"))) as? [String: Any])
+        obj["schema"] = BoxStore.schemaVersion + 1
+        try JSONSerialization.data(withJSONObject: obj).write(to: newer)
+        try Data("not json".utf8).write(to: dir.appendingPathComponent("A/scan-junk.json"))
+        XCTAssertEqual(try store.list(account: "A").unreadable, ["scan-junk.json", "scan-newer.json"])
+        XCTAssertEqual(try store.list(account: "A").scans.count, 2)
+    }
+
     func testCurrentBoxIsTheLatestFullScan() throws {
         let r = try result()
         var smaller = r; smaller.rows = Array(r.rows.prefix(2))

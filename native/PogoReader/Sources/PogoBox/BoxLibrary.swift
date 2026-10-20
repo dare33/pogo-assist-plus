@@ -70,17 +70,72 @@ public final class BoxLibrary {
     /// Make an account (an empty folder). Fine to call for one that exists.
     public func createAccount(_ name: String) throws { _ = try store.accountDirectory(name, create: true) }
 
-    /// Rename an account (see `BoxStore.renameAccount`); its box versions follow, with the new name written into each.
-    public func renameAccount(from old: String, to new: String) throws {
-        try store.renameAccount(from: old, to: new)
-        setVerified(old, nil); setVerified(new.trimmingCharacters(in: .whitespacesAndNewlines), nil)
+    /// Rename an account (see `BoxStore.renameAccount`); its box versions follow, with the new name written into each, in the same all-or-nothing
+    /// step as the scans: a rename that cannot rewrite them changes nothing and throws. A version this build cannot read (damaged, or saved by a
+    /// newer app) is left as it is.
+    public func renameAccount(from old: String, to new: String, pending: PendingScanStore? = nil) throws {
         let newName = new.trimmingCharacters(in: .whitespacesAndNewlines)
-        for seq in (try? seqs(newName)) ?? [] {
-            guard let f = try? file(newName, seq), var snap = try? load(account: newName, seq: seq) else { continue }
-            snap.account = newName
-            try? Self.encoder.encode(snap).write(to: f, options: .atomic)
+        defer { setVerified(old, nil); setVerified(newName, nil) }   // the folder may have moved even when the answer is an error
+        try store.renameAccount(from: old, to: new, pending: pending) { folder, write in
+            let dir = folder.appendingPathComponent("box", isDirectory: true)
+            guard self.fm.fileExists(atPath: dir.path) else { return }
+            for name in try self.fm.contentsOfDirectory(atPath: dir.path).sorted() where name.hasSuffix(".json") && !name.hasSuffix(".advice.json") {
+                let data = try Data(contentsOf: dir.appendingPathComponent(name))
+                if let schema = Self.schema(of: data), schema > Self.schemaVersion { continue }
+                guard var snap = try? Self.decoder.decode(BoxSnapshot.self, from: data) else { continue }
+                snap.account = newName
+                try write("box/" + name, try Self.encoder.encode(snap))
+            }
         }
     }
+
+    /// Finish or undo a rename that was cut off (see `BoxStore.recoverInterruptedRename`); run on the queue the boxes are written from, before accounts are listed.
+    @discardableResult
+    public func recoverInterruptedRename(pending: PendingScanStore? = nil) throws -> Bool { try recoverRename(pending: pending) != nil }
+
+    /// As `recoverInterruptedRename`, saying what was done (so the app can move its per-account settings along with a rename it finished).
+    @discardableResult
+    public func recoverRename(pending: PendingScanStore? = nil) throws -> BoxStore.RecoveredRename? {
+        defer { verifiedLock.lock(); verifiedThrough.removeAll(); verifiedLock.unlock() }
+        return try store.recoverRename(pending: pending)
+    }
+
+    /// The earlier cut-off rename that the last `renameAccount` finished or undid first, if any (see `BoxStore.takeRecoveredByRename`).
+    public func takeRecoveredByRename() -> BoxStore.RecoveredRename? { store.takeRecoveredByRename() }
+
+    // MARK: - was a scan already saved
+
+    public enum SaveState: Equatable { case saved, notSaved, unknown }
+
+    /// Whether the account already holds the scan that was read from the log with this signature, together with its box version. Only a clear answer is acted on: a scan record
+    /// with no version pointing at it, when every version and every scan file could be read, is a save that was cut off between the two writes, and is removed (`notSaved`);
+    /// if anything could not be read, nothing is deleted and the answer is `unknown`, because the unreadable file may be the version that points at the record.
+    public func scanAlreadySaved(account: String, signature: String) -> SaveState {
+        guard let listing = try? store.list(account: account) else { return .unknown }
+        guard let match = listing.scans.first(where: { $0.sourceSignature == signature }) else {
+            // An unreadable scan file only matters if it could be this scan: its replay log (kept beside it) is as long as the signature says. Other damaged files are not this scan.
+            let size = signature.prefix(while: { $0 != "-" })
+            let dir = try? store.accountDirectory(account, create: false)
+            let plausible = listing.unreadable.contains { name in
+                guard let dir else { return true }
+                let log = dir.appendingPathComponent(String(name.dropLast(5)) + ".replay.jsonl")
+                guard let attrs = try? fm.attributesOfItem(atPath: log.path), let n = attrs[.size] as? Int else { return true }   // no log to tell by: it could be
+                return String(n) == size
+            }
+            return plausible ? .unknown : .notSaved
+        }
+        guard let all = try? seqs(account) else { return .unknown }
+        var unreadable = false
+        for seq in all {
+            guard let f = try? file(account, seq), let data = try? Data(contentsOf: f), let h = try? Self.headerDecoder.decode(ScanIdOnly.self, from: data) else { unreadable = true; continue }
+            if h.scanId == match.id { return .saved }
+        }
+        if unreadable { return .unknown }
+        try? store.delete(account: account, id: match.id)
+        return .notSaved
+    }
+    private struct ScanIdOnly: Decodable { var scanId: String? }
+    private static let headerDecoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
 
     // MARK: - versions
 
@@ -127,6 +182,31 @@ public final class BoxLibrary {
         try Self.encoder.encode(snap).write(to: file(account, next), options: .atomic)
         verifiedLock.lock(); if verifiedThrough[account] == (last ?? 0) { verifiedThrough[account] = next }; verifiedLock.unlock()   // this build wrote it: not newer
         return snap
+    }
+
+    /// Save a reviewed scan and the box version it made as one step: the scan record (with its replay log) is written first because the version points at it,
+    /// and if the version cannot be written the record is removed again, so a failed save leaves no scan behind and a retry does not pile up a second one. The
+    /// checks a commit makes are made before anything is written: the account's folder must exist (a save never makes one, so a renamed or removed account cannot be
+    /// brought back by a scan that still carries its old name), a newer app's version, a newest version that cannot be read, and the box having changed.
+    /// `commitFailure` is for tests: it runs just before the version is written and may throw.
+    public func commitScan(_ result: ScanResult, entries: [BoxEntry], account: String, scanDate: Date, source: String, kind: BoxStore.Kind, note: String,
+                           expectedCurrentSeq: Int??, storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil, refineChanges: [String]? = nil,
+                           reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil, sourceSignature: String? = nil,
+                           commitFailure: (() throws -> Void)? = nil) throws -> (scan: BoxStore.Summary, snapshot: BoxSnapshot) {
+        guard fm.fileExists(atPath: try store.accountDirectory(account, create: false).path) else { throw BoxStore.Failure.noSuchAccount(account) }
+        try refuseOverNewer(account)
+        let cur = try current(account: account)   // throws when the newest version is damaged: nothing is written on top of it
+        if let expected = expectedCurrentSeq, expected != cur?.seq { throw Failure.boxChanged }
+        let scan = try store.save(result, account: account, scanDate: scanDate, source: source, kind: kind, storageCount: storageCount, replayLog: replayLog, paging: paging,
+                                  refineChanges: refineChanges, reviewActions: reviewActions, reportSentAt: reportSentAt, reportHash: reportHash, sourceSignature: sourceSignature)
+        do {
+            try commitFailure?()
+            let snap = try commit(account: account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: kind, scanDate: scanDate, expectedCurrentSeq: expectedCurrentSeq)
+            return (scan, snap)
+        } catch {
+            try? store.delete(account: account, id: scan.id)
+            throw error
+        }
     }
 
     /// Change the box: `transform` is given the CURRENT entries, read here, and what it returns is written as the next version, all in
@@ -208,10 +288,12 @@ public final class BoxLibrary {
     /// The version "Restore previous box" would restore: the one just before the current version, which holds the content that was current
     /// before the latest change (after [1 scan, 2 edit, 3 restore of 1, 4 scan] it is 3, which has the content of 1). Pressing it again
     /// from a restore goes back to what the restore replaced.
-    public func previousVersion(account: String) throws -> BoxSnapshot.Header? {
-        let all = try history(account: account)
-        guard let cur = all.first else { return nil }
-        return all.first { $0.seq < cur.seq }
+    public func previousVersion(account: String) throws -> BoxSnapshot.Header? { Self.previous(in: try history(account: account)) }
+
+    /// The version before the newest in a history (newest first), so a caller that has the history does not read it again.
+    public static func previous(in history: [BoxSnapshot.Header]) -> BoxSnapshot.Header? {
+        guard let cur = history.first else { return nil }
+        return history.first { $0.seq < cur.seq }
     }
 
     @discardableResult
@@ -224,6 +306,8 @@ public final class BoxLibrary {
 
     /// The advisor's report for a version, kept beside it so the Next tab opens at once.
     public func saveAdvice(_ advice: BoxAdvice, account: String, seq: Int) throws {
+        // Only for an account that exists: advice worked out in the background for a name that has since been renamed must not bring the old folder back.
+        guard fm.fileExists(atPath: try store.accountDirectory(account, create: false).path) else { throw BoxStore.Failure.noSuchAccount(account) }
         try fm.createDirectory(at: try boxFolder(account), withIntermediateDirectories: true)
         try Self.encoder.encode(advice).write(to: try adviceFile(account, seq), options: .atomic)
     }

@@ -16,7 +16,7 @@ extension BoxExportFile.Failure: CustomLocalizedStringResourceConvertible {
 
 /// The account names for the Shortcuts action's picker.
 struct AccountOptions: DynamicOptionsProvider {
-    func results() async throws -> [String] { (try? BoxLibrary(root: BoxExportFile.boxesRoot).accounts()) ?? [] }
+    func results() async throws -> [String] { (try? BoxExportFile.library().accounts()) ?? [] }
 }
 
 /// "Get Pokémon box": the saved box as a file a Shortcut can hand to the ChatGPT or Claude app. Read-only: it opens no scan, no broadcast and no screen.
@@ -34,7 +34,7 @@ struct GetPokemonBoxIntent: AppIntent {
     static var parameterSummary: some ParameterSummary { Summary("Get the \(\.$format) box of \(\.$account)") }
 
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
-        let library = BoxLibrary(root: BoxExportFile.boxesRoot)
+        let library = try BoxExportFile.library()
         guard let name = account ?? BoxExportFile.defaultAccount(in: library) else { throw BoxExportFile.Failure.noAccount }
         if let n = library.newerVersion(account: name) { throw BoxExportFile.Failure.unreadable("The box for \(name) was saved by a newer version of the app (version \(n)). Update Pogo Assist+.") }
         let snap: BoxSnapshot

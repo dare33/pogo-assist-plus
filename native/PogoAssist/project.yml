@@ -64,7 +64,7 @@ targets:
         # "Make scans better": where reports go. Both come from the git-ignored Config/Signing.local.xcconfig; unset or placeholder hides the button.
         ScanReportURL: $(SCAN_REPORT_URL)
         ScanReportKey: $(SCAN_REPORT_KEY)
-        # Export compliance: the app uses no encryption of its own (no network, no account), so App Store Connect need not ask per build.
+        # Export compliance: the app uses no encryption of its own (the opt-in report upload is plain HTTPS through URLSession, which is exempt; no account), so App Store Connect need not ask per build.
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:

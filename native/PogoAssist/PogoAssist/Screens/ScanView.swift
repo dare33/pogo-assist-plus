@@ -43,6 +43,7 @@ struct ScanView: View {
     @StateObject private var markTrigger = BroadcastTrigger()
     /// Heights of the banner, the setup line and the panel (`FixedHeights`): what the mark button has left to share, so it can shrink on a short phone instead of pushing "Show less" off the screen.
     @State private var fixedHeights: CGFloat = 0
+    @State private var confirmDiscardWaiting = false
 
     /// The least free height above and below the mark button, and the sizes it may take.
     private static let markGap: CGFloat = 12
@@ -52,7 +53,7 @@ struct ScanView: View {
     private var words: ScanWords { ScanWords.current(model) }
     private var visibleSteps: [Int] { ScanSteps.visible(raw: hiddenRaw, help: help) }
     /// The button can start a scan: not while editing, and a Full scan needs its count first.
-    private var canStart: Bool { !editing && !model.fullScanNeedsCount }
+    private var canStart: Bool { !editing && !model.fullScanNeedsCount && model.waitingScan == nil }
     /// Setup is not done and the scan is paged by voice: the mark button asks first (paging by hand skips it).
     private var asksAboutSetup: Bool { !model.setup.isDone && !model.pagedByHand }
 
@@ -69,6 +70,21 @@ struct ScanView: View {
                     if !SharedStore.containerAvailable {
                         Panel(tint: .orange) { Text("The app group is not available, so a scan cannot reach the app. Check Signing and Capabilities on both targets.")
 .font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.red) }.padding(.bottom, 20)
+                    }
+                    if let w = model.waitingScan, !model.live {
+                        // A scan kept on the phone is not open yet (its account or box was not ready, or the app was closed before it was saved): nothing new starts until it is dealt with.
+                        Panel(tint: .orange) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(w.damaged ? "A scan left from earlier is kept on this phone and cannot be opened. Discard it to scan again."
+                                               : "A scan for \(w.account) is waiting to be reviewed. Review or discard it before starting another scan.")
+                                    .font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("waiting-scan-line")
+                                HStack(spacing: 10) {
+                                    PillButton(w.damaged ? "Look at it" : "Review it", style: .filled) { model.openWaitingScan() }.accessibilityIdentifier("waiting-scan-review")
+                                    PillButton("Discard it", style: .plain, isDestructive: true) { confirmDiscardWaiting = true }.accessibilityIdentifier("waiting-scan-discard")
+                                }
+                            }
+                        }.padding(.bottom, 20)
                     }
                     if model.live {
                         markButton(size: Self.markMax).padding(.top, 24).padding(.bottom, 20)
@@ -136,6 +152,9 @@ struct ScanView: View {
             }
         }
         .navigationDestination(item: $setupPage) { page in SetupChecklistView(jumpToNext: page == .nextStep) }
+        .confirmationDialog("Discard the waiting scan?", isPresented: $confirmDiscardWaiting, titleVisibility: .visible) {
+            Button("Discard scan", role: .destructive) { model.discardWaitingScan() }
+        } message: { Text("It is thrown away without being added to the box.") }
         .sheet(isPresented: $showSetupSheet, onDismiss: { if startAfterSheet { startAfterSheet = false; startScan() } }) {
             SetupSheet(openSetup: { showSetupSheet = false; setupPage = .nextStep },
                        scanAnyway: { startAfterSheet = true; showSetupSheet = false })

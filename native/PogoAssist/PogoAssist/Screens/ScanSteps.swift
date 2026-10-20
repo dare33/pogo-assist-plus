@@ -18,6 +18,11 @@ enum ScanWords: Equatable {
     @MainActor static func current(_ model: AppModel) -> ScanWords {
         if model.pagedByHand { return .byHand }
         if model.scanKind == .partial {
+            // A re-scan from the Box: sized from what its search shows, for this scan only (the remembered number is not touched).
+            if model.rescanCount != nil, let shown = model.rescanShown {
+                if let size = VoiceCommandFile.rescanSize(shown: shown) { return .size(size) }
+                return .aboveLargest(VoiceCommandFile.setSizes.last!)
+            }
             guard let n = model.partialCount else { return .defaultSize(VoiceCommandFile.setSize(covering: AppModel.defaultPartialCount) ?? AppModel.defaultPartialCount) }
             if let size = VoiceCommandFile.setSize(covering: n) { return .size(size) }
             return .aboveLargest(VoiceCommandFile.setSizes.last!)
@@ -26,9 +31,6 @@ enum ScanWords: Equatable {
         if model.countAboveLargest { return .aboveLargest(VoiceCommandFile.setSizes.last!) }
         return .needsCount
     }
-
-    /// The command size for a re-scan of `n` Pokémon to check: the smallest that covers n plus a margin, since the game's search shows a few extra matches.
-    static func rescanSize(toCheck n: Int) -> Int? { VoiceCommandFile.setSize(covering: n + max(2, n / 10)) }
 
     /// The command to say, when there is one.
     var command: String? {

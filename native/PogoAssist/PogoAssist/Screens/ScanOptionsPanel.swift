@@ -83,7 +83,16 @@ struct ScanOptionsEditor: View {
             Text("Scan part of your storage. Nothing is removed from your box." + (model.pagedByHand ? "" : " The voice command you say sets how many."))
                 .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             // Paging by hand has no command to size, so the number is asked for only when a voice command will be said.
-            if !model.pagedByHand {
+            if !model.pagedByHand, let shown = model.rescanShown, model.rescanCount != nil {
+                // A re-scan from the Box: the number is not the remembered one but what the search shows, so it is said as that and not offered as a field that would name another size.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("How many Pokémon to scan?").font(.secondary).foregroundStyle(Theme.muted)
+                    Text(model.rescanCommandSize.map { "\($0.formatted()) for this re-scan: the search shows \(shown.formatted()) and the command adds a margin." }
+                         ?? "More than the largest command covers (\((VoiceCommandFile.setSizes.last ?? 0).formatted())): scan the first part, then the rest.")
+                        .font(.secondary).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("rescan-size")
+                }
+            } else if !model.pagedByHand {
                 field("How many Pokémon to scan?", prompt: "200", text: $model.partialCountText, focus: $partialFocused)
                 if let problem = model.partialCountProblem {
                     Text(problem).font(.secondary).foregroundStyle(Theme.red)

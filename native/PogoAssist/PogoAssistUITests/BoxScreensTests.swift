@@ -209,7 +209,8 @@ final class BoxScreensTests: XCTestCase {
     }
 
     /// A box saved with checks and the command set made: the Saved panel offers "Re-scan N", the To check chip offers it too, and it lands on the Scan screen
-    /// with Add and update and the smallest command covering N plus the margin. Editing the options, or leaving the screen, drops the suggestion.
+    /// with Add and update and the smallest command covering what the search shows plus the margin (not N alone). The options say that size while the re-scan lasts; opening the
+    /// options for editing, or leaving the screen, drops the suggestion and the remembered Add and update number (untouched by the re-scan) names the command again.
     func testRescanButtonLandsOnScanWithTheCommand() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-uitest-seed-review", "full+commands+answered", "-appearance", "light"]
@@ -239,12 +240,17 @@ final class BoxScreensTests: XCTestCase {
         shot("rescan-02-to-check-chip")
 
         let sizes = [25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000]
-        let command = "Pogo scan \(sizes.first { $0 >= n + max(2, n / 10) }!)"
+        // The command is sized from what the search shows (the to-check ones it covers plus the others it also matches), not from N alone.
+        let shownNumbers = savedLine.split(whereSeparator: { !$0.isNumber && $0 != "," }).compactMap { Int($0.replacingOccurrences(of: ",", with: "")) }
+        let shown = shownNumbers[0]   // "shows at least <total> ..." or "finds the <covered> ..."
+        let command = "Pogo scan \(sizes.first { $0 >= shown + max(2, shown / 10) }!)"
         button.tap()
         XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
         // The Scan screen opens on the options (Add and update chosen, the number set); the re-scan line sits above them, not behind them.
         XCTAssertTrue(app.staticTexts["How many Pokémon to scan?"].waitForExistence(timeout: 5), "the options are the first view")
         XCTAssertTrue(app.buttons["Add and update"].isSelected, "the scan kind is Add and update")
+        XCTAssertTrue(app.staticTexts["rescan-size"].exists, "the options say the re-scan's size, not a field holding another number")
+        XCTAssertTrue(app.staticTexts["rescan-size"].label.hasPrefix("\(sizes.first { $0 >= shown + max(2, shown / 10) }!) for this re-scan"), app.staticTexts["rescan-size"].label)
         XCTAssertEqual(app.staticTexts["rescan-line-editing"].label, "Re-scan of \(n) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
         sleep(1)
         shot("rescan-03-scan-screen-options")
@@ -256,14 +262,14 @@ final class BoxScreensTests: XCTestCase {
         sleep(1)
         shot("rescan-03-scan-screen")
 
-        // Scan Options drops the re-scan line; the covering number stays in "How many Pokémon to scan?", so the steps still name the same command.
+        // Scan Options drops the re-scan line and its command size: the remembered number (none here, so 200) names the command again, and the re-scan never wrote into it.
         app.buttons["Scan Options"].tap()
         XCTAssertTrue(app.staticTexts["How many Pokémon to scan?"].waitForExistence(timeout: 3) || app.textFields.firstMatch.exists)
         XCTAssertFalse(app.staticTexts["rescan-line-editing"].exists)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["rescan-line"].exists)
-        XCTAssertTrue(app.staticTexts["Back in the game, say \"\(command)\"."].exists)
+        XCTAssertTrue(app.staticTexts["Back in the game, say \"Pogo scan 200\"."].exists)
     }
 
     /// Changing the scan kind, or closing the Scan screen, drops the suggestion; the screen opened later from the tab bar does not meet it.

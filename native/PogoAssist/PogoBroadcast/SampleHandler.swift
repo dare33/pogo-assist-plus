@@ -118,6 +118,8 @@ class SampleHandler: RPBroadcastSampleHandler {
             state = BroadcastState()
             state.mode = mode.rawValue
             state.pausesAllowed = isFull
+            state.account = ReaderSettings.scanAccount
+            state.kind = ReaderSettings.scanKind
             state.storageCount = isFull ? ReaderSettings.storageCount : nil
             state.eggCount = isFull ? ReaderSettings.eggCount : nil
             state.scanId = Int(state.started.timeIntervalSince1970)
