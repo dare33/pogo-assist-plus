@@ -33,38 +33,63 @@ export function levelText(b) {
   return `L${b.level} · already at (or past) its ${league ? `best ${AREA_LABEL[b.pvpCost.league]} level` : `${labels(b.costAreas)} target level`}`;
 }
 
-/** What is left to do, plain text, from the steps; 'Already built' when only a Max-only Dynamax requirement (or nothing) remains. */
+/**
+ * What is left to do, plain text, from the steps. The Dynamax requirement is Max's alone: it is said inside the Max power-up bracket
+ * ("(Max; needs a Dynamax copy)") or after the rest, and a build for Max alone that lacks nothing else reads "Needs a Dynamax copy";
+ * a build with other areas and nothing left reads "Already built (Max needs a Dynamax copy)".
+ */
 export function actionText(b) {
   const dynamax = b.steps.some((x) => x.kind === 'needsDynamaxCopy');
+  let inlined = false;
   const parts = [];
   for (const x of b.steps) {
     if (x.kind === 'evolve') parts.push(`Evolve to ${x.to}`);
     else if (x.kind === 'formChange') parts.push(`Form change to ${x.to}`);
     else if (x.kind === 'megaEvolve') parts.push('Mega evolve');
-    else if (x.kind === 'powerUp') parts.push(`Power up to level ${x.toLevel} (${labels(x.areas)})`);
+    else if (x.kind === 'powerUp') {
+      const say = dynamax && x.areas.includes('max');
+      inlined = inlined || say;
+      parts.push(`Power up to level ${x.toLevel} (${labels(x.areas)}${say ? '; needs a Dynamax copy' : ''})`);
+    }
     else if (x.kind === 'secondMove') parts.push(x.certain ? 'Second move' : "Second move (if it doesn't have it)");
     else if (x.kind === 'eliteTM') parts.push(x.count === 1 ? '1 Elite TM' : `${x.count} Elite TMs`);
     else if (x.kind === 'cdMove') parts.push('Community Day move');
   }
-  const base = parts.length ? parts.join(' + ') : 'Already built';
-  return dynamax ? `${base} (Max needs a Dynamax copy)` : base;
+  if (!parts.length) return dynamax && b.areas?.length === 1 && b.areas[0] === 'max' ? 'Needs a Dynamax copy' : dynamax ? 'Already built (Max needs a Dynamax copy)' : 'Already built';
+  const base = parts.join(' + ');
+  return dynamax && !inlined ? `${base} (Max needs a Dynamax copy)` : base;
 }
 
-/** The Elite and Community Day moves a tier-table entry names: "Fast / Charged (CD) + Charged (Elite)" gives the move names. */
-function markedMoves(texts) {
+/** The leagues a climb to `climbTo` goes past: those whose best level is at or above the copy's level and below the climb. */
+export function leagueNotes(climbTo, level, bests) {
+  if (climbTo == null || climbTo <= level) return [];
+  return bests.filter((x) => x.bestLevel != null && x.bestLevel >= level && climbTo > x.bestLevel);
+}
+
+/**
+ * The Elite and Community Day moves tier-table entries name: "Fast (Elite fast) / Charged (CD) + Charged (Elite)" gives the move names from
+ * EVERY part, the fast move included. Each entry is read on its own: a marker the text has but the parser could not attach to a name
+ * (an odd format) counts as one move that cannot be held, so an unreadable entry never hides a requirement or inflates another's.
+ */
+export function markedMoves(texts) {
   const elite = new Set(), cd = new Set();
-  for (const text of texts) {
-    for (const part of String(text).split('/').slice(1)) {
+  texts.forEach((text, i) => {
+    const entryElite = new Set(), entryCd = new Set();
+    for (const part of String(text).split('/')) {
       for (const slot of part.split(/\s\+\s/)) {
         for (const alt of slot.split(/\s+or\s+/i)) {
           const name = alt.replace(/\([^)]*\)/g, '').trim();
           const quals = [...alt.matchAll(/\(([^)]*)\)/g)].map((m) => m[1]);
-          if (name && quals.some((q) => /^Elite/i.test(q))) elite.add(name);
-          if (name && quals.some((q) => /^(CD|Community Day)/i.test(q))) cd.add(name);
+          if (name && quals.some((q) => /^Elite/i.test(q))) entryElite.add(name);
+          if (name && quals.some((q) => /^(CD|Community Day)/i.test(q))) entryCd.add(name);
         }
       }
     }
-  }
+    const mentions = (re) => (String(text).match(re) || []).length;
+    for (let k = entryElite.size; k < mentions(/\(Elite[^)]*\)/gi); k++) entryElite.add(`?${i}:${k}`);
+    if (!entryCd.size && /\((CD|Community Day)[^)]*\)/i.test(String(text))) entryCd.add(`?${i}`);
+    entryElite.forEach((m) => elite.add(m)); entryCd.forEach((m) => cd.add(m));
+  });
   return { elite, cd };
 }
 const normMove = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -224,22 +249,15 @@ export function analyseBox(box, ctx) {
       if (targetId !== r.speciesId) steps.push(formChange ? { kind: 'formChange', to: gm.byId.get(targetId)?.speciesName ?? targetId } : { kind: 'evolve', to: gm.byId.get(targetId)?.speciesName ?? targetId, candy: evoCandy });
       if (viaMega) steps.push({ kind: 'megaEvolve' });
       if (climbTo != null && climbTo > level) steps.push({ kind: 'powerUp', toLevel: climbTo, areas: costAreas });
-      const leavesLeague = [];
-      if (climbTo != null && climbTo > level) {
-        for (const a of pvpAreas) {
-          if (costAreas.includes(a) || a === 'ml') continue;
-          const best = ourLeague(a)?.cost?.toLevel;
-          if (best != null && best >= level && climbTo > best) leavesLeague.push({ league: a, bestLevel: best });
-        }
-      }
+      const leavesLeague = leagueNotes(climbTo, level, pvpAreas.filter((a) => !costAreas.includes(a) && a !== 'ml').map((a) => ({ league: a, bestLevel: ourLeague(a)?.cost?.toLevel })));
       if (secondState === 'due' || secondState === 'unknown') steps.push({ kind: 'secondMove', certain: secondState === 'due' });
-      // Elite and Community Day moves the entry asks for: counted by distinct move name, and dropped when the recorded moves already hold
-      // them (the effort above still counts table mentions, as before). Names that cannot be read out of the text fall back to the flags.
+      // Elite and Community Day moves the entries ask for: counted by distinct move name, and dropped when the recorded moves already hold
+      // them (the effort above still counts table mentions, as before).
       const marked = markedMoves(ths.map((h) => h.moves || ''));
       const missing = (set) => [...set].filter((m) => !heldMoves.has(normMove(m)));
-      const eliteCount = marked.elite.size ? missing(marked.elite).length : mf.elite;
+      const eliteCount = missing(marked.elite).length;
       if (eliteCount > 0) steps.push({ kind: 'eliteTM', count: eliteCount });
-      if (marked.cd.size ? missing(marked.cd).length > 0 : mf.cd) steps.push({ kind: 'cdMove' });
+      if (missing(marked.cd).length > 0) steps.push({ kind: 'cdMove' });
       if (needsDynamax) steps.push({ kind: 'needsDynamaxCopy' });
       // IV quality: PvP uses this copy's league rank % (squared, so a mid-rank spread is worth little); everything else uses IV average, mildly.
       const ivQ = (p.ivPercent ? 0.8 + 0.2 * (p.ivPercent / 100) : 0.9) * (evoCandy === 0 && !formChange ? 1.3 : 1); // already the final form: phase 1 material

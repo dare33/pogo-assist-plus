@@ -22,7 +22,7 @@ builds.slice(0, 40).forEach((b, i) => {
   const cost = [`${k(b.cost.dust)} dust`, b.cost.candy ? `${b.cost.candy} candy` : '', b.cost.xl ? `${b.cost.xl} XL` : ''].filter(Boolean).join(', ');
   const areas = b.areas.map((a) => AREA_LABEL[a]).join(', ');
   const pvp = b.pvpCost ? ` (${b.pvpCost.league.toUpperCase()} rank ${b.pvpCost.rank})` : '';
-  const lv = `${levelText(b)}: `;
+  const lv = `${levelText(b)} — `;
   console.log(`| ${i + 1} | ${label(b.pokemon)} | ${what}${pvp} | ${areas} | ${b.bestTier} | ${lv}${cost} | ${b.score} |`);
 });
 

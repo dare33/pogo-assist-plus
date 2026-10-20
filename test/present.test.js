@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadGamemaster, loadTiers, loadRankings } from '../src/node/load.js';
-import { analyseBox, levelText, actionText } from '../src/advise.js';
+import { analyseBox, levelText, actionText, markedMoves, leagueNotes } from '../src/advise.js';
 
 const ctx = { gm: loadGamemaster(), tiers: loadTiers(), rankings: loadRankings() };
 const fixture = new URL('../fixtures/greg-2026-09-25.pokegenie.csv', import.meta.url);
@@ -179,4 +179,66 @@ test('the web page and the script word builds with the shared functions, not the
   const script = readFileSync(new URL('../scripts/advise.mjs', import.meta.url), 'utf8');
   assert.match(script, /actionText\(b\)/);
   assert.match(script, /levelText\(b\)/);
+});
+
+test('Elite and Community Day moves are read from every part of an entry, the fast move included, one entry at a time', () => {
+  const names = (m) => [[...m.elite].sort(), [...m.cd].sort()];
+  // Shadow Ninetales (Great League): an Elite fast move and an Elite charged move are two TMs.
+  assert.deepEqual(names(markedMoves(['Ember (Elite fast) / Weather Ball Fire + Energy Ball (Elite)'])), [['Ember', 'Energy Ball'], []]);
+  // The same move named by several entries is one TM (Xerneas in Raids and in Master League).
+  assert.deepEqual(names(markedMoves(['Geomancy (Elite fast) / Moonblast', 'Geomancy (Elite fast) / Close Combat + Moonblast'])), [['Geomancy'], []]);
+  // Metagross: an Elite move in the fast slot and a Community Day move in the charged slots.
+  assert.deepEqual(names(markedMoves(['Shadow Claw (Elite) / Meteor Mash (CD) + Earthquake'])), [['Shadow Claw'], ['Meteor Mash']]);
+  // An entry the parser cannot attach to a name still counts, once per marker, and does not hide or inflate another entry.
+  const odd = markedMoves(['Weird (Elite) (Elite)', 'Geomancy (Elite fast) / Moonblast']);
+  assert.equal(odd.elite.size, 3);
+  assert.ok(odd.elite.has('Geomancy'));
+  assert.equal(markedMoves(['Fast / Charge']).elite.size, 0);
+  // A 'Community Day' qualifier is read like (CD).
+  assert.deepEqual(names(markedMoves(['Mud Shot / Earth Power (Community Day)']))[1], ['Earth Power']);
+});
+
+test('Elite steps from the tables: Xerneas needs one Geomancy TM, none when it is held; Metagross\'s Shadow Claw likewise', () => {
+  const xer = build('Xerneas', 30);
+  assert.deepEqual(xer.areas.slice().sort(), ['ml', 'raids']);
+  assert.equal(xer.steps.find((s) => s.kind === 'eliteTM')?.count, 1, 'two entries name Geomancy: one TM');
+  const xerHeld = build('Xerneas', 30, 'xerneas', { moves: ['Geomancy', 'Moonblast'], chargedMoves: ['Moonblast', ''] });
+  assert.ok(!kinds(xerHeld).includes('eliteTM'));
+  const meta = build('Metagross', 40);
+  assert.ok(meta.areas.includes('ml'));
+  assert.equal(meta.steps.find((s) => s.kind === 'eliteTM')?.count, 1);
+  const metaHeld = build('Metagross', 40, 'metagross', { moves: ['Shadow Claw', 'Meteor Mash', 'Earthquake'], chargedMoves: ['Meteor Mash', 'Earthquake'] });
+  assert.ok(!kinds(metaHeld).includes('eliteTM'), 'Shadow Claw is held');
+  assert.ok(!kinds(metaHeld).includes('cdMove'), 'Meteor Mash is held');
+});
+
+test('leagueNotes: a league is left behind only when the climb goes past its best level and the copy is not already beyond it', () => {
+  const at = (climbTo, level, best) => leagueNotes(climbTo, level, [{ league: 'ul', bestLevel: best }]).length;
+  assert.equal(at(30, 10, 29), 1);
+  assert.equal(at(30, 10, 30), 0, 'climbing to exactly the best level stays in the league');
+  assert.equal(at(30.5, 10, 30), 1);
+  assert.equal(at(30, 17, 17), 1, 'a copy exactly at the best level leaves it by climbing');
+  assert.equal(at(30, 17.5, 17), 0, 'a copy already past the best level has nothing to leave');
+  assert.equal(at(30, 30, 20), 0, 'no climb, no note');
+  assert.equal(at(null, 10, 20), 0);
+  assert.equal(leagueNotes(30, 10, [{ league: 'ul', bestLevel: null }]).length, 0);
+});
+
+test('a build for Max alone that lacks nothing else needs a Dynamax copy; with other areas it is "Already built" plus the Max note; the note goes inside a Max bracket', () => {
+  const s = (steps, areas) => ({ level: 40, steps, areas, costAreas: ['max'], pvpCost: null });
+  assert.equal(actionText(s([{ kind: 'needsDynamaxCopy' }], ['max'])), 'Needs a Dynamax copy');
+  assert.equal(actionText(s([{ kind: 'needsDynamaxCopy' }], ['raids', 'max'])), 'Already built (Max needs a Dynamax copy)');
+  assert.equal(actionText(s([{ kind: 'powerUp', toLevel: 45, areas: ['max'] }, { kind: 'needsDynamaxCopy' }], ['max'])), 'Power up to level 45 (Max; needs a Dynamax copy)');
+  assert.equal(actionText(s([{ kind: 'powerUp', toLevel: 45, areas: ['raids'] }, { kind: 'needsDynamaxCopy' }], ['raids', 'max'])), 'Power up to level 45 (Raids) (Max needs a Dynamax copy)');
+  assert.ok(!/\) \(Max\)|\(Max\) \(Max/.test(actionText(s([{ kind: 'powerUp', toLevel: 45, areas: ['max'] }, { kind: 'needsDynamaxCopy' }], ['max']))));
+});
+
+test('the import keeps charged slots only when a charged move is recorded', () => {
+  const rowOf = (cols) => importPokeGenie(`Name,Form,Quick Move,Charge Move,Charge Move 2\nCharmander,,${cols}\n`)[0];
+  assert.equal(rowOf(',,').chargedMoves, undefined, 'all three blank: nothing is known');
+  assert.equal(rowOf('Ember,,').chargedMoves, undefined, 'a quick move alone says nothing about the slots');
+  assert.deepEqual(rowOf('Ember,Flamethrower,').chargedMoves, ['Flamethrower', ''], 'charge 1 recorded, charge 2 blank: locked');
+  assert.deepEqual(rowOf('Ember,Flamethrower,Blast Burn').chargedMoves, ['Flamethrower', 'Blast Burn']);
+  assert.deepEqual(rowOf('Ember,,Blast Burn').chargedMoves, ['', 'Blast Burn']);
+  assert.deepEqual(rowOf('Ember,,Blast Burn').moves, ['Ember', 'Blast Burn']);
 });

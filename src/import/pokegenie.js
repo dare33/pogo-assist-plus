@@ -27,8 +27,9 @@ export function importPokeGenie(csvText) {
       level: num(r['Level Min']),          // Poke Genie's best estimate; equals levelMax when IVs are exact
       moves: [r['Quick Move'], r['Charge Move'], r['Charge Move 2']].map((m) => (m || '').trim()).filter(Boolean),
       // The two charged slots by position (moves above drops the empty ones): an empty second slot means it is not unlocked yet.
-      // Undefined when the row records no moves at all (Poke Genie leaves them blank unless asked): then nothing is known about the slots.
-      chargedMoves: [r['Quick Move'], r['Charge Move'], r['Charge Move 2']].some((m) => (m || '').trim()) ? [r['Charge Move'], r['Charge Move 2']].map((m) => (m || '').trim()) : undefined,
+      // Undefined unless a charged move is recorded (Poke Genie leaves all three columns blank unless asked, and a quick move alone says
+      // nothing about the slots): with Charge Move recorded and Charge Move 2 blank the second slot is known to be locked.
+      chargedMoves: [r['Charge Move'], r['Charge Move 2']].some((m) => (m || '').trim()) ? [r['Charge Move'], r['Charge Move 2']].map((m) => (m || '').trim()) : undefined,
       shadow: sp === 1,
       purified: sp === 2,
       lucky: r.Lucky === '1',
