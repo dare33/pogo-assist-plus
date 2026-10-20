@@ -61,22 +61,29 @@ const template = box.find((p) => !p.shadow && !p.purified && !p.lucky && (!p.for
 const one = (name, o = {}) => analyseBox([{ ...template, name, form: '', pvp: undefined, ...o }], ctx);
 const buildTo = (res, target) => res.builds.find((b) => b.targetId === target);
 
-test("league builds are rated by the build target's OWN option, even when it is not the shown pick (Squirtle -> Blastoise)", () => {
-  // The fixture Squirtle at level 15: Poke Genie's Great League pick is Wartortle, so Blastoise is not the shown pick there.
-  const squirtle = box.find((p) => p.name === 'Squirtle' && p.level === 15 && p.ivs.atk === 14 && p.ivs.def === 14 && p.ivs.hp === 12);
-  assert.ok(squirtle);
-  const res = analyseBox([{ ...squirtle, pvp: undefined }], ctx);
-  const b = buildTo(res, 'blastoise');
-  assert.ok(b.areas.includes('gl') || b.areas.includes('ul'));
-  assert.ok(b.pvpCost, 'a league cost from the Blastoise option');
-  assert.ok(['gl', 'ul'].includes(b.pvpCost.league));
-  const L = res.pokemon[0].leagues[b.pvpCost.league];
-  const own = L.options.find((o) => o.speciesId === 'blastoise');
-  assert.equal(b.pvpCost.rankPct, own.iv.rankPct);
-  assert.equal(b.pvpCost.dust, own.cost.dust);
-  assert.equal(b.pvpCost.candy, own.cost.candy + own.cost.evolveCandy);
-  assert.equal(b.pvpCost.xl, own.cost.xl);
-});
+// A build is rated by its target's own option, not by the shown pick: Eevee 134 (level 17) has Flareon as the shown pick in Great
+// League, yet the Umbreon build is rated, costed and valued from Umbreon's option; the same for Mankey 149, shown as Mankey.
+for (const [index, target] of [[134, 'umbreon'], [149, 'annihilape']]) {
+  test(`league builds are rated by the build target's OWN option, even when it is not the shown pick (fixture index ${index} -> ${target})`, () => {
+    const p = box.find((x) => x.index === index);
+    const res = analyseBox([{ ...p, pvp: undefined }], ctx);
+    const L = res.pokemon[0].leagues.gl;
+    const b = buildTo(res, target);
+    assert.ok(b.areas.includes('gl'));
+    assert.notEqual(L.options[L.pick].speciesId, target, 'the target is not the shown pick');
+    assert.equal(b.pvpCost.league, 'gl');
+    const own = L.options.find((o) => o.speciesId === target);
+    assert.equal(b.pvpCost.rankPct, own.iv.rankPct);
+    assert.equal(b.pvpCost.dust, own.cost.dust);
+    assert.equal(b.pvpCost.candy, own.cost.candy + own.cost.evolveCandy);
+    assert.equal(b.pvpCost.xl, own.cost.xl);
+    // The Great League chip is weighted from that option's Rank %, not the neutral 0.6 (a tier-weighted sum, so just check the
+    // build is worth more than the same build with the option's rating removed).
+    const neutral = analyseBox([{ ...p, pvp: undefined, ivs: null }], ctx);
+    assert.equal(buildTo(neutral, target).pvpCost, null);
+    assert.notEqual(buildTo(neutral, target).value, b.value);
+  });
+}
 
 test('across the fixture box, many league builds carry a league cost, none from Master League', () => {
   const withCost = out.builds.filter((b) => b.pvpCost);
@@ -91,25 +98,44 @@ test('across the fixture box, many league builds carry a league cost, none from 
   assert.deepEqual(sig(scan), sig(out));
 });
 
-test('a copy already past the league cap as the target gets no league rating (Rookidee L35 -> Corviknight in Great League)', () => {
+test('a copy already past the league cap as the target has no league there: Rookidee L35 -> Corviknight is Ultra only, and ranks below a usable L5 copy', () => {
   const rookidee = (level) => one('Rookidee', { level, levelMin: level, levelMax: level, ivs: { atk: 10, def: 12, hp: 14 } });
-  const high = buildTo(rookidee(35), 'corviknight');
-  const L = rookidee(35).pokemon[0].leagues.gl;
-  assert.equal(L.options.find((o) => o.speciesId === 'corviknight').overCap, true, 'level 35 is past Corviknight\'s Great League level');
-  assert.ok(!high.pvpCost || high.pvpCost.league !== 'gl');
-  const low = buildTo(rookidee(5), 'corviknight');
-  assert.ok(low.pvpCost, 'at level 5 it is rated');
+  const high = rookidee(35), low = rookidee(5);
+  const gl35 = high.pokemon[0].leagues.gl.options.find((o) => o.speciesId === 'corviknight');
+  assert.equal(gl35.overCap, true, "level 35 is past Corviknight's Great League level");
+  const b35 = buildTo(high, 'corviknight'), b5 = buildTo(low, 'corviknight');
+  assert.deepEqual(b35.areas, ['ul']);
+  assert.ok(b35.hits.every((h) => h.area !== 'gl'));
+  assert.equal(b35.pvpCost.league, 'ul');
+  assert.deepEqual(b5.areas, ['gl', 'ul']);
+  assert.equal(b35.value, 1.49);
+  assert.equal(b5.value, 3.13);
+  assert.ok(b5.value > b35.value && b5.score > b35.score);
 });
 
-test('Master League keeps the neutral weight and is never the cost league (a hundo Melmetal at level 10)', () => {
+test('a build whose every league is past the cap is dropped (fixture Swablu, index 205, level 28, Altaria)', () => {
+  const swablu = box.find((p) => p.index === 205);
+  assert.equal(swablu.name, 'Swablu');
+  const res = analyseBox([{ ...swablu, pvp: undefined }], ctx);
+  const L = res.pokemon[0].leagues.gl;
+  assert.equal(L.options.find((o) => o.speciesId === 'altaria').overCap, true);
+  assert.equal(buildTo(res, 'altaria'), undefined);
+  assert.equal(res.builds.length, 0);
+  assert.ok(!out.builds.some((b) => b.pokemon.index === 205 && b.targetId === 'altaria'));
+});
+
+test('Master League keeps the neutral weight 0.6 and is never the cost league (a hundo Melmetal at level 10)', () => {
   const res = one('Melmetal', { level: 10, levelMin: 10, levelMax: 10, ivs: { atk: 15, def: 15, hp: 15 } });
   const b = buildTo(res, 'melmetal');
-  assert.ok(b.areas.includes('ml'));
+  assert.deepEqual(b.areas, ['gl', 'ul', 'ml']);
   assert.ok(!b.pvpCost || b.pvpCost.league !== 'ml');
-  const withUnknown = buildTo(one('Melmetal', { level: 10, levelMin: 10, levelMax: 10, ivs: null }), 'melmetal');
-  // ML's weight is 0.6 whether or not the IVs are known (any difference would come from GL or UL).
-  const ml = (bb) => bb.hits.filter((h) => h.area === 'ml').length;
-  assert.ok(ml(b) >= 1 && ml(withUnknown) >= 1);
+  // value = sum of tier weight x area weight x league quality. GL and UL are S tier (3) with their own Rank %; ML is B tier (1) at 0.6.
+  const L = res.pokemon[0].leagues;
+  const q = (a) => { const o = L[a].options.find((x) => x.speciesId === 'melmetal'); return 0.15 + 0.85 * (o.iv.rankPct / 100) ** 2; };
+  assert.ok(Math.abs(b.value - (3 * q('gl') + 3 * q('ul') + 1 * 0.6)) < 0.006, `${b.value}`);
+  // Unknown IVs: every league is neutral, so 3 x 0.6 + 3 x 0.6 + 1 x 0.6.
+  const unknown = buildTo(one('Melmetal', { level: 10, levelMin: 10, levelMax: 10, ivs: null }), 'melmetal');
+  assert.equal(unknown.value, 4.2);
   assert.ok(b.cost.dust < 400000, `${b.cost.dust} dust`);
 });
 

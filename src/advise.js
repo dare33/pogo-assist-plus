@@ -79,7 +79,19 @@ export function analyseBox(box, ctx) {
     const { p, resolved: r, hits } = entry;
     const byTarget = new Map();
     for (const h of hits) { if (!byTarget.has(h.targetId)) byTarget.set(h.targetId, []); byTarget.get(h.targetId).push(h); }
-    for (const [targetId, ths] of byTarget) {
+    for (const [targetId, allHits] of byTarget) {
+      // This copy's rating in a league AS THE BUILD'S TARGET: the target's own option in leaguesFor, whether or not it is the member
+      // shown as the pick. Read from leaguesFor rather than the Poke Genie columns so that scans (which have none) are rated too.
+      // No rating (neutral weight, no league cost) when the IVs are unknown, and for Master League, which keeps its old behaviour:
+      // neutral weight, and never the cost league (a level-50 ML cost would swamp the GL and UL chips of a Pokémon that is not built for it).
+      const targetBase = baseSpeciesId(gm, targetId);
+      const optionOf = (a) => entry.leagues?.[a]?.options.find((x) => baseSpeciesId(gm, x.speciesId) === targetBase);
+      const ourLeague = (a) => (a === 'ml' ? null : optionOf(a)?.iv ? optionOf(a) : null);
+      // A league is not an area of this build when the copy is already past that league's cap as the target (a level-35 Rookidee for
+      // Corviknight in Great League): there is nothing to build towards, and a neutral weight would outrank a usable copy. A build
+      // left with no area at all is dropped.
+      const ths = allHits.filter((h) => !['gl', 'ul', 'ml'].includes(h.area) || !optionOf(h.area)?.overCap);
+      if (!ths.length) continue;
       // Value: raids count each attacking type covered (up to three); other areas count once at their best tier.
       // PvP areas are scaled by this exact Pokémon's rank in that league as Our pick (squared: a mid-rank spread is worth little).
       const areas = new Map();
@@ -89,18 +101,6 @@ export function analyseBox(box, ctx) {
         if (h.area === 'raids' && h.section && h.section !== 'S tier — build first' && !/tier/i.test(h.section)) { if (!raidTypes.has(h.section) || raidTypes.get(h.section) < w) raidTypes.set(h.section, w); }
         if (!areas.has(h.area) || areas.get(h.area) < w) areas.set(h.area, w);
       }
-      // This copy's rating in a league AS THE BUILD'S TARGET: the target's own option in leaguesFor, whether or not it is the member
-      // shown as the pick. Read from leaguesFor rather than the Poke Genie columns so that scans (which have none) are rated too.
-      // No rating (neutral weight, no league cost) when the IVs are unknown, when the copy is already past the league's cap as the
-      // target (there is nothing to build towards), and for Master League, which keeps its old behaviour: neutral weight, and never
-      // the cost league (a level-50 ML cost would swamp the GL and UL chips of a Pokémon that is not built for it).
-      const ourLeague = (a) => {
-        if (a === 'ml') return null;
-        const L = entry.leagues?.[a];
-        const target = baseSpeciesId(gm, targetId);
-        const o = L?.options.find((x) => baseSpeciesId(gm, x.speciesId) === target);
-        return o?.iv && !o.overCap ? o : null;
-      };
       const leagueQ = (a) => {
         const L = ourLeague(a);
         return L ? 0.15 + 0.85 * (L.iv.rankPct / 100) ** 2 : 0.6;
