@@ -2,16 +2,25 @@
 
 **20 Oct 2026, branch `feat/league-options` (not merged): league options.** `leaguesFor` (`src/leagues.js`) now returns, per league,
 every allowed family member (PvPoke-ranked or not, form changes such as Zygarde included) as `options`, each rated for the copy
-(PvPoke rank and score, IV rank, moves, cost), plus `pick` (index of the member to SHOW), `experimental` (index of the other rule's
-member) and `source`. The shown pick copies Poke Genie: its own pick from the export when the entry has one and it is in the
-family, otherwise `pokeGeniePick`, a PROVISIONAL emulation (best stat product % among the members the copy is not already too strong
-for, ranked ones first). Without reading the export's pick it reproduces Poke Genie on 271/280 Great and 300/306 Ultra fixture rows;
-the misses are near-ties where Poke Genie prefers the later evolution. The earlier idea, species strength first with a
-`CLOSE_SCORE` (3.0) window decided by IV Rank %, is kept as `chooseMember`, computed in the background and not shown (240/280 Great,
-295/306 Ultra against Poke Genie); Greg swaps the shown pick to it once it is provably better. Both rules and the threshold sit
-together at the top of `src/leagues.js`. The advisor now rates league builds from the build target's own option (scans have no
-Poke Genie columns); Master League keeps its neutral weight. The display for the options is being designed separately: no
-screen changed, the app decodes the data (`BoxAdvice.LeagueRating`, advice cache version 4). Not verified on a device.
+(PvPoke rank and score, IV rank, cost; moves only on the shown and experimental options), plus `pick` (index of the member to SHOW),
+`experimental` (index of the other rule's member) and `source` (`export`, `emulated`, `ranked`, or `fallback` when nothing in the
+family is ranked there). The shown pick copies Poke Genie: its own pick from the export when the entry has one and it is in the
+family. Otherwise, in Great and Ultra League, `pokeGeniePick`, a PROVISIONAL emulation (best stat product % among the members the
+copy is not already too strong for, ranked ones first). Master League has no Poke Genie pick to copy and the emulation there only
+followed ~0.07% stat-product noise (Eevee showed Glaceon, Scyther Kleavor over Scizor, Shaymin Land over Sky), so Master League
+shows the highest PvPoke score, as `main` does (Greg's decision, 20 Oct). Without reading the export's pick the emulation matches
+Poke Genie on 271/280 Great and 300/306 Ultra fixture rows (the 278/304 seen in the cost checks are the rows with an exact level, a
+different count). Those figures are IN-SAMPLE, on one fixture (the data it was fitted on), and the test floors are regression pins,
+not evidence it generalises. The misses are not only near-ties where Poke Genie prefers the later evolution: Crocalor stays Crocalor
+where Poke Genie picks Skeledirge, and Magmar becomes Magmortar where Poke Genie keeps Magmar. The earlier idea, species strength
+first with a `CLOSE_SCORE` (3.0) window decided by IV Rank %, is kept as `chooseMember`, computed in the background and not shown
+(249/280 Great, 296/306 Ultra against Poke Genie, same caveat); `experimental` is never a member the copy is already past the cap
+for, unless every member is (then it is the shown pick). Greg swaps the shown pick to it once it is provably better. Both rules and
+the threshold sit together at the top of `src/leagues.js`. The advisor rates league builds from the build target's own option
+(scans have no Poke Genie columns); a league where the copy is already past the cap as the target is not an area of that build, and
+a build left with no area is dropped (a level-35 Rookidee no longer outranks a usable level-5 one for Corviknight). Master League
+keeps its neutral 0.6 weight and is never the cost league. The display for the options is being designed separately: no screen
+changed, the app decodes the data (`BoxAdvice.LeagueRating`, advice cache version 4). Not verified on a device.
 
 **20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,
 merged from `native-ui-v1` in PR #2), the shared JavaScript changes (extractor read fixes, CP recovery, PvP leagues,
