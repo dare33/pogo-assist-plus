@@ -108,6 +108,8 @@ private struct BatchSection: View {
                 Label("The account \(name) is no longer on this phone", systemImage: "exclamationmark.triangle").foregroundStyle(.red)
             case .ambiguous(let old, let now):
                 Label("These were for \(old), which is now called \(now); another account is called \(old) now. Choose which box.", systemImage: "person.crop.circle.badge.questionmark").foregroundStyle(.orange)
+            case .unconfirmed(_, let why):
+                Label(why, systemImage: "person.crop.circle.badge.questionmark").foregroundStyle(.orange)
             case .unknown:
                 Label("The accounts could not be listed", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
             }
@@ -181,9 +183,10 @@ private struct ItemRow: View {
                 Spacer(minLength: 0)
                 if item.canRetry { Button("Try again") { imports.retry(batch: batch.batchId, item: item.id) }.buttonStyle(.borderless) }
             }
-            if item.heldBack {
+            if item.hasHold {
                 Toggle(item.repeatOf != nil ? "This is a different Pokémon" : "Import it again", isOn: Binding(get: { item.includeAnyway == true }, set: { imports.setIncluded(batch: batch.batchId, item: item.id, $0) }))
                     .font(.footnote)
+                Button("Discard this screenshot", role: .destructive) { imports.discardItem(batch: batch.batchId, item: item.id) }.font(.footnote).buttonStyle(.borderless)
             }
         }
         .accessibilityElement(children: .combine)
@@ -205,11 +208,12 @@ private struct ItemRow: View {
         case .pending: return "Waiting to be read."
         case .read:
             let title = StillImport.title(of: item) ?? "Read"
+            if item.includeAnyway == true { return "\(title). Will be included." }
             if let earlier = item.repeatOf, let at = batch.items.firstIndex(where: { $0.id == earlier }) {
                 return "\(title). Looks like the Pokémon in screenshot \(at + 1): a second screenshot of it, or another Pokémon with the same species and IVs. Held back until you say."
             }
-            if let when = item.alreadyImported, item.includeAnyway != true { return "\(title). Imported from this screenshot on \(when.formatted(date: .abbreviated, time: .omitted)), so it is held back." }
-            return item.includeAnyway == true ? "\(title). Will be included." : "\(title). Will be added or matched to the box."
+            if let when = item.alreadyImported { return "\(title). This screenshot was imported on \(when.formatted(date: .abbreviated, time: .omitted)), so it is held back." }
+            return "\(title). Will be added, or matched to a Pokémon already in the box and left unchanged."
         case .ivsMissing:
             return [StillImport.title(of: item), item.detail].compactMap { $0 }.joined(separator: ": ") + " Not added, because the IVs are what make a Pokémon known."
         case .unsupported, .unreadable, .failed: return (item.detail ?? "Could not be used.") + " Nothing was added from it."

@@ -37,19 +37,31 @@ struct ReviewNotices: View {
     @ViewBuilder private func importNotices(_ p: ScreenshotImporter.Prepared) -> some View {
         notice("These screenshots will be added to the box of \(p.account). Pokémon that are not in them are left exactly as they are.", icon: "person.crop.circle", ink: Theme.ink, bold: true, tint: nil)
         if let left = leftOutText(p) { notice(left, icon: "info.circle", ink: Theme.muted, tint: nil) }
-        if !p.plan.same.isEmpty { notice("\(ReviewFormat.count(p.plan.same.count, "screenshot", "screenshots")) matched Pokémon already in the box exactly, so they are treated as those Pokémon and left unchanged, as in a scan.", icon: "equal.circle", ink: Theme.muted, tint: nil) }
+        if !p.plan.same.isEmpty { notice("\(ReviewFormat.count(p.plan.same.count, "screenshot", "screenshots")) match Pokémon already in the box (same species, CP and IVs), so they are treated as those Pokémon and left unchanged, as in a scan.", icon: "equal.circle", ink: Theme.muted, tint: nil) }
         if !p.dropped.isEmpty { notice("\(ReviewFormat.count(p.dropped.count, "screenshot", "screenshots")) could not be worked out again and were left out.", icon: "exclamationmark.triangle.fill", ink: Theme.orangeInk) }
     }
 
+    /// Says what was left out and, to the letter of `ImportQueue.retire`, what a save keeps and what it clears: held-back and unreadable (or failed) screenshots stay queued; screenshots
+    /// without IVs and screens that are not supported are cleared with the save, since there is nothing to do with them.
     private func leftOutText(_ p: ScreenshotImporter.Prepared) -> String? {
         let left = p.manifest.items.filter { !$0.isIncluded && $0.duplicateOf == nil }
         guard !left.isEmpty else { return nil }
-        let held = left.filter(\.heldBack).count, noIVs = left.filter { $0.state == .ivsMissing }.count, other = left.count - held - noIVs
-        var parts = [String]()
-        if noIVs > 0 { parts.append("\(ReviewFormat.count(noIVs, "screenshot", "screenshots")) without IVs (the appraisal bars were not showing or had not finished filling)") }
-        if other > 0 { parts.append("\(ReviewFormat.count(other, "screenshot", "screenshots")) that could not be read") }
-        if held > 0 { parts.append("\(ReviewFormat.count(held, "screenshot", "screenshots")) held back as possible repeats") }
-        return "Not included: " + parts.joined(separator: ", ") + ". They stay in Import screenshots after you save, or if you go back, where a held-back one can be included."
+        func n(_ k: Int) -> String { ReviewFormat.count(k, "screenshot", "screenshots") }
+        let repeats = left.filter { $0.heldBack && $0.repeatOf != nil }.count
+        let already = left.filter { $0.heldBack && $0.repeatOf == nil && $0.alreadyImported != nil }.count
+        let noIVs = left.filter { $0.state == .ivsMissing }.count, unsupported = left.filter { $0.state == .unsupported }.count
+        let unread = left.filter { $0.canRetry }.count
+        var out = [String](), stay = [String](), cleared = [String]()
+        if repeats > 0 { out.append("\(n(repeats)) held back as possible repeats of another in this batch"); stay.append("held-back") }
+        if already > 0 { out.append("\(n(already)) held back because that screenshot was imported before"); if !stay.contains("held-back") { stay.append("held-back") } }
+        if unread > 0 { out.append("\(n(unread)) that could not be read"); stay.append("unreadable") }
+        if noIVs > 0 { out.append("\(n(noIVs)) without IVs (the appraisal bars were not showing or had not finished filling)"); cleared.append("without IVs") }
+        if unsupported > 0 { out.append("\(n(unsupported)) that are not a supported screen"); cleared.append("unsupported") }
+        guard !out.isEmpty else { return nil }
+        var text = "Not included: " + out.joined(separator: ", ") + "."
+        if !stay.isEmpty { text += " After you save, the \(stay.joined(separator: " and ")) ones stay in Import screenshots." }
+        if !cleared.isEmpty { text += " The \(cleared.joined(separator: " and ")) ones are cleared with the save." }
+        return text
     }
 
     private func notice(_ text: String, icon: String, ink: Color, bold: Bool = false, tint: PanelTint? = .orange) -> some View {

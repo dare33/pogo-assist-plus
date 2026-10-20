@@ -30,6 +30,7 @@ final class ImportModel: ObservableObject {
     @Published private(set) var preparing: String?
     /// Reading is paused because the app is not in front. It carries on when it is.
     @Published private(set) var paused = false
+    private var gate = ReadingGate() { didSet { paused = gate.paused } }
     /// One line for the sheet: what went wrong or what was done for the person without asking.
     @Published var notice: String?
 
@@ -67,7 +68,6 @@ final class ImportModel: ObservableObject {
     /// front of a scan that has finished or is waiting to be reviewed: that comes first, and this is looked at again when it is done (`flowEnded`).
     func activate() {
         guard available else { return }
-        paused = false
         let importer = self.importer
         Task {
             let report = try? await serial { importer.queue.cleanup() }
@@ -76,7 +76,7 @@ final class ImportModel: ObservableObject {
             guard !batches.isEmpty else { return }
             startReading()
             let unseen = batches.filter { !promptedFor.contains($0.batchId) }
-            if !unseen.isEmpty, app.sheet == nil, app.canOpenImportReview, !app.scanPendingPickup {
+            if ImportPolicy.shouldAutoOpenSheet(unseenBatches: unseen.count, sheetOpen: app.sheet != nil, canOpenReview: app.canOpenImportReview, scanPendingPickup: app.scanPendingPickup) {
                 promptedFor.formUnion(unseen.map(\.batchId))
                 app.sheet = .screenshots
             }
@@ -107,7 +107,7 @@ final class ImportModel: ObservableObject {
     /// The app moved between the front and the background. Reading stops after the screenshot in hand when it leaves (that one is finished under a background task, so an
     /// interruption never leaves a half-read image that would count against its retries) and carries on when it returns.
     func scenePhaseChanged(background: Bool) {
-        if background { paused = true } else if paused { paused = false; startReading() }
+        if gate.scenePhaseChanged(background: background) { startReading() }
     }
 
     // MARK: picking
@@ -119,33 +119,27 @@ final class ImportModel: ObservableObject {
         guard let account = app.account else { notice = "Make an account first, then choose screenshots."; return }
         staging = Progress(batch: "", done: 0, total: picked.count)
         notice = nil
-        let queue = self.queue, mark = app.library.store.renameCount
+        let queue = self.queue, mark = app.library.store.renameCount, born = app.library.store.accountCreated(account)
         stagingTask = Task {
-            var unusable = 0, cameras = 0
             defer { staging = nil; stagingTask = nil }
-            do {
-                let builder = try queue.beginBatch(origin: .photoPicker, account: account, renameMark: mark)
-                for (i, item) in picked.enumerated() {
-                    if Task.isCancelled { builder.abort(); return }
-                    staging?.done = i
-                    let asset = item.itemIdentifier
-                    guard let data = try? await item.loadTransferable(type: Data.self) else { unusable += 1; continue }
-                    // The PNG encode and the hashing are not main-actor work.
-                    let result = await Task.detached(priority: .userInitiated) { () -> ImageStagingError? in
-                        do { _ = try builder.add(data: data, assetId: asset); return nil } catch { return (error as? ImageStagingError) ?? .cannotDecode }
-                    }.value
-                    if let result { if result == .cameraPhoto { cameras += 1 } else { unusable += 1 } }
-                }
-                // Cancelled after the last picture was loaded: nothing is queued and nothing starts reading.
-                if Task.isCancelled { builder.abort(); return }
-                let m = try builder.commit()
+            let builder: ImportQueue.Builder
+            do { builder = try queue.beginBatch(origin: .photoPicker, account: account, renameMark: mark, accountBorn: born) } catch { notice = AppModel.plain(error); return }
+            let result = await PickStager.stage(count: picked.count, builder: builder,
+                load: { i in
+                    guard let data = try? await picked[i].loadTransferable(type: Data.self) else { return nil }
+                    return (data, picked[i].itemIdentifier)
+                },
+                isCancelled: { Task.isCancelled },
+                progress: { [weak self] i in Task { @MainActor in self?.staging?.done = i } })
+            switch result {
+            case .cancelled:
+                notice = "Cancelled. Nothing was added."
+                return
+            case .committed(let m, let unusable):
                 promptedFor.insert(m.batchId)
-                var left = [String]()
-                if unusable > 0 { left.append("\(unusable) could not be opened") }
-                if cameras > 0 { left.append("\(cameras) looked like camera photos, which cannot be read") }
-                if !left.isEmpty { notice = left.joined(separator: " and ").capitalizedFirst + ", so \(unusable + cameras == 1 ? "it was" : "they were") left out." }
-            } catch {
-                notice = unusable + cameras == picked.count ? "None of the pictures could be used. Choose screenshots of Pokémon GO's appraisal screens." : AppModel.plain(error)
+                if unusable > 0 { notice = "\(unusable) of the \(picked.count) pictures could not be opened and \(unusable == 1 ? "was" : "were") left out." }
+            case .failed(let error, let unusable):
+                notice = unusable == picked.count ? "None of the pictures could be opened. Choose screenshots of Pokémon GO's appraisal screens." : AppModel.plain(error)
             }
             refresh()
             startReading()
@@ -157,18 +151,25 @@ final class ImportModel: ObservableObject {
     /// Read every waiting screenshot, oldest batch first, one image at a time on the engine's queue. Starts by itself; safe to call again while it runs. First every batch is
     /// looked at again, so one whose screenshots were copies of a batch that has since gone is read now.
     func startReading() {
-        guard available, readerTask == nil, !paused else { return }
+        guard available, readerTask == nil, gate.mayRead else { return }
         let importer = self.importer
         readerTask = Task {
             defer { reading = nil; readerTask = nil; refresh() }
-            let waiting = (try? await serial { try importer.prepareAll() }) ?? []
-            refresh()
-            let loose = ((try? queue.list())?.manifests ?? []).filter { !$0.isRead || $0.account == nil }.map(\.batchId)
-            var seen = Set<String>()
-            for id in (waiting.map(\.batchId) + loose).filter({ seen.insert($0).inserted }) {
-                if Task.isCancelled || paused { break }
-                await read(batch: id)
-                if (try? queue.load(id))?.isRead == false { break }   // stopped, paused or failed outright: leave it queued
+            // Look again after each round: finishing one batch (or the person discarding one meanwhile) can make another readable, and nothing should be left waiting for a nudge.
+            var done = Set<String>()
+            while !Task.isCancelled, gate.mayRead {
+                let waiting = (try? await serial { try importer.prepareAll() }) ?? []
+                refresh()
+                let loose = ((try? queue.list())?.manifests ?? []).filter { !$0.isRead || $0.account == nil }.map(\.batchId)
+                var seen = Set<String>()
+                let next = (waiting.map(\.batchId) + loose).filter { seen.insert($0).inserted && !done.contains($0) }
+                guard !next.isEmpty else { break }
+                for id in next {
+                    if Task.isCancelled || !gate.mayRead { break }
+                    done.insert(id)
+                    await read(batch: id)
+                    if (try? queue.load(id))?.isRead == false { break }   // stopped, paused or failed outright: leave it queued
+                }
             }
         }
     }
@@ -183,9 +184,17 @@ final class ImportModel: ObservableObject {
             let total = m.items.count
             reading = Progress(batch: id, done: total - m.pending.count, total: total)
             refresh()
-            while !Task.isCancelled, !paused, !m.isRead {
+            while !Task.isCancelled, gate.mayRead, !m.isRead {
                 // A screenshot that has been started is finished even if the app leaves the front: iOS is asked for time to do it.
-                let task = UIApplication.shared.beginBackgroundTask(withName: "pogo-read-screenshot")
+                // If the time runs out mid-read the read is not counted against its retries, and nothing further starts.
+                var task = UIBackgroundTaskIdentifier.invalid
+                task = UIApplication.shared.beginBackgroundTask(withName: "pogo-read-screenshot") { [weak self] in
+                    MainActor.assumeIsolated {
+                        self?.importer.refundInterruptedRead()
+                        self?.gate.timeExpired()
+                        if task != .invalid { UIApplication.shared.endBackgroundTask(task); task = .invalid }
+                    }
+                }
                 defer { if task != .invalid { UIApplication.shared.endBackgroundTask(task) } }
                 guard let next = try await app.worker.run({ engine in try importer.readNext(batch: id, engine: engine) }) else { break }
                 m = next
@@ -199,10 +208,11 @@ final class ImportModel: ObservableObject {
 
     /// Stop after the screenshot being read. What was read is kept; the rest waits in the queue.
     func cancel() {
-        guard readerTask != nil || stagingTask != nil else { return }
-        stagingTask?.cancel()
-        readerTask?.cancel()
-        notice = "Stopped. The screenshots that were read are kept; the rest are still queued."
+        if stagingTask != nil { stagingTask?.cancel() }   // the pick says what became of it
+        if readerTask != nil {
+            readerTask?.cancel()
+            notice = "Stopped. The screenshots that were read are kept; the rest are still queued."
+        }
     }
 
     // MARK: per screenshot and per batch
@@ -224,6 +234,12 @@ final class ImportModel: ObservableObject {
     func setIncluded(batch: String, item: String, _ include: Bool) {
         let importer = self.importer
         Task { _ = try? await serial { try importer.setIncluded(batch: batch, item: item, include) }; refresh() }
+    }
+
+    /// Throw one screenshot away (a held-back leftover, say); the batch goes with its last one.
+    func discardItem(batch: String, item: String) {
+        let importer = self.importer
+        Task { _ = try? await serial { try importer.discardItem(batch: batch, item: item) }; refresh(); if batches.isEmpty { app.sheet = nil } }
     }
 
     func assign(batch: String, to account: String) {
