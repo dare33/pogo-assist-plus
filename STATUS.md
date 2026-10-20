@@ -19,7 +19,7 @@ the threshold sit together at the top of `src/leagues.js`. The advisor rates lea
 (scans have no Poke Genie columns); a league where the copy is already past the cap as the target is not an area of that build, and
 a build left with no area is dropped; "past the cap" means the copy's CP at its current level (0/0/0 if its IVs are unknown) is over it, so a level-51 Best Buddy copy that still fits stays. A level-35 Rookidee no longer outranks a usable level-5 one for Corviknight. Master League
 keeps its neutral 0.6 weight and is never the cost league. XL candy now counts towards a build's effort for GL and UL (the league cost carries it; before, it was taken as 0). The display for the options is being designed separately: no screen
-changed, the app decodes the data (`BoxAdvice.LeagueRating`, advice cache version 4). Not verified on a device.
+changed, the app decodes the data (`BoxAdvice.LeagueRating`, advice cache version 5). Not verified on a device.
 
 **20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,
 merged from `native-ui-v1` in PR #2), the shared JavaScript changes (extractor read fixes, CP recovery, PvP leagues,

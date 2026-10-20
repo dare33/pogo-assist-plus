@@ -204,7 +204,7 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ul"]?.strength); XCTAssertNil(l["ul"]?.iv); XCTAssertNil(l["ul"]?.cost)
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
-        XCTAssertEqual(advice.version, 4)
+        XCTAssertEqual(advice.version, 5)
 
         // The options list decodes in order; the experimental member is a different index.
         let gl = try XCTUnwrap(l["gl"])
@@ -220,7 +220,7 @@ final class BoxLibraryTests: XCTestCase {
         try lib.saveAdvice(advice, account: "a", seq: 1)
         XCTAssertEqual(lib.loadAdvice(account: "a", seq: 1), advice)
         // Versions 2 (leagues only) and 3 (the first options shape, the old pick rule) are recomputed too.
-        for v in [1, 2, 3] {
+        for v in [1, 2, 3, 4] {
             var old = advice; old.version = v
             try lib.saveAdvice(old, account: "a", seq: 1)
             XCTAssertNil(lib.loadAdvice(account: "a", seq: 1), "version \(v)")
@@ -339,6 +339,9 @@ final class BoxLibraryTests: XCTestCase {
         let over = rating(overOption)
         XCTAssertEqual(LeagueText.ivs(over, key: "ul"), "Already above 2,500 CP, so it cannot be used in Ultra League")
         XCTAssertEqual(LeagueText.ivs(over, key: "gl"), "Already above 1,500 CP, so it cannot be used in Great League")
+        // Unknown IVs and already over the cap: the cap is what the page says, not "IVs not read".
+        var blindOver = overOption; blindOver.iv = nil; blindOver.cost = nil
+        XCTAssertEqual(LeagueText.ivs(rating(blindOver), key: "gl"), "Already above 1,500 CP, so it cannot be used in Great League")
         XCTAssertEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 101, 111, 1002].map(LeagueText.ordinal), ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st", "111th", "1,002nd"])
     }
 

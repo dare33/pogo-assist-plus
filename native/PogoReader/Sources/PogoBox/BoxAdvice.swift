@@ -148,7 +148,7 @@ public struct BoxAdvice: Codable, Equatable {
         public var pickIndex: Int
         /// Index into `options` of the experimental member (may equal `pickIndex`).
         public var experimentalIndex: Int
-        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the score rule ran, Master League or IVs unknown, and no member is ranked: the final evolution).
+        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). A copy with known IVs in Great or Ultra League and nothing ranked is still "emulated").
         public var source: String
 
         private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source }
@@ -215,8 +215,9 @@ public struct BoxAdvice: Codable, Equatable {
 
     /// 2 since the Leagues section: an advice cached by build 2 or earlier has no leagues, so `BoxLibrary.loadAdvice` drops it and it is recomputed.
     /// 3 since the league options; 4 since their shape became { options, pick, experimental, source } and the shown pick copies Poke Genie.
-    /// Advice cached at 2 or 3 has the old shape or the old pick rule, so it is dropped and recomputed too.
-    public static let currentVersion = 4
+    /// 5 since `overCap` became "CP at the current level exceeds the cap" (0/0/0 when the IVs are unknown) and the shown pick avoids over-cap members.
+    /// Advice cached at 2, 3 or 4 has the old shape or the old rules, so it is dropped and recomputed too.
+    public static let currentVersion = 5
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]

@@ -32,8 +32,9 @@ public enum LeagueText {
     }
 
     public static func ivs(_ r: BoxAdvice.LeagueRating, key: String) -> String {
-        guard let iv = r.iv else { return "IVs not read, so no rank" }
+        // Over the cap is checked first: it holds with unknown IVs too (CP at 0/0/0 is already over), and it matters more than the missing rank.
         if r.overCap, let cap = cap(key) { return "Already above \(grouped(cap)) CP, so it cannot be used in \(name(key))" }
+        guard let iv = r.iv else { return "IVs not read, so no rank" }
         return "IVs rank #\(grouped(iv.rank)) of 4,096 · \(oneDecimal(iv.pct))% of best"
     }
 
