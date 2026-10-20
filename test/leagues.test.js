@@ -75,7 +75,7 @@ test('acceptance: IV rank, stat product and Rank % match every exact-IV row of t
 
 // Regression pins (not evidence it generalises: the fixture is the data it was fitted on) for the emulation of Poke Genie's pick, measured WITHOUT reading the export's pick: currently 271/280 Great and 300/306 Ultra rows (the 270/278 and 298/304 counted earlier were the
 // cost-check subsets, a different row count; the printed report is the reference). A drop below these means the emulation, the IV rank or the family walk changed.
-const EMULATION_FLOOR = { gl: 270, ul: 298 };
+const EMULATION_FLOOR = { gl: 271, ul: 300 };
 
 test('report: pick agreement with Poke Genie (emulated without its pick, and the experimental rule), cost agreement, ranking convention', () => {
   const lines = [];

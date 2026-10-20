@@ -3,8 +3,8 @@
 **20 Oct 2026, branch `feat/league-options` (not merged): league options.** `leaguesFor` (`src/leagues.js`) now returns, per league,
 every allowed family member (PvPoke-ranked or not, form changes such as Zygarde included) as `options`, each rated for the copy
 (PvPoke rank and score, IV rank, cost; moves only on the shown and experimental options), plus `pick` (index of the member to SHOW),
-`experimental` (index of the other rule's member) and `source` (`export`, `emulated`, `ranked`, or `fallback` when nothing in the
-family is ranked there). The shown pick copies Poke Genie: its own pick from the export when the entry has one and it is in the
+`experimental` (index of the other rule's member) and `source` (`export`, `emulated`, `ranked`, or `fallback`: the score rule ran (Master League, or unknown IVs) with no member of the
+family ranked there; known IVs in Great or Ultra League with nothing ranked still read `emulated`). The shown pick copies Poke Genie: its own pick from the export when the entry has one and it is in the
 family. Otherwise, in Great and Ultra League, `pokeGeniePick`, a PROVISIONAL emulation (best stat product % among the members the
 copy is not already too strong for, ranked ones first). Master League has no Poke Genie pick to copy and the emulation there only
 followed ~0.07% stat-product noise (Eevee showed Glaceon, Scyther Kleavor over Scizor, Shaymin Land over Sky), so Master League
@@ -18,8 +18,8 @@ first with a `CLOSE_SCORE` (3.0) window decided by IV Rank %, is kept as `choose
 for, unless every member is (then it is the shown pick). Greg swaps the shown pick to it once it is provably better. Both rules and
 the threshold sit together at the top of `src/leagues.js`. The advisor rates league builds from the build target's own option
 (scans have no Poke Genie columns); a league where the copy is already past the cap as the target is not an area of that build, and
-a build left with no area is dropped (a level-35 Rookidee no longer outranks a usable level-5 one for Corviknight). Master League
-keeps its neutral 0.6 weight and is never the cost league. The display for the options is being designed separately: no screen
+a build left with no area is dropped; "past the cap" means the copy's CP at its current level (0/0/0 if its IVs are unknown) is over it, so a level-51 Best Buddy copy that still fits stays. A level-35 Rookidee no longer outranks a usable level-5 one for Corviknight. Master League
+keeps its neutral 0.6 weight and is never the cost league. XL candy now counts towards a build's effort for GL and UL (the league cost carries it; before, it was taken as 0). The display for the options is being designed separately: no screen
 changed, the app decodes the data (`BoxAdvice.LeagueRating`, advice cache version 4). Not verified on a device.
 
 **20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,

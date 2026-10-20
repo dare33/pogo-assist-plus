@@ -129,7 +129,8 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
  * CLOSE_SCORE rule's member (not shown); they may be the same index. `experimental` is never a member the copy is already past the
  * cap for, unless every member is, and then it is the shown pick. `source` says how `pick` was decided: 'export' = Poke Genie's own
  * pick from the entry, 'emulated' = the stat-product emulation (Great and Ultra only), 'ranked' = the highest PvPoke score (Master
- * League, or unknown IVs), 'fallback' = nothing in the family is ranked here, so the final evolution.
+ * League, or unknown IVs), 'fallback' = the PvPoke-score rule applied (Master League, or unknown IVs) and no member of the family is ranked
+ * here, so the final evolution. A copy with known IVs in Great or Ultra League and nothing ranked is still 'emulated'.
  * Option = { speciesId, name, self, genderLocked?, strength, moves, needs, iv, overCap, cost }:
  *   speciesId, name: the member (the _shadow id and name where the entry is a Shadow and PvPoke ranks the Shadow);
  *   self: it is the Pokémon itself; genderLocked: 'male'|'female', only when the sex is unknown and one sex can become it;
