@@ -3,7 +3,7 @@
 import { evolutionLinks, baseSpeciesId, resolveSpecies, FORM_CHANGES } from './gamemaster.js';
 import { powerUpCost } from './cost.js';
 import { cpAt } from './cpm.js';
-import { ivRank } from './pvp-rank.js';
+import { ivRank, CAPS } from './pvp-rank.js';
 import { evolveCandy, evolutionPath } from './evolve.js';
 
 const LEAGUES = ['gl', 'ul', 'ml'];
@@ -57,7 +57,7 @@ export const CLOSE_SCORE = 3.0;
 /**
  * The shown pick's emulation of Poke Genie (steps 2 and 3 above). `members` = [{ id, depth, score, iv, overCap }] for every allowed
  * member: score = PvPoke score or null when unranked; iv = ivRank() result or null (unknown IVs, or the member cannot fit under
- * the cap); overCap = this copy's level is already past the league's best level for that member. Returns the member, or null when
+ * the cap); overCap = this copy's CP at its current level (0/0/0 when its IVs are unknown) already exceeds the league's cap as that member. Returns the member, or null when
  * the IVs are unknown and nothing is ranked (the caller then takes the final evolution).
  */
 export function pokeGeniePick(members) {
@@ -136,7 +136,7 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
  *   strength: { score, rank, of } from PvPoke, or null when PvPoke does not rank it in this league;
  *   moves: { fast, charged[] } on the SHOWN and the EXPERIMENTAL option only when PvPoke ranks them, else null (trimmed to keep the payload small); needs: the recommended moves this copy lacks, only on the Pokémon itself, else null;
  *   iv: { rank, pct, rankPct, level, cp } for this copy's IVs as this member, or null (unknown IVs or cannot fit under the cap);
- *   overCap: this copy's level is already past the league's best level for the member; cost: dust/candy/xl to that level plus the
+ *   overCap: this copy's CP at its current level (0/0/0 if its IVs are unknown) already exceeds the cap as the member (never when the level is unknown, or in Master League); cost: dust/candy/xl to that level plus the
  *   candy to evolve there (evolveCandy), or null (no IVs, no level, over the cap).
  * Options are every allowed family member: ranked ones first (score, then Rank %, then later evolution), then unranked ones
  * (later evolution first). Unreleased members are left out unless the whole family is unreleased.
@@ -174,8 +174,11 @@ export function leaguesFor(entry, resolved, ctx) {
       if (!ivMemo.has(base)) ivMemo.set(base, ivRank(base, gm.byId.get(base).baseStats, ivs, league));
       return ivMemo.get(base);
     };
-    // Master League has no cap: a Best Buddy copy at 51 is simply past the last power-up, with nothing left to pay.
-    const overCapOf = (base) => { const iv = ivOf(base); return league !== 'ml' && !!(iv && level != null && level > iv.level); };
+    // Over the cap = the copy's CP at its CURRENT level already exceeds the league's cap (a Pokémon cannot be powered down). With
+    // unknown IVs the best case, 0/0/0, is used, so a level-35 Rookidee is over the Great League cap for Corviknight whatever its
+    // IVs are. Unknown level: never over. Master League has no cap, so a Best Buddy copy at 51 is simply past the last power-up.
+    const ZERO_IVS = { atk: 0, def: 0, hp: 0 };
+    const overCapOf = (base) => league !== 'ml' && level != null && cpAt(gm.byId.get(base).baseStats, ivs ?? ZERO_IVS, level) > CAPS[league];
 
     // One family member rated for this league: everything the Pokémon screen shows for it.
     const rate = (base, row) => {
@@ -197,7 +200,8 @@ export function leaguesFor(entry, resolved, ctx) {
       const ivOut = iv && { rank: iv.rank, pct: iv.pct, rankPct: iv.rankPct, level: iv.level, cp: iv.cp };
       const overCap = overCapOf(base);
       let cost = null;
-      if (iv && level != null && !overCap) {
+      // A best level below the current one (a level-51 Best Buddy copy that still fits the cap) leaves nothing to build towards.
+      if (iv && level != null && !overCap && (league === 'ml' || iv.level >= level)) {
         const flags = { shadow: entry.shadow, purified: entry.purified, lucky: entry.lucky };
         const up = powerUpCost(level, iv.level, flags);
         const path = evolutionPath(gm, start, base) ?? [];

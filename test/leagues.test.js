@@ -247,7 +247,9 @@ test('experimental pick: Magnemite GL takes the better spread of two close membe
   assert.equal(expOf(low).speciesId, 'magneton');
   assert.equal(low.options[0].iv.rankPct, 60.81);
   // Unknown IVs: the highest score.
-  assert.equal(expOf(rawOf(entry('Magnemite', { ivs: null })).gl).speciesId, 'magnezone');
+  // Unknown IVs: the highest score among members the copy still fits. Magnezone is past the cap at level 20 even at 0/0/0, so Magneton; with the level unknown nothing is over the cap.
+  assert.equal(expOf(rawOf(entry('Magnemite', { ivs: null })).gl).speciesId, 'magneton');
+  assert.equal(expOf(rawOf(entry('Magnemite', { ivs: null, level: null })).gl).speciesId, 'magnezone');
   // Lillipup at a level past Stoutland's Great League best level: it is not the experimental pick there either.
   const lillipup = rawOf(entry('Lillipup', { level: 30, ivs: { atk: 13, def: 13, hp: 11 } })).gl;
   assert.equal(lillipup.options.find((o) => o.speciesId === 'stoutland').overCap, true);
@@ -262,7 +264,7 @@ test('Eevee UL experimental: a far weaker member (Flareon 66.8 against Sylveon 8
 });
 
 test('unknown IVs: options carry no IV rating or cost; the shown pick is the top PvPoke score and the source says so', () => {
-  const L = rawOf(entry('Eevee', { ivs: null }));
+  const L = rawOf(entry('Eevee', { ivs: null, level: null }));
   for (const league of ['gl', 'ul', 'ml']) {
     for (const o of L[league].options) { assert.equal(o.iv, null); assert.equal(o.cost, null); assert.equal(o.overCap, false); }
     assert.equal(L[league].source, 'ranked');
@@ -682,4 +684,28 @@ test('moves are carried only on the shown and the experimental option', () => {
     });
     assert.ok(l.options.filter((o) => o.moves).length <= 2);
   }
+});
+
+test('overCap is CP at the current level over the cap: with unknown IVs it uses 0/0/0, with an unknown level it is never set', () => {
+  // Corviknight at level 35 is over the Great League cap even at 0/0/0, so unknown IVs do not hide it.
+  const unknown = rawOf(entry('Rookidee', { ivs: null, level: 35 })).gl;
+  assert.equal(unknown.options.find((o) => o.speciesId === 'corviknight').overCap, true);
+  assert.equal(unknown.options.find((o) => o.speciesId === 'rookidee').overCap, false);
+  assert.ok(unknown.options.every((o) => o.iv === null && o.cost === null));
+  const low = rawOf(entry('Rookidee', { ivs: null, level: 5 })).gl;
+  assert.ok(low.options.every((o) => !o.overCap));
+  assert.ok(rawOf(entry('Rookidee', { ivs: null, level: null })).gl.options.every((o) => !o.overCap));
+});
+
+test('a level 51 Best Buddy copy is over the cap only if its CP at 51 is: Cramorant and Seaking fit Ultra League, Talonflame does not', () => {
+  const hundo = { atk: 15, def: 15, hp: 15 };
+  const ul = (name) => rawOf(entry(name, { ivs: hundo, level: 51 })).ul;
+  for (const [name, id] of [['Cramorant', 'cramorant'], ['Seaking', 'seaking']]) {
+    const o = ul(name).options.find((x) => x.speciesId === id);
+    assert.equal(o.overCap, false, name);
+    assert.equal(o.cost, null, `${name}: its best level (50) is below the current one, so there is nothing to build towards`);
+  }
+  assert.equal(ul('Talonflame').options.find((x) => x.speciesId === 'talonflame').overCap, true);
+  // The same CP rule at level 50 and below.
+  assert.equal(rawOf(entry('Cramorant', { ivs: hundo, level: 50 })).ul.options.find((x) => x.speciesId === 'cramorant').overCap, false);
 });

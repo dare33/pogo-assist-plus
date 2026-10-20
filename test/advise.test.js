@@ -149,3 +149,20 @@ test("a league build is weighted by this copy's Rank % as Our pick, and neutrall
   assert.equal(unknown.pvpCost, null);
   assert.ok(unknown.value > bad.value && unknown.value < good.value);
 });
+
+test('unknown IVs do not hide an over-cap target: a level-35 Rookidee without IVs ranks below a usable L5 copy for Corviknight', () => {
+  const mk = (level, ivs) => ({ ...template, name: 'Rookidee', form: '', pvp: undefined, level, levelMin: level, levelMax: level, ivs });
+  const res = analyseBox([mk(35, null), mk(5, { atk: 10, def: 12, hp: 14 })], ctx);
+  const all = res.allBuilds.filter((b) => b.targetId === 'corviknight');
+  const old = all.find((b) => b.pokemon.level === 35), fresh = all.find((b) => b.pokemon.level === 5);
+  assert.ok(!old.areas.includes('gl'));
+  assert.ok(fresh.areas.includes('gl'));
+  assert.ok(fresh.value > old.value && fresh.score > old.score);
+  assert.ok(!fresh.duplicate && old.duplicate, 'the usable copy carries the build');
+});
+
+test('level 51 Best Buddy copies keep Ultra League when their CP fits (Cramorant, Seaking) and lose it when it does not (Talonflame)', () => {
+  const hundo51 = (name) => one(name, { level: 51, levelMin: 51, levelMax: 51, ivs: { atk: 15, def: 15, hp: 15 } });
+  for (const [name, id] of [['Cramorant', 'cramorant'], ['Seaking', 'seaking']]) assert.ok(buildTo(hundo51(name), id)?.areas.includes('ul'), name);
+  assert.ok(!buildTo(hundo51('Talonflame'), 'talonflame')?.areas.includes('ul'));
+});
