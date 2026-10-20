@@ -178,7 +178,14 @@ final class BoxLibraryTests: XCTestCase {
           "gl":{"pick":{"speciesId":"toxapex","name":"Toxapex","self":false},"strength":{"score":91.8,"rank":23,"of":1152},
                 "moves":{"fast":"Poison Jab","charged":["Brine","Sludge Wave"]},"needs":null,
                 "iv":{"rank":5,"pct":99.1,"rankPct":97.2,"level":24.5,"cp":1497},"overCap":false,
-                "cost":{"dust":175000,"candy":120,"xl":0,"evolveCandy":50,"toLevel":24.5}},
+                "cost":{"dust":175000,"candy":120,"xl":0,"evolveCandy":50,"toLevel":24.5},
+                "options":[
+                  {"pick":{"speciesId":"toxapex","name":"Toxapex","self":false},"strength":{"score":91.8,"rank":23,"of":1152},
+                   "moves":{"fast":"Poison Jab","charged":["Brine","Sludge Wave"]},"needs":null,
+                   "iv":{"rank":5,"pct":99.1,"rankPct":97.2,"level":24.5,"cp":1497},"overCap":false,
+                   "cost":{"dust":175000,"candy":120,"xl":0,"evolveCandy":50,"toLevel":24.5},"ours":true},
+                  {"pick":{"speciesId":"mareanie","name":"Mareanie","self":true},"strength":{"score":60.5,"rank":300,"of":1152},
+                   "moves":null,"needs":["Brine"],"iv":null,"overCap":false,"cost":null,"ours":false}]},
           "ul":{"pick":{"speciesId":"mareanie","name":"Mareanie","self":true},"strength":null,"moves":null,"needs":["Brine","Poison Jab"],
                 "iv":null,"overCap":true,"cost":null}}}]}
         """
@@ -195,14 +202,29 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ul"]?.strength); XCTAssertNil(l["ul"]?.iv); XCTAssertNil(l["ul"]?.cost)
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
-        XCTAssertEqual(advice.version, 2)
+        XCTAssertEqual(advice.version, 3)
+
+        // The options list decodes in order, with exactly the member Our pick chose marked; a rating with none has nil.
+        let options = try XCTUnwrap(l["gl"]?.options)
+        XCTAssertEqual(options.map(\.pick.speciesId), ["toxapex", "mareanie"])
+        XCTAssertEqual(options.map(\.ours), [true, false])
+        XCTAssertEqual(options[0].strength, .init(score: 91.8, rank: 23, of: 1152))
+        XCTAssertEqual(options[0].iv?.rankPct, 97.2)
+        XCTAssertEqual(options[0].cost, .init(dust: 175000, candy: 120, xl: 0, evolveCandy: 50, toLevel: 24.5))
+        XCTAssertEqual(options[1].pick.isSelf, true)
+        XCTAssertEqual(options[1].needs, ["Brine"])
+        XCTAssertNil(options[1].moves); XCTAssertNil(options[1].iv); XCTAssertNil(options[1].cost)
+        XCTAssertNil(l["ul"]?.options)
 
         // The cache round-trips it; a file with no version (build 2) or a lower one is read as missing.
         try lib.saveAdvice(advice, account: "a", seq: 1)
         XCTAssertEqual(lib.loadAdvice(account: "a", seq: 1), advice)
-        var old = advice; old.version = 1
-        try lib.saveAdvice(old, account: "a", seq: 1)
-        XCTAssertNil(lib.loadAdvice(account: "a", seq: 1))
+        // Version 2 (leagues, no options, the old pick rule) is recomputed too.
+        for v in [1, 2] {
+            var old = advice; old.version = v
+            try lib.saveAdvice(old, account: "a", seq: 1)
+            XCTAssertNil(lib.loadAdvice(account: "a", seq: 1), "version \(v)")
+        }
         let legacy = #"{"builds":[],"gaps":[],"duplicates":[],"unresolved":[],"spareBuilds":{}}"#
         let file = try XCTUnwrap(FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL }.first { $0.lastPathComponent.hasSuffix(".advice.json") })
         try Data(legacy.utf8).write(to: file)

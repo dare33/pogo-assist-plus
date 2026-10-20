@@ -82,6 +82,20 @@ public struct BoxAdvice: Codable, Equatable {
         public struct Moves: Codable, Equatable { public var fast: String; public var charged: [String] }
         public struct IV: Codable, Equatable { public var rank: Int; public var pct: Double; public var rankPct: Double; public var level: Double; public var cp: Int }
         public struct Cost: Codable, Equatable { public var dust: Int; public var candy: Int; public var xl: Int; public var evolveCandy: Int; public var toLevel: Double }
+        /// One family member rated for this league, in the same shape as the rating itself (a rating is Our pick's option without
+        /// `ours`). `leaguesFor` lists every PvPoke-ranked member, strongest score first (then better spread, then later evolution);
+        /// a family with nothing ranked has one option, the fallback pick, with no `strength`.
+        public struct Option: Codable, Equatable {
+            public var pick: Pick
+            public var strength: Strength?
+            public var moves: Moves?
+            public var needs: [String]?
+            public var iv: IV?
+            public var overCap: Bool
+            public var cost: Cost?
+            /// True on exactly one option: the member Our pick chose (the rule is `CLOSE_SCORE` in `src/leagues.js`).
+            public var ours: Bool
+        }
         public var pick: Pick
         public var strength: Strength?
         public var moves: Moves?
@@ -89,10 +103,13 @@ public struct BoxAdvice: Codable, Equatable {
         public var iv: IV?
         public var overCap: Bool
         public var cost: Cost?
+        /// Every option, Our pick included; nil only for advice cached before version 3 (which is recomputed, so screens see it always).
+        public var options: [Option]?
     }
 
     /// 2 since the Leagues section: an advice cached by build 2 or earlier has no leagues, so `BoxLibrary.loadAdvice` drops it and it is recomputed.
-    public static let currentVersion = 2
+    /// 3 since the league options (and Our pick's CLOSE_SCORE rule, which changes which member is picked): advice cached at 2 has neither.
+    public static let currentVersion = 3
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
