@@ -1,47 +1,19 @@
-// PvP leagues for one Pokémon: which family member to build for Great, Ultra and Master League, how strong that is,
-// what this exact copy's IVs rank at, and what it costs to get there.
-import { evolutionLinks, baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
+// PvP leagues for one Pokémon: which family member to build for Great, Ultra and Master League, how strong each member is,
+// what this exact copy's IVs rank at as each member, and what it costs to get there.
+import { evolutionLinks, baseSpeciesId, resolveSpecies, FORM_CHANGES } from './gamemaster.js';
 import { powerUpCost } from './cost.js';
 import { cpAt } from './cpm.js';
 import { ivRank } from './pvp-rank.js';
 import { evolveCandy, evolutionPath } from './evolve.js';
 
 const LEAGUES = ['gl', 'ul', 'ml'];
-// Megas and Primals are not allowed in Battle League, so they are never a pick.
+// Poke Genie's export columns for the leagues it has; it has none for Master League.
+const EXPORT_COLUMN = { gl: 'great', ul: 'ultra' };
+// Megas and Primals are not allowed in Battle League, so they are never an option.
 const NOT_ALLOWED = /_(mega(_[xy])?|primal)$/;
-// ---- Our pick: the rule, in one place (Greg tunes this over time) ----
-// PROVISIONAL default, decided 20 Oct 2026 and expected to change as Greg tunes the algorithm: the same for every league.
-// Species strength comes first. Every ranked family member whose PvPoke score is within CLOSE_SCORE points of the best-scoring
-// member's counts as "close"; among those, the one whose IV Rank % for this exact copy is best wins (Magnemite Great League:
-// Magnezone 78.4 against Magneton 76.4 is close, so the better spread decides; Eevee Ultra League: Sylveon 85.9 against Flareon 66.8
-// is not, so Sylveon stays). Poke Genie, by comparison, picks mostly on the IVs alone.
-export const CLOSE_SCORE = 3.0;
-
-/**
- * The rule. `candidates` are the RANKED family members for one league, each { id, score, rankPct, depth }:
- * score = PvPoke overall score, rankPct = this copy's IV Rank % as that member (null when the IVs are unknown or the member cannot
- * fit under the cap), depth = evolution steps from the Pokémon itself (later evolution = larger). Returns the winner, or null for no
- * candidates. Unranked members are never candidates, so they cannot win over a ranked one.
- *   1. Keep the members within `closeScore` of the best score (a tiny epsilon stops float error flipping an exact boundary).
- *   2. If this copy's IVs are unknown, the highest score wins (as before the rule existed); a tie goes to the later evolution.
- *   3. Otherwise the best IV Rank % wins; a tie goes to the higher score, then the later evolution.
- */
-export function chooseMember(candidates, closeScore = CLOSE_SCORE) {
-  if (!candidates.length) return null;
-  const best = Math.max(...candidates.map((c) => c.score));
-  const close = candidates.filter((c) => c.score >= best - closeScore - 1e-9);
-  const known = close.some((c) => c.rankPct != null);
-  const key = (c) => (known ? [c.rankPct ?? -1, c.score, c.depth] : [c.score, c.depth]);
-  return close.reduce((a, b) => {
-    const ka = key(a), kb = key(b);
-    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return kb[i] > ka[i] ? b : a;
-    return b; // fully tied: the later one in family order
-  });
-}
-
 const MAX_IV = { atk: 15, def: 15, hp: 15 };
 // Family members only one sex can become in Pokémon GO. Poke Genie's export carries the sex; a scan does not, so an unknown
-// sex keeps every member and the pick says which sex it needs.
+// sex keeps every member and the option says which sex it needs.
 const GENDER_LOCKED = {
   gallade: 'male', froslass: 'female', vespiquen: 'female', salazzle: 'female', mothim: 'male',
   wormadam_plant: 'female', wormadam_sandy: 'female', wormadam_trash: 'female', oinkologne: 'male', oinkologne_female: 'female',
@@ -51,17 +23,86 @@ const GENDER_LOCKED = {
 const validIvs = (ivs) => !!ivs && ['atk', 'def', 'hp'].every((k) => Number.isInteger(ivs[k]) && ivs[k] >= 0 && ivs[k] <= 15);
 const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'male' : null);
 
+// ============================================================================================================================
+// WHICH MEMBER TO SHOW, AND THE EXPERIMENT. Both rules live here, side by side; Greg tunes them over time.
+//
+// SHOWN pick (`pokeGeniePick`): copies Poke Genie, which is what Greg's family and friends use and trust. PROVISIONAL: fitted
+// against fixtures/greg-2026-09-25.pokegenie.csv (it reproduces Poke Genie's pick on about 270/278 Great and 298/304 Ultra rows,
+// test/leagues.test.js prints the exact figures); do not overfit it. The remaining misses are near-ties where Poke Genie prefers the
+// later evolution (Fidough -> Dachsbun, Gossifleur -> Eldegoss). Fitting the pools took it from 262/278 and 290/304 (best
+// stat product among the fitting members, ranked or not) to this. Exact ties go to the later evolution (the fixture is indifferent).
+//   1. If the entry carries Poke Genie's own pick for the league (a Poke Genie CSV), and it is a member of this family, use it.
+//   2. Otherwise emulate it, taking the member with the best stat product % (ivRank().pct; on an exact tie the later evolution, which is what decides Master League for a hundo)
+//      from the first of these pools that is not empty: the members this copy is not already too strong for (CP at its current
+//      level over the cap: a Pokémon cannot be powered down) that PvPoke ranks in this league; the same without the ranked
+//      requirement (Poke Genie does pick unranked stages); the ranked members; all members. Unknown level: nothing is "too strong".
+//   3. Unknown IVs: the highest PvPoke score, then the later evolution; a family with nothing ranked takes its final evolution.
+//
+// EXPERIMENTAL pick (`chooseMember`, threshold CLOSE_SCORE): carried in the data (`experimental`) but not shown; Greg will switch
+// the shown pick to it once it is provably better. Species strength first, but among ranked members within CLOSE_SCORE points of
+// the best score the best IV Rank % for this copy wins.
+// ============================================================================================================================
+
+// PROVISIONAL default (Greg, 20 Oct 2026): the same for every league, in PvPoke score points.
+export const CLOSE_SCORE = 3.0;
+
+/**
+ * The shown pick's emulation of Poke Genie (steps 2 and 3 above). `members` = [{ id, depth, score, iv, overCap }] for every allowed
+ * member: score = PvPoke score or null when unranked; iv = ivRank() result or null (unknown IVs, or the member cannot fit under
+ * the cap); overCap = this copy's level is already past the league's best level for that member. Returns the member, or null when
+ * the IVs are unknown and nothing is ranked (the caller then takes the final evolution).
+ */
+export function pokeGeniePick(members) {
+  const rated = members.filter((m) => m.iv);
+  if (rated.length) {
+    // On an exact tie the later evolution (a 15/15/15 is 100% as every member, so this decides Master League for one).
+    const best = (pool) => (pool.length ? pool.reduce((a, b) => (b.iv.pct > a.iv.pct || (b.iv.pct === a.iv.pct && b.depth > a.depth) ? b : a)) : null);
+    const fitting = rated.filter((m) => !m.overCap), ranked = rated.filter((m) => m.score != null);
+    return best(fitting.filter((m) => m.score != null)) ?? best(fitting) ?? best(ranked) ?? best(rated);
+  }
+  const ranked = members.filter((m) => m.score != null);
+  if (!ranked.length) return null;
+  return ranked.reduce((a, b) => (b.score > a.score || (b.score === a.score && b.depth >= a.depth) ? b : a));
+}
+
+/**
+ * The experimental rule. `candidates` are the RANKED members for one league, each { id, score, rankPct, depth, overCap }:
+ * rankPct = this copy's IV Rank % as that member (null when the IVs are unknown or it cannot fit under the cap), depth = evolution
+ * steps from the Pokémon itself, overCap as in pokeGeniePick. Returns the winner, or null for no candidates. Unranked members are
+ * never candidates, so they cannot win over a ranked one.
+ *   0. Members this copy is already too strong for (overCap) are left out entirely, best score included, unless every one is.
+ *   1. Keep the members within `closeScore` of the best remaining score (a tiny epsilon stops float error flipping an exact boundary).
+ *   2. If the IVs are unknown, the highest score wins; a tie goes to the later evolution.
+ *   3. Otherwise the best IV Rank % wins; a tie goes to the higher score, then the later evolution.
+ */
+export function chooseMember(candidates, closeScore = CLOSE_SCORE) {
+  if (!candidates.length) return null;
+  const live = candidates.filter((c) => !c.overCap);
+  const pool = live.length ? live : candidates;
+  const best = Math.max(...pool.map((c) => c.score));
+  const close = pool.filter((c) => c.score >= best - closeScore - 1e-9);
+  const known = close.some((c) => c.rankPct != null);
+  const key = (c) => (known ? [c.rankPct ?? -1, c.score, c.depth] : [c.score, c.depth]);
+  return close.reduce((a, b) => {
+    const ka = key(a), kb = key(b);
+    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return kb[i] > ka[i] ? b : a;
+    return b; // fully tied: the later one in family order
+  });
+}
+
 const regionOf = (id) => id.match(/_(alolan|galarian|hisuian|paldean)(?:_|$)/)?.[1] ?? null;
 
-// Everything the Pokémon can evolve into by the game master's links, minus the cross-regional links: a Cubone becomes Marowak, not
-// Alolan Marowak (that happens only in special events), while Galarian Meowth still reaches Perrserker, whose id carries no region.
+// Everything the Pokémon can become by the game master's evolution links or by a form change (energy, cells, fusion: Zygarde,
+// Crowned Zamazenta; the same set the advisor reaches), minus the cross-regional links: a Cubone becomes Marowak, not Alolan Marowak
+// (that happens only in special events), while Galarian Meowth still reaches Perrserker, whose id carries no region.
 function descendants(gm, start) {
   const out = [];
   const seen = new Set([start]);
   const stack = [start];
   while (stack.length) {
     const parent = stack.pop();
-    for (const next of evolutionLinks(gm, parent)) {
+    const links = [...evolutionLinks(gm, parent), ...(FORM_CHANGES[parent] ?? []).filter((id) => gm.byId.has(id))];
+    for (const next of links) {
       const region = regionOf(next);
       if (seen.has(next) || (region && region !== regionOf(parent))) continue;
       seen.add(next); out.push(next); stack.push(next);
@@ -74,31 +115,44 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /**
  * Leagues for one imported entry. `resolved` is resolveSpecies' result for it; ctx = { gm, tiers, rankings }.
- * Returns { gl, ul, ml }. Each league is the rating of Our pick, { pick, strength, moves, needs, iv, overCap, cost }, plus
- * `options`: every ranked family member rated the same way, Our pick among them marked `ours: true`.
- *
- * Shape, per league: { pick: { speciesId, name, self, genderLocked? }, strength: { score, rank, of } | null,
- *   moves: { fast, charged[] } | null, needs: string[] | null, iv: { rank, pct, rankPct, level, cp } | null, overCap: boolean,
- *   cost: { dust, candy, xl, evolveCandy, toLevel } | null, options: [ ...the same fields except `options`, plus ours: boolean ] }.
- * options are the PvPoke-ranked members only (an unranked one is never a candidate), strongest score first, then better Rank %,
- * then later evolution. A family with nothing ranked has a single option (the fallback pick, strength null, ours true).
- * The league-level fields are a copy of the `ours` option's, so a reader that ignores `options` sees Our pick as before.
+ * Returns { gl, ul, ml }; each league is
+ *   { options: [Option], pick: int, experimental: int, source: 'export' | 'emulated' | 'ranked' }
+ * `pick` is the index into `options` of the member to show (the Poke Genie-compatible rule), `experimental` the index of the
+ * CLOSE_SCORE rule's member (not shown); they may be the same index. `source` says how `pick` was decided: 'export' = Poke Genie's
+ * own pick from the entry, 'emulated' = the stat-product emulation, 'ranked' = unknown IVs (PvPoke score, then final evolution).
+ * Option = { speciesId, name, self, genderLocked?, strength, moves, needs, iv, overCap, cost }:
+ *   speciesId, name: the member (the _shadow id and name where the entry is a Shadow and PvPoke ranks the Shadow);
+ *   self: it is the Pokémon itself; genderLocked: 'male'|'female', only when the sex is unknown and one sex can become it;
+ *   strength: { score, rank, of } from PvPoke, or null when PvPoke does not rank it in this league (then moves is null too);
+ *   moves: { fast, charged[] } | null; needs: the recommended moves this copy lacks, only on the Pokémon itself, else null;
+ *   iv: { rank, pct, rankPct, level, cp } for this copy's IVs as this member, or null (unknown IVs or cannot fit under the cap);
+ *   overCap: this copy's level is already past the league's best level for the member; cost: dust/candy/xl to that level plus the
+ *   candy to evolve there (evolveCandy), or null (no IVs, no level, over the cap).
+ * Options are every allowed family member: ranked ones first (score, then Rank %, then later evolution), then unranked ones
+ * (later evolution first). Unreleased members are left out unless the whole family is unreleased.
  */
 export function leaguesFor(entry, resolved, ctx) {
   const { gm, rankings } = ctx;
   const start = baseSpeciesId(gm, resolved.speciesId);
   const sex = sexOf(entry.gender);
-  const family = [];
+  let family = [];
   for (const id of [start, ...descendants(gm, start)]) {
     const base = baseSpeciesId(gm, id);
     // The Pokémon itself always stays (a misread sex must not hide it); evolutions the other sex cannot become go.
     if (sex && base !== start && GENDER_LOCKED[base] && GENDER_LOCKED[base] !== sex) continue;
     if (gm.byId.has(base) && !NOT_ALLOWED.test(id) && !NOT_ALLOWED.test(base) && !family.includes(base)) family.push(base);
   }
+  // Unreleased members (nobody can build Farigiraf yet) are skipped; a family with none released keeps them all.
+  const released = family.filter((id) => gm.byId.get(id).released !== false);
+  if (released.length) family = family.filter((id) => id === start || released.includes(id));
   const depthOf = (base) => (base === start ? 0 : evolutionPath(gm, start, base)?.length ?? family.indexOf(base));
   const ivs = validIvs(entry.ivs) ? entry.ivs : null;
   const have = entry.moves ?? [];
   const level = typeof entry.level === 'number' && Number.isInteger(entry.level * 2) && entry.level >= 1 && entry.level <= 51 ? entry.level : null; // a half-level the game has
+  // The final evolution: the strongest one if the family branches (by CP at level 50 with 15/15/15).
+  const finals = family.filter((id) => !evolutionLinks(gm, id).some((e) => family.includes(baseSpeciesId(gm, e))));
+  const top = (id) => cpAt(gm.byId.get(id).baseStats, MAX_IV, 50);
+  const finalEvolution = finals.length ? finals.reduce((a, b) => (top(b) > top(a) ? b : a)) : start;
   const out = {};
   for (const league of LEAGUES) {
     const map = rankings.byLeague[league];
@@ -110,8 +164,10 @@ export function leaguesFor(entry, resolved, ctx) {
       if (!ivMemo.has(base)) ivMemo.set(base, ivRank(base, gm.byId.get(base).baseStats, ivs, league));
       return ivMemo.get(base);
     };
+    // Master League has no cap: a Best Buddy copy at 51 is simply past the last power-up, with nothing left to pay.
+    const overCapOf = (base) => { const iv = ivOf(base); return league !== 'ml' && !!(iv && level != null && level > iv.level); };
 
-    // One family member rated for this league: everything the Pokémon screen shows for a pick.
+    // One family member rated for this league: everything the Pokémon screen shows for it.
     const rate = (base, row) => {
       const rankId = rankedId(base);
       // PvPoke pads short movesets with a "none" placeholder (Unown), and a move the game master lacks has no name to show: drop both.
@@ -129,8 +185,7 @@ export function leaguesFor(entry, resolved, ctx) {
 
       const iv = ivOf(base);
       const ivOut = iv && { rank: iv.rank, pct: iv.pct, rankPct: iv.rankPct, level: iv.level, cp: iv.cp };
-      // Master League has no cap: a Best Buddy copy at 51 is simply past the last power-up, with nothing left to pay.
-      const overCap = league !== 'ml' && !!(iv && level != null && level > iv.level);
+      const overCap = overCapOf(base);
       let cost = null;
       if (iv && level != null && !overCap) {
         const flags = { shadow: entry.shadow, purified: entry.purified, lucky: entry.lucky };
@@ -140,41 +195,39 @@ export function leaguesFor(entry, resolved, ctx) {
         cost = { dust: up.dust, candy: up.candy, xl: up.xl, evolveCandy: evo, toLevel: iv.level };
       }
       return {
-        pick: {
-          speciesId: rankId, name: gm.byId.get(rankId)?.speciesName ?? gm.byId.get(base).speciesName, self: base === start,
-          // Only worth saying when the sex is unknown and the option is an evolution that one sex cannot become.
-          ...(!sex && base !== start && GENDER_LOCKED[base] ? { genderLocked: GENDER_LOCKED[base] } : {}),
-        },
+        speciesId: rankId, name: gm.byId.get(rankId)?.speciesName ?? gm.byId.get(base).speciesName, self: base === start,
+        // Only worth saying when the sex is unknown and the option is an evolution that one sex cannot become.
+        ...(!sex && base !== start && GENDER_LOCKED[base] ? { genderLocked: GENDER_LOCKED[base] } : {}),
         strength: row ? { score: row.score, rank: row.rank, of: map.size } : null,
         moves, needs, iv: ivOut, overCap, cost,
       };
     };
 
-    const ranked = [];
-    for (const base of family) {
-      const row = map.get(rankedId(base));
-      if (row) ranked.push({ base, row });
+    const members = family.map((base) => ({ base, row: map.get(rankedId(base)) ?? null, iv: ivOf(base), depth: depthOf(base), overCap: overCapOf(base) }));
+    // Options: ranked first (score, then Rank %, then later evolution), then the unranked (later evolution first).
+    const shown = [...members].sort((a, b) => (b.row ? b.row.score : -1) - (a.row ? a.row.score : -1) || (b.iv?.rankPct ?? -1) - (a.iv?.rankPct ?? -1) || b.depth - a.depth);
+    const options = shown.map((m) => rate(m.base, m.row));
+    const indexOf = (base) => shown.findIndex((m) => m.base === base);
+    const asMember = (m) => ({ id: m.base, score: m.row?.score ?? null, depth: m.depth, iv: m.iv, overCap: m.overCap });
+
+    // Shown pick. 1: Poke Genie's own pick, when the entry has it and it is in this family.
+    let pickBase = null, source = 'emulated';
+    const column = EXPORT_COLUMN[league] && entry.pvp?.[EXPORT_COLUMN[league]];
+    if (column?.name) {
+      const theirs = resolveSpecies(gm, column.name, { form: column.form });
+      const base = theirs && baseSpeciesId(gm, theirs.speciesId);
+      if (base && indexOf(base) >= 0) { pickBase = base; source = 'export'; }
     }
-    const win = chooseMember(ranked.map(({ base, row }) => ({ id: base, score: row.score, rankPct: ivOf(base)?.rankPct ?? null, depth: depthOf(base) })));
-    let pickBase, options;
-    if (win) {
-      pickBase = win.id;
-      // Strongest species first; among equal scores the better spread, then the later evolution.
-      const order = ranked.map(({ base, row }) => ({ base, row, pct: ivOf(base)?.rankPct ?? -1, depth: depthOf(base) }))
-        .sort((a, b) => b.row.score - a.row.score || b.pct - a.pct || b.depth - a.depth);
-      options = order.map(({ base, row }) => ({ ...rate(base, row), ours: base === pickBase }));
-    } else {
-      // Nothing in the family is ranked here: build the final evolution (the strongest one if the family branches).
-      // Unreleased members are skipped (nobody can build Farigiraf yet); a family with none released keeps them all.
-      const released = family.filter((id) => gm.byId.get(id).released !== false);
-      const pool = released.length ? released : family;
-      const finals = pool.filter((id) => !evolutionLinks(gm, id).some((e) => pool.includes(baseSpeciesId(gm, e))));
-      const top = (id) => cpAt(gm.byId.get(id).baseStats, MAX_IV, 50);
-      pickBase = finals.length ? finals.reduce((a, b) => (top(b) > top(a) ? b : a)) : start;
-      options = [{ ...rate(pickBase, null), ours: true }];
+    // 2 and 3: the emulation; unknown IVs fall back to the PvPoke score, and a family with nothing ranked to its final evolution.
+    if (!pickBase) {
+      const m = pokeGeniePick(members.map(asMember));
+      if (m && ivs) pickBase = m.id;
+      else { source = 'ranked'; pickBase = m ? m.id : finalEvolution; }
     }
-    const { ours, ...mine } = options.find((o) => o.ours);
-    out[league] = { ...mine, options };
+
+    // Experimental pick: the CLOSE_SCORE rule over the ranked members; a family with nothing ranked takes its final evolution.
+    const win = chooseMember(members.filter((m) => m.row).map((m) => ({ id: m.base, score: m.row.score, rankPct: m.iv?.rankPct ?? null, depth: m.depth, overCap: m.overCap })));
+    out[league] = { options, pick: indexOf(pickBase), experimental: indexOf(win ? win.id : finalEvolution), source };
   }
   return out;
 }
