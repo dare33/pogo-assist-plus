@@ -35,7 +35,7 @@ final class RealLeagueOutputTests: XCTestCase {
             for key in LeagueText.keys {
                 let rating = try XCTUnwrap(l[key].flatMap(BoxAdvice.LeagueRating.decode), "entry \(index) \(key)")
                 XCTAssertFalse(rating.options.isEmpty)
-                XCTAssertTrue(["export", "emulated", "ranked"].contains(rating.source))
+                XCTAssertTrue(["export", "emulated", "ranked", "fallback"].contains(rating.source))
                 XCTAssertEqual(l[key]?["options"]?.arrayValue?.count, rating.options.count, "no option was dropped")
             }
         }
@@ -76,20 +76,23 @@ final class RealLeagueOutputTests: XCTestCase {
     func testOneBadOptionDoesNotDropTheLeagueButABadPickDoes() throws {
         let magnemite = try XCTUnwrap(try leagues()[3])
         let gl = try XCTUnwrap(magnemite["gl"])
-        guard case .object(var obj) = gl, case .array(var options)? = obj["options"], case .number(let pick)? = obj["pick"] else { return XCTFail("shape") }
+        guard case .object(var obj) = gl, case .array(var options)? = obj["options"], case .number(let pick)? = obj["pick"], case .number(let exp)? = obj["experimental"] else { return XCTFail("shape") }
         XCTAssertGreaterThan(options.count, 2)
-        let pickIndex = Int(pick)
-        let victim = pickIndex == 0 ? 1 : 0
-        let pickedId = options[pickIndex]["speciesId"]
-        // Break a member that is not the pick: its strength becomes a string.
+        let pickIndex = Int(pick), expIndex = Int(exp)
+        // The first member that is neither the pick nor the experimental one, so dropping it re-indexes whatever follows it.
+        let victim = try XCTUnwrap(options.indices.first { $0 != pickIndex && $0 != expIndex })
+        func id(_ o: JSONValue) -> String { if case .string(let s)? = o["speciesId"] { return s } else { return "" } }
+        let pickedId = id(options[pickIndex]), experimentalId = id(options[expIndex])
+        // Break that member: its strength becomes a string.
         guard case .object(var broken) = options[victim] else { return XCTFail("option") }
         broken["strength"] = .string("oops")
         options[victim] = .object(broken)
         obj["options"] = .array(options)
         let rating = try XCTUnwrap(BoxAdvice.LeagueRating.decode(.object(obj)), "the league survives one bad option")
         XCTAssertEqual(rating.options.count, options.count - 1)
-        XCTAssertEqual(rating.shown.speciesId, { if case .string(let s)? = pickedId { return s } else { return "" } }(), "the pick still points at the same member")
-        XCTAssertTrue(rating.options.indices.contains(rating.experimentalIndex))
+        XCTAssertEqual(rating.shown.speciesId, pickedId, "the pick still points at the same member")
+        XCTAssertEqual(rating.experimental.speciesId, experimentalId, "the experimental pick still points at the same member")
+        XCTAssertFalse(rating.options.contains { $0.speciesId == id(options[victim]) }, "the bad member is the one dropped")
 
         // Break the pick itself: there is nothing to show, so the league is dropped (and the others in the box are untouched).
         guard case .object(var brokenPick) = options[pickIndex] else { return XCTFail("option") }

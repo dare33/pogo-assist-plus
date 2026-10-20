@@ -231,6 +231,47 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(lib.loadAdvice(account: "a", seq: 1))
     }
 
+    func testLeagueDecodingReindexesBothPicksAndRejectsOddIndexes() throws {
+        func option(_ id: String, bad: Bool = false) -> String {
+            #"{"speciesId":"\#(id)","name":"\#(id)","self":false,"strength":\#(bad ? #""oops""# : "null"),"moves":null,"needs":null,"iv":null,"overCap":false,"cost":null}"#
+        }
+        func league(pick: String, experimental: String? = "3") -> JSONValue {
+            let exp = experimental.map { #","experimental":\#($0)"# } ?? ""
+            let json = #"{"options":[\#(option("a", bad: true)),\#(option("b")),\#(option("c")),\#(option("d"))],"pick":\#(pick)\#(exp),"source":"emulated"}"#
+            return try! JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        }
+        // The bad option sits before both picks: both indexes shift down by one and still name the same members.
+        let r = try XCTUnwrap(BoxAdvice.LeagueRating.decode(league(pick: "2")))
+        XCTAssertEqual(r.options.map(\.speciesId), ["b", "c", "d"])
+        XCTAssertEqual(r.shown.speciesId, "c"); XCTAssertEqual(r.experimental.speciesId, "d")
+        // A bad experimental option falls back to the shown member; a missing one does too.
+        XCTAssertEqual(try XCTUnwrap(BoxAdvice.LeagueRating.decode(league(pick: "2", experimental: "0"))).experimental.speciesId, "c")
+        XCTAssertEqual(try XCTUnwrap(BoxAdvice.LeagueRating.decode(league(pick: "2", experimental: nil))).experimental.speciesId, "c")
+        // A pick that is fractional, negative, past the end or too big for an Int is no pick at all (and never traps).
+        for odd in ["1.5", "-1", "9", "1e300", "-1e300"] { XCTAssertNil(BoxAdvice.LeagueRating.decode(league(pick: odd)), odd) }
+        // An odd experimental index falls back to the shown member.
+        for odd in ["1.5", "1e300", "-2"] { XCTAssertEqual(try XCTUnwrap(BoxAdvice.LeagueRating.decode(league(pick: "2", experimental: odd))).experimental.speciesId, "c", odd) }
+        XCTAssertNil(BoxAdvice.LeagueRating.Option(json: .string("x")))
+    }
+
+    /// The hand-written option reader and the Codable one (which the cache uses) must agree on the engine's shape.
+    func testOptionJSONReaderMatchesCodable() throws {
+        let json = """
+        {"speciesId":"toxapex","name":"Toxapex","self":true,"genderLocked":"male","strength":{"score":91.8,"rank":23,"of":1152},
+         "moves":{"fast":"Poison Jab","charged":["Brine","Sludge Wave"]},"needs":["Brine"],
+         "iv":{"rank":5,"pct":99.1,"rankPct":97.2,"level":24.5,"cp":1497},"overCap":false,
+         "cost":{"dust":175000,"candy":120,"xl":0,"evolveCandy":50,"toLevel":24.5}}
+        """
+        let viaCodable = try JSONDecoder().decode(BoxAdvice.LeagueRating.Option.self, from: Data(json.utf8))
+        let value = try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        XCTAssertEqual(BoxAdvice.LeagueRating.Option(json: value), viaCodable)
+        // Wrong types are rejected by both: a fractional dust figure, a non-string move.
+        for bad in [json.replacingOccurrences(of: "175000", with: "175000.5"), json.replacingOccurrences(of: "\"Brine\",\"Sludge Wave\"", with: "\"Brine\",7")] {
+            XCTAssertThrowsError(try JSONDecoder().decode(BoxAdvice.LeagueRating.Option.self, from: Data(bad.utf8)))
+            XCTAssertNil(BoxAdvice.LeagueRating.Option(json: try JSONDecoder().decode(JSONValue.self, from: Data(bad.utf8))))
+        }
+    }
+
     func testLeagueSentences() {
         typealias R = BoxAdvice.LeagueRating
         typealias O = R.Option

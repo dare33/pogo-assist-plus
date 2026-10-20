@@ -71,7 +71,7 @@ public struct BoxAdvice: Codable, Equatable {
     /// One league's ratings of one Pokémon, as `src/leagues.js` `leaguesFor` returns them (null becomes nil).
     ///
     /// `options` lists every allowed member of the Pokémon's family (strongest PvPoke score first, then the members PvPoke does not
-    /// rank), each rated for this exact copy. `pick` (JSON "pick") is the index of the member to show, which copies Poke Genie;
+    /// rank), each rated for this exact copy. `moves` is filled only on the shown and experimental options (nil on the rest). `pick` (JSON "pick") is the index of the member to show, which copies Poke Genie;
     /// `experimental` is the index of the CLOSE_SCORE rule's member, carried but not shown. The accessors below (`pick`, `strength`,
     /// `moves`, `needs`, `iv`, `overCap`, `cost`) read the SHOWN member, so a screen written for one rating per league keeps working.
     public struct LeagueRating: Codable, Equatable {
@@ -100,6 +100,42 @@ public struct BoxAdvice: Codable, Equatable {
             public var overCap: Bool
             public var cost: Cost?
             private enum CodingKeys: String, CodingKey { case speciesId, name, isSelf = "self", genderLocked, strength, moves, needs, iv, overCap, cost }
+
+            /// Reads one option from the engine's parsed JSON; nil when a required field is missing or any present field is the wrong
+            /// type (the same cases the Codable decoding rejects). Absent and null optional fields are nil.
+            init?(json o: JSONValue) {
+                func str(_ v: JSONValue?) -> String? { if case .string(let s)? = v { return s } else { return nil } }
+                func dbl(_ v: JSONValue?) -> Double? { if case .number(let n)? = v { return n } else { return nil } }
+                func int(_ v: JSONValue?) -> Int? { dbl(v).flatMap(LeagueRating.whole) }
+                func isNull(_ v: JSONValue?) -> Bool { if v == nil { return true }; if case .null? = v { return true }; return false }
+                guard let id = str(o["speciesId"]), let name = str(o["name"]), case .bool(let overCap)? = o["overCap"] else { return nil }
+                self.speciesId = id; self.name = name; self.overCap = overCap
+                if case .bool(let b)? = o["self"] { self.isSelf = b } else { return nil }
+                if isNull(o["genderLocked"]) { self.genderLocked = nil } else if let g = str(o["genderLocked"]) { self.genderLocked = g } else { return nil }
+                if isNull(o["strength"]) { self.strength = nil }
+                else if let s = o["strength"], let score = dbl(s["score"]), let rank = int(s["rank"]), let of = int(s["of"]) { self.strength = Strength(score: score, rank: rank, of: of) }
+                else { return nil }
+                if isNull(o["moves"]) { self.moves = nil }
+                else if let m = o["moves"], let fast = str(m["fast"]), let charged = m["charged"]?.arrayValue {
+                    let names = charged.compactMap(str)
+                    guard names.count == charged.count else { return nil }
+                    self.moves = Moves(fast: fast, charged: names)
+                } else { return nil }
+                if isNull(o["needs"]) { self.needs = nil }
+                else if let arr = o["needs"]?.arrayValue {
+                    let names = arr.compactMap(str)
+                    guard names.count == arr.count else { return nil }
+                    self.needs = names
+                } else { return nil }
+                if isNull(o["iv"]) { self.iv = nil }
+                else if let v = o["iv"], let rank = int(v["rank"]), let pct = dbl(v["pct"]), let rankPct = dbl(v["rankPct"]), let level = dbl(v["level"]), let cp = int(v["cp"]) {
+                    self.iv = IV(rank: rank, pct: pct, rankPct: rankPct, level: level, cp: cp)
+                } else { return nil }
+                if isNull(o["cost"]) { self.cost = nil }
+                else if let c = o["cost"], let dust = int(c["dust"]), let candy = int(c["candy"]), let xl = int(c["xl"]), let evo = int(c["evolveCandy"]), let to = dbl(c["toLevel"]) {
+                    self.cost = Cost(dust: dust, candy: candy, xl: xl, evolveCandy: evo, toLevel: to)
+                } else { return nil }
+            }
             public init(speciesId: String, name: String, isSelf: Bool = false, genderLocked: String? = nil, strength: Strength? = nil, moves: Moves? = nil,
                         needs: [String]? = nil, iv: IV? = nil, overCap: Bool = false, cost: Cost? = nil) {
                 self.speciesId = speciesId; self.name = name; self.isSelf = isSelf; self.genderLocked = genderLocked; self.strength = strength
@@ -112,7 +148,7 @@ public struct BoxAdvice: Codable, Equatable {
         public var pickIndex: Int
         /// Index into `options` of the experimental member (may equal `pickIndex`).
         public var experimentalIndex: Int
-        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (IVs unknown: PvPoke score).
+        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (nothing in the family is ranked: the final evolution).
         public var source: String
 
         private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source }
@@ -134,19 +170,26 @@ public struct BoxAdvice: Codable, Equatable {
             self.init(options: options, pick: pick, experimental: try c.decodeIfPresent(Int.self, forKey: .experimentalIndex), source: try c.decodeIfPresent(String.self, forKey: .source) ?? "ranked")
         }
 
+        /// A whole number that fits an Int, or nil (NaN, infinite, fractional or huge values: `Int(_:)` would trap on them).
+        static func whole(_ x: Double) -> Int? {
+            guard x.isFinite, x == x.rounded(), abs(x) < 9e15 else { return nil }
+            return Int(x)
+        }
+
         /// Decodes the engine's JSON for one league, tolerating a bad option: an option that does not decode is dropped and the
         /// indexes are re-pointed, so one odd member never loses the league. Returns nil only when there is no usable shown option.
-        /// A bad experimental option falls back to the shown one.
+        /// A bad experimental option falls back to the shown one. Each option is read straight from the parsed `JSONValue`
+        /// (`Option.init?(json:)`), with no re-encode and re-decode per option: a 2,000-Pokémon box has ~13,000 of them.
         public static func decode(_ v: JSONValue) -> LeagueRating? {
-            guard case .number(let p)? = v["pick"], let raw = v["options"]?.arrayValue else { return nil }
+            guard case .number(let p)? = v["pick"], let pickAt = whole(p), let raw = v["options"]?.arrayValue else { return nil }
             var kept = [Option](), newIndex = [Int: Int]()
             for (i, o) in raw.enumerated() {
-                guard let data = try? JSONEncoder().encode(o), let option = try? JSONDecoder().decode(Option.self, from: data) else { continue }
+                guard let option = Option(json: o) else { continue }
                 newIndex[i] = kept.count; kept.append(option)
             }
-            guard let pick = newIndex[Int(p)] else { return nil }
+            guard let pick = newIndex[pickAt] else { return nil }
             var experimental = pick
-            if case .number(let x)? = v["experimental"], let j = newIndex[Int(x)] { experimental = j }
+            if case .number(let x)? = v["experimental"], let at = whole(x), let j = newIndex[at] { experimental = j }
             var source = "ranked"
             if case .string(let s)? = v["source"] { source = s }
             return LeagueRating(options: kept, pick: pick, experimental: experimental, source: source)
