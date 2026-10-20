@@ -52,6 +52,8 @@ public struct ImportQueue {
     public var maxQueuedBytes = ImportQueue.defaultMaxQueuedBytes
     /// Tests: runs at the start of every ledger write and may throw.
     public var ledgerFailure: (() throws -> Void)?
+    /// Tests: runs at the start of confirming or removing provisional entries only (the writes made AFTER the box), so a failure there leaves the box written and the ledger not finished.
+    public var ledgerConfirmFailure: (() throws -> Void)?
     private var fm: FileManager { .default }
 
     public init(root: URL) { self.root = root }
@@ -278,11 +280,19 @@ public struct ImportLedger: Codable, Equatable {
         public var epoch: Int?
         /// The account folder's birth date when this was saved: an account made again under the same name is another account and does not inherit what was saved into the old one.
         public var born: Double?
+        /// The save this entry belongs to (`import:<batch>[.<generation>]`), and whether that save is still unconfirmed. A PROVISIONAL entry is written BEFORE the box is, so the keys of a save that
+        /// is cut off, whose batch is discarded or whose clean-up fails are still held; it counts as "already imported" like a confirmed one. Recovery confirms it (some account holds a scan with
+        /// the signature) or removes it (every account was read and none does).
+        public var signature: String?
+        public var provisional: Bool?
     }
     public var version = 1
     public var entries: [Entry] = []
     public static let keepFor: TimeInterval = 365 * 24 * 3600
     public static let maxEntries = 20_000
+    /// A provisional entry nobody could settle (a box that cannot be read) for this long becomes a confirmed one: the conservative way, which holds a later copy for review rather than
+    /// allowing a double save.
+    public static let provisionalKeepFor: TimeInterval = 30 * 24 * 3600
 
     /// When any of `keys` was saved into `account`. `currentName` says what an entry's account is called now (nil: it cannot be told, so the entry is not counted); `excluding` leaves
     /// out a batch's own entries (a save cut off between the ledger and the removal must not make the batch's own screenshots look already imported).
@@ -310,6 +320,46 @@ extension ImportQueue {
         if l.entries.count > ImportLedger.maxEntries { l.entries.removeFirst(l.entries.count - ImportLedger.maxEntries) }
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
+    }
+
+    /// Write the keys of a save that is ABOUT to be made, as provisional entries tagged with its signature and the destination account's identity. Called before the box is written; if it
+    /// fails the box is not written. Keys already held for this account (confirmed, or provisional for another save) are not added again.
+    public func recordProvisional(_ items: [ImportItem], batchId: String, signature: String, account: String, epoch: Int?, born: Double?, now: Date = Date()) throws {
+        try ledgerFailure?()
+        var l = ledger()
+        l.entries.removeAll { now.timeIntervalSince($0.savedAt) > ImportLedger.keepFor && $0.provisional != true }
+        let known = Set(l.entries.filter { $0.account == account && $0.signature != signature }.map(\.key))
+        let mine = Set(l.entries.filter { $0.signature == signature }.map(\.key))
+        for item in items { for k in item.keys where !known.contains(k) && !mine.contains(k) {
+            l.entries.append(.init(account: account, key: k, batchId: batchId, savedAt: now, epoch: epoch, born: born, signature: signature, provisional: true))
+        } }
+        if l.entries.count > ImportLedger.maxEntries { l.entries.removeFirst(l.entries.count - ImportLedger.maxEntries) }
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
+    }
+
+    /// The save with this signature reached the box: its provisional entries are confirmed.
+    public func confirmProvisional(signature: String) throws {
+        try ledgerFailure?(); try ledgerConfirmFailure?()
+        var l = ledger()
+        guard l.entries.contains(where: { $0.signature == signature && $0.provisional == true }) else { return }
+        for i in l.entries.indices where l.entries[i].signature == signature { l.entries[i].provisional = nil }
+        try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
+    }
+
+    /// The save with this signature never reached the box: its provisional entries go, so its screenshots are not held back for something that did not happen.
+    public func removeProvisional(signature: String) throws {
+        try ledgerFailure?(); try ledgerConfirmFailure?()
+        var l = ledger()
+        let before = l.entries.count
+        l.entries.removeAll { $0.signature == signature && $0.provisional == true }
+        guard l.entries.count != before else { return }
+        try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
+    }
+
+    /// Provisional entries by save signature, oldest first within each.
+    public func provisionalSignatures() -> [String: [ImportLedger.Entry]] {
+        Dictionary(grouping: ledger().entries.filter { $0.provisional == true && $0.signature != nil }, by: { $0.signature! })
     }
 
     /// Mark, in the batch's manifest, every item that is the same screenshot as an earlier one: in this batch, in an older batch still waiting for the same account, or in the
