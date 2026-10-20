@@ -33,7 +33,7 @@ struct ResultScreen: View {
     private func content(_ ctx: ReviewContext) -> some View {
         let review = ctx.review
         return VStack(spacing: 0) {
-            ReviewTopBar(title: "Scan result", account: review.account)
+            ReviewTopBar(title: review.importPrepared == nil ? "Scan result" : "Import result", account: review.account)
             Group {
                 ScrollView {
                     // Not a LazyVStack: with the questions flattened into one, a fast scroll back up the page left the layout pass running for minutes on the iPad mini

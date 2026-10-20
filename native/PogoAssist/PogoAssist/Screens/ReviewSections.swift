@@ -37,6 +37,7 @@ struct ReviewNotices: View {
     @ViewBuilder private func importNotices(_ p: ScreenshotImporter.Prepared) -> some View {
         notice("These screenshots will be added to the box of \(p.account). Pokémon that are not in them are left exactly as they are.", icon: "person.crop.circle", ink: Theme.ink, bold: true, tint: nil)
         if let left = leftOutText(p) { notice(left, icon: "info.circle", ink: Theme.muted, tint: nil) }
+        if !p.plan.same.isEmpty { notice("\(ReviewFormat.count(p.plan.same.count, "screenshot", "screenshots")) matched Pokémon already in the box exactly, so they are treated as those Pokémon and left unchanged, as in a scan.", icon: "equal.circle", ink: Theme.muted, tint: nil) }
         if !p.dropped.isEmpty { notice("\(ReviewFormat.count(p.dropped.count, "screenshot", "screenshots")) could not be worked out again and were left out.", icon: "exclamationmark.triangle.fill", ink: Theme.orangeInk) }
     }
 

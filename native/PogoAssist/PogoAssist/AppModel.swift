@@ -105,7 +105,7 @@ final class AppModel: ObservableObject {
     @Published var account: String? { didSet { UserDefaults.standard.set(account, forKey: Keys.account); ReaderSettings.scanAccount = account; if account != oldValue { rescanCount = nil } } }
     @Published var snapshot: BoxSnapshot?
     @Published var advice: AdviceState = .none
-    @Published var flow: ScanFlow = .idle { didSet { if case .idle = flow { scanDonePending = false; dropCopy() } } }
+    @Published var flow: ScanFlow = .idle { didSet { if case .idle = flow { scanDonePending = false; dropCopy(); screenshots.flowEnded() } } }
     /// The review's private copy of its scan's log, kept on disk (`PendingScanStore`) until that review is saved or discarded, so it survives a relaunch. `state` is the
     /// broadcast's state file as it was when the scan ended, which the next broadcast overwrites; `kind` and `date` are what the scan was asked to be and when it ended.
     private struct ScanCopy { var signature: String; var url: URL; var state: BroadcastState?; var kind: BoxStore.Kind; var date: Date?; var account: String }
@@ -191,6 +191,8 @@ final class AppModel: ObservableObject {
         forwarded.append(m.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() })
         return m
     }()
+    /// A broadcast scan has finished (or died) and has not been through review yet: it is about to be picked up, and screenshots must not open in front of it.
+    var scanPendingPickup: Bool { (broadcast.map { $0.finished || endedWithoutFinish } ?? false) && ReplayMarker.unprocessedSignature() != nil }
     /// A screenshot review can be opened now: nothing else holds the review screen, the box files or the account names.
     var canOpenImportReview: Bool { !isReviewing && !renaming && !busyWithScan && !live && waitingScan == nil && recoveryProblem == nil && !storageMissing }
     private var holdReview: Bool { sheet != nil }

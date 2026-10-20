@@ -53,7 +53,7 @@ struct ScreenshotImportSheet: View {
                 imports.stage(items)
                 picked = []
             }
-            .onAppear { imports.refresh() }
+            .onAppear { imports.refresh(); imports.shown() }
             .confirmationDialog("Discard these screenshots?", isPresented: Binding(get: { discarding != nil }, set: { if !$0 { discarding = nil } }), titleVisibility: .visible) {
                 Button("Discard screenshots", role: .destructive) { if let id = discarding { imports.discard(batch: id) }; discarding = nil }
             } message: { Text("Nothing will be added to the box. The pictures in Photos are not touched.") }
@@ -106,11 +106,13 @@ private struct BatchSection: View {
                 Label("Choose whose box these are for", systemImage: "person.crop.circle.badge.questionmark").foregroundStyle(.orange)
             case .gone(let name):
                 Label("The account \(name) is no longer on this phone", systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+            case .ambiguous(let old, let now):
+                Label("These were for \(old), which is now called \(now); another account is called \(old) now. Choose which box.", systemImage: "person.crop.circle.badge.questionmark").foregroundStyle(.orange)
             case .unknown:
                 Label("The accounts could not be listed", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
             }
             Spacer()
-            if model.accounts.count > 1 || owner != .account(model.account ?? "") {
+            if model.accounts.count > 1 || { if case .account = owner { return false } else { return true } }() {
                 Menu {
                     ForEach(model.accounts, id: \.self) { name in
                         Button { imports.assign(batch: batch.batchId, to: name) } label: {
