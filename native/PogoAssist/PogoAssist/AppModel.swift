@@ -1265,18 +1265,20 @@ final class AppModel: ObservableObject {
                 lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: true)
                 if r.account == account { afterCommit(snap) }
             case .alreadySaved:
-                message = "These screenshots had already been saved to \(r.account), so nothing was added again."
+                message = "These screenshots had already been saved, so nothing was added again."
                 if r.account == account { loadBox() }
             }
             screenshots.refresh()
         } catch BoxLibrary.Failure.boxChanged {
             message = "The box changed while this was open, so nothing was saved. The result has been worked out again against the box as it is now: check it and save again."
             await refreshReview(r)
-        } catch ScreenshotImporter.Failure.finishingLastSave {
-            // The Pokémon ARE in the box: the earlier save is only waiting for its record. Said as that, not as "could not be saved".
+        } catch let failure as ScreenshotImporter.Failure where { if case .finishingLastSave = failure { return true } else { return false } }() {
+            // An earlier save of this batch is not finished: nothing was added again. Whether it is in the box is what the message says (found, or may be): it is the importer's wording.
             flow = .idle
-            message = "These screenshots were already saved to \(r.account), but the record of that could not be finished yet, so nothing was added again. \(Self.plain(ScreenshotImporter.Failure.finishingLastSave))"
+            message = Self.plain(failure)
             screenshots.refresh()
+        } catch ScreenshotImporter.Failure.couldNotRecordSave {
+            message = Self.plain(ScreenshotImporter.Failure.couldNotRecordSave)   // nothing was written; the review stays open to try again
         } catch {
             message = "The screenshots could not be saved: \(Self.plain(error)) Nothing in the box has changed. You can try again or discard them."
         }

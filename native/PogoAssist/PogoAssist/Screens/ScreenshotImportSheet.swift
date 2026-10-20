@@ -75,7 +75,7 @@ private struct BatchSection: View {
             if batch.pendingSave != nil {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Finishing the last save…", systemImage: "hourglass").foregroundStyle(.secondary).accessibilityIdentifier("import-finishing")
-                    Text("The Pokémon from the last save are already in your box. If this stays, you can discard these screenshots.").font(.footnote).foregroundStyle(.secondary)
+                    Text("The Pokémon from the last save may already be in your box. If this stays, you can discard these screenshots.").font(.footnote).foregroundStyle(.secondary)
                 }
             } else {
                 accountRow
