@@ -81,7 +81,7 @@ final class ScreenshotImporterTests: XCTestCase {
 
     @discardableResult
     func stage(_ pictures: [Data], assets: [String?]? = nil, account: String? = "Main", origin: ImportManifest.Origin = .photoPicker, now: Date = Date()) throws -> ImportManifest {
-        let b = try queue.beginBatch(origin: origin, account: account, renameMark: lib.store.renameCount, now: now)
+        let b = try queue.beginBatch(origin: origin, account: account, renameMark: lib.store.renameCount, accountBorn: account.flatMap { lib.store.accountCreated($0) }, now: now)
         for (i, p) in pictures.enumerated() { try b.add(data: p, assetId: assets?[i]) }
         return try b.commit(now: now)
     }
@@ -406,10 +406,10 @@ final class ScreenshotImporterTests: XCTestCase {
     func testASaveCutOffAfterTheBoxWasWrittenIsRecognisedOnRelaunchAndNotRepeated() throws {
         let m = try stage([try nickit, try rayquaza])
         let p = try review(m)
-        // what `save` does up to the box write, and then the app is ended: the batch is still queued, the box already holds it
-        let entries = try BoxMerge.apply(p.plan, to: p.base, engine: sharedEngine)
-        _ = try lib.commitScan(p.outcome.scan, entries: entries, account: "Main", scanDate: p.plan.scanDate, source: "screenshot import", kind: .partial, note: "cut off",
-                               expectedCurrentSeq: .some(nil), sourceSignature: m.signature)
+        struct Cut: Error {}
+        // the box is written, then the app is ended before the clean-up
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine, afterCommit: { throw Cut() }))
+        XCTAssertEqual(try lib.current(account: "Main")?.entries.count, 2)
         XCTAssertTrue(FileManager.default.fileExists(atPath: queue.batchDirectory(m.batchId).path))
         // relaunch: a fresh importer reviews the same batch and saves it
         importer = makeImporter()
@@ -417,7 +417,24 @@ final class ScreenshotImporterTests: XCTestCase {
         guard case .alreadySaved = try importer.save(again, resolutions: [:], engine: sharedEngine) else { return XCTFail("saved a second time") }
         XCTAssertEqual(try lib.history(account: "Main").count, 1); XCTAssertEqual(try lib.current(account: "Main")?.entries.count, 2)
         XCTAssertFalse(FileManager.default.fileExists(atPath: queue.batchDirectory(m.batchId).path), "the clean-up that was cut off is finished")
-        XCTAssertNotNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys))
+        XCTAssertNotNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys), "what was saved is in the ledger")
+    }
+
+    /// (round 2) The recovery used to guess that every row was saved. A row the person left out must not be recorded as saved.
+    func testCrashRecoveryDoesNotRecordALeftOutScreenshotAsSaved() throws {
+        let saved = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try lib.mutate(account: "Main", reason: .edit, note: "lower CP") { e in var e = e; e[0].row.cp = 3900; return e }
+        let m = try stage([try rayquazaFainted])
+        let p = try review(m)
+        XCTAssertEqual(p.plan.unsure.count, 1)
+        struct Cut: Error {}
+        XCTAssertThrowsError(try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine, afterCommit: { throw Cut() }))
+        XCTAssertEqual(try queue.load(m.batchId).pendingSave, [], "what the save contained was written down before the box")
+        importer = makeImporter()
+        let again = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
+        guard case .alreadySaved = try importer.save(again, resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys), "a left-out screenshot is not in the ledger as saved")
     }
 
     func testASaveCutOffAfterTheLedgerWasWrittenDoesNotHoldItsOwnScreenshotsBack() throws {
@@ -540,6 +557,8 @@ final class ScreenshotImporterTests: XCTestCase {
         let left = try queue.load(m.batchId)
         XCTAssertEqual(left.items.map(\.id), [m.items[2].id, m.items[3].id])
         XCTAssertEqual(left.items.map(\.state), [.read, .failed])
+        // its source was saved, so the hold is lifted: the box merge decides what it is (here an exact match to the saved one, which is that Pokémon)
+        XCTAssertNil(left.items[0].repeatOf); XCTAssertFalse(left.items[0].heldBack)
         XCTAssertNotEqual(left.signature, m.signature)
         XCTAssertFalse(FileManager.default.fileExists(atPath: queue.stagedURL(batch: m.batchId, item: m.items[0]).path))
         // the held-back one can still be included; saving it is a second scan record and the batch then goes
@@ -623,5 +642,133 @@ final class ScreenshotImporterTests: XCTestCase {
         guard case .saved = try importer.save(try review(second), resolutions: [:], engine: sharedEngine) else { return XCTFail("a damaged earlier scan blocked a new save") }
         // ...but the batch that damaged file could be IS: nothing is saved over a possible earlier save
         XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: first.signature), .unknown)
+    }
+
+    // MARK: review round 2
+
+    func testRenameReuseAfterFiftyRenamesIsStillAmbiguous() throws {
+        try lib.createAccount("O0")
+        for i in 0..<50 { try lib.renameAccount(from: "O\(i)", to: "O\(i + 1)") }
+        let m = try stage([try nickit])
+        let at = lib.store.renameCount
+        try lib.renameAccount(from: "Main", to: "Renamed")
+        XCTAssertEqual(lib.store.renameCount, (at ?? 0) + 1, "the sequence keeps counting past the 50 the history holds")
+        try lib.createAccount("Main")
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .ambiguous(old: "Main", renamedTo: "Renamed"), "the batch must not go into the NEW account")
+    }
+
+    func testABindingOlderThanTheOldestRenameOnRecordIsAskedAbout() throws {
+        let m = try stage([try nickit])
+        for i in 0..<55 { try lib.createAccount("T\(i)"); try lib.renameAccount(from: "T\(i)", to: "U\(i)") }   // 55 renames: the oldest five are gone from the history
+        guard case .unconfirmed = importer.owner(of: try queue.load(m.batchId)) else { return XCTFail("\(importer.owner(of: try queue.load(m.batchId)))") }
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertThrowsError(try importer.prepareReview(batch: m.batchId, engine: sharedEngine)) { guard case .accountUnconfirmed = $0 as? ScreenshotImporter.Failure else { return XCTFail("\($0)") } }
+        try importer.assign(batch: m.batchId, to: "Main")   // the person says
+        XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .account("Main"))
+    }
+
+    func testAnAccountDeletedAndMadeAgainUnderTheSameNameIsAskedAbout() throws {
+        let m = try stage([try nickit])
+        try lib.store.deleteAccount("Main")
+        try lib.createAccount("Main")
+        guard case .unconfirmed = importer.owner(of: try queue.load(m.batchId)) else { return XCTFail("\(importer.owner(of: try queue.load(m.batchId)))") }
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertThrowsError(try importer.prepareReview(batch: m.batchId, engine: sharedEngine))
+        XCTAssertNil(try lib.current(account: "Main"))
+        // a rename alone does not trigger it: the folder keeps its birth date
+        let ok = try stage([try rayquaza], account: "Main")
+        try lib.renameAccount(from: "Main", to: "Moved")
+        XCTAssertEqual(importer.owner(of: try queue.load(ok.batchId)), .account("Moved"))
+    }
+
+    func testAlreadyImportedSurvivesARenameOfTheBatchAccount() throws {
+        let first = try stage([try nickit])
+        guard case .saved = try importer.save(try review(first), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        let again = try stage([try nickit])
+        try importer.readAll(batch: again.batchId, engine: sharedEngine)
+        XCTAssertNotNil(try queue.load(again.batchId).items[0].alreadyImported, "held back before the rename")
+        try lib.renameAccount(from: "Main", to: "Renamed")
+        try importer.readAll(batch: again.batchId, engine: sharedEngine)   // prepared again, as the app does
+        XCTAssertNotNil(try queue.load(again.batchId).items[0].alreadyImported, "and after it")
+        XCTAssertThrowsError(try importer.prepareReview(batch: again.batchId, engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .nothingToImport) }
+    }
+
+    func testQueuedBatchesAreComparedByTheirOwnersNowNotByTheNamesTheyRecorded() throws {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = try stage([try nickit], origin: .shareExtension, now: t0)
+        try lib.renameAccount(from: "Main", to: "Renamed")
+        let second = try stage([try nickit], account: "Renamed", now: t0.addingTimeInterval(60))   // recorded under the new name
+        XCTAssertNotNil(try importer.prepare(batch: second.batchId).items[0].duplicateOf, "the same account, though the two batches recorded different names")
+        XCTAssertEqual(importer.owner(of: try queue.load(first.batchId)), .account("Renamed"))
+    }
+
+    func testAKeptRepeatAfterItsSourceWasSavedIsAnExactMatchNotAHold() throws {
+        let m = try stage([try rayquaza, try rayquazaFainted])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        let it = try XCTUnwrap(try queue.load(m.batchId).items.first)
+        XCTAssertNil(it.repeatOf); XCTAssertFalse(it.heldBack); XCTAssertFalse(it.hasHold)
+        _ = try importer.prepareAll()   // what the app runs on coming to the front: the hold does not come back
+        XCTAssertFalse(try queue.load(m.batchId).items[0].hasHold)
+        let p = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(p.plan.same.count, 1, "it is the saved Pokémon, unchanged, as Auto Scan would take it"); XCTAssertTrue(p.plan.new.isEmpty)
+    }
+
+    func testRereadingAfterARetryNeverDropsAHoldTheUserHasNotAnswered() throws {
+        let m = try stage([try rayquaza, try rayquazaFainted])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(try queue.load(m.batchId).items[1].repeatOf, m.items[0].id)
+        // the first one is retried and fails this time: the second must stay held
+        failing = [m.items[0].id]
+        try queue.update(m.batchId) { $0.items[0].state = .failed }   // it had failed on the retry
+        let again = try importer.retry(batch: m.batchId, item: m.items[0].id)
+        XCTAssertEqual(again.items[1].repeatOf, m.items[0].id, "retrying the source leaves the hold")
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)   // the source fails again
+        XCTAssertEqual(try queue.load(m.batchId).items[1].repeatOf, m.items[0].id, "still held: the person has not answered")
+        XCTAssertTrue(try queue.load(m.batchId).items[1].heldBack)
+    }
+
+    func testAnInterruptedReadGivesItsAttemptBack() throws {
+        let m = try stage([try nickit])
+        var during: (batch: String, item: String)?
+        importer = ScreenshotImporter(queue: queue, library: lib) { [unowned self] url, _ in
+            during = importer.inFlight
+            importer.refundInterruptedRead()   // the system took the time away mid-read
+            return try Self.vision.read(contentsOf: url)
+        }
+        XCTAssertNil(importer.inFlight)
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(during?.item, m.items[0].id)
+        XCTAssertNil(importer.inFlight, "nothing is in flight once the read is done")
+        // a read cut off for good (never finished) is the one that counts: attempts stays at 1 while pending
+        var cut = try stage([try rayquaza], now: Date(timeIntervalSinceNow: 5))
+        let p0 = try queue.load(cut.batchId)
+        importer = ScreenshotImporter(queue: queue, library: lib) { _, _ in throw StillImageError.cannotDecode }
+        _ = try importer.readNext(batch: p0.batchId, engine: sharedEngine)
+        cut = try queue.load(cut.batchId)
+        XCTAssertEqual(cut.items[0].attempts, 1)
+    }
+
+    func testAPhotoWithCameraMetadataIsStagedAndTheReaderSaysItIsNotAScreen() throws {
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 4000, height: 3000, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        ctx.setFillColor(CGColor(red: 0.3, green: 0.5, blue: 0.4, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 4000, height: 3000))
+        let out = NSMutableData()
+        let dest = try XCTUnwrap(CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, try XCTUnwrap(ctx.makeImage()), [kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Apple"]] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        let m = try stage([out as Data])
+        XCTAssertEqual(m.items[0].width, 3000)
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        XCTAssertEqual(try queue.load(m.batchId).items[0].state, .unsupported)
+    }
+
+    func testALoneHeldBackLeftoverCanBeDiscardedAndTheBatchGoesWithIt() throws {
+        let first = try stage([try nickit])
+        guard case .saved = try importer.save(try review(first), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        let again = try stage([try nickit])
+        try importer.readAll(batch: again.batchId, engine: sharedEngine)
+        XCTAssertTrue(try queue.load(again.batchId).items[0].heldBack)
+        try importer.discardItem(batch: again.batchId, item: again.items[0].id)
+        XCTAssertEqual(try queue.list().manifests.count, 0)
     }
 }

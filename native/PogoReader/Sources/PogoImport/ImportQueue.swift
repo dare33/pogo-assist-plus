@@ -88,6 +88,7 @@ public struct ImportQueue {
         public let origin: ImportManifest.Origin
         public let account: String?
         let renameMark: Int?
+        let accountBorn: Double?
         let queue: ImportQueue
         let staging: URL
         let createdAt: Date
@@ -96,8 +97,8 @@ public struct ImportQueue {
 
         private var bytes = 0
 
-        init(queue: ImportQueue, origin: ImportManifest.Origin, account: String?, renameMark: Int?, now: Date) throws {
-            self.queue = queue; self.origin = origin; self.account = account; self.renameMark = renameMark; createdAt = now
+        init(queue: ImportQueue, origin: ImportManifest.Origin, account: String?, renameMark: Int?, accountBorn: Double?, now: Date) throws {
+            self.queue = queue; self.origin = origin; self.account = account; self.renameMark = renameMark; self.accountBorn = accountBorn; createdAt = now
             let stamp = ISO8601DateFormatter().string(from: now).filter { $0.isNumber }
             batchId = "\(stamp)-\(UUID().uuidString.lowercased().prefix(8))"
             staging = queue.root.appendingPathComponent(".staging-\(batchId)", isDirectory: true)
@@ -142,7 +143,7 @@ public struct ImportQueue {
             if queue.stagedBytes() + bytes > queue.maxQueuedBytes { throw ImportQueueError.queueTooLarge(maxMB: queue.maxQueuedBytes / 1_000_000) }
             var manifest = ImportManifest(batchId: batchId, createdAt: createdAt, origin: origin, account: account, items: items)
             manifest.updatedAt = now
-            manifest.renameMark = renameMark
+            manifest.renameMark = renameMark; manifest.accountBorn = accountBorn
             try ImportQueue.writeAtomically(try ImportQueue.encoder.encode(manifest), to: staging.appendingPathComponent(ImportQueue.manifestName))
             try FileManager.default.moveItem(at: staging, to: queue.batchDirectory(batchId))   // the one step that makes the batch exist
             finished = true
@@ -155,9 +156,9 @@ public struct ImportQueue {
         }
     }
 
-    public func beginBatch(origin: ImportManifest.Origin, account: String?, renameMark: Int? = nil, now: Date = Date()) throws -> Builder {
+    public func beginBatch(origin: ImportManifest.Origin, account: String?, renameMark: Int? = nil, accountBorn: Double? = nil, now: Date = Date()) throws -> Builder {
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
-        return try Builder(queue: self, origin: origin, account: account, renameMark: renameMark, now: now)
+        return try Builder(queue: self, origin: origin, account: account, renameMark: renameMark, accountBorn: accountBorn, now: now)
     }
 
     /// Bytes of staged images in every batch of the queue.
@@ -208,14 +209,22 @@ public struct ImportQueue {
     }
 
     /// Read the batch, let `change` alter it, write it back whole. One writer at a time (the app's coordinator); the share extension never touches a committed batch.
+    ///
+    /// Read-modify-write is one step under a process-wide lock, so two callers (the engine's queue, and the main thread when the system is about to suspend the app) cannot lose each other's
+    /// change. Nothing is written when `change` altered nothing, so a look at an unchanged batch costs no write.
     @discardableResult
     public func update(_ id: String, now: Date = Date(), _ change: (inout ImportManifest) -> Void) throws -> ImportManifest {
-        var m = try load(id)
+        Self.writeLock.lock(); defer { Self.writeLock.unlock() }
+        let before = try load(id)
+        var m = before
         change(&m)
+        if m == before { return before }
         m.updatedAt = now
         try Self.writeAtomically(try Self.encoder.encode(m), to: manifestURL(id))
         return m
     }
+
+    private static let writeLock = NSLock()
 
     /// Remove a batch and its staged images (a save finished, or the person discarded it).
     public func remove(_ id: String) throws {
@@ -250,10 +259,6 @@ public struct ImportQueue {
             else if let seen = m.seenAt, now.timeIntervalSince(seen) > Self.abandonedAfter { if (try? remove(m.batchId)) != nil { report.removedAbandoned += 1 } }
         }
         return report
-    }
-
-    private static func error(of body: () throws -> Void) -> ImportQueueError? {
-        do { try body(); return nil } catch let e as ImportQueueError { return e } catch { return nil }
     }
 }
 
@@ -307,18 +312,25 @@ extension ImportQueue {
     /// An earlier item that failed (or could not be read) does not claim its screenshot: sharing it again is the retry. Idempotent. Returns the updated manifest.
     /// `ledgerAccount` says what a ledger entry's account is called now (see `ImportLedger.savedAt`).
     @discardableResult
-    public func markDuplicates(_ batchId: String, now: Date = Date(), ledgerAccount: @escaping (ImportLedger.Entry) -> String? = { $0.account }) throws -> ImportManifest {
+    public func markDuplicates(_ batchId: String, now: Date = Date(), owner: @escaping (ImportManifest) -> String? = { $0.account },
+                               ledgerAccount: @escaping (ImportLedger.Entry) -> String? = { $0.account }) throws -> ImportManifest {
         let others = try list().manifests.filter { $0.batchId != batchId && $0.savedAt == nil }
         let ledger = self.ledger()
         return try update(batchId, now: now) { m in
-            let older = others.filter { ($0.createdAt, $0.batchId) < (m.createdAt, m.batchId) && ($0.account == nil || m.account == nil || $0.account == m.account) }
+            // Batches are compared by whose box they are for NOW (`owner`, from the rename history), never by the name each happened to record; a batch with no known owner is compared with all.
+            let mine = owner(m)
+            let older = others.filter { o in
+                guard (o.createdAt, o.batchId) < (m.createdAt, m.batchId) else { return false }
+                let theirs = owner(o)
+                return theirs == nil || mine == nil || theirs == mine
+            }
             var seen = [String: String]()   // key -> the id that item is known by
             for o in older { for item in o.items where item.duplicateOf == nil && !item.canRetry { for k in item.keys { seen[k] = seen[k] ?? "\(o.batchId)/\(item.id)" } } }
             for i in m.items.indices {
                 let item = m.items[i]
                 m.items[i].duplicateOf = item.keys.compactMap { seen[$0] }.first
                 if m.items[i].duplicateOf == nil && !item.canRetry { for k in item.keys { seen[k] = item.id } }
-                m.items[i].alreadyImported = m.account.flatMap { ledger.savedAt(account: $0, keys: item.keys, excluding: m.batchId, currentName: ledgerAccount) }
+                m.items[i].alreadyImported = mine.flatMap { ledger.savedAt(account: $0, keys: item.keys, excluding: m.batchId, currentName: ledgerAccount) }
             }
         }
     }
@@ -337,10 +349,30 @@ extension ImportQueue {
             }
             gone = m.items.filter { !keep.contains($0.id) }
             m.items = m.items.filter { keep.contains($0.id) }
+            // A held-back repeat whose first screenshot was just saved is no longer a repeat of anything in the batch: whether it is that Pokémon (an exact match, unchanged), a power-up
+            // or something new is the box merge's to say (`BoxMerge`, as for Auto Scan), so the hold is lifted rather than left pointing at a screenshot that is gone.
+            for i in m.items.indices { if let r = m.items[i].repeatOf, saved.contains(r) { m.items[i].repeatOf = nil } }
             m.generation += 1
+            m.pendingSave = nil
             if m.items.isEmpty { m.savedAt = now }
         }
         for item in gone { try? fm.removeItem(at: stagedURL(batch: batchId, item: item)) }
+        if m.items.isEmpty { try? remove(batchId); return nil }
+        return m
+    }
+}
+
+extension ImportQueue {
+    /// The person discards one screenshot of a batch (a held-back leftover, say). The batch goes with its last one.
+    @discardableResult
+    public func removeItem(_ batchId: String, item id: String, now: Date = Date()) throws -> ImportManifest? {
+        var gone: ImportItem?
+        let m = try update(batchId, now: now) { m in
+            gone = m.items.first { $0.id == id }
+            m.items.removeAll { $0.id == id }
+            for i in m.items.indices where m.items[i].repeatOf == id { m.items[i].repeatOf = nil }
+        }
+        if let gone { try? fm.removeItem(at: stagedURL(batch: batchId, item: gone)) }
         if m.items.isEmpty { try? remove(batchId); return nil }
         return m
     }

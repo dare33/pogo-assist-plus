@@ -8,14 +8,11 @@ public enum ImageStagingError: Error, Equatable, CustomStringConvertible {
     case cannotDecode
     case tooSmall(width: Int, height: Int)
     case cannotEncode
-    /// Carries a camera's make, lens or focal length: a photograph, not a screenshot (photographs of another screen are out of scope), so it is not even staged.
-    case cameraPhoto
     public var description: String {
         switch self {
         case .cannotDecode: return "The image could not be opened."
         case .tooSmall(let w, let h): return "The image is only \(w) x \(h) pixels, too small to read."
         case .cannotEncode: return "The image could not be prepared."
-        case .cameraPhoto: return "This looks like a photo taken with a camera, not a screenshot."
         }
     }
 }
@@ -60,11 +57,6 @@ public enum ImageNormalising {
     /// An image to the bytes that are kept while it waits: PNG (lossless, so the reader sees what it would have seen), upright, size-limited, and carrying NO metadata:
     /// the pixels and their colour profile only. A screenshot's EXIF, GPS, TIFF, IPTC and maker data, creation dates and thumbnails are not copied. Nothing else about the file survives.
     public static func stagedPNG(from src: CGImageSource) throws -> (data: Data, width: Int, height: Int) {
-        // Judged from the properties, before any pixel is decoded: a photograph from a camera is refused cheaply.
-        if let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] {
-            let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:], exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
-            if tiff[kCGImagePropertyTIFFMake] != nil || exif[kCGImagePropertyExifLensModel] != nil || exif[kCGImagePropertyExifFocalLength] != nil { throw ImageStagingError.cameraPhoto }
-        }
         guard let cg = uprightImage(from: src, maxLongSide: stagedMaxLongSide), cg.width > 0, cg.height > 0 else { throw ImageStagingError.cannotDecode }
         guard min(cg.width, cg.height) >= minShortSide else { throw ImageStagingError.tooSmall(width: cg.width, height: cg.height) }
         let out = NSMutableData()

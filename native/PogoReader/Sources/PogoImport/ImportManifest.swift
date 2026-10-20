@@ -64,7 +64,9 @@ public struct ImportItem: Codable, Equatable, Identifiable {
     /// Can be tried again by the person.
     public var canRetry: Bool { state == .failed || state == .unreadable }
     /// Held back for the person's say (a repeat or an earlier import of this screenshot).
-    public var heldBack: Bool { state == .read && duplicateOf == nil && includeAnyway != true && (repeatOf != nil || alreadyImported != nil) }
+    public var heldBack: Bool { hasHold && includeAnyway != true }
+    /// Something asks for the person's say (a possible repeat, or a screenshot imported before), whether or not it has been answered yet: the control stays so the answer can be taken back.
+    public var hasHold: Bool { state == .read && duplicateOf == nil && (repeatOf != nil || alreadyImported != nil) }
     /// A Pokémon this item will contribute to the review: read in full, not a copy of another item, not held back.
     public var isIncluded: Bool { state == .read && duplicateOf == nil && !heldBack }
 }
@@ -93,6 +95,11 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
     public var renameMark: Int?
     /// When the batch was first shown to the person (the sheet opened with it in the list), and last acted on. Clean-up never removes a batch that has not been shown.
     public var seenAt: Date?
+    /// When the bound account's folder was made (seconds since 1970, at full precision: a date in the manifest keeps whole seconds only). A folder made again under the same name (the account was deleted and recreated) is another account: the person is asked.
+    public var accountBorn: Double?
+    /// The screenshots (item ids) whose Pokémon the person's answers put in the save, written BEFORE the box is written, so a save found already made on relaunch is finished with
+    /// exactly what was saved, not with a guess. Cleared once the batch has been retired.
+    public var pendingSave: [String]?
 
     public var id: String { batchId }
 
@@ -111,7 +118,7 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
     public var heldBack: [ImportItem] { items.filter(\.heldBack) }
     public var duplicates: [ImportItem] { items.filter { $0.duplicateOf != nil } }
 
-    private enum CodingKeys: String, CodingKey { case version, batchId, createdAt, updatedAt, origin, account, items, savedAt, generation, renameMark, seenAt }
+    private enum CodingKeys: String, CodingKey { case version, batchId, createdAt, updatedAt, origin, account, items, savedAt, generation, renameMark, seenAt, accountBorn, pendingSave }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -126,6 +133,8 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
         generation = try c.decodeIfPresent(Int.self, forKey: .generation) ?? 0
         renameMark = try c.decodeIfPresent(Int.self, forKey: .renameMark)
         seenAt = try c.decodeIfPresent(Date.self, forKey: .seenAt)
+        accountBorn = try c.decodeIfPresent(Double.self, forKey: .accountBorn)
+        pendingSave = try c.decodeIfPresent([String].self, forKey: .pendingSave)
     }
 }
 

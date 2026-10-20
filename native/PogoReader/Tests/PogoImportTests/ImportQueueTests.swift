@@ -316,25 +316,29 @@ final class ImportQueueTests: XCTestCase {
 
     // MARK: size, cameras, retiring
 
-    func testAScreenshotLargerThanTheReaderNeedsIsScaledDownWhenStaged() throws {
+    func testAPictureLargerThanTheReaderNeedsIsScaledDownWhenStagedToAConcreteSize() throws {
         let b = try queue.beginBatch(origin: .photoPicker, account: "Main")
         let item = try b.add(data: try picture(40, w: 3200, h: 6400))
-        XCTAssertEqual(max(item.width, item.height), ImageNormalising.stagedMaxLongSide)
-        XCTAssertEqual(Double(item.width) / Double(item.height), 0.5, accuracy: 0.01)
+        XCTAssertEqual(item.width, 1500); XCTAssertEqual(item.height, 3000, "3000 px on the long side, aspect kept")
         let phone = try b.add(data: try picture(41, w: 1320, h: 2868))
-        XCTAssertEqual(phone.height, 2868, "a phone's own screenshot is not touched")
+        XCTAssertEqual(phone.width, 1320); XCTAssertEqual(phone.height, 2868, "a phone's own screenshot is not touched")
+        let m = try b.commit()
+        let src = try XCTUnwrap(CGImageSourceCreateWithURL(queue.stagedURL(batch: m.batchId, item: m.items[0]) as CFURL, nil))
+        let props = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any])
+        XCTAssertEqual(props[kCGImagePropertyPixelWidth] as? Int, 1500); XCTAssertEqual(props[kCGImagePropertyPixelHeight] as? Int, 3000)
     }
 
-    func testACameraPhotoIsRefusedBeforeItIsStaged() throws {
-        let b = try queue.beginBatch(origin: .shareExtension, account: "Main")
-        let ctx = try XCTUnwrap(CGContext(data: nil, width: 600, height: 800, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
-        ctx.setFillColor(CGColor(red: 0.3, green: 0.4, blue: 0.5, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 800))
+    func testAPictureWithCameraMetadataIsStagedLikeAnyOtherAndLeftForTheReaderToJudge() throws {
+        // A screenshot can inherit a make or lens from an edited copy, so metadata never refuses a picture: it is scaled and staged, and the reader says what it is.
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: 4000, height: 3000, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        ctx.setFillColor(CGColor(red: 0.3, green: 0.4, blue: 0.5, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 4000, height: 3000))
         let out = NSMutableData()
         let dest = try XCTUnwrap(CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil))
         CGImageDestinationAddImage(dest, try XCTUnwrap(ctx.makeImage()), [kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Apple"], kCGImagePropertyExifDictionary: [kCGImagePropertyExifLensModel: "iPhone back camera"]] as CFDictionary)
         XCTAssertTrue(CGImageDestinationFinalize(dest))
-        XCTAssertThrowsError(try b.add(data: out as Data)) { XCTAssertEqual($0 as? ImageStagingError, .cameraPhoto) }
-        XCTAssertNoThrow(try b.add(data: try picture(42)), "a screenshot has no camera make")
+        let b = try queue.beginBatch(origin: .shareExtension, account: "Main")
+        let item = try b.add(data: out as Data)
+        XCTAssertEqual(item.width, 3000); XCTAssertEqual(item.height, 2250)
     }
 
     func testTheQueueHasAByteCapAsWellAsAnImageCap() throws {
@@ -398,5 +402,33 @@ final class ImportQueueTests: XCTestCase {
         for f in files { XCTAssertFalse(FileManager.default.fileExists(atPath: f.path)) }
         XCTAssertEqual(try queue.list().manifests.count, 0)
         XCTAssertNoThrow(try queue.remove(m.batchId), "removing twice is fine")
+    }
+
+    func testAnUpdateThatChangesNothingWritesNothing() throws {
+        let m = try makeBatch([60])
+        let url = queue.manifestURL(m.batchId)
+        let before = try Data(contentsOf: url)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_000_000)], ofItemAtPath: url.path)
+        _ = try queue.update(m.batchId) { _ in }
+        _ = try queue.markDuplicates(m.batchId)   // nothing to mark
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date, Date(timeIntervalSince1970: 1_000_000), "the file was not rewritten")
+    }
+
+    func testOneScreenshotCanBeDiscardedAndTheBatchGoesWithTheLastOne() throws {
+        let m = try makeBatch([61, 62])
+        let left = try XCTUnwrap(try queue.removeItem(m.batchId, item: m.items[0].id))
+        XCTAssertEqual(left.items.map(\.id), [m.items[1].id])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.stagedURL(batch: m.batchId, item: m.items[0]).path))
+        XCTAssertNil(try queue.removeItem(m.batchId, item: m.items[1].id))
+        XCTAssertEqual(try queue.list().manifests.count, 0)
+    }
+
+    func testASavedSourceLiftsTheHoldOnItsRepeat() throws {
+        var m = try makeBatch([63, 64])
+        m = try queue.update(m.batchId) { $0.items[0].state = .read; $0.items[1].state = .read; $0.items[1].repeatOf = $0.items[0].id }
+        XCTAssertTrue(m.items[1].heldBack)
+        let left = try XCTUnwrap(try queue.retire(m.batchId, saved: [m.items[0].id]))
+        XCTAssertNil(left.items[0].repeatOf); XCTAssertFalse(left.items[0].heldBack); XCTAssertFalse(left.items[0].hasHold)
     }
 }
