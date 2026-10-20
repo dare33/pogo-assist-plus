@@ -1,10 +1,11 @@
 # Status — Pogo Assist+
 
-**21 Oct 2026: screenshot import (branch `feat/screenshot-import-fold`, on `feat/screenshot-import`, not merged).** Quick import of Pokémon GO appraisal screenshots, from the app (system photo picker) and from
-Photos (Share > Pogo Assist+), read once each, merged as a partial Add and update and saved as source "screenshot import". Design, rules and limits: `native/README.md`, "Screenshot import". Review round 1
-(Opus: ship after fixes; Sol: do not ship) was folded in; the second round has not been run, so **the review gate is not passed**. Verified on the Mac: swift test and npm test (numbers in the commit that
-added this note), the app builds unsigned with the extension, and the picker flow ran in the iPhone 17 simulator. Not verified: the Share extension running (it needs a signed build with the
-`com.dare33.pogoassist.share` App ID and the App Group), anything on a real iPhone or iPad.
+**20 Oct 2026: screenshot import (branch `feat/screenshot-import-fold`, on `feat/screenshot-import`, not merged).** Quick import of Pokémon GO appraisal screenshots, from the app (system photo picker) and from
+Photos (Share > Pogo Assist+), each read once, merged as a partial Add and update and saved as source "screenshot import". Design, rules and limits: `native/README.md`, "Screenshot import". Two review rounds
+have been folded in (round 2: Opus ship after fixes, Sol do not ship); a third has not been run, so **the review gate is not passed**. Verified on the Mac (greg-mb-16, Xcode 27.1): `swift test` in `native/PogoReader`
+179 + 35 + 624, 0 failures (1 + 6 skipped); `npm test` 199 tests, 195 pass, 4 skipped (the recordings are not in that checkout), 0 fail; the app builds unsigned with the extension; the picker flow
+(`ScreenshotImportTests`) passed in the iPhone 17 simulator. Not verified: the Share extension running (it needs a signed build, the `com.dare33.pogoassist.share` App ID and the App Group), the new app
+glue beyond what the simulator test touches (backgrounding, the sheet opening by itself), and anything on a real iPhone or iPad.
 
 **20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,
 merged from `native-ui-v1` in PR #2), the shared JavaScript changes (extractor read fixes, CP recovery, PvP leagues,
