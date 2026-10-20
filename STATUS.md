@@ -1,5 +1,18 @@
 # Status — Pogo Assist+
 
+**20 Oct 2026, branch `feat/league-options` (not merged): league options.** `leaguesFor` (`src/leagues.js`) now returns, per league,
+every allowed family member (PvPoke-ranked or not, form changes such as Zygarde included) as `options`, each rated for the copy
+(PvPoke rank and score, IV rank, moves, cost), plus `pick` (index of the member to SHOW), `experimental` (index of the other rule's
+member) and `source`. The shown pick copies Poke Genie: its own pick from the export when the entry has one and it is in the
+family, otherwise `pokeGeniePick`, a PROVISIONAL emulation (best stat product % among the members the copy is not already too strong
+for, ranked ones first). Without reading the export's pick it reproduces Poke Genie on 271/280 Great and 300/306 Ultra fixture rows;
+the misses are near-ties where Poke Genie prefers the later evolution. The earlier idea, species strength first with a
+`CLOSE_SCORE` (3.0) window decided by IV Rank %, is kept as `chooseMember`, computed in the background and not shown (240/280 Great,
+295/306 Ultra against Poke Genie); Greg swaps the shown pick to it once it is provably better. Both rules and the threshold sit
+together at the top of `src/leagues.js`. The advisor now rates league builds from the build target's own option (scans have no
+Poke Genie columns); Master League keeps its neutral weight. The display for the options is being designed separately: no
+screen changed, the app decodes the data (`BoxAdvice.LeagueRating`, advice cache version 4). Not verified on a device.
+
 **20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,
 merged from `native-ui-v1` in PR #2), the shared JavaScript changes (extractor read fixes, CP recovery, PvP leagues,
 CP multipliers, shadow/purified/lucky cost rounding, refreshed PvPoke rankings of 10 Oct), the Pages CI fix (PR #1:
