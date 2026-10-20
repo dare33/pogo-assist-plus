@@ -31,7 +31,8 @@ test('adviseJSON: pokemon entries are only { p: { index }, unresolved, speciesId
   assert.deepEqual(Object.keys(r.pokemon[0]).sort(), ['leagues', 'p', 'speciesId']);
   assert.deepEqual(r.pokemon[0].p, { index: box[0].index });
   assert.deepEqual(Object.keys(r.pokemon[0].leagues), ['gl', 'ul', 'ml']);
-  for (const k of ['pick', 'strength', 'moves', 'needs', 'iv', 'overCap', 'cost']) assert.ok(k in r.pokemon[0].leagues.gl, k);
+  for (const k of ['pick', 'strength', 'moves', 'needs', 'iv', 'overCap', 'cost', 'options']) assert.ok(k in r.pokemon[0].leagues.gl, k);
+  assert.equal(r.pokemon[0].leagues.gl.options.filter((o) => o.ours).length, 1);
   assert.deepEqual(r.pokemon[1], { p: { index: 2 }, unresolved: true });
   assert.equal(r.builds[0].pokemon.index !== undefined, true);
 });

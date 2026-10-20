@@ -75,7 +75,14 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 /**
  * Leagues for one imported entry. `resolved` is resolveSpecies' result for it; ctx = { gm, tiers, rankings }.
  * Returns { gl, ul, ml }. Each league is the rating of Our pick, { pick, strength, moves, needs, iv, overCap, cost }, plus
- * `options`: every ranked family member rated the same way, Our pick among them marked `ours: true` (see README, "League options").
+ * `options`: every ranked family member rated the same way, Our pick among them marked `ours: true`.
+ *
+ * Shape, per league: { pick: { speciesId, name, self, genderLocked? }, strength: { score, rank, of } | null,
+ *   moves: { fast, charged[] } | null, needs: string[] | null, iv: { rank, pct, rankPct, level, cp } | null, overCap: boolean,
+ *   cost: { dust, candy, xl, evolveCandy, toLevel } | null, options: [ ...the same fields except `options`, plus ours: boolean ] }.
+ * options are the PvPoke-ranked members only (an unranked one is never a candidate), strongest score first, then better Rank %,
+ * then later evolution. A family with nothing ranked has a single option (the fallback pick, strength null, ours true).
+ * The league-level fields are a copy of the `ours` option's, so a reader that ignores `options` sees Our pick as before.
  */
 export function leaguesFor(entry, resolved, ctx) {
   const { gm, rankings } = ctx;
