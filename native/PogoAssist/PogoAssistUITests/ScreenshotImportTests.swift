@@ -33,9 +33,11 @@ final class ScreenshotImportTests: XCTestCase {
         // The system picker: select the three newest pictures, then Add.
         // The picker is another process, and its elements carry no identifiers a test can rely on: tap the three newest pictures by position (the top row of the grid) and the
         // check mark. `31-picker` shows the layout this was written against (iPhone 17, iOS 27).
-        sleep(4)
+        // The picker is another process whose controls the test cannot query (its selection count is not in the accessibility tree), so it is given time to settle (a tap before the
+        // grid is up is lost: that happened once) and the pictures are tapped slowly. The count is checked end to end below: the summary must offer "Review 2 Pokémon".
+        sleep(8)
         shot("31-picker")
-        for x in [0.17, 0.5, 0.83] { app.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.46)).tap(); usleep(400_000) }
+        for x in [0.17, 0.5, 0.83] { app.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.46)).tap(); sleep(1) }
         shot("32-picker-selected")
         let add = app.buttons["Add"]
         if add.waitForExistence(timeout: 3) { add.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.165)).tap() }
