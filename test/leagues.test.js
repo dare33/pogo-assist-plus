@@ -76,6 +76,7 @@ test('acceptance: IV rank, stat product and Rank % match every exact-IV row of t
 // Regression pins (not evidence it generalises: the fixture is the data it was fitted on) for the emulation of Poke Genie's pick, measured WITHOUT reading the export's pick: currently 272/280 Great and 300/306 Ultra rows (the 270/278 and 298/304 counted earlier were the
 // cost-check subsets, a different row count; the printed report is the reference). A drop below these means the emulation, the IV rank or the family walk changed.
 const EMULATION_FLOOR = { gl: 272, ul: 300 };
+const EXPERIMENTAL_PIN = { gl: 250, ul: 296 };
 
 test('report: pick agreement with Poke Genie (emulated without its pick, and the experimental rule), cost agreement, ranking convention', () => {
   const lines = [];
@@ -118,6 +119,8 @@ test('report: pick agreement with Poke Genie (emulated without its pick, and the
     lines.push(`${label}: experimental CLOSE_SCORE rule agrees ${experimental}/${n}; e.g. ${experimentalMiss.join(', ')}`);
     lines.push(`${label}: cost rows ${costRows}: dust ${dustOk}, candy (power-up only) ${candyOk}, candy (power-up + evolution) ${candyEvoOk}`);
     if (EMULATION_FLOOR[league]) assert.ok(emulated >= EMULATION_FLOOR[league], `${label} emulation ${emulated}/${n} is below ${EMULATION_FLOOR[league]}`);
+    // The experimental rule is pinned exactly too (a lost row fails; a gain means re-pinning on purpose).
+    if (EXPERIMENTAL_PIN[league]) assert.equal(experimental, EXPERIMENTAL_PIN[league], `${label} experimental ${experimental}/${n}`);
     // The shown pick differs from Poke Genie's only when its pick is not a member of the family (the Oinkologne twins, an unreleased form).
     assert.ok(shownSame >= n - 3, `${label} shown ${shownSame}/${n}`);
   }
@@ -737,7 +740,7 @@ test('the shown pick is never a member the copy is past the cap for while anothe
   assert.ok(checked > 1500, `${checked} leagues checked`);
 });
 
-test('a CP exactly at the cap fits; one point over does not', () => {
+test('a CP exactly at the cap fits; the next half level, whose CP is over the cap, does not', () => {
   // Find a single-stage species and a level whose CP with 15/15/15 is exactly the Great League cap (1500), then one whose CP is 1501+.
   const hundo = { atk: 15, def: 15, hp: 15 };
   let exact = null;
@@ -750,7 +753,8 @@ test('a CP exactly at the cap fits; one point over does not', () => {
   const at = rawOf(entry(exact.name, { ivs: hundo, level: exact.level })).gl.options.find((o) => o.speciesId === exact.id);
   assert.equal(at.overCap, false);
   const over = rawOf(entry(exact.name, { ivs: hundo, level: exact.level + 0.5 })).gl.options.find((o) => o.speciesId === exact.id);
-  assert.equal(over.overCap, cpAt(gm.byId.get(exact.id).baseStats, hundo, exact.level + 0.5) > 1500);
+  assert.ok(cpAt(gm.byId.get(exact.id).baseStats, hundo, exact.level + 0.5) > 1500);
+  assert.equal(over.overCap, true);
 });
 
 test("'fallback' also covers ranked members that are all past the cap: a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League", () => {
