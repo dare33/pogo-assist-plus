@@ -90,7 +90,7 @@ struct ResultScreen: View {
         } message: { Text("\(confirmFull ?? "") A full scan lists every saved Pokémon this scan did not see, as \"Not seen in this scan\". They are all kept; nothing is removed unless you mark it.") }
         .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardReview() }
-        } message: { Text("Nothing will be added to the box.") }
+        } message: { Text(review.importPrepared == nil ? "Nothing will be added to the box." : "Nothing will be added to the box. The screenshots stay queued in Import screenshots.") }
     }
 
     // MARK: questions
@@ -162,7 +162,7 @@ private struct ReviewHeader: View {
                     VStack(alignment: .leading, spacing: 0) { hero(read); readIn }
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(read.formatted()) Pokémon read in \(ReviewFormat.readIn(ctx.review.outcome.duration))")
+                .accessibilityLabel("\(read.formatted()) Pokémon read \(readInText)")
             }
             progress
             VStack(alignment: .leading, spacing: 10) {
@@ -174,8 +174,12 @@ private struct ReviewHeader: View {
     }
 
     private func hero(_ n: Int) -> some View { Text(n.formatted()).paText(.heroFigure).foregroundStyle(accent.ink) }
+    /// "in 34 min", or for a screenshot import "from 5 screenshots" (it has no duration).
+    private var readInText: String {
+        ctx.review.importPrepared.map { "from \(ReviewFormat.count($0.manifest.items.count, "screenshot", "screenshots"))" } ?? "in \(ReviewFormat.readIn(ctx.review.outcome.duration))"
+    }
     private var readIn: some View {
-        Text("read in \(ReviewFormat.readIn(ctx.review.outcome.duration))").font(.figtree(17, .semibold, relativeTo: .body)).foregroundStyle(Theme.muted)
+        Text("read \(readInText)").font(.figtree(17, .semibold, relativeTo: .body)).foregroundStyle(Theme.muted)
     }
 
     private var progress: some View {

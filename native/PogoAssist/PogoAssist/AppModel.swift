@@ -3,6 +3,7 @@ import Combine
 import UserNotifications
 import PogoBox
 import PogoReader
+import PogoImport
 
 /// Receives the pause notification's "End scan" action (the app is woken for it) and lets notifications show while the app is open.
 final class NotificationActions: NSObject, UNUserNotificationCenterDelegate {
@@ -71,6 +72,9 @@ final class AppModel: ObservableObject {
         var log: URL?
         /// Where a scan the extension ended itself stopped and what to do (`ScanStop.summary`), shown once at the top of the review.
         var stopSummary: String?
+        /// Set when this review is a screenshot import (`ScreenshotImporter`): the batch, its screenshots and the rows' origins. It is always an Add and update review, saved through the
+        /// importer (never `commitScan` with a replay log), and its source is "screenshot import", not "broadcast".
+        var importPrepared: ScreenshotImporter.Prepared?
     }
 
     enum ScanFlow {
@@ -178,9 +182,17 @@ final class AppModel: ObservableObject {
     /// A scan going live ends a re-scan suggestion (`rescanCount`).
     @Published var broadcast: BroadcastState? { didSet { if rescanCount != nil, live { rescanCount = nil } } }
     @Published var now = Date()
-    enum Sheet: String, Identifiable { case settings, diagnostics; var id: String { rawValue } }
-    /// Settings or Diagnostics. While one is open a finished scan waits (it cannot be presented underneath); it is picked up on close.
-    @Published var sheet: Sheet? { didSet { if sheet == nil { checkForFinishedScan() } } }
+    enum Sheet: String, Identifiable { case settings, diagnostics, screenshots; var id: String { rawValue } }
+    /// Settings, Diagnostics or the screenshot import. While one is open a finished scan waits (it cannot be presented underneath); it is picked up on close.
+    @Published var sheet: Sheet? { didSet { if sheet == nil { checkForFinishedScan(); screenshots.sheetClosed() } } }
+    /// Screenshot import: the picker's staging, the queue of batches (including those the share extension made), reading and the hand-over to the review.
+    lazy var screenshots: ImportModel = {
+        let m = ImportModel(app: self)
+        forwarded.append(m.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() })
+        return m
+    }()
+    /// A screenshot review can be opened now: nothing else holds the review screen, the box files or the account names.
+    var canOpenImportReview: Bool { !isReviewing && !renaming && !busyWithScan && !live && waitingScan == nil && recoveryProblem == nil && !storageMissing }
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
@@ -494,7 +506,10 @@ final class AppModel: ObservableObject {
             if let root { try? FileManager.default.removeItem(at: root) }
             if let d = BoxExportFile.pendingDirectory { PendingScanStore(directory: d).clear() }
             SharedStore.clear()
-            if let c = SharedStore.containerURL { try? FileManager.default.removeItem(at: c.appendingPathComponent("replay.processed")) }
+            if let c = SharedStore.containerURL {
+                try? FileManager.default.removeItem(at: c.appendingPathComponent("replay.processed"))
+                try? FileManager.default.removeItem(at: ImportQueue(container: c).root)   // queued screenshots
+            }
         }
         library = BoxLibrary(root: libraryRoot)
         pendingStore = PendingScanStore(directory: BoxExportFile.pendingDirectory ?? URL(fileURLWithPath: "/dev/null/pogo-assist-pending", isDirectory: true))
@@ -768,6 +783,7 @@ final class AppModel: ObservableObject {
     func renameAccount(_ old: String, to new: String) async -> String? {
         // A pending review holds the old name (`Review.account`): saving it after the rename would file the scan under a folder that no longer exists.
         if isReviewing { return "Finish or discard the open scan first, then rename the account." }
+        if screenshots.isWorking { return "Screenshots are being read or prepared. Try again in a moment." }
         if live { return "A scan is running. Rename the account when it has finished." }
         if recoveryProblem != nil { return "An earlier rename of an account has not been finished yet, so no account can be renamed now. The app tries again each time it opens a box." }
         if copying { return "A finished scan is being kept for review. Try again in a moment." }
@@ -1223,9 +1239,45 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - screenshot import review
+
+    /// Open the review for a prepared screenshot import. Its signature is the batch's, so nothing that looks at a broadcast's log mistakes it for one.
+    func presentImportReview(_ p: ScreenshotImporter.Prepared, seconds: Double) {
+        guard !isReviewing else { return }
+        var review = Review(account: p.account, kind: .partial, outcome: p.outcome, plan: p.plan, base: p.base, storageCount: nil, signature: p.manifest.signature, mergeSeconds: seconds, paging: nil, boxSeq: p.boxSeq)
+        review.importPrepared = p
+        flow = .review(review)
+    }
+
+    /// Save a screenshot import through the importer: one box version and one scan record, once, whatever the number of taps or relaunches (`ScreenshotImporter.save`).
+    private func saveImport(_ r: Review) async {
+        guard let p = r.importPrepared else { return }
+        busy = "Saving to the box"
+        defer { busy = nil }
+        let importer = screenshots.importer
+        do {
+            let result = try await worker.run { engine in try importer.save(p, resolutions: r.resolutions, engine: engine) }
+            flow = .idle
+            switch result {
+            case .saved(let snap):
+                lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: true)
+                if r.account == account { afterCommit(snap) }
+            case .alreadySaved:
+                message = "These screenshots had already been saved to \(r.account), so nothing was added again."
+                if r.account == account { loadBox() }
+            }
+            screenshots.refresh()
+        } catch BoxLibrary.Failure.boxChanged {
+            message = "The box changed while this was open, so nothing was saved. The result has been worked out again against the box as it is now: check it and save again."
+            await refreshReview(r)
+        } catch {
+            message = "The screenshots could not be saved: \(Self.plain(error)) Nothing in the box has changed. You can try again or discard them."
+        }
+    }
+
     /// Change the scan kind on the review screen; the merge is recomputed (it is pure and quick).
     func setReviewKind(_ kind: BoxStore.Kind) async {
-        guard case .review(var r) = flow, r.kind != kind else { return }
+        guard case .review(var r) = flow, r.kind != kind, r.importPrepared == nil else { return }   // a screenshot import is always Add and update
         scanKind = kind
         let base = r.base, rows = r.outcome.scan.rows, date = r.plan.scanDate
         let unmatched = r.outcome.scan.unmatched
@@ -1268,6 +1320,7 @@ final class AppModel: ObservableObject {
     func saveReview() async {
         guard case .review(let r) = flow else { return }
         if let why = saveBlocker(r) { message = why; return }
+        if r.importPrepared != nil { await saveImport(r); return }
         busy = "Saving to the box"
         defer { busy = nil }
         let lib = library
@@ -1305,6 +1358,7 @@ final class AppModel: ObservableObject {
     /// Work the merge out again against the box as it is now (after the box changed under an open review); the answers start over.
     private func refreshReview(_ r: Review) async {
         if let plan = r.reread { flow = .idle; rereadScan(id: plan.scan.id); return }
+        if let p = r.importPrepared { flow = .idle; await screenshots.review(batch: p.manifest.batchId); return }
         let lib = library, rows = r.outcome.scan.rows, unmatched = r.outcome.scan.unmatched, kind = r.kind, date = r.plan.scanDate, a = r.account
         do {
             let (plan, base, seq) = try await worker.run { _ -> (BoxMerge.Plan, [BoxEntry], Int?) in
@@ -1320,6 +1374,7 @@ final class AppModel: ObservableObject {
 
     func discardReview() {
         switch flow {
+        case .review(let r) where r.importPrepared != nil: screenshots.reviewClosedWithoutSaving()   // the screenshots stay queued; discarding them is a choice in Import screenshots
         case .review(let r): if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
         case .failed(_, let sig):
             if sig == Self.damagedPrefix { pendingStore.clear(); waitingScan = nil }   // the person's choice: what was kept goes

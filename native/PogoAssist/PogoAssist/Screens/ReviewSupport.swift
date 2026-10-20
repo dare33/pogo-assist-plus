@@ -5,9 +5,12 @@ import PogoReader
 /// How the scan ended, as far as the app really knows. The outcome line says only what is known; anything else is plain "Scan finished".
 enum ScanEnding: Equatable {
     case listEnd, longPause, byPerson, unknown
+    /// A screenshot import: there was no scan to end.
+    case screenshots
 
     /// A scan reviewed just after it was made knows from the broadcast's own flags (`Review`); a saved scan read again knows from the end markers its replay log carries.
     static func of(_ r: AppModel.Review) -> ScanEnding {
+        if r.importPrepared != nil { return .screenshots }
         if r.endedAtListEnd { return .listEnd }
         if r.stoppedByTimeout { return .longPause }
         if r.stoppedByPerson { return .byPerson }
@@ -30,6 +33,7 @@ enum ScanEnding: Equatable {
         case .longPause: return "Scan stopped after a long pause"
         case .byPerson: return "You ended the scan"
         case .unknown: return "Scan finished"
+        case .screenshots: return "Screenshots read"
         }
     }
 }
