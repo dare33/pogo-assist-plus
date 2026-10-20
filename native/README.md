@@ -880,21 +880,31 @@ Two entry points, one importer. **In the app:** More > Import screenshots > Choo
   Mac tool's path. `StillReader.judge` says: read (name, CP, HP, bars at or above `SETTLED`), IVs missing (no bars / not settled), unsupported (not a detail screen, cut off, stationed
   card) or unreadable (name, CP or HP missing, weak name). No voting, no second look.
 - **Adapter (`StillImport`, `ScreenshotImporter`, PogoBox, beside `ScanPipeline`).** Each reading is solved alone by the JavaScript `finish` (one reading, one row); a row with no IVs,
-  or CP/HP/bars that fit no level, is not added. The rows become a `ScanPipeline.Outcome` and go to `BoxMerge.plan` as `.partial`, so matching, questions, hand corrections and
+  CP/HP/bars that fit no level, or any value the solver had to correct or work out (`ivs-corrected`, `cp-recovered`, `hp-computed`, Nidoran's sex from stats, an ambiguous form)
+  is not added: an inferred value is not a read. A recogniser fault (`FaultReporting`) is a retryable failure, not an "unsupported screen". The rows become a `ScanPipeline.Outcome` and go to `BoxMerge.plan` as `.partial`, so matching, questions, hand corrections and
   "not seen is not gone" are the existing ones. Saved with source "screenshot import" and `sourceSignature` `import:<batchId>`.
 - **Queue (`PogoImport`, in the App Group: `screenshot-imports/<batchId>/manifest.json` + staged PNGs; `ledger.json`).** A batch is built in `.staging-<id>/` and renamed into place after its
-  manifest is written; every manifest write is a temp file renamed over the old. Staged images are upright PNGs with no EXIF/GPS/TIFF. Items carry the asset id (picker only), SHA-256 of the original
-  bytes and of the staged PNG, the state, and the reader's output, so a relaunch resumes. Cleanup: half-made batches after 1 h, batches whose save finished, batches untouched for 14 days; a
-  damaged batch is kept 14 days, a newer app's never removed. Limits: 50 per batch, 300 queued.
+  manifest is written; every manifest write is a temp file renamed over the old. Staged images are upright PNGs with no EXIF/GPS/TIFF, scaled down to at most 3000 px on the long side, and a picture carrying a camera make, lens or focal length is refused before it is staged. Items carry the asset id (picker only), SHA-256 of the original
+  bytes and of the staged PNG, the state, and the reader's output, so a relaunch resumes. Cleanup: half-made batches after 1 h, and batches whose save finished; a batch is removed after 14 days only if it was
+  shown to the person (`seenAt`, set when the sheet lists it) and left alone since, so a batch shared and never seen is never deleted; damaged or newer-version batches are never deleted.
+  Limits: 50 per batch, 300 queued, 1 GB of staged images queued.
 - **Duplicates.** The same asset or bytes (in a batch, in an older queued batch for the same account, or saved earlier into that account: the ledger) is read once and added once. A DIFFERENT
   screenshot whose Pokémon has the same species, CP, HP and IVs (or the same species and IVs at another CP) as an earlier one in the batch is held back until the person says "this is a different
-  Pokémon"; nothing is merged on resemblance. A screenshot already saved is held back until "import it again".
-- **Saves.** `ScreenshotImporter.save` asks `scanAlreadySaved(account, import:<batchId>)` first: saved means finish the clean-up and write nothing; unknown means refuse. A save cut off after the box was
-  written is therefore not repeated on relaunch. Leaving a review without saving keeps the batch queued.
-- **Account.** A batch belongs to the account selected when it was made (the extension reads it from the group defaults, `ReaderSettings.scanAccount`), followed through renames; the sheet and the review
-  name it before saving, and it can be changed for a batch whose account has gone or was never set.
-- **Known limits.** The share extension needs its own App ID (`com.dare33.pogoassist.share`) and the App Group on the signing team. Reading pauses when the app is backgrounded (no background task is
-  taken). A screenshot of a Pokémon with a hidden CP, or without HP, is "unreadable", where a scan would recover the CP from HP and bars. Tests: `PogoImportTests`, `StillReaderTests`,
+  Pokémon"; nothing is merged on resemblance. A screenshot already saved is held back until "import it again". An earlier item that FAILED does not claim its screenshot, so sharing it again is the retry. Copies of a batch that is later
+  discarded are read automatically (`prepareAll`).
+- **Saves.** `ScreenshotImporter.save` asks `scanAlreadySaved(account, signature)` first: saved means finish the clean-up and write nothing; unknown means refuse (an unreadable scan file blocks
+  an `import:` signature only if it still carries that signature). A save cut off after the box was written is therefore not repeated on relaunch. After a save only what still needs the person
+  stays (held-back, failed and unread screenshots, and their copies); the next save of the batch is a new scan record with its own signature (`import:<batch>.<generation>`). Only screenshots
+  actually saved go in the ledger. Leaving a review without saving keeps the whole batch queued.
+- **Saved matches.** Nothing within a batch is merged on resemblance. A screenshot that matches a saved Pokémon exactly (species, form, CP, IVs: BoxMerge rule 1) is treated as that Pokémon and left
+  unchanged, as Auto Scan does; the review says how many matched. A second identical one is asked about (rule 12, an extra twin).
+- **Account.** A batch is bound to the account selected when it was made (the extension reads it from the group defaults, `ReaderSettings.scanAccount`) and to the number of renames the box had
+  recorded then (`renameMark`; a share is stamped when the app first sees it). Renames made since are followed BEFORE asking whether the name exists, so an account renamed away and a new one given its
+  old name is ambiguous: the sheet asks which box, and nothing is saved until it is chosen (`BoxStore.resolveAccount`). The ledger records the same epoch. The sheet names the account and offers Change
+  whenever there is more than one, and always when it is unset, gone or ambiguous.
+- **Threads.** Every write to a manifest goes through the engine's serial queue; the main actor only reads.
+- **Backgrounding.** Reading stops after the screenshot in hand when the app leaves the front (that one is finished under a background task, so it does not use up its retries) and resumes on return.
+- **Known limits.** The share extension needs its own App ID (`com.dare33.pogoassist.share`) and the App Group on the signing team. A screenshot of a Pokémon with a hidden CP, or without HP, is "unreadable", where a scan would recover the CP from HP and bars. A Pokémon with a nickname has no species name on the screen and is reported as unreadable (not solved). Tests: `PogoImportTests`, `StillReaderTests`,
   `ScreenshotImporterTests` (swift test); the picker flow is `PogoAssistUITests/ScreenshotImportTests` (simulator, pictures added with `simctl addmedia`). Device runs: not done.
 
 ## What this app sends
