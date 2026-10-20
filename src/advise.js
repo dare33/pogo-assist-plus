@@ -7,6 +7,24 @@ import { cpAt } from './cpm.js';
 import { clearRankCache } from './pvp-rank.js';
 
 export const AREA_LABEL = { raids: 'Raids', rocket: 'Rocket', gym: 'Gym', gl: 'GL', ul: 'UL', ml: 'ML', max: 'Max' };
+
+// ---- how a build is worded: shared by the web page and scripts/advise.mjs (the Swift side words the same cases in BoxAdvice.Build.action) ----
+
+/** The level the build's cost refers to, with the area it is for: never a league label next to another area's cost. */
+export function levelText(b) {
+  const area = AREA_LABEL[b.costArea];
+  if (b.targetLevel != null) return `L${b.level} → ${b.targetLevel} (${area})`;
+  // No target level to climb to: either leaguesFor's best level for the league (the cost's own level), or nothing left to power up.
+  if (b.pvpCost && b.costArea === b.pvpCost.league && b.pvpCost.toLevel > b.level) return `L${b.level} → ${b.pvpCost.toLevel} (best ${area} level)`;
+  const league = b.pvpCost && b.costArea === b.pvpCost.league;
+  return `L${b.level} · already at (or past) its ${league ? `best ${area} level` : `${area} target level`}`;
+}
+
+/** What to do, plain text: evolving or a form change; otherwise power up, only the second move, or nothing at all. */
+export function actionText(b) {
+  if (b.targetId !== b.speciesId) return `${b.formChange ? 'Form change to' : 'Evolve to'} ${b.targetName}`;
+  return b.powerUpNeeded ? 'Power up' : b.secondMoveDue ? 'Second move' : 'Already built';
+}
 const TIER_W = { S: 3, A: 2, B: 1 };
 // How much a hit in each area is worth relative to a raid hit. Gym is shallow; Max hits need a Dynamax-capable copy.
 const AREA_W = { raids: 1, gl: 1, ul: 1, ml: 1, rocket: 0.6, max: 0.6, gym: 0.35 };
@@ -130,7 +148,7 @@ export function analyseBox(box, ctx) {
       for (const a of pvpAreas) {
         const L = ourLeague(a);
         if (L?.cost && (!pvpCost || L.iv.rankPct > pvpCost.rankPct)) {
-          pvpCost = { league: a, dust: L.cost.dust, candy: L.cost.candy + L.cost.evolveCandy, xl: L.cost.xl, rankPct: L.iv.rankPct, rank: L.iv.rank };
+          pvpCost = { league: a, dust: L.cost.dust, candy: L.cost.candy + L.cost.evolveCandy, xl: L.cost.xl, rankPct: L.iv.rankPct, rank: L.iv.rank, toLevel: L.cost.toLevel };
         }
       }
       let targetLevel = otherAreas.length ? Math.max(...otherAreas.map((a) => TARGET_LEVEL[a])) : Math.max(...pvpAreas.map((a) => TARGET_LEVEL[a]));
@@ -138,6 +156,11 @@ export function analyseBox(box, ctx) {
       if (pvpCost && !otherAreas.length) { cost = { dust: pvpCost.dust, candy: pvpCost.candy, xl: pvpCost.xl, steps: 0 }; targetLevel = null; }
       // A copy already at or above its target level has nothing to power up to: no target level to show (screens say "already there").
       if (targetLevel != null && targetLevel <= level) targetLevel = null;
+      // Which area the cost above is for (the level and the action text name it): the league when only league areas drive it and
+      // leaguesFor costed one, else the area with the highest target level.
+      const costAreas = otherAreas.length ? otherAreas : pvpAreas;
+      const costArea = pvpCost && !otherAreas.length ? pvpCost.league : costAreas.reduce((m, a) => (TARGET_LEVEL[a] > TARGET_LEVEL[m] ? a : m));
+      const powerUpNeeded = cost.dust > 0 || cost.candy > 0 || cost.xl > 0;
       const mf = moveFlags(ths.map((h) => h.moves).join(' '));
       const secondMove = mf.plusMove ? secondMoveCost(gm.byId.get(stepTarget)?.thirdMoveCost ?? 50000, flags) : { dust: 0, candy: 0 };
       const totalDust = cost.dust + secondMove.dust;
@@ -148,7 +171,8 @@ export function analyseBox(box, ctx) {
       builds.push({
         pokemon: p, speciesId: r.speciesId, targetId, targetName: gm.byId.get(targetId)?.speciesName ?? targetId,
         areas: [...areas.keys()], bestTier, value: Math.round(value * 100) / 100, hits: ths, path, evoCandy, formChange, viaMega, needsDynamax,
-        level, targetLevel, cost: { ...cost, dust: totalDust, candy: totalCandy, secondMove }, pvpCost, moveFlags: mf,
+        level, targetLevel, costArea, powerUpNeeded, secondMoveDue: secondMove.dust > 0 || secondMove.candy > 0,
+        cost: { ...cost, dust: totalDust, candy: totalCandy, secondMove }, pvpCost, moveFlags: mf,
         effort: Math.round(effort * 100) / 100, score: Math.round((value ** 1.5 * ivQ) / Math.max(0.3, effort) ** 0.6 * 100) / 100,
       });
     }

@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadGamemaster, loadTiers, loadRankings } from '../src/node/load.js';
-import { analyseBox, AREA_LABEL } from '../src/advise.js';
+import { analyseBox, AREA_LABEL, levelText, actionText } from '../src/advise.js';
 
 const [csvPath] = process.argv.slice(2);
 const ctx = { gm: loadGamemaster(), tiers: loadTiers(), rankings: loadRankings() };
@@ -18,11 +18,11 @@ console.log(`# Builds (${builds.length}), best first\n`);
 console.log('| # | Pokémon | Build | Areas | Tier | Cost from here | Score |');
 console.log('|---|---|---|---|---|---|---|');
 builds.slice(0, 40).forEach((b, i) => {
-  const what = (b.targetId === b.speciesId ? 'power up' : `${b.formChange ? 'form change to' : 'evolve to'} ${b.targetName}`) + (b.viaMega ? ' + Mega' : '') + (b.needsDynamax ? ' (Max needs a Dynamax copy)' : '') + (b.spares.length ? ` [+${b.spares.length} spare]` : '');
+  const what = (b.targetId === b.speciesId ? actionText(b).toLowerCase() : `${b.formChange ? 'form change to' : 'evolve to'} ${b.targetName}`) + (b.viaMega ? ' + Mega' : '') + (b.needsDynamax ? ' (Max needs a Dynamax copy)' : '') + (b.spares.length ? ` [+${b.spares.length} spare]` : '');
   const cost = [`${k(b.cost.dust)} dust`, b.cost.candy ? `${b.cost.candy} candy` : '', b.cost.xl ? `${b.cost.xl} XL` : '', b.moveFlags.elite ? `${b.moveFlags.elite} Elite TM` : '', b.moveFlags.cd ? 'CD move' : ''].filter(Boolean).join(', ');
   const areas = b.areas.map((a) => AREA_LABEL[a]).join(', ');
   const pvp = b.pvpCost ? ` (${b.pvpCost.league.toUpperCase()} rank ${b.pvpCost.rank})` : '';
-  const lv = b.targetLevel ? `L${b.level}→${b.targetLevel}: ` : `L${b.level}→best ${b.pvpCost.league.toUpperCase()} level: `;
+  const lv = `${levelText(b)}: `;
   console.log(`| ${i + 1} | ${label(b.pokemon)} | ${what}${pvp} | ${areas} | ${b.bestTier} | ${lv}${cost} | ${b.score} |`);
 });
 

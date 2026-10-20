@@ -178,3 +178,12 @@ test('a build never carries a target level at or below the copy\'s own level (a 
   const high = analyseBox([{ ...template, name: 'Cramorant', form: '', pvp: undefined, level: 38, levelMin: 38, levelMax: 38, ivs: { atk: 15, def: 15, hp: 15 } }], ctx);
   for (const x of high.allBuilds) assert.ok(x.targetLevel == null || x.targetLevel > 38);
 });
+
+test('a copy above the only area\'s target level has no target level and nothing to power up (raids only, level 45)', () => {
+  const b = buildTo(one('Xurkitree', { level: 45, levelMin: 45, levelMax: 45, ivs: { atk: 15, def: 15, hp: 15 } }), 'xurkitree');
+  assert.deepEqual(b.areas, ['raids']);
+  assert.equal(b.targetLevel, null);
+  assert.equal(b.pvpCost, null);
+  assert.equal(b.cost.dust - b.cost.secondMove.dust, 0);
+  assert.equal(b.powerUpNeeded, false);
+});
