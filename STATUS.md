@@ -1,6 +1,41 @@
 # Status — Pogo Assist+
 
-**2 Oct 2026: proof 2, the live-read prototype (branch `native-live-read`, not merged, not yet run on a phone).**
+**20 Oct 2026: where it stands (handover).** `main` now holds everything: the iPhone app (`native/`, v1.0 build 3,
+merged from `native-ui-v1` in PR #2), the shared JavaScript changes (extractor read fixes, CP recovery, PvP leagues,
+CP multipliers, shadow/purified/lucky cost rounding, refreshed PvPoke rankings of 10 Oct), the Pages CI fix (PR #1:
+the workflow now runs `npm ci`; the public page had not deployed since 25 Sep and deploys again) and the app review
+fold (PR #3). App and engine detail: `native/README.md` (the "App fold" section covers PR #3).
+
+- **Verified 19-20 Oct on greg-mb-16 (macOS 26.6, Xcode 27.1, Node 26):** `npm test` 198 pass, 1 skipped (Windows-only),
+  0 fail, with the recordings present; `swift test` in `native/PogoReader` 166 + 578, 0 failures (with the real-data
+  checks on: `POGO_PARITY=1 POGO_DEVICE_RUNS=~/Developer/personal/pogo-frames/device-runs`); the app builds signed and
+  unsigned. The live page (https://dare33.github.io/pogo-assist-plus/) loads with no errors and shows the 10 Oct rankings.
+- **Review:** every merge went through an Opus and a Sol (Codex) review; PR #3 took five rounds. Its stated limits and
+  remaining findings are in the PR #3 description and the README's "App fold" known limits.
+- **Not verified anywhere:** the app's own screens and flows after PR #3 (no simulator on this Mac; the app target has no
+  unit tests). Before the next TestFlight upload, on a phone: finish a scan, kill the app, reopen; start a second scan
+  while one waits; rename an account; re-scan from the Box; check the "Try again" explanation shows over the review screen.
+
+**Open decisions (Greg):**
+1. **Report upload.** Do the TestFlight builds include `SCAN_REPORT_URL` / `SCAN_REPORT_KEY`? If yes, the privacy
+   manifest's `NSPrivacyCollectedDataTypes` (and the App Privacy answers) must declare the upload (scan log, device
+   model, locale). Check: in the installed app, Settings > saved scans shows a "Make scans better" (paper plane) button
+   only when the build has them; or look for `SCAN_REPORT_` lines in the old Mac's `native/PogoAssist/Config/Signing.local.xcconfig`.
+2. **Build 3:** whether it is in App Store Connect (build 1 went up 8 Oct). The next upload needs build 4 (`project.yml`).
+3. **Stable account IDs:** plan written, not approved: `docs/stable-account-ids-plan.md` on local branch
+   `claude/great-moore-21a56d` (commit 1b276fb, not pushed), with 10 open decisions at its top. Accounts are identified by
+   name today, which is why rename needed a journal and why reusing an old account name can misfile a scan.
+4. **Hand-paged scans** fold two Pokémon with the same CP and HP but different IVs into one `ivs-disagree` row (rule from
+   bf12a12; the Darentas Fidough 768 / 89 pair is the known case). Keep, or split when each bar state clearly holds?
+5. **`native-fast-reader`:** an unadopted faster Vision mode, kept unmerged. Merged branches on GitHub can be deleted.
+
+**Setting up a machine:** `npm ci` (Node 20+); Xcode with `sudo xcodebuild -runFirstLaunch`; `brew install xcodegen ffmpeg`;
+sign in to the Apple developer account in Xcode and copy `native/PogoAssist/Config/Signing.local.xcconfig.example` to
+`Signing.local.xcconfig` with the team id (git-ignored); recordings from Google Drive `F. Hobbies & Gaming/Pogo Assist
+recordings/tests/` into `recordings/`; the device logs and frames (`pogo-frames`, about 19 GB, copied from Mac to Mac) into
+`~/Developer/personal/pogo-frames`. Signed builds ask for the keychain: answer Always Allow once.
+
+**2 Oct 2026: proof 2, the live-read prototype** (history; the app grew from it and is merged, see above).
 `native/` holds a Swift package with the appraisal-screen reader ported from `src/extract/` on
 `extractor-read-faults` (Apple Vision for the text), a live grouper, an Xcode project with the app
 and a ReplayKit broadcast extension, Mac tools and comparison scripts; see `native/README.md`.
