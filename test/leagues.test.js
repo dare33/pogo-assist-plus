@@ -709,3 +709,30 @@ test('a level 51 Best Buddy copy is over the cap only if its CP at 51 is: Cramor
   // The same CP rule at level 50 and below.
   assert.equal(rawOf(entry('Cramorant', { ivs: hundo, level: 50 })).ul.options.find((x) => x.speciesId === 'cramorant').overCap, false);
 });
+
+test('the shown pick is never a member the copy is past the cap for while another fits, whatever decides it', () => {
+  // Unknown IVs, the score rule: a level-35 Rookidee shows Corvisquire or Rookidee in Great League, not the top-scoring Corviknight.
+  const gl = rawOf(entry('Rookidee', { ivs: null, level: 35 })).gl;
+  assert.equal(gl.source, 'ranked');
+  assert.equal(gl.options.find((o) => o.speciesId === 'corviknight').overCap, true);
+  assert.ok(['corvisquire', 'rookidee'].includes(shownOf(gl).speciesId), shownOf(gl).speciesId);
+  // The fallback: nothing ranked, the final evolution is past the cap, so the first member that fits.
+  const chew = rawOf(entry('Chewtle', { ivs: null, level: 40 })).gl;
+  assert.equal(chew.options.find((o) => o.speciesId === 'drednaw').overCap, true);
+  assert.equal(chew.source, 'fallback');
+  assert.equal(shownOf(chew).speciesId, 'chewtle');
+  // The invariant over the fixture, with and without IVs, for the Poke Genie-free paths (the export's own pick is copied as it is).
+  let checked = 0;
+  for (const p of box) {
+    const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
+    if (!r) continue;
+    for (const ivs of [p.ivs, null]) {
+      const L = leaguesFor({ ...p, ivs, pvp: undefined }, r, ctx);
+      for (const league of ['gl', 'ul', 'ml']) {
+        const l = L[league];
+        if (l.options.some((o) => !o.overCap)) { assert.equal(shownOf(l).overCap, false, `${p.name} ${league} ${ivs ? 'IVs' : 'no IVs'}`); checked++; }
+      }
+    }
+  }
+  assert.ok(checked > 1500, `${checked} leagues checked`);
+});

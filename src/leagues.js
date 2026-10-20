@@ -41,8 +41,8 @@ const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'mal
 //      for (CP at its current level over the cap: a Pokémon cannot be powered down) that PvPoke ranks in this league; the same
 //      without the ranked requirement (Poke Genie does pick unranked stages); the ranked members; all members. Unknown level:
 //      nothing is "too strong".
-//   3. Master League, and unknown IVs in any league: the highest PvPoke score, then the later evolution; a family with nothing
-//      ranked takes its final evolution. Master League is not emulated because Poke Genie exports no Master League pick, so there is
+//   3. Master League, and unknown IVs in any league: the highest PvPoke score among the members the copy is not past the cap for (all of them if none fits), then the later evolution; a family with nothing
+//      ranked takes its final evolution (or the first member that fits, if the copy is past the cap for that one). Master League is not emulated because Poke Genie exports no Master League pick, so there is
 //      nothing to copy and the stat-product rule there only follows ~0.07% noise (Eevee showed Glaceon/Umbreon, Scyther showed
 //      Kleavor over Scizor, Shaymin Land over Sky); the species' PvPoke score is the better guide (Greg, 20 Oct 2026).
 //
@@ -68,7 +68,10 @@ export function pokeGeniePick(members) {
     const fitting = rated.filter((m) => !m.overCap), ranked = rated.filter((m) => m.score != null);
     return best(fitting.filter((m) => m.score != null)) ?? best(fitting) ?? best(ranked) ?? best(rated);
   }
-  const ranked = members.filter((m) => m.score != null);
+  // The score rule never shows a member the copy is already too strong for while another fits (the cap only ever excludes in Great and
+  // Ultra: Master League members are never over it).
+  const fitting = members.filter((m) => !m.overCap);
+  const ranked = (fitting.length ? fitting : members).filter((m) => m.score != null);
   if (!ranked.length) return null;
   return ranked.reduce((a, b) => (b.score > a.score || (b.score === a.score && b.depth >= a.depth) ? b : a));
 }
@@ -223,6 +226,7 @@ export function leaguesFor(entry, resolved, ctx) {
     const shown = [...members].sort((a, b) => (b.row ? b.row.score : -1) - (a.row ? a.row.score : -1) || (a.row ? (b.iv?.rankPct ?? -1) - (a.iv?.rankPct ?? -1) : 0) || b.depth - a.depth);
     const options = shown.map((m) => rate(m.base, m.row));
     const indexOf = (base) => shown.findIndex((m) => m.base === base);
+    const fitsBase = (base) => { const m = members.find((x) => x.base === base); return !!m && !m.overCap; };
     const asMember = (m) => ({ id: m.base, score: m.row?.score ?? null, depth: m.depth, iv: m.iv, overCap: m.overCap });
 
     // Shown pick. 1: Poke Genie's own pick, when the entry has it and it is in this family.
@@ -240,17 +244,17 @@ export function leaguesFor(entry, resolved, ctx) {
       const emulate = !!ivs && league !== 'ml';
       const m = pokeGeniePick(members.map((x) => (emulate ? asMember(x) : { ...asMember(x), iv: null })));
       if (m) { pickBase = m.id; source = emulate && m.iv ? 'emulated' : 'ranked'; }
-      else { pickBase = finalEvolution; source = 'fallback'; }
+      // Nothing ranked fits: the final evolution, unless the copy is past the cap for it, then the first member that fits.
+      else { pickBase = fitsBase(finalEvolution) ? finalEvolution : (shown.find((x) => !x.overCap)?.base ?? finalEvolution); source = 'fallback'; }
     }
 
     // Experimental pick: the CLOSE_SCORE rule over the ranked members. It is never a member the copy is already too strong for:
     // chooseMember only returns one when every ranked member is over the cap, and then the next best is the shown pick, then the
     // first member that fits; only a family where every member is over the cap takes the shown pick even if it is over the cap.
     const win = chooseMember(members.filter((m) => m.row).map((m) => ({ id: m.base, score: m.row.score, rankPct: m.iv?.rankPct ?? null, depth: m.depth, overCap: m.overCap })));
-    const fits = (base) => { const m = members.find((x) => x.base === base); return !!m && !m.overCap; };
-    let expBase = win && fits(win.id) ? win.id : null;
-    if (!expBase && !win && fits(finalEvolution)) expBase = finalEvolution; // nothing ranked at all: the final evolution
-    if (!expBase) expBase = fits(pickBase) ? pickBase : (shown.find((m) => !m.overCap)?.base ?? pickBase);
+    let expBase = win && fitsBase(win.id) ? win.id : null;
+    if (!expBase && !win && fitsBase(finalEvolution)) expBase = finalEvolution; // nothing ranked at all: the final evolution
+    if (!expBase) expBase = fitsBase(pickBase) ? pickBase : (shown.find((m) => !m.overCap)?.base ?? pickBase);
     const pick = indexOf(pickBase), experimental = indexOf(expBase);
     // Moves are about a third of an option's bytes and only the shown and the experimental member are ever displayed with them.
     options.forEach((o, i) => { if (i !== pick && i !== experimental) o.moves = null; });
