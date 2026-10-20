@@ -73,7 +73,10 @@ private struct BatchSection: View {
     var body: some View {
         Section {
             if batch.pendingSave != nil {
-                Label("Finishing the last save…", systemImage: "hourglass").foregroundStyle(.secondary).accessibilityIdentifier("import-finishing")
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Finishing the last save…", systemImage: "hourglass").foregroundStyle(.secondary).accessibilityIdentifier("import-finishing")
+                    Text("The Pokémon from the last save are already in your box. If this stays, you can discard these screenshots.").font(.footnote).foregroundStyle(.secondary)
+                }
             } else {
                 accountRow
             }
@@ -159,12 +162,12 @@ private struct BatchSection: View {
         Button {
             imports.openReview(batch: batch.batchId)
         } label: {
-            Label(n == 0 ? "Nothing to review" : "Review \(n) Pokémon", systemImage: "checklist")
+            Label(n == 0 ? "Nothing to review" : "Review \(ReviewFormat.count(n, "screenshot", "screenshots"))", systemImage: "checklist")
         }
         .disabled(!ready || n == 0 || { if case .account = owner { return false } else { return true } }())
         .accessibilityIdentifier("import-review")
         Button("Discard these screenshots", role: .destructive) { discarding = batch.batchId }
-            .disabled(working || batch.pendingSave != nil)
+            .disabled(working)
     }
 }
 

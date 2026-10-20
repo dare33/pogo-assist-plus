@@ -72,10 +72,11 @@ final class ImportModel: ObservableObject {
         guard available else { return }
         let importer = self.importer
         Task {
-            let report = try? await serial { importer.queue.cleanup() }
-            if let n = report?.removedAbandoned, n > 0 { notice = "\(n) batch\(n == 1 ? "" : "es") of screenshots that you were shown and left alone for two weeks \(n == 1 ? "was" : "were") removed from the phone. The screenshots are still in Photos." }
-            // looked at first: a share is stamped with its account's rename record the first time it is seen, and copies of a batch that has gone are found
+            // Looked at first, before anything is removed: saves that were written down but not finished are finished, a share is stamped with its account's rename record the first time it
+            // is seen, and copies of a batch that has gone are found. Only then is the queue tidied (which finishes any such save again before it removes a batch).
             _ = try? await app.worker.run { engine in try importer.prepareAll(engine: engine) }
+            let report = try? await serial { importer.cleanup() }
+            if let n = report?.removedAbandoned, n > 0 { notice = "\(n) batch\(n == 1 ? "" : "es") of screenshots that you were shown and left alone for two weeks \(n == 1 ? "was" : "were") removed from the phone. The screenshots are still in Photos." }
             refresh()
             guard !batches.isEmpty else { return }
             startReading()

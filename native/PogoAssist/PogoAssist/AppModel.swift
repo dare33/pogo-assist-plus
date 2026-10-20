@@ -1272,6 +1272,11 @@ final class AppModel: ObservableObject {
         } catch BoxLibrary.Failure.boxChanged {
             message = "The box changed while this was open, so nothing was saved. The result has been worked out again against the box as it is now: check it and save again."
             await refreshReview(r)
+        } catch ScreenshotImporter.Failure.finishingLastSave {
+            // The Pokémon ARE in the box: the earlier save is only waiting for its record. Said as that, not as "could not be saved".
+            flow = .idle
+            message = "These screenshots were already saved to \(r.account), but the record of that could not be finished yet, so nothing was added again. \(Self.plain(ScreenshotImporter.Failure.finishingLastSave))"
+            screenshots.refresh()
         } catch {
             message = "The screenshots could not be saved: \(Self.plain(error)) Nothing in the box has changed. You can try again or discard them."
         }
