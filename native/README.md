@@ -870,11 +870,38 @@ The command is made for the phone's language (the device locale); Voice Control'
 - Privacy manifests: both targets declare UserDefaults reason 1C8F.1 (the app group's defaults); the app also CA92.1 (its own defaults) and file timestamps C617.1 (the replay
   marker's modification date in its own container); the extension reads no standard defaults and no file dates.
 
+### Screenshot import (quick import without Auto Scan)
+
+Two entry points, one importer. **In the app:** More > Import screenshots > Choose screenshots (the system `PhotosPicker`, `.images`, up to 50, no library permission; the picker's own
+"Private Access" banner says so). **From Photos:** Share > Pogo Assist+ (the `PogoShare` extension). Processing starts by itself; nothing is saved without the review.
+
+- **Reading (`StillImage`, `StillReader`, PogoReader).** One image is decoded with ImageIO (orientation applied, longest side capped at 4096, never enlarged), drawn into an
+  **sRGB** bitmap (the broadcast's values; an iPhone screenshot is Display P3, and `decodeRGBA` would keep its own bytes) and read ONCE by `FrameProcessor.process` at 750 px, the
+  Mac tool's path. `StillReader.judge` says: read (name, CP, HP, bars at or above `SETTLED`), IVs missing (no bars / not settled), unsupported (not a detail screen, cut off, stationed
+  card) or unreadable (name, CP or HP missing, weak name). No voting, no second look.
+- **Adapter (`StillImport`, `ScreenshotImporter`, PogoBox, beside `ScanPipeline`).** Each reading is solved alone by the JavaScript `finish` (one reading, one row); a row with no IVs,
+  or CP/HP/bars that fit no level, is not added. The rows become a `ScanPipeline.Outcome` and go to `BoxMerge.plan` as `.partial`, so matching, questions, hand corrections and
+  "not seen is not gone" are the existing ones. Saved with source "screenshot import" and `sourceSignature` `import:<batchId>`.
+- **Queue (`PogoImport`, in the App Group: `screenshot-imports/<batchId>/manifest.json` + staged PNGs; `ledger.json`).** A batch is built in `.staging-<id>/` and renamed into place after its
+  manifest is written; every manifest write is a temp file renamed over the old. Staged images are upright PNGs with no EXIF/GPS/TIFF. Items carry the asset id (picker only), SHA-256 of the original
+  bytes and of the staged PNG, the state, and the reader's output, so a relaunch resumes. Cleanup: half-made batches after 1 h, batches whose save finished, batches untouched for 14 days; a
+  damaged batch is kept 14 days, a newer app's never removed. Limits: 50 per batch, 300 queued.
+- **Duplicates.** The same asset or bytes (in a batch, in an older queued batch for the same account, or saved earlier into that account: the ledger) is read once and added once. A DIFFERENT
+  screenshot whose Pokémon has the same species, CP, HP and IVs (or the same species and IVs at another CP) as an earlier one in the batch is held back until the person says "this is a different
+  Pokémon"; nothing is merged on resemblance. A screenshot already saved is held back until "import it again".
+- **Saves.** `ScreenshotImporter.save` asks `scanAlreadySaved(account, import:<batchId>)` first: saved means finish the clean-up and write nothing; unknown means refuse. A save cut off after the box was
+  written is therefore not repeated on relaunch. Leaving a review without saving keeps the batch queued.
+- **Account.** A batch belongs to the account selected when it was made (the extension reads it from the group defaults, `ReaderSettings.scanAccount`), followed through renames; the sheet and the review
+  name it before saving, and it can be changed for a batch whose account has gone or was never set.
+- **Known limits.** The share extension needs its own App ID (`com.dare33.pogoassist.share`) and the App Group on the signing team. Reading pauses when the app is backgrounded (no background task is
+  taken). A screenshot of a Pokémon with a hidden CP, or without HP, is "unreadable", where a scan would recover the CP from HP and bars. Tests: `PogoImportTests`, `StillReaderTests`,
+  `ScreenshotImporterTests` (swift test); the picker flow is `PogoAssistUITests/ScreenshotImportTests` (simulator, pictures added with `simctl addmedia`). Device runs: not done.
+
 ## What this app sends
 
 A local notification (below, "Scan stopped") is posted by the app's own broadcast extension on the phone and sends nothing anywhere.
 
-Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > Scans) and then Send. There is no analytics,
+Screenshots chosen or shared for import are copied into the app group on the phone, read there, and deleted after the save; they are never uploaded. Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > Scans) and then Send. There is no analytics,
 no background upload and no retry. One tap sends one file, `yyyy-mm/yyyymmddThhmmssZ-<random id>.json.gz`, to a private storage bucket
 (`scan-reports`, write-only for the app: it can add a file, never read, list or overwrite one). The file is a gzip of one JSON document with these
 keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone17,2, system version, screen size in points, language);

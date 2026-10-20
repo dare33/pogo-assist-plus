@@ -13,7 +13,8 @@ is up to. Read both before working.
   `scripts/fetch-gamemaster.mjs`); `tiers.json` is generated from the markdown tables in
   `data/source/` by `npm run build:tiers`. Edit the markdown, never the JSON.
 - Nothing in this repo may contact the game, intercept its traffic, or play it. Inputs are CSV
-  exports and the user's own screen recordings (or the live screen, read on the device).
+  exports and the user's own screen recordings (or the live screen, read on the device). Also an input, decided by Greg
+  on 20 Oct 2026: screenshots of the player's own Pokémon GO screens, read on the device.
   One exception, decided by Greg on 1 Oct 2026: paging through the player's own storage so it can
   be read, by an iOS Voice Control gesture that only taps or swipes to move from one Pokémon to
   the next (`experiments/voice-control/`). It reads and changes nothing in the game. A second exception, decided by Greg on 4 Oct 2026: after the player starts a broadcast, the app may open Pokémon GO by its URL scheme (pokemongo://) with no parameters, so the player is taken back to the game. It only brings the game to the front; it passes nothing to the game and reads and changes nothing in it. Anything beyond these two exceptions that taps, catches, battles, trades, transfers or otherwise acts in the game stays forbidden.
