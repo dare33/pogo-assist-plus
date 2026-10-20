@@ -12,45 +12,60 @@ export const AREA_LABEL = { raids: 'Raids', rocket: 'Rocket', gym: 'Gym', gl: 'G
 //
 // A build carries `steps`, the list of things still to do, computed once in analyseBox. Kinds:
 //   { kind: 'evolve', to, candy } | { kind: 'formChange', to } | { kind: 'megaEvolve' }
-//   { kind: 'powerUp', toLevel, areas: [area keys that share that level] }   (one per group: the non-league areas, the league areas)
-//   { kind: 'secondMove', certain }   certain=false: the copy's moves are unknown (a scan), so it may already have it
-//   { kind: 'eliteTM', count } | { kind: 'cdMove' } | { kind: 'needsDynamaxCopy' }
-// An empty list means the copy is already built.
+//   { kind: 'powerUp', toLevel, areas }   exactly the climb the build's cost covers: the pvpCost league's best level for a league-only
+//                                         build, else the highest non-league target level (areas = every area tied on it). At most one.
+//   { kind: 'secondMove', certain }       certain=false: the copy's moves are unknown (a scan), so it may already have it
+//   { kind: 'eliteTM', count }            distinct Elite moves the entry asks for that the copy does not have
+//   { kind: 'cdMove' }                    a Community Day move the entry asks for that the copy does not have
+//   { kind: 'needsDynamaxCopy' }          only the Max area needs it: it does not make the other areas unfinished
+// The list is empty (or holds only needsDynamaxCopy) when the copy is already built. `leavesLeague` is a note, not a step: a league whose
+// best level the climb goes past ({ league, bestLevel }).
 
 const labels = (areas) => areas.map((a) => AREA_LABEL[a]).join('/');
 
-/** The level(s) the build climbs to, each with the areas it is for, or why there is nothing to climb to. */
+/** The level the build climbs to (the one its cost covers) with its areas, or why there is nothing to climb to. */
 export function levelText(b) {
-  const ups = b.steps.filter((x) => x.kind === 'powerUp');
-  if (ups.length) return `L${b.level} → ${ups.map((x) => `${x.toLevel} (${labels(x.areas)})`).join(', ')}`;
+  const up = b.steps.find((x) => x.kind === 'powerUp');
+  const note = (b.leavesLeague ?? []).map((x) => `going past ${x.bestLevel} leaves ${AREA_LABEL[x.league]}`).join(', ');
+  if (up) return `L${b.level} → ${up.toLevel} (${labels(up.areas)})${note ? `; ${note}` : ''}`;
   // Nothing to power up: say for which area's target (or the league's own best level) the copy is already there.
   const league = b.pvpCost && b.costAreas.includes(b.pvpCost.league);
   return `L${b.level} · already at (or past) its ${league ? `best ${AREA_LABEL[b.pvpCost.league]} level` : `${labels(b.costAreas)} target level`}`;
 }
 
-/** What is left to do, plain text, from the steps; 'Already built' only when there are none. */
+/** What is left to do, plain text, from the steps; 'Already built' when only a Max-only Dynamax requirement (or nothing) remains. */
 export function actionText(b) {
-  if (!b.steps.length) return 'Already built';
+  const dynamax = b.steps.some((x) => x.kind === 'needsDynamaxCopy');
   const parts = [];
-  const ups = b.steps.filter((x) => x.kind === 'powerUp');
   for (const x of b.steps) {
     if (x.kind === 'evolve') parts.push(`Evolve to ${x.to}`);
     else if (x.kind === 'formChange') parts.push(`Form change to ${x.to}`);
     else if (x.kind === 'megaEvolve') parts.push('Mega evolve');
-    else if (x.kind === 'powerUp') { if (x === ups[0]) parts.push(`Power up to level ${ups.map((u) => `${u.toLevel} (${labels(u.areas)})`).join(' and ')}`); }
+    else if (x.kind === 'powerUp') parts.push(`Power up to level ${x.toLevel} (${labels(x.areas)})`);
     else if (x.kind === 'secondMove') parts.push(x.certain ? 'Second move' : "Second move (if it doesn't have it)");
     else if (x.kind === 'eliteTM') parts.push(x.count === 1 ? '1 Elite TM' : `${x.count} Elite TMs`);
     else if (x.kind === 'cdMove') parts.push('Community Day move');
-    else if (x.kind === 'needsDynamaxCopy') parts.push('needs a Dynamax copy');
   }
-  return parts.join(' + ');
+  const base = parts.length ? parts.join(' + ') : 'Already built';
+  return dynamax ? `${base} (Max needs a Dynamax copy)` : base;
 }
 
-/** The charged moves a tier-table entry asks for ("Fast / Charged A + Charged B"): one list of alternatives per slot. */
-function wantedCharged(text) {
-  const parts = String(text).split('/');
-  if (parts.length < 2) return [];
-  return parts[parts.length - 1].split(/\s\+\s/).map((slot) => slot.split(/\s+or\s+/i).map((m) => m.replace(/\([^)]*\)/g, '').trim()).filter(Boolean)).filter((alts) => alts.length);
+/** The Elite and Community Day moves a tier-table entry names: "Fast / Charged (CD) + Charged (Elite)" gives the move names. */
+function markedMoves(texts) {
+  const elite = new Set(), cd = new Set();
+  for (const text of texts) {
+    for (const part of String(text).split('/').slice(1)) {
+      for (const slot of part.split(/\s\+\s/)) {
+        for (const alt of slot.split(/\s+or\s+/i)) {
+          const name = alt.replace(/\([^)]*\)/g, '').trim();
+          const quals = [...alt.matchAll(/\(([^)]*)\)/g)].map((m) => m[1]);
+          if (name && quals.some((q) => /^Elite/i.test(q))) elite.add(name);
+          if (name && quals.some((q) => /^(CD|Community Day)/i.test(q))) cd.add(name);
+        }
+      }
+    }
+  }
+  return { elite, cd };
 }
 const normMove = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -191,42 +206,47 @@ export function analyseBox(box, ctx) {
       const costTop = pvpCost && !otherAreas.length ? null : Math.max(...costPool.map((a) => TARGET_LEVEL[a]));
       const costAreas = pvpCost && !otherAreas.length ? [pvpCost.league] : costPool.filter((a) => TARGET_LEVEL[a] === costTop);
       const mf = moveFlags(ths.map((h) => h.moves).join(' '));
-      // The second charged move: due unless the copy's recorded moves already hold what an entry asks for. A scan records no moves,
-      // so it may already have it (and is still charged, as before). A copy whose moves prove it has the move is not charged.
-      const haveMoves = new Set((p.moves ?? []).map(normMove));
-      const plusHits = ths.filter((h) => /\s\+\s/.test(h.moves || ''));
-      const holdsAll = (h) => { const want = wantedCharged(h.moves); return want.length > 0 && want.every((alts) => alts.some((m) => haveMoves.has(normMove(m)))); };
-      const secondState = !mf.plusMove ? 'none' : plusHits.some(holdsAll) ? 'have' : haveMoves.size ? 'due' : 'unknown';
+      // The second charged move: due unless the copy's second charged slot is already unlocked (Poke Genie's "Charge Move 2" is filled;
+      // the slot survives evolution, so it is the slot that counts, not the move names, and moves may still need TMs: no step for that).
+      // A scan records no moves, so it may already have it: still charged, and worded "if it doesn't have it".
+      const slotsKnown = Array.isArray(p.chargedMoves);
+      const secondState = !mf.plusMove ? 'none' : slotsKnown && p.chargedMoves[1] ? 'have' : slotsKnown ? 'due' : 'unknown';
       const secondMove = secondState === 'due' || secondState === 'unknown' ? secondMoveCost(gm.byId.get(stepTarget)?.thirdMoveCost ?? 50000, flags) : { dust: 0, candy: 0 };
       const totalDust = cost.dust + secondMove.dust;
       const totalCandy = (pvpCost && !otherAreas.length ? cost.candy : cost.candy + evoCandy) + secondMove.candy;
       const effort = totalDust / 100000 + totalCandy / 100 + cost.xl / 148 + mf.elite * 1.5 + (formChange ? 1.5 : 0) + (viaMega ? 0.3 : 0);
-      // The steps still to do. Power-up levels are per group, whatever set the cost: the non-league areas' target, and the league
-      // areas' own best level (leaguesFor's cost, else the table target), so a league whose best level is above the copy is never
-      // hidden behind a Raids cost. Each is a step only if it is above the copy's level.
-      const levelGroups = [];
-      const groupOf = (areaList, levelOf) => {
-        const top = Math.max(...areaList.map(levelOf));
-        // A league level at or below a level the non-league areas already climb to is passed on the way there: not a step of its own.
-        const passed = levelGroups.length && top <= levelGroups[0].toLevel;
-        if (top > level && !passed) levelGroups.push({ kind: 'powerUp', toLevel: top, areas: areaList.filter((a) => levelOf(a) === top) });
-      };
-      if (otherAreas.length) groupOf(otherAreas, (a) => TARGET_LEVEL[a]);
-      if (pvpAreas.length) groupOf(pvpAreas, (a) => ourLeague(a)?.cost?.toLevel ?? TARGET_LEVEL[a]);
+      // The steps still to do. The power-up step is exactly the climb the cost above covers (never a level or league it does not pay
+      // for): the league's best level for a league-only build, else the highest non-league target. A league's own best level shows
+      // up only as the note that the climb goes past it.
       const steps = [];
+      const heldMoves = new Set((p.moves ?? []).map(normMove));
+      const climbTo = pvpCost && !otherAreas.length ? pvpCost.toLevel : targetLevel;
       if (targetId !== r.speciesId) steps.push(formChange ? { kind: 'formChange', to: gm.byId.get(targetId)?.speciesName ?? targetId } : { kind: 'evolve', to: gm.byId.get(targetId)?.speciesName ?? targetId, candy: evoCandy });
       if (viaMega) steps.push({ kind: 'megaEvolve' });
-      steps.push(...levelGroups);
+      if (climbTo != null && climbTo > level) steps.push({ kind: 'powerUp', toLevel: climbTo, areas: costAreas });
+      const leavesLeague = [];
+      if (climbTo != null && climbTo > level) {
+        for (const a of pvpAreas) {
+          if (costAreas.includes(a) || a === 'ml') continue;
+          const best = ourLeague(a)?.cost?.toLevel;
+          if (best != null && best >= level && climbTo > best) leavesLeague.push({ league: a, bestLevel: best });
+        }
+      }
       if (secondState === 'due' || secondState === 'unknown') steps.push({ kind: 'secondMove', certain: secondState === 'due' });
-      if (mf.elite) steps.push({ kind: 'eliteTM', count: mf.elite });
-      if (mf.cd) steps.push({ kind: 'cdMove' });
+      // Elite and Community Day moves the entry asks for: counted by distinct move name, and dropped when the recorded moves already hold
+      // them (the effort above still counts table mentions, as before). Names that cannot be read out of the text fall back to the flags.
+      const marked = markedMoves(ths.map((h) => h.moves || ''));
+      const missing = (set) => [...set].filter((m) => !heldMoves.has(normMove(m)));
+      const eliteCount = marked.elite.size ? missing(marked.elite).length : mf.elite;
+      if (eliteCount > 0) steps.push({ kind: 'eliteTM', count: eliteCount });
+      if (marked.cd.size ? missing(marked.cd).length > 0 : mf.cd) steps.push({ kind: 'cdMove' });
       if (needsDynamax) steps.push({ kind: 'needsDynamaxCopy' });
       // IV quality: PvP uses this copy's league rank % (squared, so a mid-rank spread is worth little); everything else uses IV average, mildly.
       const ivQ = (p.ivPercent ? 0.8 + 0.2 * (p.ivPercent / 100) : 0.9) * (evoCandy === 0 && !formChange ? 1.3 : 1); // already the final form: phase 1 material
       builds.push({
         pokemon: p, speciesId: r.speciesId, targetId, targetName: gm.byId.get(targetId)?.speciesName ?? targetId,
         areas: [...areas.keys()], bestTier, value: Math.round(value * 100) / 100, hits: ths, path, evoCandy, formChange, viaMega, needsDynamax,
-        level, targetLevel, costAreas, steps,
+        level, targetLevel, costAreas, steps, leavesLeague,
         cost: { ...cost, dust: totalDust, candy: totalCandy, secondMove }, pvpCost, moveFlags: mf,
         effort: Math.round(effort * 100) / 100, score: Math.round((value ** 1.5 * ivQ) / Math.max(0.3, effort) ** 0.6 * 100) / 100,
       });

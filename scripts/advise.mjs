@@ -19,7 +19,7 @@ console.log('| # | Pokémon | Build | Areas | Tier | Cost from here | Score |');
 console.log('|---|---|---|---|---|---|---|');
 builds.slice(0, 40).forEach((b, i) => {
   const what = actionText(b) + (b.spares.length ? ` [+${b.spares.length} spare]` : '');
-  const cost = [`${k(b.cost.dust)} dust`, b.cost.candy ? `${b.cost.candy} candy` : '', b.cost.xl ? `${b.cost.xl} XL` : '', b.moveFlags.elite ? `${b.moveFlags.elite} Elite TM` : '', b.moveFlags.cd ? 'CD move' : ''].filter(Boolean).join(', ');
+  const cost = [`${k(b.cost.dust)} dust`, b.cost.candy ? `${b.cost.candy} candy` : '', b.cost.xl ? `${b.cost.xl} XL` : ''].filter(Boolean).join(', ');
   const areas = b.areas.map((a) => AREA_LABEL[a]).join(', ');
   const pvp = b.pvpCost ? ` (${b.pvpCost.league.toUpperCase()} rank ${b.pvpCost.rank})` : '';
   const lv = `${levelText(b)}: `;
