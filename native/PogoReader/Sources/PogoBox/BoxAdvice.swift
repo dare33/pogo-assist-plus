@@ -31,10 +31,15 @@ public struct BoxAdvice: Codable, Equatable {
         /// "GL rank 12" when the build is a league one.
         public var pvp: String?
         public var score: Double
+        /// For a power-up build: whether there is anything left to power up, and whether only the second move is due. Both decide the wording of `action`.
+        public var powerUpNeeded: Bool = true
+        public var secondMoveDue: Bool = false
 
-        /// What to do, as `scripts/advise.mjs` words it.
+        /// What to do, as `actionText` in `src/advise.js` words it: "Power up" only when there is something to power up, else "Second move" or "Already built".
         public var action: String {
-            (powerUp ? "Power up" : "\(formChange ? "Form change to" : "Evolve to") \(targetName)") + (viaMega ? " and Mega evolve" : "")
+            let base = powerUp ? (powerUpNeeded ? "Power up" : secondMoveDue ? "Second move" : "Already built")
+                               : "\(formChange ? "Form change to" : "Evolve to") \(targetName)"
+            return base + (viaMega ? " and Mega evolve" : "")
         }
         /// "120k dust, 150 candy, 8 XL, 1 Elite TM".
         public var costText: String {
@@ -148,7 +153,7 @@ public struct BoxAdvice: Codable, Equatable {
         public var pickIndex: Int
         /// Index into `options` of the experimental member (may equal `pickIndex`).
         public var experimentalIndex: Int
-        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). A copy with known IVs in Great or Ultra League and nothing ranked is still "emulated").
+        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). If no member fits and nothing is ranked, the final evolution is shown even though it is over the cap. A copy with known IVs in Great or Ultra League and nothing ranked is still "emulated").
         public var source: String
 
         private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source }
@@ -216,8 +221,9 @@ public struct BoxAdvice: Codable, Equatable {
     /// 2 since the Leagues section: an advice cached by build 2 or earlier has no leagues, so `BoxLibrary.loadAdvice` drops it and it is recomputed.
     /// 3 since the league options; 4 since their shape became { options, pick, experimental, source } and the shown pick copies Poke Genie.
     /// 5 since `overCap` became "CP at the current level exceeds the cap" (0/0/0 when the IVs are unknown) and the shown pick avoids over-cap members.
-    /// Advice cached at 2, 3 or 4 has the old shape or the old rules, so it is dropped and recomputed too.
-    public static let currentVersion = 5
+    /// 6 since a build carries `powerUpNeeded` and `secondMoveDue` (its action reads "Already built" / "Second move" when nothing is left to power up).
+    /// Advice cached at 2 to 5 has the old shape or the old rules, so it is dropped and recomputed too.
+    public static let currentVersion = 6
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -284,7 +290,8 @@ public struct BoxAdvice: Codable, Equatable {
                               formChange: bool(b["formChange"]), viaMega: bool(b["viaMega"]), needsDynamax: bool(b["needsDynamax"]), spares: spares.count,
                               areas: (b["areas"]?.arrayValue ?? []).compactMap { str($0) }.map { areaLabel[$0] ?? $0 },
                               tier: str(b["bestTier"]) ?? "", targetLevel: num(b["targetLevel"]), dust: int(cost?["dust"]), candy: int(cost?["candy"]), xl: int(cost?["xl"]),
-                              eliteTMs: int(flags?["elite"]), communityDayMove: bool(flags?["cd"]), pvp: pvp, score: num(b["score"]) ?? 0)
+                              eliteTMs: int(flags?["elite"]), communityDayMove: bool(flags?["cd"]), pvp: pvp, score: num(b["score"]) ?? 0,
+                              powerUpNeeded: b["powerUpNeeded"] == nil ? true : bool(b["powerUpNeeded"]), secondMoveDue: bool(b["secondMoveDue"]))
             out.builds.append(build)
             for s in spares { out.spareBuilds[s, default: []].append(build) }
         }

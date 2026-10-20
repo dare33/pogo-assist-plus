@@ -214,7 +214,7 @@ struct PokemonDetailView: View {
                     Text("LEAGUES").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
                         .accessibilityIdentifier("leagues-panel")
                     ForEach(LeagueText.keys, id: \.self) { key in
-                        if let r = ratings[key] { leagueRow(key, r, levelKnown: e.row.level != nil) }
+                        if let r = ratings[key] { leagueRow(key, r, levelKnown: e.row.level != nil, level: e.row.level) }
                     }
                     Text(LeagueText.footnote).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
@@ -222,8 +222,8 @@ struct PokemonDetailView: View {
         }
     }
 
-    private func leagueRow(_ key: String, _ r: BoxAdvice.LeagueRating, levelKnown: Bool) -> some View {
-        let lines = [LeagueText.pick(r), LeagueText.strength(r, key: key), LeagueText.ivs(r, key: key), LeagueText.moves(r), LeagueText.needs(r), LeagueText.cost(r, levelKnown: levelKnown)].compactMap { $0 }
+    private func leagueRow(_ key: String, _ r: BoxAdvice.LeagueRating, levelKnown: Bool, level: Double?) -> some View {
+        let lines = [LeagueText.pick(r), LeagueText.strength(r, key: key), LeagueText.ivs(r, key: key), LeagueText.moves(r), LeagueText.needs(r), LeagueText.cost(r, levelKnown: levelKnown, level: level, key: key)].compactMap { $0 }
         return VStack(alignment: .leading, spacing: 3) {
             Text(LeagueText.name(key)).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink)
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in

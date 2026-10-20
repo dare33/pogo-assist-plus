@@ -204,7 +204,7 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ul"]?.strength); XCTAssertNil(l["ul"]?.iv); XCTAssertNil(l["ul"]?.cost)
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
-        XCTAssertEqual(advice.version, 5)
+        XCTAssertEqual(advice.version, 6)
 
         // The options list decodes in order; the experimental member is a different index.
         let gl = try XCTUnwrap(l["gl"])
@@ -220,7 +220,7 @@ final class BoxLibraryTests: XCTestCase {
         try lib.saveAdvice(advice, account: "a", seq: 1)
         XCTAssertEqual(lib.loadAdvice(account: "a", seq: 1), advice)
         // Versions 2 (leagues only) and 3 (the first options shape, the old pick rule) are recomputed too.
-        for v in [1, 2, 3, 4] {
+        for v in [1, 2, 3, 4, 5] {
             var old = advice; old.version = v
             try lib.saveAdvice(old, account: "a", seq: 1)
             XCTAssertNil(lib.loadAdvice(account: "a", seq: 1), "version \(v)")
@@ -301,6 +301,21 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(rating(#""pick":2"#).json)
     }
 
+    func testBuildActionWordsWhatIsLeftToDo() {
+        func build(powerUp: Bool = true, needed: Bool = true, secondMove: Bool = false) -> BoxAdvice.Build {
+            BoxAdvice.Build(entryId: "e", title: "Xurkitree", cp: 3000, level: 40, ivs: nil, targetId: powerUp ? "x" : "y", targetName: "Y", powerUp: powerUp,
+                            formChange: false, viaMega: false, needsDynamax: false, spares: 0, areas: ["Raids"], tier: "S", targetLevel: nil, dust: 0, candy: 0, xl: 0,
+                            eliteTMs: 0, communityDayMove: false, pvp: nil, score: 1, powerUpNeeded: needed, secondMoveDue: secondMove)
+        }
+        XCTAssertEqual(build().action, "Power up")
+        XCTAssertEqual(build(needed: false).action, "Already built")
+        XCTAssertEqual(build(needed: false, secondMove: true).action, "Second move")
+        XCTAssertEqual(build(powerUp: false, needed: false).action, "Evolve to Y")
+        // The engine's JSON says it; an older report without the keys reads as a power-up.
+        let report = try! JSONDecoder().decode(JSONValue.self, from: Data(#"{"builds":[],"gaps":[],"hygiene":[],"pokemon":[]}"#.utf8))
+        XCTAssertEqual(BoxAdvice.make(from: report, entries: []).builds.count, 0)
+    }
+
     func testLeagueSentences() {
         typealias R = BoxAdvice.LeagueRating
         typealias O = R.Option
@@ -327,6 +342,12 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true), "To level 40: 9,000 dust, 40 candy")
         plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 24.5)
         XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true), "Already at level 24.5")
+        // A best level BELOW the current one (a level-51 Best Buddy copy): past its best level for that league, evolution candy only.
+        plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 50)
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 51, key: "ul"), "Past its best Ultra League level")
+        plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 50, toLevel: 50)
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 51, key: "ul"), "Past its best Ultra League level; 50 candy to evolve")
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 50, key: "ul"), "To level 50: 0 dust, 0 candy (50 to evolve)", "at the best level it still reads as a cost")
         plainOption.cost = nil
         XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: false), "Level not known, so no cost")
         XCTAssertNil(LeagueText.cost(rating(plainOption), levelKnown: true))

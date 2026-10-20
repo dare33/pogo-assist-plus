@@ -50,8 +50,14 @@ public enum LeagueText {
     }
 
     /// `levelKnown` is whether the Pokémon's own level is known; a missing cost with a known level is explained by the IV line instead.
-    public static func cost(_ r: BoxAdvice.LeagueRating, levelKnown: Bool) -> String? {
+    /// `level` and `key` are the Pokémon's level and the league: a best level BELOW the current one (a level-51 Best Buddy copy) reads as
+    /// past its best level for that league, with only the evolution candy if any is due.
+    public static func cost(_ r: BoxAdvice.LeagueRating, levelKnown: Bool, level current: Double? = nil, key: String = "") -> String? {
         guard let c = r.cost else { return levelKnown || r.overCap ? nil : "Level not known, so no cost" }
+        if let now = current, c.toLevel < now {
+            let league = key.isEmpty ? "league" : name(key)
+            return "Past its best \(league) level" + (c.evolveCandy > 0 ? "; \(grouped(c.evolveCandy)) candy to evolve" : "")
+        }
         if c.dust == 0 && c.candy == 0 && c.xl == 0 && c.evolveCandy == 0 { return "Already at level \(level(c.toLevel))" }
         var s = "To level \(level(c.toLevel)): \(grouped(c.dust)) dust, \(grouped(c.candy)) candy"
         if c.xl > 0 { s += ", \(grouped(c.xl)) XL candy" }
