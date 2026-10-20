@@ -7,7 +7,7 @@ import { loadContext } from '../src/node/load.js';
 import { resolveSpecies, baseSpeciesId, evolutionsOf, indexGamemaster } from '../src/gamemaster.js';
 import { evolutionPath, evolveCandy } from '../src/evolve.js';
 import { analyseBox } from '../src/advise.js';
-import { leaguesFor } from '../src/leagues.js';
+import { leaguesFor, chooseMember, CLOSE_SCORE } from '../src/leagues.js';
 import { ivRank, bestUnderCap, CAPS, rankCacheSize, clearRankCache } from '../src/pvp-rank.js';
 import { powerUpCost, step } from '../src/cost.js';
 import { cpAt } from '../src/cpm.js';
@@ -103,8 +103,10 @@ test('report: pick agreement with Poke Genie, cost agreement, ranking convention
 const entry = (name, o = {}) => ({ name, form: '', ivs: { atk: 10, def: 12, hp: 14 }, level: 20, cp: 500, moves: [], shadow: false, purified: false, lucky: false, ...o });
 const leaguesOf = (e) => leaguesFor(e, resolveSpecies(gm, e.name, { form: e.form, shadow: e.shadow }), ctx);
 
-test('Eevee picks the eeveelution with the highest PvPoke score in each league', () => {
-  const L = leaguesOf(entry('Eevee'));
+test('Eevee with unknown IVs picks the eeveelution with the highest PvPoke score in each league', () => {
+  // Changed with the CLOSE_SCORE rule: with IVs, a close second (Umbreon 85.5 against Sylveon 85.9 in Ultra) can win on the spread,
+  // so the plain "highest score" reading now holds only where the IVs are unknown.
+  const L = leaguesOf(entry('Eevee', { ivs: null }));
   for (const league of ['gl', 'ul', 'ml']) {
     const best = ['vaporeon', 'jolteon', 'flareon', 'espeon', 'umbreon', 'leafeon', 'glaceon', 'sylveon']
       .map((id) => rankings.byLeague[league].get(id)).filter(Boolean).sort((a, b) => b.score - a.score)[0];
@@ -112,6 +114,138 @@ test('Eevee picks the eeveelution with the highest PvPoke score in each league',
     assert.equal(L[league].pick.self, false);
     assert.equal(L[league].strength.score, best.score);
   }
+});
+
+test('CLOSE_SCORE is 3 points by default, and the Magnemite / Eevee cases it was chosen for hold in the current rankings', () => {
+  assert.equal(CLOSE_SCORE, 3);
+  const gl = rankings.byLeague.gl, ul = rankings.byLeague.ul;
+  assert.deepEqual(['magnezone', 'magneton'].map((id) => gl.get(id).score), [78.4, 76.4]);
+  assert.deepEqual(['sylveon', 'flareon'].map((id) => ul.get(id).score), [85.9, 66.8]);
+});
+
+test('Magnemite GL: Magnezone 78.4 and Magneton 76.4 are close, so the better spread for this copy wins; unknown IVs take the score', () => {
+  // 2/5/11: Rank % 68.45 as Magneton against 60.81 as Magnezone (and 41.51 as the 75.5-scoring Magnemite, also within 3 points).
+  const L = leaguesOf(entry('Magnemite', { ivs: { atk: 2, def: 5, hp: 11 } })).gl;
+  assert.equal(L.pick.speciesId, 'magneton');
+  assert.deepEqual(L.options.map((o) => o.pick.speciesId), ['magnezone', 'magneton', 'magnemite']);
+  assert.deepEqual(L.options.map((o) => o.ours), [false, true, false]);
+  assert.equal(L.strength.score, 76.4);
+  assert.equal(L.options[0].iv.rankPct, 60.81);
+  assert.equal(leaguesOf(entry('Magnemite', { ivs: null })).gl.pick.speciesId, 'magnezone');
+});
+
+test('Eevee UL: a far weaker member (Flareon 66.8 against Sylveon 85.9) never wins on spread, however good this copy is as that member', () => {
+  const L = leaguesOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 } })).ul;
+  const flareon = L.options.find((o) => o.pick.speciesId === 'flareon');
+  const sylveon = L.options.find((o) => o.pick.speciesId === 'sylveon');
+  assert.ok(flareon.iv.rankPct > sylveon.iv.rankPct, 'this copy suits Flareon better');
+  assert.equal(L.pick.speciesId, 'sylveon');
+  assert.equal(L.options.filter((o) => o.ours).length, 1);
+});
+
+test('chooseMember: the boundary is inclusive, unknown spreads take the score, ties fall to score then later evolution, nothing ranked is null', () => {
+  const c = (id, score, rankPct, depth = 0) => ({ id, score, rankPct, depth });
+  assert.equal(chooseMember([]), null);
+  // Exactly CLOSE_SCORE below is close; just past it is not.
+  assert.equal(chooseMember([c('a', 80, 10), c('b', 77, 90)]).id, 'b');
+  assert.equal(chooseMember([c('a', 80, 10), c('b', 76.9, 90)]).id, 'a');
+  assert.equal(chooseMember([c('a', 78.4, 10), c('b', 75.4, 90)]).id, 'b'); // 78.4 - 75.4 is 3.0000000000000004 in floats
+  // Unknown IVs everywhere: highest score; equal scores go to the later evolution.
+  assert.equal(chooseMember([c('a', 80, null), c('b', 79, null)]).id, 'a');
+  assert.equal(chooseMember([c('a', 80, null, 0), c('b', 80, null, 1)]).id, 'b');
+  // Equal Rank %: the higher score, then the later evolution.
+  assert.equal(chooseMember([c('a', 80, 50), c('b', 79, 50)]).id, 'a');
+  assert.equal(chooseMember([c('a', 80, 50, 0), c('b', 80, 50, 1)]).id, 'b');
+  // A member that cannot fit under the cap (rankPct null) loses to one that can, inside the close set.
+  assert.equal(chooseMember([c('a', 80, null), c('b', 79, 5)]).id, 'b');
+  // The threshold is a parameter, so tuning it is one number.
+  assert.equal(chooseMember([c('a', 80, 10), c('b', 70, 90)], 10).id, 'b');
+  assert.equal(chooseMember([c('a', 80, 10), c('b', 70, 90)], 0).id, 'a');
+});
+
+test('options: every ranked family member, strongest first, each rated like a pick, Our pick marked once and equal to the league fields', () => {
+  const L = leaguesOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, moves: ['Quick Attack'] }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    const r = L[league];
+    const ranked = ['eevee', 'vaporeon', 'jolteon', 'flareon', 'espeon', 'umbreon', 'leafeon', 'glaceon', 'sylveon'].filter((id) => rankings.byLeague[league].has(id));
+    assert.deepEqual(r.options.map((o) => o.pick.speciesId).sort(), [...ranked].sort(), league);
+    const scores = r.options.map((o) => o.strength.score);
+    assert.deepEqual(scores, [...scores].sort((a, b) => b - a), league);
+    assert.equal(r.options.filter((o) => o.ours).length, 1);
+    const { ours, ...mine } = r.options.find((o) => o.ours);
+    assert.deepEqual({ ...mine, options: r.options }, r);
+    for (const o of r.options) {
+      assert.equal(o.strength.of, rankings.byLeague[league].size);
+      assert.ok(o.iv && o.iv.rankPct >= 0);
+      assert.equal(o.cost === null, o.overCap); // level 20 is past some members' best level, so no cost there
+      assert.equal(o.pick.self, o.pick.speciesId === 'eevee');
+      if (o.pick.self) assert.ok(Array.isArray(o.needs)); else assert.equal(o.needs, null);
+      assert.ok(o.moves.fast);
+    }
+  }
+});
+
+test('options with unknown IVs have no IV rating or cost, and Our pick is the top score', () => {
+  const L = leaguesOf(entry('Eevee', { ivs: null }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    assert.ok(L[league].options.length > 1);
+    for (const o of L[league].options) { assert.equal(o.iv, null); assert.equal(o.cost, null); assert.equal(o.overCap, false); }
+    assert.equal(L[league].options[0].ours, true);
+  }
+});
+
+test('options for a Shadow use the shadow ranking where PvPoke has one, and never include a Mega or Primal', () => {
+  const L = leaguesOf(entry('Dratini', { shadow: true }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    for (const o of L[league].options) {
+      assert.doesNotMatch(o.pick.speciesId, /mega|primal/);
+      const base = o.pick.speciesId.replace(/_shadow$/, '');
+      assert.equal(o.pick.speciesId, rankings.byLeague[league].has(`${base}_shadow`) ? `${base}_shadow` : base);
+      assert.equal(o.strength.score, rankings.byLeague[league].get(o.pick.speciesId).score);
+    }
+  }
+  assert.ok(L.ml.options.some((o) => o.pick.speciesId === 'dragonite_shadow' && o.pick.name === 'Dragonite (Shadow)'));
+  for (const league of ['gl', 'ul', 'ml']) for (const o of leaguesOf(entry('Charmander'))[league].options) assert.doesNotMatch(o.pick.speciesId, /mega/);
+});
+
+test('options respect gender locks (a female Kirlia has no Gallade; unknown sex keeps it, labelled) and an unranked family has one option', () => {
+  for (const league of ['gl', 'ul', 'ml']) {
+    assert.ok(!leaguesOf(entry('Kirlia', { gender: '♀' }))[league].options.some((o) => o.pick.speciesId === 'gallade'));
+  }
+  const unknown = leaguesOf(entry('Kirlia', { gender: '' }));
+  const g = unknown.ul.options.find((o) => o.pick.speciesId === 'gallade');
+  if (g) assert.equal(g.pick.genderLocked, 'male');
+  const chew = leaguesOf(entry('Chewtle'));
+  for (const league of ['gl', 'ul', 'ml']) {
+    assert.equal(chew[league].options.length, 1);
+    assert.equal(chew[league].options[0].ours, true);
+    assert.equal(chew[league].options[0].strength, null);
+  }
+});
+
+test('across the whole fixture box, Our pick is what chooseMember says of the options, within CLOSE_SCORE of the best, never an unranked member', () => {
+  let checked = 0;
+  for (const p of box) {
+    const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
+    if (!r) continue;
+    const L = leaguesFor(p, r, ctx);
+    for (const league of ['gl', 'ul', 'ml']) {
+      const { options } = L[league];
+      const ours = options.filter((o) => o.ours);
+      assert.equal(ours.length, 1, `${p.name} ${league}`);
+      assert.deepEqual(ours[0].pick, L[league].pick);
+      if (options[0].strength) {
+        assert.ok(options.every((o) => o.strength), 'a ranked family lists only ranked members');
+        assert.ok(ours[0].strength.score >= options[0].strength.score - CLOSE_SCORE - 1e-9, `${p.name} ${league}`);
+        if (p.ivs && options.length > 1) {
+          const close = options.filter((o) => o.strength.score >= options[0].strength.score - CLOSE_SCORE - 1e-9);
+          assert.ok(close.every((o) => (o.iv?.rankPct ?? -1) <= ours[0].iv.rankPct), `${p.name} ${league}: a close member has a better spread`);
+        }
+      }
+      checked++;
+    }
+  }
+  assert.ok(checked > 600);
 });
 
 test('a shadow Dratini picks the shadow Dragonite ranking where it exists', () => {

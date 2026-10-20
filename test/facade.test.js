@@ -36,14 +36,14 @@ test('adviseJSON: pokemon entries are only { p: { index }, unresolved, speciesId
   assert.equal(r.builds[0].pokemon.index !== undefined, true);
 });
 
-test('adviseJSON: 2,000 entries come back at 4 MB or less (it was 6.7 MB), the pokemon part about 2 MB', () => {
+test('adviseJSON: 2,000 entries come back at 7 MB or less (6.7 MB before the slimming, 4 MB after it, then league options), the pokemon part about 5 MB', () => {
   const big = [];
   while (big.length < 2000) for (const p of box) if (big.length < 2000) big.push(p);
   const text = core.adviseJSON(JSON.stringify(big));
   const r = JSON.parse(text);
   assert.equal(r.pokemon.length, 2000);
   const pokemonBytes = JSON.stringify(r.pokemon).length;
-  // ~1 KB of leagues per entry is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
-  assert.ok(pokemonBytes < 2.1e6, `pokemon ${(pokemonBytes / 1e6).toFixed(2)} MB`);
-  assert.ok(text.length < 4.1e6, `${(text.length / 1e6).toFixed(2)} MB`);
+  // ~2.5 KB of leagues per entry (Our pick plus every ranked family member's own rating) is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
+  assert.ok(pokemonBytes < 5.2e6, `pokemon ${(pokemonBytes / 1e6).toFixed(2)} MB`);
+  assert.ok(text.length < 7.2e6, `${(text.length / 1e6).toFixed(2)} MB`);
 });
