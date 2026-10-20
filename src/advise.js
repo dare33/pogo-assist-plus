@@ -12,7 +12,7 @@ const TIER_W = { S: 3, A: 2, B: 1 };
 const AREA_W = { raids: 1, gl: 1, ul: 1, ml: 1, rocket: 0.6, max: 0.6, gym: 0.35 };
 // PvPoke overall score at or above which a species counts as PvP-relevant even if no tier table names it.
 const PVP_SCORE = { gl: 88, ul: 88, ml: 88 };
-// Target level per area for costing (PvP uses the export's own per-league cost when available).
+// Target level per area for costing (PvP uses leaguesFor's per-league cost when available).
 const TARGET_LEVEL = { raids: 35, rocket: 30, gym: 30, max: 30, ml: 50, gl: 30, ul: 40 };
 
 function moveFlags(movesText) {
@@ -81,7 +81,7 @@ export function analyseBox(box, ctx) {
     for (const h of hits) { if (!byTarget.has(h.targetId)) byTarget.set(h.targetId, []); byTarget.get(h.targetId).push(h); }
     for (const [targetId, ths] of byTarget) {
       // Value: raids count each attacking type covered (up to three); other areas count once at their best tier.
-      // PvP areas are scaled by this exact Pokémon's rank in that league from the export (squared: a mid-rank spread is worth little).
+      // PvP areas are scaled by this exact Pokémon's rank in that league as Our pick (squared: a mid-rank spread is worth little).
       const areas = new Map();
       const raidTypes = new Map();
       for (const h of ths) {
@@ -89,11 +89,16 @@ export function analyseBox(box, ctx) {
         if (h.area === 'raids' && h.section && h.section !== 'S tier — build first' && !/tier/i.test(h.section)) { if (!raidTypes.has(h.section) || raidTypes.get(h.section) < w) raidTypes.set(h.section, w); }
         if (!areas.has(h.area) || areas.get(h.area) < w) areas.set(h.area, w);
       }
+      // This copy's rating in a league as Our pick (leaguesFor), when Our pick is the member this build targets. Read from leaguesFor
+      // rather than the Poke Genie columns so that scans (which have none) and copies whose Our pick differs from Poke Genie's are
+      // rated too. Without known IVs there is no rating, and the build gets the neutral weight and no league cost.
+      const ourLeague = (a) => {
+        const L = entry.leagues?.[a];
+        return L?.iv && baseSpeciesId(gm, L.pick.speciesId) === baseSpeciesId(gm, targetId) ? L : null;
+      };
       const leagueQ = (a) => {
-        const league = a === 'gl' ? 'great' : a === 'ul' ? 'ultra' : null; // the export has no Master League figures
-        const c = league && p.pvp?.[league];
-        const same = c && resolveSpecies(gm, c.name, { form: c.form })?.speciesId === baseSpeciesId(gm, targetId);
-        return same && c.rankPct != null ? 0.15 + 0.85 * (c.rankPct / 100) ** 2 : 0.6;
+        const L = ourLeague(a);
+        return L ? 0.15 + 0.85 * (L.iv.rankPct / 100) ** 2 : 0.6;
       };
       let value = 0;
       for (const [area, w] of areas) {
@@ -109,29 +114,29 @@ export function analyseBox(box, ctx) {
       const path = evolutionPath(gm, r.speciesId, stepTarget) ?? [];
       const evoCandy = path.reduce((s, [from, to]) => s + (FORM_CHANGES[from]?.includes(to) ? 0 : evolveCandy(gm, from, to)), 0);
       const formChange = path.some(([from, to]) => FORM_CHANGES[from]?.includes(to));
-      // Costing: the most demanding area decides the target level; PvP uses the export's own figures when they match the target.
+      // Costing: the most demanding area decides the target level; PvP uses leaguesFor's figures when Our pick is the target.
       const flags = { shadow: p.shadow, purified: p.purified, lucky: p.lucky };
       const level = p.level ?? 20;
       const pvpAreas = [...areas.keys()].filter((a) => ['gl', 'ul', 'ml'].includes(a));
       const otherAreas = [...areas.keys()].filter((a) => !pvpAreas.includes(a));
-      // The export knows this exact Pokémon's cost to its best level in each league; take the league where it ranks best.
+      // leaguesFor knows this exact Pokémon's cost to its best level in each league (evolution candy included, as Poke Genie's
+      // column was); take the league where it ranks best.
       let pvpCost = null;
       for (const a of pvpAreas) {
-        const league = a === 'gl' ? 'great' : a === 'ul' ? 'ultra' : null;
-        const c = league && p.pvp?.[league];
-        if (c && c.dust !== null && resolveSpecies(gm, c.name, { form: c.form })?.speciesId === baseSpeciesId(gm, targetId)) {
-          if (!pvpCost || (c.rankPct ?? 0) > (pvpCost.rankPct ?? 0)) pvpCost = { league: a, dust: c.dust, candy: c.candy, rankPct: c.rankPct, rank: c.rank };
+        const L = ourLeague(a);
+        if (L?.cost && (!pvpCost || L.iv.rankPct > pvpCost.rankPct)) {
+          pvpCost = { league: a, dust: L.cost.dust, candy: L.cost.candy + L.cost.evolveCandy, xl: L.cost.xl, rankPct: L.iv.rankPct, rank: L.iv.rank };
         }
       }
       let targetLevel = otherAreas.length ? Math.max(...otherAreas.map((a) => TARGET_LEVEL[a])) : Math.max(...pvpAreas.map((a) => TARGET_LEVEL[a]));
       let cost = powerUpCost(level, Math.max(level, targetLevel), flags);
-      if (pvpCost && !otherAreas.length) { cost = { dust: pvpCost.dust, candy: pvpCost.candy, xl: 0, steps: 0 }; targetLevel = null; }
+      if (pvpCost && !otherAreas.length) { cost = { dust: pvpCost.dust, candy: pvpCost.candy, xl: pvpCost.xl, steps: 0 }; targetLevel = null; }
       const mf = moveFlags(ths.map((h) => h.moves).join(' '));
       const secondMove = mf.plusMove ? secondMoveCost(gm.byId.get(stepTarget)?.thirdMoveCost ?? 50000, flags) : { dust: 0, candy: 0 };
       const totalDust = cost.dust + secondMove.dust;
       const totalCandy = (pvpCost && !otherAreas.length ? cost.candy : cost.candy + evoCandy) + secondMove.candy;
       const effort = totalDust / 100000 + totalCandy / 100 + cost.xl / 148 + mf.elite * 1.5 + (formChange ? 1.5 : 0) + (viaMega ? 0.3 : 0);
-      // IV quality: PvP uses the export's rank % (squared, so a mid-rank spread is worth little); everything else uses IV average, mildly.
+      // IV quality: PvP uses this copy's league rank % (squared, so a mid-rank spread is worth little); everything else uses IV average, mildly.
       const ivQ = (p.ivPercent ? 0.8 + 0.2 * (p.ivPercent / 100) : 0.9) * (evoCandy === 0 && !formChange ? 1.3 : 1); // already the final form: phase 1 material
       builds.push({
         pokemon: p, speciesId: r.speciesId, targetId, targetName: gm.byId.get(targetId)?.speciesName ?? targetId,

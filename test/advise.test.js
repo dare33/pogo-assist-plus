@@ -56,3 +56,26 @@ test('hygiene keeps the best copy and counts transfers', () => {
   assert.equal(zapdos.keep.length, 2);
   assert.equal(zapdos.keep[0].cp, 1991);
 });
+
+test('league build scoring reads leaguesFor (Our pick), not the Poke Genie columns: a scan with no pvp columns scores the same', () => {
+  const scan = analyseBox(box.map((p) => ({ ...p, pvp: undefined })), ctx);
+  const sig = (o) => o.builds.map((b) => [b.speciesId, b.targetId, b.value, b.score, b.pvpCost, b.cost]);
+  assert.deepEqual(sig(scan), sig(out));
+  const withCost = out.builds.filter((b) => b.pvpCost);
+  assert.ok(withCost.length >= 10, `${withCost.length} builds carry a league cost`);
+  for (const b of withCost) {
+    assert.ok(['gl', 'ul', 'ml'].includes(b.pvpCost.league));
+    assert.ok(b.pvpCost.rankPct >= 0 && b.pvpCost.rankPct <= 100);
+  }
+});
+
+test("a league build is weighted by this copy's Rank % as Our pick, and neutrally (0.6) when the IVs are unknown", () => {
+  const mk = (ivs) => ({ ...box.find((p) => p.name === 'Tinkatink'), ivs, pvp: undefined, ivPercent: 80 });
+  const val = (ivs) => analyseBox([mk(ivs)], ctx).builds.find((b) => b.targetId === 'tinkaton');
+  const good = val({ atk: 0, def: 15, hp: 15 }), bad = val({ atk: 15, def: 0, hp: 0 }), unknown = val(null);
+  assert.ok(good.pvpCost && bad.pvpCost);
+  assert.ok(good.pvpCost.rankPct > bad.pvpCost.rankPct);
+  assert.ok(good.value > bad.value);
+  assert.equal(unknown.pvpCost, null);
+  assert.ok(unknown.value > bad.value && unknown.value < good.value);
+});
