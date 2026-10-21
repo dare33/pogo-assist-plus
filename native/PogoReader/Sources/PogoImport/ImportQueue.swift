@@ -360,9 +360,37 @@ extension ImportQueue {
         for item in items { for k in item.keys where !known.contains(k) && !mine.contains(k) {
             l.entries.append(.init(account: account, key: k, batchId: batchId, savedAt: now, epoch: epoch, born: born, signature: signature, provisional: true))
         } }
+        // The save always leaves a record under its signature, even when every key was already held (an "import it again"): a marker entry (it matches no screenshot). A save is known to have
+        // been started by there being an entry, or the batch's note; without either it never reached a box.
+        if !l.entries.contains(where: { $0.signature == signature && $0.account == account }) {
+            l.entries.append(.init(account: account, key: Self.saveMarkerPrefix + signature, batchId: batchId, savedAt: now, epoch: epoch, born: born, signature: signature, provisional: true))
+        }
         l.trim()
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
+    }
+
+    static let saveMarkerPrefix = "save:"
+
+    /// Whether the ledger has any entry, provisional or confirmed, under this save's signature: the record that a save was started. nil when the ledger cannot be read (nothing can be said).
+    public func hasRecord(ofSave signature: String) -> Bool? {
+        guard let l = try? loadLedger() else { return nil }
+        return l.entries.contains { $0.signature == signature }
+    }
+
+    /// Put an unreadable ledger aside and start an empty one: the damaged file is kept (`ledger.damaged.json`, numbered if one is there already) and nothing is deleted. Earlier imports are no
+    /// longer recognised afterwards. Returns where the damaged file went, or nil when the ledger was readable (nothing is done to a good one).
+    @discardableResult
+    public func startNewLedger() throws -> URL? {
+        guard fm.fileExists(atPath: ledgerURL.path) else { return nil }
+        if (try? loadLedger()) != nil { return nil }
+        var n = 1
+        var target = root.appendingPathComponent("ledger.damaged.json")
+        // the copy loadLedger keeps stays; the file itself is moved to the next free name
+        while fm.fileExists(atPath: target.path) && (try? Data(contentsOf: target)) != (try? Data(contentsOf: ledgerURL)) { n += 1; target = root.appendingPathComponent("ledger.damaged-\(n).json") }
+        if !fm.fileExists(atPath: target.path) { try fm.copyItem(at: ledgerURL, to: target) }
+        try Self.writeAtomically(try Self.encoder.encode(ImportLedger()), to: ledgerURL)
+        return target
     }
 
     /// The save with this signature reached the box: its provisional entries are confirmed.

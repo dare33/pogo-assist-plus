@@ -490,4 +490,66 @@ final class ImportQueueTests: XCTestCase {
         XCTAssertEqual(l.entries.first { $0.provisional != true }?.key, "k8", "the oldest confirmed ones went")
     }
 
+
+    // MARK: round 8
+
+    func testEveryWritePathTrimsTheLedgerAndNeverEvictsProvisional() throws {
+        let m = try makeBatch([100])
+        func entry(_ i: Int, provisional: Bool) -> ImportLedger.Entry { .init(account: "Main", key: "k\(i)", batchId: "b", savedAt: Date(timeIntervalSinceNow: Double(i - 30_000)), epoch: nil, born: nil, signature: provisional ? "s" : nil, provisional: provisional ? true : nil) }
+        var l = ImportLedger()
+        l.entries = (0..<2).map { entry($0, provisional: true) } + (2..<(ImportLedger.maxEntries + 3)).map { entry($0, provisional: false) }
+        try FileManager.default.createDirectory(at: queue.root, withIntermediateDirectories: true)
+        try ImportQueue.writeAtomically(try ImportQueue.encoder.encode(l), to: queue.ledgerURL)
+        // a provisional write trims
+        try queue.recordProvisional(m.items, batchId: m.batchId, signature: "import:t", account: "Main", epoch: nil, born: nil)
+        var now = queue.ledger()
+        XCTAssertLessThanOrEqual(now.entries.count, ImportLedger.maxEntries)
+        XCTAssertGreaterThanOrEqual(now.entries.filter { $0.provisional == true }.count, 3, "the two old provisional entries and the new ones all stay")
+        // so does a confirmed write (recordSaved)
+        try queue.recordSaved(m.items, batchId: m.batchId, account: "Other")
+        now = queue.ledger()
+        XCTAssertLessThanOrEqual(now.entries.count, ImportLedger.maxEntries)
+        XCTAssertTrue(now.entries.contains { $0.key == "k0" && $0.provisional == true } && now.entries.contains { $0.key == "k1" && $0.provisional == true })
+    }
+
+    func testAHoldIsProvisionalOnlyWhenEveryEntryThatHoldsItIs() {
+        var l = ImportLedger()
+        l.entries = [.init(account: "A", key: "k", batchId: "b1", savedAt: Date(timeIntervalSince1970: 1), epoch: nil, born: nil, signature: "s1", provisional: true),
+                     .init(account: "A", key: "k", batchId: "b2", savedAt: Date(timeIntervalSince1970: 2), epoch: nil, born: nil, signature: "s2", provisional: nil)]
+        XCTAssertEqual(l.hold(account: "A", keys: ["k"])?.provisionalOnly, false, "one confirmed entry is enough")
+        l.entries.removeLast()
+        XCTAssertEqual(l.hold(account: "A", keys: ["k"])?.provisionalOnly, true)
+    }
+
+    func testASignatureGetsItsOwnEntriesForEachAccountItIsRecordedFor() throws {
+        let m = try makeBatch([101])
+        try queue.recordProvisional(m.items, batchId: m.batchId, signature: "import:s", account: "A", epoch: nil, born: nil)
+        try queue.recordProvisional(m.items, batchId: m.batchId, signature: "import:s", account: "B", epoch: nil, born: nil)
+        let l = queue.ledger()
+        XCTAssertTrue(l.entries.contains { $0.account == "A" && $0.key == m.items[0].keys[0] }); XCTAssertTrue(l.entries.contains { $0.account == "B" && $0.key == m.items[0].keys[0] }, "B's keys were skipped because A's carried the signature")
+    }
+
+    func testRecordSavedNeverWritesOverAnUnreadableLedgerAndKeepsProvisionalOnExpiry() throws {
+        let m = try makeBatch([102])
+        try queue.recordProvisional(m.items, batchId: m.batchId, signature: "import:old", account: "Main", epoch: nil, born: nil, now: Date(timeIntervalSinceNow: -400 * 24 * 3600))
+        try queue.recordSaved(m.items, batchId: "other", account: "Main", now: Date())
+        XCTAssertTrue(queue.ledger().entries.contains { $0.signature == "import:old" && $0.provisional == true }, "a provisional entry does not expire with the year")
+        let garbage = Data("{bad".utf8)
+        try garbage.write(to: queue.ledgerURL)
+        XCTAssertThrowsError(try queue.recordSaved(m.items, batchId: "x", account: "Main")) { XCTAssertEqual($0 as? ImportQueueError, .ledgerUnreadable) }
+        XCTAssertEqual(try Data(contentsOf: queue.ledgerURL), garbage)
+    }
+
+    func testStartingANewLedgerDoesNothingToAGoodOneAndKeepsEveryDamagedCopy() throws {
+        let m = try makeBatch([103])
+        try queue.recordSaved(m.items, batchId: m.batchId, account: "Main")
+        XCTAssertNil(try queue.startNewLedger(), "a readable ledger is left alone")
+        for round in 1...3 {
+            try Data("{bad \(round)".utf8).write(to: queue.ledgerURL)
+            XCTAssertNotNil(try queue.startNewLedger())
+        }
+        let names = try FileManager.default.contentsOfDirectory(atPath: queue.root.path).filter { $0.hasPrefix("ledger.damaged") }.sorted()
+        XCTAssertEqual(names, ["ledger.damaged-2.json", "ledger.damaged-3.json", "ledger.damaged.json"])
+        XCTAssertTrue(queue.ledger().entries.isEmpty)
+    }
 }

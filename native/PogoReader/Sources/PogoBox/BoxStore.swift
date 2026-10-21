@@ -292,7 +292,8 @@ public final class BoxStore {
     public var accountListIsIncomplete: Bool {
         if renameJournalExists { return true }
         let names = (try? fm.contentsOfDirectory(atPath: root.path)) ?? []
-        return names.contains { ($0.hasPrefix(".rename-") || $0.hasPrefix(".renaming")) && !$0.hasSuffix(".json") }
+        // the folder a rename moves aside is `.rename-<uuid>` (its journal and history are `.json` files)
+        return names.contains { $0.hasPrefix(".rename-") && !$0.hasSuffix(".json") }
     }
 
     /// How many renames have been recorded in all: the "epoch" a binding is stamped with. It only goes up, whatever is trimmed from the history.

@@ -20,6 +20,8 @@ public struct BoxSnapshot: Codable, Equatable {
     /// For a restore: the version whose entries were copied.
     public var restoredFrom: Int?
     public var entries: [BoxEntry]
+    /// The screenshot import this version was written for (its signature), recorded so a save can be recognised even if its scan record is damaged or gone. nil for every other version.
+    public var sourceSignature: String?
 
     /// The version without its entries, for the history list.
     public struct Header: Codable, Equatable {
@@ -111,35 +113,14 @@ public final class BoxLibrary {
     /// with no version pointing at it, when every version and every scan file could be read, is a save that was cut off between the two writes, and is removed (`notSaved`);
     /// if anything could not be read, nothing is deleted and the answer is `unknown`, because the unreadable file may be the version that points at the record.
     public func scanAlreadySaved(account: String, signature: String) -> SaveState {
+        if signature.hasPrefix("import:") { return importSaveState(account: account, signature: signature) }
         guard let listing = try? store.list(account: account) else { return .unknown }
         guard let match = listing.scans.first(where: { $0.sourceSignature == signature }) else {
             // An unreadable scan file only matters if it could be this scan: its replay log (kept beside it) is as long as the signature says. Other damaged files are not this scan.
             let size = signature.prefix(while: { $0 != "-" })
             let dir = try? store.accountDirectory(account, create: false)
-            // For an import signature: which box versions point at which scan (and when each was written), and whether some version cannot be read.
-            var versionScans = [String: Date](), versionsDamaged = false
-            if signature.hasPrefix("import:"), !listing.unreadable.isEmpty {
-                if let all = try? seqs(account) {
-                    for seq in all {
-                        if let f = try? file(account, seq), let data = try? Data(contentsOf: f), let h = try? Self.headerDecoder.decode(ScanIdOnly.self, from: data) {
-                            if let id = h.scanId { versionScans[id] = min(versionScans[id] ?? .distantFuture, h.createdAt ?? .distantFuture) }
-                        } else { versionsDamaged = true }
-                    }
-                } else { versionsDamaged = true }
-            }
-            let batchMade = Self.importBatchDate(signature)
             let plausible = listing.unreadable.contains { name in
                 guard let dir else { return true }
-                // A screenshot import's signature (`import:<batch>`) names no log size: an unreadable file can be that save only if it still carries the signature text.
-                if signature.hasPrefix("import:") {
-                    // ...or if a box version points at it (a scan that is damaged through and through has lost its signature, but the version that was written for it still names it), or if a
-                    // version cannot be read at all (it may be the one that names it).
-                    // A version written BEFORE the batch was made cannot belong to this save, so a scan it points at is unrelated however damaged it is.
-                    if versionsDamaged { return true }
-                    if let written = versionScans[String(name.dropLast(5))] { return batchMade.map { written >= $0.addingTimeInterval(-2) } ?? true }
-                    guard let data = try? Data(contentsOf: dir.appendingPathComponent(name)) else { return true }
-                    return data.range(of: Data(("\"" + signature + "\"").utf8)) != nil
-                }
                 let log = dir.appendingPathComponent(String(name.dropLast(5)) + ".replay.jsonl")
                 guard let attrs = try? fm.attributesOfItem(atPath: log.path), let n = attrs[.size] as? Int else { return true }   // no log to tell by: it could be
                 return String(n) == size
@@ -156,15 +137,30 @@ public final class BoxLibrary {
         try? store.delete(account: account, id: match.id)
         return .notSaved
     }
-    private struct ScanIdOnly: Decodable { var scanId: String?; var createdAt: Date? }
 
-    /// When the batch an import signature names was made (the stamp its id starts with, UTC), or nil if it does not parse.
-    static func importBatchDate(_ signature: String) -> Date? {
-        guard signature.hasPrefix("import:") else { return nil }
-        let stamp = signature.dropFirst(7).prefix { $0 != "-" }
-        let f = DateFormatter(); f.dateFormat = "yyyyMMddHHmmss"; f.timeZone = TimeZone(identifier: "UTC"); f.locale = Locale(identifier: "en_US_POSIX")
-        return f.date(from: String(stamp))
+    /// Whether this account's box holds a screenshot import's save (its signature `import:<batch>[.<generation>]`). Asked only of a save that HAS a record (the ledger is written before the box,
+    /// so a save with no record in a readable ledger and no note never reached a box and no box is asked). It is saved when a readable scan carries the signature, or a box version records it in its
+    /// own metadata (every import since then does, so a scan that is damaged or gone still answers). Otherwise a version that points at a scan that is damaged or MISSING, and records no signature of
+    /// its own, could be this save: undetermined; so could a version file that cannot be read. A damaged unrelated scan or version that is not in this save's way does not matter.
+    private func importSaveState(account: String, signature: String) -> SaveState {
+        guard let listing = try? store.list(account: account), let all = try? seqs(account) else { return .unknown }
+        let match = listing.scans.first { $0.sourceSignature == signature }
+        let readable = Set(listing.scans.map(\.id))
+        var pointsAtMatch = false, unknown = false
+        for seq in all {
+            guard let f = try? file(account, seq), let data = try? Data(contentsOf: f), let h = try? Self.headerDecoder.decode(ScanIdOnly.self, from: data) else { unknown = true; continue }
+            if h.sourceSignature == signature { return .saved }
+            if let match, h.scanId == match.id { pointsAtMatch = true }
+            // another import's version is unrelated; any other version that names a scan that cannot be read (damaged or missing) might have been written for this save
+            if h.sourceSignature == nil, let id = h.scanId, !readable.contains(id) { unknown = true }
+        }
+        if pointsAtMatch { return .saved }
+        if unknown { return .unknown }
+        if let match { try? store.delete(account: account, id: match.id) }   // a scan record no version points at: a save cut off between the two writes
+        return .notSaved
     }
+
+    private struct ScanIdOnly: Decodable { var scanId: String?; var createdAt: Date?; var sourceSignature: String? }
     private static let headerDecoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
 
     // MARK: - versions
@@ -200,14 +196,14 @@ public final class BoxLibrary {
 
     @discardableResult
     public func commit(account: String, entries: [BoxEntry], reason: BoxSnapshot.Reason, note: String, scanId: String? = nil, scanKind: BoxStore.Kind? = nil,
-                       scanDate: Date? = nil, restoredFrom: Int? = nil, expectedCurrentSeq: Int?? = nil, now: Date = Date()) throws -> BoxSnapshot {
+                       scanDate: Date? = nil, restoredFrom: Int? = nil, expectedCurrentSeq: Int?? = nil, sourceSignature: String? = nil, now: Date = Date()) throws -> BoxSnapshot {
         let last = try seqs(account).last
         try refuseOverNewer(account)
         // A save prepared against a box that has since changed is refused, not written over it.
         if let expected = expectedCurrentSeq, expected != last { throw Failure.boxChanged }
         let next = (last ?? 0) + 1
         let snap = BoxSnapshot(schema: Self.schemaVersion, seq: next, account: account, createdAt: now, reason: reason, note: note, scanId: scanId, scanKind: scanKind,
-                               scanDate: scanDate, restoredFrom: restoredFrom, entries: entries)
+                               scanDate: scanDate, restoredFrom: restoredFrom, entries: entries, sourceSignature: sourceSignature)
         try fm.createDirectory(at: try boxFolder(account), withIntermediateDirectories: true)
         try Self.encoder.encode(snap).write(to: file(account, next), options: .atomic)
         verifiedLock.lock(); if verifiedThrough[account] == (last ?? 0) { verifiedThrough[account] = next }; verifiedLock.unlock()   // this build wrote it: not newer
@@ -231,7 +227,7 @@ public final class BoxLibrary {
                                   refineChanges: refineChanges, reviewActions: reviewActions, reportSentAt: reportSentAt, reportHash: reportHash, sourceSignature: sourceSignature)
         do {
             try commitFailure?()
-            let snap = try commit(account: account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: kind, scanDate: scanDate, expectedCurrentSeq: expectedCurrentSeq)
+            let snap = try commit(account: account, entries: entries, reason: .scan, note: note, scanId: scan.id, scanKind: kind, scanDate: scanDate, expectedCurrentSeq: expectedCurrentSeq, sourceSignature: sourceSignature)
             return (scan, snap)
         } catch {
             try? store.delete(account: account, id: scan.id)

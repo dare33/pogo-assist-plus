@@ -60,7 +60,7 @@ public final class ScreenshotImporter {
             case .accountAmbiguous(let old, let now): return "These screenshots were for the account that was called \(old) and is now \(now), but there is another account called \(old) now. Choose which box they belong to."
             case .nothingToImport: return "None of the screenshots gave a Pokémon that can be added."
             case .notYetRead: return "The screenshots have not all been read yet."
-            case .cannotTellIfSaved: return "The box could not be checked for an earlier save of these screenshots, so nothing was saved. Try again."
+            case .cannotTellIfSaved: return "The box could not be checked for an earlier save of these screenshots (a file in it could not be read), so nothing was saved. Trying again will not change that: discard these screenshots and share them again, or restore the box from Settings."
             }
         }
     }
@@ -161,24 +161,25 @@ public final class ScreenshotImporter {
         }
     }
 
-    /// Whether a save with this signature is in any account's box: found in one, in none (EVERY account was listed and read, and none has it), or undetermined. It is never "in none" while
-    /// the list of accounts may be incomplete (a rename is half done, or a folder it moved aside is hiding an account) or an account cannot be read. The signature belongs to one save, so
-    /// which account it went into does not matter: any account that holds it settles it, whatever it is called or whenever its folder was made.
-    /// One exception, for saving: with no note and no provisional key for this signature (`hasRecord` false) nothing was ever started, so an account that cannot be read matters only if it is the
-    /// destination, and the destination's own answer decides.
+    /// Whether a save with this signature is in any account's box. The ledger is written BEFORE the box, so a save that has no record (no ledger entry under its signature, provisional or
+    /// confirmed, and no note on the batch) never reached any box, and no box is asked: a damaged scan or version unrelated to it cannot get in the way of saving. A save WITH a record is looked
+    /// for in every account: found in one, in none (EVERY account was listed and read, and none has it), or undetermined. It is never "in none" while the list of accounts may be incomplete (a
+    /// rename is half done, or a folder it moved aside may hide an account) or an account cannot be read, and never when the ledger itself cannot be read. The signature belongs to one save, so
+    /// which account it went into does not matter.
     private enum SaveOutcome { case found, notFound, undetermined }
-    private func outcomeOfSave(signature: String, destination: String? = nil, hasRecord: Bool = true) -> SaveOutcome {
+    private func outcomeOfSave(signature: String, note: Bool = false) -> SaveOutcome {
+        guard let record = queue.hasRecord(ofSave: signature) else { return .undetermined }   // the ledger cannot be read
+        if !record && !note { return .notFound }
         guard !library.store.accountListIsIncomplete, let accounts = try? library.accounts() else { return .undetermined }
-        var undetermined = false, destinationAnswered = false
+        var undetermined = false
         for a in accounts {
             switch library.scanAlreadySaved(account: a, signature: signature) {
             case .saved: return .found
             case .unknown: undetermined = true
-            case .notSaved: if a == destination { destinationAnswered = true }
+            case .notSaved: break
             }
         }
-        if undetermined { return !hasRecord && destinationAnswered ? .notFound : .undetermined }
-        return .notFound
+        return undetermined ? .undetermined : .notFound
     }
 
     private enum Completion { case finished, noteCleared, foundButUnrecorded, undetermined }
@@ -206,7 +207,7 @@ public final class ScreenshotImporter {
     @discardableResult
     private func completeInterruptedSave(_ m: ImportManifest) -> Completion {
         guard let pending = m.pendingSave else { return .finished }
-        switch outcomeOfSave(signature: m.signature) {
+        switch outcomeOfSave(signature: m.signature, note: true) {
         case .found:
             do {
                 try queue.confirmProvisional(signature: m.signature)
@@ -327,6 +328,16 @@ public final class ScreenshotImporter {
         return out
     }
 
+    /// The record of what was imported is damaged and the person chose to start a new one: the damaged file is kept (`ledger.damaged.json`), an empty ledger is started, and every batch is looked
+    /// at again, so the holds that came from not being able to read it go. Earlier imports are not recognised afterwards (an exact match to a Pokémon already in the box is still that Pokémon, left
+    /// unchanged). Does nothing to a ledger that can be read.
+    @discardableResult
+    public func startNewImportRecord(engine: CoreEngine? = nil) throws -> Bool {
+        guard try queue.startNewLedger() != nil else { return false }
+        _ = try prepareAll(engine: engine)
+        return true
+    }
+
     /// Everything a read screenshot needs to be tried again (a failure, or an unreadable). The person's choice; the read is not repeated by itself.
     @discardableResult
     public func retry(batch: String, item: String) throws -> ImportManifest {
@@ -420,8 +431,9 @@ public final class ScreenshotImporter {
         }
         // Whether this save is already in a box is asked of EVERY account (the signature is this save's alone): a review that was open when an account was renamed, or its name used again, must
         // not be saved into whatever has that name now.
-        let hasRecord = (try? queue.load(p.manifest.batchId))?.pendingSave != nil || queue.provisionalSignatures()[p.manifest.signature] != nil
-        switch outcomeOfSave(signature: p.manifest.signature, destination: p.account, hasRecord: hasRecord) {
+        if queue.hasRecord(ofSave: p.manifest.signature) == nil { throw Failure.importRecordUnreadable }   // a damaged ledger: nothing can be decided, and nothing is saved
+        let noted = (try? queue.load(p.manifest.batchId))?.pendingSave != nil
+        switch outcomeOfSave(signature: p.manifest.signature, note: noted) {
         case .found:
             // A save with no note of what it held (made before the note was written, or already finished): what this review would have saved is taken as saved, if the batch is as the
             // review left it; otherwise the batch has moved on and is left as it is.
@@ -456,7 +468,7 @@ public final class ScreenshotImporter {
         } catch {
             // The box was not written (the commit takes its own record back): if every account confirms nothing of this save is in a box, the provisional keys and the note go now, so the
             // batch is usable at once. If that cannot be settled they stay, and the next look at the queue settles them.
-            if outcomeOfSave(signature: signature) == .notFound, (try? queue.removeProvisional(signature: signature)) != nil { _ = try? queue.update(p.manifest.batchId) { $0.pendingSave = nil } }
+            if outcomeOfSave(signature: signature, note: true) == .notFound, (try? queue.removeProvisional(signature: signature)) != nil { _ = try? queue.update(p.manifest.batchId) { $0.pendingSave = nil } }
             throw error
         }
         try afterCommit?()   // tests: the app ends here
