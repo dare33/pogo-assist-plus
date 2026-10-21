@@ -1288,6 +1288,8 @@ final class AppModel: ObservableObject {
             message = Self.plain(ScreenshotImporter.Failure.importRecordUnreadable) + " Open Import screenshots to start a new import record."
         } catch ScreenshotImporter.Failure.cannotTellIfSaved {
             message = Self.plain(ScreenshotImporter.Failure.cannotTellIfSaved)   // trying again will not change it: the text says what to do
+        } catch ScreenshotImporter.Failure.couldNotUpdateBatch {
+            message = Self.plain(ScreenshotImporter.Failure.couldNotUpdateBatch) + " Nothing was saved; you can try again."
         } catch ScreenshotImporter.Failure.couldNotRecordSave {
             message = Self.plain(ScreenshotImporter.Failure.couldNotRecordSave)   // nothing was written; the review stays open to try again
         } catch {
