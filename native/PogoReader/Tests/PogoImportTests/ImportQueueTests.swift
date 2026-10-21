@@ -670,4 +670,28 @@ final class ImportQueueTests: XCTestCase {
         XCTAssertEqual(try queue.list().unreadable, [b])
         XCTAssertTrue(FileManager.default.fileExists(atPath: stray.path))
     }
+
+    /// A batch folder that cannot be entered is damaged, not gone: listed as damaged, kept by clean-up.
+    func testAnInaccessibleBatchFolderIsListedAsDamagedAndKept() throws {
+        let b = try makeBatch([1]).batchId
+        let dirPath = queue.batchDirectory(b).path
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: dirPath)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dirPath) }
+        XCTAssertEqual(try queue.list().unreadable, [b]); XCTAssertTrue(try queue.list().manifests.isEmpty)
+        queue.cleanup()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queue.root.appendingPathComponent(b).path), "kept")
+        XCTAssertEqual(try queue.list().unreadable, [b])
+    }
+
+    /// `load` tells a manifest that is not there from one that cannot be read.
+    func testLoadSeparatesAMissingManifestFromAnUnreadableOne() throws {
+        let b = try makeBatch([1]).batchId
+        let url = queue.manifestURL(b)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+        XCTAssertThrowsError(try queue.load(b)) { XCTAssertEqual($0 as? ImportQueueError, .unreadable(b)) }
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        try FileManager.default.removeItem(at: url)
+        XCTAssertThrowsError(try queue.load(b)) { XCTAssertEqual($0 as? ImportQueueError, .noSuchBatch(b)) }
+    }
 }
