@@ -7,12 +7,20 @@ import { loadContext } from '../src/node/load.js';
 import { resolveSpecies, baseSpeciesId, evolutionsOf, indexGamemaster } from '../src/gamemaster.js';
 import { evolutionPath, evolveCandy } from '../src/evolve.js';
 import { analyseBox } from '../src/advise.js';
-import { leaguesFor } from '../src/leagues.js';
+import { leaguesFor, pokeGeniePick, chooseMember, CLOSE_SCORE } from '../src/leagues.js';
 import { ivRank, bestUnderCap, CAPS, rankCacheSize, clearRankCache } from '../src/pvp-rank.js';
 import { powerUpCost, step } from '../src/cost.js';
 import { cpAt } from '../src/cpm.js';
 
 const ctx = loadContext();
+// leaguesFor returns options plus indexes for the shown pick and the experimental one. Most tests below read the SHOWN pick in the
+// older flat form ({ pick: { speciesId, name, self, genderLocked? }, strength, moves, needs, iv, overCap, cost }); `raw` is the real thing.
+const flatten = (L) => Object.fromEntries(Object.entries(L).map(([k, l]) => {
+  const o = l.options[l.pick];
+  const pick = { speciesId: o.speciesId, name: o.name, self: o.self, ...(o.genderLocked ? { genderLocked: o.genderLocked } : {}) };
+  return [k, { pick, strength: o.strength, moves: o.moves, needs: o.needs, iv: o.iv, overCap: o.overCap, cost: o.cost, raw: l }];
+}));
+const lf = (e, r, c) => flatten(leaguesFor(e, r, c));
 const { gm, rankings } = ctx;
 const box = importPokeGenie(readFileSync(new URL('../fixtures/greg-2026-09-25.pokegenie.csv', import.meta.url), 'utf8'));
 
@@ -65,35 +73,56 @@ test('acceptance: IV rank, stat product and Rank % match every exact-IV row of t
   assert.deepEqual(bad, []);
 });
 
-test('report: pick agreement with Poke Genie, cost agreement, ranking convention', () => {
+// Regression pins (not evidence it generalises: the fixture is the data it was fitted on) for the emulation of Poke Genie's pick, measured WITHOUT reading the export's pick: currently 272/280 Great and 300/306 Ultra rows (the 270/278 and 298/304 counted earlier were the
+// cost-check subsets, a different row count; the printed report is the reference). A drop below these means the emulation, the IV rank or the family walk changed.
+const EMULATION_FLOOR = { gl: 272, ul: 300 };
+const EXPERIMENTAL_PIN = { gl: 250, ul: 296 };
+
+test('report: pick agreement with Poke Genie (emulated without its pick, and the experimental rule), cost agreement, ranking convention', () => {
   const lines = [];
   for (const { key, label, league } of PG) {
     if (league === 'lc') continue; // the app computes Great, Ultra and Master only
-    let n = 0, same = 0, differ = 0;
+    let n = 0, emulated = 0, experimental = 0, shownSame = 0;
     let costRows = 0, dustOk = 0, candyOk = 0, candyEvoOk = 0, zeroCost = 0;
-    const differing = [];
+    const emulatedMiss = [], experimentalMiss = [];
     for (const p of box) {
       const c = p.pvp[key];
       const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
       const pg = pgPick(p, key);
       if (!r || !pg || !c.name) continue;
       n++;
-      const ours = leaguesFor(p, r, ctx)[league];
-      const ourBase = baseSpeciesId(gm, ours.pick.speciesId);
       const pgBase = baseSpeciesId(gm, pg.speciesId);
-      if (sameMember(ourBase, pgBase)) same++;
-      else { differ++; if (differing.length < 6) differing.push(`${p.name}->${ourBase} (PG ${pgBase})`); }
+      const baseOf = (o) => baseSpeciesId(gm, o.speciesId);
+      // (a) the emulation: the same entry with Poke Genie's columns removed, so it cannot read the answer.
+      const blind = leaguesFor({ ...p, pvp: undefined }, r, ctx)[league];
+      assert.ok(p.ivs ? blind.source === 'emulated' : ['ranked', 'fallback'].includes(blind.source));
+      if (sameMember(baseOf(blind.options[blind.pick]), pgBase)) emulated++;
+      else if (emulatedMiss.length < 6) emulatedMiss.push(`${p.name}->${baseOf(blind.options[blind.pick])} (PG ${pgBase})`);
+      // (b) the experimental CLOSE_SCORE rule (also computed blind: it never reads the columns).
+      if (sameMember(baseOf(blind.options[blind.experimental]), pgBase)) experimental++;
+      else if (experimentalMiss.length < 6) experimentalMiss.push(`${p.name}->${baseOf(blind.options[blind.experimental])} (PG ${pgBase})`);
+      // With the columns the shown pick is Poke Genie's own wherever it is in the family.
+      const full = leaguesFor(p, r, ctx)[league];
+      const shown = full.options[full.pick];
+      if (sameMember(baseOf(shown), pgBase)) shownSame++;
       // Cost: only where it is the same member, the level is exact and the copy is not already past the league's best level.
-      if (sameMember(ourBase, pgBase) && p.levelMin === p.levelMax && p.ivs && ours.cost && c.dust != null) {
+      if (sameMember(baseOf(shown), pgBase) && p.levelMin === p.levelMax && p.ivs && shown.cost && c.dust != null) {
         costRows++;
-        if (ours.cost.dust === c.dust) dustOk++;
-        if (ours.cost.candy === c.candy) candyOk++;
-        if (ours.cost.candy + ours.cost.evolveCandy === c.candy) candyEvoOk++;
+        if (shown.cost.dust === c.dust) dustOk++;
+        if (shown.cost.candy === c.candy) candyOk++;
+        if (shown.cost.candy + shown.cost.evolveCandy === c.candy) candyEvoOk++;
         if (c.dust === 0) zeroCost++;
       }
     }
-    lines.push(`${label}: pick agrees ${same}/${n} (${differ} differ); e.g. ${differing.join(', ')}`);
+    lines.push(`${label}: shown pick with the export's columns agrees ${shownSame}/${n}`);
+    lines.push(`${label}: emulation WITHOUT the export's pick agrees ${emulated}/${n}; e.g. ${emulatedMiss.join(', ')}`);
+    lines.push(`${label}: experimental CLOSE_SCORE rule agrees ${experimental}/${n}; e.g. ${experimentalMiss.join(', ')}`);
     lines.push(`${label}: cost rows ${costRows}: dust ${dustOk}, candy (power-up only) ${candyOk}, candy (power-up + evolution) ${candyEvoOk}`);
+    if (EMULATION_FLOOR[league]) assert.ok(emulated >= EMULATION_FLOOR[league], `${label} emulation ${emulated}/${n} is below ${EMULATION_FLOOR[league]}`);
+    // The experimental rule is pinned exactly too (a lost row fails; a gain means re-pinning on purpose).
+    if (EXPERIMENTAL_PIN[league]) assert.equal(experimental, EXPERIMENTAL_PIN[league], `${label} experimental ${experimental}/${n}`);
+    // The shown pick differs from Poke Genie's only when its pick is not a member of the family (the Oinkologne twins, an unreleased form).
+    assert.ok(shownSame >= n - 3, `${label} shown ${shownSame}/${n}`);
   }
   lines.push('Rank % = (N - rank) / (N - 1) over the N = 4096 spreads; rank = 1 + spreads with a strictly better stat product (ties share the best rank), products compared to a relative 1e-12; level cap 50; HP floored.');
   console.log(lines.join('\n'));
@@ -101,10 +130,12 @@ test('report: pick agreement with Poke Genie, cost agreement, ranking convention
 
 // ---- unit cases ----
 const entry = (name, o = {}) => ({ name, form: '', ivs: { atk: 10, def: 12, hp: 14 }, level: 20, cp: 500, moves: [], shadow: false, purified: false, lucky: false, ...o });
-const leaguesOf = (e) => leaguesFor(e, resolveSpecies(gm, e.name, { form: e.form, shadow: e.shadow }), ctx);
+const leaguesOf = (e) => lf(e, resolveSpecies(gm, e.name, { form: e.form, shadow: e.shadow }), ctx);
 
-test('Eevee picks the eeveelution with the highest PvPoke score in each league', () => {
-  const L = leaguesOf(entry('Eevee'));
+test('Eevee with unknown IVs picks the eeveelution with the highest PvPoke score in each league', () => {
+  // Changed with the CLOSE_SCORE rule: with IVs, a close second (Umbreon 85.5 against Sylveon 85.9 in Ultra) can win on the spread,
+  // so the plain "highest score" reading now holds only where the IVs are unknown.
+  const L = leaguesOf(entry('Eevee', { ivs: null }));
   for (const league of ['gl', 'ul', 'ml']) {
     const best = ['vaporeon', 'jolteon', 'flareon', 'espeon', 'umbreon', 'leafeon', 'glaceon', 'sylveon']
       .map((id) => rankings.byLeague[league].get(id)).filter(Boolean).sort((a, b) => b.score - a.score)[0];
@@ -112,6 +143,198 @@ test('Eevee picks the eeveelution with the highest PvPoke score in each league',
     assert.equal(L[league].pick.self, false);
     assert.equal(L[league].strength.score, best.score);
   }
+});
+
+const rawOf = (e) => leaguesFor(e, resolveSpecies(gm, e.name, { form: e.form, shadow: e.shadow }), ctx);
+const idsOf = (l) => l.options.map((o) => o.speciesId);
+const shownOf = (l) => l.options[l.pick];
+const expOf = (l) => l.options[l.experimental];
+
+test('the data shape: options plus two indexes and a source; no per-option pick or ours flag', () => {
+  const L = rawOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, moves: ['Quick Attack'] }));
+  assert.deepEqual(Object.keys(L), ['gl', 'ul', 'ml']);
+  for (const league of ['gl', 'ul', 'ml']) {
+    const l = L[league];
+    assert.deepEqual(Object.keys(l), ['options', 'pick', 'experimental', 'source']);
+    assert.ok(Number.isInteger(l.pick) && l.pick >= 0 && l.pick < l.options.length);
+    assert.ok(Number.isInteger(l.experimental) && l.experimental < l.options.length);
+    assert.ok(['export', 'emulated', 'ranked', 'fallback'].includes(l.source));
+    for (const o of l.options) {
+      const keys = Object.keys(o);
+      for (const k of ['speciesId', 'name', 'self', 'strength', 'moves', 'needs', 'iv', 'overCap', 'cost']) assert.ok(keys.includes(k), k);
+      assert.ok(!('ours' in o) && !('pick' in o));
+      assert.equal(o.self, o.speciesId === 'eevee');
+      if (o.strength) assert.equal(o.strength.of, rankings.byLeague[league].size); else assert.equal(o.moves, null);
+      if (!o.self) assert.equal(o.needs, null);
+    }
+    // Ranked members first, strongest first; then the unranked.
+    const scores = l.options.map((o) => o.strength?.score ?? -1);
+    assert.deepEqual(scores, [...scores].sort((a, b) => b - a), league);
+  }
+  // Every Eevee evolution is listed whether PvPoke ranks it or not, in every league.
+  for (const league of ['gl', 'ul', 'ml']) {
+    assert.deepEqual(idsOf(L[league]).sort(), ['eevee', 'espeon', 'flareon', 'glaceon', 'jolteon', 'leafeon', 'sylveon', 'umbreon', 'vaporeon']);
+  }
+});
+
+test('the shown pick copies Poke Genie: its own pick from the export when it is in the family, else the stat-product emulation', () => {
+  // Poke Genie's export says Flareon for this Eevee in Great League; the shown pick is Flareon although PvPoke ranks others far above it.
+  const withColumns = entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, pvp: { great: { name: 'Flareon', form: '' }, ultra: { name: 'Vaporeon', form: 'Normal' } } });
+  const L = rawOf(withColumns);
+  assert.equal(shownOf(L.gl).speciesId, 'flareon');
+  assert.equal(L.gl.source, 'export');
+  assert.equal(shownOf(L.ul).speciesId, 'vaporeon');
+  assert.equal(L.ml.source, 'ranked'); // Poke Genie has no Master League column: the PvPoke score decides, not the emulation
+  // A pick that is not in the family (or no pick: an app scan has empty columns) is emulated.
+  for (const pvp of [{ great: { name: 'Pikachu', form: '' } }, { great: { name: '', form: '' } }, undefined]) {
+    assert.equal(rawOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, pvp })).gl.source, 'emulated');
+  }
+  // The emulation: the best stat product % among the members this copy is not already too strong for, ranked ones first.
+  const bare = rawOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, level: 10 })).gl;
+  const fitting = bare.options.filter((o) => !o.overCap && o.strength);
+  assert.equal(shownOf(bare).speciesId, fitting.reduce((a, b) => (b.iv.pct > a.iv.pct ? b : a)).speciesId);
+  assert.equal(bare.source, 'emulated');
+});
+
+test('pokeGeniePick: fitting ranked members first, then fitting, then ranked, then all; ties to the later evolution; unknown IVs by score', () => {
+  const m = (id, pct, o = {}) => ({ id, depth: 0, score: null, iv: pct == null ? null : { pct }, overCap: false, ...o });
+  // A fitting ranked member beats a better-spread fitting unranked one, and any over-cap one.
+  assert.equal(pokeGeniePick([m('a', 90, { score: 50 }), m('b', 99), m('c', 99, { score: 40, overCap: true })]).id, 'a');
+  // No fitting ranked member: the best fitting one.
+  assert.equal(pokeGeniePick([m('a', 90, { overCap: false }), m('b', 99, { score: 40, overCap: true })]).id, 'a');
+  // Nothing fits: ranked first, then everything.
+  assert.equal(pokeGeniePick([m('a', 99, { overCap: true }), m('b', 90, { score: 1, overCap: true })]).id, 'b');
+  assert.equal(pokeGeniePick([m('a', 99, { overCap: true }), m('b', 90, { overCap: true })]).id, 'a');
+  // Exact tie: the later evolution.
+  assert.equal(pokeGeniePick([m('a', 100, { depth: 0 }), m('b', 100, { depth: 2 }), m('c', 100, { depth: 1 })]).id, 'b');
+  // Members whose IVs cannot be rated are never picked while another can.
+  assert.equal(pokeGeniePick([m('a', null, { score: 99 }), m('b', 10)]).id, 'b');
+  // Unknown IVs: the highest score, the later evolution on a tie; nothing ranked: null.
+  assert.equal(pokeGeniePick([m('a', null, { score: 70 }), m('b', null, { score: 80 })]).id, 'b');
+  assert.equal(pokeGeniePick([m('a', null, { score: 80 }), m('b', null, { score: 80, depth: 1 })]).id, 'b');
+  assert.equal(pokeGeniePick([m('a', null), m('b', null)]), null);
+});
+
+test('CLOSE_SCORE is 3 points by default, and the Magnemite / Eevee cases it was chosen for hold in the current rankings', () => {
+  assert.equal(CLOSE_SCORE, 3);
+  assert.deepEqual(['magnezone', 'magneton'].map((id) => rankings.byLeague.gl.get(id).score), [78.4, 76.4]);
+  assert.deepEqual(['sylveon', 'flareon'].map((id) => rankings.byLeague.ul.get(id).score), [85.9, 66.8]);
+});
+
+test('chooseMember (experimental): inclusive boundary, unknown spreads take the score, ties, over-cap members left out, nothing ranked is null', () => {
+  const c = (id, score, rankPct, depth = 0, overCap = false) => ({ id, score, rankPct, depth, overCap });
+  assert.equal(chooseMember([]), null);
+  assert.equal(chooseMember([c('a', 80, 10), c('b', 77, 90)]).id, 'b');
+  assert.equal(chooseMember([c('a', 80, 10), c('b', 76.9, 90)]).id, 'a');
+  assert.equal(chooseMember([c('a', 78.4, 10), c('b', 75.4, 90)]).id, 'b'); // 78.4 - 75.4 is 3.0000000000000004 in floats
+  assert.equal(chooseMember([c('a', 80, null), c('b', 79, null)]).id, 'a');
+  assert.equal(chooseMember([c('a', 80, null, 0), c('b', 80, null, 1)]).id, 'b');
+  assert.equal(chooseMember([c('a', 80, 50), c('b', 79, 50)]).id, 'a');
+  assert.equal(chooseMember([c('a', 80, 50, 0), c('b', 80, 50, 1)]).id, 'b');
+  assert.equal(chooseMember([c('a', 80, null), c('b', 79, 5)]).id, 'b');
+  assert.equal(chooseMember([c('a', 80, 10), c('b', 70, 90)], 10).id, 'b');
+  assert.equal(chooseMember([c('a', 80, 10), c('b', 70, 90)], 0).id, 'a');
+  // Over-cap members are left out entirely, the best score included: the 90 is gone, so 70 is the best and 69 is close to it.
+  assert.equal(chooseMember([c('top', 90, 99, 0, true), c('x', 70, 10), c('y', 69, 80)]).id, 'y');
+  // ...unless every member is over the cap.
+  assert.equal(chooseMember([c('a', 90, 10, 0, true), c('b', 89, 80, 0, true)]).id, 'b');
+});
+
+test('experimental pick: Magnemite GL takes the better spread of two close members; an over-cap member never wins', () => {
+  // 2/5/11 at level 20: Magnezone (78.4) is already past the Great League cap here, so the choice is Magneton (76.4) / Magnemite (75.5) on spread.
+  const gl = rawOf(entry('Magnemite', { ivs: { atk: 2, def: 5, hp: 11 } })).gl;
+  assert.equal(expOf(gl).speciesId, 'magneton');
+  // At level 5 nothing is over the cap and the three are close: the best Rank % wins, which is Magneton (68.45 against 60.81 and 41.51).
+  const low = rawOf(entry('Magnemite', { ivs: { atk: 2, def: 5, hp: 11 }, level: 5 })).gl;
+  assert.deepEqual(low.options.map((o) => o.overCap), [false, false, false]);
+  assert.equal(expOf(low).speciesId, 'magneton');
+  assert.equal(low.options[0].iv.rankPct, 60.81);
+  // Unknown IVs: the highest score.
+  // Unknown IVs: the highest score among members the copy still fits. Magnezone is past the cap at level 20 even at 0/0/0, so Magneton; with the level unknown nothing is over the cap.
+  assert.equal(expOf(rawOf(entry('Magnemite', { ivs: null })).gl).speciesId, 'magneton');
+  assert.equal(expOf(rawOf(entry('Magnemite', { ivs: null, level: null })).gl).speciesId, 'magnezone');
+  // Lillipup at a level past Stoutland's Great League best level: it is not the experimental pick there either.
+  const lillipup = rawOf(entry('Lillipup', { level: 30, ivs: { atk: 13, def: 13, hp: 11 } })).gl;
+  assert.equal(lillipup.options.find((o) => o.speciesId === 'stoutland').overCap, true);
+  assert.equal(expOf(lillipup).overCap, false);
+});
+
+test('Eevee UL experimental: a far weaker member (Flareon 66.8 against Sylveon 85.9) never wins on spread', () => {
+  const l = rawOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, level: 10 })).ul;
+  const flareon = l.options.find((o) => o.speciesId === 'flareon'), sylveon = l.options.find((o) => o.speciesId === 'sylveon');
+  assert.ok(flareon.iv.rankPct > sylveon.iv.rankPct, 'this copy suits Flareon better');
+  assert.notEqual(expOf(l).speciesId, 'flareon');
+});
+
+test('unknown IVs: options carry no IV rating or cost; the shown pick is the top PvPoke score and the source says so', () => {
+  const L = rawOf(entry('Eevee', { ivs: null, level: null }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    for (const o of L[league].options) { assert.equal(o.iv, null); assert.equal(o.cost, null); assert.equal(o.overCap, false); }
+    assert.equal(L[league].source, 'ranked');
+    assert.equal(L[league].pick, 0);
+    assert.equal(L[league].experimental, 0);
+  }
+});
+
+test('the family walk includes form changes: Zygarde 10% reaches Complete, Hero Zamazenta reaches Crowned', () => {
+  const z = rawOf(entry('Zygarde', { form: '10%' }));
+  const zamazenta = rawOf(entry('Zamazenta', { form: 'Hero' }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    assert.ok(idsOf(z[league]).includes('zygarde_complete'), league);
+    assert.ok(idsOf(zamazenta[league]).includes('zamazenta_crowned_shield'), league);
+  }
+  assert.ok(z.ml.options.find((o) => o.speciesId === 'zygarde_complete').cost.evolveCandy === 0, 'a form change costs no candy');
+});
+
+test('options for a Shadow use the shadow ranking where PvPoke has one; no Mega or Primal; gender locks and unreleased members respected', () => {
+  const L = rawOf(entry('Dratini', { shadow: true }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    for (const o of L[league].options) {
+      assert.doesNotMatch(o.speciesId, /mega|primal/);
+      const base = o.speciesId.replace(/_shadow$/, '');
+      if (o.strength) assert.equal(o.speciesId, rankings.byLeague[league].has(`${base}_shadow`) ? `${base}_shadow` : base);
+    }
+  }
+  assert.ok(L.ml.options.some((o) => o.speciesId === 'dragonite_shadow' && o.name === 'Dragonite (Shadow)'));
+  for (const league of ['gl', 'ul', 'ml']) {
+    assert.ok(!rawOf(entry('Kirlia', { gender: '♀' }))[league].options.some((o) => o.speciesId === 'gallade'));
+    const g = rawOf(entry('Kirlia', { gender: '' }))[league].options.find((o) => o.speciesId === 'gallade');
+    assert.equal(g.genderLocked, 'male');
+    assert.ok(!idsOf(rawOf(entry('Girafarig'))[league]).includes('farigiraf'), 'unreleased');
+  }
+});
+
+test('across the whole fixture box, every league is well-formed and the pick is a listed member', () => {
+  let checked = 0;
+  for (const p of box) {
+    const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
+    if (!r) continue;
+    const L = leaguesFor(p, r, ctx);
+    for (const league of ['gl', 'ul', 'ml']) {
+      const l = L[league];
+      assert.ok(l.options[l.pick] && l.options[l.experimental], `${p.name} ${league}`);
+      assert.equal(new Set(idsOf(l)).size, l.options.length, 'no member twice');
+      const exp = expOf(l);
+      if (exp.strength) {
+        const scores = l.options.filter((o) => o.strength && !o.overCap).map((o) => o.strength.score);
+        if (scores.length && !exp.overCap) assert.ok(exp.strength.score >= Math.max(...scores) - CLOSE_SCORE - 1e-9, `${p.name} ${league}`);
+      }
+      checked++;
+    }
+  }
+  assert.ok(checked > 600);
+});
+
+test('payload: a box of branching families (Eevees, Zygardes, Kirlias, Poliwags, Tyrogues) stays within an honest size budget', () => {
+  const branching = [];
+  for (let i = 0; i < 2000; i++) branching.push(entry(['Eevee', 'Zygarde', 'Kirlia', 'Poliwag', 'Tyrogue'][i % 5], { form: i % 5 === 1 ? '10%' : '', index: i + 1, ivs: { atk: i % 16, def: (i >> 2) % 16, hp: (i >> 4) % 16 }, level: 1 + (i % 40) }));
+  const t0 = performance.now();
+  const out = analyseBox(branching, ctx);
+  const s = (performance.now() - t0) / 1000;
+  const bytes = JSON.stringify(out.pokemon.map((e) => e.leagues)).length;
+  console.log(`branching box: 2,000 entries, leagues JSON ${(bytes / 1e6).toFixed(2)} MB (${Math.round(bytes / 2000)} B each), analysed in ${s.toFixed(2)} s`);
+  assert.ok(bytes < 9e6, `${(bytes / 1e6).toFixed(2)} MB`);
+  assert.ok(s < 5, `${s.toFixed(2)} s`);
 });
 
 test('a shadow Dratini picks the shadow Dragonite ranking where it exists', () => {
@@ -174,30 +397,32 @@ test('needs names the recommended moves the copy lacks, only for the Pokémon it
   for (const league of ['gl', 'ul', 'ml']) { assert.equal(mareep[league].pick.self, false); assert.equal(mareep[league].needs, null); }
 });
 
-test('a family with no ranked member falls back to its final evolution, without strength', () => {
+test('a family with no ranked member and unknown IVs falls back to its final evolution, without strength', () => {
+  // (Changed with the Poke Genie-compatible pick: with IVs known the shown pick is the stat-product emulation, which can pick any stage.)
   // Chewtle and Toxel have no PvPoke ranking in any league in the current snapshot (checked when this test was written).
   for (const l of ['gl', 'ul', 'ml']) for (const id of ['chewtle', 'drednaw']) assert.ok(!rankings.byLeague[l].has(id), `${id} is now ranked in ${l}: pick another unranked family`);
   // (Chewtle's family is wholly unreleased, so all of it stays eligible and the final form is still Drednaw.)
-  const L = leaguesOf(entry('Chewtle'));
+  const L = leaguesOf(entry('Chewtle', { ivs: null }));
   for (const l of ['gl', 'ul', 'ml']) {
     assert.equal(L[l].pick.speciesId, 'drednaw');
     assert.equal(L[l].strength, null);
     assert.equal(L[l].moves, null);
     assert.equal(L[l].needs, null);
-    assert.ok(L[l].iv);
+    assert.equal(L[l].raw.source, 'fallback');
+    assert.equal(L[l].raw.options.length, 2); // both stages are listed, neither ranked
   }
   // Unreleased finals are skipped: Girafarig's Farigiraf is not released. Toxel reaches the released plain Toxtricity through EVOLUTION_OVERRIDES
   // (the game master links only its two unreleased form ids), so its picks are Toxtricity where ranked and in the Master League fallback.
   for (const id of ['toxtricity_amped', 'toxtricity_low_key', 'farigiraf', 'basculegion_male']) assert.equal(gm.byId.get(id).released, false, `${id} is now released: pick another example`);
   assert.ok(!rankings.byLeague.ml.has('toxel') && !rankings.byLeague.ml.has('girafarig') && !rankings.byLeague.ml.has('farigiraf'), 'ranking data changed: pick another example');
   assert.equal(gm.byId.get('toxtricity').released, true);
-  for (const l of ['gl', 'ul', 'ml']) assert.equal(leaguesOf(entry('Toxel'))[l].pick.speciesId, 'toxtricity', l);
-  assert.equal(leaguesOf(entry('Girafarig')).ml.pick.speciesId, 'girafarig');
+  for (const l of ['gl', 'ul', 'ml']) assert.equal(leaguesOf(entry('Toxel', { ivs: null }))[l].pick.speciesId, 'toxtricity', l);
+  assert.equal(leaguesOf(entry('Girafarig', { ivs: null })).ml.pick.speciesId, 'girafarig');
   // A branching family takes the released final form with the higher CP at level 50 with 15/15/15 (no real family is unranked and branching, so a made-up one).
   const mon = (speciesId, atk, released = true, family = {}) => ({ speciesId, speciesName: speciesId, dex: 1, baseStats: { atk, def: 100, hp: 100 }, types: ['normal'], released, family: { id: 'F', ...family } });
   const fake = indexGamemaster({ timestamp: 0, moves: [], pokemon: [mon('a', 100, true, { evolutions: ['b', 'c', 'd'] }), mon('b', 150), mon('c', 200), mon('d', 300, false)] });
   const fakeCtx = { gm: fake, tiers: ctx.tiers, rankings: { byLeague: { gl: new Map(), ul: new Map(), ml: new Map() } } };
-  assert.equal(leaguesFor(entry('A'), { speciesId: 'a' }, fakeCtx).ul.pick.speciesId, 'c');
+  assert.equal(lf(entry('A', { ivs: null }), { speciesId: 'a' }, fakeCtx).ul.pick.speciesId, 'c');
 });
 
 test('analyseBox: resolved entries carry leagues, unresolved ones do not, and the result is plain JSON', () => {
@@ -236,7 +461,7 @@ test('gender-locked evolutions: a female Kirlia never picks Gallade, a female Le
   const row = box.find((p) => p.index === 89); // CSV line 90
   assert.equal(row.name, 'Lechonk');
   assert.equal(row.gender, '♀');
-  assert.equal(leaguesFor(row, resolveSpecies(gm, row.name, { form: row.form }), ctx).gl.pick.speciesId, 'oinkologne_female');
+  assert.equal(lf(row, resolveSpecies(gm, row.name, { form: row.form }), ctx).gl.pick.speciesId, 'oinkologne_female');
   // Unknown sex: Gallade stays a candidate and is labelled where it wins.
   const picked = ['gl', 'ul', 'ml'].map((l) => kirlia('')[l].pick).filter((p) => p.speciesId === 'gallade');
   assert.ok(picked.length > 0, 'Gallade should win at least one league for a Kirlia of unknown sex');
@@ -248,7 +473,7 @@ test('gender-locked evolutions: a female Kirlia never picks Gallade, a female Le
 test('shadow costs round per power-up: the Grubbin row matches Poke Genie to the dust and candy; purified rounds per step too', () => {
   const g = box.find((p) => p.name === 'Grubbin' && p.shadow);
   assert.ok(g && g.level === 8);
-  const L = leaguesFor(g, resolveSpecies(gm, g.name, { form: g.form, shadow: true }), ctx);
+  const L = lf(g, resolveSpecies(gm, g.name, { form: g.form, shadow: true }), ctx);
   for (const [key, league] of [['great', 'gl'], ['ultra', 'ul']]) {
     const c = g.pvp[key], cost = L[league].cost;
     assert.equal(cost.dust, c.dust, key);
@@ -276,7 +501,7 @@ test('Galarian Corsola evolves to Cursola: it is the Ultra pick (Galarian Corsol
   const e = entry('Corsola', { form: 'Galar' });
   const r = resolveSpecies(gm, e.name, { form: e.form });
   assert.equal(r.speciesId, 'corsola_galarian');
-  const L = leaguesFor(e, r, ctx);
+  const L = lf(e, r, ctx);
   // Galarian Corsola itself scores 91.5 in Great against Cursola's 60, and is unranked in Ultra and Master.
   assert.ok(rankings.byLeague.ul.has('cursola') && !rankings.byLeague.ul.has('corsola_galarian'), 'ranking data changed: pick another example');
   assert.equal(L.gl.pick.speciesId, 'corsola_galarian');
@@ -335,7 +560,7 @@ test('rank ties are exact products, not near ones: Ivysaur GL 11/7/14 and 5/5/6 
 });
 
 test('bad inputs are treated as unknown instead of throwing: odd IVs, odd levels, missing moves', () => {
-  const ok = leaguesOf(entry('Mareep'));
+  const ok = leaguesOf(entry('Mareep', { ivs: null })); // odd IVs are unknown IVs: the same pick as with none
   for (const ivs of [{ atk: 1.5, def: 3, hp: 4 }, { atk: 16, def: 3, hp: 4 }, { atk: -1, def: 3, hp: 4 }, { atk: 3, def: 3 }, { atk: '3', def: 3, hp: 4 }, { atk: NaN, def: 3, hp: 4 }]) {
     const L = leaguesOf(entry('Mareep', { ivs }));
     for (const league of ['gl', 'ul', 'ml']) {
@@ -360,7 +585,7 @@ test('the Mega check works on the raw id: a Mega the family walk reaches is neve
   // baseSpeciesId would turn b_mega into b, which is allowed; the raw id must be what is tested.
   const fake = indexGamemaster({ timestamp: 0, moves: [], pokemon: [mon('a', 100, { evolutions: ['b_mega'] }), mon('b', 100), mon('b_mega', 300)] });
   const fakeCtx = { gm: fake, tiers: ctx.tiers, rankings: { byLeague: { gl: new Map(), ul: new Map(), ml: new Map() } } };
-  assert.equal(leaguesFor(entry('A'), { speciesId: 'a' }, fakeCtx).ul.pick.speciesId, 'a');
+  assert.equal(lf(entry('A'), { speciesId: 'a' }, fakeCtx).ul.pick.speciesId, 'a');
 });
 
 test('rank tables built by walking from the neighbouring spread equal a fresh bisection per spread', () => {
@@ -411,4 +636,133 @@ test('purified costs round up per power-up like shadow costs (Bulbapedia Shadow 
   assert.equal(powerUpCost(31, 33, { purified: true }).candy, 24);    // 5.4 -> 6 per step, four steps
   assert.equal(powerUpCost(31, 33, { shadow: true }).candy, 32);      // 7.2 -> 8 per step
   assert.equal(powerUpCost(31, 33).candy, 24);
+});
+
+test('Master League: the shown pick is the highest PvPoke score, not the stat-product emulation (Poke Genie exports no Master League pick)', () => {
+  let rows = 0;
+  for (const p of box) {
+    const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
+    if (!r) continue;
+    const l = leaguesFor({ ...p, pvp: undefined }, r, ctx).ml;
+    const ranked = l.options.filter((o) => o.strength);
+    if (!ranked.length) { assert.equal(l.source, 'fallback'); continue; }
+    assert.equal(l.source, 'ranked', p.name);
+    assert.equal(l.options[l.pick].strength.score, Math.max(...ranked.map((o) => o.strength.score)), `${p.name} ${p.form}`);
+    rows++;
+  }
+  assert.ok(rows > 100, `${rows} rows checked`);
+  // Scyther: Scizor, not Kleavor (which the stat-product emulation preferred by ~0.07%); Great League is still emulated.
+  const scyther = rawOf(entry('Scyther', { ivs: { atk: 6, def: 7, hp: 12 }, level: 17 }));
+  assert.equal(shownOf(scyther.ml).speciesId, 'scizor');
+  assert.equal(scyther.ml.source, 'ranked');
+  assert.equal(scyther.gl.source, 'emulated');
+});
+
+test('experimental is never a member the copy is already too strong for; only a family with every member over the cap takes the shown pick', () => {
+  let checked = 0;
+  for (const p of box) {
+    const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
+    if (!r) continue;
+    const L = leaguesFor({ ...p, pvp: undefined }, r, ctx);
+    for (const league of ['gl', 'ul', 'ml']) {
+      const l = L[league];
+      if (l.options.some((o) => !o.overCap)) { assert.equal(l.options[l.experimental].overCap, false, `${p.name} ${league}`); checked++; }
+      else assert.equal(l.experimental, l.pick, `${p.name} ${league}`);
+    }
+  }
+  assert.ok(checked > 700, `${checked} leagues checked`);
+  // Magnezone (a family of one) at level 40 is past the Great League cap: nothing fits, so the experimental pick is the shown pick.
+  const all = rawOf(entry('Magnezone', { ivs: { atk: 2, def: 5, hp: 11 }, level: 40 })).gl;
+  assert.ok(all.options.every((o) => o.overCap));
+  assert.equal(all.experimental, all.pick);
+});
+
+test('moves are carried only on the shown and the experimental option', () => {
+  const L = rawOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, level: 17 }));
+  for (const league of ['gl', 'ul', 'ml']) {
+    const l = L[league];
+    l.options.forEach((o, i) => {
+      if (i === l.pick || i === l.experimental) assert.ok(o.strength ? o.moves : o.moves === null, `${league} ${o.speciesId}`);
+      else assert.equal(o.moves, null, `${league} ${o.speciesId}`);
+    });
+    assert.ok(l.options.filter((o) => o.moves).length <= 2);
+  }
+});
+
+test('overCap is CP at the current level over the cap: with unknown IVs it uses 0/0/0, with an unknown level it is never set', () => {
+  // Corviknight at level 35 is over the Great League cap even at 0/0/0, so unknown IVs do not hide it.
+  const unknown = rawOf(entry('Rookidee', { ivs: null, level: 35 })).gl;
+  assert.equal(unknown.options.find((o) => o.speciesId === 'corviknight').overCap, true);
+  assert.equal(unknown.options.find((o) => o.speciesId === 'rookidee').overCap, false);
+  assert.ok(unknown.options.every((o) => o.iv === null && o.cost === null));
+  const low = rawOf(entry('Rookidee', { ivs: null, level: 5 })).gl;
+  assert.ok(low.options.every((o) => !o.overCap));
+  assert.ok(rawOf(entry('Rookidee', { ivs: null, level: null })).gl.options.every((o) => !o.overCap));
+});
+
+test('a level 51 Best Buddy copy is over the cap only if its CP at 51 is: Cramorant and Seaking fit Ultra League, Talonflame does not', () => {
+  const hundo = { atk: 15, def: 15, hp: 15 };
+  const ul = (name) => rawOf(entry(name, { ivs: hundo, level: 51 })).ul;
+  for (const [name, id] of [['Cramorant', 'cramorant'], ['Seaking', 'seaking']]) {
+    const o = ul(name).options.find((x) => x.speciesId === id);
+    assert.equal(o.overCap, false, name);
+    assert.deepEqual(o.cost, { dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 50 }, `${name}: its best level (50) is below the current one, so nothing is left to pay`);
+  }
+  assert.equal(ul('Talonflame').options.find((x) => x.speciesId === 'talonflame').overCap, true);
+  // The same CP rule at level 50 and below.
+  assert.equal(rawOf(entry('Cramorant', { ivs: hundo, level: 50 })).ul.options.find((x) => x.speciesId === 'cramorant').overCap, false);
+});
+
+test('the shown pick is never a member the copy is past the cap for while another fits, whatever decides it', () => {
+  // Unknown IVs, the score rule: a level-35 Rookidee shows Corvisquire or Rookidee in Great League, not the top-scoring Corviknight.
+  const gl = rawOf(entry('Rookidee', { ivs: null, level: 35 })).gl;
+  assert.equal(gl.source, 'ranked');
+  assert.equal(gl.options.find((o) => o.speciesId === 'corviknight').overCap, true);
+  assert.ok(['corvisquire', 'rookidee'].includes(shownOf(gl).speciesId), shownOf(gl).speciesId);
+  // The fallback: nothing ranked, the final evolution is past the cap, so the first member that fits.
+  const chew = rawOf(entry('Chewtle', { ivs: null, level: 40 })).gl;
+  assert.equal(chew.options.find((o) => o.speciesId === 'drednaw').overCap, true);
+  assert.equal(chew.source, 'fallback');
+  assert.equal(shownOf(chew).speciesId, 'chewtle');
+  // The invariant over the fixture, with and without IVs, for the Poke Genie-free paths (the export's own pick is copied as it is).
+  let checked = 0;
+  for (const p of box) {
+    const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
+    if (!r) continue;
+    for (const ivs of [p.ivs, null]) {
+      const L = leaguesFor({ ...p, ivs, pvp: undefined }, r, ctx);
+      for (const league of ['gl', 'ul', 'ml']) {
+        const l = L[league];
+        if (l.options.some((o) => !o.overCap)) { assert.equal(shownOf(l).overCap, false, `${p.name} ${league} ${ivs ? 'IVs' : 'no IVs'}`); checked++; }
+      }
+    }
+  }
+  assert.ok(checked > 1500, `${checked} leagues checked`);
+});
+
+test('a CP exactly at the cap fits; the next half level, whose CP is over the cap, does not', () => {
+  // Find a single-stage species and a level whose CP with 15/15/15 is exactly the Great League cap (1500), then one whose CP is 1501+.
+  const hundo = { atk: 15, def: 15, hp: 15 };
+  let exact = null;
+  for (const s of gm.species ?? [...gm.byId.values()]) {
+    if (!s.baseStats || evolutionsOf(gm, s.speciesId).length || s.speciesId.includes('_')) continue;
+    for (let level = 1; level <= 50 && !exact; level += 0.5) if (cpAt(s.baseStats, hundo, level) === 1500) exact = { id: s.speciesId, name: s.speciesName, level };
+    if (exact) break;
+  }
+  assert.ok(exact, 'no species reaches exactly 1500 CP at some level with 15/15/15');
+  const at = rawOf(entry(exact.name, { ivs: hundo, level: exact.level })).gl.options.find((o) => o.speciesId === exact.id);
+  assert.equal(at.overCap, false);
+  const over = rawOf(entry(exact.name, { ivs: hundo, level: exact.level + 0.5 })).gl.options.find((o) => o.speciesId === exact.id);
+  assert.ok(cpAt(gm.byId.get(exact.id).baseStats, hundo, exact.level + 0.5) > 1500);
+  assert.equal(over.overCap, true);
+});
+
+test("'fallback' also covers ranked members that are all past the cap: a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League", () => {
+  const ul = rawOf(entry('Bulbasaur', { ivs: null, level: 50 })).ul;
+  const ranked = ul.options.filter((o) => o.strength);
+  assert.ok(ranked.length && ranked.every((o) => o.overCap), 'every ranked member is past the cap');
+  assert.equal(ul.source, 'fallback');
+  assert.equal(shownOf(ul).overCap, false);
+  assert.equal(shownOf(ul).speciesId, 'ivysaur');
+  assert.equal(shownOf(ul).strength, null);
 });

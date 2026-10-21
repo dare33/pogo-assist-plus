@@ -183,7 +183,7 @@ struct PokemonDetailView: View {
                 if a.isEmpty { Text("The advisor has nothing for this Pokémon.").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
                 ForEach(Array(a.builds.enumerated()), id: \.element.id) { n, b in
                     if n > 0 { Rectangle().fill(accent.ink.opacity(0.18)).frame(height: 1).padding(.vertical, 4) }
-                    Text(b.action + (b.needsDynamax ? " (Max needs a Dynamax copy)" : "") + (b.pvp.map { " (\($0))" } ?? "")).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
+                    Text(b.action + (b.pvp.map { " (\($0))" } ?? "")).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
                     HStack(spacing: 6) {
                         ForEach(b.areas, id: \.self) { tag($0) }
                         if !b.tier.isEmpty { tag("Tier \(b.tier)") }
@@ -214,7 +214,7 @@ struct PokemonDetailView: View {
                     Text("LEAGUES").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
                         .accessibilityIdentifier("leagues-panel")
                     ForEach(LeagueText.keys, id: \.self) { key in
-                        if let r = ratings[key] { leagueRow(key, r, levelKnown: e.row.level != nil) }
+                        if let r = ratings[key] { leagueRow(key, r, levelKnown: e.row.level != nil, level: e.row.level) }
                     }
                     Text(LeagueText.footnote).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
@@ -222,8 +222,8 @@ struct PokemonDetailView: View {
         }
     }
 
-    private func leagueRow(_ key: String, _ r: BoxAdvice.LeagueRating, levelKnown: Bool) -> some View {
-        let lines = [LeagueText.pick(r), LeagueText.strength(r, key: key), LeagueText.ivs(r, key: key), LeagueText.moves(r), LeagueText.needs(r), LeagueText.cost(r, levelKnown: levelKnown)].compactMap { $0 }
+    private func leagueRow(_ key: String, _ r: BoxAdvice.LeagueRating, levelKnown: Bool, level: Double?) -> some View {
+        let lines = [LeagueText.pick(r), LeagueText.strength(r, key: key), LeagueText.ivs(r, key: key), LeagueText.moves(r), LeagueText.needs(r), LeagueText.cost(r, levelKnown: levelKnown, level: level, key: key)].compactMap { $0 }
         return VStack(alignment: .leading, spacing: 3) {
             Text(LeagueText.name(key)).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink)
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
@@ -297,7 +297,7 @@ struct BuildRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             if showName { Text(build.title).font(.callout.weight(.medium)) }
-            Text(build.action + (build.needsDynamax ? " (Max needs a Dynamax copy)" : "") + (build.pvp.map { " (\($0))" } ?? "")).font(showName ? .callout : .callout.weight(.medium))
+            Text(build.action + (build.pvp.map { " (\($0))" } ?? "")).font(showName ? .callout : .callout.weight(.medium))
             if showName {
                 Text("CP \(build.cp)" + (build.ivs.map { ", IVs \($0)" } ?? "") + (build.level.map { ", level \(Fmt.number($0))" } ?? "")).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
             }
@@ -308,9 +308,10 @@ struct BuildRow: View {
     }
     var costLine: String {
         let from = build.level.map { "Level \(Fmt.number($0))" } ?? ""
-        let to = build.targetLevel.map { $0 > (build.level ?? 0) ? " to \(Fmt.number($0))" : "" } ?? ""
-        let cost = build.dust == 0 && build.candy == 0 && build.xl == 0 && build.eliteTMs == 0 ? "nothing to spend" : build.costText
-        return (from.isEmpty ? "" : from + to + ": ") + cost
+        let to = build.climbLevel.map { $0 > (build.level ?? 0) ? " to \(Fmt.number($0))" : "" } ?? ""
+        let cost = build.dust == 0 && build.candy == 0 && build.xl == 0 ? "no dust or candy to spend" : build.costText
+        let line = (from.isEmpty ? "" : from + to + ": ") + cost
+        return build.leavesLeagueText.map { line + "; " + $0 } ?? line
     }
 }
 
