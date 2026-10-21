@@ -500,11 +500,13 @@ final class ImportQueueTests: XCTestCase {
         l.entries = (0..<2).map { entry($0, provisional: true) } + (2..<(ImportLedger.maxEntries + 3)).map { entry($0, provisional: false) }
         try FileManager.default.createDirectory(at: queue.root, withIntermediateDirectories: true)
         try ImportQueue.writeAtomically(try ImportQueue.encoder.encode(l), to: queue.ledgerURL)
-        // a provisional write trims
+        // a provisional write does not trim (its keys are protected until the save is settled); confirming it does
         try queue.recordProvisional(m.items, batchId: m.batchId, signature: "import:t", account: "Main", epoch: nil, born: nil)
+        XCTAssertGreaterThan(queue.ledger().entries.count, ImportLedger.maxEntries)
+        try queue.confirmProvisional(signature: "import:t")
         var now = queue.ledger()
         XCTAssertLessThanOrEqual(now.entries.count, ImportLedger.maxEntries)
-        XCTAssertGreaterThanOrEqual(now.entries.filter { $0.provisional == true }.count, 3, "the two old provisional entries and the new ones all stay")
+        XCTAssertGreaterThanOrEqual(now.entries.filter { $0.provisional == true }.count, 2, "the two old provisional entries stay")
         // so does a confirmed write (recordSaved)
         try queue.recordSaved(m.items, batchId: m.batchId, account: "Other")
         now = queue.ledger()
@@ -551,5 +553,46 @@ final class ImportQueueTests: XCTestCase {
         let names = try FileManager.default.contentsOfDirectory(atPath: queue.root.path).filter { $0.hasPrefix("ledger.damaged") }.sorted()
         XCTAssertEqual(names, ["ledger.damaged-2.json", "ledger.damaged-3.json", "ledger.damaged.json"])
         XCTAssertTrue(queue.ledger().entries.isEmpty)
+    }
+
+    /// The cap is by KEY recency: saving one screenshot again and again leaves one entry per key, and does not push out another screenshot imported more recently than the oldest.
+    func testRepeatedImportItAgainDoesNotEvictAnotherScreenshot() throws {
+        func item(_ i: Int) -> ImportItem { ImportItem(id: "i\(i)", file: "f", sourceHash: "k\(i)", stagedHash: "t\(i)", width: 1, height: 1) }
+        let perItem = 2
+        let count = ImportLedger.maxEntries / perItem
+        var l = ImportLedger()
+        for i in 0..<count { for k in item(i).keys { l.entries.append(.init(account: "Main", key: k, batchId: "b", savedAt: Date(timeIntervalSince1970: 1_800_000_000 + Double(i)), epoch: nil, born: nil)) } }
+        XCTAssertEqual(l.entries.count, ImportLedger.maxEntries)   // full
+        try FileManager.default.createDirectory(at: queue.root, withIntermediateDirectories: true)
+        try ImportQueue.writeAtomically(try ImportQueue.encoder.encode(l), to: queue.ledgerURL)
+        // the OLDEST screenshot is saved again five times, each save with its own signature
+        let now = Date(timeIntervalSince1970: 1_800_000_000 + Double(count) + 10)
+        for n in 0..<5 {
+            try queue.recordProvisional([item(0)], batchId: "again\(n)", signature: "import:again\(n)", account: "Main", epoch: nil, born: nil, now: now.addingTimeInterval(Double(n)))
+            try queue.confirmProvisional(signature: "import:again\(n)")
+        }
+        let after = queue.ledger()
+        let keys = Set(after.entries.map(\.key))
+        for i in [1, 2, count / 2, count - 1] { XCTAssertTrue(item(i).keys.allSatisfy(keys.contains), "screenshot \(i) was pushed out by repeated saves of screenshot 0") }
+        XCTAssertEqual(after.entries.filter { $0.key == "h:k0" }.count, 1, "the older duplicates of the repeated key were dropped")
+        XCTAssertLessThanOrEqual(after.entries.count, ImportLedger.maxEntries)
+    }
+
+    func testWhenStillOverTheKeysWhoseLatestEntryIsOldestGoFirstAndNeverOnesWithAProvisionalEntry() {
+        var l = ImportLedger()
+        func e(_ k: String, _ t: Double, prov: Bool = false) -> ImportLedger.Entry { .init(account: "A", key: k, batchId: "b", savedAt: Date(timeIntervalSince1970: t), epoch: nil, born: nil, signature: prov ? "s" : nil, provisional: prov ? true : nil) }
+        l.entries = (0..<ImportLedger.maxEntries).map { e("k\($0)", Double($0 + 10)) } + [e("old", 1), e("old", 2), e("oldProv", 0, prov: true), e("oldProv", 0.5)]
+        l.trim()
+        XCTAssertLessThanOrEqual(l.entries.count, ImportLedger.maxEntries)
+        XCTAssertTrue(l.entries.contains { $0.key == "oldProv" && $0.provisional == true }, "a key with a provisional entry stays")
+        XCTAssertFalse(l.entries.contains { $0.key == "old" }, "the key whose latest entry is oldest goes, all its entries together")
+        XCTAssertTrue(l.entries.contains { $0.key == "k\(ImportLedger.maxEntries - 1)" })
+    }
+
+    func testAProvisionalEntryIsNotPrunedByAgeWhenAnotherSaveIsRecorded() throws {
+        let m = try makeBatch([110]), n = try makeBatch([111])
+        try queue.recordProvisional(m.items, batchId: m.batchId, signature: "import:old", account: "Main", epoch: nil, born: nil, now: Date(timeIntervalSinceNow: -400 * 24 * 3600))
+        try queue.recordProvisional(n.items, batchId: n.batchId, signature: "import:new", account: "Main", epoch: nil, born: nil)
+        XCTAssertTrue(queue.ledger().entries.contains { $0.signature == "import:old" && $0.provisional == true })
     }
 }

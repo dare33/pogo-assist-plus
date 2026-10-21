@@ -427,16 +427,17 @@ final class ScreenshotImporterTests: XCTestCase {
         let saved = try stage([try rayquaza])
         guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
         _ = try lib.mutate(account: "Main", reason: .edit, note: "lower CP") { e in var e = e; e[0].row.cp = 3900; return e }
-        let m = try stage([try rayquazaFainted])
+        let m = try stage([try rayquazaFainted, try nickit])   // the first is an unsure row, left out; the second is saved
         let p = try review(m)
         XCTAssertEqual(p.plan.unsure.count, 1)
         struct Cut: Error {}
         XCTAssertThrowsError(try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine, afterCommit: { throw Cut() }))
         let written = try XCTUnwrap(try queue.load(m.batchId).pendingSave, "what the save contained was written down before the box")
-        XCTAssertEqual(written.items, []); XCTAssertEqual(written.leftOut, [m.items[0].id]); XCTAssertEqual(written.account, "Main")
+        XCTAssertEqual(written.items, [m.items[1].id]); XCTAssertEqual(written.leftOut, [m.items[0].id]); XCTAssertEqual(written.account, "Main")
         importer = makeImporter()
         _ = try importer.prepareAll(engine: sharedEngine)
         XCTAssertNil(queue.ledger().savedAt(account: "Main", keys: m.items[0].keys), "a left-out screenshot is not in the ledger as saved")
+        XCTAssertNotNil(queue.ledger().savedAt(account: "Main", keys: m.items[1].keys))
         XCTAssertThrowsError(try queue.load(m.batchId), "and it is not kept to be asked about again")
     }
 
@@ -788,7 +789,7 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertEqual(try queue.load(m.batchId).items[1].repeatOf, m.items[0].id, "held as a repeat of the first")
         let p = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
         let u = try XCTUnwrap(p.plan.unsure.first)
-        guard case .saved = try importer.save(p, resolutions: [u.scanned: .leaveOut], engine: sharedEngine) else { return XCTFail() }
+        _ = try importer.save(p, resolutions: [u.scanned: .leaveOut], engine: sharedEngine)   // (a save, or, when every row is left out, nothing to save: the batch is retired either way)
         let left = try queue.load(m.batchId)
         let ids = Set(left.items.map(\.id))
         XCTAssertFalse(left.items.contains { $0.repeatOf.map { !ids.contains($0) } ?? false }, "held back as a repeat of a screenshot that is no longer in the batch")
@@ -1550,7 +1551,7 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertEqual(try lib.history(account: "Main").count, 0, "the same save written into a second box")
     }
 
-    /// A save whose every key was already held still leaves a record (a marker entry), so a stale review later is recognised.
+    /// A save whose every key was already held still leaves a record (its own key entries are always written), so a stale review later is recognised.
     func testASaveOfOnlyKnownKeysStillLeavesARecord() throws {
         let first = try stage([try nickit])
         guard case .saved = try importer.save(try review(first), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
@@ -1734,7 +1735,7 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertTrue(try importer.startNewImportRecord(engine: sharedEngine))
         XCTAssertThrowsError(try queue.load(m.batchId), "the interrupted save was finished from the box version")
         XCTAssertEqual(try lib.history(account: "Main").count, 1)
-        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine), "and the stale review cannot save it again")
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine), "and the stale review cannot save it again") { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .staleReview) }
         XCTAssertEqual(try lib.history(account: "Main").count, 1)
     }
 
@@ -1780,5 +1781,34 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertEqual(try lib.history(account: "Main").count, 0)
         guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
         XCTAssertEqual(try lib.history(account: "Other").count, 1)
+    }
+
+    /// HM3 (the generation half of the stale-review guard). Part saved into Other, the batch given back to Main, the ledger restarted: a review made for Main before all that must not save into Main.
+    func testAReviewMadeBeforeAPartialSaveElsewhereAndAMoveBackIsRefused() throws {
+        try lib.createAccount("Other")
+        let m = try stage([try nickit, try retake(try nickit, 7)])
+        let p1 = try review(m)
+        _ = try importer.assign(batch: m.batchId, to: "Other")
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try importer.assign(batch: m.batchId, to: "Main")
+        try Data("{ lost".utf8).write(to: queue.root.appendingPathComponent("ledger.json"))
+        XCTAssertTrue(try importer.startNewImportRecord(engine: sharedEngine))
+        XCTAssertThrowsError(try importer.save(p1, resolutions: [:], engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .staleReview) }
+        XCTAssertEqual(try lib.history(account: "Main").count, 0, "saved into Main what Other already holds")
+    }
+
+    /// A save in which every row is left out writes no box version and no key, and the batch is finished.
+    func testASaveWithEveryRowLeftOutWritesNothingToTheBox() throws {
+        let saved = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try lib.mutate(account: "Main", reason: .edit, note: "lower CP") { e in var e = e; e[0].row.cp = 3900; return e }
+        let m = try stage([try rayquazaFainted])
+        let p = try review(m)
+        XCTAssertEqual(p.plan.unsure.count, 1)
+        let versions = try lib.history(account: "Main").count, scans = try lib.store.list(account: "Main").scans.count
+        guard case .nothingToSave = try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine) else { return XCTFail("a save with every row left out wrote to the box") }
+        XCTAssertEqual(try lib.history(account: "Main").count, versions); XCTAssertEqual(try lib.store.list(account: "Main").scans.count, scans)
+        XCTAssertThrowsError(try queue.load(m.batchId), "the batch is finished")
+        XCTAssertEqual(queue.hasRecord(ofSave: m.signature), false, "and no key was written for it")
     }
 }

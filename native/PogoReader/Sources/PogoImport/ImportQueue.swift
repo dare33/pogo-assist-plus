@@ -309,13 +309,22 @@ public struct ImportLedger: Codable, Equatable {
         return (date, hits.allSatisfy { $0.provisional == true })
     }
 
-    /// Keep to `maxEntries`: the oldest CONFIRMED entries go first, and a provisional entry is never evicted (it may be the only thing standing between a screenshot and a second save).
+    /// Keep to `maxEntries`, by the recency of each KEY, not of each entry: a key's protection lasts as long as its most recent import. First, older duplicate entries of a key that has a newer
+    /// CONFIRMED entry go (repeated "Import it again" saves of one screenshot leave one entry, not many); if it is still over, the keys whose most recent entry is oldest go, all their entries
+    /// together. A key with any provisional entry is never evicted (it may be the only thing standing between a screenshot and a second save).
     mutating func trim() {
+        guard entries.count > Self.maxEntries else { return }
+        struct K: Hashable { var account: String; var key: String }
+        var newest = [K: Date]()
+        for e in entries where e.provisional != true { newest[K(account: e.account, key: e.key)] = max(newest[K(account: e.account, key: e.key)] ?? .distantPast, e.savedAt) }
+        entries.removeAll { e in e.provisional != true && (newest[K(account: e.account, key: e.key)] ?? .distantPast) > e.savedAt }
         var over = entries.count - Self.maxEntries
         guard over > 0 else { return }
-        var i = 0
-        while over > 0, i < entries.count {
-            if entries[i].provisional == true { i += 1 } else { entries.remove(at: i); over -= 1 }
+        let protected = Set(entries.filter { $0.provisional == true }.map { K(account: $0.account, key: $0.key) })
+        for (k, _) in newest.sorted(by: { $0.value < $1.value }) where over > 0 && !protected.contains(k) {
+            let before = entries.count
+            entries.removeAll { $0.provisional != true && K(account: $0.account, key: $0.key) == k }
+            over -= before - entries.count
         }
     }
 }
@@ -349,7 +358,8 @@ extension ImportQueue {
     }
 
     /// Write the keys of a save that is ABOUT to be made, as provisional entries tagged with its signature and the destination account's identity. Called before the box is written; if it
-    /// fails the box is not written. Keys already held for this account (confirmed, or provisional for another save) are not added again.
+    /// fails the box is not written. Every key of the save is written under THIS save's signature and date, whoever else already holds it (a key another unresolved save has only provisionally must
+    /// still be written for this one, and a screenshot saved again renews its protection); a key already written under this signature for this account is not written twice.
     public func recordProvisional(_ items: [ImportItem], batchId: String, signature: String, account: String, epoch: Int?, born: Double?, now: Date = Date()) throws {
         try ledgerFailure?()
         var l = try loadLedger()
@@ -360,7 +370,8 @@ extension ImportQueue {
         for item in items { for k in item.keys where !mine.contains(k) {
             l.entries.append(.init(account: account, key: k, batchId: batchId, savedAt: now, epoch: epoch, born: born, signature: signature, provisional: true))
         } }
-        l.trim()
+        // not trimmed here: a provisional entry's key is protected, and the older entries of that key are only redundant once the save is CONFIRMED (a save that never happens must not have cost
+        // them). The overflow is as big as the saves still unresolved; `confirmProvisional` trims.
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
     }
@@ -392,6 +403,7 @@ extension ImportQueue {
         var l = try loadLedger()
         guard l.entries.contains(where: { $0.signature == signature && $0.provisional == true }) else { return }
         for i in l.entries.indices where l.entries[i].signature == signature { l.entries[i].provisional = nil }
+        l.trim()
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
     }
 
