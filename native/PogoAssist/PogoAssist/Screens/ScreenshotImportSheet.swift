@@ -219,7 +219,11 @@ private struct ItemRow: View {
             if let earlier = item.repeatOf, let at = batch.items.firstIndex(where: { $0.id == earlier }) {
                 return "\(title). Looks like the Pokémon in screenshot \(at + 1): a second screenshot of it, or another Pokémon with the same species and IVs. Held back until you say."
             }
-            if let when = item.alreadyImported { return "\(title). This screenshot was imported on \(when.formatted(date: .abbreviated, time: .omitted)), so it is held back." }
+            if item.ledgerUnknown == true { return "\(title). The record of what was imported before could not be read, so this is held back until you say." }
+            if let when = item.alreadyImported {
+                let day = when.formatted(date: .abbreviated, time: .omitted)
+                return item.alreadyImportedMaybe == true ? "\(title). A save of this screenshot on \(day) may already have been made, so it is held back." : "\(title). This screenshot was imported on \(day), so it is held back."
+            }
             return "\(title). Will be added, or matched to a Pokémon already in the box and left unchanged."
         case .ivsMissing:
             return [StillImport.title(of: item), item.detail].compactMap { $0 }.joined(separator: ": ") + " Not added, because the IVs are what make a Pokémon known."
