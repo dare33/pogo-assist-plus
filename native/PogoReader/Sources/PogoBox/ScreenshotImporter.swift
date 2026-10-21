@@ -40,6 +40,8 @@ public final class ScreenshotImporter {
         case couldNotRecordSave
         /// The record of what was imported is damaged and cannot be read: nothing was saved, and the damaged file is kept aside.
         case importRecordUnreadable
+        /// The review is not the batch's current state (it was saved, partly saved or moved to another account since the review was made): nothing was saved.
+        case staleReview
         case nothingToImport
         case notYetRead
         /// The account's saved scans could not be read well enough to tell whether this batch was already saved; saving now could make a second copy.
@@ -54,13 +56,14 @@ public final class ScreenshotImporter {
             case .finishingLastSave(let found):
                 return found ? "The last save of these screenshots is in your box, but the record of it could not be finished yet, so nothing was added again. This is tried again each time the app comes to the front; you can also discard this batch."
                              : "A save of these screenshots was started earlier and may already be in your box: it could not be checked yet (a file could not be read or written), so nothing was added again. This is tried again each time the app comes to the front; you can also discard this batch."
+            case .staleReview: return "These screenshots have changed since this review was opened (a save of them was made, or they were given to another account), so nothing was saved. Open the review again."
             case .importRecordUnreadable: return "Nothing was saved: the record of what has been imported could not be read. Your box has not been changed, and the damaged file was kept."
             case .couldNotRecordSave: return "Nothing was saved: the record that keeps a screenshot from being imported twice could not be written. Your box has not been changed. Try again."
             case .noSuchAccount(let n): return "There is no account called \(n) on this phone."
             case .accountAmbiguous(let old, let now): return "These screenshots were for the account that was called \(old) and is now \(now), but there is another account called \(old) now. Choose which box they belong to."
             case .nothingToImport: return "None of the screenshots gave a Pokémon that can be added."
             case .notYetRead: return "The screenshots have not all been read yet."
-            case .cannotTellIfSaved: return "The box could not be checked for an earlier save of these screenshots (a file in it could not be read), so nothing was saved. Trying again will not change that: discard these screenshots and share them again, or restore the box from Settings."
+            case .cannotTellIfSaved: return "The box could not be checked for an earlier save of these screenshots (a file in it could not be read), so nothing was saved. Trying again will not change that: discard these screenshots and share them again."
             }
         }
     }
@@ -445,6 +448,9 @@ public final class ScreenshotImporter {
         case .undetermined: throw Failure.cannotTellIfSaved
         case .notFound: break
         }
+        // Not in any box, but the review must still be the batch as it stands: after a save of part of it, or a move to another account, a review of the old state is not saved (that would be a
+        // second save of what the first already holds, or into a box the batch no longer belongs to), whatever the ledger does or does not remember.
+        guard let current = try? queue.load(p.manifest.batchId), current.generation == p.manifest.generation, current.account == p.manifest.account else { throw Failure.staleReview }
         // Refused (not written over it) if the box has changed since the review was prepared: the caller prepares again.
         let entries = try BoxMerge.apply(p.plan, resolutions: resolutions, keepGone: [], to: p.base, engine: engine)
         // Which screenshots this save contains, written down BEFORE the box is. First their keys go in the ledger as provisional entries tagged with this save's signature and the destination's

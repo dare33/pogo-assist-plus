@@ -1701,4 +1701,84 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertNotNil(try queue.load(m.batchId).pendingSave, "not concluded to be in no box while a rename may be half done")
         XCTAssertFalse(queue.ledger().entries.isEmpty)
     }
+
+    // MARK: the last fold
+
+    /// An explicit "Import it again" save renews the protection of the screenshot's keys, so pruning the older entry cannot leave it unprotected.
+    func testImportItAgainRenewsTheKeysWithTheNewSavesDate() throws {
+        let first = try stage([try nickit])
+        let t0 = Date().addingTimeInterval(-364 * 24 * 3600)
+        try queue.recordSaved(first.items, batchId: "old", account: "Main", now: t0)   // imported almost a year ago
+        try importer.discard(batch: first.batchId)   // (only its keys matter)
+        let again = try stage([try nickit], now: Date().addingTimeInterval(5))
+        try importer.readAll(batch: again.batchId, engine: sharedEngine)
+        XCTAssertTrue(try queue.load(again.batchId).items[0].heldBack)
+        try importer.setIncluded(batch: again.batchId, item: again.items[0].id, true)
+        guard case .saved = try importer.save(try importer.prepareReview(batch: again.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        // two days on, the year-old entry is pruned by any write; the renewed one is not
+        try queue.recordSaved(first.items, batchId: "later", account: "Other", now: Date().addingTimeInterval(2 * 24 * 3600))
+        XCTAssertTrue(queue.ledger().entries.contains { $0.signature == again.signature && Set(first.items[0].keys).contains($0.key) && $0.provisional != true }, "the new save's own entries stay")
+        XCTAssertFalse(queue.ledger().entries.contains { $0.batchId == "old" }, "the old ones were pruned")
+        let third = try stage([try nickit], now: Date().addingTimeInterval(9))
+        try importer.readAll(batch: third.batchId, engine: sharedEngine)
+        XCTAssertNotNil(try queue.load(third.batchId).items[0].alreadyImported, "still held: protection was renewed")
+    }
+
+    /// H10B. Cut off after the box write, then the ledger is lost and restarted: the note makes the recovery ask the boxes, finds the save by the version's own signature and finishes it, so no
+    /// second save can be made.
+    func testACutOffSaveStillFoundWhenTheLedgerIsLostAndRestarted() throws {
+        let m = try stage([try nickit])
+        let p = try review(m)
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine, afterCommit: { throw Cut() }))
+        try Data("{ lost".utf8).write(to: queue.root.appendingPathComponent("ledger.json"))
+        XCTAssertTrue(try importer.startNewImportRecord(engine: sharedEngine))
+        XCTAssertThrowsError(try queue.load(m.batchId), "the interrupted save was finished from the box version")
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine), "and the stale review cannot save it again")
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+    }
+
+    /// H10A. A stale review of a batch that has since been (partly) saved into another account is refused when the ledger no longer remembers, with a clear message.
+    func testAStaleCrossAccountReviewIsRefusedAfterTheLedgerWasRestarted() throws {
+        try lib.createAccount("Other")
+        let m = try stage([try nickit, try retake(try nickit, 7)])
+        let p1 = try review(m)
+        _ = try importer.assign(batch: m.batchId, to: "Other")
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertNotNil(try? queue.load(m.batchId), "the held repeat keeps the batch")
+        try Data("{ lost".utf8).write(to: queue.root.appendingPathComponent("ledger.json"))
+        XCTAssertTrue(try importer.startNewImportRecord(engine: sharedEngine))
+        XCTAssertThrowsError(try importer.save(p1, resolutions: [:], engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .staleReview) }
+        XCTAssertEqual(try lib.history(account: "Main").count, 0, "the same save was written into a second box")
+        XCTAssertTrue((ScreenshotImporter.Failure.staleReview.errorDescription ?? "").contains("Open the review again"))
+        XCTAssertFalse((ScreenshotImporter.Failure.cannotTellIfSaved.errorDescription ?? "").contains("Settings"))
+    }
+
+    /// H10C2. A version with no signature of its own that names a READABLE scan carrying the signature is that save (and the scan is not deleted as an orphan).
+    func testAVersionWithoutASignatureThatPointsAtTheSavesReadableScanIsThatSave() throws {
+        let m = try stage([try nickit])
+        let p = try review(m)
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine, afterCommit: { throw Cut() }))
+        let box = try lib.store.accountDirectory("Main", create: false).appendingPathComponent("box/000001.json")
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: box)) as? [String: Any])
+        json.removeValue(forKey: "sourceSignature")
+        try JSONSerialization.data(withJSONObject: json).write(to: box)
+        XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: m.signature), .saved)
+        _ = try importer.prepareAll(engine: sharedEngine)
+        XCTAssertThrowsError(try queue.load(m.batchId), "found and finished")
+        XCTAssertEqual(try lib.store.list(account: "Main").scans.count, 1, "the scan the version points at was not deleted as an orphan")
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+    }
+
+    /// A review made for one account is not saved after the batch was given to another (the generation is unchanged, only the account differs).
+    func testAReviewIsRefusedWhenTheBatchWasGivenToAnotherAccountMeanwhile() throws {
+        try lib.createAccount("Other")
+        let m = try stage([try nickit])
+        let p = try review(m)
+        _ = try importer.assign(batch: m.batchId, to: "Other")
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .staleReview) }
+        XCTAssertEqual(try lib.history(account: "Main").count, 0)
+        guard case .saved = try importer.save(try importer.prepareReview(batch: m.batchId, engine: sharedEngine), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertEqual(try lib.history(account: "Other").count, 1)
+    }
 }

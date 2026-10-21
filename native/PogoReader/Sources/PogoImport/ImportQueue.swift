@@ -326,7 +326,7 @@ extension ImportQueue {
     /// The ledger as it is, for looking at (tests, the sheet): an unreadable one shows as empty here. Everything that decides or writes uses `loadLedger`.
     public func ledger() -> ImportLedger { (try? loadLedger()) ?? ImportLedger() }
 
-    /// The ledger; absent is empty, but one that is there and cannot be decoded THROWS (`ledgerUnreadable`) and is copied aside once (`ledger.damaged-<n>.json`), never treated as empty and never
+    /// The ledger; absent is empty, but one that is there and cannot be decoded THROWS (`ledgerUnreadable`) and is copied aside once (`ledger.damaged.json`; `startNewLedger` keeps any further damaged file as `ledger.damaged-<n>.json`), never treated as empty and never
     /// written over.
     public func loadLedger() throws -> ImportLedger {
         guard fm.fileExists(atPath: ledgerURL.path) else { return ImportLedger() }
@@ -354,23 +354,16 @@ extension ImportQueue {
         try ledgerFailure?()
         var l = try loadLedger()
         l.entries.removeAll { now.timeIntervalSince($0.savedAt) > ImportLedger.keepFor && $0.provisional != true }
-        // only CONFIRMED entries say a key is held: a key another, unresolved save has only provisionally must still be written for this one, or removing that save's entries would lose it
-        let known = Set(l.entries.filter { $0.account == account && $0.provisional != true }.map(\.key))
+        // Every key of this save is written under ITS signature and date, whoever else already holds it: a key another unresolved save has only provisionally must still be written for this one (or
+        // removing that save's entries would lose it), and a screenshot saved again ("Import it again") renews its protection, so the pruning of an older entry cannot leave it unprotected.
         let mine = Set(l.entries.filter { $0.signature == signature && $0.account == account }.map(\.key))
-        for item in items { for k in item.keys where !known.contains(k) && !mine.contains(k) {
+        for item in items { for k in item.keys where !mine.contains(k) {
             l.entries.append(.init(account: account, key: k, batchId: batchId, savedAt: now, epoch: epoch, born: born, signature: signature, provisional: true))
         } }
-        // The save always leaves a record under its signature, even when every key was already held (an "import it again"): a marker entry (it matches no screenshot). A save is known to have
-        // been started by there being an entry, or the batch's note; without either it never reached a box.
-        if !l.entries.contains(where: { $0.signature == signature && $0.account == account }) {
-            l.entries.append(.init(account: account, key: Self.saveMarkerPrefix + signature, batchId: batchId, savedAt: now, epoch: epoch, born: born, signature: signature, provisional: true))
-        }
         l.trim()
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
     }
-
-    static let saveMarkerPrefix = "save:"
 
     /// Whether the ledger has any entry, provisional or confirmed, under this save's signature: the record that a save was started. nil when the ledger cannot be read (nothing can be said).
     public func hasRecord(ofSave signature: String) -> Bool? {
