@@ -173,74 +173,266 @@ final class BoxLibraryTests: XCTestCase {
     func testAdviceFromBeforeLeaguesIsDroppedAndLeaguesDecode() throws {
         try lib.commit(account: "a", entries: entries([100]), reason: .scan, note: "one", now: date(1))
         let box = try XCTUnwrap(lib.current(account: "a")).entries
+        // The shape leaguesFor returns: options (ranked first), then pick / experimental indexes and a source. Unranked members carry no
+        // strength and no moves (so no needs either, whatever the entry knows).
         let json = """
         {"pokemon":[{"p":{"index":1},"hits":[],"leagues":{
-          "gl":{"pick":{"speciesId":"toxapex","name":"Toxapex","self":false},"strength":{"score":91.8,"rank":23,"of":1152},
-                "moves":{"fast":"Poison Jab","charged":["Brine","Sludge Wave"]},"needs":null,
-                "iv":{"rank":5,"pct":99.1,"rankPct":97.2,"level":24.5,"cp":1497},"overCap":false,
-                "cost":{"dust":175000,"candy":120,"xl":0,"evolveCandy":50,"toLevel":24.5}},
-          "ul":{"pick":{"speciesId":"mareanie","name":"Mareanie","self":true},"strength":null,"moves":null,"needs":["Brine","Poison Jab"],
-                "iv":null,"overCap":true,"cost":null}}}]}
+          "gl":{"options":[
+                  {"speciesId":"toxapex","name":"Toxapex","self":false,"strength":{"score":91.8,"rank":23,"of":1152},
+                   "moves":{"fast":"Poison Jab","charged":["Brine","Sludge Wave"]},"needs":null,
+                   "iv":{"rank":5,"pct":99.1,"rankPct":97.2,"level":24.5,"cp":1497},"overCap":false,
+                   "cost":{"dust":175000,"candy":120,"xl":0,"evolveCandy":50,"toLevel":24.5}},
+                  {"speciesId":"mareanie","name":"Mareanie","self":true,"strength":{"score":60.5,"rank":300,"of":1152},
+                   "moves":{"fast":"Poison Jab","charged":["Brine"]},"needs":["Brine"],"iv":null,"overCap":false,"cost":null},
+                  {"speciesId":"gallade","name":"Gallade","self":false,"genderLocked":"male","strength":null,"moves":null,"needs":null,
+                   "iv":null,"overCap":true,"cost":null}],
+                "pick":0,"experimental":1,"source":"emulated"},
+          "ul":{"options":[{"speciesId":"mareanie","name":"Mareanie","self":true,"strength":null,"moves":null,"needs":null,"iv":null,"overCap":true,"cost":null}],
+                "pick":0,"experimental":0,"source":"ranked"}}}]}
         """
         let advice = BoxAdvice.make(from: try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)), entries: box)
         let l = advice.leagues(for: box[0].id)
+        // The accessors read the shown member.
         XCTAssertEqual(l["gl"]?.pick.name, "Toxapex")
         XCTAssertEqual(l["gl"]?.pick.isSelf, false)
         XCTAssertEqual(l["gl"]?.strength, .init(score: 91.8, rank: 23, of: 1152))
         XCTAssertEqual(l["gl"]?.moves, .init(fast: "Poison Jab", charged: ["Brine", "Sludge Wave"]))
         XCTAssertNil(l["gl"]?.needs)
         XCTAssertEqual(l["gl"]?.cost, .init(dust: 175000, candy: 120, xl: 0, evolveCandy: 50, toLevel: 24.5))
-        XCTAssertEqual(l["ul"]?.needs, ["Brine", "Poison Jab"])
-        XCTAssertEqual(l["ul"]?.overCap, true)
+        XCTAssertEqual(l["gl"]?.source, "emulated")
+        XCTAssertNil(l["ul"]?.needs); XCTAssertEqual(l["ul"]?.overCap, true)
         XCTAssertNil(l["ul"]?.strength); XCTAssertNil(l["ul"]?.iv); XCTAssertNil(l["ul"]?.cost)
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
-        XCTAssertEqual(advice.version, 2)
+        XCTAssertEqual(advice.version, 8)
+
+        // The options list decodes in order; the experimental member is a different index.
+        let gl = try XCTUnwrap(l["gl"])
+        XCTAssertEqual(gl.options.map(\.speciesId), ["toxapex", "mareanie", "gallade"])
+        XCTAssertEqual(gl.pickIndex, 0); XCTAssertEqual(gl.experimentalIndex, 1)
+        XCTAssertEqual(gl.experimental.speciesId, "mareanie")
+        XCTAssertEqual(gl.options[1].needs, ["Brine"])
+        XCTAssertEqual(gl.options[2].genderLocked, "male")
+        XCTAssertNil(gl.options[2].strength); XCTAssertNil(gl.options[2].moves)
+        XCTAssertEqual(l["ul"]?.options.count, 1)
 
         // The cache round-trips it; a file with no version (build 2) or a lower one is read as missing.
         try lib.saveAdvice(advice, account: "a", seq: 1)
         XCTAssertEqual(lib.loadAdvice(account: "a", seq: 1), advice)
-        var old = advice; old.version = 1
-        try lib.saveAdvice(old, account: "a", seq: 1)
-        XCTAssertNil(lib.loadAdvice(account: "a", seq: 1))
+        // Versions 2 (leagues only) and 3 (the first options shape, the old pick rule) are recomputed too.
+        for v in [1, 2, 3, 4, 5, 6, 7] {
+            var old = advice; old.version = v
+            try lib.saveAdvice(old, account: "a", seq: 1)
+            XCTAssertNil(lib.loadAdvice(account: "a", seq: 1), "version \(v)")
+        }
         let legacy = #"{"builds":[],"gaps":[],"duplicates":[],"unresolved":[],"spareBuilds":{}}"#
         let file = try XCTUnwrap(FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL }.first { $0.lastPathComponent.hasSuffix(".advice.json") })
         try Data(legacy.utf8).write(to: file)
         XCTAssertNil(lib.loadAdvice(account: "a", seq: 1))
     }
 
+    func testLeagueDecodingReindexesBothPicksAndRejectsOddIndexes() throws {
+        func option(_ id: String, bad: Bool = false) -> String {
+            #"{"speciesId":"\#(id)","name":"\#(id)","self":false,"strength":\#(bad ? #""oops""# : "null"),"moves":null,"needs":null,"iv":null,"overCap":false,"cost":null}"#
+        }
+        func league(pick: String, experimental: String? = "3") -> JSONValue {
+            let exp = experimental.map { #","experimental":\#($0)"# } ?? ""
+            let json = #"{"options":[\#(option("a", bad: true)),\#(option("b")),\#(option("c")),\#(option("d"))],"pick":\#(pick)\#(exp),"source":"emulated"}"#
+            return try! JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        }
+        // The bad option sits before both picks: both indexes shift down by one and still name the same members.
+        let r = try XCTUnwrap(BoxAdvice.LeagueRating.decode(league(pick: "2")))
+        XCTAssertEqual(r.options.map(\.speciesId), ["b", "c", "d"])
+        XCTAssertEqual(r.shown.speciesId, "c"); XCTAssertEqual(r.experimental.speciesId, "d")
+        // A bad experimental option falls back to the shown member; a missing one does too.
+        XCTAssertEqual(try XCTUnwrap(BoxAdvice.LeagueRating.decode(league(pick: "2", experimental: "0"))).experimental.speciesId, "c")
+        XCTAssertEqual(try XCTUnwrap(BoxAdvice.LeagueRating.decode(league(pick: "2", experimental: nil))).experimental.speciesId, "c")
+        // A pick that is fractional, negative, past the end or too big for an Int is no pick at all (and never traps).
+        for odd in ["1.5", "-1", "9", "1e300", "-1e300"] { XCTAssertNil(BoxAdvice.LeagueRating.decode(league(pick: odd)), odd) }
+        // An odd experimental index falls back to the shown member.
+        for odd in ["1.5", "1e300", "-2"] { XCTAssertEqual(try XCTUnwrap(BoxAdvice.LeagueRating.decode(league(pick: "2", experimental: odd))).experimental.speciesId, "c", odd) }
+        XCTAssertNil(BoxAdvice.LeagueRating.Option(json: .string("x")))
+    }
+
+    /// The hand-written option reader and the Codable one (which the cache uses) must agree on the engine's shape.
+    func testOptionJSONReaderMatchesCodable() throws {
+        let json = """
+        {"speciesId":"toxapex","name":"Toxapex","self":true,"genderLocked":"male","strength":{"score":91.8,"rank":23,"of":1152},
+         "moves":{"fast":"Poison Jab","charged":["Brine","Sludge Wave"]},"needs":["Brine"],
+         "iv":{"rank":5,"pct":99.1,"rankPct":97.2,"level":24.5,"cp":1497},"overCap":false,
+         "cost":{"dust":175000,"candy":120,"xl":0,"evolveCandy":50,"toLevel":24.5}}
+        """
+        let viaCodable = try JSONDecoder().decode(BoxAdvice.LeagueRating.Option.self, from: Data(json.utf8))
+        let value = try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        XCTAssertEqual(BoxAdvice.LeagueRating.Option(json: value), viaCodable)
+        // Wrong types are rejected by both: a fractional dust figure, a non-string move.
+        for bad in [json.replacingOccurrences(of: "175000", with: "175000.5"), json.replacingOccurrences(of: "\"Brine\",\"Sludge Wave\"", with: "\"Brine\",7")] {
+            XCTAssertThrowsError(try JSONDecoder().decode(BoxAdvice.LeagueRating.Option.self, from: Data(bad.utf8)))
+            XCTAssertNil(BoxAdvice.LeagueRating.Option(json: try JSONDecoder().decode(JSONValue.self, from: Data(bad.utf8))))
+        }
+    }
+
+    /// The two league readers (the cache's Codable one and the engine-JSON one) must give the same answer on odd league-level shapes.
+    func testLeagueReadersAgreeOnOddShapes() throws {
+        let good = #"{"speciesId":"a","name":"a","self":false,"strength":null,"moves":null,"needs":null,"iv":null,"overCap":false,"cost":null}"#
+        let other = good.replacingOccurrences(of: #""a""#, with: #""b""#)
+        func rating(_ tail: String) -> (json: BoxAdvice.LeagueRating?, codable: BoxAdvice.LeagueRating?) {
+            let text = #"{"options":[\#(good),\#(other)],\#(tail)}"#
+            let value = try! JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+            return (BoxAdvice.LeagueRating.decode(value), try? JSONDecoder().decode(BoxAdvice.LeagueRating.self, from: Data(text.utf8)))
+        }
+        let cases = [
+            #""pick":1,"experimental":0,"source":"export""#,
+            #""pick":1,"source":"export""#,
+            #""pick":1,"experimental":5,"source":"export""#, #""pick":1,"experimental":-1,"source":"export""#,
+            #""pick":1,"experimental":1.5,"source":"export""#, #""pick":1,"experimental":1e300,"source":"export""#,
+            #""pick":1,"experimental":"0","source":"export""#, #""pick":1,"experimental":null,"source":"export""#,
+            #""pick":1,"experimental":0,"source":7"#, #""pick":1,"experimental":0,"source":null"#, #""pick":1,"experimental":0"#,
+            #""pick":2,"experimental":0,"source":"export""#, #""pick":1.5,"source":"export""#, #""pick":"1","source":"export""#, #""pick":1e300"#,
+        ]
+        for tail in cases {
+            let (a, b) = rating(tail)
+            XCTAssertEqual(a, b, tail)
+        }
+        // The values themselves, not only the agreement.
+        XCTAssertEqual(rating(#""pick":1,"experimental":1.5,"source":7"#).json?.experimentalIndex, 1)
+        XCTAssertEqual(rating(#""pick":1,"experimental":1.5,"source":7"#).json?.source, "ranked")
+        XCTAssertEqual(rating(#""pick":1,"experimental":0,"source":"export""#).json?.experimentalIndex, 0)
+        XCTAssertNil(rating(#""pick":2"#).json)
+    }
+
+    func testBuildActionIsWordedFromTheSteps() {
+        typealias S = BoxAdvice.Build.Step
+        func build(powerUp: Bool = true, _ steps: [S]?) -> BoxAdvice.Build {
+            BoxAdvice.Build(entryId: "e", title: "Xurkitree", cp: 3000, level: 40, ivs: nil, targetId: powerUp ? "x" : "y", targetName: "Y", powerUp: powerUp,
+                            formChange: false, viaMega: false, needsDynamax: false, spares: 0, areas: ["Raids"], tier: "S", targetLevel: nil, dust: 0, candy: 0, xl: 0,
+                            pvp: nil, score: 1, steps: steps)
+        }
+        XCTAssertEqual(build([]).action, "Already built", "an empty list is already built")
+        XCTAssertEqual(build([S(kind: "powerUp", toLevel: 35, areas: ["raids"])]).action, "Power up to level 35 (Raids)")
+        XCTAssertEqual(build([S(kind: "powerUp", toLevel: 30, areas: ["gym", "max"])]).action, "Power up to level 30 (Gym/Max)")
+        XCTAssertEqual(build([S(kind: "powerUp", toLevel: 16, areas: ["gl"])]).action, "Power up to level 16 (GL)")
+        XCTAssertEqual(build([S(kind: "powerUp")]).action, "Power up", "a power-up step without a level never reads 'to level 0'")
+        XCTAssertEqual(build([S(kind: "secondMove", certain: true)]).action, "Second move")
+        XCTAssertEqual(build([S(kind: "secondMove", certain: false)]).action, "Second move (if it doesn't have it)")
+        // The Dynamax requirement is Max's alone: it does not make the build unfinished, and it is not hidden.
+        XCTAssertEqual(build([S(kind: "needsDynamaxCopy")]).action, "Already built (Max needs a Dynamax copy)")
+        var maxOnly = build([S(kind: "needsDynamaxCopy")]); maxOnly.areas = ["Max"]
+        XCTAssertEqual(maxOnly.action, "Needs a Dynamax copy")
+        maxOnly.steps = [S(kind: "powerUp", toLevel: 45, areas: ["max"]), S(kind: "needsDynamaxCopy")]
+        XCTAssertEqual(maxOnly.action, "Power up to level 45 (Max; needs a Dynamax copy)")
+        XCTAssertEqual(build([S(kind: "megaEvolve"), S(kind: "needsDynamaxCopy")]).action, "Mega evolve (Max needs a Dynamax copy)")
+        XCTAssertEqual(build(powerUp: false, [S(kind: "evolve", to: "Gengar", candy: 100), S(kind: "megaEvolve"), S(kind: "eliteTM", count: 2), S(kind: "cdMove")]).action,
+                       "Evolve to Gengar + Mega evolve + 2 Elite TMs + Community Day move")
+        XCTAssertEqual(build([S(kind: "eliteTM", count: 1)]).action, "1 Elite TM")
+        // A step this version does not know (or one with no kind) is still something to do.
+        XCTAssertEqual(build([S(kind: "somethingNew")]).action, "More to do")
+        XCTAssertEqual(BoxAdvice.Build.Step(json: .object(["to": .string("x")])).kind, "unknown")
+        // The cost line carries dust, candy and XL only (Elite TMs and the Community Day move are steps).
+        var withDust = build([]); withDust.dust = 5000
+        XCTAssertEqual(withDust.costText, "5k dust")
+        // A build read without the engine's steps falls back to the plain wording (never "Already built").
+        XCTAssertEqual(build(nil).action, "Power up")
+        XCTAssertEqual(build(powerUp: false, nil).action, "Evolve to Y")
+        // The export never words a spare as an action.
+        let spare = BoxExport.adviceText(.init(builds: [], spareFor: [build([])], duplicateOf: nil, keep: false))
+        XCTAssertFalse(spare.contains("Already built"))
+        XCTAssertEqual(spare, "spare for the Y build (Xurkitree)")
+    }
+
+    /// Builds decoded from the REAL engine output (the bundle run on three entries), so the steps and the action cannot be constants.
+    func testBuildsFromTheRealEngineCarryTheirSteps() throws {
+        func record(_ index: Int, _ name: String, _ level: Double, _ ivs: (Int, Int, Int)) -> JSONValue {
+            let json = """
+            {"index":\(index),"name":"\(name)","form":"","gender":"","cp":500,"level":\(level),"levelMin":\(level),"levelMax":\(level),"shadow":false,"purified":false,"lucky":false,
+             "ivs":{"atk":\(ivs.0),"def":\(ivs.1),"hp":\(ivs.2)},"ivPercent":80,"moves":[]}
+            """
+            return try! JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        }
+        let rows = [record(1, "Xurkitree", 40, (15, 15, 15)), record(2, "Squirtle", 45, (0, 7, 14)), record(3, "Cramorant", 51, (15, 15, 15)), record(4, "Mankey", 12, (15, 15, 15)), record(5, "Snorlax", 10, (15, 15, 15))]
+        let report = try CoreEngine().advise(box: .array(rows))
+        try lib.commit(account: "a", entries: entries([100, 200, 300, 400, 500]), reason: .scan, note: "five", now: date(1))
+        let box = try XCTUnwrap(lib.current(account: "a")).entries
+        let advice = BoxAdvice.make(from: report, entries: box)
+        func build(_ i: Int, _ target: String) throws -> BoxAdvice.Build { try XCTUnwrap(advice.builds.first { $0.entryId == box[i].id && $0.targetId == target }, target) }
+        let xurk = try build(0, "xurkitree"), squirtle = try build(1, "blastoise"), cram = try build(2, "cramorant")
+        XCTAssertEqual(xurk.steps, [])
+        XCTAssertEqual(xurk.action, "Already built")
+        // Ultra League's best level (49.5) is not what the Raids cost pays for, so there is no power-up step; Dynamax is Max's alone.
+        XCTAssertEqual(squirtle.steps?.map(\.kind), ["evolve", "megaEvolve", "needsDynamaxCopy"])
+        XCTAssertEqual(squirtle.steps?.first { $0.kind == "evolve" }?.candy, 125)
+        XCTAssertEqual(squirtle.action, "Evolve to Blastoise + Mega evolve (Max needs a Dynamax copy)")
+        let climbing = try build(3, "annihilape")
+        XCTAssertEqual(climbing.steps?.last, .init(kind: "powerUp", toLevel: 16, areas: ["gl"]))
+        XCTAssertEqual(climbing.action, "Evolve to Annihilape + Power up to level 16 (GL)")
+        // Snorlax climbs to 30 for Gym/Max: that goes past the best level of two leagues, which the app says (and the export repeats).
+        let snor = try build(4, "snorlax")
+        XCTAssertEqual(snor.steps?.first { $0.kind == "powerUp" }, .init(kind: "powerUp", toLevel: 30, areas: ["gym", "max"]))
+        XCTAssertEqual(snor.leavesLeague, [.init(league: "UL", bestLevel: 27), .init(league: "GL", bestLevel: 16)])
+        XCTAssertEqual(snor.leavesLeagueText, "going past 27 leaves UL, going past 16 leaves GL")
+        XCTAssertEqual(snor.climbLevel, 30)
+        XCTAssertNil(xurk.climbLevel)
+        XCTAssertEqual(snor.action, "Power up to level 30 (Gym/Max; needs a Dynamax copy)")
+        XCTAssertNil(xurk.leavesLeagueText)
+        let exported = BoxExport.adviceText(advice.entries(for: box[4].id))
+        XCTAssertTrue(exported.contains("going past 27 leaves UL, going past 16 leaves GL"), exported)
+        XCTAssertEqual(cram.steps, [.init(kind: "secondMove", certain: false)])
+        XCTAssertEqual(cram.action, "Second move (if it doesn't have it)")
+        // A report whose first build has no `steps` key (not what the current engine produces) reads as nil, not as an empty list.
+        guard case .object(var o) = report, case .array(var bs)? = o["builds"], case .object(var b0) = bs[0], case .string(let firstTarget)? = b0["targetId"] else { return XCTFail("shape") }
+        b0["steps"] = nil; bs[0] = .object(b0); o["builds"] = .array(bs)
+        let stripped = BoxAdvice.make(from: .object(o), entries: box).builds
+        XCTAssertNil(try XCTUnwrap(stripped.first { $0.targetId == firstTarget }).steps)
+        XCTAssertNotNil(try XCTUnwrap(stripped.first { $0.targetId != firstTarget }).steps)
+    }
+
     func testLeagueSentences() {
         typealias R = BoxAdvice.LeagueRating
-        let full = R(pick: .init(speciesId: "toxapex", name: "Toxapex", isSelf: false), strength: .init(score: 91.84, rank: 23, of: 1152),
-                     moves: .init(fast: "Poison Jab", charged: ["Brine", "Sludge Wave"]), needs: ["Brine", "Poison Jab"],
-                     iv: .init(rank: 1234, pct: 97.26, rankPct: 70, level: 24.5, cp: 1497), overCap: false,
-                     cost: .init(dust: 175000, candy: 1200, xl: 8, evolveCandy: 50, toLevel: 24.5))
+        typealias O = R.Option
+        let option = O(speciesId: "toxapex", name: "Toxapex", strength: .init(score: 91.84, rank: 23, of: 1152),
+                       moves: .init(fast: "Poison Jab", charged: ["Brine", "Sludge Wave"]), needs: ["Brine", "Poison Jab"],
+                       iv: .init(rank: 1234, pct: 97.26, rankPct: 70, level: 24.5, cp: 1497), overCap: false,
+                       cost: .init(dust: 175000, candy: 1200, xl: 8, evolveCandy: 50, toLevel: 24.5))
+        func rating(_ o: O) -> R { R(options: [o], pick: 0, source: "emulated") }
+        let full = rating(option)
         XCTAssertEqual(LeagueText.pick(full), "As Toxapex")
-        var locked = full; locked.pick = .init(speciesId: "gallade", name: "Gallade", isSelf: false, genderLocked: "male")
+        var lockedOption = option; lockedOption.speciesId = "gallade"; lockedOption.name = "Gallade"; lockedOption.genderLocked = "male"
+        let locked = rating(lockedOption)
         XCTAssertEqual(LeagueText.pick(locked), "As Gallade, if it is male")
         XCTAssertEqual(LeagueText.strength(full, key: "gl"), "PvPoke ranks Toxapex 23rd of 1,152 in Great League, score 91.8")
         XCTAssertEqual(LeagueText.ivs(full, key: "gl"), "IVs rank #1,234 of 4,096 · 97.3% of best")
         XCTAssertEqual(LeagueText.moves(full), "Moves: Poison Jab, Brine, Sludge Wave")
         XCTAssertEqual(LeagueText.needs(full), "Needs Brine and Poison Jab")
-        var one = full; one.needs = ["Brine"]
-        XCTAssertEqual(LeagueText.needs(one), "Needs Brine")
-        one.needs = []; XCTAssertNil(LeagueText.needs(one))
-        one.needs = nil; XCTAssertNil(LeagueText.needs(one))
+        var oneOption = option; oneOption.needs = ["Brine"]
+        XCTAssertEqual(LeagueText.needs(rating(oneOption)), "Needs Brine")
+        oneOption.needs = []; XCTAssertNil(LeagueText.needs(rating(oneOption)))
+        oneOption.needs = nil; XCTAssertNil(LeagueText.needs(rating(oneOption)))
         XCTAssertEqual(LeagueText.cost(full, levelKnown: true), "To level 24.5: 175,000 dust, 1,200 candy, 8 XL candy (50 to evolve)")
-        var plain = full; plain.cost = .init(dust: 9000, candy: 40, xl: 0, evolveCandy: 0, toLevel: 40)
-        XCTAssertEqual(LeagueText.cost(plain, levelKnown: true), "To level 40: 9,000 dust, 40 candy")
-        plain.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 24.5)
-        XCTAssertEqual(LeagueText.cost(plain, levelKnown: true), "Already at level 24.5")
-        plain.cost = nil
-        XCTAssertEqual(LeagueText.cost(plain, levelKnown: false), "Level not known, so no cost")
-        XCTAssertNil(LeagueText.cost(plain, levelKnown: true))
-        var self1 = full; self1.pick.isSelf = true; self1.strength = nil; self1.moves = nil; self1.iv = nil
+        var plainOption = option; plainOption.cost = .init(dust: 9000, candy: 40, xl: 0, evolveCandy: 0, toLevel: 40)
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true), "To level 40: 9,000 dust, 40 candy")
+        plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 24.5)
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true), "Already at level 24.5")
+        // A best level BELOW the current one (a level-51 Best Buddy copy): past its best level for that league, evolution candy only.
+        plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 50)
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 51, key: "ul"), "Past its best Ultra League level")
+        plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 50, toLevel: 50)
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 51, key: "ul"), "Past its best Ultra League level; 50 candy to evolve")
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 50, key: "ul"), "To level 50: 0 dust, 0 candy (50 to evolve)", "at the best level it still reads as a cost")
+        plainOption.cost = nil
+        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: false), "Level not known, so no cost")
+        XCTAssertNil(LeagueText.cost(rating(plainOption), levelKnown: true))
+        var selfOption = option; selfOption.isSelf = true; selfOption.strength = nil; selfOption.moves = nil; selfOption.iv = nil
+        let self1 = rating(selfOption)
         XCTAssertNil(LeagueText.pick(self1)); XCTAssertNil(LeagueText.moves(self1))
         XCTAssertEqual(LeagueText.strength(self1, key: "ul"), "Not ranked in Ultra League by PvPoke")
         XCTAssertEqual(LeagueText.ivs(self1, key: "ul"), "IVs not read, so no rank")
-        var over = full; over.overCap = true
+        var overOption = option; overOption.overCap = true
+        let over = rating(overOption)
         XCTAssertEqual(LeagueText.ivs(over, key: "ul"), "Already above 2,500 CP, so it cannot be used in Ultra League")
         XCTAssertEqual(LeagueText.ivs(over, key: "gl"), "Already above 1,500 CP, so it cannot be used in Great League")
+        // Unknown IVs and already over the cap: the cap is what the page says, not "IVs not read".
+        var blindOver = overOption; blindOver.iv = nil; blindOver.cost = nil
+        XCTAssertEqual(LeagueText.ivs(rating(blindOver), key: "gl"), "Already above 1,500 CP, so it cannot be used in Great League")
         XCTAssertEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 101, 111, 1002].map(LeagueText.ordinal), ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st", "111th", "1,002nd"])
     }
 

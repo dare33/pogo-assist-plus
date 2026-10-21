@@ -31,19 +31,20 @@ test('adviseJSON: pokemon entries are only { p: { index }, unresolved, speciesId
   assert.deepEqual(Object.keys(r.pokemon[0]).sort(), ['leagues', 'p', 'speciesId']);
   assert.deepEqual(r.pokemon[0].p, { index: box[0].index });
   assert.deepEqual(Object.keys(r.pokemon[0].leagues), ['gl', 'ul', 'ml']);
-  for (const k of ['pick', 'strength', 'moves', 'needs', 'iv', 'overCap', 'cost']) assert.ok(k in r.pokemon[0].leagues.gl, k);
+  for (const k of ['options', 'pick', 'experimental', 'source']) assert.ok(k in r.pokemon[0].leagues.gl, k);
+  assert.ok(r.pokemon[0].leagues.gl.options[r.pokemon[0].leagues.gl.pick].speciesId);
   assert.deepEqual(r.pokemon[1], { p: { index: 2 }, unresolved: true });
   assert.equal(r.builds[0].pokemon.index !== undefined, true);
 });
 
-test('adviseJSON: 2,000 entries come back at 4 MB or less (it was 6.7 MB), the pokemon part about 2 MB', () => {
+test('adviseJSON: 2,000 entries come back at 6.6 MB or less (6.7 MB before the slimming, 4 MB after it, then league options, then trimming moves), the pokemon part about 4.4 MB', () => {
   const big = [];
   while (big.length < 2000) for (const p of box) if (big.length < 2000) big.push(p);
   const text = core.adviseJSON(JSON.stringify(big));
   const r = JSON.parse(text);
   assert.equal(r.pokemon.length, 2000);
   const pokemonBytes = JSON.stringify(r.pokemon).length;
-  // ~1 KB of leagues per entry is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
-  assert.ok(pokemonBytes < 2.1e6, `pokemon ${(pokemonBytes / 1e6).toFixed(2)} MB`);
-  assert.ok(text.length < 4.1e6, `${(text.length / 1e6).toFixed(2)} MB`);
+  // ~2.2 KB of leagues per entry (the shown pick plus all members' own ratings, moves only on the shown and experimental ones) is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
+  assert.ok(pokemonBytes < 4.6e6, `pokemon ${(pokemonBytes / 1e6).toFixed(2)} MB`);
+  assert.ok(text.length < 6.6e6, `${(text.length / 1e6).toFixed(2)} MB`);
 });

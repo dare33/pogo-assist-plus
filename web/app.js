@@ -1,7 +1,7 @@
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { indexGamemaster } from '../src/gamemaster.js';
 import { indexTiers, indexRankings } from '../src/data.js';
-import { analyseBox, AREA_LABEL } from '../src/advise.js';
+import { analyseBox, AREA_LABEL, levelText, actionText } from '../src/advise.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -52,16 +52,13 @@ function render() {
 
 function renderBuilds() {
   const rows = result.builds.map((b, i) => {
-    const what = (b.targetId === b.speciesId ? 'Power up' : `${b.formChange ? 'Form change to' : 'Evolve to'} <strong>${esc(b.targetName)}</strong>`) + (b.viaMega ? ' + Mega' : '');
+    const what = esc(actionText(b)); // every step still to do: evolve, Mega, power up, second move, Elite TM, Community Day move, Dynamax copy
     const flags = [
-      b.needsDynamax ? '<span class="flag flag-warn">Max needs a Dynamax copy</span>' : '',
-      b.moveFlags.elite ? `<span class="flag flag-bad">${b.moveFlags.elite} Elite TM</span>` : '',
-      b.moveFlags.cd ? '<span class="flag flag-warn">Community Day move</span>' : '',
       b.moveFlags.legacy ? '<span class="flag flag-locked">Legacy move</span>' : '',
       b.spares.length ? `<span class="flag flag-good">+${b.spares.length} spare</span>` : '',
     ].join('');
     const cost = [`${k(b.cost.dust)} dust`, b.cost.candy ? `${b.cost.candy} candy` : '', b.cost.xl ? `${b.cost.xl} XL` : ''].filter(Boolean).join(', ');
-    const lv = b.targetLevel ? `L${b.level} → ${b.targetLevel}` : `L${b.level} → best ${b.pvpCost.league.toUpperCase()} level`;
+    const lv = levelText(b);
     const pvp = b.pvpCost ? ` · ${b.pvpCost.league.toUpperCase()} IV rank #${b.pvpCost.rank}` : '';
     const hits = b.hits.map((h) => `<li>${h.tier} ${AREA_LABEL[h.area]}${h.section ? ` / ${esc(h.section)}` : ''}: ${esc(h.name)}${h.moves ? ` — ${esc(h.moves)}` : ''}${h.rank ? ` (PvPoke #${h.rank}, ${h.score})` : ''}</li>`).join('');
     return `<tr data-areas="${b.areas.join(' ')}"><td class="num">${i + 1}</td><td class="name">${esc(label(b.pokemon))}<span class="sub">CP ${b.pokemon.cp} · L${b.pokemon.level} · ${iv(b.pokemon)}${pvp}</span></td><td>${what}${flags ? `<div>${flags}</div>` : ''}<details class="hits"><summary>why</summary><ul>${hits}</ul></details></td><td>${areaChips(b.areas)}</td><td>${badge(b.bestTier)}</td><td class="muted">${lv}<span class="sub">${cost}</span></td><td class="num">${b.score}</td></tr>`;

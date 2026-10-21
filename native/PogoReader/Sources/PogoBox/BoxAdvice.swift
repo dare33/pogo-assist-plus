@@ -26,24 +26,90 @@ public struct BoxAdvice: Codable, Equatable {
         public var dust: Int
         public var candy: Int
         public var xl: Int
-        public var eliteTMs: Int
-        public var communityDayMove: Bool
         /// "GL rank 12" when the build is a league one.
         public var pvp: String?
         public var score: Double
-
-        /// What to do, as `scripts/advise.mjs` words it.
-        public var action: String {
-            (powerUp ? "Power up" : "\(formChange ? "Form change to" : "Evolve to") \(targetName)") + (viaMega ? " and Mega evolve" : "")
+        /// One thing still to do, as `steps` in `src/advise.js` lists them. `kind` is evolve (to, candy), formChange (to), megaEvolve,
+        /// powerUp (toLevel, areas: the area keys that share that level), secondMove (certain: false when the copy's moves are unknown),
+        /// eliteTM (count), cdMove or needsDynamaxCopy.
+        public struct Step: Codable, Equatable {
+            public var kind: String
+            public var to: String?
+            public var candy: Int?
+            public var toLevel: Double?
+            public var areas: [String]?
+            public var certain: Bool?
+            public var count: Int?
+            public init(kind: String, to: String? = nil, candy: Int? = nil, toLevel: Double? = nil, areas: [String]? = nil, certain: Bool? = nil, count: Int? = nil) {
+                self.kind = kind; self.to = to; self.candy = candy; self.toLevel = toLevel; self.areas = areas; self.certain = certain; self.count = count
+            }
+            /// Reads one step from the engine's JSON. A step without a kind is kept as kind "unknown" (never dropped: dropping it could turn
+            /// a build with something left to do into "Already built").
+            init(json v: JSONValue) {
+                if case .string(let k)? = v["kind"] { kind = k } else { kind = "unknown" }
+                if case .string(let t)? = v["to"] { to = t }
+                if case .number(let c)? = v["candy"], let n = LeagueRating.whole(c) { candy = n }
+                if case .number(let l)? = v["toLevel"] { toLevel = l }
+                if let arr = v["areas"]?.arrayValue { areas = arr.compactMap { if case .string(let a) = $0 { return a } else { return nil } } }
+                if case .bool(let c)? = v["certain"] { certain = c }
+                if case .number(let c)? = v["count"], let n = LeagueRating.whole(c) { count = n }
+            }
         }
-        /// "120k dust, 150 candy, 8 XL, 1 Elite TM".
+        /// What is left to do, in order. nil only for a build read without the engine's `steps` (then `action` falls back to the plain
+        /// "Power up" / "Evolve to"); an EMPTY list means the copy is already built.
+        public var steps: [Step]? = nil
+        /// A league the climb goes past (`leavesLeague` in `src/advise.js`): going past `bestLevel` leaves `league` (a label such as "UL").
+        public struct LeaguePast: Codable, Equatable {
+            public var league: String
+            public var bestLevel: Double
+            public init(league: String, bestLevel: Double) { self.league = league; self.bestLevel = bestLevel }
+        }
+        public var leavesLeague: [LeaguePast] = []
+        /// "going past 27 leaves UL, going past 16 leaves GL", or nil when the climb leaves no league.
+        public var leavesLeagueText: String? {
+            leavesLeague.isEmpty ? nil : leavesLeague.map { "going past \(levelText($0.bestLevel)) leaves \($0.league)" }.joined(separator: ", ")
+        }
+        /// The level the power-up step climbs to, if there is one.
+        public var climbLevel: Double? { steps?.first { $0.kind == "powerUp" }?.toLevel }
+
+        private func areaText(_ keys: [String]?) -> String { (keys ?? []).map { BoxAdvice.areaLabel[$0] ?? $0 }.joined(separator: "/") }
+        private func levelText(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(d) }
+
+        /// What is left to do, worded as `actionText` in `src/advise.js` does: the steps joined with " + ". The Dynamax requirement is Max's
+        /// alone: it goes inside the Max power-up bracket, or after the rest in brackets; a Max-only build that lacks nothing else reads
+        /// "Needs a Dynamax copy", and a build with other areas and nothing left "Already built (Max needs a Dynamax copy)".
+        public var action: String {
+            guard let steps else { return powerUp ? "Power up" : "\(formChange ? "Form change to" : "Evolve to") \(targetName)" }
+            let dynamax = steps.contains { $0.kind == "needsDynamaxCopy" }
+            var inlined = false
+            var parts = [String]()
+            for st in steps {
+                switch st.kind {
+                case "evolve": parts.append("Evolve to \(st.to ?? targetName)")
+                case "formChange": parts.append("Form change to \(st.to ?? targetName)")
+                case "megaEvolve": parts.append("Mega evolve")
+                case "powerUp":
+                    let say = dynamax && (st.areas ?? []).contains("max")
+                    inlined = inlined || say
+                    let areas = areaText(st.areas) + (say ? "; needs a Dynamax copy" : "")
+                    if let level = st.toLevel { parts.append("Power up to level \(levelText(level))" + (areas.isEmpty ? "" : " (\(areas))")) } else { parts.append("Power up") }
+                case "secondMove": parts.append(st.certain == false ? "Second move (if it doesn't have it)" : "Second move")
+                case "eliteTM": parts.append((st.count ?? 1) == 1 ? "1 Elite TM" : "\(st.count ?? 1) Elite TMs")
+                case "cdMove": parts.append("Community Day move")
+                case "needsDynamaxCopy": break
+                default: parts.append("More to do") // a step this version does not know: still something left, never "Already built"
+                }
+            }
+            if parts.isEmpty { return dynamax ? (areas == ["Max"] ? "Needs a Dynamax copy" : "Already built (Max needs a Dynamax copy)") : "Already built" }
+            let base = parts.joined(separator: " + ")
+            return dynamax && !inlined ? base + " (Max needs a Dynamax copy)" : base
+        }
+        /// "120k dust, 150 candy, 8 XL". Elite TMs and the Community Day move are steps of `action`, not repeated here.
         public var costText: String {
             var parts = [String]()
             parts.append(dust >= 1000 ? "\(Int((Double(dust) / 1000).rounded()))k dust" : "\(dust) dust")
             if candy > 0 { parts.append("\(candy) candy") }
             if xl > 0 { parts.append("\(xl) XL candy") }
-            if eliteTMs > 0 { parts.append(eliteTMs == 1 ? "1 Elite TM" : "\(eliteTMs) Elite TMs") }
-            if communityDayMove { parts.append("Community Day move") }
             return parts.joined(separator: ", ")
         }
     }
@@ -68,31 +134,159 @@ public struct BoxAdvice: Codable, Equatable {
         public var transferIds: [String]
     }
 
-    /// One league's rating of one Pokémon, as `src/leagues.js` `leaguesFor` returns it (null becomes nil).
+    /// One league's ratings of one Pokémon, as `src/leagues.js` `leaguesFor` returns them (null becomes nil).
+    ///
+    /// `options` lists every allowed member of the Pokémon's family (strongest PvPoke score first, then the members PvPoke does not
+    /// rank), each rated for this exact copy. `moves` is filled only on the shown and experimental options (nil on the rest). `pick` (JSON "pick") is the index of the member to show, which copies Poke Genie;
+    /// `experimental` is the index of the CLOSE_SCORE rule's member, carried but not shown. The accessors below (`pick`, `strength`,
+    /// `moves`, `needs`, `iv`, `overCap`, `cost`) read the SHOWN member, so a screen written for one rating per league keeps working.
     public struct LeagueRating: Codable, Equatable {
         public struct Pick: Codable, Equatable {
             public var speciesId: String; public var name: String
-            /// The Pokémon itself is the pick (JSON key "self", which Swift cannot use as a property name).
+            /// The Pokémon itself is the pick.
             public var isSelf: Bool
             /// "male" or "female" when the pick is an evolution only one sex can make and the entry's sex is not known (scans carry none).
             public var genderLocked: String?
-            private enum CodingKeys: String, CodingKey { case speciesId, name, isSelf = "self", genderLocked }
         }
         public struct Strength: Codable, Equatable { public var score: Double; public var rank: Int; public var of: Int }
         public struct Moves: Codable, Equatable { public var fast: String; public var charged: [String] }
         public struct IV: Codable, Equatable { public var rank: Int; public var pct: Double; public var rankPct: Double; public var level: Double; public var cp: Int }
         public struct Cost: Codable, Equatable { public var dust: Int; public var candy: Int; public var xl: Int; public var evolveCandy: Int; public var toLevel: Double }
-        public var pick: Pick
-        public var strength: Strength?
-        public var moves: Moves?
-        public var needs: [String]?
-        public var iv: IV?
-        public var overCap: Bool
-        public var cost: Cost?
+
+        /// One family member rated for this league. `strength` is nil when PvPoke does not rank it in this league (then `moves` is nil too).
+        public struct Option: Codable, Equatable {
+            public var speciesId: String; public var name: String
+            /// JSON key "self", which Swift cannot use as a property name.
+            public var isSelf: Bool
+            public var genderLocked: String?
+            public var strength: Strength?
+            public var moves: Moves?
+            public var needs: [String]?
+            public var iv: IV?
+            public var overCap: Bool
+            public var cost: Cost?
+            private enum CodingKeys: String, CodingKey { case speciesId, name, isSelf = "self", genderLocked, strength, moves, needs, iv, overCap, cost }
+
+            /// Reads one option from the engine's parsed JSON; nil when a required field is missing or any present field is the wrong
+            /// type (the same cases the Codable decoding rejects). Absent and null optional fields are nil.
+            init?(json o: JSONValue) {
+                func str(_ v: JSONValue?) -> String? { if case .string(let s)? = v { return s } else { return nil } }
+                func dbl(_ v: JSONValue?) -> Double? { if case .number(let n)? = v { return n } else { return nil } }
+                func int(_ v: JSONValue?) -> Int? { dbl(v).flatMap(LeagueRating.whole) }
+                func isNull(_ v: JSONValue?) -> Bool { if v == nil { return true }; if case .null? = v { return true }; return false }
+                guard let id = str(o["speciesId"]), let name = str(o["name"]), case .bool(let overCap)? = o["overCap"] else { return nil }
+                self.speciesId = id; self.name = name; self.overCap = overCap
+                if case .bool(let b)? = o["self"] { self.isSelf = b } else { return nil }
+                if isNull(o["genderLocked"]) { self.genderLocked = nil } else if let g = str(o["genderLocked"]) { self.genderLocked = g } else { return nil }
+                if isNull(o["strength"]) { self.strength = nil }
+                else if let s = o["strength"], let score = dbl(s["score"]), let rank = int(s["rank"]), let of = int(s["of"]) { self.strength = Strength(score: score, rank: rank, of: of) }
+                else { return nil }
+                if isNull(o["moves"]) { self.moves = nil }
+                else if let m = o["moves"], let fast = str(m["fast"]), let charged = m["charged"]?.arrayValue {
+                    let names = charged.compactMap(str)
+                    guard names.count == charged.count else { return nil }
+                    self.moves = Moves(fast: fast, charged: names)
+                } else { return nil }
+                if isNull(o["needs"]) { self.needs = nil }
+                else if let arr = o["needs"]?.arrayValue {
+                    let names = arr.compactMap(str)
+                    guard names.count == arr.count else { return nil }
+                    self.needs = names
+                } else { return nil }
+                if isNull(o["iv"]) { self.iv = nil }
+                else if let v = o["iv"], let rank = int(v["rank"]), let pct = dbl(v["pct"]), let rankPct = dbl(v["rankPct"]), let level = dbl(v["level"]), let cp = int(v["cp"]) {
+                    self.iv = IV(rank: rank, pct: pct, rankPct: rankPct, level: level, cp: cp)
+                } else { return nil }
+                if isNull(o["cost"]) { self.cost = nil }
+                else if let c = o["cost"], let dust = int(c["dust"]), let candy = int(c["candy"]), let xl = int(c["xl"]), let evo = int(c["evolveCandy"]), let to = dbl(c["toLevel"]) {
+                    self.cost = Cost(dust: dust, candy: candy, xl: xl, evolveCandy: evo, toLevel: to)
+                } else { return nil }
+            }
+            public init(speciesId: String, name: String, isSelf: Bool = false, genderLocked: String? = nil, strength: Strength? = nil, moves: Moves? = nil,
+                        needs: [String]? = nil, iv: IV? = nil, overCap: Bool = false, cost: Cost? = nil) {
+                self.speciesId = speciesId; self.name = name; self.isSelf = isSelf; self.genderLocked = genderLocked; self.strength = strength
+                self.moves = moves; self.needs = needs; self.iv = iv; self.overCap = overCap; self.cost = cost
+            }
+        }
+
+        public var options: [Option]
+        /// Index into `options` of the member to show.
+        public var pickIndex: Int
+        /// Index into `options` of the experimental member (may equal `pickIndex`).
+        public var experimentalIndex: Int
+        /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). If no member fits and nothing is ranked, the final evolution is shown even though it is over the cap. A copy with known IVs in Great or Ultra League and nothing ranked is still "emulated").
+        public var source: String
+
+        private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source }
+
+        /// The indexes are clamped into range, so the accessors never trap. `options` must not be empty.
+        public init(options: [Option], pick: Int = 0, experimental: Int? = nil, source: String = "ranked") {
+            precondition(!options.isEmpty, "a league rating has at least one option")
+            self.options = options
+            self.pickIndex = min(max(pick, 0), options.count - 1)
+            self.experimentalIndex = min(max(experimental ?? pick, 0), options.count - 1)
+            self.source = source
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let options = try c.decode([Option].self, forKey: .options)
+            let pick = try c.decode(Int.self, forKey: .pickIndex)
+            guard options.indices.contains(pick) else { throw DecodingError.dataCorruptedError(forKey: .pickIndex, in: c, debugDescription: "pick is not an index of options") }
+            // Odd experimental or source values are not fatal, exactly as in `decode(_:)`: an experimental index that is missing, not a whole
+            // number or out of range is the shown pick, and a source that is missing or not a string is "ranked".
+            let experimental = (try? c.decodeIfPresent(Int.self, forKey: .experimentalIndex)).flatMap { $0 }.flatMap { options.indices.contains($0) ? $0 : nil }
+            let source = (try? c.decodeIfPresent(String.self, forKey: .source)).flatMap { $0 } ?? "ranked"
+            self.init(options: options, pick: pick, experimental: experimental, source: source)
+        }
+
+        /// A whole number that fits an Int, or nil (NaN, infinite, fractional or huge values: `Int(_:)` would trap on them).
+        static func whole(_ x: Double) -> Int? {
+            guard x.isFinite, x == x.rounded(), abs(x) < 9e15 else { return nil }
+            return Int(x)
+        }
+
+        /// Decodes the engine's JSON for one league, tolerating a bad option: an option that does not decode is dropped and the
+        /// indexes are re-pointed, so one odd member never loses the league. Returns nil only when there is no usable shown option.
+        /// A bad experimental option falls back to the shown one. Each option is read straight from the parsed `JSONValue`
+        /// (`Option.init?(json:)`), with no re-encode and re-decode per option: a 2,000-Pokémon box has ~13,000 of them.
+        public static func decode(_ v: JSONValue) -> LeagueRating? {
+            guard case .number(let p)? = v["pick"], let pickAt = whole(p), let raw = v["options"]?.arrayValue else { return nil }
+            var kept = [Option](), newIndex = [Int: Int]()
+            for (i, o) in raw.enumerated() {
+                guard let option = Option(json: o) else { continue }
+                newIndex[i] = kept.count; kept.append(option)
+            }
+            guard let pick = newIndex[pickAt] else { return nil }
+            var experimental = pick
+            if case .number(let x)? = v["experimental"], let at = whole(x), let j = newIndex[at] { experimental = j }
+            var source = "ranked"
+            if case .string(let s)? = v["source"] { source = s }
+            return LeagueRating(options: kept, pick: pick, experimental: experimental, source: source)
+        }
+
+        /// The member to show.
+        public var shown: Option { options[pickIndex] }
+        /// The experimental member (not shown).
+        public var experimental: Option { options[experimentalIndex] }
+
+        public var pick: Pick { Pick(speciesId: shown.speciesId, name: shown.name, isSelf: shown.isSelf, genderLocked: shown.genderLocked) }
+        public var strength: Strength? { shown.strength }
+        public var moves: Moves? { shown.moves }
+        public var needs: [String]? { shown.needs }
+        public var iv: IV? { shown.iv }
+        public var overCap: Bool { shown.overCap }
+        public var cost: Cost? { shown.cost }
     }
 
     /// 2 since the Leagues section: an advice cached by build 2 or earlier has no leagues, so `BoxLibrary.loadAdvice` drops it and it is recomputed.
-    public static let currentVersion = 2
+    /// 3 since the league options; 4 since their shape became { options, pick, experimental, source } and the shown pick copies Poke Genie.
+    /// 5 since `overCap` became "CP at the current level exceeds the cap" (0/0/0 when the IVs are unknown) and the shown pick avoids over-cap members.
+    /// 6 since a build carried `powerUpNeeded` and `secondMoveDue`; 7 since those became the list of `steps` (evolve, Mega, power up, second move,
+    /// Elite TM, Community Day move, Dynamax copy), which the action is worded from; 8 since the power-up step is the climb the cost covers, builds carry
+    /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone. Advice cached at 2 to 7 has the
+    /// old shape or the old rules, so it is dropped and recomputed too.
+    public static let currentVersion = 8
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -148,7 +342,7 @@ public struct BoxAdvice: Codable, Equatable {
         var out = BoxAdvice()
         for b in report["builds"]?.arrayValue ?? [] {
             guard let p = b["pokemon"], let eid = id(p) else { continue }
-            let cost = b["cost"], flags = b["moveFlags"]
+            let cost = b["cost"]
             var ivs: String?
             if let i = p["ivs"], case .number(let a)? = i["atk"], case .number(let d)? = i["def"], case .number(let h)? = i["hp"] { ivs = "\(Int(a))/\(Int(d))/\(Int(h))" }
             var pvp: String?
@@ -159,7 +353,12 @@ public struct BoxAdvice: Codable, Equatable {
                               formChange: bool(b["formChange"]), viaMega: bool(b["viaMega"]), needsDynamax: bool(b["needsDynamax"]), spares: spares.count,
                               areas: (b["areas"]?.arrayValue ?? []).compactMap { str($0) }.map { areaLabel[$0] ?? $0 },
                               tier: str(b["bestTier"]) ?? "", targetLevel: num(b["targetLevel"]), dust: int(cost?["dust"]), candy: int(cost?["candy"]), xl: int(cost?["xl"]),
-                              eliteTMs: int(flags?["elite"]), communityDayMove: bool(flags?["cd"]), pvp: pvp, score: num(b["score"]) ?? 0)
+                              pvp: pvp, score: num(b["score"]) ?? 0,
+                              steps: b["steps"]?.arrayValue.map { $0.map(Build.Step.init(json:)) },
+                              leavesLeague: (b["leavesLeague"]?.arrayValue ?? []).compactMap { v in
+                                  guard case .string(let l)? = v["league"], case .number(let at)? = v["bestLevel"] else { return nil }
+                                  return Build.LeaguePast(league: areaLabel[l] ?? l, bestLevel: at)
+                              })
             out.builds.append(build)
             for s in spares { out.spareBuilds[s, default: []].append(build) }
         }
@@ -184,7 +383,8 @@ public struct BoxAdvice: Codable, Equatable {
             guard let eid = id(e["p"]), let l = e["leagues"] else { continue }
             var byLeague = [String: LeagueRating]()
             for key in ["gl", "ul", "ml"] {
-                guard let v = l[key], let data = try? JSONEncoder().encode(v), let rating = try? JSONDecoder().decode(LeagueRating.self, from: data) else { continue }
+                // Per option, so one member the decoder cannot read does not take the league (and the shown pick) with it.
+                guard let v = l[key], let rating = LeagueRating.decode(v) else { continue }
                 byLeague[key] = rating
             }
             if !byLeague.isEmpty { out.leagues[eid] = byLeague }
