@@ -1264,6 +1264,9 @@ final class AppModel: ObservableObject {
             case .saved(let snap):
                 lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: true)
                 if r.account == account { afterCommit(snap) }
+            case .nothingToSave:
+                message = "Nothing was added: every Pokémon in these screenshots was left out."
+                if r.account == account { loadBox() }
             case .alreadySaved:
                 message = "These screenshots had already been saved, so nothing was added again."
                 if r.account == account { loadBox() }
