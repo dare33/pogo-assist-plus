@@ -287,6 +287,14 @@ public final class BoxStore {
         return .gone
     }
 
+    /// A rename is half done (its journal exists) or a folder it moved aside is hiding an account (names that begin with a dot are never listed): what `accounts()` returns is then not every
+    /// account, so nothing may be concluded from an account being absent from it.
+    public var accountListIsIncomplete: Bool {
+        if renameJournalExists { return true }
+        let names = (try? fm.contentsOfDirectory(atPath: root.path)) ?? []
+        return names.contains { ($0.hasPrefix(".rename-") || $0.hasPrefix(".renaming")) && !$0.hasSuffix(".json") }
+    }
+
     /// How many renames have been recorded in all: the "epoch" a binding is stamped with. It only goes up, whatever is trimmed from the history.
     public var renameCount: Int? { renameSequence }
 

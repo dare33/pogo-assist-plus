@@ -40,6 +40,10 @@ public struct ImportItem: Codable, Equatable, Identifiable {
     public var alreadyImported: Date?
     /// A different screenshot whose Pokémon has the same species, form, CP, HP and IVs as an earlier item of this batch: a retake of it, or a genuine twin. Held back until the person says.
     public var repeatOf: String?
+    /// The hold in `alreadyImported` rests on provisional entries only: that save may or may not have reached the box ("may already have been imported").
+    public var alreadyImportedMaybe: Bool?
+    /// The record of what was imported before could not be read, so nothing can be said of this screenshot and it is held for the person's say.
+    public var ledgerUnknown: Bool?
     /// The person's answer to a held-back item ("this is another Pokémon" / "import it again").
     public var includeAnyway: Bool?
     /// A hold on this repeat was lifted because its source was saved or left out: the box merge decides what it is now, and it is not held again against the others.
@@ -68,7 +72,7 @@ public struct ImportItem: Codable, Equatable, Identifiable {
     /// Held back for the person's say (a repeat or an earlier import of this screenshot).
     public var heldBack: Bool { hasHold && includeAnyway != true }
     /// Something asks for the person's say (a possible repeat, or a screenshot imported before), whether or not it has been answered yet: the control stays so the answer can be taken back.
-    public var hasHold: Bool { state == .read && duplicateOf == nil && (repeatOf != nil || alreadyImported != nil) }
+    public var hasHold: Bool { state == .read && duplicateOf == nil && (repeatOf != nil || alreadyImported != nil || ledgerUnknown == true) }
     /// A Pokémon this item will contribute to the review: read in full, not a copy of another item, not held back.
     public var isIncluded: Bool { state == .read && duplicateOf == nil && !heldBack }
 }
@@ -153,7 +157,7 @@ public struct ImportManifest: Codable, Equatable, Identifiable {
 
 extension ImportItem {
     private enum CodingKeys: String, CodingKey {
-        case id, file, assetId, sourceHash, stagedHash, width, height, state, detail, reading, attempts, duplicateOf, alreadyImported, repeatOf, includeAnyway, holdLifted
+        case id, file, assetId, sourceHash, stagedHash, width, height, state, detail, reading, attempts, duplicateOf, alreadyImported, alreadyImportedMaybe, ledgerUnknown, repeatOf, includeAnyway, holdLifted
     }
 
     /// Tolerant: a field a later build added is ignored, one this build expects but the file lacks takes its default, an unknown state reads as pending (read again).
@@ -172,6 +176,8 @@ extension ImportItem {
         attempts = try c.decodeIfPresent(Int.self, forKey: .attempts) ?? 0
         duplicateOf = try c.decodeIfPresent(String.self, forKey: .duplicateOf)
         alreadyImported = try c.decodeIfPresent(Date.self, forKey: .alreadyImported)
+        alreadyImportedMaybe = try c.decodeIfPresent(Bool.self, forKey: .alreadyImportedMaybe)
+        ledgerUnknown = try c.decodeIfPresent(Bool.self, forKey: .ledgerUnknown)
         repeatOf = try c.decodeIfPresent(String.self, forKey: .repeatOf)
         includeAnyway = try c.decodeIfPresent(Bool.self, forKey: .includeAnyway)
         holdLifted = try c.decodeIfPresent(Bool.self, forKey: .holdLifted)

@@ -639,9 +639,9 @@ final class ScreenshotImporterTests: XCTestCase {
         })
         let handle = try FileHandle(forWritingTo: account.appendingPathComponent(file)); try handle.seekToEnd(); try handle.write(contentsOf: Data("{{garbage".utf8)); try handle.close()
         XCTAssertEqual(try lib.store.list(account: "Main").unreadable, [file])
-        // another import is not refused for it...
-        XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: "import:some-other-batch"), .notSaved)
-        let second = try stage([try rayquaza])
+        // another import, made after that save, is not refused for it (the version that names the damaged scan was written before this batch existed)...
+        let second = try stage([try rayquaza], now: Date().addingTimeInterval(3600))
+        XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: second.signature), .notSaved)
         guard case .saved = try importer.save(try review(second), resolutions: [:], engine: sharedEngine) else { return XCTFail("a damaged earlier scan blocked a new save") }
         // ...but the batch that damaged file could be IS: nothing is saved over a possible earlier save
         XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: first.signature), .unknown)
@@ -1020,8 +1020,10 @@ final class ScreenshotImporterTests: XCTestCase {
         guard case .ambiguous = importer.owner(of: try queue.load(m.batchId)) else { return XCTFail() }
         _ = try importer.prepareAll(engine: sharedEngine)
         XCTAssertThrowsError(try queue.load(m.batchId), "finished")
-        // confirmed by the signature, whichever account holds the scan. (Which account the old name's entries are counted for once the name is reused is the account-identity question, on hold.)
+        // confirmed by the signature, whichever account holds the scan. (Which account the old name's entries are counted for once the name is reused is the account-identity question, on hold;
+        // what must hold meanwhile is that the NEW account called Main does not inherit them.)
         XCTAssertFalse(queue.ledger().entries.isEmpty); XCTAssertTrue(queue.ledger().entries.allSatisfy { $0.provisional != true })
+        XCTAssertFalse(ledgerHolds("Main", m.items[0]), "the new account with the old name inherits nothing")
         XCTAssertEqual(try lib.history(account: "Moved").count, 1); XCTAssertEqual(try lib.history(account: "Main").count, 0)
     }
 
@@ -1170,18 +1172,22 @@ final class ScreenshotImporterTests: XCTestCase {
     }
 
     /// H5. A re-share while the first batch's save is unfinished: reviewing and saving it adds nothing a second time.
-    func testReshareAndSaveDuringAnUnfinishedSaveWritesNoSecondBoxVersion() throws {
+    func testReshareDuringAnUnfinishedSaveIsHeldAndOnlyImportItAgainWritesASecondVersion() throws {
         let m = try stage([try nickit])
         try importer.readAll(batch: m.batchId, engine: sharedEngine)
         try saveWithLedgerFailing(m)
         let n = try stage([try nickit], now: Date().addingTimeInterval(5))
         try importer.readAll(batch: n.batchId, engine: sharedEngine)
-        try importer.setIncluded(batch: n.batchId, item: n.items[0].id, true)   // even if the person says "import it again"
+        // held: without the person's explicit choice nothing can be saved from it
+        XCTAssertThrowsError(try importer.prepareReview(batch: n.batchId, engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .nothingToImport) }
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+        try importer.setIncluded(batch: n.batchId, item: n.items[0].id, true)   // "Import it again": the person's explicit choice
         let p = try importer.prepareReview(batch: n.batchId, engine: sharedEngine)
         XCTAssertEqual(p.plan.same.count, 1, "an exact match to what is already in the box: that Pokémon, unchanged")
         let before = try lib.current(account: "Main")?.entries.count
         _ = try importer.save(p, resolutions: [:], engine: sharedEngine)
-        XCTAssertEqual(try lib.current(account: "Main")?.entries.count, before)
+        XCTAssertEqual(try lib.current(account: "Main")?.entries.count, before, "the Pokémon is not added twice (an exact match is that Pokémon)")
+        XCTAssertEqual(try lib.history(account: "Main").count, 2, "but the explicit choice writes its own box version, honestly")
         queue.ledgerConfirmFailure = nil; importer = makeImporter()
         importer.completeInterruptedSaves()
         XCTAssertEqual(try lib.current(account: "Main")?.entries.count, before)
@@ -1350,9 +1356,11 @@ final class ScreenshotImporterTests: XCTestCase {
         _ = try importer.prepareAll(engine: sharedEngine)   // the confirmation succeeds: partly retired, the held repeat stays
         XCTAssertEqual(try queue.load(m.batchId).items.count, 1)
         try lib.renameAccount(from: "Main", to: "Moved"); try lib.createAccount("Main")
+        let generation = try queue.load(m.batchId).generation
         guard case .alreadySaved = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail("saved again") }
         XCTAssertEqual(try lib.history(account: "Main").count, 0); XCTAssertEqual(try lib.history(account: "Moved").count, 1)
         XCTAssertEqual(try queue.load(m.batchId).items.count, 1, "the held screenshot is kept")
+        XCTAssertEqual(try queue.load(m.batchId).generation, generation, "a review the batch has moved on from does not retire it again (the next save would get another signature)")
     }
 
     /// Undetermined: the word is "may", never "is".
@@ -1438,5 +1446,142 @@ final class ScreenshotImporterTests: XCTestCase {
         guard case .unconfirmed = importer.owner(of: try queue.load(m.batchId)) else { return XCTFail("\(importer.owner(of: try queue.load(m.batchId)))") }
         try queue.update(m.batchId) { $0.accountBorn = born + 0.000001 }
         XCTAssertEqual(importer.owner(of: try queue.load(m.batchId)), .account("Main"), "a date that went through JSON is still the same folder")
+    }
+
+    // MARK: review round 7
+
+    /// M1. A folder hidden by a half-done rename must not make a save that IS in a box look like it is in none.
+    func testAnAccountHiddenByAHalfDoneRenameIsNeverConcludedToBeInNoBox() throws {
+        let m = try stage([try nickit])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        try saveWithLedgerFailing(m)
+        queue.ledgerConfirmFailure = nil
+        lib.store.renameKill = "caseTemp"
+        XCTAssertThrowsError(try lib.renameAccount(from: "Main", to: "MAIN"))
+        lib.store.renameKill = nil
+        XCTAssertTrue(lib.store.accountListIsIncomplete)
+        importer = makeImporter(); _ = try importer.prepareAll(engine: sharedEngine)
+        XCTAssertFalse(queue.ledger().entries.isEmpty, "the keys of a save that IS in a hidden box were removed")
+        XCTAssertNotNil(try queue.load(m.batchId).pendingSave, "and the note was cleared")
+        XCTAssertThrowsError(try importer.setIncluded(batch: m.batchId, item: m.items[0].id, true)) { assertFinishing($0, found: false) }
+    }
+
+    /// GPT 1. A scan damaged through and through (its signature gone) that a box version still points at could be this save; one that a version written BEFORE the batch existed points at cannot.
+    func testADamagedScanThatAVersionPointsAtMakesTheAnswerUndetermined() throws {
+        let earlier = try stage([try nickit], now: Date().addingTimeInterval(-3600))   // made before the save below
+        let first = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(first), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        let account = try lib.store.accountDirectory("Main", create: false)
+        let scanFile = try XCTUnwrap(try FileManager.default.contentsOfDirectory(atPath: account.path).first { name in
+            name.hasSuffix(".json") && (try? Data(contentsOf: account.appendingPathComponent(name)))?.range(of: Data(first.signature.utf8)) != nil
+        })
+        try Data("\u{0}\u{0} damaged through and through".utf8).write(to: account.appendingPathComponent(scanFile))   // the signature is gone from its bytes
+        XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: earlier.signature), .unknown, "a version points at that scan, and it could be this save's")
+        let later = try stage([try nickit], now: Date().addingTimeInterval(3600))
+        XCTAssertEqual(lib.scanAlreadySaved(account: "Main", signature: later.signature), .notSaved, "a batch made after that version cannot be what it points at")
+    }
+
+    /// GPT 3. A damaged ledger is not an empty one.
+    func testADamagedLedgerIsNeverTreatedAsEmptyOrWrittenOver() throws {
+        let first = try stage([try nickit])
+        guard case .saved = try importer.save(try review(first), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        let url = queue.root.appendingPathComponent("ledger.json")
+        let garbage = Data("{ this is not a ledger".utf8)
+        try garbage.write(to: url)
+        // the duplicate check holds: it cannot say the screenshot was not imported
+        let again = try stage([try nickit], now: Date().addingTimeInterval(5))
+        try importer.readAll(batch: again.batchId, engine: sharedEngine)
+        let item = try queue.load(again.batchId).items[0]
+        XCTAssertEqual(item.ledgerUnknown, true); XCTAssertTrue(item.heldBack)
+        // a save refuses and writes nothing anywhere
+        let other = try stage([try rayquaza], now: Date().addingTimeInterval(6))
+        try importer.readAll(batch: other.batchId, engine: sharedEngine)
+        XCTAssertThrowsError(try importer.prepareReview(batch: other.batchId, engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .nothingToImport) }   // held too
+        try importer.setIncluded(batch: other.batchId, item: other.items[0].id, true)   // the person's say
+        let p = try importer.prepareReview(batch: other.batchId, engine: sharedEngine)
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .importRecordUnreadable) }
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+        XCTAssertEqual(try Data(contentsOf: url), garbage, "the damaged file was not written over")
+        XCTAssertEqual(try Data(contentsOf: queue.root.appendingPathComponent("ledger.damaged.json")), garbage, "a copy was kept")
+        XCTAssertNil(try queue.load(other.batchId).pendingSave, "and no note was left")
+    }
+
+    /// Opus M2. One account that cannot be read does not stop a save into another when nothing of this save was ever started; with a record of it, it does.
+    func testAnUnreadableOtherAccountDoesNotBlockASaveWithNoRecordOfIt() throws {
+        try lib.createAccount("Broken")
+        let dir = try lib.store.accountDirectory("Broken", create: false)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: dir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+        let m = try stage([try nickit])
+        let p = try review(m)
+        guard case .saved = try importer.save(p, resolutions: [:], engine: sharedEngine) else { return XCTFail("a save into Main was refused because Broken cannot be read") }
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+        // with a provisional record of the save, the answer has to cover every account
+        let n = try stage([try rayquaza])
+        let q = try review(n)
+        try queue.recordProvisional(n.items, batchId: n.batchId, signature: n.signature, account: "Main", epoch: lib.store.renameCount, born: lib.store.accountCreated("Main"))
+        XCTAssertThrowsError(try importer.save(q, resolutions: [:], engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .cannotTellIfSaved) }
+        XCTAssertEqual(try lib.history(account: "Main").count, 1)
+    }
+
+    /// Opus L1. A key another unresolved save holds only provisionally is still written for this save.
+    func testAKeyAnotherUnresolvedSaveHoldsOnlyProvisionallyIsStillWrittenForThisOne() throws {
+        let b = try stage([try nickit])
+        try queue.recordProvisional(b.items, batchId: b.batchId, signature: "import:B", account: "Main", epoch: 0, born: nil)
+        let a = try stage([try nickit], now: Date().addingTimeInterval(5))
+        try queue.recordProvisional(a.items, batchId: a.batchId, signature: "import:A", account: "Main", epoch: 0, born: nil)
+        try queue.removeProvisional(signature: "import:B")   // B turns out never to have reached a box
+        XCTAssertTrue(queue.ledger().entries.contains { $0.signature == "import:A" && Set(a.items[0].keys).contains($0.key) }, "A's key was lost with B's")
+    }
+
+    /// Opus L2. A hold that rests on provisional entries only says so.
+    func testAHoldThatRestsOnProvisionalEntriesOnlyIsMarkedMaybe() throws {
+        let b = try stage([try nickit])
+        try queue.recordProvisional(b.items, batchId: b.batchId, signature: b.signature, account: "Main", epoch: lib.store.renameCount, born: lib.store.accountCreated("Main"))
+        let a = try stage([try nickit], now: Date().addingTimeInterval(5))
+        try importer.readAll(batch: a.batchId, engine: sharedEngine)
+        XCTAssertEqual(try queue.load(a.batchId).items[0].alreadyImportedMaybe, true)
+        try queue.confirmProvisional(signature: b.signature)
+        try importer.readAll(batch: a.batchId, engine: sharedEngine)
+        XCTAssertNil(try queue.load(a.batchId).items[0].alreadyImportedMaybe)
+        XCTAssertNotNil(try queue.load(a.batchId).items[0].alreadyImported)
+    }
+
+    /// Opus L4. The ledger-only pass takes the keys of a save that is in no box away, with the batch long gone.
+    func testTheLedgerOnlyPassRemovesTheKeysOfASaveThatIsInNoBox() throws {
+        let m = try stage([try nickit])
+        try queue.recordProvisional(m.items, batchId: m.batchId, signature: m.signature, account: "Main", epoch: lib.store.renameCount, born: lib.store.accountCreated("Main"))
+        try importer.discard(batch: m.batchId)   // (the discard's own attempt already settles it)
+        importer.resolveProvisionals()
+        XCTAssertTrue(queue.ledger().entries.isEmpty)
+        // and directly, with no batch ever involved
+        try queue.recordProvisional(m.items, batchId: "gone-batch", signature: "import:gone", account: "Main", epoch: lib.store.renameCount, born: nil)
+        importer.resolveProvisionals()
+        XCTAssertTrue(queue.ledger().entries.isEmpty)
+    }
+
+    /// Nit. A save that IS in a box but whose clean-up cannot be written says "is", not "may".
+    func testFoundButCleanUpFailedSaysIsInTheBox() throws {
+        let m = try stage([try nickit, try retake(try nickit, 7)])
+        try importer.readAll(batch: m.batchId, engine: sharedEngine)
+        let p = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
+        XCTAssertThrowsError(try importer.save(p, resolutions: [:], engine: sharedEngine, afterCommit: { throw Cut() }))
+        let batchDir = queue.batchDirectory(m.batchId)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: batchDir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: batchDir.path) }
+        XCTAssertThrowsError(try importer.setIncluded(batch: m.batchId, item: m.items[1].id, true)) { assertFinishing($0, found: true) }
+    }
+
+    /// A rename journal alone (no folder hidden yet) also means the account list may be incomplete.
+    func testARenameJournalAloneMakesTheAnswerUndetermined() throws {
+        let m = try stage([try nickit])
+        try queue.update(m.batchId) { $0.pendingSave = PendingSave(items: [m.items[0].id], leftOut: [], account: "Main", born: lib.store.accountCreated("Main")) }
+        try queue.recordProvisional(m.items, batchId: m.batchId, signature: m.signature, account: "Main", epoch: lib.store.renameCount, born: lib.store.accountCreated("Main"))
+        XCTAssertFalse(lib.store.accountListIsIncomplete)
+        try Data("{}".utf8).write(to: dir.appendingPathComponent("boxes/.rename-journal.json"))
+        XCTAssertTrue(lib.store.accountListIsIncomplete)
+        _ = try importer.prepareAll(engine: sharedEngine)
+        XCTAssertNotNil(try queue.load(m.batchId).pendingSave, "not concluded to be in no box while a rename may be half done")
+        XCTAssertFalse(queue.ledger().entries.isEmpty)
     }
 }

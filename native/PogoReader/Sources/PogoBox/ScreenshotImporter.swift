@@ -33,12 +33,13 @@ public final class ScreenshotImporter {
         case accountAmbiguous(old: String, renamedTo: String)
         /// The batch's account cannot be confirmed (it was deleted and made again under the same name, or the renames since cannot be followed any more): the person chooses.
         case accountUnconfirmed(String)
-        /// The last save of this batch has reached the box but is not finished (its record in the ledger, its clean-up): nothing else is done to the batch until it is.
         /// A save of this batch is written down and not finished. `found`: a scan with its signature IS in an account's box and only its record is unfinished; otherwise it could not be
         /// checked, so the Pokémon MAY already be in the box.
         case finishingLastSave(found: Bool)
         /// Nothing was saved: the record that keeps a screenshot from being imported twice could not be written, so the box was not written either.
         case couldNotRecordSave
+        /// The record of what was imported is damaged and cannot be read: nothing was saved, and the damaged file is kept aside.
+        case importRecordUnreadable
         case nothingToImport
         case notYetRead
         /// The account's saved scans could not be read well enough to tell whether this batch was already saved; saving now could make a second copy.
@@ -53,6 +54,7 @@ public final class ScreenshotImporter {
             case .finishingLastSave(let found):
                 return found ? "The last save of these screenshots is in your box, but the record of it could not be finished yet, so nothing was added again. This is tried again each time the app comes to the front; you can also discard this batch."
                              : "A save of these screenshots was started earlier and may already be in your box: it could not be checked yet (a file could not be read or written), so nothing was added again. This is tried again each time the app comes to the front; you can also discard this batch."
+            case .importRecordUnreadable: return "Nothing was saved: the record of what has been imported could not be read. Your box has not been changed, and the damaged file was kept."
             case .couldNotRecordSave: return "Nothing was saved: the record that keeps a screenshot from being imported twice could not be written. Your box has not been changed. Try again."
             case .noSuchAccount(let n): return "There is no account called \(n) on this phone."
             case .accountAmbiguous(let old, let now): return "These screenshots were for the account that was called \(old) and is now \(now), but there is another account called \(old) now. Choose which box they belong to."
@@ -159,20 +161,24 @@ public final class ScreenshotImporter {
         }
     }
 
-    /// Whether a save with this signature is in any account's box: found in one, in none (every account was read and none has it), or undetermined (an account could not be read or listed).
-    /// The signature belongs to one save, so which account it went into does not matter: any account that holds it settles it, whatever the account is called or whenever its folder was made.
+    /// Whether a save with this signature is in any account's box: found in one, in none (EVERY account was listed and read, and none has it), or undetermined. It is never "in none" while
+    /// the list of accounts may be incomplete (a rename is half done, or a folder it moved aside is hiding an account) or an account cannot be read. The signature belongs to one save, so
+    /// which account it went into does not matter: any account that holds it settles it, whatever it is called or whenever its folder was made.
+    /// One exception, for saving: with no note and no provisional key for this signature (`hasRecord` false) nothing was ever started, so an account that cannot be read matters only if it is the
+    /// destination, and the destination's own answer decides.
     private enum SaveOutcome { case found, notFound, undetermined }
-    private func outcomeOfSave(signature: String) -> SaveOutcome {
-        guard let accounts = try? library.accounts() else { return .undetermined }
-        var undetermined = false
+    private func outcomeOfSave(signature: String, destination: String? = nil, hasRecord: Bool = true) -> SaveOutcome {
+        guard !library.store.accountListIsIncomplete, let accounts = try? library.accounts() else { return .undetermined }
+        var undetermined = false, destinationAnswered = false
         for a in accounts {
             switch library.scanAlreadySaved(account: a, signature: signature) {
             case .saved: return .found
             case .unknown: undetermined = true
-            case .notSaved: break
+            case .notSaved: if a == destination { destinationAnswered = true }
             }
         }
-        return undetermined ? .undetermined : .notFound
+        if undetermined { return !hasRecord && destinationAnswered ? .notFound : .undetermined }
+        return .notFound
     }
 
     private enum Completion { case finished, noteCleared, foundButUnrecorded, undetermined }
@@ -202,8 +208,10 @@ public final class ScreenshotImporter {
         guard let pending = m.pendingSave else { return .finished }
         switch outcomeOfSave(signature: m.signature) {
         case .found:
-            do { try queue.confirmProvisional(signature: m.signature) } catch { return .foundButUnrecorded }
-            _ = try? queue.retire(m.batchId, saved: Set(pending.items), dropped: Set(pending.leftOut), now: Date())
+            do {
+                try queue.confirmProvisional(signature: m.signature)
+                _ = try queue.retire(m.batchId, saved: Set(pending.items), dropped: Set(pending.leftOut), now: Date())
+            } catch { return .foundButUnrecorded }   // it IS in a box; only its record or the clean-up is unfinished
             return .finished
         case .notFound:
             // the save never reached any box: its provisional keys go and the note is cleared, so the batch is usable again
@@ -412,13 +420,14 @@ public final class ScreenshotImporter {
         }
         // Whether this save is already in a box is asked of EVERY account (the signature is this save's alone): a review that was open when an account was renamed, or its name used again, must
         // not be saved into whatever has that name now.
-        switch outcomeOfSave(signature: p.manifest.signature) {
+        let hasRecord = (try? queue.load(p.manifest.batchId))?.pendingSave != nil || queue.provisionalSignatures()[p.manifest.signature] != nil
+        switch outcomeOfSave(signature: p.manifest.signature, destination: p.account, hasRecord: hasRecord) {
         case .found:
             // A save with no note of what it held (made before the note was written, or already finished): what this review would have saved is taken as saved, if the batch is as the
             // review left it; otherwise the batch has moved on and is left as it is.
             try? queue.confirmProvisional(signature: p.manifest.signature)
-            if let now = try? queue.load(p.manifest.batchId), now.generation == p.manifest.generation {
-                _ = try? queue.retire(p.manifest.batchId, saved: Self.savedItems(p, resolutions: [:]), dropped: Set(p.dropped), now: now.updatedAt)
+            if let current = try? queue.load(p.manifest.batchId), current.generation == p.manifest.generation {
+                _ = try? queue.retire(p.manifest.batchId, saved: Self.savedItems(p, resolutions: [:]), dropped: Set(p.dropped), now: now)
             }
             return .alreadySaved
         case .undetermined: throw Failure.cannotTellIfSaved
@@ -434,7 +443,7 @@ public final class ScreenshotImporter {
         do {
             try queue.recordProvisional(p.manifest.items.filter { ids.contains($0.id) }, batchId: p.manifest.batchId, signature: signature, account: p.account,
                                         epoch: library.store.renameCount, born: library.store.accountCreated(p.account), now: now)
-        } catch { throw Failure.couldNotRecordSave }
+        } catch ImportQueueError.ledgerUnreadable { throw Failure.importRecordUnreadable } catch { throw Failure.couldNotRecordSave }
         try queue.update(p.manifest.batchId) { $0.pendingSave = PendingSave(items: Array(ids).sorted(), leftOut: Array(leftOut).sorted(), account: p.account, born: library.store.accountCreated(p.account)) }
         let n = p.outcome.scan.rows.count
         let note = "Screenshot import, \(n) Pokémon"

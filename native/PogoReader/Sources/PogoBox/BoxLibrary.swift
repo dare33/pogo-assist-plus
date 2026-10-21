@@ -116,10 +116,27 @@ public final class BoxLibrary {
             // An unreadable scan file only matters if it could be this scan: its replay log (kept beside it) is as long as the signature says. Other damaged files are not this scan.
             let size = signature.prefix(while: { $0 != "-" })
             let dir = try? store.accountDirectory(account, create: false)
+            // For an import signature: which box versions point at which scan (and when each was written), and whether some version cannot be read.
+            var versionScans = [String: Date](), versionsDamaged = false
+            if signature.hasPrefix("import:"), !listing.unreadable.isEmpty {
+                if let all = try? seqs(account) {
+                    for seq in all {
+                        if let f = try? file(account, seq), let data = try? Data(contentsOf: f), let h = try? Self.headerDecoder.decode(ScanIdOnly.self, from: data) {
+                            if let id = h.scanId { versionScans[id] = min(versionScans[id] ?? .distantFuture, h.createdAt ?? .distantFuture) }
+                        } else { versionsDamaged = true }
+                    }
+                } else { versionsDamaged = true }
+            }
+            let batchMade = Self.importBatchDate(signature)
             let plausible = listing.unreadable.contains { name in
                 guard let dir else { return true }
                 // A screenshot import's signature (`import:<batch>`) names no log size: an unreadable file can be that save only if it still carries the signature text.
                 if signature.hasPrefix("import:") {
+                    // ...or if a box version points at it (a scan that is damaged through and through has lost its signature, but the version that was written for it still names it), or if a
+                    // version cannot be read at all (it may be the one that names it).
+                    // A version written BEFORE the batch was made cannot belong to this save, so a scan it points at is unrelated however damaged it is.
+                    if versionsDamaged { return true }
+                    if let written = versionScans[String(name.dropLast(5))] { return batchMade.map { written >= $0.addingTimeInterval(-2) } ?? true }
                     guard let data = try? Data(contentsOf: dir.appendingPathComponent(name)) else { return true }
                     return data.range(of: Data(("\"" + signature + "\"").utf8)) != nil
                 }
@@ -139,7 +156,15 @@ public final class BoxLibrary {
         try? store.delete(account: account, id: match.id)
         return .notSaved
     }
-    private struct ScanIdOnly: Decodable { var scanId: String? }
+    private struct ScanIdOnly: Decodable { var scanId: String?; var createdAt: Date? }
+
+    /// When the batch an import signature names was made (the stamp its id starts with, UTC), or nil if it does not parse.
+    static func importBatchDate(_ signature: String) -> Date? {
+        guard signature.hasPrefix("import:") else { return nil }
+        let stamp = signature.dropFirst(7).prefix { $0 != "-" }
+        let f = DateFormatter(); f.dateFormat = "yyyyMMddHHmmss"; f.timeZone = TimeZone(identifier: "UTC"); f.locale = Locale(identifier: "en_US_POSIX")
+        return f.date(from: String(stamp))
+    }
     private static let headerDecoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
 
     // MARK: - versions

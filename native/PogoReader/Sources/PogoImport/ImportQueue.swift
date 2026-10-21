@@ -11,6 +11,8 @@ public enum ImportQueueError: Error, Equatable, LocalizedError {
     case newerVersion(String)
     case emptyBatch
     case badName(String)
+    /// The record of what was imported (the ledger) is there but cannot be read: it is never treated as empty or written over.
+    case ledgerUnreadable
 
     public var errorDescription: String? {
         switch self {
@@ -22,6 +24,7 @@ public enum ImportQueueError: Error, Equatable, LocalizedError {
         case .newerVersion: return "These screenshots were queued by a newer version of the app. Update the app to open them."
         case .emptyBatch: return "None of the screenshots could be used."
         case .badName(let n): return "\(n) is not a valid batch name."
+        case .ledgerUnreadable: return "The record of what has been imported could not be read, so nothing was saved. The damaged file was kept."
         }
     }
 }
@@ -296,28 +299,51 @@ public struct ImportLedger: Codable, Equatable {
 
     /// When any of `keys` was saved into `account`. `currentName` says what an entry's account is called now (nil: it cannot be told, so the entry is not counted); `excluding` leaves
     /// out a batch's own entries (a save cut off between the ledger and the removal must not make the batch's own screenshots look already imported).
-    public func savedAt(account: String, keys: [String], excluding: String? = nil, currentName: (Entry) -> String? = { $0.account }) -> Date? {
+    public func savedAt(account: String, keys: [String], excluding: String? = nil, currentName: (Entry) -> String? = { $0.account }) -> Date? { hold(account: account, keys: keys, excluding: excluding, currentName: currentName)?.date }
+
+    /// The latest entry that holds one of `keys` for `account`, and whether EVERY entry that does is provisional (a save that may or may not have reached the box).
+    public func hold(account: String, keys: [String], excluding: String? = nil, currentName: (Entry) -> String? = { $0.account }) -> (date: Date, provisionalOnly: Bool)? {
         let wanted = Set(keys)
-        return entries.filter { $0.batchId != excluding && wanted.contains($0.key) && currentName($0) == account }.map(\.savedAt).max()
+        let hits = entries.filter { $0.batchId != excluding && wanted.contains($0.key) && currentName($0) == account }
+        guard let date = hits.map(\.savedAt).max() else { return nil }
+        return (date, hits.allSatisfy { $0.provisional == true })
+    }
+
+    /// Keep to `maxEntries`: the oldest CONFIRMED entries go first, and a provisional entry is never evicted (it may be the only thing standing between a screenshot and a second save).
+    mutating func trim() {
+        var over = entries.count - Self.maxEntries
+        guard over > 0 else { return }
+        var i = 0
+        while over > 0, i < entries.count {
+            if entries[i].provisional == true { i += 1 } else { entries.remove(at: i); over -= 1 }
+        }
     }
 }
 
 extension ImportQueue {
     var ledgerURL: URL { root.appendingPathComponent(Self.ledgerName) }
 
-    public func ledger() -> ImportLedger {
-        guard let data = try? Data(contentsOf: ledgerURL), let l = try? Self.decoder.decode(ImportLedger.self, from: data) else { return ImportLedger() }
-        return l
+    /// The ledger as it is, for looking at (tests, the sheet): an unreadable one shows as empty here. Everything that decides or writes uses `loadLedger`.
+    public func ledger() -> ImportLedger { (try? loadLedger()) ?? ImportLedger() }
+
+    /// The ledger; absent is empty, but one that is there and cannot be decoded THROWS (`ledgerUnreadable`) and is copied aside once (`ledger.damaged-<n>.json`), never treated as empty and never
+    /// written over.
+    public func loadLedger() throws -> ImportLedger {
+        guard fm.fileExists(atPath: ledgerURL.path) else { return ImportLedger() }
+        if let data = try? Data(contentsOf: ledgerURL), let l = try? Self.decoder.decode(ImportLedger.self, from: data) { return l }
+        let copy = root.appendingPathComponent("ledger.damaged.json")
+        if !fm.fileExists(atPath: copy.path) { try? fm.copyItem(at: ledgerURL, to: copy) }
+        throw ImportQueueError.ledgerUnreadable
     }
 
     /// Remember that these items were saved into `account`. Called after the box write succeeded; a failure here only means the same screenshot is not recognised later.
     public func recordSaved(_ items: [ImportItem], batchId: String, account: String, epoch: Int? = nil, born: Double? = nil, now: Date = Date()) throws {
         try ledgerFailure?()
-        var l = ledger()
-        l.entries.removeAll { now.timeIntervalSince($0.savedAt) > ImportLedger.keepFor }
-        let known = Set(l.entries.filter { $0.account == account }.map(\.key))
+        var l = try loadLedger()
+        l.entries.removeAll { now.timeIntervalSince($0.savedAt) > ImportLedger.keepFor && $0.provisional != true }
+        let known = Set(l.entries.filter { $0.account == account && $0.provisional != true }.map(\.key))
         for item in items { for k in item.keys where !known.contains(k) { l.entries.append(.init(account: account, key: k, batchId: batchId, savedAt: now, epoch: epoch, born: born)) } }
-        if l.entries.count > ImportLedger.maxEntries { l.entries.removeFirst(l.entries.count - ImportLedger.maxEntries) }
+        l.trim()
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
     }
@@ -326,14 +352,15 @@ extension ImportQueue {
     /// fails the box is not written. Keys already held for this account (confirmed, or provisional for another save) are not added again.
     public func recordProvisional(_ items: [ImportItem], batchId: String, signature: String, account: String, epoch: Int?, born: Double?, now: Date = Date()) throws {
         try ledgerFailure?()
-        var l = ledger()
+        var l = try loadLedger()
         l.entries.removeAll { now.timeIntervalSince($0.savedAt) > ImportLedger.keepFor && $0.provisional != true }
-        let known = Set(l.entries.filter { $0.account == account && $0.signature != signature }.map(\.key))
-        let mine = Set(l.entries.filter { $0.signature == signature }.map(\.key))
+        // only CONFIRMED entries say a key is held: a key another, unresolved save has only provisionally must still be written for this one, or removing that save's entries would lose it
+        let known = Set(l.entries.filter { $0.account == account && $0.provisional != true }.map(\.key))
+        let mine = Set(l.entries.filter { $0.signature == signature && $0.account == account }.map(\.key))
         for item in items { for k in item.keys where !known.contains(k) && !mine.contains(k) {
             l.entries.append(.init(account: account, key: k, batchId: batchId, savedAt: now, epoch: epoch, born: born, signature: signature, provisional: true))
         } }
-        if l.entries.count > ImportLedger.maxEntries { l.entries.removeFirst(l.entries.count - ImportLedger.maxEntries) }
+        l.trim()
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
     }
@@ -341,7 +368,7 @@ extension ImportQueue {
     /// The save with this signature reached the box: its provisional entries are confirmed.
     public func confirmProvisional(signature: String) throws {
         try ledgerFailure?(); try ledgerConfirmFailure?()
-        var l = ledger()
+        var l = try loadLedger()
         guard l.entries.contains(where: { $0.signature == signature && $0.provisional == true }) else { return }
         for i in l.entries.indices where l.entries[i].signature == signature { l.entries[i].provisional = nil }
         try Self.writeAtomically(try Self.encoder.encode(l), to: ledgerURL)
@@ -350,7 +377,7 @@ extension ImportQueue {
     /// The save with this signature never reached the box: its provisional entries go, so its screenshots are not held back for something that did not happen.
     public func removeProvisional(signature: String) throws {
         try ledgerFailure?(); try ledgerConfirmFailure?()
-        var l = ledger()
+        var l = try loadLedger()
         let before = l.entries.count
         l.entries.removeAll { $0.signature == signature && $0.provisional == true }
         guard l.entries.count != before else { return }
@@ -371,7 +398,9 @@ extension ImportQueue {
                                ledgerAccount: @escaping (ImportLedger.Entry) -> String? = { $0.account }) throws -> ImportManifest {
         // A batch whose last save is unfinished is not an earlier copy of anything: its screenshots are in the box already, and a share of the same screenshot must not wait behind it.
         let others = try list().manifests.filter { $0.batchId != batchId && $0.savedAt == nil && $0.pendingSave == nil }
-        let ledger = self.ledger()
+        // An unreadable ledger is not an empty one: every screenshot is held for the person's say until it can be read.
+        let loaded = try? loadLedger()
+        let ledger = loaded ?? ImportLedger()
         return try update(batchId, now: now) { m in
             // Batches are compared by whose box they are for NOW (`owner`, from the rename history), never by the name each happened to record; a batch with no known owner is compared with all.
             let mine = owner(m)
@@ -386,7 +415,10 @@ extension ImportQueue {
                 let item = m.items[i]
                 m.items[i].duplicateOf = item.keys.compactMap { seen[$0] }.first
                 if m.items[i].duplicateOf == nil && !item.canRetry { for k in item.keys { seen[k] = item.id } }
-                m.items[i].alreadyImported = mine.flatMap { ledger.savedAt(account: $0, keys: item.keys, excluding: m.batchId, currentName: ledgerAccount) }
+                let hold = mine.flatMap { ledger.hold(account: $0, keys: item.keys, excluding: m.batchId, currentName: ledgerAccount) }
+                m.items[i].alreadyImported = hold?.date
+                m.items[i].alreadyImportedMaybe = hold.map { $0.provisionalOnly ? true : nil } ?? nil
+                m.items[i].ledgerUnknown = loaded == nil ? true : nil
             }
         }
     }

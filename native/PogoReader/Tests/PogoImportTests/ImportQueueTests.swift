@@ -478,4 +478,16 @@ final class ImportQueueTests: XCTestCase {
         try queue.recordSaved(m.items, batchId: m.batchId, account: "Main", epoch: 1, born: 1234.5)
         XCTAssertEqual(queue.ledger().entries.first?.born, 1234.5)
     }
+
+    /// GPT 4. Eviction never removes a provisional entry, and takes the oldest confirmed first.
+    func testLedgerEvictionNeverRemovesAProvisionalEntry() {
+        var l = ImportLedger()
+        func entry(_ i: Int, provisional: Bool) -> ImportLedger.Entry { .init(account: "A", key: "k\(i)", batchId: "b", savedAt: Date(timeIntervalSince1970: Double(i)), epoch: nil, born: nil, signature: provisional ? "s" : nil, provisional: provisional ? true : nil) }
+        l.entries = (0..<3).map { entry($0, provisional: true) } + (3..<(ImportLedger.maxEntries + 5)).map { entry($0, provisional: false) }
+        l.trim()
+        XCTAssertEqual(l.entries.count, ImportLedger.maxEntries)
+        XCTAssertEqual(l.entries.filter { $0.provisional == true }.count, 3, "the oldest entries are provisional and stay")
+        XCTAssertEqual(l.entries.first { $0.provisional != true }?.key, "k8", "the oldest confirmed ones went")
+    }
+
 }
