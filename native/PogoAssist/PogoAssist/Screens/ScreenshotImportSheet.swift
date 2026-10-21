@@ -10,6 +10,7 @@ struct ScreenshotImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var picked: [PhotosPickerItem] = []
     @State private var discarding: String?
+    @State private var startingNewRecord = false
 
     private var imports: ImportModel { model.screenshots }
 
@@ -35,6 +36,18 @@ struct ScreenshotImportSheet: View {
                 } footer: {
                     Text(imports.available ? "You can also share screenshots from Photos to Pogo Assist+. They wait here until you open the app." : "The shared storage the app group needs is not available, so screenshots cannot be imported on this build.")
                 }
+                if imports.importRecordUnreadable {
+                    Section {
+                        Text("The record of what you have imported before is damaged, so these screenshots are held back until you say. You can start a new record: the damaged one is kept, but screenshots you imported earlier will not be recognised any more (one that exactly matches a Pokémon already in your box is still left unchanged).").font(.footnote)
+                        Button("Start a new import record") { startingNewRecord = true }.accessibilityIdentifier("import-new-record")
+                    }
+                }
+                if imports.importRecordUnreadable {
+                    Section {
+                        Text("The record of what you have imported before is damaged, so these screenshots are held back until you say. You can start a new record: the damaged one is kept, but screenshots you imported earlier will not be recognised any more (one that exactly matches a Pokémon already in your box is still left unchanged).").font(.footnote)
+                        Button("Start a new import record") { startingNewRecord = true }.accessibilityIdentifier("import-new-record")
+                    }
+                }
                 if let notice = imports.notice {
                     Section { Text(notice).font(.footnote).accessibilityIdentifier("import-notice") }
                 }
@@ -54,6 +67,9 @@ struct ScreenshotImportSheet: View {
                 picked = []
             }
             .onAppear { imports.refresh(); imports.shown() }
+            .confirmationDialog("Start a new import record?", isPresented: $startingNewRecord, titleVisibility: .visible) {
+                Button("Start a new record") { imports.startNewImportRecord() }
+            } message: { Text("The damaged record is kept. Screenshots you imported before will not be recognised any more, so one of them could be offered again; one that exactly matches a Pokémon already in your box is still left unchanged.") }
             .confirmationDialog("Discard these screenshots?", isPresented: Binding(get: { discarding != nil }, set: { if !$0 { discarding = nil } }), titleVisibility: .visible) {
                 Button("Discard screenshots", role: .destructive) { if let id = discarding { imports.discard(batch: id) }; discarding = nil }
             } message: { Text("Nothing will be added to the box. The pictures in Photos are not touched.") }
@@ -191,7 +207,7 @@ private struct ItemRow: View {
                 if item.canRetry { Button("Try again") { imports.retry(batch: batch.batchId, item: item.id) }.buttonStyle(.borderless) }
             }
             if item.hasHold {
-                Toggle(item.repeatOf != nil ? "This is a different Pokémon" : "Import it again", isOn: Binding(get: { item.includeAnyway == true }, set: { imports.setIncluded(batch: batch.batchId, item: item.id, $0) }))
+                Toggle(item.repeatOf != nil ? "This is a different Pokémon" : item.ledgerUnknown == true ? "Include it anyway" : "Import it again", isOn: Binding(get: { item.includeAnyway == true }, set: { imports.setIncluded(batch: batch.batchId, item: item.id, $0) }))
                     .font(.footnote)
                 Button("Discard this screenshot", role: .destructive) { imports.discardItem(batch: batch.batchId, item: item.id) }.font(.footnote).buttonStyle(.borderless)
             }

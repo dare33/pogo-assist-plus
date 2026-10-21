@@ -48,12 +48,16 @@ struct ReviewNotices: View {
         guard !left.isEmpty else { return nil }
         func n(_ k: Int) -> String { ReviewFormat.count(k, "screenshot", "screenshots") }
         let repeats = left.filter { $0.heldBack && $0.repeatOf != nil }.count
-        let already = left.filter { $0.heldBack && $0.repeatOf == nil && $0.alreadyImported != nil }.count
+        let unreadableRecord = left.filter { $0.heldBack && $0.repeatOf == nil && $0.ledgerUnknown == true }.count
+        let maybe = left.filter { $0.heldBack && $0.repeatOf == nil && $0.ledgerUnknown != true && $0.alreadyImportedMaybe == true }.count
+        let already = left.filter { $0.heldBack && $0.repeatOf == nil && $0.ledgerUnknown != true && $0.alreadyImportedMaybe != true && $0.alreadyImported != nil }.count
         let noIVs = left.filter { $0.state == .ivsMissing }.count, unsupported = left.filter { $0.state == .unsupported }.count
         let unread = left.filter { $0.canRetry }.count
         var out = [String](), stay = [String](), cleared = [String]()
         if repeats > 0 { out.append("\(n(repeats)) held back as possible repeats of another in this batch"); stay.append("held-back") }
         if already > 0 { out.append("\(n(already)) held back because that screenshot was imported before"); if !stay.contains("held-back") { stay.append("held-back") } }
+        if maybe > 0 { out.append("\(n(maybe)) held back because a save of that screenshot may already have been made"); if !stay.contains("held-back") { stay.append("held-back") } }
+        if unreadableRecord > 0 { out.append("\(n(unreadableRecord)) held back because the record of earlier imports could not be read"); if !stay.contains("held-back") { stay.append("held-back") } }
         if unread > 0 { out.append("\(n(unread)) that could not be read"); stay.append("unreadable") }
         if noIVs > 0 { out.append("\(n(noIVs)) without IVs (the appraisal bars were not showing or had not finished filling)"); cleared.append("without IVs") }
         if unsupported > 0 { out.append("\(n(unsupported)) that are not a supported screen"); cleared.append("unsupported") }

@@ -256,6 +256,23 @@ final class ImportModel: ObservableObject {
         }
     }
 
+    /// The record of what was imported is damaged: the person starts a new one. The damaged file is kept; earlier imports are not recognised afterwards (an exact match to a Pokémon already in the
+    /// box is still that Pokémon, left unchanged).
+    func startNewImportRecord() {
+        let importer = self.importer
+        Task {
+            do {
+                let started = try await app.worker.run { engine in try importer.startNewImportRecord(engine: engine) }
+                notice = started ? "A new import record was started. The damaged one was kept in the app's storage. Screenshots imported before are not recognised any more; one that exactly matches a Pokémon already in your box is still left unchanged." : nil
+            } catch { notice = AppModel.plain(error) }
+            refresh()
+            startReading()
+        }
+    }
+
+    /// Some screenshot is held back because the import record could not be read.
+    var importRecordUnreadable: Bool { batches.contains { $0.items.contains { $0.ledgerUnknown == true } } }
+
     func assign(batch: String, to account: String) {
         let importer = self.importer
         Task {
