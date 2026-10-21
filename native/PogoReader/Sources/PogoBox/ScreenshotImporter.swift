@@ -40,6 +40,8 @@ public final class ScreenshotImporter {
         case couldNotRecordSave
         /// The record of what was imported is damaged and cannot be read: nothing was saved, and the damaged file is kept aside.
         case importRecordUnreadable
+        /// Nothing was saved and the batch could not be updated (every Pokémon was left out, and the batch's file could not be written).
+        case couldNotUpdateBatch
         /// The review is not the batch's current state (it was saved, partly saved or moved to another account since the review was made): nothing was saved.
         case staleReview
         case nothingToImport
@@ -56,6 +58,7 @@ public final class ScreenshotImporter {
             case .finishingLastSave(let found):
                 return found ? "The last save of these screenshots is in your box, but the record of it could not be finished yet, so nothing was added again. This is tried again each time the app comes to the front; you can also discard this batch."
                              : "A save of these screenshots was started earlier and may already be in your box: it could not be checked yet (a file could not be read or written), so nothing was added again. This is tried again each time the app comes to the front; you can also discard this batch."
+            case .couldNotUpdateBatch: return "The screenshots could not be updated, so nothing was saved. Try again."
             case .staleReview: return "These screenshots are not as they were when this review was opened (a save of them was made, they were given to another account, or they are no longer in the queue), so nothing was saved. Open the review again."
             case .importRecordUnreadable: return "Nothing was saved: the record of what has been imported could not be read. Your box has not been changed, and the damaged file was kept."
             case .couldNotRecordSave: return "Nothing was saved: the record that keeps a screenshot from being imported twice could not be written. Your box has not been changed. Try again."
@@ -462,7 +465,7 @@ public final class ScreenshotImporter {
         // Every row left out: there is nothing to put in the box, so no box version is written (and no key, which would hold a screenshot back for a save that never happened). The batch is
         // retired as finished: what was left out is the person's answer.
         if ids.isEmpty {
-            _ = try? queue.retire(p.manifest.batchId, saved: [], dropped: leftOut, now: now)
+            do { _ = try queue.retire(p.manifest.batchId, saved: [], dropped: leftOut, now: now) } catch { throw Failure.couldNotUpdateBatch }
             return .nothingToSave
         }
         let signature = p.manifest.signature

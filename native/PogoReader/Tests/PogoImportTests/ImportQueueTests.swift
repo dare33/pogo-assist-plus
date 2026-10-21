@@ -493,7 +493,7 @@ final class ImportQueueTests: XCTestCase {
 
     // MARK: round 8
 
-    func testEveryWritePathTrimsTheLedgerAndNeverEvictsProvisional() throws {
+    func testConfirmingAndRecordSavedTrimTheLedgerAndProvisionalWritesDoNot() throws {
         let m = try makeBatch([100])
         func entry(_ i: Int, provisional: Bool) -> ImportLedger.Entry { .init(account: "Main", key: "k\(i)", batchId: "b", savedAt: Date(timeIntervalSinceNow: Double(i - 30_000)), epoch: nil, born: nil, signature: provisional ? "s" : nil, provisional: provisional ? true : nil) }
         var l = ImportLedger()
@@ -594,5 +594,49 @@ final class ImportQueueTests: XCTestCase {
         try queue.recordProvisional(m.items, batchId: m.batchId, signature: "import:old", account: "Main", epoch: nil, born: nil, now: Date(timeIntervalSinceNow: -400 * 24 * 3600))
         try queue.recordProvisional(n.items, batchId: n.batchId, signature: "import:new", account: "Main", epoch: nil, born: nil)
         XCTAssertTrue(queue.ledger().entries.contains { $0.signature == "import:old" && $0.provisional == true })
+    }
+
+    private func led(_ k: String, _ t: Double, account: String = "A", born: Double? = nil, prov: Bool = false, batch: String = "b") -> ImportLedger.Entry {
+        .init(account: account, key: k, batchId: batch, savedAt: Date(timeIntervalSince1970: t), epoch: nil, born: born, signature: prov ? "s" : nil, provisional: prov ? true : nil)
+    }
+
+    /// Two saves of one screenshot in the same second leave one entry, and the second pass does not evict another screenshot.
+    func testSameSecondDuplicatesAreDedupedAndNothingElseIsEvicted() {
+        var l = ImportLedger()
+        l.entries = (0..<(ImportLedger.maxEntries - 1)).map { led("k\($0)", Double($0 + 100)) }
+        l.entries += [led("dup", 5000, batch: "first"), led("dup", 5000, batch: "second"), led("dup", 5000, batch: "third")]   // three saves in the same second
+        XCTAssertEqual(l.entries.count, ImportLedger.maxEntries + 2)
+        l.trim()
+        XCTAssertEqual(l.entries.filter { $0.key == "dup" }.map(\.batchId), ["third"], "the one written last survives a tie in date")
+        XCTAssertEqual(l.entries.count, ImportLedger.maxEntries - 1 + 1)
+        let keys = Set(l.entries.map(\.key))
+        XCTAssertTrue((0..<(ImportLedger.maxEntries - 1)).allSatisfy { keys.contains("k\($0)") }, "another screenshot was evicted")
+    }
+
+    func testAnAccountMadeAgainUnderTheSameNameIsNotMergedByTheDuplicatePass() {
+        var l = ImportLedger()
+        l.entries = (0..<ImportLedger.maxEntries).map { led("k\($0)", Double($0 + 100)) }
+        l.entries += [led("same", 5000, born: 1), led("same", 5001, born: 2)]   // one key, two folders of the same name
+        l.trim()
+        XCTAssertEqual(l.entries.filter { $0.key == "same" }.count, 2, "each folder keeps its own")
+    }
+
+    func testAProtectedKeysConfirmedEntryStaysWhenOverTheCap() {
+        var l = ImportLedger()
+        l.entries = [led("held", 1), led("held", 2, prov: true)] + (0..<ImportLedger.maxEntries).map { led("k\($0)", Double($0 + 100)) }
+        l.trim()
+        XCTAssertTrue(l.entries.contains { $0.key == "held" && $0.provisional != true }, "the oldest key has a provisional entry: its confirmed one stays too")
+        XCTAssertTrue(l.entries.contains { $0.key == "held" && $0.provisional == true })
+        XCTAssertFalse(l.entries.contains { $0.key == "k0" }, "an unprotected one went instead")
+    }
+
+    func testTrimmingFarOverTheCapIsFast() {
+        var l = ImportLedger()
+        l.entries = (0..<(ImportLedger.maxEntries + 10_000)).map { led("k\($0)", Double($0)) }
+        let start = Date()
+        l.trim()
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.0, "a quadratic trim took seconds")
+        XCTAssertEqual(l.entries.count, ImportLedger.maxEntries)
+        XCTAssertEqual(l.entries.first?.key, "k10000", "the oldest keys went")
     }
 }

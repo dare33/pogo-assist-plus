@@ -789,7 +789,7 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertEqual(try queue.load(m.batchId).items[1].repeatOf, m.items[0].id, "held as a repeat of the first")
         let p = try importer.prepareReview(batch: m.batchId, engine: sharedEngine)
         let u = try XCTUnwrap(p.plan.unsure.first)
-        _ = try importer.save(p, resolutions: [u.scanned: .leaveOut], engine: sharedEngine)   // (a save, or, when every row is left out, nothing to save: the batch is retired either way)
+        guard case .nothingToSave = try importer.save(p, resolutions: [u.scanned: .leaveOut], engine: sharedEngine) else { return XCTFail() }   // the only row is left out: nothing to save, the batch is retired
         let left = try queue.load(m.batchId)
         let ids = Set(left.items.map(\.id))
         XCTAssertFalse(left.items.contains { $0.repeatOf.map { !ids.contains($0) } ?? false }, "held back as a repeat of a screenshot that is no longer in the batch")
@@ -1810,5 +1810,33 @@ final class ScreenshotImporterTests: XCTestCase {
         XCTAssertEqual(try lib.history(account: "Main").count, versions); XCTAssertEqual(try lib.store.list(account: "Main").scans.count, scans)
         XCTAssertThrowsError(try queue.load(m.batchId), "the batch is finished")
         XCTAssertEqual(queue.hasRecord(ofSave: m.signature), false, "and no key was written for it")
+    }
+
+    /// A retire failure is not reported as success when every row is left out.
+    func testNothingToSaveSurfacesAFailureToUpdateTheBatch() throws {
+        let saved = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try lib.mutate(account: "Main", reason: .edit, note: "lower CP") { e in var e = e; e[0].row.cp = 3900; return e }
+        let m = try stage([try rayquazaFainted])
+        let p = try review(m)
+        let dir = queue.batchDirectory(m.batchId)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: dir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+        XCTAssertThrowsError(try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .couldNotUpdateBatch) }
+        XCTAssertEqual(try lib.history(account: "Main").count, 2, "and nothing was written to the box")
+    }
+
+    /// Leaving every row out clears those screenshots and keeps what is not part of the answer (here an unrelated read screenshot that is not a row).
+    func testNothingToSaveClearsTheLeftOutAndKeepsTheRest() throws {
+        let saved = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try lib.mutate(account: "Main", reason: .edit, note: "lower CP") { e in var e = e; e[0].row.cp = 3900; return e }
+        let m = try stage([try rayquazaFainted, try retake(try rayquazaFainted, 9)])   // the second is a repeat of the first, held back
+        let p = try review(m)
+        XCTAssertEqual(p.rowItems, [m.items[0].id])
+        guard case .nothingToSave = try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine) else { return XCTFail() }
+        let left = try queue.load(m.batchId)
+        XCTAssertEqual(left.items.map(\.id), [m.items[1].id], "the left-out one is cleared; the other stays queued")
+        XCTAssertFalse(left.items[0].heldBack, "its source is gone, so the hold is lifted")
     }
 }

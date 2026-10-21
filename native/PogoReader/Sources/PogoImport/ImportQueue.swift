@@ -309,23 +309,29 @@ public struct ImportLedger: Codable, Equatable {
         return (date, hits.allSatisfy { $0.provisional == true })
     }
 
-    /// Keep to `maxEntries`, by the recency of each KEY, not of each entry: a key's protection lasts as long as its most recent import. First, older duplicate entries of a key that has a newer
-    /// CONFIRMED entry go (repeated "Import it again" saves of one screenshot leave one entry, not many); if it is still over, the keys whose most recent entry is oldest go, all their entries
-    /// together. A key with any provisional entry is never evicted (it may be the only thing standing between a screenshot and a second save).
+    /// Keep to `maxEntries`, by the recency of each KEY, not of each entry: a key's protection lasts as long as its most recent import. One pass finds, for each (account, folder birth date, key), its
+    /// single newest CONFIRMED entry (a tie in date goes to the later one written, since dates are whole seconds); every other confirmed entry of that key is a duplicate and goes. If it is still
+    /// over, the keys whose newest entry is oldest go, one entry each now. A key with any provisional entry is never evicted (it may be the only thing standing between a screenshot and a second
+    /// save), and its confirmed entry stays too. One pass and one rebuild, however far over it is.
     mutating func trim() {
         guard entries.count > Self.maxEntries else { return }
-        struct K: Hashable { var account: String; var key: String }
-        var newest = [K: Date]()
-        for e in entries where e.provisional != true { newest[K(account: e.account, key: e.key)] = max(newest[K(account: e.account, key: e.key)] ?? .distantPast, e.savedAt) }
-        entries.removeAll { e in e.provisional != true && (newest[K(account: e.account, key: e.key)] ?? .distantPast) > e.savedAt }
-        var over = entries.count - Self.maxEntries
-        guard over > 0 else { return }
-        let protected = Set(entries.filter { $0.provisional == true }.map { K(account: $0.account, key: $0.key) })
-        for (k, _) in newest.sorted(by: { $0.value < $1.value }) where over > 0 && !protected.contains(k) {
-            let before = entries.count
-            entries.removeAll { $0.provisional != true && K(account: $0.account, key: $0.key) == k }
-            over -= before - entries.count
+        struct K: Hashable { var account: String; var born: Double?; var key: String }
+        func k(_ e: Entry) -> K { K(account: e.account, born: e.born, key: e.key) }
+        var newest = [K: Int]()
+        var protected = Set<K>()
+        for (i, e) in entries.enumerated() {
+            if e.provisional == true { protected.insert(k(e)); continue }
+            if let j = newest[k(e)], entries[j].savedAt > e.savedAt { continue }
+            newest[k(e)] = i
         }
+        var drop = Set<Int>()
+        for (i, e) in entries.enumerated() where e.provisional != true && newest[k(e)] != i { drop.insert(i) }
+        var over = entries.count - drop.count - Self.maxEntries
+        if over > 0 {
+            for (key, i) in newest.sorted(by: { (entries[$0.value].savedAt, $0.value) < (entries[$1.value].savedAt, $1.value) }) where over > 0 && !protected.contains(key) { drop.insert(i); over -= 1 }
+        }
+        guard !drop.isEmpty else { return }
+        entries = entries.enumerated().filter { !drop.contains($0.offset) }.map(\.element)
     }
 }
 
