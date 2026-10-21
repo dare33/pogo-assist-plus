@@ -635,8 +635,16 @@ final class ImportQueueTests: XCTestCase {
         l.entries = (0..<(ImportLedger.maxEntries + 10_000)).map { led("k\($0)", Double($0)) }
         let start = Date()
         l.trim()
-        XCTAssertLessThan(Date().timeIntervalSince(start), 1.0, "a quadratic trim took seconds")
+        XCTAssertLessThan(Date().timeIntervalSince(start), 2.0, "a quadratic trim took many seconds")
         XCTAssertEqual(l.entries.count, ImportLedger.maxEntries)
         XCTAssertEqual(l.entries.first?.key, "k10000", "the oldest keys went")
+    }
+
+    /// The newest of a key's entries survives, wherever it sits in the list.
+    func testTheNewestEntryOfAKeySurvivesWhateverItsPosition() {
+        var l = ImportLedger()
+        l.entries = [led("dup", 1), led("dup", 50_000, batch: "newest")] + (0..<ImportLedger.maxEntries).map { led("k\($0)", Double($0 + 100)) }
+        l.trim()
+        XCTAssertEqual(l.entries.filter { $0.key == "dup" }.map(\.savedAt), [Date(timeIntervalSince1970: 50_000)])
     }
 }

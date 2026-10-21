@@ -1822,11 +1822,15 @@ final class ScreenshotImporterTests: XCTestCase {
         let dir = queue.batchDirectory(m.batchId)
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: dir.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+        let ledgerBefore = queue.ledger().entries
         XCTAssertThrowsError(try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine)) { XCTAssertEqual($0 as? ScreenshotImporter.Failure, .couldNotUpdateBatch) }
         XCTAssertEqual(try lib.history(account: "Main").count, 2, "and nothing was written to the box")
+        let after = try queue.load(m.batchId)
+        XCTAssertEqual(after.items.map(\.id), [m.items[0].id], "the batch is as it was"); XCTAssertNil(after.pendingSave)
+        XCTAssertEqual(queue.ledger().entries, ledgerBefore, "and no key was written")
     }
 
-    /// Leaving every row out clears those screenshots and keeps what is not part of the answer (here an unrelated read screenshot that is not a row).
+    /// Leaving every row out clears those screenshots and keeps the rest: here a held repeat of the left-out one (its hold lifted), and a second case below for one the person answered after the review.
     func testNothingToSaveClearsTheLeftOutAndKeepsTheRest() throws {
         let saved = try stage([try rayquaza])
         guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
@@ -1838,5 +1842,46 @@ final class ScreenshotImporterTests: XCTestCase {
         let left = try queue.load(m.batchId)
         XCTAssertEqual(left.items.map(\.id), [m.items[1].id], "the left-out one is cleared; the other stays queued")
         XCTAssertFalse(left.items[0].heldBack, "its source is gone, so the hold is lifted")
+    }
+
+    /// A read screenshot that is not in the review (the person said to include it after the review was made) stays after an all-left-out save.
+    func testNothingToSaveKeepsAScreenshotAnsweredAfterTheReviewWasMade() throws {
+        let saved = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try lib.mutate(account: "Main", reason: .edit, note: "lower CP") { e in var e = e; e[0].row.cp = 3900; return e }
+        let m = try stage([try rayquazaFainted, try retake(try rayquazaFainted, 9)])
+        let p = try review(m)
+        try importer.setIncluded(batch: m.batchId, item: m.items[1].id, true)   // answered after the review was made: not one of its rows
+        guard case .nothingToSave = try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine) else { return XCTFail() }
+        let left = try queue.load(m.batchId)
+        XCTAssertEqual(left.items.map(\.id), [m.items[1].id]); XCTAssertEqual(left.items[0].includeAnyway, true)
+    }
+
+    /// A finished batch whose folder cannot be removed is hidden at once and removed by the next clean-up.
+    func testAFinishedBatchThatCannotBeRemovedIsHiddenAndRemovedLater() throws {
+        let saved = try stage([try rayquaza])
+        guard case .saved = try importer.save(try review(saved), resolutions: [:], engine: sharedEngine) else { return XCTFail() }
+        _ = try lib.mutate(account: "Main", reason: .edit, note: "lower CP") { e in var e = e; e[0].row.cp = 3900; return e }
+        let m = try stage([try rayquazaFainted])
+        let p = try review(m)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: queue.root.path)   // the queue's folder cannot be changed: the batch's own folder cannot be removed
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: queue.root.path) }
+        guard case .nothingToSave = try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine) else { return XCTFail() }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queue.batchDirectory(m.batchId).path), "the folder is still there")
+        XCTAssertTrue(try queue.list().manifests.isEmpty, "but it is not shown")
+        XCTAssertTrue(try importer.prepareAll(engine: sharedEngine).isEmpty)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: queue.root.path)
+        _ = importer.cleanup()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.batchDirectory(m.batchId).path), "removed once it can be")
+    }
+
+    /// A batch whose manifest is left with no screenshots (its removal failed after the last was cleared) is not listed, and is removed by clean-up.
+    func testABatchWithNoScreenshotsLeftIsNotListedAndIsCleanedUp() throws {
+        let m = try stage([try rayquazaFainted])
+        _ = try queue.update(m.batchId) { $0.items = []; $0.savedAt = Date() }
+        XCTAssertTrue(try queue.list().manifests.isEmpty); XCTAssertTrue(try queue.list().unreadable.isEmpty)
+        XCTAssertTrue(try importer.prepareAll(engine: sharedEngine).isEmpty)
+        _ = importer.cleanup()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.batchDirectory(m.batchId).path))
     }
 }

@@ -58,7 +58,7 @@ public final class ScreenshotImporter {
             case .finishingLastSave(let found):
                 return found ? "The last save of these screenshots is in your box, but the record of it could not be finished yet, so nothing was added again. This is tried again each time the app comes to the front; you can also discard this batch."
                              : "A save of these screenshots was started earlier and may already be in your box: it could not be checked yet (a file could not be read or written), so nothing was added again. This is tried again each time the app comes to the front; you can also discard this batch."
-            case .couldNotUpdateBatch: return "The screenshots could not be updated, so nothing was saved. Try again."
+            case .couldNotUpdateBatch: return "The batch of screenshots could not be updated."
             case .staleReview: return "These screenshots are not as they were when this review was opened (a save of them was made, they were given to another account, or they are no longer in the queue), so nothing was saved. Open the review again."
             case .importRecordUnreadable: return "Nothing was saved: the record of what has been imported could not be read. Your box has not been changed, and the damaged file was kept."
             case .couldNotRecordSave: return "Nothing was saved: the record that keeps a screenshot from being imported twice could not be written. Your box has not been changed. Try again."
@@ -425,7 +425,8 @@ public final class ScreenshotImporter {
     // MARK: saving
 
     public enum Saved { case saved(BoxSnapshot), alreadySaved
-        /// Every screenshot's Pokémon was left out: no box version was written, and the batch was retired.
+        /// Every screenshot's Pokémon was left out: no box version was written, and the batch was updated: the left-out screenshots are cleared, any others (held back, unread, failed, or
+        /// answered since the review opened) stay queued, and a batch with nothing left is removed.
         case nothingToSave }
 
     /// Save a reviewed import: one box version and one scan record, once. Asks the account whether this batch (its signature) is already in it first, so a save that was cut off

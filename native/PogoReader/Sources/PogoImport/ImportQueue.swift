@@ -197,7 +197,8 @@ public struct ImportQueue {
         for name in try fm.contentsOfDirectory(atPath: root.path).sorted() where Self.validName(name) {
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: root.appendingPathComponent(name).path, isDirectory: &isDir), isDir.boolValue else { continue }
-            do { out.append(try load(name)) } catch { bad.append(name) }
+            // A batch with no screenshots left is finished, and so is a folder whose removal was cut off after its manifest went: neither is listed (the folder stays hidden, and `cleanup` tries again).
+            do { let m = try load(name); if !m.items.isEmpty { out.append(m) } } catch ImportQueueError.noSuchBatch { continue } catch { bad.append(name) }
         }
         out.sort { ($0.createdAt, $0.batchId) < ($1.createdAt, $1.batchId) }
         return Listing(manifests: out, unreadable: bad)
@@ -260,6 +261,12 @@ public struct ImportQueue {
             let url = root.appendingPathComponent(name)
             let modified = (try? fm.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? now
             if now.timeIntervalSince(modified) > Self.stagingExpiresAfter, (try? fm.removeItem(at: url)) != nil { report.removedStaging += 1 }
+        }
+        // Finished batches whose folder could not be removed then (the parent was not writable, a file was in use): removed now if they can be, hidden meanwhile (`list`).
+        for name in names where Self.validName(name) {
+            let finished: Bool
+            do { finished = try load(name).items.isEmpty } catch ImportQueueError.noSuchBatch { finished = true } catch { finished = false }   // no manifest: removal got as far as deleting it
+            if finished, (try? remove(name)) != nil { report.removedSaved += 1 }
         }
         for m in (try? list().manifests) ?? [] {
             if m.savedAt != nil { if (try? remove(m.batchId)) != nil { report.removedSaved += 1 } }
