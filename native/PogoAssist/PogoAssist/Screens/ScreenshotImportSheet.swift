@@ -42,12 +42,6 @@ struct ScreenshotImportSheet: View {
                         Button("Start a new import record") { startingNewRecord = true }.accessibilityIdentifier("import-new-record")
                     }
                 }
-                if imports.importRecordUnreadable {
-                    Section {
-                        Text("The record of what you have imported before is damaged, so these screenshots are held back until you say. You can start a new record: the damaged one is kept, but screenshots you imported earlier will not be recognised any more (one that exactly matches a Pokémon already in your box is still left unchanged).").font(.footnote)
-                        Button("Start a new import record") { startingNewRecord = true }.accessibilityIdentifier("import-new-record")
-                    }
-                }
                 if let notice = imports.notice {
                     Section { Text(notice).font(.footnote).accessibilityIdentifier("import-notice") }
                 }

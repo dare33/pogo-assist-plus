@@ -1277,6 +1277,10 @@ final class AppModel: ObservableObject {
             flow = .idle
             message = Self.plain(failure)
             screenshots.refresh()
+        } catch ScreenshotImporter.Failure.staleReview {
+            flow = .idle
+            message = Self.plain(ScreenshotImporter.Failure.staleReview)
+            screenshots.refresh()
         } catch ScreenshotImporter.Failure.importRecordUnreadable {
             message = Self.plain(ScreenshotImporter.Failure.importRecordUnreadable) + " Open Import screenshots to start a new import record."
         } catch ScreenshotImporter.Failure.cannotTellIfSaved {
