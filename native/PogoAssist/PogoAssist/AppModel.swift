@@ -1265,7 +1265,7 @@ final class AppModel: ObservableObject {
                 lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: true)
                 if r.account == account { afterCommit(snap) }
             case .nothingToSave:
-                message = "Nothing was added: every Pokémon in these screenshots was left out."
+                message = "Nothing was added. The screenshots you left out were cleared; any that are held back, unread or failed stay in Import screenshots."
                 if r.account == account { loadBox() }
             case .alreadySaved:
                 message = "These screenshots had already been saved, so nothing was added again."
