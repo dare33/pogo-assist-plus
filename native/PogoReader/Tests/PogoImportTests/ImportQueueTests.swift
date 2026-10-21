@@ -647,4 +647,27 @@ final class ImportQueueTests: XCTestCase {
         l.trim()
         XCTAssertEqual(l.entries.filter { $0.key == "dup" }.map(\.savedAt), [Date(timeIntervalSince1970: 50_000)])
     }
+
+    /// The newest of a key's entries survives when it is first in the list too.
+    func testTheNewestEntryOfAKeySurvivesWhenItIsFirst() {
+        var l = ImportLedger()
+        l.entries = [led("dup", 50_000, batch: "newest"), led("dup", 1)] + (0..<ImportLedger.maxEntries).map { led("k\($0)", Double($0 + 100)) }
+        l.trim()
+        XCTAssertEqual(l.entries.filter { $0.key == "dup" }.map(\.savedAt), [Date(timeIntervalSince1970: 50_000)])
+    }
+
+    /// A manifest that is there but cannot be read is listed as damaged and survives clean-up; a stray file at the queue's root is left alone.
+    func testAnUnreadableManifestIsKeptAndAStrayFileSurvivesCleanUp() throws {
+        let b = try makeBatch([1]).batchId
+        let manifest = queue.manifestURL(b)
+        let stray = queue.root.appendingPathComponent("README")
+        try Data("x".utf8).write(to: stray)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: manifest.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: manifest.path) }
+        XCTAssertEqual(try queue.list().unreadable, [b])
+        queue.cleanup()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queue.batchDirectory(b).path), "a damaged batch is kept")
+        XCTAssertEqual(try queue.list().unreadable, [b])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stray.path))
+    }
 }

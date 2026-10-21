@@ -1869,6 +1869,7 @@ final class ScreenshotImporterTests: XCTestCase {
         guard case .nothingToSave = try importer.save(p, resolutions: [0: .leaveOut], engine: sharedEngine) else { return XCTFail() }
         XCTAssertTrue(FileManager.default.fileExists(atPath: queue.batchDirectory(m.batchId).path), "the folder is still there")
         XCTAssertTrue(try queue.list().manifests.isEmpty, "but it is not shown")
+        XCTAssertTrue(try queue.list().unreadable.isEmpty, "and is not called damaged")
         XCTAssertTrue(try importer.prepareAll(engine: sharedEngine).isEmpty)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: queue.root.path)
         _ = importer.cleanup()
