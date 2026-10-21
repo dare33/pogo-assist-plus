@@ -2,7 +2,7 @@
 
 **20 Oct 2026: screenshot import (branch `feat/screenshot-import-fold`, on `feat/screenshot-import`, not merged).** Quick import of Pokémon GO appraisal screenshots, from the app (system photo picker) and from
 Photos (Share > Pogo Assist+), each read once, merged as a partial Add and update and saved as source "screenshot import". Design, rules and limits: `native/README.md`, "Screenshot import". The latest reviews (of the ledger-cap fold) were Opus "ship after fixes" and Sol "do not ship" on small items, which this fold addresses; account-name hardening is deliberately on hold (see the known limits below). **The review gate is not passed.** Verified on the Mac (greg-mb-16, Xcode 27.1): `swift test` in `native/PogoReader`
-179 + 60 + 707, 0 failures (1 + 6 skipped); `npm test` 244 tests, 240 pass, 4 skipped (the recordings are not in that checkout), 0 fail; the app builds unsigned with the extension; the picker flow
+179 + 63 + 707, 0 failures (1 + 6 skipped); `npm test` 244 tests, 240 pass, 4 skipped (the recordings are not in that checkout), 0 fail; the app builds unsigned with the extension; the picker flow
 (`ScreenshotImportTests`) passed in the iPhone 17 simulator. Not verified: the Share extension running (it needs a signed build, the `com.dare33.pogoassist.share` App ID and the App Group), the new app
 glue beyond what the simulator test touches (backgrounding, the sheet opening by itself), and anything on a real iPhone or iPad.
 **Known limits (screenshot import):** account identity is by name, so renaming an account and then creating a new one with the old name while screenshots are queued can leave holds counted for neither account or ask
