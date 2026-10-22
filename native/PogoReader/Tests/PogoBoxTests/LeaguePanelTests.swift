@@ -79,7 +79,18 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertNil(LeaguePanel.card(R(options: [option("a", score: 90, iv: iv, cost: cost), option("b", score: 80, iv: iv, cost: cost)]), shown: 0, key: "gl", level: 17).bestAvailableNote)
     }
 
-    func testRookideeShapeNamesTheUnrankedFinalEvolution() {
+    func testGenderLockedStrongerSpeciesIsNamedWithItsCondition() {
+        // Unknown-sex Kirlia: Gallade (male only) is the stronger species and is over the cap; Kirlia is shown.
+        let r = R(options: [option("gallade", score: 85, over: true, locked: "male"), option("kirlia", score: 60, iv: iv, cost: cost, isSelf: true)], pick: 1, experimental: 1)
+        let c = LeaguePanel.card(r, shown: 1, key: "gl", level: 35)
+        XCTAssertEqual(c.bestAvailableNote, "Gallade (if it is male) is the stronger species, but this copy is already over 1,500 CP as Gallade.")
+        let female = R(options: [option("froslass", score: 85, over: true, locked: "female"), option("snorunt", score: 60, iv: iv, cost: cost, isSelf: true)], pick: 1, experimental: 1)
+        XCTAssertEqual(LeaguePanel.card(female, shown: 1, key: "ul", level: 35).bestAvailableNote, "Froslass (if it is female) is the stronger species, but this copy is already over 2,500 CP as Froslass.")
+    }
+
+    /// Constructed data for the second branch only: the shown member is unranked and the unranked final evolution is over the cap. (In real
+    /// data PvPoke ranks Corviknight, so a real Rookidee takes the first branch, a ranked stronger member.)
+    func testUnrankedOverCapFinalEvolutionIsNamedWhenTheShownMemberIsUnranked() {
         // Corviknight (the final evolution) is over the cap and unranked here ("fallback"); Corvisquire is shown.
         let r = R(options: [option("corviknight", over: true), option("corvisquire", iv: iv, cost: cost), option("rookidee", over: true)], pick: 1, experimental: 1, source: "fallback")
         let c = LeaguePanel.card(r, shown: 1, key: "gl", level: 35)

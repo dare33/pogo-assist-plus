@@ -621,7 +621,9 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertEqual(figure.value as? String, "95.3 percent", "the IVs panel follows the ranking")
         let info = app.buttons["leagues-scoring-info"]
         info.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Pogo Assist'")).firstMatch.waitForExistence(timeout: 3), "the explainer opens under the header")
+        let explainer = app.descendants(matching: .any)["leagues-scoring-explainer"]
+        XCTAssertTrue(explainer.waitForExistence(timeout: 3), "the explainer opens under the header")
+        XCTAssertTrue(explainer.label.contains("weighs the species first"), explainer.label)
         resetRanking(app)
         XCTAssertTrue(ul.label.contains("Pick: Scyther."))
         XCTAssertEqual(figure.value as? String, "96.2 percent")
@@ -692,8 +694,8 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["leagues-panel"].waitForExistence(timeout: 20), "the section shows on the Normal form")
         XCTAssertTrue(app.descendants(matching: .any)["iv-figure-gl"].exists, "the IVs panel's PvP figures show on the Normal form")
         app.buttons["form-mega"].tap()
-        XCTAssertFalse(app.descendants(matching: .any)["iv-figure-gl"].exists, "and wait with the Leagues panel on the Mega form")
         XCTAssertTrue(app.staticTexts["CP 3970"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.descendants(matching: .any)["iv-figure-gl"].exists, "the PvP figures wait with the Leagues panel on the Mega form")
         XCTAssertFalse(app.staticTexts["leagues-panel"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["league-gl"].exists)
         app.swipeUp()

@@ -130,7 +130,11 @@ public enum LeaguePanel {
         }
         let o = r.options[at]
         let stronger = strongerOverCap(r, than: o)
-        let note = stronger.map { "\($0.name) is the stronger species, but this copy is already over \(cap(key).map(grouped) ?? "") CP as \($0.name)." }
+        // A member only one sex can become is named with its condition: "Gallade (if it is male)".
+        let note = stronger.map { s -> String in
+            let named = s.genderLocked.map { "\(s.name) (if it is \($0))" } ?? s.name
+            return "\(named) is the stronger species, but this copy is already over \(cap(key).map(grouped) ?? "") CP as \(s.name)."
+        }
         let read = o.iv != nil
         return Card(status: read ? .fits : .ivsNotRead, option: o, title: title(o), strongerOverCap: stronger, overCapCount: overCount, bestAvailableNote: note, blockedText: nil,
                     scoreText: o.strength.map { oneDecimal($0.score) } ?? "—",
