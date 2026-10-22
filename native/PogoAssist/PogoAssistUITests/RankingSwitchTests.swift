@@ -10,10 +10,24 @@ final class RankingSwitchTests: XCTestCase {
         return app
     }
 
+    /// Leaves the ranking preference at its default for whatever runs next.
+    override func tearDown() {
+        let app = launch(["-reset-ranking"])
+        _ = app.descendants(matching: .any).matching(identifier: "ranking").firstMatch.waitForExistence(timeout: 10)
+        app.terminate()
+        super.tearDown()
+    }
+
     private func shot(_ name: String) {
         guard let dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] else { return }
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
+        let file = URL(fileURLWithPath: dir).appendingPathComponent("\(name).png")
+        do {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try XCUIScreen.main.screenshot().pngRepresentation.write(to: file)
+        } catch {
+            XCTFail("screenshot not written to \(file.path): \(error)")
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "screenshot not written to \(file.path)")
     }
 
     func testRankingSwitchPersistsAndExplains() {
@@ -42,7 +56,9 @@ final class RankingSwitchTests: XCTestCase {
         XCTAssertEqual(info.value as? String, "Expanded")
         shot("gallery-explainer-open")
         info.tap()
-        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'weighs the species first'")).firstMatch.waitForExistence(timeout: 1))
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"),
+            object: app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'weighs the species first'")).firstMatch)
+        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 3), .completed, "the explainer closes")
 
         // It persisted: a relaunch without the reset still says Pogo Assist.
         app.terminate()

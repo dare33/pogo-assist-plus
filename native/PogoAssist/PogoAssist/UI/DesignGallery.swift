@@ -47,7 +47,7 @@ struct DesignGallery: View {
                     heading("Pokémon types")
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], spacing: 6) {
                         ForEach(Theme.pokemonTypeHex.keys.sorted(), id: \.self) { name in
-                            Text(name.uppercased()).font(.figtree(10, .heavy, relativeTo: .caption2)).foregroundStyle(.white)
+                            Text(name.uppercased()).font(.figtree(10, .heavy, relativeTo: .caption2)).foregroundStyle(Theme.pokemonTypeText(name))
                                 .frame(maxWidth: .infinity, minHeight: 24)
                                 .background(Theme.pokemonType(name) ?? .clear, in: Capsule())
                         }

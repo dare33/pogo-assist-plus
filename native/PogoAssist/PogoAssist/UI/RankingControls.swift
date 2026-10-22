@@ -67,11 +67,18 @@ struct SegmentedSwitch<Value: Hashable>: View {
     }
 
     private func step(_ direction: AccessibilityAdjustmentDirection) {
-        guard let i = segments.firstIndex(where: { $0.value == selection }) else { return }
+        let values = segments.map(\.value)
+        guard let i = values.firstIndex(of: selection) else { return }
+        selection = Self.stepped(in: values, from: i, by: direction)
+    }
+
+    /// The value one step from index `i` (VoiceOver increment / decrement), staying put at either end. Pure, so it can be
+    /// unit-tested once the app has a unit-test target (it has none yet).
+    static func stepped(in values: [Value], from i: Int, by direction: AccessibilityAdjustmentDirection) -> Value {
         switch direction {
-        case .increment: if i + 1 < segments.count { selection = segments[i + 1].value }
-        case .decrement: if i > 0 { selection = segments[i - 1].value }
-        @unknown default: break
+        case .increment: return i + 1 < values.count ? values[i + 1] : values[i]
+        case .decrement: return i > 0 ? values[i - 1] : values[i]
+        @unknown default: return values[i]
         }
     }
 
@@ -108,10 +115,18 @@ struct SegmentedSwitch<Value: Hashable>: View {
 /// Toggles `isOpen`; the caller shows the text it opens.
 struct InfoButton: View {
     @Binding var isOpen: Bool
-    var size: CGFloat = 26
+    /// The circle's diameter at the default text size; it scales with the glyph's text style.
+    @ScaledMetric(relativeTo: .footnote) private var size: CGFloat = 26
     var label = "About ranking"
     var identifier: String? = nil
     @Environment(\.accent) private var accent
+
+    init(isOpen: Binding<Bool>, size: CGFloat = 26, label: String = "About ranking", identifier: String? = nil) {
+        _isOpen = isOpen
+        _size = ScaledMetric(wrappedValue: size, relativeTo: .footnote)
+        self.label = label
+        self.identifier = identifier
+    }
 
     var body: some View {
         Button { withAnimation(.easeOut(duration: 0.15)) { isOpen.toggle() } } label: {
@@ -132,18 +147,21 @@ struct InfoButton: View {
     /// Georgia bold italic 13 (the design's 800); the system serif italic where Georgia is not installed.
     private static var glyph: Font {
         if UIFont(name: "Georgia-BoldItalic", size: 13) != nil { return .custom("Georgia-BoldItalic", size: 13, relativeTo: .footnote) }
-        return .system(size: 13, weight: .heavy, design: .serif).italic()
+        return .system(.footnote, design: .serif).weight(.heavy).italic()
     }
 }
 
 // MARK: RankingSwitch
 
 /// RANKING, the Default | Pogo Assist switch (the one global preference) and the "i" that the caller's `infoOpen`
-/// shows `RankingExplainer` for. Where the row no longer fits (large text) the switch moves under the label.
+/// shows `RankingExplainer` for. It hugs its content (the caller places it). Where the row no longer fits (large text)
+/// the label goes above the switch and the "i", which stay together in one row.
 struct RankingSwitch: View {
     @Binding var infoOpen: Bool
     /// The switch's accessibility identifier; the "i" is "<identifier>-info".
     var identifier = "ranking"
+    /// False hides "RANKING" (the Leagues panel header names the switch already).
+    var showsCaption = true
     @AppStorage(PrefKey.ranking) private var raw = Ranking.default.rawValue
 
     private var selection: Binding<Ranking> {
@@ -155,20 +173,22 @@ struct RankingSwitch: View {
             HStack(spacing: 8) {
                 caption
                 control(singleLine: true)
-                Spacer(minLength: 0)
                 info
             }
+            .fixedSize(horizontal: true, vertical: false)
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) { caption; Spacer(minLength: 0); info }
-                control(singleLine: false)
+                caption
+                HStack(spacing: 8) { control(singleLine: false); info }
             }
         }
     }
 
-    private var caption: some View {
-        Text("RANKING").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10)
-            .foregroundStyle(Theme.faint)
-            .accessibilityHidden(true)
+    @ViewBuilder private var caption: some View {
+        if showsCaption {
+            Text("RANKING").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10)
+                .foregroundStyle(Theme.faint)
+                .accessibilityHidden(true)
+        }
     }
 
     private func control(singleLine: Bool) -> some View {
@@ -183,19 +203,20 @@ struct RankingSwitch: View {
 
 // MARK: RankingExplainer
 
-/// The card the "i" opens. Wording checked against src/leagues.js (chooseMember, pickFor).
+/// The card the "i" opens. Wording checked against src/leagues.js (pokeGeniePick, chooseMember).
 struct RankingExplainer: View {
     var identifier = "ranking-explainer"
     @Environment(\.accent) private var accent
 
     var body: some View {
+        // P1 describes pokeGeniePick (iv.pct); P2 describes chooseMember (rankPct), both in src/leagues.js.
+        // "within 3 points" is CLOSE_SCORE in src/leagues.js and must change with it.
         VStack(alignment: .leading, spacing: 8) {
             Text("Default").bold().foregroundStyle(accent.ink)
-                + Text(" matches Poke Genie. In Great and Ultra League it takes the family member this copy's IVs suit best under the CP cap (stat product, out of 4,096 IV combinations), preferring species PvPoke ranks; from a Poke Genie export it uses Poke Genie's own pick. In Master League it takes the strongest species.")
-            // "within 3 points" is CLOSE_SCORE in src/leagues.js and must change with it.
+                + Text(" follows Poke Genie. From a Poke Genie export it uses that export's own pick. Otherwise, in Great and Ultra League, it takes the family member for which this copy's stat product is the highest share of the best possible under the CP cap, preferring species PvPoke ranks. In Master League, or when the IVs are not known, it takes the strongest species.")
             Text("Pogo Assist").bold().foregroundStyle(accent.ink)
-                + Text(" weighs the species first. It starts from the member with the best PvPoke score and moves to a weaker one only when that one is within 3 points of the best and this copy's IVs rank higher for it.")
-            Text("Both use the same IV ranks and PvPoke rankings; they differ only in which comes first. The choice applies everywhere in the app.")
+                + Text(" weighs the species first. It starts from the member with the best PvPoke score and moves to a weaker one only when that one is within 3 points of the best and this copy's IV rank (out of 4,096 combinations) is higher for it.")
+            Text("Both use PvPoke's rankings and this copy's IVs, so they often agree. The choice applies everywhere in the app.")
                 .foregroundStyle(Theme.muted)
         }
         .font(.figtree(13, .medium, relativeTo: .footnote))

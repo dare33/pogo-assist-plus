@@ -62,7 +62,6 @@ enum Theme {
     static func pair(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? rgb(dark) : rgb(light) })
     }
-    /// A dark value given as the design's rgba (tints are translucent in dark mode).
     /// Both values given as rgba (the league tints are translucent in light mode too).
     static func pair(rgba l: (CGFloat, CGFloat, CGFloat, CGFloat), dark d: (CGFloat, CGFloat, CGFloat, CGFloat)) -> Color {
         Color(uiColor: UIColor { c in
@@ -70,6 +69,7 @@ enum Theme {
             return UIColor(red: v.0 / 255, green: v.1 / 255, blue: v.2 / 255, alpha: v.3)
         })
     }
+    /// A dark value given as the design's rgba (tints are translucent in dark mode).
     static func pair(_ light: UInt32, rgba d: (CGFloat, CGFloat, CGFloat, CGFloat)) -> Color {
         Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: d.0 / 255, green: d.1 / 255, blue: d.2 / 255, alpha: d.3) : rgb(light) })
     }
@@ -142,7 +142,7 @@ enum ContentType: String, CaseIterable, Identifiable {
 }
 
 extension Theme {
-    /// The game's type colours for Pokémon type chips (white text on them), the same in light and dark. Keyed by the
+    /// The game's type colours for Pokémon type chips (text from `pokemonTypeText`), the same in light and dark. Keyed by the
     /// type name as the game master spells it: lowercase.
     static let pokemonTypeHex: [String: UInt32] = [
         "normal": 0x9FA19F, "fire": 0xE62829, "water": 0x2980EF, "electric": 0xFAC000, "grass": 0x3FA129,
@@ -150,6 +150,28 @@ extension Theme {
         "psychic": 0xEF4179, "bug": 0x91A119, "rock": 0xAFA981, "ghost": 0x704170, "dragon": 0x5060E1,
         "dark": 0x624D4E, "steel": 0x60A1B8, "fairy": 0xEF70EF,
     ]
+    /// The text colour for a type chip: white or Theme ink's light value (#15192B, fixed, not dynamic), whichever has the
+    /// higher WCAG contrast against the fill. Computed from the hex values above (white / ink contrast):
+    /// white: fire 4.47/3.90, poison 5.49/3.17, ground 6.17/2.82, ghost 7.84/2.22, dragon 5.12/3.40, dark 7.80/2.23.
+    /// ink: normal 6.69/2.60, water 4.50/3.87, electric 10.45/1.67, grass 5.26/3.31, ice 9.39/1.85, fighting 6.92/2.52,
+    /// flying 8.39/2.08, psychic 4.73/3.68, bug 6.07/2.87, rock 7.31/2.38, steel 6.04/2.88, fairy 6.83/2.55.
+    /// White for a name that is not a type.
+    static func pokemonTypeText(_ type: String) -> Color {
+        guard let hex = pokemonTypeHex[type.lowercased()] else { return .white }
+        let ink: UInt32 = 0x15192B
+        return contrast(0xFFFFFF, hex) >= contrast(ink, hex) ? .white : Color(uiColor: rgb(ink))
+    }
+    private static func luminance(_ hex: UInt32) -> Double {
+        func channel(_ shift: UInt32) -> Double {
+            let c = Double((hex >> shift) & 0xFF) / 255
+            return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+    }
+    private static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
+        let (la, lb) = (luminance(a), luminance(b))
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+    }
     /// nil for a name that is not one of the 18 types.
     static func pokemonType(_ name: String) -> Color? {
         pokemonTypeHex[name.lowercased()].map { Color(uiColor: rgb($0)) }
