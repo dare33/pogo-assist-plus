@@ -1,5 +1,7 @@
 # Status — Pogo Assist+
 
+**23 Oct 2026, branch `feat/league-ui-leagues-panel` (PR 2 of 5 of the design handover, stacked on the PR 1 branch, not merged): the Pokémon page.** New Leagues panel (pick cards, league view with the option list, the app-wide ranking switch choosing `pick` or `experimental`), the game search as a chip beside the CP line, a Settings circle in the header, three PvP IV figures in the IVs panel, the Shadow footnote only while `ScanRow.shadow` is nil. Its logic is `PogoBox/LeaguePanel.swift` (replaces `LeagueText`), pinned by `LeaguePanelTests`. `leaguesFor` now keeps `moves` on every option PvPoke ranks; advice cache version 9; `pogo-core.js` rebuilt. The review gate is not passed; not verified on a device.
+
 **20 Oct 2026: screenshot import (branch `feat/screenshot-import-fold`, on `feat/screenshot-import`, not merged).** Quick import of Pokémon GO appraisal screenshots, from the app (system photo picker) and from
 Photos (Share > Pogo Assist+), each read once, merged as a partial Add and update and saved as source "screenshot import". Design, rules and limits: `native/README.md`, "Screenshot import". The latest reviews (of the ledger-cap fold) were Opus "ship after fixes" and Sol "do not ship" on small items, which this fold addresses; account-name hardening is deliberately on hold (see the known limits below). **The review gate is not passed.** Verified on the Mac (greg-mb-16, Xcode 27.1): `swift test` in `native/PogoReader`
 179 + 65 + 707, 0 failures (1 + 6 skipped); `npm test` 244 tests, 240 pass, 4 skipped (the recordings are not in that checkout), 0 fail; the app builds unsigned with the extension; the picker flow
@@ -11,7 +13,7 @@ which box; stable account IDs (`docs/stable-account-ids-plan.md` on `claude/grea
 
 **20 Oct 2026, branch `feat/league-options` (merged in PR #7): league options.** `leaguesFor` (`src/leagues.js`) now returns, per league,
 every allowed family member (PvPoke-ranked or not, form changes such as Zygarde included) as `options`, each rated for the copy
-(PvPoke rank and score, IV rank, cost; moves only on the shown and experimental options), plus `pick` (index of the member to SHOW),
+(PvPoke rank and score, IV rank, cost; moves on every option PvPoke ranks), plus `pick` (index of the member to SHOW),
 `experimental` (index of the other rule's member) and `source` (`export`, `emulated`, `ranked`, or `fallback`: the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). If no member fits and nothing is ranked, the final evolution is shown even though it is over the cap. A copy with known IVs in Great or Ultra League and nothing ranked is still `emulated`). The shown pick copies Poke Genie: its own pick from the export when the entry has one and it is in the
 family. Otherwise, in Great and Ultra League, `pokeGeniePick`, a PROVISIONAL emulation (best stat product % among the members the
 copy is not already too strong for, ranked ones first). Master League has no Poke Genie pick to copy and the emulation there only
@@ -40,7 +42,7 @@ unlocked (Poke Genie's Charge Move 2 is filled; kept by position as `chargedMove
 it doesn't have it)" and is still charged, as before. Elite TM and Community Day move steps are dropped when the recorded moves already hold
 the move, and Elite TMs are counted by distinct move name in the step text. The fixture records moves for one Pokémon only (a Mareep whose
 second charged slot is empty), so scores, costs and order are byte-identical to 7c43c85 on the fixture and 11 variants. A spare reads "spare
-for the X build". The app decodes the data (`BoxAdvice.LeagueRating`, `Build.steps`; advice cache version 8). Not verified on a device.
+for the X build". The app decodes the data (`BoxAdvice.LeagueRating`, `Build.steps`; advice cache version 9). Not verified on a device.
 
 **Known limits / follow-up (league options branch; not changed here, scores must stay as they are).**
 - Costing is single-area: a build is costed to ONE target (the league's best level for a league-only build, else the highest non-league

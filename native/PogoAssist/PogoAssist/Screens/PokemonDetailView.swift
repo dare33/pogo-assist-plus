@@ -12,6 +12,8 @@ struct PokemonDetailView: View {
     @State private var fixing = false
     @State private var deleting: DeleteTarget?
     @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
+    @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
+    @Environment(\.showToast) private var showToast
     /// The switch's position once the person has moved it; until then the Settings choice.
     @State private var chosenMega: Bool?
 
@@ -26,6 +28,7 @@ struct PokemonDetailView: View {
             HStack {
                 IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
                 Spacer()
+                IconButton(systemImage: "gearshape", kind: .floating, label: "Settings") { model.sheet = .settings }
                 if let e = model.entry(id) {
                     // "Fix a value" changes the normal values only, so it waits while the page shows the Mega form.
                     let onMega = megaShown(e) != nil
@@ -41,26 +44,22 @@ struct PokemonDetailView: View {
                     VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
                         heading(e, mega: megaShown(e))
                         if !e.row.checkFlags.isEmpty { checkPanel(e) }
-                        ivPanel(e.row)
+                        ivPanel(e)
                         advicePanel(e)
                         // Megas are not allowed in GO Battle League, so the section waits while the page shows the Mega form.
                         if megaShown(e) == nil { leaguesPanel(e) }
                         factsPanel(e, mega: megaShown(e))
                         notesPanel(e, mega: megaShown(e))
-                        // The search is always the normal form's: the game shows a Mega CP only while the Pokémon is Mega evolved, so a search on it would find nothing the rest of the time.
-                        if let search = GameSearch.text([GameSearch.part(row: e.row)]) {
-                            SearchStrip(text: search, prominent: true)
-                            if megaShown(e) != nil {
-                                Text("The game shows the Mega CP only while it is Mega evolved, so this search uses the normal CP.")
-                                    .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                                    .accessibilityIdentifier("mega-search-note")
+                        VStack(spacing: 2) {
+                            Button { deleting = DeleteTarget(id: e.id, title: e.row.title, cp: e.row.cp) } label: {
+                                Text("Delete from box").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
                             }
+                            .accessibilityHint("Removes it from the box only, not from the game")
+                            Text("Removes this copy from the app's box only, not from the game.").font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.faint)
+                                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         }
-                        Button { deleting = DeleteTarget(id: e.id, title: e.row.title, cp: e.row.cp) } label: {
-                            Text("Delete from box").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .accessibilityHint("Removes it from the box only, not from the game")
+                        .frame(maxWidth: .infinity)
                     }
                     .padding(.horizontal, Theme.Space.screen)
                     .padding(.top, 6)
@@ -89,10 +88,23 @@ struct PokemonDetailView: View {
         return VStack(alignment: .leading, spacing: 0) {
             Text(title).font(.figtree(34, .heavy, relativeTo: .largeTitle)).tracking(-0.025 * 34).foregroundStyle(Theme.ink)
                 .accessibilityAddTraits(.isHeader)
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            let cpLine = HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(verbatim: Fmt.cp(cp)).font(.figtree(cp > 0 ? 22 : 17, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(Theme.ink)
                 Text(meta.joined(separator: " · ")).font(.figtree(15, .semibold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.muted)
             }
+            // The search is always the normal form's: the game shows a Mega CP only while the Pokémon is Mega evolved, so a search on it would find nothing the rest of the time.
+            if let search = GameSearch.text([GameSearch.part(row: e.row)]) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) { cpLine; Spacer(minLength: 8); searchChip(search) }
+                    VStack(alignment: .leading, spacing: 4) { cpLine; searchChip(search) }
+                }
+                if mega != nil {
+                    Text("The game shows the Mega CP only while it is Mega evolved, so this search uses the normal CP.")
+                        .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                        .accessibilityIdentifier("mega-search-note")
+                }
+            } else { cpLine }
             if e.shownMegaForm != nil { formSwitch(on: mega != nil).padding(.top, 12) }
         }
         .padding(.horizontal, 8).padding(.top, 4)
@@ -144,12 +156,56 @@ struct PokemonDetailView: View {
 
     // MARK: IVs
 
-    private func ivPanel(_ r: ScanRow) -> some View {
-        Panel {
-            HStack(alignment: .firstTextBaseline) {
+    /// The game search as a small chip beside the CP line: tapping copies it and toasts "Copied".
+    private func searchChip(_ text: String) -> some View {
+        Button {
+            UIPasteboard.general.string = text
+            showToast("Copied")
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").font(.figtree(12, .heavy)).accessibilityHidden(true)
+                Text(text).font(.figtree(13, .heavy, relativeTo: .footnote))
+                Text("· Copy").font(.figtree(13, .bold, relativeTo: .footnote)).opacity(0.8)
+            }
+            .foregroundStyle(Theme.orangeInk)
+            .padding(.horizontal, 10).frame(minHeight: 30)
+            .background(Theme.orangeTint, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .padding(.vertical, 7).contentShape(Rectangle()).padding(.vertical, -7)
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityLabel("Copy search")
+        .accessibilityValue(text)
+        .accessibilityIdentifier("search-chip")
+    }
+
+    // MARK: IVs
+
+    /// The IV bars; at the trailing edge this copy's IV % as the shown member in Great, Ultra and Master League (nothing when the IVs are not read).
+    private func ivPanel(_ e: BoxEntry) -> some View {
+        let r = e.row
+        return Panel {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("IVs").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-                Spacer()
-                if let p = Fmt.ivPercent(r.ivs) { Text(p).font(.figtree(26, .heavy, relativeTo: .title)).monospacedDigit().foregroundStyle(Theme.greenInk) }
+                Spacer(minLength: 0)
+                if r.ivs != nil, case .ready(let advice) = model.advice {
+                    let ratings = advice.leagues(for: e.id)
+                    if !ratings.isEmpty {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            ForEach(LeaguePanel.ivFigures(ratings, pogoAssist: rankingRaw == Ranking.pogoAssist.rawValue, level: r.level), id: \.key) { f in
+                                let league = League(rawValue: f.key) ?? .gl
+                                VStack(alignment: .trailing, spacing: 0) {
+                                    Text(f.pct.map(LeaguePanel.percent) ?? "—").font(.figtree(17, .heavy, relativeTo: .headline)).monospacedDigit()
+                                    Text(LeaguePanel.shortName(f.key).uppercased()).font(.figtree(11, .bold, relativeTo: .caption2)).tracking(0.06 * 11)
+                                }
+                                .foregroundStyle(league.ink)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("\(LeaguePanel.name(f.key)) IVs")
+                                .accessibilityValue(f.pct.map { "\(LeaguePanel.oneDecimal($0)) percent" } ?? "none")
+                            }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             if let i = r.ivs { BarsView(i.atk, i.def, i.hp) } else { Text("IVs not read").paText(.secondary).foregroundStyle(Theme.muted) }
         }
@@ -206,34 +262,15 @@ struct PokemonDetailView: View {
     // MARK: leagues
 
     /// Great, Ultra and Master League for this Pokémon, all read from the cached advice: nothing is worked out here.
+    /// The Shadow footnote shows while this copy's Shadow status is unknown: only a clip merge records one (`ScanRow.shadow`), so a scan or a
+    /// screenshot import says nothing about it.
     @ViewBuilder private func leaguesPanel(_ e: BoxEntry) -> some View {
         if case .ready(let advice) = model.advice {
             let ratings = advice.leagues(for: e.id)
             if !ratings.isEmpty {
-                Panel(padding: 18, spacing: 14) {
-                    Text("LEAGUES").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
-                        .accessibilityIdentifier("leagues-panel")
-                    ForEach(LeagueText.keys, id: \.self) { key in
-                        if let r = ratings[key] { leagueRow(key, r, levelKnown: e.row.level != nil, level: e.row.level) }
-                    }
-                    Text(LeagueText.footnote).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                }
+                LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil)
             }
         }
-    }
-
-    private func leagueRow(_ key: String, _ r: BoxAdvice.LeagueRating, levelKnown: Bool, level: Double?) -> some View {
-        let lines = [LeagueText.pick(r), LeagueText.strength(r, key: key), LeagueText.ivs(r, key: key), LeagueText.moves(r), LeagueText.needs(r), LeagueText.cost(r, levelKnown: levelKnown, level: level, key: key)].compactMap { $0 }
-        return VStack(alignment: .leading, spacing: 3) {
-            Text(LeagueText.name(key)).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink)
-            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                Text(line).font(.figtree(15, .regular, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(([LeagueText.name(key)] + lines).joined(separator: ". "))
-        .accessibilityIdentifier("league-\(key)")
     }
 
     // MARK: facts
