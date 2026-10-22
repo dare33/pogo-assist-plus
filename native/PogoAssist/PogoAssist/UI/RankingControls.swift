@@ -91,7 +91,9 @@ struct SegmentedSwitch<Value: Hashable>: View {
             HStack(spacing: 8) {
                 if let dot = s.dot { Circle().fill(dot).frame(width: 8, height: 8).accessibilityHidden(true) }
                 Text(s.title).font(.figtree(metrics.fontSize, .bold, relativeTo: .subheadline))
-                    .lineLimit(singleLine ? 1 : nil)
+                    // Wrapped (very large text): shrink a title onto one line rather than break it mid-word ("Defau/lt").
+                    .lineLimit(1)
+                    .minimumScaleFactor(singleLine ? 1 : 0.5)
                     .fixedSize(horizontal: singleLine, vertical: true)
             }
             .foregroundStyle(selected ? (s.selectedInk ?? Theme.ink) : Theme.ink)
