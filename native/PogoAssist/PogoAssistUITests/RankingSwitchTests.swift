@@ -1,7 +1,7 @@
 import XCTest
 
 /// The ranking switch, its "i" and explainer, in the DEBUG design gallery (`-design-gallery`). Not part of `swift test`.
-/// Screenshots go to the folder in POGO_SCREENS (or the temp folder) when it is set.
+/// Screenshots go to the folder in POGO_SCREENS when it is set.
 final class RankingSwitchTests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
@@ -26,6 +26,7 @@ final class RankingSwitchTests: XCTestCase {
             try XCUIScreen.main.screenshot().pngRepresentation.write(to: file)
         } catch {
             XCTFail("screenshot not written to \(file.path): \(error)")
+            return
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "screenshot not written to \(file.path)")
     }

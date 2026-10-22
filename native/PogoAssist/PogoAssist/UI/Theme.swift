@@ -151,24 +151,25 @@ extension Theme {
         "dark": 0x624D4E, "steel": 0x60A1B8, "fairy": 0xEF70EF,
     ]
     /// The text colour for a type chip: white or Theme ink's light value (#15192B, fixed, not dynamic), whichever has the
-    /// higher WCAG contrast against the fill. Computed from the hex values above (white / ink contrast):
+    /// higher WCAG contrast against the fill. Computed from the hex values above (each pair is chosen / other):
     /// white: fire 4.47/3.90, poison 5.49/3.17, ground 6.17/2.82, ghost 7.84/2.22, dragon 5.12/3.40, dark 7.80/2.23.
     /// ink: normal 6.69/2.60, water 4.50/3.87, electric 10.45/1.67, grass 5.26/3.31, ice 9.39/1.85, fighting 6.92/2.52,
     /// flying 8.39/2.08, psychic 4.73/3.68, bug 6.07/2.87, rock 7.31/2.38, steel 6.04/2.88, fairy 6.83/2.55.
+    /// Fire keeps white at 4.47:1 (the better of the two, and the game's own look) by decision, though it is under 4.5.
     /// White for a name that is not a type.
     static func pokemonTypeText(_ type: String) -> Color {
         guard let hex = pokemonTypeHex[type.lowercased()] else { return .white }
         let ink: UInt32 = 0x15192B
         return contrast(0xFFFFFF, hex) >= contrast(ink, hex) ? .white : Color(uiColor: rgb(ink))
     }
-    private static func luminance(_ hex: UInt32) -> Double {
+    static func luminance(_ hex: UInt32) -> Double {
         func channel(_ shift: UInt32) -> Double {
             let c = Double((hex >> shift) & 0xFF) / 255
             return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
         }
         return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
     }
-    private static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
+    static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
         let (la, lb) = (luminance(a), luminance(b))
         return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
     }
@@ -190,6 +191,20 @@ enum Accent: String, CaseIterable, Identifiable {
     var tint: Color { Theme.pair(t.lt, rgba: t.dt) }
     /// On the light solid the text is always white; in dark mode it is per accent.
     var onSolid: Color { Theme.pair(0xFFFFFF, t.on) }
+    /// The glyph on the solid where the "i" is open: `onSolid` when it reaches 4.5:1 against the solid, otherwise the
+    /// darker of ink-light (#15192B) and black, whichever contrasts more. Chosen per accent and mode from the hex values:
+    ///   light: blue black 4.67 (onSolid 4.50, just under), sky black 5.13 (4.09), teal black 5.61 (3.74); the rest onSolid
+    ///   (indigo 8.16, forest 6.47, berry 4.62, plum 6.87, graphite 9.68).
+    ///   dark: forest black 4.86 (onSolid 4.32); the rest onSolid (blue 5.97, indigo 5.01, sky 8.47, teal 8.69, berry 6.30,
+    ///   plum 5.53, graphite 6.10).
+    var openGlyph: Color {
+        func pick(_ solid: UInt32, _ on: UInt32) -> UInt32 {
+            if Theme.contrast(on, solid) >= 4.5 { return on }
+            let ink: UInt32 = 0x15192B
+            return Theme.contrast(ink, solid) >= Theme.contrast(0, solid) ? ink : 0
+        }
+        return Theme.pair(pick(t.ls, 0xFFFFFF), pick(t.ds, t.on))
+    }
 
     /// The mark's ring and the on-disc ink in dark mode: a navy, not the background. White in light mode, and in dark mode for the accents whose onSolid is already white.
     var markInk: Color { Theme.pair(0xFFFFFF, t.on == 0xFFFFFF ? 0xFFFFFF : 0x1B2A4E) }

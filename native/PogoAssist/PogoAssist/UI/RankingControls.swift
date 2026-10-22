@@ -41,7 +41,8 @@ struct SegmentedSwitch<Value: Hashable>: View {
     var identifier: String? = nil
     /// One adjustable element (VoiceOver swipes up and down) instead of a row of buttons.
     var adjustable = false
-    /// Keep each title on one line (the caller falls back to a layout that fits when it cannot).
+    /// Fixed size, never shrunk: the title keeps its natural width (the caller falls back to a layout that fits when it
+    /// cannot). Both modes keep one line; false lets a title shrink to fit instead (the league switch does too).
     var singleLine = false
 
     private let hit: CGFloat = 44
@@ -117,7 +118,7 @@ struct SegmentedSwitch<Value: Hashable>: View {
 /// Toggles `isOpen`; the caller shows the text it opens.
 struct InfoButton: View {
     @Binding var isOpen: Bool
-    /// The circle's diameter at the default text size; it scales with the glyph's text style.
+    /// The circle's diameter at the default text size; it scales with the glyph's text style, to at most 44 pt.
     @ScaledMetric(relativeTo: .footnote) private var size: CGFloat = 26
     var label = "About ranking"
     var identifier: String? = nil
@@ -133,8 +134,8 @@ struct InfoButton: View {
     var body: some View {
         Button { withAnimation(.easeOut(duration: 0.15)) { isOpen.toggle() } } label: {
             Text("i").font(Self.glyph)
-                .foregroundStyle(isOpen ? accent.onSolid : Theme.muted)
-                .frame(width: size, height: size)
+                .foregroundStyle(isOpen ? accent.openGlyph : Theme.muted)
+                .frame(width: min(size, 44), height: min(size, 44))
                 .background(Circle().fill(isOpen ? accent.solid : Theme.off))
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
@@ -215,9 +216,10 @@ struct RankingExplainer: View {
         // "within 3 points" is CLOSE_SCORE in src/leagues.js and must change with it.
         VStack(alignment: .leading, spacing: 8) {
             Text("Default").bold().foregroundStyle(accent.ink)
-                + Text(" follows Poke Genie. From a Poke Genie export it uses that export's own pick. Otherwise, in Great and Ultra League, it takes the family member for which this copy's stat product is the highest share of the best possible under the CP cap, preferring species PvPoke ranks. In Master League, or when the IVs are not known, it takes the strongest species.")
+                + Text(" follows Poke Genie. From a Poke Genie export it uses that export's own pick. Otherwise, in Great and Ultra League, it takes the family member for which this copy's stat product is the highest share of the best possible under the CP cap, preferring members it is not already too strong for, then species PvPoke ranks. In Master League, or when the IVs are not known, it takes the strongest species.")
             Text("Pogo Assist").bold().foregroundStyle(accent.ink)
                 + Text(" weighs the species first. It starts from the member with the best PvPoke score and moves to a weaker one only when that one is within 3 points of the best and this copy's IV rank (out of 4,096 combinations) is higher for it.")
+            // The switch is only placed where it is wired, from PR 2 on, so "everywhere" holds once it is.
             Text("Both use PvPoke's rankings and this copy's IVs, so they often agree. The choice applies everywhere in the app.")
                 .foregroundStyle(Theme.muted)
         }
