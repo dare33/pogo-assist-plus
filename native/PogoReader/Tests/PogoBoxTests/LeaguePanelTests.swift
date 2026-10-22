@@ -34,7 +34,7 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertEqual(c.ivPct, 97.24)
         XCTAssertEqual(c.moves.map(\.text), ["Ember", "Overheat", "Flamethrower"])
         XCTAssertEqual(LeaguePanel.spoken(c, key: "gl", chip: "Pick"),
-                       "Great League, under 1,500 CP. Pick: Flareon. Species 68.9, rank 710 of 1,152. This copy 97.2 percent, IV rank 216. target level 18.5, target CP 1,500, 6,600 dust, 31 candy. Moves Ember, Overheat, Flamethrower.")
+                       "Great League, under 1,500 CP. Pick: Flareon. Species 68.9, rank 710 of 1,152. This copy 97.2 percent, IV rank 216. Target level 18.5, target CP 1,500, 6,600 dust, 31 candy. Moves Ember, Overheat, Flamethrower.")
     }
 
     func testXLIsAppendedToTheCandyAndMissingMovesAreChips() {
@@ -63,6 +63,29 @@ final class LeaguePanelTests: XCTestCase {
         let shownOver = LeaguePanel.card(r, shown: 0, key: "gl", level: 35)
         XCTAssertEqual(shownOver.option.speciesId, "corvisquire")
         XCTAssertEqual(shownOver.strongerOverCap?.speciesId, "corviknight")
+    }
+
+    func testNoNoteWhenNothingStrongerIsOverTheCap() {
+        // The shown member is the strongest: nothing to name.
+        let top = R(options: [option("a", score: 90, iv: iv, cost: cost), option("b", score: 80, over: true)])
+        XCTAssertNil(LeaguePanel.card(top, shown: 0, key: "gl", level: 17).bestAvailableNote)
+        // A weaker member is over the cap but the shown one outscores it: still nothing stronger.
+        let weakerOver = R(options: [option("a", score: 90, iv: iv, cost: cost), option("b", score: 60, over: true)])
+        XCTAssertNil(LeaguePanel.card(weakerOver, shown: 0, key: "gl", level: 17).bestAvailableNote)
+        // Unranked members over the cap listed AFTER the shown one are earlier evolutions, never the stronger species.
+        let earlier = R(options: [option("final", iv: iv, cost: cost), option("middle", over: true)])
+        XCTAssertNil(LeaguePanel.card(earlier, shown: 0, key: "gl", level: 17).bestAvailableNote)
+        // Nothing over the cap at all.
+        XCTAssertNil(LeaguePanel.card(R(options: [option("a", score: 90, iv: iv, cost: cost), option("b", score: 80, iv: iv, cost: cost)]), shown: 0, key: "gl", level: 17).bestAvailableNote)
+    }
+
+    func testRookideeShapeNamesTheUnrankedFinalEvolution() {
+        // Corviknight (the final evolution) is over the cap and unranked here ("fallback"); Corvisquire is shown.
+        let r = R(options: [option("corviknight", over: true), option("corvisquire", iv: iv, cost: cost), option("rookidee", over: true)], pick: 1, experimental: 1, source: "fallback")
+        let c = LeaguePanel.card(r, shown: 1, key: "gl", level: 35)
+        XCTAssertEqual(c.bestAvailableNote, "Corviknight is the stronger species, but this copy is already over 1,500 CP as Corviknight.")
+        XCTAssertEqual(c.strongerOverCap?.speciesId, "corviknight")
+        XCTAssertEqual(c.overCapCount, 2)
     }
 
     func testNoViableOption() {
@@ -118,6 +141,8 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertEqual(u.detailLevel, "Best level 26.5 under the cap, CP 1,481. IVs rank #1,879 of 4,096, 94.75% of best.")
         XCTAssertEqual(u.detailCost, "To level 26.5: 56,800 dust, 75 candy · CP 1,481")
         XCTAssertNil(u.detailMoves, "an unranked or move-less member has no moves line")
+        let ml = LeaguePanel.row(umb, key: "ml", level: 17)
+        XCTAssertEqual(ml.detailLevel, "Best level 26.5, CP 1,481. IVs rank #1,879 of 4,096, 94.75% of best.", "Master League has no cap to be under")
         var ranked = umb; ranked.moves = .init(fast: "Snarl", charged: ["Foul Play", "Last Resort"])
         XCTAssertEqual(LeaguePanel.row(ranked, key: "gl", level: 17).detailMoves, "Moves: Snarl, Foul Play, Last Resort")
         let over = LeaguePanel.row(option("corviknight", score: 86, over: true), key: "gl", level: 35)

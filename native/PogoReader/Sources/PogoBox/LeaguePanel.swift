@@ -107,6 +107,16 @@ public enum LeaguePanel {
         return ([m.fast] + m.charged).map { MoveChip(text: needs.contains($0) ? "Needs \($0)" : $0, missing: needs.contains($0)) }
     }
 
+    /// The member to name in the best-available note: the card's member is not the strongest and a stronger one is already over the cap.
+    /// The highest-scored ranked member over the cap that outscores the card's member; failing that, when the card's member is unranked (the
+    /// engine's "fallback": nothing it may show is ranked), the deepest unranked member over the cap that is listed before it, which is the
+    /// final evolution (options list unranked members later evolution first), e.g. Rookidee shows Corvisquire while Corviknight is over the cap.
+    public static func strongerOverCap(_ r: BoxAdvice.LeagueRating, than o: BoxAdvice.LeagueRating.Option) -> BoxAdvice.LeagueRating.Option? {
+        if let ranked = r.options.first(where: { $0.overCap && ($0.strength?.score ?? -1) > (o.strength?.score ?? -1) && $0.speciesId != o.speciesId && $0.strength != nil }) { return ranked }
+        guard o.strength == nil, let at = r.options.firstIndex(where: { $0.speciesId == o.speciesId }) else { return nil }
+        return r.options[..<at].first { $0.overCap && $0.strength == nil }
+    }
+
     /// Everything one pick card shows. `level` is the Pokémon's own level (nil when not known).
     public static func card(_ r: BoxAdvice.LeagueRating, shown: Int, key: String, level now: Double?) -> Card {
         let shownOption = r.options[min(max(shown, 0), r.options.count - 1)]
@@ -119,8 +129,7 @@ public enum LeaguePanel {
                         costItems: [], costNote: nil, moves: moveChips(shownOption), ivPct: nil)
         }
         let o = r.options[at]
-        // The stronger species is the highest-scored member this copy is already over the cap as, when that outscores the headline.
-        let stronger = r.options.first { $0.overCap && $0.strength != nil && $0.speciesId != o.speciesId && ($0.strength?.score ?? 0) > (o.strength?.score ?? -1) }
+        let stronger = strongerOverCap(r, than: o)
         let note = stronger.map { "\($0.name) is the stronger species, but this copy is already over \(cap(key).map(grouped) ?? "") CP as \($0.name)." }
         let read = o.iv != nil
         return Card(status: read ? .fits : .ivsNotRead, option: o, title: title(o), strongerOverCap: stronger, overCapCount: overCount, bestAvailableNote: note, blockedText: nil,
@@ -145,7 +154,10 @@ public enum LeaguePanel {
         } else {
             parts.append(c.scoreText == "—" ? "Species not ranked" : "Species \(c.scoreText), rank \(c.rankText.replacingOccurrences(of: "#", with: ""))")
             if let iv = c.option.iv, c.status != .ivsNotRead { parts.append("This copy \(oneDecimal(iv.pct)) percent, IV rank \(grouped(iv.rank))") } else { parts.append("This copy not read") }
-            if let n = c.costNote { parts.append(n) } else if !c.costItems.isEmpty { parts.append(c.costItems.map { ($0.label + $0.value).replacingOccurrences(of: ": ", with: " ").lowercasedFirst }.joined(separator: ", ")) }
+            if let n = c.costNote { parts.append(n) } else if !c.costItems.isEmpty { parts.append(c.costItems.enumerated().map { n, item in
+                let text = (item.label + item.value).replacingOccurrences(of: ": ", with: " ")
+                return n == 0 ? text : text.lowercasedFirst
+            }.joined(separator: ", ")) }
         }
         if !c.moves.isEmpty { parts.append("Moves " + c.moves.map(\.text).joined(separator: ", ")) }
         return parts.joined(separator: ". ") + "."
@@ -180,7 +192,7 @@ public enum LeaguePanel {
                 candy = c.xl > 0 ? "\(grouped(c.xl)) XL" : (c.candy + c.evolveCandy > 0 ? "\(grouped(c.candy + c.evolveCandy)) candy" : "no candy")
             } else { dust = "0"; candy = c.evolveCandy > 0 ? "\(grouped(c.evolveCandy)) candy" : "at its level" }
         } else { dust = "—"; candy = now == nil ? "level not known" : "no cost" }
-        let detailLevel = o.iv.map { "Best level \(level($0.level)) under the cap, CP \(grouped($0.cp)). IVs rank #\(grouped($0.rank)) of 4,096, \(String(format: "%.2f", $0.pct))% of best." }
+        let detailLevel = o.iv.map { "Best level \(level($0.level))\(cap(key) == nil ? "" : " under the cap"), CP \(grouped($0.cp)). IVs rank #\(grouped($0.rank)) of 4,096, \(String(format: "%.2f", $0.pct))% of best." }
             ?? (o.overCap ? "Already above the cap as \(o.name)." : "IVs not read, so no rank.")
         return Row(option: o, sub: sub,
                    blockedText: o.overCap ? cap(key).map { "Over \(grouped($0)) CP as \(o.name)" } : nil,
