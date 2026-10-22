@@ -138,7 +138,7 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
  *   speciesId, name: the member (the _shadow id and name where the entry is a Shadow and PvPoke ranks the Shadow);
  *   self: it is the Pokémon itself; genderLocked: 'male'|'female', only when the sex is unknown and one sex can become it;
  *   strength: { score, rank, of } from PvPoke, or null when PvPoke does not rank it in this league;
- *   moves: { fast, charged[] } on the SHOWN and the EXPERIMENTAL option only when PvPoke ranks them, else null (trimmed to keep the payload small); needs: the recommended moves this copy lacks, only on the Pokémon itself, else null;
+ *   moves: { fast, charged[] } on every option PvPoke ranks, else null (an unranked option has none); needs: the recommended moves this copy lacks, only on the Pokémon itself, else null;
  *   iv: { rank, pct, rankPct, level, cp } for this copy's IVs as this member, or null (unknown IVs or cannot fit under the cap);
  *   overCap: this copy's CP at its current level (0/0/0 if its IVs are unknown) already exceeds the cap as the member (never when the level is unknown, or in Master League); cost: dust/candy/xl to that level plus the
  *   candy to evolve there (evolveCandy), or null (no IVs, no level, over the cap). A copy whose best level is BELOW its current one (a
@@ -258,8 +258,7 @@ export function leaguesFor(entry, resolved, ctx) {
     if (!expBase && !win && fitsBase(finalEvolution)) expBase = finalEvolution; // nothing ranked at all: the final evolution
     if (!expBase) expBase = fitsBase(pickBase) ? pickBase : (shown.find((m) => !m.overCap)?.base ?? pickBase);
     const pick = indexOf(pickBase), experimental = indexOf(expBase);
-    // Moves are about a third of an option's bytes and only the shown and the experimental member are ever displayed with them.
-    options.forEach((o, i) => { if (i !== pick && i !== experimental) o.moves = null; });
+    // Every option PvPoke ranks keeps its moves (the Pokémon page's expanded option row shows them), so none is trimmed here.
     out[league] = { options, pick, experimental, source };
   }
   return out;
