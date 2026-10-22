@@ -44,10 +44,10 @@ struct PokemonDetailView: View {
                     VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
                         heading(e, mega: megaShown(e))
                         if !e.row.checkFlags.isEmpty { checkPanel(e) }
-                        ivPanel(e)
-                        advicePanel(e)
-                        // Megas are not allowed in GO Battle League, so the section waits while the page shows the Mega form.
+                        ivPanel(e, pvpFigures: megaShown(e) == nil)
+                        // Megas are not allowed in GO Battle League, so the section (and the IVs panel's PvP figures) wait while the page shows the Mega form.
                         if megaShown(e) == nil { leaguesPanel(e) }
+                        advicePanel(e)
                         factsPanel(e, mega: megaShown(e))
                         notesPanel(e, mega: megaShown(e))
                         VStack(spacing: 2) {
@@ -154,7 +154,7 @@ struct PokemonDetailView: View {
         }
     }
 
-    // MARK: IVs
+    // MARK: search chip
 
     /// The game search as a small chip beside the CP line: tapping copies it and toasts "Copied".
     private func searchChip(_ text: String) -> some View {
@@ -181,13 +181,13 @@ struct PokemonDetailView: View {
     // MARK: IVs
 
     /// The IV bars; at the trailing edge this copy's IV % as the shown member in Great, Ultra and Master League (nothing when the IVs are not read).
-    private func ivPanel(_ e: BoxEntry) -> some View {
+    private func ivPanel(_ e: BoxEntry, pvpFigures: Bool) -> some View {
         let r = e.row
         return Panel {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("IVs").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                 Spacer(minLength: 0)
-                if r.ivs != nil, case .ready(let advice) = model.advice {
+                if pvpFigures, r.ivs != nil, case .ready(let advice) = model.advice {
                     let ratings = advice.leagues(for: e.id)
                     if !ratings.isEmpty {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -199,6 +199,7 @@ struct PokemonDetailView: View {
                                 }
                                 .foregroundStyle(league.ink)
                                 .accessibilityElement(children: .ignore)
+                                .accessibilityIdentifier("iv-figure-\(f.key)")
                                 .accessibilityLabel("\(LeaguePanel.name(f.key)) IVs")
                                 .accessibilityValue(f.pct.map { "\(LeaguePanel.oneDecimal($0)) percent" } ?? "none")
                             }

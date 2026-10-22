@@ -50,7 +50,19 @@ struct LeaguesPanel: View {
 
     // MARK: header
 
+    /// LEAGUES (with the back circle in the league view) and the ranking switch: one row, or from the sizes where the switch no longer
+    /// fits beside the label, the label above the switch.
     private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { title; Spacer(minLength: 8); rankingSwitch }
+            VStack(alignment: .leading, spacing: 4) { title; rankingSwitch }
+        }
+        .frame(minHeight: 30)
+    }
+
+    private var rankingSwitch: some View { RankingSwitch(infoOpen: $infoOpen, identifier: "leagues-scoring", showsCaption: false) }
+
+    private var title: some View {
         HStack(spacing: 8) {
             if mode != nil {
                 Button { mode = nil } label: {
@@ -65,11 +77,7 @@ struct LeaguesPanel: View {
             }
             Text("LEAGUES").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("leagues-panel")
-            Spacer(minLength: 8)
-            RankingSwitch(infoOpen: $infoOpen, identifier: "leagues-scoring", showsCaption: false)
-                .fixedSize(horizontal: !oneColumn, vertical: false)
         }
-        .frame(minHeight: 30)
     }
 
     // MARK: base state
@@ -297,7 +305,7 @@ struct LeaguesPanel: View {
                     .frame(width: Self.figureWidths.reduce(16, +), alignment: .trailing)
             } else {
                 cell(row.score, row.rank, ink: row.score == "—" ? Theme.faint : (row.scoreStrong ? Theme.greenInk : Theme.ink), width: Self.figureWidths[0])
-                cell(row.ivPct, row.ivRank, ink: row.ivStrong ? Theme.greenInk : Theme.ink, width: Self.figureWidths[1])
+                cell(row.ivPct, row.ivRank, ink: row.ivPct == "—" ? Theme.faint : (row.ivStrong ? Theme.greenInk : Theme.ink), width: Self.figureWidths[1])
                 cell(row.dust, row.candy, ink: row.dustMuted ? Theme.muted : Theme.ink, width: Self.figureWidths[2])
             }
         }
