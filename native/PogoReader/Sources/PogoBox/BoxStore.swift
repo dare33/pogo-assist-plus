@@ -237,8 +237,24 @@ public final class BoxStore {
     /// Every completed rename (old name to new name), newest last, so a name recorded earlier (the account a scan was started under) can be followed to what it is called now.
     private func appendHistory(old: String, new: String) {
         var all = (try? Data(contentsOf: historyURL)).flatMap { try? JSONDecoder().decode([[String]].self, from: $0) } ?? []
-        if all.last != [old, new] { all.append([old, new]) }
+        // The history keeps only the last 50 renames, so a position in it is not a stable number: `renameSequence` counts every rename ever recorded and never goes down.
+        // A counter that cannot be read must not send the sequence backwards (a stamp already made would then point at the wrong place): it restarts a million above anything the history
+        // can say, so every earlier stamp is older than the oldest rename on record and is asked about. The counter is written BEFORE the history: a failure between the two leaves it one
+        // too high, which also only makes stamps look older (asked about), never newer.
+        var total = renameSequence ?? (all.count + Self.counterRecoveryJump)
+        if all.last != [old, new] { all.append([old, new]); total += 1 }
+        try? Data(String(total).utf8).write(to: sequenceURL, options: .atomic)
         try? JSONEncoder().encode(Array(all.suffix(50))).write(to: historyURL, options: .atomic)
+    }
+
+    static let counterRecoveryJump = 1_000_000
+    private var sequenceURL: URL { root.appendingPathComponent(".renames-recorded") }
+    /// How many renames have ever been recorded (nil: the record cannot be read). Absent counter: the length of the history (a store from before the counter).
+    var renameSequence: Int? {
+        if let data = try? Data(contentsOf: sequenceURL) { return Int(String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0 >= 0 ? $0 : nil } }
+        guard fm.fileExists(atPath: historyURL.path) else { return 0 }
+        guard let data = try? Data(contentsOf: historyURL), let all = try? JSONDecoder().decode([[String]].self, from: data) else { return nil }
+        return all.count
     }
 
     public enum AccountLookup: Equatable {
@@ -269,6 +285,59 @@ public final class BoxStore {
             if existing.contains(name) { return .found(name) }
         }
         return .gone
+    }
+
+    /// A rename is half done (its journal exists) or a folder it moved aside is hiding an account (names that begin with a dot are never listed): what `accounts()` returns is then not every
+    /// account, so nothing may be concluded from an account being absent from it.
+    public var accountListIsIncomplete: Bool {
+        if renameJournalExists { return true }
+        let names = (try? fm.contentsOfDirectory(atPath: root.path)) ?? []
+        // the folder a rename moves aside is `.rename-<uuid>` (its journal and history are `.json` files)
+        return names.contains { $0.hasPrefix(".rename-") && !$0.hasSuffix(".json") }
+    }
+
+    /// How many renames have been recorded in all: the "epoch" a binding is stamped with. It only goes up, whatever is trimmed from the history.
+    public var renameCount: Int? { renameSequence }
+
+    /// When an account's folder was made. A rename moves the folder and keeps this; deleting an account and making another of the same name does not.
+    public func accountCreated(_ name: String) -> Double? {
+        guard let dir = try? accountDirectory(name, create: false) else { return nil }
+        return ((try? fm.attributesOfItem(atPath: dir.path))?[.creationDate] as? Date)?.timeIntervalSince1970
+    }
+
+    public enum AccountResolution: Equatable {
+        case found(String)
+        case gone
+        case unknown
+        /// `old` was renamed to `renamedTo` after the binding was made, and an account called `old` exists again: which of the two the binding means cannot be told, so the person says.
+        case ambiguous(old: String, renamedTo: String)
+        /// The binding is older than the oldest rename still on record, so what happened to the name since cannot be followed: the person says.
+        case indeterminate
+    }
+
+    /// Whose account a name recorded at rename-sequence `since` means NOW. Renames made after `since` are followed first, before asking whether the name exists, because a name that was
+    /// renamed away and then used for a new account is not the same account. With `since` nil (an older record) this is `lookupAccount`. A `since` older than the oldest rename the
+    /// history still holds is `indeterminate`, unless no rename has happened since (then there is nothing to follow).
+    public func resolveAccount(_ recorded: String, since: Int?) -> AccountResolution {
+        guard let since else {
+            switch lookupAccount(recorded) { case .found(let n): return .found(n); case .gone: return .gone; case .unknown: return .unknown }
+        }
+        guard let list = try? accounts() else { return .unknown }
+        if renameJournalExists { return .unknown }
+        var all = [[String]]()
+        if fm.fileExists(atPath: historyURL.path) {
+            guard let data = try? Data(contentsOf: historyURL), let decoded = try? JSONDecoder().decode([[String]].self, from: data) else { return .unknown }
+            all = decoded
+        }
+        guard let total = renameSequence else { return .indeterminate }   // the counter cannot be read: nothing can be followed, so the person is asked
+        let first = max(0, total - all.count)   // the position, in all renames ever, of the first one still held
+        if since < first { return .indeterminate }
+        var name = recorded, moved = false
+        for step in all.dropFirst(min(since - first, all.count)) where step.count == 2 && step[0] == name { name = step[1]; moved = true }
+        let existing = Set(list)
+        guard moved else { return existing.contains(recorded) ? .found(recorded) : .gone }
+        guard existing.contains(name) else { return .gone }
+        return existing.contains(recorded) && recorded != name ? .ambiguous(old: recorded, renamedTo: name) : .found(name)
     }
 
     /// `lookupAccount` as a name or nil (gone, or not known).

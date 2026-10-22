@@ -8,6 +8,8 @@ let package = Package(
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "PogoReader", targets: ["PogoReader"]),
+        // The screenshot queue (staging, manifests, duplicate ledger). The share extension links this and nothing larger.
+        .library(name: "PogoImport", targets: ["PogoImport"]),
         .executable(name: "pogo-read", targets: ["pogo-read"]),
         .executable(name: "pogo-drop", targets: ["pogo-drop"]),
         // The app core: the project's JavaScript grouping/solver in JavaScriptCore, the saved box, the CSV.
@@ -17,16 +19,20 @@ let package = Package(
         .executable(name: "pogo-voice", targets: ["pogo-voice"]),
     ],
     targets: [
-        .target(name: "PogoReader", resources: [.copy("Resources/species.json")]),
+        // Decoding, orienting, stripping and hashing one image: ImageIO and CryptoKit, nothing that touches file dates. The broadcast extension links it through PogoReader.
+        .target(name: "PogoImage"),
+        .target(name: "PogoImport", dependencies: ["PogoImage"]),
+        .testTarget(name: "PogoImportTests", dependencies: ["PogoImport"]),
+        .target(name: "PogoReader", dependencies: ["PogoImage"], resources: [.copy("Resources/species.json")]),
         .executableTarget(name: "pogo-read", dependencies: ["PogoReader"]),
         .executableTarget(name: "pogo-drop", dependencies: ["PogoReader"]),
         .testTarget(name: "PogoReaderTests", dependencies: ["PogoReader"]),
-        .target(name: "PogoBox", dependencies: ["PogoReader"], resources: [
+        .target(name: "PogoBox", dependencies: ["PogoReader", "PogoImport"], resources: [
             .copy("Resources/pogo-core.js"), .copy("Resources/gamemaster.json"),
             .copy("Resources/tiers.json"), .copy("Resources/pvp-rankings.json"),
         ]),
         .executableTarget(name: "pogo-rows", dependencies: ["PogoBox", "PogoReader"]),
         .executableTarget(name: "pogo-voice", dependencies: ["PogoBox"]),
-        .testTarget(name: "PogoBoxTests", dependencies: ["PogoBox", "PogoReader"], resources: [.copy("Fixtures")]),
+        .testTarget(name: "PogoBoxTests", dependencies: ["PogoBox", "PogoReader", "PogoImport"], resources: [.copy("Fixtures")]),
     ]
 )

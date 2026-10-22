@@ -44,6 +44,7 @@ struct RootView: View {
         .sheet(item: $model.sheet) { sheet in
             switch sheet {
             case .settings: SettingsView().environmentObject(model)
+            case .screenshots: ScreenshotImportSheet().environmentObject(model)
             case .diagnostics:
                 ContentView(onLoadSample: { partial in
                     do {
@@ -64,6 +65,7 @@ struct RootView: View {
         } message: { Text(model.message ?? "") }
         .overlay { if let work = model.busy { BusyOverlay(text: work) } }
         .onAppear {
+            model.screenshots.activate()
             model.refreshBroadcast(); model.startTimer()
             #if DEBUG
             if let variant = UserDefaults.standard.string(forKey: "uitest-seed-review") { model.seedReview(variant: variant) }
@@ -76,8 +78,8 @@ struct RootView: View {
         .onChange(of: model.scanDonePending) { _, pending in if pending { doneRun = true; scanOpen = true } }
         .onChange(of: model.isReviewing) { _, reviewing in if !reviewing && doneRun { doneRun = false; scanOpen = false } }
         .onChange(of: phase) { _, p in
-            if p == .active { model.refreshBroadcast(); model.startTimer() } else { model.stopTimer() }
-            if p == .active || p == .background { model.scenePhaseChanged(background: p == .background) }
+            if p == .active { model.refreshBroadcast(); model.startTimer(); model.screenshots.activate() } else { model.stopTimer() }
+            if p == .active || p == .background { model.scenePhaseChanged(background: p == .background); model.screenshots.scenePhaseChanged(background: p == .background) }
         }
     }
 }
@@ -197,6 +199,8 @@ struct MoreMenu: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         Menu {
+            Button { model.sheet = .screenshots } label: { Label(model.screenshots.waitingCount > 0 ? "Import screenshots (\(model.screenshots.waitingCount) waiting)" : "Import screenshots", systemImage: "photo.on.rectangle.angled") }
+                .disabled(model.accounts.isEmpty)
             Button { model.sheet = .settings } label: { Label("Settings", systemImage: "gearshape") }
             Button { model.sheet = .diagnostics } label: { Label("Diagnostics", systemImage: "waveform.path.ecg") }
         } label: {

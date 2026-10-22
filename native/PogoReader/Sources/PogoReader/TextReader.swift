@@ -27,6 +27,10 @@ public protocol TextReader: AnyObject {
     func read(_ image: RGBAImage, kind: TextKind) -> TextRead
 }
 
+/// A text reader that can say its recogniser FAILED (as opposed to finding no text): the count of reads that threw or could not be started. A still-image read that saw a
+/// fault is a fault of the reader, not a verdict about the screenshot.
+public protocol FaultReporting: AnyObject { var faultCount: Int { get } }
+
 /// Vision settings that may change its memory or speed. Every one is off by default; the Mac tool
 /// (`pogo-read --vision-device`, `--vision-min-text-height`, `--vision-recreate`) measures them. Mac
 /// figures may not transfer to an iPhone extension, so only what the phone shows should be adopted.
@@ -45,7 +49,8 @@ public struct VisionOptions: Equatable {
 
 /// Apple Vision text recognition: accurate level, language correction off (it would "fix" Pokémon
 /// names and digits into words), en-US. The request object is created once and reused.
-public final class VisionTextReader: TextReader {
+public final class VisionTextReader: TextReader, FaultReporting {
+    public private(set) var faultCount = 0
     private var request: VNRecognizeTextRequest
     private let options: VisionOptions
     private let colourSpace = CGColorSpaceCreateDeviceRGB()
@@ -92,9 +97,9 @@ public final class VisionTextReader: TextReader {
         return autoreleasepool {
             if options.recreateRequestEachRead { request = VisionTextReader.makeRequest(options) }
             var work = upscaled(image, toHeight: target)
-            guard let cg = cgImage(&work) else { return .empty }
+            guard let cg = cgImage(&work) else { faultCount += 1; return .empty }
             let handler = VNImageRequestHandler(cgImage: cg, options: [:])
-            do { try handler.perform([request]) } catch { return .empty }
+            do { try handler.perform([request]) } catch { faultCount += 1; return .empty }
             let observations = (request.results ?? []).sorted { $0.boundingBox.minX < $1.boundingBox.minX }
             var words = [TextWord]()
             for o in observations {

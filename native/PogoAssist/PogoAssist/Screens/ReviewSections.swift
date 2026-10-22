@@ -24,12 +24,48 @@ struct ReviewNotices: View {
     var body: some View {
         if let tapWarning { notice(tapWarning, icon: "exclamationmark.octagon.fill", ink: Theme.red, bold: true) }
         if let paceWarning { notice(paceWarning, icon: "exclamationmark.triangle.fill", ink: Theme.orangeInk) }
+        if let p = review.importPrepared { importNotices(p) }
         if let stop = review.stopSummary { notice(stop, icon: "flag.checkered", ink: Theme.ink, tint: nil) }
         if let note = review.kindNote { notice(note, icon: "info.circle", ink: Theme.muted, tint: nil) }
         if let plan = review.reread {
             notice("Reading the scan from \(Fmt.date(plan.scan.scanDate)) again, against the box as it was before that scan was saved. Nothing changes until you save.", icon: "arrow.clockwise", ink: Theme.muted, tint: nil)
             if plan.hasLaterChanges { notice(laterText(plan), icon: "exclamationmark.triangle.fill", ink: Theme.orangeInk) }
         }
+    }
+
+    /// A screenshot import: whose box it goes to (said before anything is saved), that nothing else in the box is touched, and what was left out and why.
+    @ViewBuilder private func importNotices(_ p: ScreenshotImporter.Prepared) -> some View {
+        notice("These screenshots will be added to the box of \(p.account). Pokémon that are not in them are left exactly as they are.", icon: "person.crop.circle", ink: Theme.ink, bold: true, tint: nil)
+        if let left = leftOutText(p) { notice(left, icon: "info.circle", ink: Theme.muted, tint: nil) }
+        if !p.plan.same.isEmpty { notice("\(ReviewFormat.count(p.plan.same.count, "screenshot", "screenshots")) match Pokémon already in the box (same species, CP and IVs), so they are treated as those Pokémon and left unchanged, as in a scan.", icon: "equal.circle", ink: Theme.muted, tint: nil) }
+        if !p.dropped.isEmpty { notice("\(ReviewFormat.count(p.dropped.count, "screenshot", "screenshots")) could not be worked out again and were left out.", icon: "exclamationmark.triangle.fill", ink: Theme.orangeInk) }
+    }
+
+    /// Says what was left out and, to the letter of `ImportQueue.retire`, what a save keeps and what it clears: held-back and unreadable (or failed) screenshots stay queued; screenshots
+    /// without IVs and screens that are not supported are cleared with the save, since there is nothing to do with them.
+    private func leftOutText(_ p: ScreenshotImporter.Prepared) -> String? {
+        let left = p.manifest.items.filter { !$0.isIncluded && $0.duplicateOf == nil }
+        guard !left.isEmpty else { return nil }
+        func n(_ k: Int) -> String { ReviewFormat.count(k, "screenshot", "screenshots") }
+        let repeats = left.filter { $0.heldBack && $0.repeatOf != nil }.count
+        let unreadableRecord = left.filter { $0.heldBack && $0.repeatOf == nil && $0.ledgerUnknown == true }.count
+        let maybe = left.filter { $0.heldBack && $0.repeatOf == nil && $0.ledgerUnknown != true && $0.alreadyImportedMaybe == true }.count
+        let already = left.filter { $0.heldBack && $0.repeatOf == nil && $0.ledgerUnknown != true && $0.alreadyImportedMaybe != true && $0.alreadyImported != nil }.count
+        let noIVs = left.filter { $0.state == .ivsMissing }.count, unsupported = left.filter { $0.state == .unsupported }.count
+        let unread = left.filter { $0.canRetry }.count
+        var out = [String](), stay = [String](), cleared = [String]()
+        if repeats > 0 { out.append("\(n(repeats)) held back as possible repeats of another in this batch"); stay.append("held-back") }
+        if already > 0 { out.append("\(n(already)) held back because that screenshot was imported before"); if !stay.contains("held-back") { stay.append("held-back") } }
+        if maybe > 0 { out.append("\(n(maybe)) held back because a save of that screenshot may already have been made"); if !stay.contains("held-back") { stay.append("held-back") } }
+        if unreadableRecord > 0 { out.append("\(n(unreadableRecord)) held back because the record of earlier imports could not be read"); if !stay.contains("held-back") { stay.append("held-back") } }
+        if unread > 0 { out.append("\(n(unread)) that could not be read"); stay.append("unreadable") }
+        if noIVs > 0 { out.append("\(n(noIVs)) without IVs (the appraisal bars were not showing or had not finished filling)"); cleared.append("without IVs") }
+        if unsupported > 0 { out.append("\(n(unsupported)) that are not a supported screen"); cleared.append("unsupported") }
+        guard !out.isEmpty else { return nil }
+        var text = "Not included: " + out.joined(separator: ", ") + "."
+        if !stay.isEmpty { text += " After you save, the \(stay.joined(separator: " and ")) ones stay in Import screenshots." }
+        if !cleared.isEmpty { text += " The \(cleared.joined(separator: " and ")) ones are cleared with the save." }
+        return text
     }
 
     private func notice(_ text: String, icon: String, ink: Color, bold: Bool = false, tint: PanelTint? = .orange) -> some View {
@@ -100,7 +136,7 @@ struct ReviewLowerSections: View {
         let marked = report.gone.filter { review.markedForRemoval.contains($0) }.count
         let rows = listRows(report, marked: marked)
         if !rows.isEmpty { Panel(padding: 0, spacing: 0) { ForEach(rows) { $0 } }.padding(.top, 4) }
-        if review.reread == nil { scanKind }
+        if review.reread == nil && review.importPrepared == nil { scanKind }
         scanDetails
     }
 
@@ -203,14 +239,18 @@ struct ReviewLowerSections: View {
         let outcome = review.outcome
         let unmatched = outcome.scan.unmatched
         Panel(padding: 0, spacing: 0) {
-            reveal("details", InsetRow(title: "Scan details", sub: "Pace, frames, time", icon: "info.circle", showsChevron: true, separator: false) { toggle("details") }) {
-                detail("Scan time", Fmt.duration(outcome.duration))
-                detail("Frames read", "\(outcome.readings)")
+            reveal("details", InsetRow(title: "Scan details", sub: review.importPrepared == nil ? "Pace, frames, time" : "Screenshots, box", icon: "info.circle", showsChevron: true, separator: false) { toggle("details") }) {
+                if review.importPrepared == nil {
+                    detail("Scan time", Fmt.duration(outcome.duration))
+                    detail("Frames read", "\(outcome.readings)")
+                } else {
+                    detail("Screenshots", "\(outcome.readings)")
+                }
                 if let pace = outcome.pace { detail("Pace", "about \(String(format: "%.1f", pace.medianPeriod)) s per Pokémon") }
                 detail("Box", review.account)
                 detail("Pokémon read", outcome.scan.rows.count.formatted())
-                detail("Cards the scan could not read", "\(BoxMerge.unreadCount(plan))")
-                if unmatched.isEmpty { Text("Every Pokémon on screen was read.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
+                if review.importPrepared == nil { detail("Cards the scan could not read", "\(BoxMerge.unreadCount(plan))") }
+                if unmatched.isEmpty && review.importPrepared == nil { Text("Every Pokémon on screen was read.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
                 ForEach(Array(unmatched.enumerated()), id: \.offset) { _, u in Text(Fmt.unmatched(u)).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.ink) }
                 if !plan.partMatches.isEmpty {
                     Text("Part reads matched by HP (\(plan.partMatches.count))").paText(.rowTitle).foregroundStyle(Theme.ink).padding(.top, 6)
@@ -220,7 +260,7 @@ struct ReviewLowerSections: View {
                     Text("Notes from the reader").paText(.rowTitle).foregroundStyle(Theme.ink).padding(.top, 6)
                     ForEach(outcome.notices, id: \.self) { Text($0).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
                 }
-                if model.reportsEnabled {
+                if model.reportsEnabled && review.importPrepared == nil {
                     PillButton("Make scans better", systemImage: "paperplane", style: .tint) { model.reportTarget = .review }.padding(.top, 6)
                 }
             }

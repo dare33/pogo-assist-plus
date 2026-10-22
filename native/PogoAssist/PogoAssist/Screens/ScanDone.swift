@@ -27,6 +27,7 @@ struct ScanDoneWords: Equatable {
         // The end of the list was reached but the scan is not a sound Full scan: say only that.
         case .listEnd: headline = "Scan finished at the end of your list."
         case .unknown: headline = "Scan finished."
+        case .screenshots: headline = "Screenshots read."
         }
     }
 

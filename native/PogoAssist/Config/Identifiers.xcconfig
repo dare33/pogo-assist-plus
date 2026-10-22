@@ -5,6 +5,7 @@
 BUNDLE_ID_PREFIX = com.dare33
 APP_BUNDLE_ID = $(BUNDLE_ID_PREFIX).pogoassist
 EXTENSION_BUNDLE_ID = $(BUNDLE_ID_PREFIX).pogoassist.broadcast
+SHARE_EXTENSION_BUNDLE_ID = $(BUNDLE_ID_PREFIX).pogoassist.share
 APP_GROUP = group.$(BUNDLE_ID_PREFIX).pogoassist
 
 // The signing team is not tracked. Copy Signing.local.xcconfig.example to Signing.local.xcconfig (git-ignored) and put
