@@ -38,6 +38,8 @@ enum Theme {
     static let greenInk = pair(0x1C7A3E, 0x6FD796)
     static let greenTint = pair(0xE6F6EC, rgba: (80, 200, 120, 0.16))
     static let red = pair(0xD92D3A, 0xFF6B76)
+    /// Behind the "over cap" indicator.
+    static let redTint = pair(0xFBE4E6, rgba: (255, 107, 118, 0.16))
 
     /// Question kind: match to one you have.
     static let match = pair(0x0E9AA7, 0x2EC4CF)
@@ -61,8 +63,96 @@ enum Theme {
         Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? rgb(dark) : rgb(light) })
     }
     /// A dark value given as the design's rgba (tints are translucent in dark mode).
+    /// Both values given as rgba (the league tints are translucent in light mode too).
+    static func pair(rgba l: (CGFloat, CGFloat, CGFloat, CGFloat), dark d: (CGFloat, CGFloat, CGFloat, CGFloat)) -> Color {
+        Color(uiColor: UIColor { c in
+            let v = c.userInterfaceStyle == .dark ? d : l
+            return UIColor(red: v.0 / 255, green: v.1 / 255, blue: v.2 / 255, alpha: v.3)
+        })
+    }
     static func pair(_ light: UInt32, rgba d: (CGFloat, CGFloat, CGFloat, CGFloat)) -> Color {
         Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: d.0 / 255, green: d.1 / 255, blue: d.2 / 255, alpha: d.3) : rgb(light) })
+    }
+}
+
+/// The three PvP leagues, coloured after GO Battle League (design handoff of 22 Oct 2026, "New tokens").
+enum League: String, CaseIterable, Identifiable {
+    case gl, ul, ml
+    var id: String { rawValue }
+    var title: String { switch self { case .gl: return "Great"; case .ul: return "Ultra"; case .ml: return "Master" } }
+    /// Text in the league's colour.
+    var ink: Color {
+        switch self {
+        case .gl: return Theme.pair(0x1F5FD1, 0x8FB0FF)
+        case .ul: return Theme.pair(0x8A5A00, 0xF0C33C)
+        case .ml: return Theme.pair(0x7A2FB5, 0xD1A3FF)
+        }
+    }
+    /// The dot and the tile's left border.
+    var dot: Color {
+        switch self {
+        case .gl: return Theme.pair(0x3B82F6, 0x6FA3FF)
+        case .ul: return Theme.pair(0xE0A82A, 0xF0C33C)
+        case .ml: return Theme.pair(0xA855F7, 0xC58CFF)
+        }
+    }
+    var tint: Color {
+        switch self {
+        case .gl: return Theme.pair(rgba: (59, 130, 246, 0.10), dark: (111, 163, 255, 0.14))
+        case .ul: return Theme.pair(rgba: (224, 168, 42, 0.14), dark: (240, 195, 60, 0.14))
+        case .ml: return Theme.pair(rgba: (168, 85, 247, 0.10), dark: (197, 140, 255, 0.14))
+        }
+    }
+}
+
+/// The kinds of content on the Pogo Hub. Each has an ink and a tint; `.everything` follows the accent, so both take it.
+enum ContentType: String, CaseIterable, Identifiable {
+    case everything, raids, gym, rocket, pvp, max
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .everything: return "Everything"
+        case .raids: return "Raids"
+        case .gym: return "Gym battles"
+        case .rocket: return "Team Rocket"
+        case .pvp: return "PvP leagues"
+        case .max: return "Max battles"
+        }
+    }
+    func ink(_ accent: Accent) -> Color {
+        switch self {
+        case .everything: return accent.ink
+        case .raids: return Theme.orangeInk
+        case .gym: return Theme.greenInk
+        case .rocket: return Theme.pair(0x2A3042, 0xB5BBCB)
+        case .pvp: return Theme.pair(0x7A2FB5, 0xD1A3FF)
+        case .max: return Theme.changeInk
+        }
+    }
+    func tint(_ accent: Accent) -> Color {
+        switch self {
+        case .everything: return accent.tint
+        case .raids: return Theme.orangeTint
+        case .gym: return Theme.greenTint
+        case .rocket: return Theme.pair(0xE9EBF0, rgba: (90, 98, 118, 0.3))
+        case .pvp: return Theme.pair(0xEFEBFF, rgba: (156, 131, 255, 0.2))
+        case .max: return Theme.changeTint
+        }
+    }
+}
+
+extension Theme {
+    /// The game's type colours for Pokémon type chips (white text on them), the same in light and dark. Keyed by the
+    /// type name as the game master spells it: lowercase.
+    static let pokemonTypeHex: [String: UInt32] = [
+        "normal": 0x9FA19F, "fire": 0xE62829, "water": 0x2980EF, "electric": 0xFAC000, "grass": 0x3FA129,
+        "ice": 0x3DCEF3, "fighting": 0xFF8000, "poison": 0x9141CB, "ground": 0x915121, "flying": 0x81B9EF,
+        "psychic": 0xEF4179, "bug": 0x91A119, "rock": 0xAFA981, "ghost": 0x704170, "dragon": 0x5060E1,
+        "dark": 0x624D4E, "steel": 0x60A1B8, "fairy": 0xEF70EF,
+    ]
+    /// nil for a name that is not one of the 18 types.
+    static func pokemonType(_ name: String) -> Color? {
+        pokemonTypeHex[name.lowercased()].map { Color(uiColor: rgb($0)) }
     }
 }
 
@@ -99,13 +189,22 @@ enum Accent: String, CaseIterable, Identifiable {
 
 // MARK: preferences
 
-/// The three preferences, stored in AppStorage under these keys.
+/// The preferences, stored in AppStorage under these keys.
 enum PrefKey {
     static let accent = "accent"
     static let appearance = "appearance"
     static let helpLevel = "helpLevel"
     /// Which form of a Pokémon with a Mega form its page shows first: `MegaDefault`.
     static let megaDefault = "megaDefault"
+    /// How the family member for a league is chosen, app-wide: `Ranking`.
+    static let ranking = "ranking"
+}
+
+/// The global ranking choice. Nothing ranks by it yet; the switch and its raw value are here for the screens that will.
+enum Ranking: String, CaseIterable, Identifiable {
+    case `default`, pogoAssist
+    var id: String { rawValue }
+    var title: String { self == .default ? "Default" : "Pogo Assist" }
 }
 
 enum Appearance: String, CaseIterable, Identifiable {
