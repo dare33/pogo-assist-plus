@@ -138,7 +138,7 @@ public struct BoxAdvice: Codable, Equatable {
     ///
     /// `options` lists every allowed member of the Pokémon's family (strongest PvPoke score first, then the members PvPoke does not
     /// rank), each rated for this exact copy. `moves` is filled on every option PvPoke ranks (nil on an unranked one). `pick` (JSON "pick") is the index of the member to show, which copies Poke Genie;
-    /// `experimental` is the index of the CLOSE_SCORE rule's member, carried but not shown. The accessors below (`pick`, `strength`,
+    /// `experimental` is the index of the CLOSE_SCORE rule's member, shown under the Pogo Assist ranking. The accessors below (`pick`, `strength`,
     /// `moves`, `needs`, `iv`, `overCap`, `cost`) read the SHOWN member, so a screen written for one rating per league keeps working.
     public struct LeagueRating: Codable, Equatable {
         public struct Pick: Codable, Equatable {
@@ -267,7 +267,7 @@ public struct BoxAdvice: Codable, Equatable {
 
         /// The member to show.
         public var shown: Option { options[pickIndex] }
-        /// The experimental member (not shown).
+        /// The experimental member (shown under the Pogo Assist ranking).
         public var experimental: Option { options[experimentalIndex] }
 
         public var pick: Pick { Pick(speciesId: shown.speciesId, name: shown.name, isSelf: shown.isSelf, genderLocked: shown.genderLocked) }

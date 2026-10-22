@@ -46,7 +46,7 @@ const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'mal
 //      nothing to copy and the stat-product rule there only follows ~0.07% noise (Eevee showed Glaceon/Umbreon, Scyther showed
 //      Kleavor over Scizor, Shaymin Land over Sky); the species' PvPoke score is the better guide (Greg, 20 Oct 2026).
 //
-// EXPERIMENTAL pick (`chooseMember`, threshold CLOSE_SCORE): carried in the data (`experimental`) but not shown; Greg will switch
+// EXPERIMENTAL pick (`chooseMember`, threshold CLOSE_SCORE): carried in the data (`experimental`) and shown when the app's ranking switch is on Pogo Assist; Greg will switch
 // the shown pick to it once it is provably better. Species strength first, but among ranked members within CLOSE_SCORE points of
 // the best score the best IV Rank % for this copy wins.
 // ============================================================================================================================
@@ -130,7 +130,7 @@ const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
  * Returns { gl, ul, ml }; each league is
  *   { options: [Option], pick: int, experimental: int, source: 'export' | 'emulated' | 'ranked' | 'fallback' }
  * `pick` is the index into `options` of the member to show (the Poke Genie-compatible rule), `experimental` the index of the
- * CLOSE_SCORE rule's member (not shown); they may be the same index. `experimental` is never a member the copy is already past the
+ * CLOSE_SCORE rule's member (shown under the Pogo Assist ranking); they may be the same index. `experimental` is never a member the copy is already past the
  * cap for, unless every member is, and then it is the shown pick. `source` says how `pick` was decided: 'export' = Poke Genie's own
  * pick from the entry, 'emulated' = the stat-product emulation (Great and Ultra only), 'ranked' = the highest PvPoke score (Master
  * League, or unknown IVs), 'fallback' = the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). If no member fits and nothing is ranked, the final evolution is shown even though it is over the cap. A copy with known IVs in Great or Ultra League and nothing ranked is still 'emulated'.
