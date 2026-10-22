@@ -484,7 +484,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(gl.label.contains("over cap. No viable option. This copy is already above 1,500 CP as every member of the family."), gl.label)
         XCTAssertTrue(ul.label.hasPrefix("Ultra League, under 2,500 CP. Pick: Scyther."), ul.label)
         XCTAssertTrue(ul.label.contains("This copy 96.2 percent, IV rank 1,766"), ul.label)
-        XCTAssertTrue(ul.label.contains("target level 40, target CP 2,500, 160,000 dust, 190 candy"), ul.label)
+        XCTAssertTrue(ul.label.contains("Target level 40, target CP 2,500, 160,000 dust, 190 candy"), ul.label)
         XCTAssertTrue(ml.label.hasPrefix("Master League, no CP cap. Pick: "), ml.label)
         XCTAssertTrue(app.staticTexts["Pogo Assist is currently unable to detect Shadow Pokémon."].exists, "a scan does not know the Shadow status")
         XCTAssertTrue(app.staticTexts["Removes this copy from the app's box only, not from the game."].exists)
@@ -544,6 +544,9 @@ final class BoxScreensTests: XCTestCase {
         openLeagueDetail(large, species: "Scyther")
         scrollToLeagues(large, large.staticTexts["leagues-panel"])
         resetRanking(large)
+        large.swipeUp(velocity: .slow)
+        large.swipeDown(velocity: .slow)
+        sleep(1); shot("ax1-header")
         large.buttons["league-ul-pick"].tap()
         large.buttons["league-ul-more"].tap()
         let row = large.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'league-ul-option-' AND NOT identifier ENDSWITH '-detail'")).firstMatch
@@ -594,8 +597,9 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["league-gl-pick"].waitForExistence(timeout: 3), "back returns to the three cards")
     }
 
-    /// The ranking switch changes the chip on the cards from PICK to POGO ASSIST PICK, and back.
-    func testRankingSwitchChangesThePickChip() throws {
+    /// The ranking switch changes the pick, not only the chip: the sample Scyther's Ultra League pick is Scyther itself under Default and
+    /// Scizor under Pogo Assist (the engine's `pick` and `experimental` differ), and the IVs panel's Ultra figure follows.
+    func testRankingSwitchChangesThePick() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
         app.launch()
@@ -604,17 +608,31 @@ final class BoxScreensTests: XCTestCase {
         scrollToLeagues(app, app.staticTexts["leagues-panel"])
         XCTAssertTrue(app.staticTexts["leagues-panel"].waitForExistence(timeout: 20))
         resetRanking(app)
-        XCTAssertTrue(app.buttons["league-ul-pick"].label.contains("Pick: "))
-        XCTAssertFalse(app.buttons["league-ul-pick"].label.contains("Pogo Assist pick"))
+        let ul = app.buttons["league-ul-pick"]
+        XCTAssertTrue(ul.label.contains("Pick: Scyther."), ul.label)
+        XCTAssertFalse(ul.label.contains("Pogo Assist pick"))
+        let figure = app.descendants(matching: .any)["iv-figure-ul"]
+        XCTAssertEqual(figure.value as? String, "96.2 percent", "the Ultra figure is Scyther's IV % under Default")
         let control = app.descendants(matching: .any)["leagues-scoring"]
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
         XCTAssertEqual(control.value as? String, "Pogo Assist")
-        XCTAssertTrue(app.buttons["league-ul-pick"].label.contains("Pogo Assist pick: "), app.buttons["league-ul-pick"].label)
+        XCTAssertTrue(ul.label.contains("Pogo Assist pick: Scizor."), ul.label)
+        XCTAssertTrue(ul.label.contains("This copy 95.3 percent, IV rank 2,379"), ul.label)
+        XCTAssertEqual(figure.value as? String, "95.3 percent", "the IVs panel follows the ranking")
         let info = app.buttons["leagues-scoring-info"]
         info.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'weighs the species first'")).firstMatch.waitForExistence(timeout: 3), "the explainer opens under the header")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Pogo Assist'")).firstMatch.waitForExistence(timeout: 3), "the explainer opens under the header")
         resetRanking(app)
-        XCTAssertFalse(app.buttons["league-ul-pick"].label.contains("Pogo Assist pick"))
+        XCTAssertTrue(ul.label.contains("Pick: Scyther."))
+        XCTAssertEqual(figure.value as? String, "96.2 percent")
+        // The option rows carry the species id: under Default the other Ultra League members are Scizor and Kleavor.
+        ul.tap()
+        app.buttons["league-ul-more"].tap()
+        let row = app.buttons["league-ul-option-scizor"]
+        XCTAssertTrue(row.waitForExistence(timeout: 3), "league-ul-option-<speciesId>")
+        XCTAssertTrue(app.buttons["league-ul-option-kleavor"].exists)
+        row.tap()
+        XCTAssertEqual(row.value as? String, "Expanded")
     }
 
     /// The search chip beside the CP line copies and toasts; the Settings circle opens Settings.
@@ -672,7 +690,9 @@ final class BoxScreensTests: XCTestCase {
         let app = saveMegaPair(["-appearance", "light"])
         openBlaziken(app)
         XCTAssertTrue(app.staticTexts["leagues-panel"].waitForExistence(timeout: 20), "the section shows on the Normal form")
+        XCTAssertTrue(app.descendants(matching: .any)["iv-figure-gl"].exists, "the IVs panel's PvP figures show on the Normal form")
         app.buttons["form-mega"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["iv-figure-gl"].exists, "and wait with the Leagues panel on the Mega form")
         XCTAssertTrue(app.staticTexts["CP 3970"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["leagues-panel"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["league-gl"].exists)
