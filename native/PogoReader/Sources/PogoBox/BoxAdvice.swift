@@ -137,7 +137,7 @@ public struct BoxAdvice: Codable, Equatable {
     /// One league's ratings of one Pokémon, as `src/leagues.js` `leaguesFor` returns them (null becomes nil).
     ///
     /// `options` lists every allowed member of the Pokémon's family (strongest PvPoke score first, then the members PvPoke does not
-    /// rank), each rated for this exact copy. `moves` is filled only on the shown and experimental options (nil on the rest). `pick` (JSON "pick") is the index of the member to show, which copies Poke Genie;
+    /// rank), each rated for this exact copy. `moves` is filled on every option PvPoke ranks (nil on an unranked one). `pick` (JSON "pick") is the index of the member to show, which copies Poke Genie;
     /// `experimental` is the index of the CLOSE_SCORE rule's member, carried but not shown. The accessors below (`pick`, `strength`,
     /// `moves`, `needs`, `iv`, `overCap`, `cost`) read the SHOWN member, so a screen written for one rating per league keeps working.
     public struct LeagueRating: Codable, Equatable {
@@ -284,9 +284,9 @@ public struct BoxAdvice: Codable, Equatable {
     /// 5 since `overCap` became "CP at the current level exceeds the cap" (0/0/0 when the IVs are unknown) and the shown pick avoids over-cap members.
     /// 6 since a build carried `powerUpNeeded` and `secondMoveDue`; 7 since those became the list of `steps` (evolve, Mega, power up, second move,
     /// Elite TM, Community Day move, Dynamax copy), which the action is worded from; 8 since the power-up step is the climb the cost covers, builds carry
-    /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone. Advice cached at 2 to 7 has the
-    /// old shape or the old rules, so it is dropped and recomputed too.
-    public static let currentVersion = 8
+    /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone; 9 since every option PvPoke ranks carries its
+    /// `moves` (before, only the shown and experimental ones did). Advice cached at 2 to 8 has the old shape or the old rules, so it is dropped and recomputed too.
+    public static let currentVersion = 9
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
