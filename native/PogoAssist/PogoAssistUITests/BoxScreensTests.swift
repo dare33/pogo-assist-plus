@@ -510,7 +510,7 @@ final class BoxScreensTests: XCTestCase {
             page("Staraptor", "over-cap") { _ in sleep(1); self.shot("\(tag)-over-cap-leagues") }
             page("Scyther", "league-view") { app in
                 app.buttons["league-ul-pick"].tap()
-                app.buttons["league-ul-more"].tap()
+                // The list is open by default in the league view.
                 let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'league-ul-option-' AND NOT identifier ENDSWITH '-detail'")).firstMatch
                 if row.waitForExistence(timeout: 3) { row.tap() }
                 sleep(1); self.shot("\(tag)-league-view-row-open")
@@ -548,7 +548,6 @@ final class BoxScreensTests: XCTestCase {
         large.swipeDown(velocity: .slow)
         sleep(1); shot("ax1-header")
         large.buttons["league-ul-pick"].tap()
-        large.buttons["league-ul-more"].tap()
         let row = large.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'league-ul-option-' AND NOT identifier ENDSWITH '-detail'")).firstMatch
         if row.waitForExistence(timeout: 3) { row.tap() }
         large.swipeUp(velocity: .slow)
@@ -576,17 +575,24 @@ final class BoxScreensTests: XCTestCase {
         for key in ["gl", "ul", "ml"] { XCTAssertTrue(app.descendants(matching: .any)["league-\(key)"].exists, key) }
         XCTAssertFalse(app.descendants(matching: .any)["leagues-back"].exists, "the base state has no back circle")
 
+        let advice = app.staticTexts["ADVICE"]
+        XCTAssertTrue(advice.exists, "the base page has the Advice panel")
         app.buttons["league-ul-pick"].tap()
         let back = app.buttons["leagues-back"]
         XCTAssertTrue(back.waitForExistence(timeout: 3), "the league view has its back circle")
+        XCTAssertFalse(advice.exists, "the league view has no Advice panel")
         XCTAssertTrue(app.descendants(matching: .any)["leagues-control"].exists)
         let more = app.buttons["league-ul-more"]
         XCTAssertTrue(more.waitForExistence(timeout: 3))
-        XCTAssertEqual(more.value as? String, "Collapsed", "the list starts closed")
-        more.tap()
-        XCTAssertEqual(more.value as? String, "Expanded")
+        XCTAssertEqual(more.value as? String, "Expanded", "the list starts open in the league view")
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'league-ul-option-' AND NOT identifier ENDSWITH '-detail'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 3), "the other family members are listed")
+        more.tap()
+        XCTAssertEqual(more.value as? String, "Collapsed", "Show less collapses it")
+        XCTAssertFalse(row.exists)
+        more.tap()
+        XCTAssertEqual(more.value as? String, "Expanded")
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
         XCTAssertEqual(row.value as? String, "Collapsed")
         row.tap()
         XCTAssertEqual(row.value as? String, "Expanded")
@@ -595,6 +601,7 @@ final class BoxScreensTests: XCTestCase {
         shot("league-view-row-open")
         back.tap()
         XCTAssertTrue(app.buttons["league-gl-pick"].waitForExistence(timeout: 3), "back returns to the three cards")
+        XCTAssertTrue(advice.waitForExistence(timeout: 3), "and the Advice panel comes back with them")
     }
 
     /// The ranking switch changes the pick, not only the chip: the sample Scyther's Ultra League pick is Scyther itself under Classic and
@@ -629,7 +636,6 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertEqual(figure.value as? String, "96.2 percent")
         // The option rows carry the species id: under Classic the other Ultra League members are Scizor and Kleavor.
         ul.tap()
-        app.buttons["league-ul-more"].tap()
         let row = app.buttons["league-ul-option-scizor"]
         XCTAssertTrue(row.waitForExistence(timeout: 3), "league-ul-option-<speciesId>")
         XCTAssertTrue(app.buttons["league-ul-option-kleavor"].exists)

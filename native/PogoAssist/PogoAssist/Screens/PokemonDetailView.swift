@@ -16,6 +16,8 @@ struct PokemonDetailView: View {
     @Environment(\.showToast) private var showToast
     /// The switch's position once the person has moved it; until then the Settings choice.
     @State private var chosenMega: Bool?
+    /// The league the Leagues panel has open (nil on its base cards); the Advice panel waits while one is.
+    @State private var leaguesMode: String?
 
     /// The Mega form the page shows now: only for an entry whose Mega form has a CP, and only while the switch is on Mega.
     private func megaShown(_ e: BoxEntry) -> MegaForm? {
@@ -47,7 +49,8 @@ struct PokemonDetailView: View {
                         ivPanel(e, pvpFigures: megaShown(e) == nil)
                         // Megas are not allowed in GO Battle League, so the section (and the IVs panel's PvP figures) wait while the page shows the Mega form.
                         if megaShown(e) == nil { leaguesPanel(e) }
-                        advicePanel(e)
+                        // The league view is the page's focus: the Advice panel returns with the base cards.
+                        if leaguesMode == nil || megaShown(e) != nil { advicePanel(e) }
                         factsPanel(e, mega: megaShown(e))
                         notesPanel(e, mega: megaShown(e))
                         VStack(spacing: 2) {
@@ -238,14 +241,20 @@ struct PokemonDetailView: View {
             Panel(tint: .accent, padding: 18, spacing: 8) {
                 adviceLabel
                 if a.isEmpty { Text("The advisor has nothing for this Pokémon.").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
+                // Every build this copy carries (`entries(for:)` keeps the advisor's best-first order), each its own block with its areas.
                 ForEach(Array(a.builds.enumerated()), id: \.element.id) { n, b in
                     if n > 0 { Rectangle().fill(accent.ink.opacity(0.18)).frame(height: 1).padding(.vertical, 4) }
-                    Text(b.action + (b.pvp.map { " (\($0))" } ?? "")).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
-                    HStack(spacing: 6) {
-                        ForEach(b.areas, id: \.self) { tag($0) }
-                        if !b.tier.isEmpty { tag("Tier \(b.tier)") }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(b.action + (b.pvp.map { " (\($0))" } ?? "")).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
+                        HStack(spacing: 6) {
+                            ForEach(b.areas, id: \.self) { tag($0) }
+                            if !b.tier.isEmpty { tag("Tier \(b.tier)") }
+                        }
+                        Text(BuildRow(build: b, showName: false).costLine).font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineSpacing(3)
                     }
-                    Text(BuildRow(build: b, showName: false).costLine).font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineSpacing(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("advice-build-\(n)")
                 }
                 ForEach(a.spareFor) { b in Text("A spare copy: a better one is already planned for \(b.targetName).").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
                 if let d = a.duplicateOf {
@@ -269,7 +278,7 @@ struct PokemonDetailView: View {
         if case .ready(let advice) = model.advice {
             let ratings = advice.leagues(for: e.id)
             if !ratings.isEmpty {
-                LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil)
+                LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, mode: $leaguesMode)
             }
         }
     }

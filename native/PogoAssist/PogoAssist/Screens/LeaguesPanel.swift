@@ -15,9 +15,11 @@ struct LeaguesPanel: View {
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accent) private var accent
-    /// nil is the base state (one card per league); otherwise the league the view shows.
-    @State private var mode: String?
-    @State private var showMore: Set<String> = []
+    /// nil is the base state (one card per league); otherwise the league the view shows. Owned by the Pokémon page, which drops its
+    /// Advice panel while a league view is open.
+    @Binding var mode: String?
+    /// Leagues whose option list was collapsed with "Show less": the list is open by default in the league view.
+    @State private var collapsed: Set<String> = []
     @State private var expanded: [String: String] = [:]
     @State private var infoOpen = false
 
@@ -202,7 +204,7 @@ struct LeaguesPanel: View {
     private func leagueView(_ key: String, _ r: BoxAdvice.LeagueRating) -> some View {
         let selection = Binding<String>(get: { mode ?? key }, set: { mode = $0 })
         let rows = LeaguePanel.listed(r, headline: LeaguePanel.headlineIndex(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)))
-        let open = showMore.contains(key)
+        let open = !collapsed.contains(key)
         return VStack(alignment: .leading, spacing: 14) {
             SegmentedSwitch(
                 segments: LeaguePanel.keys.map { k in
@@ -215,7 +217,7 @@ struct LeaguesPanel: View {
                 .accessibilityLabel(spoken(key, r))
                 .accessibilityIdentifier("league-\(key)-pick")
             if !rows.isEmpty {
-                Button { withAnimation(.easeOut(duration: 0.2)) { if open { showMore.remove(key) } else { showMore.insert(key) } } } label: {
+                Button { withAnimation(.easeOut(duration: 0.2)) { if open { collapsed.insert(key) } else { collapsed.remove(key) } } } label: {
                     HStack {
                         Text(open ? "Show less" : "Show more").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
                         Spacer()
