@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadGamemaster, loadTiers, loadRankings } from '../src/node/load.js';
 import { analyseBox } from '../src/advise.js';
+import { PVP_SCORE } from '../src/leagues.js';
 
 const ctx = { gm: loadGamemaster(), tiers: loadTiers(), rankings: loadRankings() };
 const box = importPokeGenie(readFileSync(new URL('../fixtures/greg-2026-09-25.pokegenie.csv', import.meta.url), 'utf8'));
@@ -211,4 +212,13 @@ test('a league build for a target the copy is already over the cap for is droppe
 test('a Pokémon with no league-viable target carries only its other areas (Abra: Alakazam raids, not GL/UL/ML)', () => {
   const abra = analyseBox([copy('Abra', 17, { atk: 0, def: 14, hp: 15 })], ctx).builds;
   assert.deepEqual(abra.map((b) => [b.targetId, b.areas]), [['alakazam', ['raids']]]);
+});
+
+test('the advisor and the Leagues card share one PvP bar: PVP_SCORE, which the report hands the app', () => {
+  const [abra] = analyseBox([copy('Abra', 17, { atk: 0, def: 14, hp: 15 })], ctx).pokemon;
+  for (const league of ['gl', 'ul', 'ml']) {
+    const alakazam = abra.leagues[league].options.find((o) => o.name === 'Alakazam');
+    assert.ok(alakazam.strength.score < PVP_SCORE[league], 'the Alakazam pick is below the bar, which is why the advisor builds no league build for it');
+  }
+  assert.deepEqual(PVP_SCORE, { gl: 88, ul: 88, ml: 88 });
 });

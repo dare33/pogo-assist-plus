@@ -1,7 +1,7 @@
 // The advisor: turns an imported box plus the tier tables and PvP rankings into ranked builds, gaps and hygiene.
 import { resolveSpecies, evolutionsOf, formChangesOf, megaIdsOf, baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
 import { evolveCandy, evolutionPath } from './evolve.js';
-import { leaguesFor } from './leagues.js';
+import { leaguesFor, PVP_SCORE } from './leagues.js';
 import { powerUpCost, secondMoveCost } from './cost.js';
 import { cpAt } from './cpm.js';
 import { clearRankCache } from './pvp-rank.js';
@@ -97,8 +97,7 @@ const normMove = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 const TIER_W = { S: 3, A: 2, B: 1 };
 // How much a hit in each area is worth relative to a raid hit. Gym is shallow; Max hits need a Dynamax-capable copy.
 const AREA_W = { raids: 1, gl: 1, ul: 1, ml: 1, rocket: 0.6, max: 0.6, gym: 0.35 };
-// PvPoke overall score at or above which a species counts as PvP-relevant even if no tier table names it.
-const PVP_SCORE = { gl: 88, ul: 88, ml: 88 };
+// PVP_SCORE (imported): the PvPoke overall score at or above which a species counts as PvP-relevant even if no tier table names it.
 // Target level per area for costing (PvP uses leaguesFor's per-league cost when available).
 const TARGET_LEVEL = { raids: 35, rocket: 30, gym: 30, max: 30, ml: 50, gl: 30, ul: 40 };
 
