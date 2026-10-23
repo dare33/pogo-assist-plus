@@ -26,6 +26,7 @@
 		3612921432E15343B1E195EA /* FlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAA375CD0561890BDC48B2 /* FlowTests.swift */; };
 		371C03D06719ECB18761E0D6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4C1077B425FFEEFAFBFA9570 /* Assets.xcassets */; };
 		373A9DA32DD806383DC6106A /* ComponentGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */; };
+		376C2D00223CEED89FEF3D42 /* HistoryScansView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10EFC08EEA5AD7BB42454DD8 /* HistoryScansView.swift */; };
 		391A1C3B445B6E751C85CA27 /* ScreenshotImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7576F57445609D7B4888792D /* ScreenshotImportTests.swift */; };
 		39805C51C92B02B0586C5877 /* PogoImport in Frameworks */ = {isa = PBXBuildFile; productRef = E40CDE8E142D7DAD4E45B792 /* PogoImport */; };
 		3A0CEB8C4C1831E05411C6FB /* BoxExportFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CBC04B3E82BBE8BB3DC034 /* BoxExportFile.swift */; };
@@ -141,6 +142,7 @@
 		00B7030AC596BFDD03757B5C /* SetupStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepView.swift; sourceTree = "<group>"; };
 		01F723B7B2F32D040376093D /* SetupChecklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistView.swift; sourceTree = "<group>"; };
 		09D08E55E9B50EC09258EFF1 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		10EFC08EEA5AD7BB42454DD8 /* HistoryScansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryScansView.swift; sourceTree = "<group>"; };
 		1222BDC1C6F45E94BECD7F63 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
 		167560673B06A1C7DF3C9ACE /* ScreenshotImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImportSheet.swift; sourceTree = "<group>"; };
 		1BB1A15D6F733EEE0586D675 /* RankingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingControls.swift; sourceTree = "<group>"; };
@@ -395,6 +397,7 @@
 				C317D4A35524B2870E2635E8 /* GameOpener.swift */,
 				1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */,
 				51C5D5C5A5E06415BB056093 /* GuideFlow.swift */,
+				10EFC08EEA5AD7BB42454DD8 /* HistoryScansView.swift */,
 				5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */,
 				55460A514386DA8E46320B36 /* NextView.swift */,
 				33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */,
@@ -656,6 +659,7 @@
 				29D9364DF6997E6C296892EC /* GameOpener.swift in Sources */,
 				68A28061D9146D4EA5A538CC /* GameSearch.swift in Sources */,
 				205415EE687703C0379569F7 /* GuideFlow.swift in Sources */,
+				376C2D00223CEED89FEF3D42 /* HistoryScansView.swift in Sources */,
 				7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */,
 				AF7D163058C2BCD0E1E66334 /* NextView.swift in Sources */,
 				83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */,

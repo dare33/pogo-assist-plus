@@ -52,15 +52,19 @@ final class FlowTests: XCTestCase {
         sleep(1)
         shot("06-box")
 
-        // Read the saved scan again from Settings > Scans: the review opens against the box before it; Discard changes nothing.
+        // Read the saved scan again from Settings > History and scans > Scans: the review opens against the box before it; Discard changes nothing.
         app.buttons["More"].tap()
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()
         if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }   // the menu can swallow the first tap
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), "Settings did not open")
+        let historyRow = app.buttons["settings-history-row"]
+        for _ in 0..<6 where !(historyRow.exists && historyRow.isHittable) { app.swipeUp() }
+        XCTAssertTrue(historyRow.waitForExistence(timeout: 5))
+        historyRow.tap()
+        app.buttons["history-tab-scans"].tap()
         let actions = app.buttons["Scan actions"]
-        for _ in 0..<6 where !(actions.exists && actions.isHittable) { app.swipeUp() }
         XCTAssertTrue(actions.waitForExistence(timeout: 5))
         shot("15-settings-scans")
         actions.tap()
@@ -219,6 +223,69 @@ final class FlowTests: XCTestCase {
         shot("16-make-scans-better")
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["Save to box"].waitForExistence(timeout: 5), "back on the scan result")
+    }
+
+    /// Settings > History and scans: the row, the two tabs, the month picker. A fresh install can only make entries dated today, so one month exists
+    /// (plus All); the filtering across several months is covered by the unit tests of the month grouping (MonthGroupsTests).
+    func testHistoryAndScansScreen() throws {
+        for appearance in ["light", "dark"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-uitest-reset", "-appearance", appearance]
+            app.launch()
+            let field = app.textFields["Trainer name"]
+            XCTAssertTrue(field.waitForExistence(timeout: 10))
+            field.tap(); field.typeText("Greg main")
+            app.buttons["Create account"].tap()
+            XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
+            app.buttons["More"].tap()
+            let diagnostics = app.buttons["Diagnostics"]
+            XCTAssertTrue(diagnostics.waitForExistence(timeout: 5))
+            diagnostics.tap()
+            let load = app.buttons["Load sample scan"]
+            if !load.waitForExistence(timeout: 8), diagnostics.exists { diagnostics.tap() }
+            XCTAssertTrue(load.waitForExistence(timeout: 10))
+            load.tap()
+            app.openReviewFromDone()
+            let save = app.buttons["Save to box"]
+            XCTAssertTrue(save.waitForExistence(timeout: 60), "review did not appear")
+            save.tap()
+            XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 15))
+            app.buttons["More"].tap()
+            let settings = app.buttons["Settings"]
+            XCTAssertTrue(settings.waitForExistence(timeout: 5))
+            settings.tap()
+            if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
+            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), "Settings did not open")
+            XCTAssertFalse(app.staticTexts["History"].exists, "no inline History section any more")
+            let row = app.buttons["settings-history-row"]
+            for _ in 0..<6 where !(row.exists && row.isHittable) { app.swipeUp() }
+            XCTAssertTrue(row.waitForExistence(timeout: 5))
+            row.tap()
+            XCTAssertTrue(app.navigationBars["History and scans"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.descendants(matching: .any)["history-tabs"].exists)
+            // History tab: a version, narrowed to the latest month by default.
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Version '")).firstMatch.waitForExistence(timeout: 8))
+            let month = app.buttons["history-month"]
+            XCTAssertTrue(month.waitForExistence(timeout: 5))
+            XCTAssertFalse(month.label.contains("All"), "the latest month is the default: \(month.label)")
+            month.tap()
+            // The menu item is the first "All"; the second is the back button (its label is the previous screen's title).
+            let all = app.buttons.matching(NSPredicate(format: "label == 'All'"))
+            XCTAssertTrue(all.firstMatch.waitForExistence(timeout: 5))
+            shot("history-\(appearance)-month-menu")
+            all.element(boundBy: 0).tap()
+            expectation(for: NSPredicate(format: "label CONTAINS 'All'"), evaluatedWith: month)
+            waitForExpectations(timeout: 5)
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Version '")).firstMatch.exists)
+            // Scans tab: its own month choice and the saved scan.
+            app.buttons["history-tab-scans"].tap()
+            XCTAssertTrue(app.buttons["Scan actions"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Version '")).firstMatch.exists)
+            XCTAssertFalse(app.buttons["history-month"].label.contains("All"), "each tab starts on its latest month")
+            XCTAssertTrue(app.staticTexts["Share a scan's replay log and result to send them for diagnosis."].exists)
+            shot("history-\(appearance)-scans")
+            app.terminate()
+        }
     }
 
     /// The UI v1 component gallery (DEBUG builds, `-ui-gallery`): light, dark, a non-default accent and a large
