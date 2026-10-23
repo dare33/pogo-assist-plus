@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import UIKit
 
 /// Design tokens for UI v1 (design handoff README, "Design tokens"). Every colour is a light/dark pair resolved
 /// by the system, so a screen never branches on the colour scheme. Orange (look in the game), green (done) and
@@ -248,14 +247,12 @@ enum Ranking: String, CaseIterable, Identifiable {
 enum Appearance: String, CaseIterable, Identifiable {
     case auto, light, dark
     var id: String { rawValue }
-    /// nil follows the system.
-    var colorScheme: ColorScheme? { switch self { case .auto: return nil; case .light: return .light; case .dark: return .dark } }
     var interfaceStyle: UIUserInterfaceStyle { switch self { case .auto: return .unspecified; case .light: return .light; case .dark: return .dark } }
 
     /// Light, Dark or Auto is set on the app's windows, not with `preferredColorScheme`: SwiftUI does not undo an explicit scheme
     /// when it goes back to nil inside a sheet that is already open, so Dark then Auto left Settings dark on a light phone.
     /// Every sheet is in the same window, so all of them follow.
-    static func applyToWindows(_ raw: String) {
+    @MainActor static func applyToWindows(_ raw: String) {
         let style = (Appearance(rawValue: raw) ?? .auto).interfaceStyle
         for scene in UIApplication.shared.connectedScenes {
             for window in (scene as? UIWindowScene)?.windows ?? [] { window.overrideUserInterfaceStyle = style }
@@ -284,7 +281,8 @@ extension EnvironmentValues {
 }
 
 /// Reads the preferences from AppStorage and applies them: the accent and help level in the environment,
-/// `.tint` (so stock controls follow the accent), the colour scheme and the toast host. Apply once at the root.
+/// `.tint` (so stock controls follow the accent) and the toast host. The colour scheme is set on the windows (`Appearance.applyToWindows`),
+/// so it follows for every presentation, sheets and covers included; a new presentation still needs `themeRoot()` for the accent, help level and toast host.
 struct ThemeRoot: ViewModifier {
     @AppStorage(PrefKey.accent) private var accentRaw = Accent.blue.rawValue
     @AppStorage(PrefKey.appearance) private var appearanceRaw = Appearance.auto.rawValue

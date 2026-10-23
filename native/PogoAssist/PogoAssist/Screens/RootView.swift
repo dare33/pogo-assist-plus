@@ -43,7 +43,7 @@ struct RootView: View {
         .environmentObject(model)
         .sheet(item: $model.sheet) { sheet in
             switch sheet {
-            case .settings: SettingsView().environmentObject(model).themeRoot()   // the sheet is attached outside .themeRoot() above, so it does not inherit the accent and colour scheme; apply it here
+            case .settings: SettingsView().environmentObject(model).themeRoot()   // the sheet is attached outside .themeRoot() above, so it does not inherit the accent, help level and toast host; apply them here (the colour scheme follows the window)
             case .screenshots: ScreenshotImportSheet().environmentObject(model)
             case .diagnostics:
                 ContentView(onLoadSample: { partial in

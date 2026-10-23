@@ -41,7 +41,12 @@ final class MonthGroupsTests: XCTestCase {
     func testDefaultGroupingIsGregorianNotTheDeviceCalendar() {
         XCTAssertEqual(MonthKey.grouping().identifier, .gregorian)
         XCTAssertEqual(MonthKey.grouping().timeZone.identifier, TimeZone.current.identifier, "the default is the current zone, not UTC")
-        XCTAssertEqual(MonthKey(day(2026, 10, 5)), MonthKey(day(2026, 10, 5), timeZone: .current))
+        // 00:30 on 1 Nov in the current zone: a UTC default would put it in October wherever the zone is ahead of UTC. Trivially true on a UTC machine,
+        // meaningful anywhere else.
+        let local = MonthKey.grouping()
+        let midnight = local.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 0, minute: 30))!
+        XCTAssertEqual(MonthKey(midnight), MonthKey(year: 2026, month: 11))
+        XCTAssertEqual(MonthKey(midnight, timeZone: .current), MonthKey(year: 2026, month: 11))
         let japanese = Calendar(identifier: .japanese)
         let d = day(2026, 10, 5)
         XCTAssertEqual(japanese.component(.year, from: d), 8, "the Japanese calendar numbers this year differently")
