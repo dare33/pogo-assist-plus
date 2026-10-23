@@ -269,7 +269,7 @@ final class FlowTests: XCTestCase {
             XCTAssertTrue(month.waitForExistence(timeout: 5))
             XCTAssertFalse(month.label.contains("All"), "the latest month is the default: \(month.label)")
             month.tap()
-            // The menu item is the first "All"; the second is the back button (its label is the previous screen's title).
+            // Two buttons are labelled "All" (the second sits at the screen's left edge, by its frame); the menu item is the first.
             let all = app.buttons.matching(NSPredicate(format: "label == 'All'"))
             XCTAssertTrue(all.firstMatch.waitForExistence(timeout: 5))
             shot("history-\(appearance)-month-menu")
