@@ -12,7 +12,6 @@ const modules = {
   'src/gamemaster.js': await import('../src/gamemaster.js'),
   'src/data.js': await import('../src/data.js'),
   'src/advise.js': await import('../src/advise.js'),
-  'src/leagues.js': await import('../src/leagues.js'),
   'src/import/pokegenie.js': await import('../src/import/pokegenie.js'),
 };
 const sandbox = { __use: (path) => modules[path] };
@@ -27,8 +26,7 @@ const box = importPokeGenie(readFileSync(new URL('../fixtures/greg-2026-09-25.po
 test('adviseJSON: pokemon entries are only { p: { index }, unresolved, speciesId, leagues }', () => {
   const rows = [box[0], { ...box[1], name: 'Notamon', index: 2 }, box[2]];
   const r = JSON.parse(core.adviseJSON(JSON.stringify(rows)));
-  assert.deepEqual(Object.keys(r).sort(), ['areaLabel', 'builds', 'gaps', 'hygiene', 'pokemon', 'pvpScore']);
-  assert.deepEqual(r.pvpScore, { gl: 88, ul: 88, ml: 88 }, "the advisor's PvP bar, which the Leagues card reads");
+  assert.deepEqual(Object.keys(r).sort(), ['areaLabel', 'builds', 'gaps', 'hygiene', 'pokemon']);
   assert.equal(r.pokemon.length, 3);
   assert.deepEqual(Object.keys(r.pokemon[0]).sort(), ['leagues', 'p', 'speciesId']);
   assert.deepEqual(r.pokemon[0].p, { index: box[0].index });
@@ -46,7 +44,7 @@ test('adviseJSON: 2,000 entries come back at 6.6 MB or less (6.7 MB before the s
   const r = JSON.parse(text);
   assert.equal(r.pokemon.length, 2000);
   const pokemonBytes = JSON.stringify(r.pokemon).length;
-  // ~2.2 KB of leagues per entry (every member's own rating, with moves on each member PvPoke ranks) is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
+  // ~2.2 KB of leagues per entry (the shown pick plus all members' own ratings, moves only on the shown and experimental ones) is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
   assert.ok(pokemonBytes < 4.6e6, `pokemon ${(pokemonBytes / 1e6).toFixed(2)} MB`);
   assert.ok(text.length < 6.6e6, `${(text.length / 1e6).toFixed(2)} MB`);
 });

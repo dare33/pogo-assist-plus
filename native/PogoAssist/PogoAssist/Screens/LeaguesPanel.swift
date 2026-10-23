@@ -20,8 +20,8 @@ struct LeaguesPanel: View {
     /// nil is the base state (one card per league); otherwise the league the view shows. Owned by the Pokémon page, which drops its
     /// Advice panel while a league view is open.
     @Binding var mode: String?
-    /// Leagues whose option list was collapsed with "Show less": the list is open by default in the league view.
-    @State private var collapsed: Set<String> = []
+    /// Leagues whose worth tag was tapped open: the one line it explains.
+    @State private var worthOpen: Set<String> = []
     @State private var expanded: [String: String] = [:]
     @State private var infoOpen = false
 
@@ -102,6 +102,7 @@ struct LeaguesPanel: View {
                 .accessibilityLabel(spoken(key, r))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("league-\(key)-pick")
+                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, r, $0) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("league-\(key)")
@@ -125,6 +126,7 @@ struct LeaguesPanel: View {
                 Text(LeaguePanel.chipText(pogoAssist: pogoAssist).uppercased()).font(.figtree(12, .bold, relativeTo: .caption)).tracking(0.07 * 12)
                     .foregroundStyle(accent.ink).padding(.horizontal, 8).padding(.vertical, 4)
                     .background(accent.tint, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+                if let w = c.worth { worthTag(w) }
                 if c.overCapCount > 0 {
                     Text("▲ \(c.overCapCount) over cap").font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.04 * 11)
                         .foregroundStyle(Theme.red).padding(.horizontal, 7).padding(.vertical, 3)
@@ -132,6 +134,11 @@ struct LeaguesPanel: View {
                 }
             }
             .padding(.trailing, tappable ? 22 : 0)
+            if let w = c.worth, worthOpen.contains(key) {
+                Text(LeaguePanel.worthSentence(w, key: key)).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("league-\(key)-worth-text")
+            }
             if let note = c.bestAvailableNote {
                 Text(note).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
             }
@@ -144,10 +151,6 @@ struct LeaguesPanel: View {
                 if let n = c.costNote {
                     Text(n).font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                 }
-            }
-            if let n = c.notWorthText {
-                Text(n).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("league-\(key)-not-worth")
             }
             if !c.moves.isEmpty {
                 FlowLayout(spacing: 6) {
@@ -164,6 +167,34 @@ struct LeaguesPanel: View {
         .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.Radius.insetRow, style: .continuous))
         .overlay(alignment: .topTrailing) {
             if tappable { Image(systemName: "chevron.right").font(.figtree(13, .heavy)).foregroundStyle(Theme.faint).padding(.top, 20).padding(.trailing, 16).accessibilityHidden(true) }
+        }
+    }
+
+    /// The Strong / OK / Weak chip, drawn like the PICK chip (green, orange, or the muted off tone). It is only drawn here: the card is one
+    /// accessibility element that hides its children, so the tap target is `worthButton`, laid over the chip's frame outside the card.
+    private func worthTag(_ w: LeaguePanel.Worth) -> some View {
+        let (ink, tint): (Color, Color) = w == .strong ? (Theme.greenInk, Theme.greenTint) : w == .ok ? (Theme.orangeInk, Theme.orangeTint) : (Theme.muted, Theme.off)
+        return Text(w.label.uppercased()).font(.figtree(12, .bold, relativeTo: .caption)).tracking(0.07 * 12)
+            .foregroundStyle(ink).padding(.horizontal, 8).padding(.vertical, 4)
+            .background(tint, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+            .anchorPreference(key: WorthBounds.self, value: .bounds) { $0 }
+    }
+
+    /// The tap target over the chip (at least 44 pt square): opens or closes the one line the tag explains. Its accessibility value carries that
+    /// line while it is open.
+    private func worthLayer(_ key: String, _ r: BoxAdvice.LeagueRating, _ anchor: Anchor<CGRect>?) -> some View {
+        let w = card(key, r).worth
+        return GeometryReader { geo in
+            if let anchor, let w {
+                let rect = geo[anchor], open = worthOpen.contains(key)
+                Button { withAnimation(.easeOut(duration: 0.15)) { if open { worthOpen.remove(key) } else { worthOpen.insert(key) } } } label: { Color.clear.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .frame(width: max(rect.width, 44), height: max(rect.height, 44))
+                    .position(x: rect.midX, y: rect.midY)
+                    .accessibilityLabel("\(w.label) for \(LeaguePanel.name(key))")
+                    .accessibilityValue(open ? LeaguePanel.worthSentence(w, key: key) : "Collapsed")
+                    .accessibilityIdentifier("league-\(key)-worth")
+            }
         }
     }
 
@@ -210,7 +241,6 @@ struct LeaguesPanel: View {
     private func leagueView(_ key: String, _ r: BoxAdvice.LeagueRating) -> some View {
         let selection = Binding<String>(get: { mode ?? key }, set: { mode = $0 })
         let rows = LeaguePanel.listed(r, headline: LeaguePanel.headlineIndex(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)))
-        let open = !collapsed.contains(key)
         return VStack(alignment: .leading, spacing: 14) {
             SegmentedSwitch(
                 segments: LeaguePanel.keys.map { k in
@@ -222,21 +252,8 @@ struct LeaguesPanel: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(spoken(key, r))
                 .accessibilityIdentifier("league-\(key)-pick")
-            if !rows.isEmpty {
-                Button { withAnimation(.easeOut(duration: 0.2)) { if open { collapsed.insert(key) } else { collapsed.remove(key) } } } label: {
-                    HStack {
-                        Text(open ? "Show less" : "Show more").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
-                        Spacer()
-                        Image(systemName: "chevron.down").font(.figtree(13, .bold)).foregroundStyle(accent.ink).rotationEffect(.degrees(open ? 180 : 0))
-                    }
-                    .padding(.horizontal, 2).frame(minHeight: 44).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityValue(open ? "Expanded" : "Collapsed")
-                .accessibilityIdentifier("league-\(key)-more")
-                if open { optionList(key, rows) }
-            }
+                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, r, $0) }
+            if !rows.isEmpty { optionList(key, rows) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("league-\(key)")
@@ -371,4 +388,10 @@ struct FlowLayout: Layout {
             s.place(at: CGPoint(x: bounds.minX + f.minX, y: bounds.minY + f.minY + ((lineTop[f.minY] ?? f.height) - f.height) / 2), proposal: ProposedViewSize(width: f.width, height: f.height))
         }
     }
+}
+
+/// The frame of the worth chip inside a pick card, so the tap target can sit over it outside the card's single accessibility element.
+private struct WorthBounds: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
 }

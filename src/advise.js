@@ -1,7 +1,7 @@
 // The advisor: turns an imported box plus the tier tables and PvP rankings into ranked builds, gaps and hygiene.
 import { resolveSpecies, evolutionsOf, formChangesOf, megaIdsOf, baseSpeciesId, FORM_CHANGES } from './gamemaster.js';
 import { evolveCandy, evolutionPath } from './evolve.js';
-import { leaguesFor, PVP_SCORE } from './leagues.js';
+import { leaguesFor } from './leagues.js';
 import { powerUpCost, secondMoveCost } from './cost.js';
 import { cpAt } from './cpm.js';
 import { clearRankCache } from './pvp-rank.js';
@@ -97,7 +97,8 @@ const normMove = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 const TIER_W = { S: 3, A: 2, B: 1 };
 // How much a hit in each area is worth relative to a raid hit. Gym is shallow; Max hits need a Dynamax-capable copy.
 const AREA_W = { raids: 1, gl: 1, ul: 1, ml: 1, rocket: 0.6, max: 0.6, gym: 0.35 };
-// PVP_SCORE (imported): the PvPoke overall score at or above which a species counts as PvP-relevant even if no tier table names it.
+// PvPoke overall score at or above which a species counts as PvP-relevant even if no tier table names it.
+const PVP_SCORE = { gl: 88, ul: 88, ml: 88 };
 // Target level per area for costing (PvP uses leaguesFor's per-league cost when available).
 const TARGET_LEVEL = { raids: 35, rocket: 30, gym: 30, max: 30, ml: 50, gl: 30, ul: 40 };
 
@@ -264,8 +265,6 @@ export function analyseBox(box, ctx) {
         pokemon: p, speciesId: r.speciesId, targetId, targetName: gm.byId.get(targetId)?.speciesName ?? targetId,
         areas: [...areas.keys()], bestTier, value: Math.round(value * 100) / 100, hits: ths, path, evoCandy, formChange, viaMega, needsDynamax,
         level, targetLevel, costAreas, steps, leavesLeague,
-        // The family member each league area of this build is rated as (the option `optionOf` found), which the Leagues card compares with the member it shows.
-        leagueMembers: Object.fromEntries(pvpAreas.map((a) => [a, optionOf(a)?.speciesId]).filter(([, id]) => id)),
         cost: { ...cost, dust: totalDust, candy: totalCandy, secondMove }, pvpCost, moveFlags: mf,
         effort: Math.round(effort * 100) / 100, score: Math.round((value ** 1.5 * ivQ) / Math.max(0.3, effort) ** 0.6 * 100) / 100,
       });

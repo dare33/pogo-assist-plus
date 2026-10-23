@@ -4,7 +4,7 @@
 // the indexed game master, tiers and rankings kept in the context after load().
 // JSON.stringify drops undefined; the replacer turns the Maps and Sets the advisor uses into plain data.
 const P = __use('src/extract/pipeline.js'), B = __use('src/extract/batch.js'), G = __use('src/gamemaster.js'), D = __use('src/data.js'),
-  A = __use('src/advise.js'), L = __use('src/leagues.js'), I = __use('src/import/pokegenie.js');
+  A = __use('src/advise.js'), I = __use('src/import/pokegenie.js');
 let ctx = null;
 const need = () => { if (!ctx) throw new Error('PogoCore.load(gamemaster, tiers, rankings) has not been called'); return ctx; };
 const replacer = (k, v) => (v instanceof Map ? Object.fromEntries(v) : v instanceof Set ? [...v] : v);
@@ -30,6 +30,6 @@ global.PogoCore = {
   importPokeGenieJSON(csvText) { return out(I.importPokeGenie(csvText)); },
   adviseJSON(boxText) {
     const r = A.analyseBox(JSON.parse(boxText), need());
-    return `{"builds":${out(r.builds)},"gaps":${out(r.gaps)},"hygiene":${out(r.hygiene)},"pokemon":${JSON.stringify(r.pokemon.map(slim))},"areaLabel":${out(A.AREA_LABEL)},"pvpScore":${out(L.PVP_SCORE)}}`;
+    return `{"builds":${out(r.builds)},"gaps":${out(r.gaps)},"hygiene":${out(r.hygiene)},"pokemon":${JSON.stringify(r.pokemon.map(slim))},"areaLabel":${out(A.AREA_LABEL)}}`;
   },
 };

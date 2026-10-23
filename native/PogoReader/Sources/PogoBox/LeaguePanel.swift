@@ -72,8 +72,35 @@ public enum LeaguePanel {
         public var moves: [MoveChip]
         /// This copy's IV % as the headline member; nil when nothing fits or the IVs are not read (the IVs panel shows "—").
         public var ivPct: Double?
-        /// "Not worth building for Great League: Alakazam ranks #938 of 1,152." or "Blastoise is the one worth building for Great League." (see `notWorthText`).
-        public var notWorthText: String? = nil
+        /// The tag on the card: nil on a "No viable option" card.
+        public var worth: Worth? = nil
+    }
+
+    // MARK: the worth tag
+
+    /// How worth building the shown member is for this copy in a league: Strong when one of the copy's Advice builds covers the league (the same
+    /// source as the Advice panel, so they never disagree), else OK from `okScore`, else Weak.
+    public enum Worth: Equatable {
+        case strong, ok, weak
+        public var label: String { self == .strong ? "Strong" : self == .ok ? "OK" : "Weak" }
+    }
+
+    /// The PvPoke score from which a member that no build covers still reads OK. A display threshold of this screen, not the advisor's bar.
+    public static let okScore = 80.0
+
+    public static func worth(_ o: BoxAdvice.LeagueRating.Option, key: String, builds: [BoxAdvice.Build]) -> Worth {
+        let label = BoxAdvice.areaLabel[key] ?? key
+        if builds.contains(where: { $0.areas.contains(label) }) { return .strong }
+        return (o.strength?.score ?? -1) >= okScore ? .ok : .weak
+    }
+
+    /// The line a tap on the tag opens.
+    public static func worthSentence(_ w: Worth, key: String) -> String {
+        switch w {
+        case .strong: return "Worth powering up for \(name(key))."
+        case .ok: return "A solid choice for \(name(key)), though stronger options exist."
+        case .weak: return "Better kept for trading or transferring than for \(name(key))."
+        }
     }
 
     /// "Gallade, if it is male".
@@ -120,22 +147,7 @@ public enum LeaguePanel {
     }
 
     /// Everything one pick card shows. `level` is the Pokémon's own level (nil when not known).
-    /// The card's line about whether this league is worth building for, from this copy's Advice builds first (so the card never contradicts the
-    /// Advice panel, which also builds towards a species a tier table names): a build covering the league with another target says which species is
-    /// the one; with no build covering it, the shown member's own PvPoke score against the advisor's bar. `builds` are the copy's builds (its own
-    /// and those it is a spare for).
-    public static func notWorthText(_ r: BoxAdvice.LeagueRating, shown o: BoxAdvice.LeagueRating.Option, key: String, builds: [BoxAdvice.Build]) -> String? {
-        let label = BoxAdvice.areaLabel[key] ?? key
-        let covering = builds.filter { $0.areas.contains(label) }
-        if let first = covering.first {
-            // The advisor's own member for the build when it said (`leagueMembers`), else the build's target by name.
-            let sameMember = covering.contains { b in b.leagueMembers[key].map { $0 == o.speciesId } ?? (b.targetName == o.name) }
-            return sameMember ? nil : "\(first.targetName) is the one worth building for \(name(key))."
-        }
-        guard let bar = r.worthBar, (o.strength?.score ?? -1) < bar else { return nil }
-        return "Not worth building for \(name(key)): " + (o.strength.map { "\(o.name) ranks #\(grouped($0.rank)) of \(grouped($0.of))." } ?? "PvPoke does not rank \(o.name) there.")
-    }
-
+    /// `builds` are the copy's Advice builds (its own and those it is a spare for), which decide the Strong tag.
     public static func card(_ r: BoxAdvice.LeagueRating, shown: Int, key: String, level now: Double?, builds: [BoxAdvice.Build] = []) -> Card {
         let shownOption = r.options[min(max(shown, 0), r.options.count - 1)]
         let overCount = r.options.filter(\.overCap).count
@@ -154,7 +166,6 @@ public enum LeaguePanel {
             return "\(named) is the stronger species, but this copy is already over \(cap(key).map(grouped) ?? "") CP as \(s.name)."
         }
         let read = o.iv != nil
-        let notWorth = notWorthText(r, shown: o, key: key, builds: builds)
         return Card(status: read ? .fits : .ivsNotRead, option: o, title: title(o), strongerOverCap: stronger, overCapCount: overCount, bestAvailableNote: note, blockedText: nil,
                     scoreText: o.strength.map { oneDecimal($0.score) } ?? "—",
                     rankText: o.strength.map { "#\(grouped($0.rank)) of \(grouped($0.of))" } ?? "",
@@ -163,12 +174,13 @@ public enum LeaguePanel {
                     ivStrong: (o.iv?.rank ?? Int.max) <= 500,
                     costItems: read && costNote(o, key: key, level: now) == nil ? costItems(o) : [],
                     costNote: read ? costNote(o, key: key, level: now) : (now == nil ? costNote(o, key: key, level: now) : nil),
-                    moves: moveChips(o), ivPct: o.iv?.pct, notWorthText: notWorth)
+                    moves: moveChips(o), ivPct: o.iv?.pct, worth: worth(o, key: key, builds: builds))
     }
 
     /// The spoken summary of a pick card, as one element.
     public static func spoken(_ c: Card, key: String, chip: String) -> String {
         var parts = ["\(name(key)), \(capText(key).lowercasedFirst)", "\(chip): \(c.title)"]
+        if let w = c.worth { parts.append("\(w.label) for \(name(key))") }
         if c.overCapCount > 0 { parts.append("\(c.overCapCount) over cap") }
         if let n = c.bestAvailableNote { parts.append(n) }
         if c.status == .noViable {
@@ -182,7 +194,6 @@ public enum LeaguePanel {
                 return n == 0 ? text : text.lowercasedFirst
             }.joined(separator: ", ")) }
         }
-        if let n = c.notWorthText { parts.append(n) }
         if !c.moves.isEmpty { parts.append("Moves " + c.moves.map(\.text).joined(separator: ", ")) }
         return parts.joined(separator: ". ") + "."
     }

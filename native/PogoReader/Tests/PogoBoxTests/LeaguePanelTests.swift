@@ -34,7 +34,7 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertEqual(c.ivPct, 97.24)
         XCTAssertEqual(c.moves.map(\.text), ["Ember", "Overheat", "Flamethrower"])
         XCTAssertEqual(LeaguePanel.spoken(c, key: "gl", chip: "Pick"),
-                       "Great League, under 1,500 CP. Pick: Flareon. Species 68.9, rank 710 of 1,152. This copy 97.2 percent, IV rank 216. Target level 18.5, target CP 1,500, 6,600 dust, 31 candy. Moves Ember, Overheat, Flamethrower.")
+                       "Great League, under 1,500 CP. Pick: Flareon. Weak for Great League. Species 68.9, rank 710 of 1,152. This copy 97.2 percent, IV rank 216. Target level 18.5, target CP 1,500, 6,600 dust, 31 candy. Moves Ember, Overheat, Flamethrower.")
     }
 
     func testXLIsAppendedToTheCandyAndMissingMovesAreChips() {
@@ -180,87 +180,44 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertEqual(LeaguePanel.capText("gl"), "Under 1,500 CP"); XCTAssertEqual(LeaguePanel.capText("ul"), "Under 2,500 CP"); XCTAssertEqual(LeaguePanel.capText("ml"), "No CP cap")
     }
 
-    // MARK: not worth building
+    // MARK: the worth tag
 
-    func testNotWorthBuildingBelowTheBarUnrankedAtAndAboveIt() {
-        let bar = 88.0
-        func card(_ o: O, key: String = "gl", bar: Double? = bar) -> LeaguePanel.Card {
-            LeaguePanel.card(R(options: [o], worthBar: bar), shown: 0, key: key, level: 17)
-        }
-        // Below the bar: the rank is named.
-        let below = card(option("alakazam", score: 60.3, rank: 938, iv: iv, cost: cost))
-        XCTAssertEqual(below.notWorthText, "Not worth building for Great League: Alakazam ranks #938 of 1,152.")
-        XCTAssertTrue(LeaguePanel.spoken(below, key: "gl", chip: "Pick").contains("Not worth building for Great League: Alakazam ranks #938 of 1,152."))
-        XCTAssertEqual(card(option("alakazam", score: 63.8, rank: 800, iv: iv, cost: cost), key: "ul").notWorthText,
-                       "Not worth building for Ultra League: Alakazam ranks #800 of 1,152.")
-        // Unranked by PvPoke there.
-        XCTAssertEqual(card(option("kadabra", iv: iv, cost: cost), key: "ml").notWorthText, "Not worth building for Master League: PvPoke does not rank Kadabra there.")
-        // At or above the bar: no line (the advisor's rule is score >= bar).
-        XCTAssertNil(card(option("a", score: 88, iv: iv, cost: cost)).notWorthText)
-        XCTAssertNil(card(option("a", score: 91.8, iv: iv, cost: cost)).notWorthText)
-        XCTAssertNotNil(card(option("a", score: 87.99, iv: iv, cost: cost)).notWorthText)
-        // The bar is the report's, not a constant here: another bar moves the line, and no bar means no line.
-        XCTAssertNil(card(option("a", score: 60, iv: iv, cost: cost), bar: 50).notWorthText)
-        XCTAssertNil(card(option("a", score: 60, iv: iv, cost: cost), bar: nil).notWorthText)
-        // The line is about the member the card shows: with the IVs unread it still applies.
-        XCTAssertNotNil(card(option("alakazam", score: 60.3, rank: 938)).notWorthText)
+    private func build(areas: [String]) -> BoxAdvice.Build {
+        BoxAdvice.Build(entryId: "e", title: "X", cp: 300, level: 20, ivs: nil, targetId: "t", targetName: "T", powerUp: false, formChange: false, viaMega: false,
+                        needsDynamax: false, spares: 0, areas: areas, tier: "B", targetLevel: nil, dust: 0, candy: 0, xl: 0, pvp: nil, score: 1, steps: [])
     }
 
-    func testNoViableCardsHaveNoNotWorthLine() {
-        let r = R(options: [option("moltres", score: 70, over: true, isSelf: true)], worthBar: 88)
-        let c = LeaguePanel.card(r, shown: 0, key: "gl", level: 20)
-        XCTAssertEqual(c.status, .noViable)
-        XCTAssertNil(c.notWorthText)
-        XCTAssertFalse(LeaguePanel.spoken(c, key: "gl", chip: "Pick").contains("Not worth"))
+    func testStrongWhenAnAdviceBuildCoversTheLeagueWhateverItsTarget() {
+        // Squirtle: the shown member (Wartortle, 86.2) differs from the build's target (Blastoise); the build covers GL and UL, so both are Strong, ML is not.
+        let r = R(options: [option("wartortle", score: 86.2, rank: 90, iv: iv, cost: cost)])
+        let b = build(areas: ["Max", "GL", "UL", "Raids"])
+        XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: [b]).worth, .strong)
+        XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "ul", level: 17, builds: [b]).worth, .strong)
+        XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "ml", level: 17, builds: [b]).worth, .ok, "86.2 is OK where no build covers the league")
+        // A low-scoring member (a tier-table build, below any bar) is still Strong when a build covers the league.
+        let weak = R(options: [option("cursola", score: 60, rank: 700, iv: iv, cost: cost)])
+        XCTAssertEqual(LeaguePanel.card(weak, shown: 0, key: "gl", level: 17, builds: [build(areas: ["GL"])]).worth, .strong)
     }
 
-    private func build(_ target: String, _ name: String, areas: [String], members: [String: String]) -> BoxAdvice.Build {
-        var b = BoxAdvice.Build(entryId: "e", title: "X", cp: 300, level: 20, ivs: nil, targetId: target, targetName: name, powerUp: false, formChange: false, viaMega: false,
-                                needsDynamax: false, spares: 0, areas: areas, tier: "B", targetLevel: nil, dust: 0, candy: 0, xl: 0, pvp: nil, score: 1, steps: [])
-        b.leagueMembers = members
-        return b
+    func testOKFromEightyAndWeakBelowOrUnranked() {
+        func worth(_ o: O, builds: [BoxAdvice.Build] = []) -> LeaguePanel.Worth? { LeaguePanel.card(R(options: [o]), shown: 0, key: "gl", level: 17, builds: builds).worth }
+        XCTAssertEqual(worth(option("a", score: 80, iv: iv, cost: cost)), .ok, "80 is the OK threshold, inclusive")
+        XCTAssertEqual(worth(option("a", score: 80.1, iv: iv, cost: cost)), .ok)
+        XCTAssertEqual(worth(option("a", score: 79.9, iv: iv, cost: cost)), .weak)
+        XCTAssertEqual(worth(option("a", iv: iv, cost: cost)), .weak, "unranked")
+        XCTAssertEqual(worth(option("a", score: 95, iv: iv, cost: cost), builds: [build(areas: ["UL", "ML"])]), .ok, "a build for other leagues does not make this one Strong")
+        XCTAssertEqual(LeaguePanel.okScore, 80)
     }
 
-    /// The three real fixture copies (greg-2026-09-25) where the shown pick is below the bar but a build of the copy covers the league:
-    /// the ids and names are the engine's own (test/advise.test.js pins them from `analyseBox`).
-    func testTheLineNamesTheSpeciesWorthBuildingWhenABuildCoversTheLeagueWithAnotherMember() {
-        // Squirtle, Great League: the shown Wartortle is 86.2 (below the bar), the advisor builds Blastoise (rank hit).
-        let squirtle = R(options: [option("blastoise", score: 89, rank: 40, over: true), option("wartortle", score: 86.2, rank: 90, iv: iv, cost: cost), option("squirtle")], pick: 1, worthBar: 88)
-        let toBlastoise = build("blastoise", "Blastoise", areas: ["Max", "GL", "UL", "Raids"], members: ["gl": "blastoise", "ul": "blastoise"])
-        XCTAssertEqual(LeaguePanel.card(squirtle, shown: 1, key: "gl", level: 17, builds: [toBlastoise]).notWorthText, "Blastoise is the one worth building for Great League.")
-        XCTAssertEqual(LeaguePanel.card(squirtle, shown: 1, key: "gl", level: 17).notWorthText, "Not worth building for Great League: Wartortle ranks #90 of 1,152.", "with no builds the score decides")
-        // Corsola (Galarian), Great League: the shown Cursola is 60, the build (a tier-table one, below the bar) is Corsola (Galarian).
-        let corsola = R(options: [option("corsola_galarian", score: 91.5, iv: iv, cost: cost, isSelf: true), option("cursola", score: 60, rank: 700, iv: iv, cost: cost)], pick: 1, worthBar: 88)
-        let toGalarian = build("corsola_galarian", "Corsola (Galarian)", areas: ["GL"], members: ["gl": "corsola_galarian"])
-        XCTAssertEqual(LeaguePanel.card(corsola, shown: 1, key: "gl", level: 17, builds: [toGalarian]).notWorthText, "Corsola (Galarian) is the one worth building for Great League.")
-        // Zygarde (10% Forme), Ultra League: the shown member is the 10% Forme (64.7), the build is Zygarde (Complete Forme).
-        let zygarde = R(options: [option("zygarde_complete", score: 92.9, iv: iv, cost: cost), option("zygarde_10", score: 64.7, rank: 600, iv: iv, cost: cost, isSelf: true)], pick: 1, worthBar: 88)
-        let toComplete = build("zygarde_complete", "Zygarde (Complete Forme)", areas: ["UL", "ML"], members: ["ul": "zygarde_complete", "ml": "zygarde_complete"])
-        XCTAssertEqual(LeaguePanel.card(zygarde, shown: 1, key: "ul", level: 17, builds: [toComplete]).notWorthText, "Zygarde (Complete Forme) is the one worth building for Ultra League.")
-    }
-
-    func testNoLineWhenABuildCoversTheLeagueWithTheShownMember() {
-        // The shown member is the build's own member in that league: nothing to say, even below the bar (a tier-table build).
-        let r = R(options: [option("corsola_galarian", score: 60, rank: 700, iv: iv, cost: cost, isSelf: true)], worthBar: 88)
-        let b = build("corsola_galarian", "Corsola (Galarian)", areas: ["GL"], members: ["gl": "corsola_galarian"])
-        XCTAssertNil(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: [b]).notWorthText)
-        // Any covering build with the shown member is enough, and a build without leagueMembers falls back to the target's name.
-        let other = build("blastoise", "Blastoise", areas: ["GL"], members: ["gl": "blastoise"])
-        XCTAssertNil(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: [other, b]).notWorthText)
-        let named = build("corsola", "Corsola", areas: ["GL"], members: [:])
-        let plain = R(options: [option("corsola", score: 60, iv: iv, cost: cost)], worthBar: 88)
-        XCTAssertNil(LeaguePanel.card(plain, shown: 0, key: "gl", level: 17, builds: [named]).notWorthText, "without leagueMembers the target's name is compared with the shown member's")
-        XCTAssertEqual(LeaguePanel.card(plain, shown: 0, key: "gl", level: 17, builds: [build("blastoise", "Blastoise", areas: ["GL"], members: [:])]).notWorthText,
-                       "Blastoise is the one worth building for Great League.")
-    }
-
-    func testABuildForAnotherLeagueDoesNotCoverThisOne() {
-        // Squirtle's Blastoise build covers GL and UL, not ML: Master League falls back to the score.
-        let r = R(options: [option("blastoise", score: 51.1, rank: 300, iv: iv, cost: cost)], worthBar: 88)
-        let b = build("blastoise", "Blastoise", areas: ["GL", "UL"], members: ["gl": "blastoise", "ul": "blastoise"])
-        XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "ml", level: 17, builds: [b]).notWorthText, "Not worth building for Master League: Blastoise ranks #300 of 1,152.")
-        // Above the bar with no covering build (a copy the advisor did not build for): no line.
-        let high = R(options: [option("lapras", score: 90.5, iv: iv, cost: cost)], worthBar: 88)
-        XCTAssertNil(LeaguePanel.card(high, shown: 0, key: "ul", level: 17, builds: []).notWorthText)
+    func testNoTagOnANoViableCardAndTheSentencesAndSpeech() {
+        let none = R(options: [option("moltres", score: 70, over: true, isSelf: true)])
+        let c = LeaguePanel.card(none, shown: 0, key: "gl", level: 20, builds: [build(areas: ["GL"])])
+        XCTAssertEqual(c.status, .noViable); XCTAssertNil(c.worth)
+        XCTAssertFalse(LeaguePanel.spoken(c, key: "gl", chip: "Pick").contains("for Great League"))
+        XCTAssertEqual(LeaguePanel.worthSentence(.strong, key: "gl"), "Worth powering up for Great League.")
+        XCTAssertEqual(LeaguePanel.worthSentence(.ok, key: "ul"), "A solid choice for Ultra League, though stronger options exist.")
+        XCTAssertEqual(LeaguePanel.worthSentence(.weak, key: "ml"), "Better kept for trading or transferring than for Master League.")
+        let fit = LeaguePanel.card(R(options: [option("sylveon", score: 80.1, rank: 70, iv: iv, cost: cost)]), shown: 0, key: "ml", level: 17)
+        XCTAssertTrue(LeaguePanel.spoken(fit, key: "ml", chip: "Pick").contains("Pick: Sylveon. OK for Master League. Species 80.1"), LeaguePanel.spoken(fit, key: "ml", chip: "Pick"))
     }
 }

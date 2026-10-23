@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadGamemaster, loadTiers, loadRankings } from '../src/node/load.js';
 import { analyseBox } from '../src/advise.js';
-import { PVP_SCORE } from '../src/leagues.js';
 
 const ctx = { gm: loadGamemaster(), tiers: loadTiers(), rankings: loadRankings() };
 const box = importPokeGenie(readFileSync(new URL('../fixtures/greg-2026-09-25.pokegenie.csv', import.meta.url), 'utf8'));
@@ -212,34 +211,4 @@ test('a league build for a target the copy is already over the cap for is droppe
 test('a Pokémon with no league-viable target carries only its other areas (Abra: Alakazam raids, not GL/UL/ML)', () => {
   const abra = analyseBox([copy('Abra', 17, { atk: 0, def: 14, hp: 15 })], ctx).builds;
   assert.deepEqual(abra.map((b) => [b.targetId, b.areas]), [['alakazam', ['raids']]]);
-});
-
-test('the advisor and the Leagues card share one PvP bar: PVP_SCORE, which the report hands the app', () => {
-  const [abra] = analyseBox([copy('Abra', 17, { atk: 0, def: 14, hp: 15 })], ctx).pokemon;
-  for (const league of ['gl', 'ul', 'ml']) {
-    const alakazam = abra.leagues[league].options.find((o) => o.name === 'Alakazam');
-    assert.ok(alakazam.strength.score < PVP_SCORE[league], 'the Alakazam pick is below the bar, which is why the advisor builds no league build for it');
-  }
-  assert.deepEqual(PVP_SCORE, { gl: 88, ul: 88, ml: 88 });
-});
-
-// The Leagues card says which species is the one worth building when a build of the copy covers the league with a member other than the shown
-// pick. These are the real fixture copies where the two differ; a build names its member per league (`leagueMembers`) so the app need not guess.
-test('builds name the family member they are rated as in each league, and the three fixture copies where it is not the shown pick', () => {
-  const shownOf = (e, league) => e.leagues[league].options[e.leagues[league].pick].speciesId;
-  const cases = [
-    // [name, form, league, shown member, member the build is rated as, build's target]
-    ['Squirtle', '', 'gl', 'wartortle', 'blastoise', 'blastoise'],
-    ['Corsola', 'Galar', 'gl', 'cursola', 'corsola_galarian', 'corsola_galarian'],
-    ['Zygarde', '10%', 'ul', 'zygarde_10', 'zygarde_complete', 'zygarde_complete'],
-  ];
-  for (const [name, form, league, shown, member, target] of cases) {
-    const entries = out.pokemon.filter((e) => !e.unresolved && e.p.name === name && (e.p.form ?? '') === form && shownOf(e, league) === shown);
-    assert.ok(entries.length, `${name} ${form} with ${shown} shown in ${league}`);
-    const builds = out.builds.filter((b) => entries.some((e) => e.p === b.pokemon) && b.areas.includes(league));
-    assert.ok(builds.length, `${name} has a build covering ${league}`);
-    for (const b of builds) { assert.equal(b.targetId, target); assert.equal(b.leagueMembers[league], member); assert.notEqual(b.leagueMembers[league], shown); }
-  }
-  // Every league area of every build has its member (the target's own option), so the app compares ids, not names.
-  for (const b of out.builds) for (const a of b.areas.filter((x) => ['gl', 'ul', 'ml'].includes(x))) assert.ok(b.leagueMembers[a], `${b.speciesId}->${b.targetId} ${a}`);
 });

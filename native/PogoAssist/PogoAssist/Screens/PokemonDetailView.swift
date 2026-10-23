@@ -18,6 +18,8 @@ struct PokemonDetailView: View {
     @State private var chosenMega: Bool?
     /// The league the Leagues panel has open (nil on its base cards); the Advice panel waits while one is.
     @State private var leaguesMode: String?
+    /// "How it was read" is one line that opens its notes beneath it.
+    @State private var notesOpen = false
 
     /// The Mega form the page shows now: only for an entry whose Mega form has a CP, and only while the switch is on Mega.
     private func megaShown(_ e: BoxEntry) -> MegaForm? {
@@ -243,7 +245,6 @@ struct PokemonDetailView: View {
             Panel(tint: .accent, padding: 18, spacing: 8) {
                 adviceLabel
                 if a.isEmpty { Text("The advisor has nothing for this Pokémon.").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
-                // Every build this copy carries (`entries(for:)` keeps the advisor's best-first order), each its own block with its areas.
                 ForEach(Array(a.builds.enumerated()), id: \.element.id) { n, b in
                     if n > 0 { Rectangle().fill(accent.ink.opacity(0.18)).frame(height: 1).padding(.vertical, 4) }
                     VStack(alignment: .leading, spacing: 8) {
@@ -258,13 +259,32 @@ struct PokemonDetailView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("advice-build-\(n)")
                 }
-                ForEach(a.spareFor) { b in Text("A spare copy: a better one is already planned for \(b.targetName).").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
-                if let d = a.duplicateOf {
-                    Text(a.keep ? "One of \(d.count) \(d.name) in your box. **Keep this one.**" : "One of \(d.count) \(d.name) in your box. **The advisor would transfer this one.**")
-                        .font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineSpacing(3)
-                }
+                let notes = adviceNotes(a, e)
+                if let t = notes.spare { Text(t).font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineSpacing(3).accessibilityIdentifier("advice-spare") }
+                if let t = notes.verdict { Text(LocalizedStringKey(t)).font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineSpacing(3).accessibilityIdentifier("advice-verdict") }
             }
         }
+    }
+
+    /// One message, then one verdict that agrees with it. A copy with no build of its own is a spare for the targets whose builds went to better
+    /// copies. The duplicate verdict comes from the hygiene rule in `src/advise.js` (the best IV % of the species is kept, whatever the builds say),
+    /// so a spare that is kept says why ("it has your best IVs"), not a bare "Keep this one" under a "better one is planned" line.
+    private func adviceNotes(_ a: BoxAdvice.ForEntry, _ e: BoxEntry) -> (spare: String?, verdict: String?) {
+        let name = a.duplicateOf?.name ?? e.row.title
+        var targets = [String]()
+        // A target that is the Pokémon itself (a power-up) reads "a better copy", not "better Moltres planned for Moltres".
+        for b in a.spareFor where b.targetName != name && !targets.contains(b.targetName) { targets.append(b.targetName) }
+        var spare: String?
+        if !a.spareFor.isEmpty {
+            let joined = targets.count <= 1 ? (targets.first ?? "") : targets.dropLast().joined(separator: ", ") + " and " + targets[targets.count - 1]
+            if a.builds.isEmpty { spare = targets.isEmpty ? "No build for this copy: you already have a better \(name) planned." : "No build for this copy: you already have better \(name) planned for \(joined)." }
+            else { spare = targets.isEmpty ? "Also a spare: a better copy is already planned." : "Also a spare for \(joined): better copies are already planned." }
+        }
+        guard let d = a.duplicateOf else { return (spare, nil) }
+        let count = "One of \(d.count) \(d.name) in your box."
+        if !a.keep { return (spare, "\(count) **The advisor would transfer this one.**") }
+        if a.builds.isEmpty && spare != nil { return (spare, "\(count) **Keep it:** it has \(d.keepIds.count == 1 ? "your best" : "some of your best") IVs of the \(d.count).") }
+        return (spare, "\(count) **Keep this one.**")
     }
 
     private var adviceLabel: some View {
@@ -324,20 +344,32 @@ struct PokemonDetailView: View {
     @ViewBuilder private func notesPanel(_ e: BoxEntry, mega: MegaForm?) -> some View {
         let r = e.row
         if !r.noteFlags.isEmpty || e.megaWhenScanned == true || mega != nil || e.isHandCorrected {
-            Panel(padding: 16, spacing: 10) {
-                if !r.noteFlags.isEmpty {
-                    Text("How it was read").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+            VStack(alignment: .leading, spacing: 10) {
+                Button { withAnimation(.easeOut(duration: 0.15)) { notesOpen.toggle() } } label: {
+                    HStack(spacing: 4) {
+                        Text("How it was read").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                        Image(systemName: "chevron.right").font(.figtree(11, .bold)).foregroundStyle(Theme.muted).rotationEffect(.degrees(notesOpen ? 90 : 0)).accessibilityHidden(true)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(notesOpen ? "Expanded" : "Collapsed")
+                .accessibilityIdentifier("how-it-was-read")
+                if notesOpen {
                     ForEach(r.noteFlags, id: \.self) { Text(FlagInfo.explainNote($0)).paText(.secondary).foregroundStyle(Theme.muted) }
-                }
-                if mega != nil {
-                    Label("The Mega CP is temporary: these are the Mega values from the last scan that saw it Mega evolved. The IVs and the advice are the same for both forms. To fix a value, switch to Normal.", systemImage: "sparkles").paText(.secondary).foregroundStyle(Theme.muted)
-                } else if e.megaWhenScanned == true {
-                    Label("Mega evolved when scanned. The Mega CP is temporary, so the values above are from an earlier scan.", systemImage: "sparkles").paText(.secondary).foregroundStyle(Theme.muted)
-                }
-                if e.isHandCorrected {
-                    Label("Corrected by hand: \(corrected(e)). A later scan will not undo it unless the Pokémon has changed.", systemImage: "pencil").paText(.secondary).foregroundStyle(Theme.muted)
+                    if mega != nil {
+                        Label("The Mega CP is temporary: these are the Mega values from the last scan that saw it Mega evolved. The IVs and the advice are the same for both forms. To fix a value, switch to Normal.", systemImage: "sparkles").paText(.secondary).foregroundStyle(Theme.muted)
+                    } else if e.megaWhenScanned == true {
+                        Label("Mega evolved when scanned. The Mega CP is temporary, so the values above are from an earlier scan.", systemImage: "sparkles").paText(.secondary).foregroundStyle(Theme.muted)
+                    }
+                    if e.isHandCorrected {
+                        Label("Corrected by hand: \(corrected(e)). A later scan will not undo it unless the Pokémon has changed.", systemImage: "pencil").paText(.secondary).foregroundStyle(Theme.muted)
+                    }
                 }
             }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

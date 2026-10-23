@@ -65,8 +65,6 @@ public struct BoxAdvice: Codable, Equatable {
             public init(league: String, bestLevel: Double) { self.league = league; self.bestLevel = bestLevel }
         }
         public var leavesLeague: [LeaguePast] = []
-        /// league key ("gl", "ul", "ml") -> the speciesId of the family member this build is rated as in that league (the target's own option in the leagues data).
-        public var leagueMembers: [String: String] = [:]
         /// "going past 27 leaves UL, going past 16 leaves GL", or nil when the climb leaves no league.
         public var leavesLeagueText: String? {
             leavesLeague.isEmpty ? nil : leavesLeague.map { "going past \(levelText($0.bestLevel)) leaves \($0.league)" }.joined(separator: ", ")
@@ -218,20 +216,16 @@ public struct BoxAdvice: Codable, Equatable {
         public var experimentalIndex: Int
         /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). If no member fits and nothing is ranked, the final evolution is shown even though it is over the cap. A copy with known IVs in Great or Ultra League and nothing ranked is still "emulated").
         public var source: String
-        /// The PvPoke score a member needs for the advisor to build towards this league: `PVP_SCORE` in `src/leagues.js`, which the engine puts once in
-        /// the report (`pvpScore`) and `BoxAdvice.make` copies onto every rating here. nil when the report did not say (no "not worth building" line then).
-        public var worthBar: Double?
 
-        private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source, worthBar }
+        private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source }
 
         /// The indexes are clamped into range, so the accessors never trap. `options` must not be empty.
-        public init(options: [Option], pick: Int = 0, experimental: Int? = nil, source: String = "ranked", worthBar: Double? = nil) {
+        public init(options: [Option], pick: Int = 0, experimental: Int? = nil, source: String = "ranked") {
             precondition(!options.isEmpty, "a league rating has at least one option")
             self.options = options
             self.pickIndex = min(max(pick, 0), options.count - 1)
             self.experimentalIndex = min(max(experimental ?? pick, 0), options.count - 1)
             self.source = source
-            self.worthBar = worthBar
         }
 
         public init(from decoder: Decoder) throws {
@@ -243,8 +237,7 @@ public struct BoxAdvice: Codable, Equatable {
             // number or out of range is the shown pick, and a source that is missing or not a string is "ranked".
             let experimental = (try? c.decodeIfPresent(Int.self, forKey: .experimentalIndex)).flatMap { $0 }.flatMap { options.indices.contains($0) ? $0 : nil }
             let source = (try? c.decodeIfPresent(String.self, forKey: .source)).flatMap { $0 } ?? "ranked"
-            let bar = (try? c.decodeIfPresent(Double.self, forKey: .worthBar)).flatMap { $0 }
-            self.init(options: options, pick: pick, experimental: experimental, source: source, worthBar: bar)
+            self.init(options: options, pick: pick, experimental: experimental, source: source)
         }
 
         /// A whole number that fits an Int, or nil (NaN, infinite, fractional or huge values: `Int(_:)` would trap on them).
@@ -292,8 +285,8 @@ public struct BoxAdvice: Codable, Equatable {
     /// 6 since a build carried `powerUpNeeded` and `secondMoveDue`; 7 since those became the list of `steps` (evolve, Mega, power up, second move,
     /// Elite TM, Community Day move, Dynamax copy), which the action is worded from; 8 since the power-up step is the climb the cost covers, builds carry
     /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone; 9 since every option PvPoke ranks carries its
-    /// `moves` (before, only the shown and experimental ones did); 10 since the report carries `pvpScore` (the advisor's PvP bar) and each build `leagueMembers`, which the Leagues card reads. Advice cached at 2 to 9 has the old shape or the old rules, so it is dropped and recomputed too.
-    public static let currentVersion = 11
+    /// `moves` (before, only the shown and experimental ones did). Advice cached at 2 to 8 has the old shape or the old rules, so it is dropped and recomputed too.
+    public static let currentVersion = 9
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -365,8 +358,7 @@ public struct BoxAdvice: Codable, Equatable {
                               leavesLeague: (b["leavesLeague"]?.arrayValue ?? []).compactMap { v in
                                   guard case .string(let l)? = v["league"], case .number(let at)? = v["bestLevel"] else { return nil }
                                   return Build.LeaguePast(league: areaLabel[l] ?? l, bestLevel: at)
-                              },
-                              leagueMembers: { if case .object(let m)? = b["leagueMembers"] { return m.compactMapValues { if case .string(let s) = $0 { return s } else { return nil } } } else { return [:] } }())
+                              })
             out.builds.append(build)
             for s in spares { out.spareBuilds[s, default: []].append(build) }
         }
@@ -392,8 +384,7 @@ public struct BoxAdvice: Codable, Equatable {
             var byLeague = [String: LeagueRating]()
             for key in ["gl", "ul", "ml"] {
                 // Per option, so one member the decoder cannot read does not take the league (and the shown pick) with it.
-                guard let v = l[key], var rating = LeagueRating.decode(v) else { continue }
-                if case .number(let bar)? = report["pvpScore"]?[key], bar.isFinite { rating.worthBar = bar }
+                guard let v = l[key], let rating = LeagueRating.decode(v) else { continue }
                 byLeague[key] = rating
             }
             if !byLeague.isEmpty { out.leagues[eid] = byLeague }
