@@ -214,10 +214,23 @@ final class LeaguePanelTests: XCTestCase {
         let c = LeaguePanel.card(none, shown: 0, key: "gl", level: 20, builds: [build(areas: ["GL"])])
         XCTAssertEqual(c.status, .noViable); XCTAssertNil(c.worth)
         XCTAssertFalse(LeaguePanel.spoken(c, key: "gl", chip: "Pick").contains("for Great League"))
-        XCTAssertEqual(LeaguePanel.worthSentence(.strong, key: "gl"), "Worth powering up for Great League.")
+        XCTAssertEqual(LeaguePanel.worthSentence(.strong, key: "gl"), "Worth building for Great League.")
         XCTAssertEqual(LeaguePanel.worthSentence(.ok, key: "ul"), "A solid choice for Ultra League, though stronger options exist.")
-        XCTAssertEqual(LeaguePanel.worthSentence(.weak, key: "ml"), "Better kept for trading or transferring than for Master League.")
+        XCTAssertEqual(LeaguePanel.worthSentence(.weak, key: "ml"), "Not a strong pick for Master League.", "Weak says 'transferring' only when the Advice panel does")
+        XCTAssertEqual(LeaguePanel.worthSentence(.weak, key: "ml", transfers: true), "Better kept for trading or transferring than for Master League.")
+        XCTAssertEqual(LeaguePanel.worthSentence(.ok, key: "ul", transfers: true), "A solid choice for Ultra League, though stronger options exist.")
         let fit = LeaguePanel.card(R(options: [option("sylveon", score: 80.1, rank: 70, iv: iv, cost: cost)]), shown: 0, key: "ml", level: 17)
         XCTAssertTrue(LeaguePanel.spoken(fit, key: "ml", chip: "Pick").contains("Pick: Sylveon. OK for Master League. Species 80.1"), LeaguePanel.spoken(fit, key: "ml", chip: "Pick"))
+    }
+
+    func testASpareCopyIsNotStrongFromAnotherCopysBuild() {
+        // The build covers GL, but another copy carries it (this copy is only a spare for it): the card is handed the copy's OWN builds, which is none.
+        var advice = BoxAdvice(builds: [build(areas: ["GL"])])
+        advice.spareBuilds["spare"] = advice.builds
+        let own = advice.entries(for: "spare").builds
+        XCTAssertTrue(own.isEmpty)
+        let r = R(options: [option("cursola", score: 60, rank: 700, iv: iv, cost: cost)])
+        XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: own).worth, .weak)
+        XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: advice.entries(for: "e").builds).worth, .strong, "the copy that carries the build is Strong")
     }
 }

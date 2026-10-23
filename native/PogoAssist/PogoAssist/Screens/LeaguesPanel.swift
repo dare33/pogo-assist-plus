@@ -11,8 +11,10 @@ struct LeaguesPanel: View {
     let level: Double?
     /// "Pogo Assist is currently unable to detect Shadow Pokémon." while this copy's Shadow status is unknown.
     let showsShadowNote: Bool
-    /// This copy's Advice builds (its own and those it is a spare for): the card's "worth building" line reads which leagues they cover.
+    /// This copy's own Advice builds: the worth tag is Strong for a league one of them covers.
     let builds: [BoxAdvice.Build]
+    /// No build of its own and hygiene would transfer it: the Weak tag may then say "better kept for trading or transferring".
+    let transfers: Bool
 
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -96,13 +98,14 @@ struct LeaguesPanel: View {
                 Text(LeaguePanel.capText(key)).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(league.ink)
             }
             .accessibilityHidden(true)
-            Button { mode = key } label: { pickCard(key, r, tappable: true) }
+            let c = card(key, r)
+            Button { mode = key } label: { pickCard(key, c, tappable: true) }
                 .buttonStyle(PressStyle())
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spoken(key, r))
+                .accessibilityLabel(spoken(key, c))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("league-\(key)-pick")
-                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, r, $0) }
+                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, c.worth, $0) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("league-\(key)")
@@ -112,14 +115,13 @@ struct LeaguesPanel: View {
         LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist), key: key, level: level, builds: builds)
     }
 
-    private func spoken(_ key: String, _ r: BoxAdvice.LeagueRating) -> String {
-        LeaguePanel.spoken(card(key, r), key: key, chip: LeaguePanel.chipText(pogoAssist: pogoAssist))
+    private func spoken(_ key: String, _ c: LeaguePanel.Card) -> String {
+        LeaguePanel.spoken(c, key: key, chip: LeaguePanel.chipText(pogoAssist: pogoAssist))
     }
 
     // MARK: the pick card
 
-    private func pickCard(_ key: String, _ r: BoxAdvice.LeagueRating, tappable: Bool) -> some View {
-        let c = card(key, r)
+    private func pickCard(_ key: String, _ c: LeaguePanel.Card, tappable: Bool) -> some View {
         return VStack(alignment: .leading, spacing: 8) {
             FlowLayout(spacing: 8) {
                 Text(c.title).font(.figtree(19, .heavy, relativeTo: .title3)).tracking(-0.01 * 19).foregroundStyle(Theme.ink)
@@ -135,7 +137,7 @@ struct LeaguesPanel: View {
             }
             .padding(.trailing, tappable ? 22 : 0)
             if let w = c.worth, worthOpen.contains(key) {
-                Text(LeaguePanel.worthSentence(w, key: key)).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
+                Text(LeaguePanel.worthSentence(w, key: key, transfers: transfers)).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("league-\(key)-worth-text")
             }
@@ -182,8 +184,7 @@ struct LeaguesPanel: View {
 
     /// The tap target over the chip (at least 44 pt square): opens or closes the one line the tag explains. Its accessibility value carries that
     /// line while it is open.
-    private func worthLayer(_ key: String, _ r: BoxAdvice.LeagueRating, _ anchor: Anchor<CGRect>?) -> some View {
-        let w = card(key, r).worth
+    private func worthLayer(_ key: String, _ w: LeaguePanel.Worth?, _ anchor: Anchor<CGRect>?) -> some View {
         return GeometryReader { geo in
             if let anchor, let w {
                 let rect = geo[anchor], open = worthOpen.contains(key)
@@ -192,7 +193,7 @@ struct LeaguesPanel: View {
                     .frame(width: max(rect.width, 44), height: max(rect.height, 44))
                     .position(x: rect.midX, y: rect.midY)
                     .accessibilityLabel("\(w.label) for \(LeaguePanel.name(key))")
-                    .accessibilityValue(open ? LeaguePanel.worthSentence(w, key: key) : "Collapsed")
+                    .accessibilityValue(open ? LeaguePanel.worthSentence(w, key: key, transfers: transfers) : "Collapsed")
                     .accessibilityIdentifier("league-\(key)-worth")
             }
         }
@@ -248,11 +249,12 @@ struct LeaguesPanel: View {
                     return .init(value: k, title: LeaguePanel.shortName(k), dot: league.dot, selectedInk: league.ink, identifier: "leagues-control-\(k)")
                 },
                 selection: selection, label: "League", identifier: "leagues-control", singleLine: !oneColumn)
-            pickCard(key, r, tappable: false)
+            let c = card(key, r)
+            pickCard(key, c, tappable: false)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spoken(key, r))
+                .accessibilityLabel(spoken(key, c))
                 .accessibilityIdentifier("league-\(key)-pick")
-                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, r, $0) }
+                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, c.worth, $0) }
             if !rows.isEmpty { optionList(key, rows) }
         }
         .accessibilityElement(children: .contain)

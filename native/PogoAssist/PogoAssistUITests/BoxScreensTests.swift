@@ -318,9 +318,9 @@ final class BoxScreensTests: XCTestCase {
         return b.exists ? b.value as? String : nil
     }
 
-    /// A spare copy (one of the sample scan's Moltres whose build went to a better copy) says so once, then a verdict that agrees with it; "How it
-    /// was read" is one line that opens its notes beneath it.
-    func testSpareCopyAdviceIsOneMessageAndOneVerdict() throws {
+    /// The sample scan's Moltres: the copy that carries the build shows the build and NO keep/transfer verdict (hygiene ignores builds); a spare says
+    /// once that there is no build for it and gives one verdict that agrees; "How it was read" is one line that opens its read notes.
+    func testSpareAndBuiltCopyAdvice() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "dark"]
         app.launch()
@@ -331,22 +331,30 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(copies.firstMatch.waitForExistence(timeout: 5))
         let n = copies.count
         XCTAssertGreaterThan(n, 1, "the sample has several Moltres")
-        var found = false
-        for i in 0..<n {
+        func scrollToVerdictArea() {
+            var swipes = 0
+            while !app.staticTexts["ADVICE"].isHittable && swipes < 8 { app.swipeUp(); swipes += 1 }
+        }
+        var sawSpare = false, sawBuilt = false
+        for i in 0..<n where !(sawSpare && sawBuilt) {
             let c = app.buttons.matching(identifier: "pokemon-row").element(boundBy: i)
             guard c.waitForExistence(timeout: 3) else { break }
             c.tap()
             _ = app.staticTexts["ADVICE"].waitForExistence(timeout: 20)
-            if app.staticTexts["advice-spare"].exists {
-                found = true
-                let spare = app.staticTexts["advice-spare"].label, verdict = app.staticTexts["advice-verdict"].label
-                XCTAssertTrue(spare.hasPrefix("No build for this copy: you already have a better Moltres planned"), spare)
-                XCTAssertFalse(spare.contains("A spare copy"), "one message, not one line per target")
-                XCTAssertTrue(verdict.hasPrefix("One of ") && (verdict.contains("Keep it:") || verdict.contains("would transfer")), verdict)
-                XCTAssertFalse(verdict.contains("Keep this one"), "a spare is not told 'Keep this one' without a reason")
-                var swipes = 0
-                while !app.staticTexts["advice-verdict"].isHittable && swipes < 6 { app.swipeUp(); swipes += 1 }
-                shot("spare-advice")
+            if app.otherElements["advice-build-0"].exists || app.staticTexts["advice-build-0"].exists || app.descendants(matching: .any)["advice-build-0"].exists {
+                sawBuilt = true
+                XCTAssertFalse(app.staticTexts["advice-verdict"].exists, "a copy with its own build shows the build and no keep or transfer verdict")
+                scrollToVerdictArea(); shot("with-builds")
+            } else if app.staticTexts["advice-spare"].exists {
+                sawSpare = true
+                XCTAssertEqual(app.staticTexts["advice-spare"].label, "No build for this copy: you already have a better Moltres planned.")
+                let verdict = app.staticTexts["advice-verdict"].label
+                XCTAssertTrue([
+                    "One of 6 Moltres in your box. Keep it: it has one of your two best IV sets of the 6.",
+                    "One of 6 Moltres in your box. Keep it: it is one of your two strongest of the 6.",
+                    "One of 6 Moltres in your box. The advisor would transfer this one.",
+                ].contains(verdict), verdict)
+                scrollToVerdictArea(); shot("spare-advice")
                 let notes = app.buttons["how-it-was-read"]
                 if notes.exists {
                     XCTAssertEqual(notes.value as? String, "Collapsed")
@@ -354,12 +362,12 @@ final class BoxScreensTests: XCTestCase {
                     XCTAssertEqual(notes.value as? String, "Expanded")
                     shot("how-it-was-read-open")
                 }
-                break
             }
             app.buttons["Back"].tap()
             _ = app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5)
         }
-        XCTAssertTrue(found, "one of the Moltres is a spare for a better copy")
+        XCTAssertTrue(sawSpare, "one of the Moltres is a spare for a better copy")
+        XCTAssertTrue(sawBuilt, "one of the Moltres carries the build")
     }
 
     /// A league view open on the Normal form closes with its panel when the page goes to the Mega form (no Leagues there), the Advice panel is
@@ -555,7 +563,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(ul.label.contains("This copy 96.2 percent, IV rank 1,766"), ul.label)
         XCTAssertTrue(ul.label.contains("Target level 40, target CP 2,500, 160,000 dust, 190 candy"), ul.label)
         XCTAssertTrue(ml.label.hasPrefix("Master League, no CP cap. Pick: "), ml.label)
-        // The tag: Scyther's Ultra pick (71.8, no build covers Ultra) is Weak, and the spoken card says so; a No viable option card has none.
+        // The tag: Scyther's Ultra pick (71.8; its own build, Scizor for Raids, does not cover Ultra) is Weak, and the spoken card says so; a No viable option card has none.
         XCTAssertTrue(ul.label.contains("Pick: Scyther. Weak for Ultra League. Species 71.8"), ul.label)
         XCTAssertTrue(app.buttons["league-ul-worth"].exists, "the tag is a tap target of its own")
         XCTAssertFalse(app.buttons["league-gl-worth"].exists || gl.label.contains("for Great League. Species"), "no tag on a No viable option card")
@@ -658,7 +666,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertEqual(tag.value as? String, "Collapsed")
         tag.tap()
         // The line sits inside the card's one accessibility element, so the tag's value carries it.
-        XCTAssertEqual(tag.value as? String, "Better kept for trading or transferring than for Ultra League.")
+        XCTAssertEqual(tag.value as? String, "Not a strong pick for Ultra League.")
         XCTAssertFalse(app.buttons["leagues-back"].exists, "tapping the tag does not open the league view")
         shot("worth-tag-open")
         tag.tap()

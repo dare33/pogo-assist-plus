@@ -78,8 +78,8 @@ public enum LeaguePanel {
 
     // MARK: the worth tag
 
-    /// How worth building the shown member is for this copy in a league: Strong when one of the copy's Advice builds covers the league (the same
-    /// source as the Advice panel, so they never disagree), else OK from `okScore`, else Weak.
+    /// How worth building the shown member is for this copy in a league: Strong when one of the copy's OWN Advice builds covers the league (the same
+    /// source as the Advice panel, so they never disagree; a build another copy carries does not count), else OK from `okScore`, else Weak.
     public enum Worth: Equatable {
         case strong, ok, weak
         public var label: String { self == .strong ? "Strong" : self == .ok ? "OK" : "Weak" }
@@ -95,11 +95,13 @@ public enum LeaguePanel {
     }
 
     /// The line a tap on the tag opens.
-    public static func worthSentence(_ w: Worth, key: String) -> String {
+    /// "Better kept for trading or transferring" is only said when the Advice panel says the same: the copy has no build and hygiene would transfer it
+    /// (`transfers`); a Weak tag under other advice says only that it is not a strong pick.
+    public static func worthSentence(_ w: Worth, key: String, transfers: Bool = false) -> String {
         switch w {
-        case .strong: return "Worth powering up for \(name(key))."
+        case .strong: return "Worth building for \(name(key))."
         case .ok: return "A solid choice for \(name(key)), though stronger options exist."
-        case .weak: return "Better kept for trading or transferring than for \(name(key))."
+        case .weak: return transfers ? "Better kept for trading or transferring than for \(name(key))." : "Not a strong pick for \(name(key))."
         }
     }
 
@@ -147,7 +149,7 @@ public enum LeaguePanel {
     }
 
     /// Everything one pick card shows. `level` is the Pokémon's own level (nil when not known).
-    /// `builds` are the copy's Advice builds (its own and those it is a spare for), which decide the Strong tag.
+    /// `builds` are the copy's own Advice builds, which decide the Strong tag.
     public static func card(_ r: BoxAdvice.LeagueRating, shown: Int, key: String, level now: Double?, builds: [BoxAdvice.Build] = []) -> Card {
         let shownOption = r.options[min(max(shown, 0), r.options.count - 1)]
         let overCount = r.options.filter(\.overCap).count

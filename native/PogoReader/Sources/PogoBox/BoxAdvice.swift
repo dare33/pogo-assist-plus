@@ -286,6 +286,8 @@ public struct BoxAdvice: Codable, Equatable {
     /// Elite TM, Community Day move, Dynamax copy), which the action is worded from; 8 since the power-up step is the climb the cost covers, builds carry
     /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone; 9 since every option PvPoke ranks carries its
     /// `moves` (before, only the shown and experimental ones did). Advice cached at 2 to 8 has the old shape or the old rules, so it is dropped and recomputed too.
+    /// Versions 10 and 11 were written by dev builds of a branch that carried interim payload fields (since removed), so they are taken: the next real
+    /// bump must be 12 or higher, or such a cache would pass for the new shape (`loadAdvice` keeps any version at or above this one).
     public static let currentVersion = 9
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
@@ -308,11 +310,16 @@ public struct BoxAdvice: Codable, Equatable {
         public var duplicateOf: Duplicate?
         public var keep: Bool
         public var isEmpty: Bool { builds.isEmpty && spareFor.isEmpty && duplicateOf == nil }
+        /// This copy's position in the duplicate's kept list (nil when it is not kept).
+        public var keepIndex: Int?
+        /// No build of its own, and the hygiene rule would transfer it.
+        public var transfersWithNoBuild: Bool { builds.isEmpty && duplicateOf != nil && !keep }
     }
 
     public func entries(for id: String) -> ForEntry {
         let dup = duplicates.first { $0.keepIds.contains(id) || $0.transferIds.contains(id) }
-        return ForEntry(builds: builds.filter { $0.entryId == id }, spareFor: spareBuilds[id] ?? [], duplicateOf: dup, keep: dup?.keepIds.contains(id) ?? false)
+        return ForEntry(builds: builds.filter { $0.entryId == id }, spareFor: spareBuilds[id] ?? [], duplicateOf: dup, keep: dup?.keepIds.contains(id) ?? false,
+                        keepIndex: dup?.keepIds.firstIndex(of: id))
     }
     /// entry id -> builds it is a spare copy for (built when decoding is not needed: filled by `make`).
     var spareBuilds: [String: [Build]] = [:]
