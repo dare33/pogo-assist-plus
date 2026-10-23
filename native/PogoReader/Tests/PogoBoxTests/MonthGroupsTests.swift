@@ -27,24 +27,21 @@ final class MonthGroupsTests: XCTestCase {
         XCTAssertEqual(MonthKey(year: 2026, month: 10).title(calendar: cal, locale: Locale(identifier: "en_AU")), "Oct 2026")
     }
 
-    /// 00:30 on 1 November in Sydney is still 31 October in UTC: the month is the person's local one.
+    /// 00:30 on 1 November in Sydney is still 31 October in UTC: the month is the one in the zone given.
     func testSydneyMidnightBoundary() {
-        // The default grouping follows the process's time zone: set it to Sydney so a fall back to UTC fails here.
-        let saved = NSTimeZone.default
-        NSTimeZone.default = TimeZone(identifier: "Australia/Sydney")!
-        defer { NSTimeZone.default = saved }
-        XCTAssertEqual(MonthKey.grouping.timeZone.identifier, "Australia/Sydney")
-        var syd = Calendar(identifier: .gregorian); syd.timeZone = TimeZone(identifier: "Australia/Sydney")!
+        let sydney = TimeZone(identifier: "Australia/Sydney")!
+        var syd = Calendar(identifier: .gregorian); syd.timeZone = sydney
         let d = syd.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 0, minute: 30))!
-        XCTAssertEqual(MonthKey(d, calendar: syd), MonthKey(year: 2026, month: 11))
-        XCTAssertEqual(MonthKey(d), MonthKey(year: 2026, month: 11), "the default grouping is local time")
-        XCTAssertEqual(MonthKey(d, calendar: cal), MonthKey(year: 2026, month: 10))
+        XCTAssertEqual(MonthKey(d, timeZone: sydney), MonthKey(year: 2026, month: 11))
+        XCTAssertEqual(MonthKey(d, timeZone: TimeZone(identifier: "UTC")!), MonthKey(year: 2026, month: 10))
+        XCTAssertEqual(MonthGroups.months(of: [d], date: { $0 }, calendar: MonthKey.grouping(timeZone: sydney)), [MonthKey(year: 2026, month: 11)])
     }
 
     /// The default grouping calendar is Gregorian in the current zone; a device on the Japanese calendar would read 2026 as Reiwa 8 if `.current` were used.
     func testDefaultGroupingIsGregorianNotTheDeviceCalendar() {
-        XCTAssertEqual(MonthKey.grouping.identifier, .gregorian)
-        XCTAssertEqual(MonthKey.grouping.timeZone, TimeZone.current)
+        XCTAssertEqual(MonthKey.grouping().identifier, .gregorian)
+        XCTAssertEqual(MonthKey.grouping().timeZone.identifier, TimeZone.current.identifier, "the default is the current zone, not UTC")
+        XCTAssertEqual(MonthKey(day(2026, 10, 5)), MonthKey(day(2026, 10, 5), timeZone: .current))
         let japanese = Calendar(identifier: .japanese)
         let d = day(2026, 10, 5)
         XCTAssertEqual(japanese.component(.year, from: d), 8, "the Japanese calendar numbers this year differently")
