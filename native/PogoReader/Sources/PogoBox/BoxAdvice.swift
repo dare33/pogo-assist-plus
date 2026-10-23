@@ -216,16 +216,20 @@ public struct BoxAdvice: Codable, Equatable {
         public var experimentalIndex: Int
         /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). If no member fits and nothing is ranked, the final evolution is shown even though it is over the cap. A copy with known IVs in Great or Ultra League and nothing ranked is still "emulated").
         public var source: String
+        /// The PvPoke score a member needs for the advisor to build towards this league: `PVP_SCORE` in `src/leagues.js`, which the engine puts once in
+        /// the report (`pvpScore`) and `BoxAdvice.make` copies here. nil when the report did not say (no "not worth building" line then).
+        public var worthBar: Double?
 
-        private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source }
+        private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source, worthBar }
 
         /// The indexes are clamped into range, so the accessors never trap. `options` must not be empty.
-        public init(options: [Option], pick: Int = 0, experimental: Int? = nil, source: String = "ranked") {
+        public init(options: [Option], pick: Int = 0, experimental: Int? = nil, source: String = "ranked", worthBar: Double? = nil) {
             precondition(!options.isEmpty, "a league rating has at least one option")
             self.options = options
             self.pickIndex = min(max(pick, 0), options.count - 1)
             self.experimentalIndex = min(max(experimental ?? pick, 0), options.count - 1)
             self.source = source
+            self.worthBar = worthBar
         }
 
         public init(from decoder: Decoder) throws {
@@ -237,7 +241,8 @@ public struct BoxAdvice: Codable, Equatable {
             // number or out of range is the shown pick, and a source that is missing or not a string is "ranked".
             let experimental = (try? c.decodeIfPresent(Int.self, forKey: .experimentalIndex)).flatMap { $0 }.flatMap { options.indices.contains($0) ? $0 : nil }
             let source = (try? c.decodeIfPresent(String.self, forKey: .source)).flatMap { $0 } ?? "ranked"
-            self.init(options: options, pick: pick, experimental: experimental, source: source)
+            let bar = (try? c.decodeIfPresent(Double.self, forKey: .worthBar)).flatMap { $0 }
+            self.init(options: options, pick: pick, experimental: experimental, source: source, worthBar: bar)
         }
 
         /// A whole number that fits an Int, or nil (NaN, infinite, fractional or huge values: `Int(_:)` would trap on them).
@@ -285,8 +290,8 @@ public struct BoxAdvice: Codable, Equatable {
     /// 6 since a build carried `powerUpNeeded` and `secondMoveDue`; 7 since those became the list of `steps` (evolve, Mega, power up, second move,
     /// Elite TM, Community Day move, Dynamax copy), which the action is worded from; 8 since the power-up step is the climb the cost covers, builds carry
     /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone; 9 since every option PvPoke ranks carries its
-    /// `moves` (before, only the shown and experimental ones did). Advice cached at 2 to 8 has the old shape or the old rules, so it is dropped and recomputed too.
-    public static let currentVersion = 9
+    /// `moves` (before, only the shown and experimental ones did); 10 since the report carries `pvpScore` (the advisor's PvP bar, which the Leagues card reads). Advice cached at 2 to 9 has the old shape or the old rules, so it is dropped and recomputed too.
+    public static let currentVersion = 10
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -384,7 +389,8 @@ public struct BoxAdvice: Codable, Equatable {
             var byLeague = [String: LeagueRating]()
             for key in ["gl", "ul", "ml"] {
                 // Per option, so one member the decoder cannot read does not take the league (and the shown pick) with it.
-                guard let v = l[key], let rating = LeagueRating.decode(v) else { continue }
+                guard let v = l[key], var rating = LeagueRating.decode(v) else { continue }
+                if case .number(let bar)? = report["pvpScore"]?[key], bar.isFinite { rating.worthBar = bar }
                 byLeague[key] = rating
             }
             if !byLeague.isEmpty { out.leagues[eid] = byLeague }

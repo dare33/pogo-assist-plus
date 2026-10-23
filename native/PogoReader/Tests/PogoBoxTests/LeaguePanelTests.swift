@@ -179,4 +179,46 @@ final class LeaguePanelTests: XCTestCase {
     func testCapText() {
         XCTAssertEqual(LeaguePanel.capText("gl"), "Under 1,500 CP"); XCTAssertEqual(LeaguePanel.capText("ul"), "Under 2,500 CP"); XCTAssertEqual(LeaguePanel.capText("ml"), "No CP cap")
     }
+
+    // MARK: not worth building
+
+    func testNotWorthBuildingBelowTheBarUnrankedAtAndAboveIt() {
+        let bar = 88.0
+        func card(_ o: O, key: String = "gl", bar: Double? = bar) -> LeaguePanel.Card {
+            LeaguePanel.card(R(options: [o], worthBar: bar), shown: 0, key: key, level: 17)
+        }
+        // Below the bar: the rank is named.
+        let below = card(option("alakazam", score: 60.3, rank: 938, iv: iv, cost: cost))
+        XCTAssertEqual(below.notWorthText, "Not worth building for Great League: Alakazam ranks #938 of 1,152.")
+        XCTAssertTrue(LeaguePanel.spoken(below, key: "gl", chip: "Pick").contains("Not worth building for Great League: Alakazam ranks #938 of 1,152."))
+        XCTAssertEqual(card(option("alakazam", score: 63.8, rank: 800, iv: iv, cost: cost), key: "ul").notWorthText,
+                       "Not worth building for Ultra League: Alakazam ranks #800 of 1,152.")
+        // Unranked by PvPoke there.
+        XCTAssertEqual(card(option("kadabra", iv: iv, cost: cost), key: "ml").notWorthText, "Not worth building for Master League: PvPoke does not rank Kadabra there.")
+        // At or above the bar: no line (the advisor's rule is score >= bar).
+        XCTAssertNil(card(option("a", score: 88, iv: iv, cost: cost)).notWorthText)
+        XCTAssertNil(card(option("a", score: 91.8, iv: iv, cost: cost)).notWorthText)
+        XCTAssertNotNil(card(option("a", score: 87.99, iv: iv, cost: cost)).notWorthText)
+        // The bar is the report's, not a constant here: another bar moves the line, and no bar means no line.
+        XCTAssertNil(card(option("a", score: 60, iv: iv, cost: cost), bar: 50).notWorthText)
+        XCTAssertNil(card(option("a", score: 60, iv: iv, cost: cost), bar: nil).notWorthText)
+        // The line is about the member the card shows: with the IVs unread it still applies.
+        XCTAssertNotNil(card(option("alakazam", score: 60.3, rank: 938)).notWorthText)
+    }
+
+    func testNoViableCardsHaveNoNotWorthLine() {
+        let r = R(options: [option("moltres", score: 70, over: true, isSelf: true)], worthBar: 88)
+        let c = LeaguePanel.card(r, shown: 0, key: "gl", level: 20)
+        XCTAssertEqual(c.status, .noViable)
+        XCTAssertNil(c.notWorthText)
+        XCTAssertFalse(LeaguePanel.spoken(c, key: "gl", chip: "Pick").contains("Not worth"))
+    }
+
+    func testNotWorthFollowsTheShownMember() {
+        // Pogo Assist shows member 1 (below the bar); Classic shows member 0 (above it).
+        let r = R(options: [option("a", score: 90, iv: iv, cost: cost), option("b", score: 60, rank: 500, iv: iv, cost: cost)], pick: 0, experimental: 1, worthBar: 88)
+        XCTAssertNil(LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: false), key: "gl", level: 17).notWorthText)
+        XCTAssertEqual(LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: true), key: "gl", level: 17).notWorthText,
+                       "Not worth building for Great League: B ranks #500 of 1,152.")
+    }
 }

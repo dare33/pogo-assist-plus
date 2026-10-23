@@ -51,6 +51,8 @@ final class CsvAndAdviseTests: XCTestCase {
         XCTAssertNotNil(report["builds"]?.arrayValue)
         XCTAssertNotNil(report["gaps"]?.arrayValue)
         XCTAssertNotNil(report["hygiene"]?.arrayValue)
+        // The bundled core hands over the advisor's PvP bar (PVP_SCORE), which the Leagues card reads.
+        XCTAssertEqual(report["pvpScore"]?["gl"], .number(88)); XCTAssertEqual(report["pvpScore"]?["ml"], .number(88))
         XCTAssertFalse(try XCTUnwrap(report["builds"]?.arrayValue).isEmpty, "Lucario 3000 etc. should give builds")
     }
 

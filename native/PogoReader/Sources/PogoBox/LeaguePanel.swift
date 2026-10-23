@@ -72,6 +72,8 @@ public enum LeaguePanel {
         public var moves: [MoveChip]
         /// This copy's IV % as the headline member; nil when nothing fits or the IVs are not read (the IVs panel shows "—").
         public var ivPct: Double?
+        /// "Not worth building for Great League: Alakazam ranks #938 of 1,152." when the headline member is unranked or below the advisor's PvP bar.
+        public var notWorthText: String? = nil
     }
 
     /// "Gallade, if it is male".
@@ -136,6 +138,11 @@ public enum LeaguePanel {
             return "\(named) is the stronger species, but this copy is already over \(cap(key).map(grouped) ?? "") CP as \(s.name)."
         }
         let read = o.iv != nil
+        // The same bar the advisor uses (carried in the rating), so this card and the Advice panel never disagree.
+        var notWorth: String?
+        if let bar = r.worthBar, (o.strength?.score ?? -1) < bar {
+            notWorth = "Not worth building for \(name(key)): " + (o.strength.map { "\(o.name) ranks #\(grouped($0.rank)) of \(grouped($0.of))." } ?? "PvPoke does not rank \(o.name) there.")
+        }
         return Card(status: read ? .fits : .ivsNotRead, option: o, title: title(o), strongerOverCap: stronger, overCapCount: overCount, bestAvailableNote: note, blockedText: nil,
                     scoreText: o.strength.map { oneDecimal($0.score) } ?? "—",
                     rankText: o.strength.map { "#\(grouped($0.rank)) of \(grouped($0.of))" } ?? "",
@@ -144,7 +151,7 @@ public enum LeaguePanel {
                     ivStrong: (o.iv?.rank ?? Int.max) <= 500,
                     costItems: read && costNote(o, key: key, level: now) == nil ? costItems(o) : [],
                     costNote: read ? costNote(o, key: key, level: now) : (now == nil ? costNote(o, key: key, level: now) : nil),
-                    moves: moveChips(o), ivPct: o.iv?.pct)
+                    moves: moveChips(o), ivPct: o.iv?.pct, notWorthText: notWorth)
     }
 
     /// The spoken summary of a pick card, as one element.
@@ -163,6 +170,7 @@ public enum LeaguePanel {
                 return n == 0 ? text : text.lowercasedFirst
             }.joined(separator: ", ")) }
         }
+        if let n = c.notWorthText { parts.append(n) }
         if !c.moves.isEmpty { parts.append("Moves " + c.moves.map(\.text).joined(separator: ", ")) }
         return parts.joined(separator: ". ") + "."
     }

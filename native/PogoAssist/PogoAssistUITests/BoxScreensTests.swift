@@ -486,6 +486,10 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(ul.label.contains("This copy 96.2 percent, IV rank 1,766"), ul.label)
         XCTAssertTrue(ul.label.contains("Target level 40, target CP 2,500, 160,000 dust, 190 candy"), ul.label)
         XCTAssertTrue(ml.label.hasPrefix("Master League, no CP cap. Pick: "), ml.label)
+        // The pick is below the advisor's PvP bar (Scyther is #522 of 849 in Ultra League): the card says so, and the spoken card carries it.
+        XCTAssertTrue(ul.label.contains("Not worth building for Ultra League: Scyther ranks #522 of 849."), ul.label)
+        XCTAssertTrue(app.staticTexts["league-ul-not-worth"].exists, "the line is on the card")
+        XCTAssertFalse(gl.label.contains("Not worth building"), "a No viable option card does not carry it")
         XCTAssertTrue(app.staticTexts["Pogo Assist is currently unable to detect Shadow Pokémon."].exists, "a scan does not know the Shadow status")
         XCTAssertTrue(app.staticTexts["Removes this copy from the app's box only, not from the game."].exists)
     }

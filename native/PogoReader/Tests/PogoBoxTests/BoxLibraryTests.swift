@@ -188,10 +188,14 @@ final class BoxLibraryTests: XCTestCase {
                    "iv":null,"overCap":true,"cost":null}],
                 "pick":0,"experimental":1,"source":"emulated"},
           "ul":{"options":[{"speciesId":"mareanie","name":"Mareanie","self":true,"strength":null,"moves":null,"needs":null,"iv":null,"overCap":true,"cost":null}],
-                "pick":0,"experimental":0,"source":"ranked"}}}]}
+                "pick":0,"experimental":0,"source":"ranked"}}}],
+         "pvpScore":{"gl":88,"ul":87.5,"ml":88}}
         """
         let advice = BoxAdvice.make(from: try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)), entries: box)
         let l = advice.leagues(for: box[0].id)
+        // The advisor's PvP bar comes once in the report and lands on each league's rating (and survives the cache's encode and decode).
+        XCTAssertEqual(l["gl"]?.worthBar, 88); XCTAssertEqual(l["ul"]?.worthBar, 87.5)
+        XCTAssertEqual(try JSONDecoder().decode(BoxAdvice.self, from: JSONEncoder().encode(advice)).leagues(for: box[0].id)["ul"]?.worthBar, 87.5)
         // The accessors read the shown member.
         XCTAssertEqual(l["gl"]?.pick.name, "Toxapex")
         XCTAssertEqual(l["gl"]?.pick.isSelf, false)
@@ -205,7 +209,7 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
         XCTAssertEqual(advice.version, BoxAdvice.currentVersion)
-        XCTAssertEqual(BoxAdvice.currentVersion, 9)
+        XCTAssertEqual(BoxAdvice.currentVersion, 10)
 
         // The options list decodes in order; the experimental member is a different index.
         let gl = try XCTUnwrap(l["gl"])

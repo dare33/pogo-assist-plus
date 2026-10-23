@@ -143,6 +143,10 @@ struct LeaguesPanel: View {
                     Text(n).font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if let n = c.notWorthText {
+                Text(n).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("league-\(key)-not-worth")
+            }
             if !c.moves.isEmpty {
                 FlowLayout(spacing: 6) {
                     ForEach(Array(c.moves.enumerated()), id: \.offset) { _, m in
