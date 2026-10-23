@@ -241,7 +241,7 @@ enum PrefKey {
 enum Ranking: String, CaseIterable, Identifiable {
     case `default`, pogoAssist
     var id: String { rawValue }
-    var title: String { self == .default ? "Default" : "Pogo Assist" }
+    var title: String { self == .default ? "Classic" : "Pogo Assist" }
 }
 
 enum Appearance: String, CaseIterable, Identifiable {

@@ -35,7 +35,7 @@ final class RankingSwitchTests: XCTestCase {
         var app = launch(["-reset-ranking"])
         var control = app.descendants(matching: .any).matching(identifier: "ranking").firstMatch
         XCTAssertTrue(control.waitForExistence(timeout: 10))
-        XCTAssertEqual(control.value as? String, "Default", "the preference starts at Default")
+        XCTAssertEqual(control.value as? String, "Classic", "the preference starts at Classic")
 
         // A real tap on the right-hand segment.
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
@@ -44,21 +44,21 @@ final class RankingSwitchTests: XCTestCase {
         // A tap on the left-hand segment goes back. (XCUITest cannot drive the adjustable increment and decrement actions: a
         // swipe on the element is a plain swipe, not a VoiceOver adjustment.)
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap()
-        XCTAssertEqual(control.value as? String, "Default")
+        XCTAssertEqual(control.value as? String, "Classic")
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
         XCTAssertEqual(control.value as? String, "Pogo Assist")
 
         // The "i" opens and closes the explainer.
         let info = app.buttons["ranking-info"]
         XCTAssertTrue(info.exists)
-        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'weighs the species first'")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'starts from the strongest species'")).firstMatch.exists)
         info.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'weighs the species first'")).firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'starts from the strongest species'")).firstMatch.waitForExistence(timeout: 3))
         XCTAssertEqual(info.value as? String, "Expanded")
         shot("gallery-explainer-open")
         info.tap()
         let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"),
-            object: app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'weighs the species first'")).firstMatch)
+            object: app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'starts from the strongest species'")).firstMatch)
         XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 3), .completed, "the explainer closes")
 
         // It persisted: a relaunch without the reset still says Pogo Assist.

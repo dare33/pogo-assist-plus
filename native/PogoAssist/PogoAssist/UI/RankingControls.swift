@@ -92,7 +92,7 @@ struct SegmentedSwitch<Value: Hashable>: View {
             HStack(spacing: 8) {
                 if let dot = s.dot { Circle().fill(dot).frame(width: 8, height: 8).accessibilityHidden(true) }
                 Text(s.title).font(.figtree(metrics.fontSize, .bold, relativeTo: .subheadline))
-                    // Wrapped (very large text): shrink a title onto one line rather than break it mid-word ("Defau/lt").
+                    // Wrapped (very large text): shrink a title onto one line rather than break it mid-word ("Pogo Assi/st").
                     .lineLimit(1)
                     .minimumScaleFactor(singleLine ? 1 : 0.5)
                     .fixedSize(horizontal: singleLine, vertical: true)
@@ -156,7 +156,7 @@ struct InfoButton: View {
 
 // MARK: RankingSwitch
 
-/// RANKING, the Default | Pogo Assist switch (the one global preference) and the "i" that the caller's `infoOpen`
+/// RANKING, the Classic | Pogo Assist switch (the one global preference) and the "i" that the caller's `infoOpen`
 /// shows `RankingExplainer` for. It hugs its content (the caller places it). Where the row no longer fits (large text)
 /// the label goes above the switch and the "i", which stay together in one row.
 struct RankingSwitch: View {
@@ -212,16 +212,13 @@ struct RankingExplainer: View {
     @Environment(\.accent) private var accent
 
     var body: some View {
-        // P1 describes pokeGeniePick (iv.pct); P2 describes chooseMember (rankPct), both in src/leagues.js.
-        // "within 3 points" is CLOSE_SCORE in src/leagues.js and must change with it.
+        // Classic is pokeGeniePick (iv.pct); Pogo Assist is chooseMember (rankPct), both in src/leagues.js.
+        // "3 PvPoke points" is CLOSE_SCORE in src/leagues.js and must change with it.
         VStack(alignment: .leading, spacing: 8) {
-            Text("Default").bold().foregroundStyle(accent.ink)
-                + Text(" follows Poke Genie. From a Poke Genie export it uses that export's own pick. Otherwise, in Great and Ultra League, it takes the family member for which this copy's stat product is the highest share of the best possible under the CP cap, preferring members it is not already too strong for, then species PvPoke ranks. In Master League, or when the IVs are not known, it takes the strongest species.")
+            Text("Classic").bold().foregroundStyle(accent.ink)
+                + Text(" takes the family member this copy's IVs suit best under the CP cap. In Master League it takes the strongest species.")
             Text("Pogo Assist").bold().foregroundStyle(accent.ink)
-                + Text(" weighs the species first. It starts from the member with the best PvPoke score and moves to a weaker one only when that one is within 3 points of the best and this copy's IV rank (out of 4,096 combinations) is higher for it.")
-            // The switch is only placed where it is wired, from PR 2 on, so "everywhere" holds once it is.
-            Text("Both use PvPoke's rankings and this copy's IVs, so they often agree. The choice applies everywhere in the app.")
-                .foregroundStyle(Theme.muted)
+                + Text(" starts from the strongest species and moves to a weaker one only when it is within 3 PvPoke points and this copy's IVs rank higher for it.")
         }
         .font(.figtree(13, .medium, relativeTo: .footnote))
         .foregroundStyle(Theme.ink)
