@@ -344,6 +344,8 @@ final class BoxScreensTests: XCTestCase {
                 XCTAssertFalse(spare.contains("A spare copy"), "one message, not one line per target")
                 XCTAssertTrue(verdict.hasPrefix("One of ") && (verdict.contains("Keep it:") || verdict.contains("would transfer")), verdict)
                 XCTAssertFalse(verdict.contains("Keep this one"), "a spare is not told 'Keep this one' without a reason")
+                var swipes = 0
+                while !app.staticTexts["advice-verdict"].isHittable && swipes < 6 { app.swipeUp(); swipes += 1 }
                 shot("spare-advice")
                 let notes = app.buttons["how-it-was-read"]
                 if notes.exists {
