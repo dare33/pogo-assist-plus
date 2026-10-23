@@ -318,6 +318,31 @@ final class BoxScreensTests: XCTestCase {
         return b.exists ? b.value as? String : nil
     }
 
+    /// A league view open on the Normal form closes with its panel when the page goes to the Mega form (no Leagues there), the Advice panel is
+    /// on the Mega page, and Normal comes back to the base cards with the Advice panel.
+    func testMegaFormWithALeagueViewOpen() throws {
+        let app = saveMegaPair(["-appearance", "light"])
+        let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        let one = app.buttons.matching(identifier: "pokemon-row")
+        XCTAssertTrue(one.firstMatch.waitForExistence(timeout: 5)); one.firstMatch.tap()
+        XCTAssertTrue(app.buttons["form-mega"].waitForExistence(timeout: 5))
+        let pick = app.buttons["league-ul-pick"]
+        XCTAssertTrue(pick.waitForExistence(timeout: 20), "Blaziken has league ratings once the advice is ready")
+        let advice = app.staticTexts["ADVICE"]
+        XCTAssertTrue(advice.exists)
+        pick.tap()
+        XCTAssertTrue(app.buttons["leagues-back"].waitForExistence(timeout: 3))
+        XCTAssertFalse(advice.exists, "no Advice panel in the league view")
+        app.buttons["form-mega"].tap()
+        XCTAssertTrue(app.staticTexts["CP 3970"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["leagues-back"].exists, "no Leagues panel on the Mega form")
+        XCTAssertTrue(advice.waitForExistence(timeout: 3), "the Mega page keeps its Advice panel")
+        app.buttons["form-normal"].tap()
+        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 3), "Normal comes back to the base cards, not the stale league view")
+        XCTAssertTrue(advice.exists)
+    }
+
     /// The detail's Normal / Mega switch, the row marker, the one-entry count and the Settings choice that sets where the switch starts.
     func testMegaFormSwitchRowMarkerCountAndSettings() throws {
         let app = saveMegaPair(["-appearance", "light"])

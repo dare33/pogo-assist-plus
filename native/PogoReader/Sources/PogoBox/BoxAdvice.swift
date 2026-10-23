@@ -65,6 +65,8 @@ public struct BoxAdvice: Codable, Equatable {
             public init(league: String, bestLevel: Double) { self.league = league; self.bestLevel = bestLevel }
         }
         public var leavesLeague: [LeaguePast] = []
+        /// league key ("gl", "ul", "ml") -> the speciesId of the family member this build is rated as in that league (the target's own option in the leagues data).
+        public var leagueMembers: [String: String] = [:]
         /// "going past 27 leaves UL, going past 16 leaves GL", or nil when the climb leaves no league.
         public var leavesLeagueText: String? {
             leavesLeague.isEmpty ? nil : leavesLeague.map { "going past \(levelText($0.bestLevel)) leaves \($0.league)" }.joined(separator: ", ")
@@ -217,7 +219,7 @@ public struct BoxAdvice: Codable, Equatable {
         /// How the shown member was chosen: "export" (Poke Genie's own pick), "emulated" (its rule applied here), "ranked" (the highest PvPoke score: Master League, or IVs unknown), "fallback" (the PvPoke-score rule ran (Master League, or unknown IVs) but none of the members it may show is ranked here: either nothing in the family is ranked, or every ranked member is past the cap. The shown member is then the final evolution if it fits, else the first option that fits, which is an unranked one (a level-50 Bulbasaur with unknown IVs shows Ivysaur in Ultra League). If no member fits and nothing is ranked, the final evolution is shown even though it is over the cap. A copy with known IVs in Great or Ultra League and nothing ranked is still "emulated").
         public var source: String
         /// The PvPoke score a member needs for the advisor to build towards this league: `PVP_SCORE` in `src/leagues.js`, which the engine puts once in
-        /// the report (`pvpScore`) and `BoxAdvice.make` copies here. nil when the report did not say (no "not worth building" line then).
+        /// the report (`pvpScore`) and `BoxAdvice.make` copies onto every rating here. nil when the report did not say (no "not worth building" line then).
         public var worthBar: Double?
 
         private enum CodingKeys: String, CodingKey { case options, pickIndex = "pick", experimentalIndex = "experimental", source, worthBar }
@@ -290,8 +292,8 @@ public struct BoxAdvice: Codable, Equatable {
     /// 6 since a build carried `powerUpNeeded` and `secondMoveDue`; 7 since those became the list of `steps` (evolve, Mega, power up, second move,
     /// Elite TM, Community Day move, Dynamax copy), which the action is worded from; 8 since the power-up step is the climb the cost covers, builds carry
     /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone; 9 since every option PvPoke ranks carries its
-    /// `moves` (before, only the shown and experimental ones did); 10 since the report carries `pvpScore` (the advisor's PvP bar, which the Leagues card reads). Advice cached at 2 to 9 has the old shape or the old rules, so it is dropped and recomputed too.
-    public static let currentVersion = 10
+    /// `moves` (before, only the shown and experimental ones did); 10 since the report carries `pvpScore` (the advisor's PvP bar) and each build `leagueMembers`, which the Leagues card reads. Advice cached at 2 to 9 has the old shape or the old rules, so it is dropped and recomputed too.
+    public static let currentVersion = 11
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -363,7 +365,8 @@ public struct BoxAdvice: Codable, Equatable {
                               leavesLeague: (b["leavesLeague"]?.arrayValue ?? []).compactMap { v in
                                   guard case .string(let l)? = v["league"], case .number(let at)? = v["bestLevel"] else { return nil }
                                   return Build.LeaguePast(league: areaLabel[l] ?? l, bestLevel: at)
-                              })
+                              },
+                              leagueMembers: { if case .object(let m)? = b["leagueMembers"] { return m.compactMapValues { if case .string(let s) = $0 { return s } else { return nil } } } else { return [:] } }())
             out.builds.append(build)
             for s in spares { out.spareBuilds[s, default: []].append(build) }
         }

@@ -50,7 +50,7 @@ struct PokemonDetailView: View {
                         // Megas are not allowed in GO Battle League, so the section (and the IVs panel's PvP figures) wait while the page shows the Mega form.
                         if megaShown(e) == nil { leaguesPanel(e) }
                         // The league view is the page's focus: the Advice panel returns with the base cards.
-                        if leaguesMode == nil || megaShown(e) != nil { advicePanel(e) }
+                        if !leagueViewShowing(e) { advicePanel(e) }
                         factsPanel(e, mega: megaShown(e))
                         notesPanel(e, mega: megaShown(e))
                         VStack(spacing: 2) {
@@ -68,6 +68,8 @@ struct PokemonDetailView: View {
                     .padding(.top, 6)
                     .padding(.bottom, 24)
                 }
+                // The league view closes with its panel (no ratings while the advice recalculates, or the Mega form shown), so it never comes back stale.
+                .onChange(of: leaguesPanelShown(e)) { _, shown in if !shown { leaguesMode = nil } }
                 .sheet(isPresented: $fixing) { FixValueView(entry: e).environmentObject(model) }
             } else {
                 Text("This Pokémon is no longer in the box.").paText(.secondary).foregroundStyle(Theme.muted)
@@ -278,9 +280,23 @@ struct PokemonDetailView: View {
         if case .ready(let advice) = model.advice {
             let ratings = advice.leagues(for: e.id)
             if !ratings.isEmpty {
-                LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, mode: $leaguesMode)
+                // The builds the card's "worth building" line reads: the copy's own and those it is a spare for.
+                let a = advice.entries(for: e.id)
+                LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, builds: a.builds + a.spareFor, mode: $leaguesMode)
             }
         }
+    }
+
+    /// The Leagues panel is on the page: the advice is ready, this copy has ratings, and the page is not on the Mega form.
+    private func leaguesPanelShown(_ e: BoxEntry) -> Bool {
+        guard megaShown(e) == nil, case .ready(let advice) = model.advice else { return false }
+        return !advice.leagues(for: e.id).isEmpty
+    }
+
+    /// The panel is showing a league view (not its base cards): the Advice panel gives way to it.
+    private func leagueViewShowing(_ e: BoxEntry) -> Bool {
+        guard leaguesPanelShown(e), case .ready(let advice) = model.advice, let key = leaguesMode else { return false }
+        return advice.leagues(for: e.id)[key] != nil
     }
 
     // MARK: facts

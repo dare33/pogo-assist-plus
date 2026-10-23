@@ -214,11 +214,53 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertFalse(LeaguePanel.spoken(c, key: "gl", chip: "Pick").contains("Not worth"))
     }
 
-    func testNotWorthFollowsTheShownMember() {
-        // Pogo Assist shows member 1 (below the bar); Classic shows member 0 (above it).
-        let r = R(options: [option("a", score: 90, iv: iv, cost: cost), option("b", score: 60, rank: 500, iv: iv, cost: cost)], pick: 0, experimental: 1, worthBar: 88)
-        XCTAssertNil(LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: false), key: "gl", level: 17).notWorthText)
-        XCTAssertEqual(LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: true), key: "gl", level: 17).notWorthText,
-                       "Not worth building for Great League: B ranks #500 of 1,152.")
+    private func build(_ target: String, _ name: String, areas: [String], members: [String: String]) -> BoxAdvice.Build {
+        var b = BoxAdvice.Build(entryId: "e", title: "X", cp: 300, level: 20, ivs: nil, targetId: target, targetName: name, powerUp: false, formChange: false, viaMega: false,
+                                needsDynamax: false, spares: 0, areas: areas, tier: "B", targetLevel: nil, dust: 0, candy: 0, xl: 0, pvp: nil, score: 1, steps: [])
+        b.leagueMembers = members
+        return b
+    }
+
+    /// The three real fixture copies (greg-2026-09-25) where the shown pick is below the bar but a build of the copy covers the league:
+    /// the ids and names are the engine's own (test/advise.test.js pins them from `analyseBox`).
+    func testTheLineNamesTheSpeciesWorthBuildingWhenABuildCoversTheLeagueWithAnotherMember() {
+        // Squirtle, Great League: the shown Wartortle is 86.2 (below the bar), the advisor builds Blastoise (rank hit).
+        let squirtle = R(options: [option("blastoise", score: 89, rank: 40, over: true), option("wartortle", score: 86.2, rank: 90, iv: iv, cost: cost), option("squirtle")], pick: 1, worthBar: 88)
+        let toBlastoise = build("blastoise", "Blastoise", areas: ["Max", "GL", "UL", "Raids"], members: ["gl": "blastoise", "ul": "blastoise"])
+        XCTAssertEqual(LeaguePanel.card(squirtle, shown: 1, key: "gl", level: 17, builds: [toBlastoise]).notWorthText, "Blastoise is the one worth building for Great League.")
+        XCTAssertEqual(LeaguePanel.card(squirtle, shown: 1, key: "gl", level: 17).notWorthText, "Not worth building for Great League: Wartortle ranks #90 of 1,152.", "with no builds the score decides")
+        // Corsola (Galarian), Great League: the shown Cursola is 60, the build (a tier-table one, below the bar) is Corsola (Galarian).
+        let corsola = R(options: [option("corsola_galarian", score: 91.5, iv: iv, cost: cost, isSelf: true), option("cursola", score: 60, rank: 700, iv: iv, cost: cost)], pick: 1, worthBar: 88)
+        let toGalarian = build("corsola_galarian", "Corsola (Galarian)", areas: ["GL"], members: ["gl": "corsola_galarian"])
+        XCTAssertEqual(LeaguePanel.card(corsola, shown: 1, key: "gl", level: 17, builds: [toGalarian]).notWorthText, "Corsola (Galarian) is the one worth building for Great League.")
+        // Zygarde (10% Forme), Ultra League: the shown member is the 10% Forme (64.7), the build is Zygarde (Complete Forme).
+        let zygarde = R(options: [option("zygarde_complete", score: 92.9, iv: iv, cost: cost), option("zygarde_10", score: 64.7, rank: 600, iv: iv, cost: cost, isSelf: true)], pick: 1, worthBar: 88)
+        let toComplete = build("zygarde_complete", "Zygarde (Complete Forme)", areas: ["UL", "ML"], members: ["ul": "zygarde_complete", "ml": "zygarde_complete"])
+        XCTAssertEqual(LeaguePanel.card(zygarde, shown: 1, key: "ul", level: 17, builds: [toComplete]).notWorthText, "Zygarde (Complete Forme) is the one worth building for Ultra League.")
+    }
+
+    func testNoLineWhenABuildCoversTheLeagueWithTheShownMember() {
+        // The shown member is the build's own member in that league: nothing to say, even below the bar (a tier-table build).
+        let r = R(options: [option("corsola_galarian", score: 60, rank: 700, iv: iv, cost: cost, isSelf: true)], worthBar: 88)
+        let b = build("corsola_galarian", "Corsola (Galarian)", areas: ["GL"], members: ["gl": "corsola_galarian"])
+        XCTAssertNil(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: [b]).notWorthText)
+        // Any covering build with the shown member is enough, and a build without leagueMembers falls back to the target's name.
+        let other = build("blastoise", "Blastoise", areas: ["GL"], members: ["gl": "blastoise"])
+        XCTAssertNil(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: [other, b]).notWorthText)
+        let named = build("corsola", "Corsola", areas: ["GL"], members: [:])
+        let plain = R(options: [option("corsola", score: 60, iv: iv, cost: cost)], worthBar: 88)
+        XCTAssertNil(LeaguePanel.card(plain, shown: 0, key: "gl", level: 17, builds: [named]).notWorthText, "without leagueMembers the target's name is compared with the shown member's")
+        XCTAssertEqual(LeaguePanel.card(plain, shown: 0, key: "gl", level: 17, builds: [build("blastoise", "Blastoise", areas: ["GL"], members: [:])]).notWorthText,
+                       "Blastoise is the one worth building for Great League.")
+    }
+
+    func testABuildForAnotherLeagueDoesNotCoverThisOne() {
+        // Squirtle's Blastoise build covers GL and UL, not ML: Master League falls back to the score.
+        let r = R(options: [option("blastoise", score: 51.1, rank: 300, iv: iv, cost: cost)], worthBar: 88)
+        let b = build("blastoise", "Blastoise", areas: ["GL", "UL"], members: ["gl": "blastoise", "ul": "blastoise"])
+        XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "ml", level: 17, builds: [b]).notWorthText, "Not worth building for Master League: Blastoise ranks #300 of 1,152.")
+        // Above the bar with no covering build (a copy the advisor did not build for): no line.
+        let high = R(options: [option("lapras", score: 90.5, iv: iv, cost: cost)], worthBar: 88)
+        XCTAssertNil(LeaguePanel.card(high, shown: 0, key: "ul", level: 17, builds: []).notWorthText)
     }
 }

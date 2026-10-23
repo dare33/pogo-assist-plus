@@ -11,6 +11,8 @@ struct LeaguesPanel: View {
     let level: Double?
     /// "Pogo Assist is currently unable to detect Shadow Pokémon." while this copy's Shadow status is unknown.
     let showsShadowNote: Bool
+    /// This copy's Advice builds (its own and those it is a spare for): the card's "worth building" line reads which leagues they cover.
+    let builds: [BoxAdvice.Build]
 
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -106,7 +108,7 @@ struct LeaguesPanel: View {
     }
 
     private func card(_ key: String, _ r: BoxAdvice.LeagueRating) -> LeaguePanel.Card {
-        LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist), key: key, level: level)
+        LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist), key: key, level: level, builds: builds)
     }
 
     private func spoken(_ key: String, _ r: BoxAdvice.LeagueRating) -> String {
