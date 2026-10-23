@@ -53,6 +53,16 @@ final class CsvAndAdviseTests: XCTestCase {
         XCTAssertNotNil(report["hygiene"]?.arrayValue)
         // The bundled core hands over the advisor's PvP bar (PVP_SCORE), which the Leagues card reads.
         XCTAssertEqual(report["pvpScore"]?["gl"], .number(88)); XCTAssertEqual(report["pvpScore"]?["ml"], .number(88))
+        // Every league area of a build names the family member it is rated as there (the Leagues card compares it with the shown member).
+        var leagueAreas = 0
+        for b in report["builds"]?.arrayValue ?? [] {
+            for case .string(let area)? in b["areas"]?.arrayValue?.map({ Optional($0) }) ?? [] where ["gl", "ul", "ml"].contains(area) {
+                leagueAreas += 1
+                guard case .string(let member)? = b["leagueMembers"]?[area] else { return XCTFail("no leagueMembers.\(area) on a \(area) build") }
+                XCTAssertFalse(member.isEmpty)
+            }
+        }
+        XCTAssertGreaterThan(leagueAreas, 0, "the fixture box has league builds")
         XCTAssertFalse(try XCTUnwrap(report["builds"]?.arrayValue).isEmpty, "Lucario 3000 etc. should give builds")
     }
 
