@@ -216,7 +216,7 @@ struct RankingExplainer: View {
         // "3 PvPoke points" is CLOSE_SCORE in src/leagues.js and must change with it.
         VStack(alignment: .leading, spacing: 8) {
             Text("Classic").bold().foregroundStyle(accent.ink)
-                + Text(" takes the family member this copy's IVs suit best under the CP cap. In Master League it takes the strongest species.")
+                + Text(" takes the family member this copy's IVs suit best under the CP cap. In Master League, or when the IVs are not known, it takes the strongest species.")
             Text("Pogo Assist").bold().foregroundStyle(accent.ink)
                 + Text(" starts from the strongest species and moves to a weaker one only when it is within 3 PvPoke points and this copy's IVs rank higher for it.")
         }
