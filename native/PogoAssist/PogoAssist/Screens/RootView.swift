@@ -43,7 +43,7 @@ struct RootView: View {
         .environmentObject(model)
         .sheet(item: $model.sheet) { sheet in
             switch sheet {
-            case .settings: SettingsView().environmentObject(model)
+            case .settings: SettingsView().environmentObject(model).themeRoot()   // a sheet does not inherit the root's environment, so the accent reaches Settings only this way
             case .screenshots: ScreenshotImportSheet().environmentObject(model)
             case .diagnostics:
                 ContentView(onLoadSample: { partial in

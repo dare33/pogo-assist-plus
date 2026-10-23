@@ -100,7 +100,7 @@ struct HistoryScansView: View {
                 } footer: { Text("Share a scan's replay log and result to send them for diagnosis.") }
             }
         }
-        // Settings is a sheet, so the root's tint does not reach here.
+        // The Settings sheet carries the accent (RootView applies themeRoot to it).
         .tint(accent.solid)
         .navigationTitle("History and scans")
         .navigationBarTitleDisplayMode(.inline)
