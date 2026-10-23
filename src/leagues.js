@@ -53,9 +53,9 @@ const sexOf = (gender) => (gender === '♀' ? 'female' : gender === '♂' ? 'mal
 
 // PROVISIONAL default (Greg, 20 Oct 2026): the same for every league, in PvPoke score points.
 export const CLOSE_SCORE = 3.0;
-// PvPoke overall score at or above which a species counts as PvP-relevant. The advisor builds towards a league only above this bar
-// (it imports it from here), and the app reads it from the advice report (`pvpScore`, once per report rather than once per league
-// rating) for the Leagues card's "not worth building" line, so the card and the Advice panel never disagree.
+// PvPoke overall score at or above which a species counts as PvP-relevant even if no tier table names it; below it the advisor adds a
+// league area only for a species a tier table names. The app reads it from the advice report (`pvpScore`, once per report) for the
+// Leagues card's "not worth building" line, which it shows only for a league none of the copy's builds covers.
 export const PVP_SCORE = { gl: 88, ul: 88, ml: 88 };
 
 /**

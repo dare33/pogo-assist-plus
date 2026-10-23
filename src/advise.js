@@ -264,6 +264,8 @@ export function analyseBox(box, ctx) {
         pokemon: p, speciesId: r.speciesId, targetId, targetName: gm.byId.get(targetId)?.speciesName ?? targetId,
         areas: [...areas.keys()], bestTier, value: Math.round(value * 100) / 100, hits: ths, path, evoCandy, formChange, viaMega, needsDynamax,
         level, targetLevel, costAreas, steps, leavesLeague,
+        // The family member each league area of this build is rated as (the option `optionOf` found), which the Leagues card compares with the member it shows.
+        leagueMembers: Object.fromEntries(pvpAreas.map((a) => [a, optionOf(a)?.speciesId]).filter(([, id]) => id)),
         cost: { ...cost, dust: totalDust, candy: totalCandy, secondMove }, pvpCost, moveFlags: mf,
         effort: Math.round(effort * 100) / 100, score: Math.round((value ** 1.5 * ivQ) / Math.max(0.3, effort) ** 0.6 * 100) / 100,
       });

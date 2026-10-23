@@ -46,7 +46,7 @@ test('adviseJSON: 2,000 entries come back at 6.6 MB or less (6.7 MB before the s
   const r = JSON.parse(text);
   assert.equal(r.pokemon.length, 2000);
   const pokemonBytes = JSON.stringify(r.pokemon).length;
-  // ~2.2 KB of leagues per entry (the shown pick plus all members' own ratings, moves only on the shown and experimental ones) is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
+  // ~2.2 KB of leagues per entry (every member's own rating, with moves on each member PvPoke ranks) is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
   assert.ok(pokemonBytes < 4.6e6, `pokemon ${(pokemonBytes / 1e6).toFixed(2)} MB`);
   assert.ok(text.length < 6.6e6, `${(text.length / 1e6).toFixed(2)} MB`);
 });
