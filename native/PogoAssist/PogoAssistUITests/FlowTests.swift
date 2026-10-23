@@ -63,7 +63,9 @@ final class FlowTests: XCTestCase {
         for _ in 0..<6 where !(historyRow.exists && historyRow.isHittable) { app.swipeUp() }
         XCTAssertTrue(historyRow.waitForExistence(timeout: 5))
         historyRow.tap()
-        app.buttons["history-tab-scans"].tap()
+        let scansTab = app.buttons["history-tab-scans"]
+        XCTAssertTrue(scansTab.waitForExistence(timeout: 5))
+        scansTab.tap()
         let actions = app.buttons["Scan actions"]
         XCTAssertTrue(actions.waitForExistence(timeout: 5))
         shot("15-settings-scans")
@@ -230,7 +232,7 @@ final class FlowTests: XCTestCase {
     func testHistoryAndScansScreen() throws {
         for appearance in ["light", "dark"] {
             let app = XCUIApplication()
-            app.launchArguments = ["-uitest-reset", "-appearance", appearance]
+            app.launchArguments = ["-uitest-reset", "-appearance", appearance, "-accent", "berry"]
             app.launch()
             let field = app.textFields["Trainer name"]
             XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -256,7 +258,7 @@ final class FlowTests: XCTestCase {
             settings.tap()
             if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
             XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), "Settings did not open")
-            XCTAssertFalse(app.staticTexts["History"].exists, "no inline History section any more")
+            XCTAssertFalse(app.staticTexts["Every scan and every correction is kept as a version. Swipe a version to restore it; the current box stays in the history."].exists, "no inline History section any more")
             let row = app.buttons["settings-history-row"]
             for _ in 0..<6 where !(row.exists && row.isHittable) { app.swipeUp() }
             XCTAssertTrue(row.waitForExistence(timeout: 5))
@@ -269,11 +271,11 @@ final class FlowTests: XCTestCase {
             XCTAssertTrue(month.waitForExistence(timeout: 5))
             XCTAssertFalse(month.label.contains("All"), "the latest month is the default: \(month.label)")
             month.tap()
-            // Two buttons are labelled "All" (the second sits at the screen's left edge, by its frame); the menu item is the first.
-            let all = app.buttons.matching(NSPredicate(format: "label == 'All'"))
-            XCTAssertTrue(all.firstMatch.waitForExistence(timeout: 5))
+            // By identifier: the back button also carries the word "All".
+            let all = app.buttons["history-month-all"]
+            XCTAssertTrue(all.waitForExistence(timeout: 5))
             shot("history-\(appearance)-month-menu")
-            all.element(boundBy: 0).tap()
+            all.tap()
             expectation(for: NSPredicate(format: "label CONTAINS 'All'"), evaluatedWith: month)
             waitForExpectations(timeout: 5)
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Version '")).firstMatch.exists)

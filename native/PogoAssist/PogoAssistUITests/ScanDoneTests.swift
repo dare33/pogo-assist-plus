@@ -190,7 +190,9 @@ final class ScanDoneTests: XCTestCase {
         for _ in 0..<6 where !(historyRow.exists && historyRow.isHittable) { app.swipeUp() }
         XCTAssertTrue(historyRow.waitForExistence(timeout: 5))
         historyRow.tap()
-        app.buttons["history-tab-scans"].tap()
+        let scansTab = app.buttons["history-tab-scans"]
+        XCTAssertTrue(scansTab.waitForExistence(timeout: 5))
+        scansTab.tap()
         let actions = app.buttons["Scan actions"]
         XCTAssertTrue(actions.waitForExistence(timeout: 5))
         actions.tap()

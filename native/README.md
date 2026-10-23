@@ -503,7 +503,7 @@ none is deleted; Settings restores any of them (as a new version). The replay lo
   digits are a subsequence of a saved same-species CP (182 in 1982) with the same HP (or HP unread) is Unsure with those saved
   Pokemon as candidates. The answers are "It is this one" (only marks it seen; the part-read values are not copied over), "It is new"
   and "Leave it out of the box". Leave it out is available for every unsure row.
-- Delete one Pokemon (swipe, with a confirmation) and Settings > Scans (date, kind, Pokemon read, with a share button for the scan's
+- Delete one Pokemon (swipe, with a confirmation) and Settings > History and scans > Scans (date, kind, Pokemon read, with a share button for the scan's
   `replay.jsonl` and result JSON). "Fix a value" re-runs the JavaScript solver for the Pokemon (`LevelSolve`, the way `Refine` solves
   a hidden-CP row) so level and dust follow the corrected values; when no level fits it keeps the edit, adds `no-level-fits` and says so.
 - Diagnostics has "Load partial-read sample" (one Staraptor read as CP 182) to drive the unsure card in the simulator.
@@ -769,7 +769,7 @@ What this was tested on, and what it was not: the owner's two screenshots (19 / 
   checks otherwise; `form-ambiguous` and `level-ambiguous` are always notes; everything else, including a flag nobody has seen yet, is a check.
   Notes show on the Pokemon's detail under "How it was read". On the owner's 313-Pokemon scan (`run8-tap-300`) 72 rows were flagged and 9 remain
   in "To check". "These values are right" clears the check flags and leaves the notes.
-- Settings > Scans > "Read again with the latest rules" runs the pipeline on a scan's stored `replay.jsonl` with its stored kind and paging hint and
+- Settings > History and scans > Scans > "Read again with the latest rules" runs the pipeline on a scan's stored `replay.jsonl` with its stored kind and paging hint and
   opens the normal review screen against the box as it was before that scan was first saved (`BoxLibrary.prepareReread`: the version before the
   lowest version that names the scan). Save adds one box version (earlier box plus the new read) and records `lastReread` on the scan; the scan's
   stored result is not rewritten. Scans and corrections saved after it are not re-applied (the screen says so; their versions stay in the history).
@@ -946,7 +946,7 @@ Two entry points, one importer. **In the app:** More > Import screenshots > Choo
 
 A local notification (below, "Scan stopped") is posted by the app's own broadcast extension on the phone and sends nothing anywhere.
 
-Screenshots chosen or shared for import are copied into the app group on the phone, read there, and deleted after the save; they are never uploaded. Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > Scans) and then Send. There is no analytics,
+Screenshots chosen or shared for import are copied into the app group on the phone, read there, and deleted after the save; they are never uploaded. Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > History and scans > Scans) and then Send. There is no analytics,
 no background upload and no retry. One tap sends one file, `yyyy-mm/yyyymmddThhmmssZ-<random id>.json.gz`, to a private storage bucket
 (`scan-reports`, write-only for the app: it can add a file, never read, list or overwrite one). The file is a gzip of one JSON document with these
 keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone17,2, system version, screen size in points, language);

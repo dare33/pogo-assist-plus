@@ -82,7 +82,7 @@ struct SettingsView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: { Text("The box, its history and its saved scans move to the new name.") }
-            .onAppear { model.loadScans(); renameProblem = nil }
+            .onAppear { renameProblem = nil }
             .confirmationDialog("Restore the previous box?", isPresented: $confirmPrevious, titleVisibility: .visible) {
                 Button("Restore previous box") { Task { await model.restorePrevious() } }
             } message: { Text("The box as it is now stays in the history, so you can come back to it.") }

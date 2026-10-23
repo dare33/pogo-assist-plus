@@ -9,6 +9,7 @@ struct HistoryScansView: View {
     enum Choice: Hashable { case all, month(MonthKey) }
 
     @EnvironmentObject var model: AppModel
+    @Environment(\.accent) private var accent
     @State private var tab: Tab = .history
     @State private var chosen: [Tab: Choice] = [:]
     @State private var shareURLs: [URL] = []
@@ -27,6 +28,10 @@ struct HistoryScansView: View {
         return months.first.map { .month($0) } ?? .all
     }
     private var monthFilter: MonthKey? { if case .month(let m) = choice { return m } else { return nil } }
+
+    private func dropStalePicks() {
+        for (t, c) in chosen { if case .month(let m) = c, !(t == .history ? historyMonths : scanMonths).contains(m) { chosen[t] = nil } }
+    }
 
     private var choiceBinding: Binding<Choice> { Binding(get: { choice }, set: { chosen[tab] = $0 }) }
 
@@ -68,7 +73,7 @@ struct HistoryScansView: View {
                            .init(value: Tab.scans, title: "Scans", identifier: "history-tab-scans")],
                 selection: $tab, label: "History or scans", identifier: "history-tabs")
             Picker("Month", selection: choiceBinding) {
-                Text("All").tag(Choice.all)
+                Text("All").tag(Choice.all).accessibilityIdentifier("history-month-all")
                 ForEach(months, id: \.self) { Text($0.title()).tag(Choice.month($0)) }
             }
             .pickerStyle(.menu)
@@ -95,11 +100,16 @@ struct HistoryScansView: View {
                 } footer: { Text("Share a scan's replay log and result to send them for diagnosis.") }
             }
         }
+        // Settings is a sheet, so the root's tint does not reach here.
+        .tint(accent.solid)
         .navigationTitle("History and scans")
         .navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden)
         .background(Theme.bg.ignoresSafeArea())
         .onAppear { model.loadScans() }
+        // A pick whose month has gone (its last entry removed) is dropped, so it cannot come back if that month fills again later.
+        .onChange(of: historyMonths) { _, _ in dropStalePicks() }
+        .onChange(of: scanMonths) { _, _ in dropStalePicks() }
         // Presented from here: Settings is itself a sheet, and this screen is pushed inside it.
         .sheet(item: $model.reportTarget) { MakeScansBetterSheet(target: $0).environmentObject(model) }
         .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = [] } })) {
