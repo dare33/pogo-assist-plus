@@ -555,12 +555,12 @@ final class BoxScreensTests: XCTestCase {
         sleep(1); shot("ax1-option-list")
     }
 
-    /// Makes sure the ranking switch (a persisted preference) starts on Default.
+    /// Makes sure the ranking switch (a persisted preference) starts on Classic.
     private func resetRanking(_ app: XCUIApplication) {
         let control = app.descendants(matching: .any)["leagues-scoring"]
         XCTAssertTrue(control.waitForExistence(timeout: 10))
-        if control.value as? String != "Default" { control.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap() }
-        XCTAssertEqual(control.value as? String, "Default")
+        if control.value as? String != "Classic" { control.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap() }
+        XCTAssertEqual(control.value as? String, "Classic")
     }
 
     /// Base cards, then a card opens the league view, Show more lists the other members, and a row opens.
@@ -597,7 +597,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["league-gl-pick"].waitForExistence(timeout: 3), "back returns to the three cards")
     }
 
-    /// The ranking switch changes the pick, not only the chip: the sample Scyther's Ultra League pick is Scyther itself under Default and
+    /// The ranking switch changes the pick, not only the chip: the sample Scyther's Ultra League pick is Scyther itself under Classic and
     /// Scizor under Pogo Assist (the engine's `pick` and `experimental` differ), and the IVs panel's Ultra figure follows.
     func testRankingSwitchChangesThePick() throws {
         let app = XCUIApplication()
@@ -612,7 +612,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(ul.label.contains("Pick: Scyther."), ul.label)
         XCTAssertFalse(ul.label.contains("Pogo Assist pick"))
         let figure = app.descendants(matching: .any)["iv-figure-ul"]
-        XCTAssertEqual(figure.value as? String, "96.2 percent", "the Ultra figure is Scyther's IV % under Default")
+        XCTAssertEqual(figure.value as? String, "96.2 percent", "the Ultra figure is Scyther's IV % under Classic")
         let control = app.descendants(matching: .any)["leagues-scoring"]
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
         XCTAssertEqual(control.value as? String, "Pogo Assist")
@@ -623,11 +623,11 @@ final class BoxScreensTests: XCTestCase {
         info.tap()
         let explainer = app.descendants(matching: .any)["leagues-scoring-explainer"]
         XCTAssertTrue(explainer.waitForExistence(timeout: 3), "the explainer opens under the header")
-        XCTAssertTrue(explainer.label.contains("weighs the species first"), explainer.label)
+        XCTAssertTrue(explainer.label.contains("starts from the strongest species"), explainer.label)
         resetRanking(app)
         XCTAssertTrue(ul.label.contains("Pick: Scyther."))
         XCTAssertEqual(figure.value as? String, "96.2 percent")
-        // The option rows carry the species id: under Default the other Ultra League members are Scizor and Kleavor.
+        // The option rows carry the species id: under Classic the other Ultra League members are Scizor and Kleavor.
         ul.tap()
         app.buttons["league-ul-more"].tap()
         let row = app.buttons["league-ul-option-scizor"]
