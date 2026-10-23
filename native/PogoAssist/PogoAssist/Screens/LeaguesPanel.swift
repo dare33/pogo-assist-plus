@@ -105,7 +105,7 @@ struct LeaguesPanel: View {
                 .accessibilityLabel(spoken(key, c))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("league-\(key)-pick")
-                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, c.worth, $0) }
+                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, c, $0) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("league-\(key)")
@@ -137,7 +137,7 @@ struct LeaguesPanel: View {
             }
             .padding(.trailing, tappable ? 22 : 0)
             if let w = c.worth, worthOpen.contains(key) {
-                Text(LeaguePanel.worthSentence(w, key: key, transfers: transfers)).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
+                Text(LeaguePanel.worthSentence(w, key: key, transfers: transfers, target: c.worthTarget)).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("league-\(key)-worth-text")
             }
@@ -184,7 +184,8 @@ struct LeaguesPanel: View {
 
     /// The tap target over the chip (at least 44 pt square): opens or closes the one line the tag explains. Its accessibility value carries that
     /// line while it is open.
-    private func worthLayer(_ key: String, _ w: LeaguePanel.Worth?, _ anchor: Anchor<CGRect>?) -> some View {
+    private func worthLayer(_ key: String, _ c: LeaguePanel.Card, _ anchor: Anchor<CGRect>?) -> some View {
+        let w = c.worth
         return GeometryReader { geo in
             if let anchor, let w {
                 let rect = geo[anchor], open = worthOpen.contains(key)
@@ -193,7 +194,7 @@ struct LeaguesPanel: View {
                     .frame(width: max(rect.width, 44), height: max(rect.height, 44))
                     .position(x: rect.midX, y: rect.midY)
                     .accessibilityLabel("\(w.label) for \(LeaguePanel.name(key))")
-                    .accessibilityValue(open ? LeaguePanel.worthSentence(w, key: key, transfers: transfers) : "Collapsed")
+                    .accessibilityValue(open ? LeaguePanel.worthSentence(w, key: key, transfers: transfers, target: c.worthTarget) : "Collapsed")
                     .accessibilityIdentifier("league-\(key)-worth")
             }
         }
@@ -254,7 +255,7 @@ struct LeaguesPanel: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(spoken(key, c))
                 .accessibilityIdentifier("league-\(key)-pick")
-                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, c.worth, $0) }
+                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, c, $0) }
             if !rows.isEmpty { optionList(key, rows) }
         }
         .accessibilityElement(children: .contain)

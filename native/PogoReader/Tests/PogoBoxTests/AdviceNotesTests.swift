@@ -17,14 +17,14 @@ final class AdviceNotesTests: XCTestCase {
 
     func testSpareSentenceJoinsOneTwoAndThreeTargets() {
         func spare(_ targets: [String]) -> String? { BoxAdvice.adviceNotes(entry(spareFor: targets.map { build("x", $0) }, id: "me"), name: "Eevee").spare }
-        XCTAssertEqual(spare(["Umbreon"]), "No build for this copy: you already have a better Eevee planned for Umbreon.")
-        XCTAssertEqual(spare(["Umbreon", "Vaporeon"]), "No build for this copy: you already have a better Eevee planned for Umbreon and Vaporeon.")
-        XCTAssertEqual(spare(["Umbreon", "Vaporeon", "Glaceon"]), "No build for this copy: you already have a better Eevee planned for Umbreon, Vaporeon and Glaceon.")
-        XCTAssertEqual(spare(["Umbreon", "Umbreon"]), "No build for this copy: you already have a better Eevee planned for Umbreon.", "a target named twice is named once")
+        XCTAssertEqual(spare(["Umbreon"]), "No build for this copy: you already have another Eevee planned for Umbreon.")
+        XCTAssertEqual(spare(["Umbreon", "Vaporeon"]), "No build for this copy: you already have another Eevee planned for Umbreon and Vaporeon.")
+        XCTAssertEqual(spare(["Umbreon", "Vaporeon", "Glaceon"]), "No build for this copy: you already have another Eevee planned for Umbreon, Vaporeon and Glaceon.")
+        XCTAssertEqual(spare(["Umbreon", "Umbreon"]), "No build for this copy: you already have another Eevee planned for Umbreon.", "a target named twice is named once")
         // A target that is the Pokémon itself (a power-up) is not named.
-        XCTAssertEqual(BoxAdvice.adviceNotes(entry(spareFor: [build("x", "Moltres")], id: "me"), name: "Moltres").spare, "No build for this copy: you already have a better Moltres planned.")
+        XCTAssertEqual(BoxAdvice.adviceNotes(entry(spareFor: [build("x", "Moltres")], id: "me"), name: "Moltres").spare, "No build for this copy: you already have another Moltres planned.")
         XCTAssertEqual(BoxAdvice.adviceNotes(entry(spareFor: [build("x", "Moltres"), build("x", "Umbreon")], id: "me"), name: "Moltres").spare,
-                       "No build for this copy: you already have a better Moltres planned for Umbreon.")
+                       "No build for this copy: you already have another Moltres planned for Umbreon.")
         XCTAssertNil(spare([]))
     }
 
@@ -53,8 +53,16 @@ final class AdviceNotesTests: XCTestCase {
         // Unknown IVs: it won on CP.
         XCTAssertEqual(verdict(dup(keep: ["CP 3000, IVs unknown"], transfer: ["CP 2500, IVs unknown"], keepIds: ["me"])),
                        "One of 65 Eevee in your box. **Keep it:** it is your strongest of the 65.")
-        // A tie on IVs is decided by CP.
+        // A tie on IVs goes to CP in the rule, but a transferred copy may have the higher CP: it still reads "best IVs", never "strongest".
         XCTAssertEqual(verdict(dup(keep: ["CP 2000, 15/15/15"], transfer: ["CP 1000, 15/15/15"], keepIds: ["me"])),
+                       "One of 65 Eevee in your box. **Keep it:** it has your best IVs of the 65.")
+        XCTAssertEqual(verdict(dup(keep: ["CP 1000, 15/15/15"], transfer: ["CP 3000, 15/15/15"], keepIds: ["me"])),
+                       "One of 65 Eevee in your box. **Keep it:** it has your best IVs of the 65.")
+        // A transferred copy with the higher CP and lower IVs: the kept one still has the best IVs.
+        XCTAssertEqual(verdict(dup(keep: ["CP 1000, 15/15/15"], transfer: ["CP 3000, 10/10/10"], keepIds: ["me"])),
+                       "One of 65 Eevee in your box. **Keep it:** it has your best IVs of the 65.")
+        // Unknown IVs on the kept copy: it can only be the strongest.
+        XCTAssertEqual(verdict(dup(keep: ["CP 1000, IVs unknown"], transfer: ["CP 500, IVs unknown"], keepIds: ["me"])),
                        "One of 65 Eevee in your box. **Keep it:** it is your strongest of the 65.")
         // Two kept, won on CP.
         XCTAssertEqual(verdict(dup(keep: ["CP 2000, IVs unknown", "CP 1900, IVs unknown"], transfer: ["CP 100, IVs unknown"], keepIds: ["me", "you"])),

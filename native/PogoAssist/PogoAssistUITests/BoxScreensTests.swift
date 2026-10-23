@@ -304,10 +304,17 @@ final class BoxScreensTests: XCTestCase {
         return app
     }
 
+    /// True once the element can be tapped (it exists and is not covered or mid-transition).
+    private func waitHittable(_ el: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: el)], timeout: timeout) == .completed
+    }
+
     private func openBlaziken(_ app: XCUIApplication) {
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); XCTAssertTrue(waitHittable(row), "the Blaziken row is tappable"); row.tap()
         let one = app.buttons.matching(identifier: "pokemon-row").firstMatch
+        // A tap during a screen transition can reach nothing: if the list has not appeared and the species row is still there, tap it once more.
+        if !one.waitForExistence(timeout: 3), row.exists { row.tap() }
         XCTAssertTrue(one.waitForExistence(timeout: 5)); one.tap()
         XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
         sleep(1)
@@ -347,7 +354,7 @@ final class BoxScreensTests: XCTestCase {
                 scrollToVerdictArea(); shot("with-builds")
             } else if app.staticTexts["advice-spare"].exists {
                 sawSpare = true
-                XCTAssertEqual(app.staticTexts["advice-spare"].label, "No build for this copy: you already have a better Moltres planned.")
+                XCTAssertEqual(app.staticTexts["advice-spare"].label, "No build for this copy: you already have another Moltres planned.")
                 let verdict = app.staticTexts["advice-verdict"].label
                 XCTAssertTrue([
                     "One of 6 Moltres in your box. Keep it: it has one of your two best IV sets of the 6.",
@@ -432,10 +439,15 @@ final class BoxScreensTests: XCTestCase {
         shot("mega-light-04-detail-mega")
         app.swipeUp()
         shot("mega-light-05-detail-mega-lower")
-        app.buttons["Back"].tap(); app.buttons["Back"].tap()
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5), "back to the species list before the second Back")
+        app.buttons["Back"].tap()
 
         // Settings > Mega Pokémon sets where the switch starts.
-        app.buttons["More"].tap()
+        let more = app.buttons["More"]
+        XCTAssertTrue(more.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitHittable(more), "More is tappable")
+        more.tap()
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()

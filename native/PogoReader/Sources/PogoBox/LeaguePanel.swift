@@ -74,6 +74,8 @@ public enum LeaguePanel {
         public var ivPct: Double?
         /// The tag on the card: nil on a "No viable option" card.
         public var worth: Worth? = nil
+        /// For a Strong tag whose build is for another member than the one shown (the Wartortle card, the Blastoise build): that build's target.
+        public var worthTarget: String? = nil
     }
 
     // MARK: the worth tag
@@ -88,6 +90,15 @@ public enum LeaguePanel {
     /// The PvPoke score from which a member that no build covers still reads OK. A display threshold of this screen, not the advisor's bar.
     public static let okScore = 80.0
 
+    /// The target of the covering build when none of the covering builds is for the shown member (names compared without a "(Shadow)" suffix).
+    public static func worthTarget(_ o: BoxAdvice.LeagueRating.Option, key: String, builds: [BoxAdvice.Build]) -> String? {
+        let label = BoxAdvice.areaLabel[key] ?? key
+        func plain(_ s: String) -> String { s.replacingOccurrences(of: " (Shadow)", with: "") }
+        let covering = builds.filter { $0.areas.contains(label) }
+        guard let first = covering.first, !covering.contains(where: { plain($0.targetName) == plain(o.name) }) else { return nil }
+        return first.targetName
+    }
+
     public static func worth(_ o: BoxAdvice.LeagueRating.Option, key: String, builds: [BoxAdvice.Build]) -> Worth {
         let label = BoxAdvice.areaLabel[key] ?? key
         if builds.contains(where: { $0.areas.contains(label) }) { return .strong }
@@ -97,9 +108,9 @@ public enum LeaguePanel {
     /// The line a tap on the tag opens.
     /// "Better kept for trading or transferring" is only said when the Advice panel says the same: the copy has no build and hygiene would transfer it
     /// (`transfers`); a Weak tag under other advice says only that it is not a strong pick.
-    public static func worthSentence(_ w: Worth, key: String, transfers: Bool = false) -> String {
+    public static func worthSentence(_ w: Worth, key: String, transfers: Bool = false, target: String? = nil) -> String {
         switch w {
-        case .strong: return "Worth building for \(name(key))."
+        case .strong: return target.map { "Worth building for \(name(key)) as \($0)." } ?? "Worth building for \(name(key))."
         case .ok: return "A solid choice for \(name(key)), though stronger options exist."
         case .weak: return transfers ? "Better kept for trading or transferring than for \(name(key))." : "Not a strong pick for \(name(key))."
         }
@@ -176,7 +187,7 @@ public enum LeaguePanel {
                     ivStrong: (o.iv?.rank ?? Int.max) <= 500,
                     costItems: read && costNote(o, key: key, level: now) == nil ? costItems(o) : [],
                     costNote: read ? costNote(o, key: key, level: now) : (now == nil ? costNote(o, key: key, level: now) : nil),
-                    moves: moveChips(o), ivPct: o.iv?.pct, worth: worth(o, key: key, builds: builds))
+                    moves: moveChips(o), ivPct: o.iv?.pct, worth: worth(o, key: key, builds: builds), worthTarget: worthTarget(o, key: key, builds: builds))
     }
 
     /// The spoken summary of a pick card, as one element.

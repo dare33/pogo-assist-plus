@@ -233,4 +233,21 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: own).worth, .weak)
         XCTAssertEqual(LeaguePanel.card(r, shown: 0, key: "gl", level: 17, builds: advice.entries(for: "e").builds).worth, .strong, "the copy that carries the build is Strong")
     }
+
+    func testAStrongTagNamesTheBuildTargetWhenItIsNotTheShownMember() {
+        func b(_ name: String, areas: [String]) -> BoxAdvice.Build { var x = build(areas: areas); x.targetName = name; return x }
+        // Wartortle card, Blastoise build.
+        let squirtle = R(options: [option("wartortle", score: 86.2, rank: 90, iv: iv, cost: cost)])
+        let c = LeaguePanel.card(squirtle, shown: 0, key: "gl", level: 17, builds: [b("Blastoise", areas: ["GL"])])
+        XCTAssertEqual(c.worth, .strong); XCTAssertEqual(c.worthTarget, "Blastoise")
+        XCTAssertEqual(LeaguePanel.worthSentence(.strong, key: "gl", target: c.worthTarget), "Worth building for Great League as Blastoise.")
+        // The shown member is the build's target (also with a Shadow suffix): no "as".
+        let same = LeaguePanel.card(R(options: [option("blastoise", score: 89, rank: 40, iv: iv, cost: cost)]), shown: 0, key: "gl", level: 17, builds: [b("Blastoise", areas: ["GL"])])
+        XCTAssertNil(same.worthTarget)
+        XCTAssertEqual(LeaguePanel.worthSentence(.strong, key: "gl", target: same.worthTarget), "Worth building for Great League.")
+        XCTAssertNil(LeaguePanel.card(R(options: [option("blastoise", score: 89, rank: 40, iv: iv, cost: cost)]), shown: 0, key: "gl", level: 17, builds: [b("Blastoise (Shadow)", areas: ["GL"])]).worthTarget)
+        // Any covering build for the shown member is enough; a build for another league names nothing.
+        XCTAssertNil(LeaguePanel.card(squirtle, shown: 0, key: "gl", level: 17, builds: [b("Blastoise", areas: ["GL"]), b("Wartortle", areas: ["GL"])]).worthTarget)
+        XCTAssertNil(LeaguePanel.card(squirtle, shown: 0, key: "ul", level: 17, builds: [b("Blastoise", areas: ["GL"])]).worthTarget)
+    }
 }

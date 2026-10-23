@@ -335,6 +335,11 @@ final class BoxLibraryTests: XCTestCase {
         // A build read without the engine's steps falls back to the plain wording (never "Already built").
         XCTAssertEqual(build(nil).action, "Power up")
         XCTAssertEqual(build(powerUp: false, nil).action, "Evolve to Y")
+        // The duplicate verdict is only for a copy with no build of its own, as on the Pokémon page.
+        let dupe = BoxAdvice.Duplicate(name: "Eevee", count: 2, keep: ["CP 1, 15/15/15"], transfer: ["CP 2, 1/1/1"], keepIds: ["a"], transferIds: ["b"])
+        XCTAssertEqual(BoxExport.adviceText(.init(builds: [], spareFor: [], duplicateOf: dupe, keep: false)), "duplicate of Eevee, transfer")
+        XCTAssertFalse(BoxExport.adviceText(.init(builds: [build([])], spareFor: [], duplicateOf: dupe, keep: false)).contains("transfer"), "no transfer verdict under the copy's own build")
+        XCTAssertFalse(BoxExport.adviceText(.init(builds: [build([])], spareFor: [], duplicateOf: dupe, keep: true)).contains("duplicate of"))
         // The export never words a spare as an action.
         let spare = BoxExport.adviceText(.init(builds: [], spareFor: [build([])], duplicateOf: nil, keep: false))
         XCTAssertFalse(spare.contains("Already built"))
