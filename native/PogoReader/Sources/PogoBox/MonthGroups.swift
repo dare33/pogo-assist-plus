@@ -14,7 +14,7 @@ public struct MonthKey: Hashable, Comparable, Sendable {
     }
     public static func < (a: MonthKey, b: MonthKey) -> Bool { (a.year, a.month) < (b.year, b.month) }
 
-    /// "Oct 2026", in the person's language and calendar.
+    /// "Oct 2026": the person's language, with the Gregorian calendar the months were grouped by.
     public func title(calendar: Calendar = MonthKey.grouping, locale: Locale = .current) -> String {
         guard let d = calendar.date(from: DateComponents(year: year, month: month, day: 1)) else { return "\(month)/\(year)" }
         let f = DateFormatter()

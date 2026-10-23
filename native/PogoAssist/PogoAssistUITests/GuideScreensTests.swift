@@ -83,6 +83,20 @@ final class GuideScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["mode-dark"].isSelected)
         sleep(1)
         shot("a-04-dark")
+        // Auto follows the system again, with the Settings sheet still open: the screen differs between a dark and a light system appearance.
+        reveal(app, app.buttons["mode-auto"])
+        app.buttons["mode-auto"].tap()
+        XCTAssertTrue(app.buttons["mode-auto"].isSelected)
+        defer { XCUIDevice.shared.appearance = .light }
+        XCUIDevice.shared.appearance = .dark
+        sleep(1)
+        shot("a-04b-auto-system-dark")
+        let autoDark = XCUIScreen.main.screenshot().pngRepresentation
+        XCUIDevice.shared.appearance = .light
+        sleep(1)
+        shot("a-04c-auto-system-light")
+        XCTAssertNotEqual(autoDark, XCUIScreen.main.screenshot().pngRepresentation, "Auto follows the system appearance")
+        XCTAssertTrue(app.buttons["mode-auto"].isSelected)
         reveal(app, app.buttons["help-guide"])
         app.buttons["help-guide"].tap()
         XCTAssertTrue(app.buttons["help-guide"].isSelected && !app.buttons["help-standard"].isSelected)

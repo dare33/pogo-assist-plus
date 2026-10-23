@@ -9,7 +9,6 @@ struct HistoryScansView: View {
     enum Choice: Hashable { case all, month(MonthKey) }
 
     @EnvironmentObject var model: AppModel
-    @Environment(\.accent) private var accent
     @State private var tab: Tab = .history
     @State private var chosen: [Tab: Choice] = [:]
     @State private var shareURLs: [URL] = []
@@ -100,8 +99,6 @@ struct HistoryScansView: View {
                 } footer: { Text("Share a scan's replay log and result to send them for diagnosis.") }
             }
         }
-        // The Settings sheet carries the accent (RootView applies themeRoot to it).
-        .tint(accent.solid)
         .navigationTitle("History and scans")
         .navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden)

@@ -29,9 +29,15 @@ final class MonthGroupsTests: XCTestCase {
 
     /// 00:30 on 1 November in Sydney is still 31 October in UTC: the month is the person's local one.
     func testSydneyMidnightBoundary() {
+        // The default grouping follows the process's time zone: set it to Sydney so a fall back to UTC fails here.
+        let saved = NSTimeZone.default
+        NSTimeZone.default = TimeZone(identifier: "Australia/Sydney")!
+        defer { NSTimeZone.default = saved }
+        XCTAssertEqual(MonthKey.grouping.timeZone.identifier, "Australia/Sydney")
         var syd = Calendar(identifier: .gregorian); syd.timeZone = TimeZone(identifier: "Australia/Sydney")!
         let d = syd.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 0, minute: 30))!
         XCTAssertEqual(MonthKey(d, calendar: syd), MonthKey(year: 2026, month: 11))
+        XCTAssertEqual(MonthKey(d), MonthKey(year: 2026, month: 11), "the default grouping is local time")
         XCTAssertEqual(MonthKey(d, calendar: cal), MonthKey(year: 2026, month: 10))
     }
 
