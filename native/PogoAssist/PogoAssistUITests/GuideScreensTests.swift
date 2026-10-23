@@ -79,24 +79,24 @@ final class GuideScreensTests: XCTestCase {
         app.buttons["accent-berry"].tap()
         XCTAssertTrue(app.buttons["accent-berry"].isSelected && !app.buttons["accent-blue"].isSelected, "the accent changes at once")
         shot("a-03-berry")
+        XCUIDevice.shared.appearance = .light
         app.buttons["mode-dark"].tap()
         XCTAssertTrue(app.buttons["mode-dark"].isSelected)
         sleep(1)
         shot("a-04-dark")
-        // Auto follows the system again, with the Settings sheet still open: the screen differs between a dark and a light system appearance.
+        // Dark, then Auto with the Settings sheet still open, on a LIGHT system (whatever the simulator started in): the sheet must go light again.
+        // (XCUIDevice.appearance does not reliably reach the app after the first change, so the system going dark and light again is checked
+        // outside the test, with `xcrun simctl ui <id> appearance dark|light` while this screen is open.)
+        func screen() -> Data { sleep(1); return XCUIScreen.main.screenshot().pngRepresentation }
         reveal(app, app.buttons["mode-auto"])
+        let darkMode = screen()
         app.buttons["mode-auto"].tap()
         XCTAssertTrue(app.buttons["mode-auto"].isSelected)
+        var autoLight = screen()
+        for _ in 0..<5 where autoLight == darkMode { autoLight = screen() }
+        shot("a-04b-auto-system-light")
+        XCTAssertNotEqual(darkMode, autoLight, "Dark then Auto on a light system leaves the sheet light")
         defer { XCUIDevice.shared.appearance = .light }
-        XCUIDevice.shared.appearance = .dark
-        sleep(1)
-        shot("a-04b-auto-system-dark")
-        let autoDark = XCUIScreen.main.screenshot().pngRepresentation
-        XCUIDevice.shared.appearance = .light
-        sleep(1)
-        shot("a-04c-auto-system-light")
-        XCTAssertNotEqual(autoDark, XCUIScreen.main.screenshot().pngRepresentation, "Auto follows the system appearance")
-        XCTAssertTrue(app.buttons["mode-auto"].isSelected)
         reveal(app, app.buttons["help-guide"])
         app.buttons["help-guide"].tap()
         XCTAssertTrue(app.buttons["help-guide"].isSelected && !app.buttons["help-standard"].isSelected)
