@@ -712,6 +712,8 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(ul.label.contains("Pick: Scyther."))
         XCTAssertEqual(figure.value as? String, "96.2 percent")
         // The option rows carry the species id: under Classic the other Ultra League members are Scizor and Kleavor.
+        // Scrolled into the middle first: at the screen's edge a tap lands on the card's top row, where the worth tag is.
+        app.swipeUp(velocity: .slow)
         ul.tap()
         let row = app.buttons["league-ul-option-scizor"]
         XCTAssertTrue(row.waitForExistence(timeout: 3), "league-ul-option-<speciesId>")
