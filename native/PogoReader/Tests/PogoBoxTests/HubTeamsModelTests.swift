@@ -253,14 +253,41 @@ final class HubTeamsModelTests: XCTestCase {
     func testToBuildAndBuiltStates() throws {
         var a = try advice()
         a.leagues = ["e0": ["gl": rating("staraptor", "Staraptor", score: 90, ivRank: 1)],                             // built copy, itself
-                     "e1": ["gl": rating("lucario", "Lucario", score: 89, ivRank: 1)],                                 // itself, but its build still has steps
+                     "e1": ["gl": rating("lucario", "Lucario", score: 89, ivRank: 1)],                                 // itself; its build has steps, but the option has no cost
                      "free": ["gl": rating("azumarill", "Azumarill", score: 88, ivRank: 1)],                           // itself, no build at all
                      "evo": ["gl": rating("gallade", "Gallade", score: 87, ivRank: 1, selfName: "Kirlia", gender: "male")]]   // an evolution of the copy
         let c = HubTeams.candidates(league: "gl", advice: a)
         XCTAssertEqual(c.map(\.name), ["Staraptor", "Lucario", "Azumarill", "Gallade"])
-        XCTAssertEqual(c.map(\.stateText), ["Built", "To build", "Built", "To build"])
+        XCTAssertEqual(c.map(\.stateText), ["Built", "Built", "Built", "To build"], "the advice's builds are not read: Lucario's unfinished build does not make its league option To build")
         XCTAssertEqual(c.map(\.displayName), ["Staraptor", "Lucario", "Azumarill", "Gallade, if it is male"])
         XCTAssertEqual(c[3].fromText, "From Kirlia")
+    }
+
+    func testBuiltComesFromTheOptionsOwnCostAndMoves() {
+        func option(_ id: String, isSelf: Bool = true, cost: BoxAdvice.LeagueRating.Cost? = nil, needs: [String]? = nil) -> BoxAdvice.LeagueRating {
+            .init(options: [.init(speciesId: id, name: id.capitalized, isSelf: isSelf, strength: .init(score: 90, rank: 1, of: 100), needs: needs,
+                                  iv: .init(rank: 1, pct: 99, rankPct: 99, level: 20, cp: 1400), cost: cost)])
+        }
+        var a = BoxAdvice()   // no builds at all: the rule never reads them
+        a.leagues = ["done": ["gl": option("azumarill", cost: .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 25))],
+                     "nocost": ["gl": option("medicham")],
+                     "dust": ["gl": option("skarmory", cost: .init(dust: 31_000, candy: 40, xl: 0, evolveCandy: 0, toLevel: 30))],
+                     "candy": ["gl": option("lanturn", cost: .init(dust: 0, candy: 12, xl: 0, evolveCandy: 0, toLevel: 30))],
+                     "xl": ["gl": option("hypno", cost: .init(dust: 0, candy: 0, xl: 3, evolveCandy: 0, toLevel: 41))],
+                     "moves": ["gl": option("registeel", cost: .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 25), needs: ["Focus Blast"])],
+                     "evo": ["gl": .init(options: [.init(speciesId: "x", name: "Kirlia", isSelf: true),
+                                                   .init(speciesId: "gallade", name: "Gallade", isSelf: false, strength: .init(score: 89, rank: 1, of: 100),
+                                                         iv: .init(rank: 1, pct: 99, rankPct: 99, level: 20, cp: 1400), cost: .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 25))], pick: 1)]]
+        let states = Dictionary(uniqueKeysWithValues: HubTeams.candidates(league: "gl", advice: a).map { ($0.entryId, $0.stateText) })
+        XCTAssertEqual(states, ["done": "Built", "nocost": "Built", "dust": "To build", "candy": "To build", "xl": "To build", "moves": "To build", "evo": "To build"])
+    }
+
+    func testBeatsTextForNothingBeaten() throws {
+        let b = try advice().builds
+        let slot = hub.leaders.first { $0.name == "Giovanni" }!.slots[1]
+        XCTAssertEqual(HubTeams.beatsText(by: b[2], options: slot, gm: gm, hub: hub), "beats Machamp only", "Fairy beats Fighting")
+        XCTAssertEqual(HubTeams.beatsText(by: b[2], options: Array(slot.prefix(2)), gm: gm, hub: hub), "beats none", "Xerneas (Fairy) beats neither Kangaskhan nor Rhyperior")
+        XCTAssertEqual(HubTeams.beatsText(by: b[2], options: [slot[0]], gm: gm, hub: hub), "beats none")
     }
 
     func testSuggestedTeamAddsTheMostNewTypesAndNotesSharedWeakness() {

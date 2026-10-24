@@ -121,7 +121,9 @@ final class HubTeamsTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Suggested team"].exists)
         app.buttons["hub-pvp-league-ml"].tap()
         XCTAssertTrue(app.staticTexts["Suggested team"].waitForExistence(timeout: 5), "Master League shows a team")
-        XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-2"].exists, "a second team member")
+        // All three tiles always exist: slot 2 must name a Pokémon and slot 3 must be empty.
+        XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-2"].label.contains("Zamazenta"), app.descendants(matching: .any)["hub-pvp-slot-2"].label)
+        XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-3"].label.contains("empty"), app.descendants(matching: .any)["hub-pvp-slot-3"].label)
         sleep(1)
         shot("pvp-02-light-master")
         app.terminate()
