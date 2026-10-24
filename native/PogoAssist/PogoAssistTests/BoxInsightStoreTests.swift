@@ -130,6 +130,8 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertEqual(WorthTag.detail(.strong, best: "best: Flareon 97.2%"), "Strong · best: Flareon 97.2%")
         XCTAssertEqual(WorthTag.detail(.strong, best: nil), "Strong")
         XCTAssertEqual(WorthTag.detail(.weak, best: nil), "Weak")
+        XCTAssertEqual(WorthTag.detail(.weak, best: "best: Flareon 97.2%"), "Weak · best: Flareon 97.2%", "a species whose every copy is Weak still has a best copy: both words show")
+        XCTAssertEqual(WorthTag.detail(.ok, best: "best (needs a Dynamax copy)"), "OK · best (needs a Dynamax copy)")
         XCTAssertEqual(WorthTag.detail(nil, best: nil), "Not rated", "a copy with no fit for the area")
     }
 
@@ -176,6 +178,60 @@ final class BoxInsightStoreTests: XCTestCase {
         await store.refreshInsight(key: InsightKey(account: "B", seq: 3, state: .waiting), advice: nil, entries: [])
         await b.value
         XCTAssertNil(store.insight)
+    }
+
+    /// A ready, built; B asked for and its build left to be cancelled; then A again: A's insight must be built and published afresh (it was dropped at the switch).
+    func testAToBackToAIsRebuiltWhenBsBuildWasCancelled() async {
+        let store = BoxIndexStore(), (adv, es) = oneCopy()
+        let a = InsightKey(account: "A", seq: 1, state: .ready), b = InsightKey(account: "B", seq: 1, state: .ready)
+        await store.refreshInsight(key: a, advice: adv, entries: es)
+        XCTAssertEqual(store.insightBuiltFor, a)
+        let task = Task { await store.refreshInsight(key: b, advice: adv, entries: many(2_000, prefix: "b")) }
+        await Task.yield()
+        task.cancel()
+        await task.value
+        XCTAssertNil(store.insight, "B's build was cancelled and A's insight was dropped at the switch")
+        await store.refreshInsight(key: a, advice: adv, entries: es)
+        XCTAssertEqual(store.insightBuiltFor, a, "A is built again, not left waiting")
+        XCTAssertNotNil(store.insight(forAccount: "A"))
+    }
+
+    /// The same for the index.
+    func testAToBackToAIndexIsRebuilt() async {
+        let store = BoxIndexStore()
+        await store.refresh(key: "A|1", entries: [entry("a", "Eevee")])
+        let task = Task { await store.refresh(key: "B|1", entries: many(2_000, prefix: "b")) }
+        await Task.yield()
+        task.cancel()
+        await task.value
+        await store.refresh(key: "A|1", entries: [entry("a", "Eevee")])
+        XCTAssertEqual(store.indexKey, "A|1")
+        XCTAssertEqual(store.index.items.first?.id, "a")
+    }
+
+    /// An older build for the same key, not cancelled, finishing after a newer request for it: only the newer publishes, and the older is discarded by its generation.
+    func testAnOlderBuildOfTheSameKeyFinishingAfterANewerRequestIsDiscarded() async {
+        let store = BoxIndexStore(), (adv, _) = oneCopy()
+        let key = InsightKey(account: "A", seq: 1, state: .ready)
+        let older = Task { await store.refreshInsight(key: key, advice: adv, entries: many(2_000, prefix: "old")) }
+        await Task.yield()
+        await store.refreshInsight(key: key, advice: adv, entries: [entry("new", "Eevee")])
+        let versionAfterNewer = store.insightVersion
+        await older.value
+        XCTAssertEqual(store.insightVersion, versionAfterNewer, "the older build did not publish")
+        XCTAssertNotNil(store.insight?.copies["new"], "the newer build is the one on show")
+        XCTAssertNil(store.insight?.copies["old0"])
+    }
+
+    func testAnOlderIndexOfTheSameKeyFinishingAfterANewerRequestIsDiscarded() async {
+        let store = BoxIndexStore()
+        let older = Task { await store.refresh(key: "A|1", entries: many(2_000, prefix: "old")) }
+        await Task.yield()
+        await store.refresh(key: "A|2", entries: [entry("new", "Eevee")])
+        await older.value
+        XCTAssertEqual(store.indexKey, "A|2")
+        XCTAssertEqual(store.index.items.first?.id, "new")
+        XCTAssertEqual(store.index.count, 1)
     }
 
     func testTheInsightIsReadOnlyForTheAccountItWasBuiltFor() async {

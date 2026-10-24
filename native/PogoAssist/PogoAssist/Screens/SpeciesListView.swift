@@ -122,7 +122,7 @@ struct SpeciesListView: View {
     }
 
     private var order: some View {
-        Label(activity.flatMap { a in insight == nil ? nil : "\(a.league != nil ? a.title + " League" : a.title) first" } ?? "Best IVs first", systemImage: "arrow.down").labelStyle(.titleAndIcon)
+        Label(activity.flatMap { a in insight == nil ? nil : "\(a.league?.uppercased() ?? a.title) first" } ?? "Best IVs first", systemImage: "arrow.down").labelStyle(.titleAndIcon)
             .font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
             .frame(minHeight: 44, alignment: .leading)
             .lineLimit(1).fixedSize(horizontal: true, vertical: false)

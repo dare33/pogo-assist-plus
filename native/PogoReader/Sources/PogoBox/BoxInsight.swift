@@ -106,6 +106,7 @@ public struct BoxInsight {
             return "best: \(slot.member)" + (slot.pct.map { " " + LeaguePanel.percent($0) } ?? "")
         }
         guard let b = copies[id]?.best.first(where: { $0.area == a.rawValue }) else { return nil }
+        if a == .max { return "best (needs a Dynamax copy)" }
         return "best" + (b.asName.map { " as " + $0 } ?? "")
     }
 

@@ -212,4 +212,13 @@ final class BoxInsightTests: XCTestCase {
         XCTAssertEqual(insight.bestText(of: "p", title: "Tyranitar", .gl, pogoAssist: false), "best: Flareon 97.2%")
         XCTAssertNil(insight.bestText(of: "s", title: "Tyranitar", .gl, pogoAssist: false), "the tile is another copy's")
     }
+
+    /// Max has no "as" name; its merged chip keeps the caveat that the copy must be Dynamaxed.
+    func testTheMaxMergedChipKeepsTheDynamaxCaveat() {
+        let es = [shadowEntry("m", "Charizard", shadow: false)]
+        let fit = BoxAdvice.Fit(area: "max", tag: .ok, asName: nil, tier: "A", reason: nil, species: nil, ivPercent: 98)
+        var adv = advice(["m": ["gl": R(options: [option("flareon", score: 93, pct: 97.2, rankPct: 95)])]], fit: ["m": ["max": fit]])
+        adv.bestOf = ["m": ["max"]]
+        XCTAssertEqual(BoxInsight.make(advice: adv, entries: es).bestText(of: "m", title: "Charizard", .max, pogoAssist: false), "best (needs a Dynamax copy)")
+    }
 }

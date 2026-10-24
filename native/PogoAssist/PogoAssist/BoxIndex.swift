@@ -302,8 +302,8 @@ struct InsightKey: Hashable {
 
 /// Owns the current `BoxIndex`: rebuilt when the box is loaded or saved (a new version), away from the main thread for a large box.
 ///
-/// Every published result carries the key it was built for, and a result is published only when that key is still the one most recently asked for. Task
-/// cancellation alone is not enough: a detached build for account A cannot be cancelled once it runs, and its result would otherwise land on account B's screen.
+/// Every published result carries the key it was built for, and a result is published only when no later request has been made (a generation counter per path,
+/// taken before any early return). Task cancellation alone is not enough: a detached build for account A cannot be cancelled once it runs, and its result would otherwise land on account B's screen.
 @MainActor
 final class BoxIndexStore: ObservableObject {
     @Published private(set) var index = BoxIndex.empty
@@ -318,20 +318,23 @@ final class BoxIndexStore: ObservableObject {
     @Published private(set) var insightVersion = 0
     /// Bumped on each rebuild, so a view can recompute what it derived from the index.
     @Published private(set) var version = 0
-    private var indexWanted: String?
+    /// A counter per path, bumped at the top of every call before any early return. A build publishes only if no later call has been made since it started, so the
+    /// last request wins even when an older detached build (which cancellation cannot stop) finishes after it.
+    private var indexGeneration = 0
+    private var insightGeneration = 0
     private var insightWanted: InsightKey?
-    private var insightFor: InsightKey?
 
     func refresh(key: String, entries: [BoxEntry]) async {
+        indexGeneration += 1
+        let generation = indexGeneration
         guard indexKey != key else { return }
-        indexWanted = key
         let built: BoxIndex
         if entries.count < 2000 {
             built = BoxIndex(entries: entries)
         } else {
             built = await Task.detached(priority: .userInitiated) { BoxIndex(entries: entries) }.value
         }
-        guard !Task.isCancelled, indexWanted == key else { return }
+        guard !Task.isCancelled, indexGeneration == generation else { return }
         index = built; indexKey = key; version += 1
     }
 
@@ -344,12 +347,14 @@ final class BoxIndexStore: ObservableObject {
     /// version of the same account (a hand fix, a saved scan) keeps the previous insight on show while the advice is recalculated and the new one built (copy ids
     /// are stable, so it stays close, and the list does not blank after every edit); a failed advice drops it, since nothing can then be said about the new version.
     func refreshInsight(key: InsightKey, advice: BoxAdvice?, entries: [BoxEntry]) async {
-        guard insightFor != key else { return }
+        insightGeneration += 1
+        let generation = insightGeneration
+        // Already published for exactly this key: nothing to do. (A key that only reached "seen" without a published result, such as one whose build was cancelled, is built again.)
+        guard !(insightBuiltFor == key && insight != nil) else { return }
         insightWanted = key
         if let was = insightBuiltFor, was.account != key.account, insight != nil { insight = nil; insightBuiltFor = nil; insightVersion += 1 }
         guard key.state == .ready, let advice else {
             if key.state != .waiting, insight != nil { insight = nil; insightBuiltFor = nil; insightVersion += 1 }
-            insightFor = key
             return
         }
         let built: BoxInsight
@@ -358,13 +363,13 @@ final class BoxIndexStore: ObservableObject {
         } else {
             built = await Task.detached(priority: .userInitiated) { BoxInsight.make(advice: advice, entries: entries) }.value
         }
-        guard !Task.isCancelled, insightWanted == key else { return }
-        insight = built; insightBuiltFor = key; insightFor = key; insightVersion += 1
+        guard !Task.isCancelled, insightGeneration == generation, insightWanted == key else { return }
+        insight = built; insightBuiltFor = key; insightVersion += 1
     }
 
     #if DEBUG
     /// DEBUG only: put a ready-made index in place (the synthetic 15,000 box).
-    func install(_ built: BoxIndex, key: String) { index = built; indexKey = key; indexWanted = key; version += 1 }
+    func install(_ built: BoxIndex, key: String) { index = built; indexKey = key; indexGeneration += 1; version += 1 }
     #endif
 }
 
