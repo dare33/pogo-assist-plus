@@ -115,7 +115,16 @@ struct BoxIndex {
 
     // MARK: filtering
 
-    enum Chip: Hashable { case all, toCheck, fixed }
+    /// One filter at a time: everything, the Pokémon to check, those fixed by hand, or an activity (Raids … Max) whose Strong or OK copies are kept.
+    enum Chip: Hashable { case all, toCheck, fixed, activity(BoxInsight.Activity) }
+
+    /// What the activity chips and the tiles read: the insight built from the advice (nil while the advice is still being worked out) and the ranking
+    /// the leagues are read under. The search and the other chips need neither.
+    struct Scoring {
+        var insight: BoxInsight?
+        var pogoAssist = false
+        static let none = Scoring()
+    }
 
     enum Query: Hashable {
         case none
@@ -138,11 +147,12 @@ struct BoxIndex {
         var isEmpty: Bool { self == .none }
     }
 
-    func matches(_ it: Item, _ query: Query, _ chip: Chip) -> Bool {
+    func matches(_ it: Item, _ query: Query, _ chip: Chip, _ scoring: Scoring = .none) -> Bool {
         switch chip {
         case .all: break
         case .toCheck: if !it.needsCheck { return false }
         case .fixed: if !it.fixed { return false }
+        case .activity(let a): if scoring.insight?.copies[it.id]?.suits(a, pogoAssist: scoring.pogoAssist) != true { return false }
         }
         switch query {
         case .none: return true
@@ -151,9 +161,12 @@ struct BoxIndex {
         }
     }
 
-    /// The members of a species that pass the chip and the search, still best IVs first.
+    /// The members of a species that pass the chip and the search, still best IVs first. An activity chip does not drop copies here: the species list
+    /// shows every copy with its tag for the activity and puts the Weak ones last (the row on the list page counts the Strong and OK ones).
     func members(of title: String, query: Query, chip: Chip) -> [Int] {
         guard let g = groups.first(where: { $0.title == title }) else { return [] }
+        var chip = chip
+        if case .activity = chip { chip = .all }
         if query.isEmpty, chip == .all { return g.members }
         return g.members.filter { matches(items[$0], query, chip) }
     }
@@ -166,6 +179,8 @@ struct BoxIndex {
         var id: String { title }
         var title: String
         var stats: Stats
+        /// With an activity chip: the best tag among the copies that pass it (Strong when any is, else OK).
+        var lead: LeaguePanel.Worth?
     }
     struct Section: Identifiable {
         var id: String
@@ -177,14 +192,19 @@ struct BoxIndex {
     }
 
     /// Species rows grouped under A to Z (or CP bands). With a search or a chip, a row shows the figures of the Pokémon that pass it.
-    func sections(query: Query, chip: Chip, sort: Sort) -> [Section] {
+    func sections(query: Query, chip: Chip, sort: Sort, scoring: Scoring = .none) -> [Section] {
         let filtered = !query.isEmpty || chip != .all
         var rows = [Row]()
         rows.reserveCapacity(groups.count)
         for g in groups {
             if !filtered { rows.append(Row(title: g.title, stats: g.stats)); continue }
-            let m = g.members.filter { matches(items[$0], query, chip) }
-            if !m.isEmpty { rows.append(Row(title: g.title, stats: stats(of: m))) }
+            let m = g.members.filter { matches(items[$0], query, chip, scoring) }
+            if m.isEmpty { continue }
+            var lead: LeaguePanel.Worth?
+            if case .activity(let a) = chip {
+                lead = m.contains { scoring.insight?.copies[items[$0].id]?.worth(a, pogoAssist: scoring.pogoAssist) == .strong } ? .strong : .ok
+            }
+            rows.append(Row(title: g.title, stats: stats(of: m), lead: lead))
         }
         switch sort {
         case .name:
@@ -251,9 +271,13 @@ struct BoxIndex {
 @MainActor
 final class BoxIndexStore: ObservableObject {
     @Published private(set) var index = BoxIndex.empty
+    /// The tags and tiles read from the advice; nil until the advice is ready. Built once per box version, for both rankings.
+    @Published private(set) var insight: BoxInsight?
+    @Published private(set) var insightVersion = 0
     /// Bumped on each rebuild, so a view can recompute what it derived from the index.
     @Published private(set) var version = 0
     private var builtFor: String?
+    private var insightFor: String?
 
     func refresh(key: String, entries: [BoxEntry]) async {
         guard builtFor != key else { return }
@@ -265,6 +289,20 @@ final class BoxIndexStore: ObservableObject {
         }
         guard !Task.isCancelled else { return }
         index = built; builtFor = key; version += 1
+    }
+
+    /// Builds the insight when the advice is ready (and drops it while the advice is recalculating, so a tag never belongs to another box version).
+    func refreshInsight(key: String, advice: BoxAdvice?, entries: [BoxEntry]) async {
+        guard insightFor != key else { return }
+        guard let advice else { insight = nil; insightFor = key; insightVersion += 1; return }
+        let built: BoxInsight
+        if entries.count < 2000 {
+            built = BoxInsight.make(advice: advice, entries: entries)
+        } else {
+            built = await Task.detached(priority: .userInitiated) { BoxInsight.make(advice: advice, entries: entries) }.value
+        }
+        guard !Task.isCancelled else { return }
+        insight = built; insightFor = key; insightVersion += 1
     }
 
     #if DEBUG

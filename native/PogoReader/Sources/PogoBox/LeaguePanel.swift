@@ -246,6 +246,34 @@ public enum LeaguePanel {
                     buildsIt: builds.contains { $0.areas.contains(BoxAdvice.areaLabel[key] ?? key) }, buildTarget: buildTarget(o, key: key, builds: builds))
     }
 
+    // MARK: the list's tile and tag
+
+    /// What the Pokémon list and the species list need of one copy in one league, without the card's sentences: the member the card would headline,
+    /// whether it fits, this copy's IV figures as that member, and the worth tag. Built from the same primitives as `card` (`headlineIndex`, `tier`,
+    /// `worth`), so a tile and a pick card cannot disagree; kept lean (no strings are formatted) because the list builds one per copy, league and ranking.
+    public struct Slot: Equatable {
+        public enum Status: Equatable { case fits, ivsNotRead, overCap }
+        public var status: Status
+        /// The headline member's name; for an over-cap slot the member the ranking shows.
+        public var member: String
+        /// This copy's IV % of best as that member; nil unless `status` is `.fits`.
+        public var pct: Double?
+        /// This copy's IV rank percentile as that member (100 the best of the 4,096 spreads); nil unless `.fits`.
+        public var rankPct: Double?
+        /// The card's tag: nil when nothing fits (the card is "No viable option").
+        public var worth: Worth?
+    }
+
+    public static func slot(_ r: BoxAdvice.LeagueRating, shown: Int, key: String) -> Slot? {
+        guard !r.options.isEmpty else { return nil }
+        guard let at = headlineIndex(r, shown: shown) else {
+            return Slot(status: .overCap, member: r.options[min(max(shown, 0), r.options.count - 1)].name, pct: nil, rankPct: nil, worth: nil)
+        }
+        let o = r.options[at]
+        let leagueTier = tier(speciesId: o.speciesId, key: key, score: o.strength?.score)
+        return Slot(status: o.iv != nil ? .fits : .ivsNotRead, member: o.name, pct: o.iv?.pct, rankPct: o.iv?.rankPct, worth: worth(tier: leagueTier, roll: o.iv?.rankPct))
+    }
+
     /// The spoken summary of a pick card, as one element.
     public static func spoken(_ c: Card, key: String, chip: String) -> String {
         var parts = ["\(name(key)), \(capText(key).lowercasedFirst)", "\(chip): \(c.title)"]
