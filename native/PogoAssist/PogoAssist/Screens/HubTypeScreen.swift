@@ -55,6 +55,8 @@ struct HubTypeDestination: View {
     var body: some View {
         switch type {
         case .everything: HubEverythingView()
+        case .raids: HubRaidsView()
+        case .max: HubMaxView()
         default: HubAreaScreen(type: type)
         }
     }

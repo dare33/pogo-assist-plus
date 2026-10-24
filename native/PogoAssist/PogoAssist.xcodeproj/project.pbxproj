@@ -16,10 +16,12 @@
 		0A3EC8BBA5B78347A0413F5C /* ReviewWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B793340E977374E8287D10D /* ReviewWording.swift */; };
 		0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4B281BB0B64267189CDB87 /* SetupProgress.swift */; };
 		0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052B76A429D7B08291119B9 /* ReviewResult.swift */; };
+		15DF09FE6C1E2A69EDBF9B42 /* HubRaidsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F07C1AF615AD4789157D020 /* HubRaidsView.swift */; };
 		1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 00436FF3692616EF8377125B /* PogoReader */; };
 		1DF267CCE4D1096881873210 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
 		205415EE687703C0379569F7 /* GuideFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C5D5C5A5E06415BB056093 /* GuideFlow.swift */; };
 		262F06295009225A5291CD5A /* BoxChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853199DAE4157490F71A25E8 /* BoxChrome.swift */; };
+		298BB1E338CBDCF134829537 /* HubRaidsMaxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3125EA9837C6BDA1514128F /* HubRaidsMaxTests.swift */; };
 		29D9364DF6997E6C296892EC /* GameOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = C317D4A35524B2870E2635E8 /* GameOpener.swift */; };
 		3141426D1BEF397FDB06B649 /* DesignGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D753F1DDCCB14FE57185CE0 /* DesignGallery.swift */; };
 		31CA236599307F00B33A65CA /* SetupStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B7030AC596BFDD03757B5C /* SetupStepView.swift */; };
@@ -54,6 +56,7 @@
 		83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */; };
 		877CD9FE721D96DF464F3FD7 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6AA316B422945EDE86A699 /* Formatting.swift */; };
 		88B726BE30F7E106A63BC75E /* QuestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */; };
+		8A85717ADE3ADD7C76920987 /* HubMaxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 084FB265AF36DD53B7DD982A /* HubMaxView.swift */; };
 		8DCC1E40BCAA03A119A1ECC8 /* sample-scan.replay.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = 50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */; };
 		8E62CA1C22FF97368E5B9F14 /* FloatingTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 943D02DD923AE19E5F63128C /* FloatingTabBar.swift */; };
 		8EF4EB6711143884E09716FE /* ReviewSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7658A29BC83D760022D1FB3A /* ReviewSeed.swift */; };
@@ -144,6 +147,7 @@
 		00027E9C738C8485EF328388 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		00B7030AC596BFDD03757B5C /* SetupStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepView.swift; sourceTree = "<group>"; };
 		01F723B7B2F32D040376093D /* SetupChecklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistView.swift; sourceTree = "<group>"; };
+		084FB265AF36DD53B7DD982A /* HubMaxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubMaxView.swift; sourceTree = "<group>"; };
 		09D08E55E9B50EC09258EFF1 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		1222BDC1C6F45E94BECD7F63 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
 		167560673B06A1C7DF3C9ACE /* ScreenshotImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImportSheet.swift; sourceTree = "<group>"; };
@@ -201,6 +205,7 @@
 		9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
 		9BE36A9AF52A15ACFDA18097 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9DD3B9B348BAD6411BC1C01A /* SharedState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedState.swift; sourceTree = "<group>"; };
+		9F07C1AF615AD4789157D020 /* HubRaidsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubRaidsView.swift; sourceTree = "<group>"; };
 		A052B76A429D7B08291119B9 /* ReviewResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewResult.swift; sourceTree = "<group>"; };
 		A0F17C7995A34F075324B10F /* PogoAssistUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PogoAssistUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionCard.swift; sourceTree = "<group>"; };
@@ -214,6 +219,7 @@
 		B79BED1C304CA088B36F393B /* HubTypeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubTypeScreen.swift; sourceTree = "<group>"; };
 		B7BBE6B4B350600CD9DBB146 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		C1DE7A75803B1C92E4B63AF8 /* Identifiers.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Identifiers.xcconfig; sourceTree = "<group>"; };
+		C3125EA9837C6BDA1514128F /* HubRaidsMaxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubRaidsMaxTests.swift; sourceTree = "<group>"; };
 		C317D4A35524B2870E2635E8 /* GameOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameOpener.swift; sourceTree = "<group>"; };
 		C6F031A6C112AFF16F56C17A /* PogoReader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PogoReader; path = ../PogoReader; sourceTree = SOURCE_ROOT; };
 		CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoBroadcast.entitlements; sourceTree = "<group>"; };
@@ -333,6 +339,7 @@
 				444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */,
 				D7EAA375CD0561890BDC48B2 /* FlowTests.swift */,
 				B4553543BAEE1146FEB5BC7F /* GuideScreensTests.swift */,
+				C3125EA9837C6BDA1514128F /* HubRaidsMaxTests.swift */,
 				84957A517D0BAC062A93BF66 /* HubScreensTests.swift */,
 				92443CC47565AC21CD82E3EC /* RankingSwitchTests.swift */,
 				5B1732C765F713AF409B47D5 /* ReviewScreensTests.swift */,
@@ -405,6 +412,8 @@
 				1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */,
 				51C5D5C5A5E06415BB056093 /* GuideFlow.swift */,
 				4A52B34F2A7384C8792F6CDE /* HubEverythingView.swift */,
+				084FB265AF36DD53B7DD982A /* HubMaxView.swift */,
+				9F07C1AF615AD4789157D020 /* HubRaidsView.swift */,
 				B79BED1C304CA088B36F393B /* HubTypeScreen.swift */,
 				B688913DD33FFE4F9A7B0B21 /* HubView.swift */,
 				4D8E6A568314AEC10B511E50 /* LeaguesPanel.swift */,
@@ -638,6 +647,7 @@
 				F9C0DA47B6D99ED2A742185D /* BoxScreensTests.swift in Sources */,
 				3612921432E15343B1E195EA /* FlowTests.swift in Sources */,
 				93DC471F59BEADA19D7B80B8 /* GuideScreensTests.swift in Sources */,
+				298BB1E338CBDCF134829537 /* HubRaidsMaxTests.swift in Sources */,
 				4B140840C0B01BB6DA9674AA /* HubScreensTests.swift in Sources */,
 				6BD03137A6BC55ED478E73D8 /* RankingSwitchTests.swift in Sources */,
 				31DDB5EE5F7E61CF3A468735 /* ReviewScreensTests.swift in Sources */,
@@ -670,6 +680,8 @@
 				68A28061D9146D4EA5A538CC /* GameSearch.swift in Sources */,
 				205415EE687703C0379569F7 /* GuideFlow.swift in Sources */,
 				001F90DC60A4D0CBD81D6EDE /* HubEverythingView.swift in Sources */,
+				8A85717ADE3ADD7C76920987 /* HubMaxView.swift in Sources */,
+				15DF09FE6C1E2A69EDBF9B42 /* HubRaidsView.swift in Sources */,
 				D1C92751EA85BD6C6A90E779 /* HubTypeScreen.swift in Sources */,
 				357BCB74EA69C6D002BF0A25 /* HubView.swift in Sources */,
 				B240DFB4A51535986CADBF9D /* LeaguesPanel.swift in Sources */,
