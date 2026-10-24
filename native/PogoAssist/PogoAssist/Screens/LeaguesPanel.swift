@@ -129,7 +129,7 @@ struct LeaguesPanel: View {
                     .foregroundStyle(accent.ink).padding(.horizontal, 8).padding(.vertical, 4)
                     .background(accent.tint, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
                 if let w = c.worth { worthTag(w) }
-                if c.buildsIt { buildsItTag() }
+                if c.buildsIt { buildsItTag(c) }
                 if c.overCapCount > 0 {
                     Text("▲ \(c.overCapCount) over cap").font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.04 * 11)
                         .foregroundStyle(Theme.red).padding(.horizontal, 7).padding(.vertical, 3)
@@ -183,13 +183,12 @@ struct LeaguesPanel: View {
             .anchorPreference(key: WorthBounds.self, value: .bounds) { $0 }
     }
 
-    /// "Advice builds it": the cost-aware marker beside the worth tag, drawn like the PICK chip in outline so it does not read as a second tag. Only
-    /// drawn here (the card's spoken label carries it).
-    private func buildsItTag() -> some View {
-        Text("ADVICE BUILDS IT").font(.figtree(11, .bold, relativeTo: .caption2)).tracking(0.06 * 11)
+    /// "Advice builds it" / "Advice builds Blastoise": the cost-aware marker beside the worth tag, drawn like the PICK chip in outline so it does not read
+    /// as a second tag. Visible text, named for the build's target when that is not the card's Pokémon; the card's spoken label says the same.
+    private func buildsItTag(_ c: LeaguePanel.Card) -> some View {
+        Text(LeaguePanel.buildsChipText(c)).font(.figtree(11, .bold, relativeTo: .caption2)).tracking(0.06 * 11)
             .foregroundStyle(Theme.muted).padding(.horizontal, 7).padding(.vertical, 3)
             .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous).stroke(Theme.line, lineWidth: 1))
-            .accessibilityHidden(true)
     }
 
     /// The tap target over the chip (at least 44 pt square): opens or closes the one line the tag explains. Its accessibility value carries that

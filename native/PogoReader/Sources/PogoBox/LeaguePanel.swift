@@ -74,7 +74,7 @@ public enum LeaguePanel {
         public var ivPct: Double?
         /// The tag on the card: nil on a "No viable option" card.
         public var worth: Worth? = nil
-        /// The shown member's tier by PvPoke score (S, A or B); nil when it is unranked or scores below the B line.
+        /// The shown member's tier in this league: the tiers.json letter when the table names the species, else the PvPoke score band (S, A or B); nil when neither.
         public var tier: String? = nil
         /// This copy's IV rank percentile for the league as the shown member (100 is the best spread); nil when the IVs are not read.
         public var roll: Double? = nil
@@ -111,6 +111,26 @@ public enum LeaguePanel {
         return score >= sScore ? "S" : score >= aScore ? "A" : score >= bScore ? "B" : nil
     }
 
+    /// The league tiers of the bundled `tiers.json` (`kind` "pvp", `area` gl / ul / ml), keyed "area/speciesId": the letters the Next list and the Advice
+    /// panel show. A Shadow table entry has its own species id ("ninetales_shadow"), so it never matches a member's plain id. Read once; empty when the
+    /// resource cannot be read, which leaves the score bands.
+    static let tableTiers: [String: String] = {
+        guard let url = Bundle.module.url(forResource: "tiers", withExtension: "json"), let data = try? Data(contentsOf: url),
+              let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let entries = root["entries"] as? [[String: Any]] else { return [:] }
+        var out = [String: String]()
+        for e in entries where e["kind"] as? String == "pvp" {
+            guard let area = e["area"] as? String, let id = e["speciesId"] as? String, let tier = e["tier"] as? String else { continue }
+            if out["\(area)/\(id)"] == nil { out["\(area)/\(id)"] = tier }
+        }
+        return out
+    }()
+
+    /// The tier of a member in a league as the engine gives it: the table entry for that species and league when there is one (Tinkaton in Great
+    /// League is S in the table whatever its 91.7 says), otherwise the score band (`advise.js` adds a rank hit at 88 and above when the table has none).
+    public static func tier(speciesId: String, key: String, score: Double?) -> String? {
+        tableTiers["\(key)/\(speciesId)"] ?? tier(score: score)
+    }
+
     /// The tag from the shown member's tier and this copy's roll (nil when the IVs are not read).
     public static func worth(tier: String?, roll: Double?) -> Worth {
         guard let tier, let roll, roll >= decentRollPercentile else { return .weak }
@@ -126,6 +146,9 @@ public enum LeaguePanel {
         return first.targetName
     }
 
+    /// The chip beside the tag when the copy's Advice builds it for the league: names the build's target when that is not the card's Pokémon.
+    public static func buildsChipText(_ c: Card) -> String { "ADVICE BUILDS " + (c.buildTarget?.uppercased() ?? "IT") }
+
     /// The line a tap on the tag opens: the tier and the roll behind it ("S-tier species, IVs in the top 20% for Great League"). A Weak tag says which
     /// of them fell short. "Better kept for trading or transferring" is only added when the Advice panel says the same: the copy has no build and
     /// hygiene would transfer it (`transfers`).
@@ -138,8 +161,8 @@ public enum LeaguePanel {
             return "\(c.tier ?? "?")-tier species, IVs in \(topText(c.roll ?? 0)) for \(league)"
         case .weak:
             var s: String
-            if c.roll == nil { s = "IVs not read, so no roll to judge for \(league)" }
-            else if c.tier == nil { s = c.option.strength == nil ? "Species not ranked for \(league)" : "Species below the B-tier line for \(league)" }
+            if c.tier == nil { s = c.option.strength == nil ? "Species not ranked for \(league)" : "Species below the B-tier line for \(league)" }
+            else if c.roll == nil { s = "IVs not read, so no roll to judge for \(league)" }
             else { s = "\(c.tier ?? "?")-tier species, but IVs only in \(topText(c.roll ?? 0)) for \(league); a good roll is the top \(top)%" }
             if transfers { s += ". Better kept for trading or transferring" }
             return s
@@ -209,16 +232,17 @@ public enum LeaguePanel {
             return "\(named) is the stronger species, but this copy is already over \(cap(key).map(grouped) ?? "") CP as \(s.name)."
         }
         let read = o.iv != nil
+        let leagueTier = tier(speciesId: o.speciesId, key: key, score: o.strength?.score)
         return Card(status: read ? .fits : .ivsNotRead, option: o, title: title(o), strongerOverCap: stronger, overCapCount: overCount, bestAvailableNote: note, blockedText: nil,
                     scoreText: o.strength.map { oneDecimal($0.score) } ?? "—",
                     rankText: o.strength.map { "#\(grouped($0.rank)) of \(grouped($0.of))" } ?? "",
-                    scoreStrong: (o.strength?.score ?? 0) >= 80,
+                    scoreStrong: (o.strength?.score ?? 0) >= bScore,
                     ivText: o.iv.map { percent($0.pct) } ?? "—", ivRankText: o.iv.map { "IV #\(grouped($0.rank))" } ?? "not read",
-                    ivStrong: (o.iv?.rank ?? Int.max) <= 500,
+                    ivStrong: (o.iv?.rankPct ?? 0) >= decentRollPercentile,
                     costItems: read && costNote(o, key: key, level: now) == nil ? costItems(o) : [],
                     costNote: read ? costNote(o, key: key, level: now) : (now == nil ? costNote(o, key: key, level: now) : nil),
-                    moves: moveChips(o), ivPct: o.iv?.pct, worth: worth(tier: tier(score: o.strength?.score), roll: o.iv?.rankPct),
-                    tier: tier(score: o.strength?.score), roll: o.iv?.rankPct,
+                    moves: moveChips(o), ivPct: o.iv?.pct, worth: worth(tier: leagueTier, roll: o.iv?.rankPct),
+                    tier: leagueTier, roll: o.iv?.rankPct,
                     buildsIt: builds.contains { $0.areas.contains(BoxAdvice.areaLabel[key] ?? key) }, buildTarget: buildTarget(o, key: key, builds: builds))
     }
 
@@ -277,8 +301,8 @@ public enum LeaguePanel {
             ?? (o.overCap ? "Already above the cap as \(o.name)." : "IVs not read, so no rank.")
         return Row(option: o, sub: sub,
                    blockedText: o.overCap ? cap(key).map { "Over \(grouped($0)) CP as \(o.name)" } : nil,
-                   score: o.strength.map { oneDecimal($0.score) } ?? "—", rank: o.strength.map { "#\(grouped($0.rank))" } ?? "", scoreStrong: (o.strength?.score ?? 0) >= 80,
-                   ivPct: o.iv.map { percent($0.pct) } ?? "—", ivRank: o.iv.map { "IV #\(grouped($0.rank))" } ?? "not read", ivStrong: (o.iv?.rank ?? Int.max) <= 500,
+                   score: o.strength.map { oneDecimal($0.score) } ?? "—", rank: o.strength.map { "#\(grouped($0.rank))" } ?? "", scoreStrong: (o.strength?.score ?? 0) >= bScore,
+                   ivPct: o.iv.map { percent($0.pct) } ?? "—", ivRank: o.iv.map { "IV #\(grouped($0.rank))" } ?? "not read", ivStrong: (o.iv?.rankPct ?? 0) >= decentRollPercentile,
                    dust: dust, candy: candy, dustMuted: (o.cost?.xl ?? 0) > 0,
                    detailLevel: detailLevel, detailCost: costSentence(o, key: key, level: now), detailMoves: movesSentence(o))
     }

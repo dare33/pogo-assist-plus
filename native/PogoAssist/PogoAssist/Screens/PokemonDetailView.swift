@@ -279,7 +279,7 @@ struct PokemonDetailView: View {
         if case .ready(let advice) = model.advice {
             let ratings = advice.leagues(for: e.id)
             if !ratings.isEmpty {
-                // The tag reads the copy's own builds only (never those it is a spare for), so it agrees with the Advice panel.
+                // The "Advice builds it" marker reads the copy's own builds only (never those it is a spare for), so it agrees with the Advice panel; the tag is worth alone.
                 let a = advice.entries(for: e.id)
                 LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, builds: a.builds, transfers: a.transfersWithNoBuild, mode: $leaguesMode)
             }
@@ -384,14 +384,17 @@ struct BuildRow: View {
                 // effort is the dust, candy and XL it costs.
                 Text(build.areas.joined(separator: ", ")).font(.footnote).foregroundStyle(.secondary)
                 HStack(alignment: .top, spacing: 24) {
-                    labelled("Worth", "\(build.tier)-tier")
-                    labelled("Effort", build.dust == 0 && build.candy == 0 && build.xl == 0 ? "none" : build.costText)
+                    // The tag on the Box list is per copy (its roll included); this tier is the build target's, so the copy's roll is shown beside it.
+                    labelled("Worth", build.worthText)
+                    labelled("Effort", build.effortText)
                 }
                 .accessibilityElement(children: .combine)
             } else {
                 Text("\(build.areas.joined(separator: ", ")) · tier \(build.tier)").font(.footnote).foregroundStyle(.secondary)
             }
-            Text(costLine).font(.footnote).foregroundStyle(.secondary)
+            // The Next list already shows the cost as EFFORT, so its line keeps the level climb and what it leaves; the Advice panel's line carries the cost.
+            let line = showName ? climbLine : costLine
+            if !line.isEmpty { Text(line).font(.footnote).foregroundStyle(.secondary) }
             if build.spares > 0 { Text("\(build.spares) spare \(build.spares == 1 ? "copy" : "copies")").font(.footnote).foregroundStyle(.secondary) }
         }
     }
@@ -401,11 +404,18 @@ struct BuildRow: View {
             Text(value).font(.footnote.weight(.semibold)).monospacedDigit()
         }
     }
-    var costLine: String {
+    private var climb: String {
         let from = build.level.map { "Level \(Fmt.number($0))" } ?? ""
         let to = build.climbLevel.map { $0 > (build.level ?? 0) ? " to \(Fmt.number($0))" : "" } ?? ""
+        return from.isEmpty ? "" : from + to
+    }
+    /// "Level 20 to 35; going past 27 leaves UL": the climb without its cost (the Next list shows the cost as EFFORT). Empty when there is neither.
+    var climbLine: String {
+        [climb, build.leavesLeagueText ?? ""].filter { !$0.isEmpty }.joined(separator: "; ")
+    }
+    var costLine: String {
         let cost = build.dust == 0 && build.candy == 0 && build.xl == 0 ? "no dust or candy to spend" : build.costText
-        let line = (from.isEmpty ? "" : from + to + ": ") + cost
+        let line = (climb.isEmpty ? "" : climb + ": ") + cost
         return build.leavesLeagueText.map { line + "; " + $0 } ?? line
     }
 }

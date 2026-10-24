@@ -352,6 +352,11 @@ final class BoxScreensTests: XCTestCase {
                 sawBuilt = true
                 XCTAssertFalse(app.staticTexts["advice-verdict"].exists, "a copy with its own build shows the build and no keep or transfer verdict")
                 scrollToVerdictArea(); shot("with-builds")
+                // The chip beside a league tag is the build's marker: "Advice builds it", or "... as <target>" in the card's spoken label when the target is another species.
+                for key in ["gl", "ul", "ml"] {
+                    let label = app.buttons["league-\(key)-pick"].label
+                    if label.contains("Advice builds") { XCTAssertTrue(label.contains("Advice builds it"), label) }
+                }
             } else if app.staticTexts["advice-spare"].exists {
                 sawSpare = true
                 XCTAssertEqual(app.staticTexts["advice-spare"].label, "No build for this copy: you already have another Moltres planned.")
@@ -829,4 +834,5 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(credit.exists)
         shot("league-about")
     }
+
 }

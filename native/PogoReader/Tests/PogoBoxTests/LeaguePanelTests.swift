@@ -282,4 +282,77 @@ final class LeaguePanelTests: XCTestCase {
         let other = LeaguePanel.card(squirtle, shown: 0, key: "ul", level: 17, builds: [b("Blastoise", areas: ["GL"])])
         XCTAssertNil(other.buildTarget); XCTAssertFalse(other.buildsIt)
     }
+
+    // MARK: the tier is the engine's (fold of slice 1b)
+
+    func testTheTierIsTheTierTablesLetterWhenTheTableNamesTheSpeciesElseTheScoreBand() {
+        func card(_ id: String, _ score: Double?, key: String = "gl") -> LeaguePanel.Card {
+            LeaguePanel.card(R(options: [option(id, score: score, iv: rolled(97), cost: cost)]), shown: 0, key: key, level: 17)
+        }
+        // Tinkaton in Great League: tiers.json says S, the score 91.7 alone would say A. The table wins, as in the Next list and the Advice panel.
+        let tinkaton = card("tinkaton", 91.7)
+        XCTAssertEqual(tinkaton.tier, "S"); XCTAssertEqual(tinkaton.worth, .strong)
+        XCTAssertEqual(LeaguePanel.worthSentence(tinkaton, key: "gl"), "S-tier species, IVs in the top 3% for Great League")
+        XCTAssertEqual(LeaguePanel.tier(score: 91.7), "A", "the band alone")
+        // The table is per league: an id the Great League table names is judged by its score in a league whose table does not.
+        XCTAssertEqual(LeaguePanel.tier(speciesId: "tinkaton", key: "ul", score: 94.3), "S")
+        XCTAssertEqual(LeaguePanel.tier(speciesId: "tinkaton", key: "ml", score: 80), LeaguePanel.tableTiers["ml/tinkaton"] ?? nil)
+        // No table entry: the score band applies (S >= 92, A >= 90, B >= 88, below none).
+        XCTAssertNil(LeaguePanel.tableTiers["gl/notaspecies"])
+        XCTAssertEqual(card("notaspecies", 90.4).tier, "A"); XCTAssertEqual(card("notaspecies", 88).tier, "B")
+        XCTAssertNil(card("notaspecies", 87.9).tier)
+        // Wartortle (Great League 86.2) and Scyther (Ultra League 71.8) are in no table and below the B line: no tier, Weak, however good the roll.
+        XCTAssertNil(LeaguePanel.tableTiers["gl/wartortle"]); XCTAssertNil(LeaguePanel.tableTiers["ul/scyther"])
+        let wartortle = card("wartortle", 86.2), scyther = card("scyther", 71.8, key: "ul")
+        XCTAssertNil(wartortle.tier); XCTAssertEqual(wartortle.worth, .weak)
+        XCTAssertNil(scyther.tier); XCTAssertEqual(scyther.worth, .weak)
+    }
+
+    func testTierAndRollComeFromTheHeadlineOptionWhenTheShownOneIsOverTheCap() {
+        let r = R(options: [option("tinkaton", score: 95, rank: 1, iv: rolled(99), over: true),
+                            option("scyther", score: 71.8, rank: 700, iv: rolled(50), cost: cost)], pick: 0, experimental: 0)
+        let c = LeaguePanel.card(r, shown: 0, key: "gl", level: 17)
+        XCTAssertEqual(c.option.speciesId, "scyther")
+        XCTAssertNil(c.tier); XCTAssertEqual(c.roll, 50); XCTAssertEqual(c.worth, .weak)
+    }
+
+    func testCardHighlightsUseTheTagsThresholds() {
+        func card(_ score: Double, _ pct: Double) -> LeaguePanel.Card {
+            LeaguePanel.card(R(options: [option("a", score: score, iv: rolled(pct), cost: cost)]), shown: 0, key: "gl", level: 17)
+        }
+        XCTAssertTrue(card(88, 80).scoreStrong); XCTAssertFalse(card(87.9, 80).scoreStrong); XCTAssertTrue(card(88, 80).ivStrong); XCTAssertFalse(card(88, 79.9).ivStrong)
+        let row = LeaguePanel.row(option("a", score: 88, iv: rolled(80), cost: cost), key: "gl", level: 17)
+        XCTAssertTrue(row.scoreStrong); XCTAssertTrue(row.ivStrong)
+        let low = LeaguePanel.row(option("a", score: 85, iv: rolled(79), cost: cost), key: "gl", level: 17)
+        XCTAssertFalse(low.scoreStrong); XCTAssertFalse(low.ivStrong)
+    }
+
+    func testTheBuildChipNamesTheTargetOnlyWhenItDiffersAndTheSentenceChecksTheTierFirst() {
+        var b = build(areas: ["GL"]); b.targetName = "Blastoise"
+        let wart = LeaguePanel.card(R(options: [option("wartortle", score: 86.2, iv: iv, cost: cost)]), shown: 0, key: "gl", level: 17, builds: [b])
+        XCTAssertEqual(LeaguePanel.buildsChipText(wart), "ADVICE BUILDS BLASTOISE")
+        let same = LeaguePanel.card(R(options: [option("blastoise", score: 89, iv: iv, cost: cost)]), shown: 0, key: "gl", level: 17, builds: [b])
+        XCTAssertEqual(LeaguePanel.buildsChipText(same), "ADVICE BUILDS IT")
+        XCTAssertTrue(LeaguePanel.spoken(wart, key: "gl", chip: "Pick").contains("Advice builds it as Blastoise"))
+        // Unranked and IVs not read: the species is what is wrong first.
+        let unranked = LeaguePanel.card(R(options: [option("a", iv: nil)]), shown: 0, key: "gl", level: 17)
+        XCTAssertEqual(LeaguePanel.worthSentence(unranked, key: "gl"), "Species not ranked for Great League")
+        // A roll just under the bar is "top 21%" against the "top 20%" bar.
+        let near = LeaguePanel.card(R(options: [option("a", score: 95, iv: rolled(79.9), cost: cost)]), shown: 0, key: "gl", level: 17)
+        XCTAssertEqual(LeaguePanel.worthSentence(near, key: "gl"), "S-tier species, but IVs only in the top 21% for Great League; a good roll is the top 20%")
+    }
+
+    func testTheNextListShowsTheCopysRollBesideTheTierAndWordsTheStepsLeft() {
+        var b = build(areas: ["GL"])
+        b.tier = "S"; b.ivs = "8/15/0"
+        XCTAssertEqual(b.worthText, "S-tier · IVs 51.1%")
+        b.ivs = "15/15/15"; XCTAssertEqual(b.worthText, "S-tier · IVs 100.0%")
+        b.ivs = nil; XCTAssertEqual(b.worthText, "S-tier · IVs not read")
+        // No dust, candy or XL: "none" only when no step is left.
+        b.steps = []; XCTAssertEqual(b.effortText, "none")
+        b.steps = [.init(kind: "formChange", to: "X"), .init(kind: "megaEvolve"), .init(kind: "eliteTM", count: 2), .init(kind: "secondMove"), .init(kind: "needsDynamaxCopy")]
+        XCTAssertEqual(b.effortText, "Form change, Mega evolve, Elite TM, Second move, Dynamax copy")
+        b.dust = 56_800; b.candy = 10
+        XCTAssertEqual(b.effortText, b.costText, "a cost is shown as the cost")
+    }
 }

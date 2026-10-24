@@ -75,6 +75,16 @@ final class FitTests: XCTestCase {
         let odd = try XCTUnwrap(BoxAdvice.Fit.decode(area: "rocket", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"somethingNew"]"#.utf8)), ivPercent: nil))
         XCTAssertEqual(odd.line, "Weak for Rocket")
         XCTAssertNil(BoxAdvice.Fit.decode(area: "raids", try JSONDecoder().decode(JSONValue.self, from: Data(#"["x"]"#.utf8)), ivPercent: nil), "an unknown tag is skipped")
+        func decode(_ json: String) throws -> BoxAdvice.Fit? { BoxAdvice.Fit.decode(area: "raids", try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)), ivPercent: 90) }
+        // A Strong or OK array without its build species and tier strings is skipped, not read as Strong.
+        XCTAssertNil(try decode(#"["s"]"#)); XCTAssertNil(try decode(#"["s","Mega Delphox"]"#)); XCTAssertNil(try decode(#"["o",null,"S"]"#)); XCTAssertNil(try decode(#"["s",5,6]"#))
+        XCTAssertNotNil(try decode(#"["s","Mega Delphox","S"]"#))
+        // The build tail goes through the range-checked whole-number reading: a fraction, a huge or a non-finite figure drops the tail, never traps.
+        XCTAssertEqual(try decode(#"["s","Mega Delphox","S",true,"Mega Delphox",1000,50,0]"#)?.buildCost, .init(dust: 1000, candy: 50, xl: 0))
+        for bad in ["1.5", "1e300", "-1e300", "9e15"] {
+            let f = try XCTUnwrap(try decode(#"["s","Mega Delphox","S",true,"Mega Delphox",\#(bad),50,0]"#), bad)
+            XCTAssertFalse(f.build, bad); XCTAssertNil(f.buildCost, bad)
+        }
     }
 
     /// The build tail: from index 3 for strong / ok, from 5 for weak (index 4 then holds the extra, or null).

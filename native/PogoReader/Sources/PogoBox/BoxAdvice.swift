@@ -104,6 +104,36 @@ public struct BoxAdvice: Codable, Equatable {
             let base = parts.joined(separator: " + ")
             return dynamax && !inlined ? base + " (Max needs a Dynamax copy)" : base
         }
+        /// This copy's IV percentage from `ivs` ("17/9/13" is 86.7); nil when the IVs are not known.
+        public var ivPercent: Double? {
+            let p = (ivs ?? "").split(separator: "/").compactMap { Double($0) }
+            return p.count == 3 ? p.reduce(0, +) / 45 * 100 : nil
+        }
+        /// The Next list's WORTH: the build target's tier and this copy's roll ("S-tier · IVs 17.8%", "S-tier · IVs not read"), so species worth and the copy are both shown.
+        public var worthText: String {
+            "\(tier)-tier · " + (ivPercent.map { "IVs " + String(format: "%.1f", $0) + "%" } ?? "IVs not read")
+        }
+        /// The Next list's EFFORT: the cost when there is one, else the steps still left in words (a form change, a Mega, an Elite TM, a second move, a
+        /// Dynamax copy cost no dust or candy but are not "none"); "none" only when no step is left.
+        public var effortText: String {
+            if dust != 0 || candy != 0 || xl != 0 { return costText }
+            guard let steps else { return powerUp ? "none" : formChange ? "Form change" : "Evolve" }
+            var words = [String]()
+            for st in steps {
+                switch st.kind {
+                case "evolve": words.append("Evolve")
+                case "formChange": words.append("Form change")
+                case "megaEvolve": words.append("Mega evolve")
+                case "powerUp": words.append("Power up")
+                case "secondMove": words.append("Second move")
+                case "eliteTM": words.append("Elite TM")
+                case "cdMove": words.append("Community Day move")
+                case "needsDynamaxCopy": words.append("Dynamax copy")
+                default: words.append("More to do")
+                }
+            }
+            return words.isEmpty ? "none" : words.joined(separator: ", ")
+        }
         /// "120k dust, 150 candy, 8 XL". Elite TMs and the Community Day move are steps of `action`, not repeated here.
         public var costText: String {
             var parts = [String]()
@@ -391,9 +421,12 @@ public struct BoxAdvice: Codable, Equatable {
         static func decode(area: String, _ v: JSONValue, ivPercent: Double?) -> Fit? {
             guard let a = v.arrayValue, case .string(let t)? = a.first else { return nil }
             func str(_ i: Int) -> String? { if i < a.count, case .string(let s) = a[i] { return s } else { return nil } }
-            func num(_ i: Int) -> Int? { if i < a.count, case .number(let n) = a[i] { return Int(n) } else { return nil } }
+            // The same range-checked whole-number reading as the league decoder: `Int(_:)` traps on NaN, infinity and huge values.
+            func num(_ i: Int) -> Int? { if i < a.count, case .number(let n) = a[i] { return LeagueRating.whole(n) } else { return nil } }
             let tag: Tag
             switch t { case "s": tag = .strong; case "o": tag = .ok; case "w": tag = .weak; default: return nil }
+            // A strong or ok fit always names the build species and the tier; one without them is not a Strong the app can word, so it is skipped.
+            if tag != .weak, str(1) == nil || str(2) == nil { return nil }
             var pct = ivPercent
             var species: String?
             let reason = str(3).flatMap(Reason.init(rawValue:))
