@@ -25,7 +25,7 @@ const ALLOWED = new Set([
   'src/cpm.js', 'src/cost.js', 'src/evolve.js', 'src/leagues.js', 'src/gamemaster.js', 'src/advise.js', 'src/data.js', 'src/pvp-rank.js', 'src/csv.js', 'src/import/pokegenie.js',
 ]);
 const STUBS = { 'src/extract/frame.js': ['readFrame'] };
-const DATA_FILES = ['gamemaster.json', 'tiers.json', 'pvp-rankings.json'];
+const DATA_FILES = ['gamemaster.json', 'tiers.json', 'pvp-rankings.json', 'hub.json'];
 const NODE_WORDS = /\b(process|require|Buffer|__dirname|__filename)\b|node:|import\.meta|\bawait\s+import\b/;
 const FACADE = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'pogo-core-facade.js'), 'utf8');
 

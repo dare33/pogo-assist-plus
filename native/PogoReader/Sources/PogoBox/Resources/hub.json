@@ -1,0 +1,1166 @@
+{
+ "generated": "2026-10-24T13:47:20.404Z",
+ "rotation": [
+  {
+   "from": "2026-10-21",
+   "to": "2026-10-27",
+   "kind": "5star",
+   "title": "5-star raid",
+   "bosses": [
+    {
+     "name": "Palkia",
+     "speciesId": "palkia",
+     "types": [
+      "water",
+      "dragon"
+     ]
+    }
+   ],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/october-2026-events/"
+  },
+  {
+   "from": "2026-10-28",
+   "to": "2026-11-03",
+   "kind": "5star",
+   "title": "5-star raid",
+   "bosses": [
+    {
+     "name": "Giratina (Origin)",
+     "speciesId": "giratina_origin",
+     "types": [
+      "ghost",
+      "dragon"
+     ]
+    }
+   ],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/october-2026-events/"
+  },
+  {
+   "from": "2026-11-04",
+   "to": "2026-11-08",
+   "kind": "5star",
+   "title": "5-star raid",
+   "bosses": [
+    {
+     "name": "Giratina (Altered)",
+     "speciesId": "giratina_altered",
+     "types": [
+      "ghost",
+      "dragon"
+     ]
+    }
+   ],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-09",
+   "to": "2026-11-24",
+   "kind": "5star",
+   "title": "5-star raid",
+   "bosses": [
+    {
+     "name": "Cresselia",
+     "speciesId": "cresselia",
+     "types": [
+      "psychic"
+     ]
+    },
+    {
+     "name": "Darkrai",
+     "speciesId": "darkrai",
+     "types": [
+      "dark"
+     ]
+    }
+   ],
+   "note": "Both at once",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-25",
+   "to": "2026-12-01",
+   "kind": "5star",
+   "title": "5-star raid",
+   "bosses": [
+    {
+     "name": "Deoxys",
+     "speciesId": "deoxys",
+     "types": [
+      "psychic"
+     ]
+    },
+    {
+     "name": "Deoxys (Speed)",
+     "speciesId": "deoxys_speed",
+     "types": [
+      "psychic"
+     ]
+    },
+    {
+     "name": "Deoxys (Attack)",
+     "speciesId": "deoxys_attack",
+     "types": [
+      "psychic"
+     ]
+    },
+    {
+     "name": "Deoxys (Defense)",
+     "speciesId": "deoxys_defense",
+     "types": [
+      "psychic"
+     ]
+    }
+   ],
+   "note": "All four formes (Normal, Speed, Attack, Defense)",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-10-21",
+   "to": "2026-10-27",
+   "kind": "mega",
+   "title": "Mega raid",
+   "bosses": [
+    {
+     "name": "Mega Charizard X",
+     "speciesId": "charizard_mega_x",
+     "types": [
+      "fire",
+      "dragon"
+     ]
+    },
+    {
+     "name": "Mega Charizard Y",
+     "speciesId": "charizard_mega_y",
+     "types": [
+      "fire",
+      "flying"
+     ]
+    }
+   ],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/october-2026-events/"
+  },
+  {
+   "from": "2026-10-28",
+   "to": "2026-11-08",
+   "kind": "mega",
+   "title": "Mega raid",
+   "bosses": [
+    {
+     "name": "Mega Sableye",
+     "speciesId": "sableye_mega",
+     "types": [
+      "dark",
+      "ghost"
+     ]
+    }
+   ],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-16",
+   "to": "2026-11-24",
+   "kind": "mega",
+   "title": "Mega raid",
+   "bosses": [
+    {
+     "name": "Mega Banette",
+     "speciesId": "banette_mega",
+     "types": [
+      "ghost"
+     ]
+    }
+   ],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-25",
+   "to": "2026-12-01",
+   "kind": "mega",
+   "title": "Mega raid",
+   "bosses": [
+    {
+     "name": "Mega Metagross",
+     "speciesId": "metagross_mega",
+     "types": [
+      "steel",
+      "psychic"
+     ]
+    }
+   ],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-10-07",
+   "to": "2026-11-03",
+   "kind": "shadow",
+   "title": "Shadow raid",
+   "bosses": [
+    {
+     "name": "Shadow Landorus (Incarnate)",
+     "speciesId": "landorus_incarnate_shadow",
+     "types": [
+      "ground",
+      "flying"
+     ]
+    }
+   ],
+   "note": "Weekends only",
+   "source": "https://pokemongohub.net/post/event/october-2026-events/"
+  },
+  {
+   "from": "2026-11-03",
+   "to": "2026-12-01",
+   "kind": "shadow",
+   "title": "Shadow raid",
+   "bosses": [
+    {
+     "name": "Shadow Tornadus (Incarnate)",
+     "speciesId": "tornadus_incarnate_shadow",
+     "types": [
+      "flying"
+     ]
+    }
+   ],
+   "note": "Weekends only",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-10-26",
+   "to": "2026-10-26",
+   "kind": "maxmon",
+   "title": "Max Monday",
+   "bosses": [
+    {
+     "name": "Sableye",
+     "speciesId": "sableye",
+     "types": [
+      "dark",
+      "ghost"
+     ]
+    }
+   ],
+   "note": "6:00 am to 9:00 pm local time",
+   "source": "https://leekduck.com/events/max-mondays-2026-10-26/"
+  },
+  {
+   "from": "2026-11-02",
+   "to": "2026-11-02",
+   "kind": "maxmon",
+   "title": "Max Monday",
+   "bosses": [
+    {
+     "name": "Machop",
+     "speciesId": "machop",
+     "types": [
+      "fighting"
+     ]
+    }
+   ],
+   "note": "6:00 am to 9:00 pm local time",
+   "source": "https://leekduck.com/events/max-mondays-2026-11-02/"
+  },
+  {
+   "from": "2026-11-16",
+   "to": "2026-11-16",
+   "kind": "maxmon",
+   "title": "Max Monday",
+   "bosses": [],
+   "note": "6:00 am to 9:00 pm local time",
+   "source": "https://leekduck.com/events/max-mondays-2026-11-16/"
+  },
+  {
+   "from": "2026-11-30",
+   "to": "2026-11-30",
+   "kind": "maxmon",
+   "title": "Max Monday",
+   "bosses": [
+    {
+     "name": "Cryogonal",
+     "speciesId": "cryogonal",
+     "types": [
+      "ice"
+     ]
+    }
+   ],
+   "note": "6:00 am to 9:00 pm local time",
+   "source": "https://leekduck.com/events/max-mondays-2026-11-30/"
+  },
+  {
+   "from": "2026-10-31",
+   "to": "2026-10-31",
+   "kind": "battleday",
+   "title": "Super Mega Raid Day",
+   "bosses": [
+    {
+     "name": "Chandelure",
+     "speciesId": "chandelure",
+     "types": [
+      "ghost",
+      "fire"
+     ]
+    }
+   ],
+   "note": "Time to be announced",
+   "source": "https://pokemongohub.net/post/event/october-2026-events/"
+  },
+  {
+   "from": "2026-11-28",
+   "to": "2026-11-28",
+   "kind": "battleday",
+   "title": "Super Mega Raid Day",
+   "bosses": [],
+   "note": "Time to be announced",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-16",
+   "to": "2026-11-23",
+   "kind": "event",
+   "title": "Dynamax Trails",
+   "bosses": [],
+   "note": "Max battle event",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-10-28",
+   "to": "2026-10-28",
+   "kind": "raidhour",
+   "title": "Raid Hour",
+   "bosses": [],
+   "note": "6:00 pm to 7:00 pm local time",
+   "source": "https://pokemongohub.net/post/event/october-2026-events/"
+  },
+  {
+   "from": "2026-11-04",
+   "to": "2026-11-04",
+   "kind": "raidhour",
+   "title": "Raid Hour",
+   "bosses": [],
+   "note": "6:00 pm to 7:00 pm local time",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-18",
+   "to": "2026-11-18",
+   "kind": "raidhour",
+   "title": "Raid Hour",
+   "bosses": [],
+   "note": "6:00 pm to 7:00 pm local time",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-25",
+   "to": "2026-11-25",
+   "kind": "raidhour",
+   "title": "Raid Hour",
+   "bosses": [],
+   "note": "6:00 pm to 7:00 pm local time",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-21",
+   "to": "2026-11-21",
+   "kind": "event",
+   "title": "Pawniard Community Day",
+   "bosses": [
+    {
+     "name": "Pawniard",
+     "speciesId": "pawniard",
+     "types": [
+      "dark",
+      "steel"
+     ]
+    }
+   ],
+   "note": "2:00 pm to 5:00 pm local time; Kowtow Cleave when Bisharp evolves to Kingambit",
+   "source": "https://pokemongo.com/news/communityday-november-2026-pawniard"
+  },
+  {
+   "from": "2026-11-01",
+   "to": "2026-11-05",
+   "kind": "event",
+   "title": "Halloween Part Two",
+   "bosses": [],
+   "note": "Seasonal event",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-09",
+   "to": "2026-11-13",
+   "kind": "event",
+   "title": "Into the Wild",
+   "bosses": [],
+   "note": "Steel and Dragon types",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-14",
+   "to": "2026-11-15",
+   "kind": "event",
+   "title": "Global GO Wild Area",
+   "bosses": [],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-14",
+   "to": "2026-11-19",
+   "kind": "event",
+   "title": "Minior Showers: Leonidis",
+   "bosses": [],
+   "note": "Meteor Pokémon event",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-24",
+   "to": "2026-11-30",
+   "kind": "event",
+   "title": "Twilight Wishes",
+   "bosses": [],
+   "note": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  }
+ ],
+ "events": [
+  {
+   "from": "2026-09-08",
+   "to": "2026-12-01",
+   "title": "GO Battle League: Twilight Trails",
+   "line": "Season ends 1 Dec, 10:00 am PT. Mega Edition leagues: Great, Ultra and Little Cup from 13 Oct; Ultra, Master Mega Edition and Fantasy Cup: Great League Edition from 20 Oct; Master League and Mega Halloween Cup: Great League Edition from 27 Oct.",
+   "tie": "pvp",
+   "source": "https://pokemongo.com/news/go-battle-league-twilight-trails ; https://leekduck.com/events/?name=Twilight%20Trails"
+  },
+  {
+   "from": "2026-10-10",
+   "to": "2026-10-10",
+   "title": "Zorua Community Day",
+   "line": "2:00 pm to 5:00 pm local time. Sucker Punch when Zorua evolves to Zoroark.",
+   "tie": "",
+   "source": "https://pokemongo.com/news/communityday-october-2026-zorua"
+  },
+  {
+   "from": "2026-10-31",
+   "to": "2026-10-31",
+   "title": "Super Mega Raid Day",
+   "line": "Chandelure featured.",
+   "tie": "raids",
+   "source": "https://pokemongohub.net/post/event/october-2026-events/"
+  },
+  {
+   "from": "2026-11-01",
+   "to": "2026-11-05",
+   "title": "Halloween Part Two",
+   "line": "Seasonal event continues.",
+   "tie": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-09",
+   "to": "2026-11-13",
+   "title": "Into the Wild",
+   "line": "Steel and Dragon types.",
+   "tie": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-14",
+   "to": "2026-11-15",
+   "title": "Global GO Wild Area",
+   "line": "Special event.",
+   "tie": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-14",
+   "to": "2026-11-19",
+   "title": "Minior Showers: Leonidis",
+   "line": "Meteor Pokémon event.",
+   "tie": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-16",
+   "to": "2026-11-23",
+   "title": "Dynamax Trails",
+   "line": "Max battle event.",
+   "tie": "max",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-21",
+   "to": "2026-11-21",
+   "title": "Pawniard Community Day",
+   "line": "2:00 pm to 5:00 pm local time. Kowtow Cleave when Bisharp evolves to Kingambit.",
+   "tie": "",
+   "source": "https://pokemongo.com/news/communityday-november-2026-pawniard"
+  },
+  {
+   "from": "2026-11-24",
+   "to": "2026-11-30",
+   "title": "Twilight Wishes",
+   "line": "Special event.",
+   "tie": "",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  },
+  {
+   "from": "2026-11-28",
+   "to": "2026-11-28",
+   "title": "Super Mega Raid Day",
+   "line": "Special Mega Raid event.",
+   "tie": "raids",
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+  }
+ ],
+ "leaders": [
+  {
+   "name": "Giovanni",
+   "since": "2026-10-04",
+   "slots": [
+    [
+     {
+      "name": "Shadow Persian",
+      "speciesId": "persian_shadow",
+      "types": [
+       "normal"
+      ]
+     }
+    ],
+    [
+     {
+      "name": "Shadow Rhyperior",
+      "speciesId": "rhyperior_shadow",
+      "types": [
+       "ground",
+       "rock"
+      ]
+     },
+     {
+      "name": "Shadow Machamp",
+      "speciesId": "machamp_shadow",
+      "types": [
+       "fighting"
+      ]
+     },
+     {
+      "name": "Shadow Kangaskhan",
+      "speciesId": "kangaskhan",
+      "types": [
+       "normal"
+      ]
+     }
+    ],
+    [
+     {
+      "name": "Shadow Zekrom",
+      "speciesId": "zekrom",
+      "types": [
+       "dragon",
+       "electric"
+      ]
+     }
+    ]
+   ],
+   "source": "https://dnyuz.com/2026/10/05/pokemon-go-giovanni-lineup-and-best-counters-for-october-2026-takeover/ ; https://www.giga.de/games/giovanni-in-pokemon-go-besiegen-oktober-2026--01J4S5HWNXED3VMC2SZH26QCQT"
+  },
+  {
+   "name": "Sierra",
+   "since": "2026-10",
+   "slots": [
+    [
+     {
+      "name": "Shadow Pancham",
+      "speciesId": "pancham",
+      "types": [
+       "fighting"
+      ]
+     }
+    ],
+    [
+     {
+      "name": "Shadow Blastoise",
+      "speciesId": "blastoise_shadow",
+      "types": [
+       "water"
+      ]
+     },
+     {
+      "name": "Shadow Flygon",
+      "speciesId": "flygon_shadow",
+      "types": [
+       "ground",
+       "dragon"
+      ]
+     }
+    ],
+    [
+     {
+      "name": "Shadow Milotic",
+      "speciesId": "milotic_shadow",
+      "types": [
+       "water"
+      ]
+     },
+     {
+      "name": "Shadow Houndoom",
+      "speciesId": "houndoom_shadow",
+      "types": [
+       "dark",
+       "fire"
+      ]
+     }
+    ]
+   ],
+   "source": "https://leekduck.com/rocket-lineups/"
+  },
+  {
+   "name": "Cliff",
+   "since": "2026-10",
+   "slots": [
+    [
+     {
+      "name": "Shadow Cubone",
+      "speciesId": "cubone_shadow",
+      "types": [
+       "ground"
+      ]
+     }
+    ],
+    [
+     {
+      "name": "Shadow Snorlax",
+      "speciesId": "snorlax_shadow",
+      "types": [
+       "normal"
+      ]
+     },
+     {
+      "name": "Shadow Golurk",
+      "speciesId": "golurk_shadow",
+      "types": [
+       "ground",
+       "ghost"
+      ]
+     }
+    ],
+    [
+     {
+      "name": "Shadow Tyranitar",
+      "speciesId": "tyranitar_shadow",
+      "types": [
+       "rock",
+       "dark"
+      ]
+     }
+    ]
+   ],
+   "source": "https://leekduck.com/rocket-lineups/"
+  },
+  {
+   "name": "Arlo",
+   "since": "2026-10",
+   "slots": [
+    [
+     {
+      "name": "Shadow Alolan Grimer",
+      "speciesId": "grimer_alolan_shadow",
+      "types": [
+       "poison",
+       "dark"
+      ]
+     }
+    ],
+    [
+     {
+      "name": "Shadow Steelix",
+      "speciesId": "steelix_shadow",
+      "types": [
+       "steel",
+       "ground"
+      ]
+     },
+     {
+      "name": "Shadow Slowbro",
+      "speciesId": "slowbro_shadow",
+      "types": [
+       "water",
+       "psychic"
+      ]
+     }
+    ],
+    [
+     {
+      "name": "Shadow Alakazam",
+      "speciesId": "alakazam_shadow",
+      "types": [
+       "psychic"
+      ]
+     },
+     {
+      "name": "Shadow Charizard",
+      "speciesId": "charizard_shadow",
+      "types": [
+       "fire",
+       "flying"
+      ]
+     },
+     {
+      "name": "Shadow Scizor",
+      "speciesId": "scizor_shadow",
+      "types": [
+       "bug",
+       "steel"
+      ]
+     }
+    ]
+   ],
+   "source": "https://leekduck.com/rocket-lineups/"
+  }
+ ],
+ "grunts": [
+  {
+   "type": "normal",
+   "quote": "Winning is for winners"
+  },
+  {
+   "type": "fire",
+   "quote": "Do you know how hot Pokémon fire breath can get?"
+  },
+  {
+   "type": "water",
+   "quote": "These waters are treacherous!"
+  },
+  {
+   "type": "electric",
+   "quote": "Get ready to be shocked!"
+  },
+  {
+   "type": "grass",
+   "quote": "Don't tangle with us!"
+  },
+  {
+   "type": "ice",
+   "quote": "You're gonna be frozen in your tracks."
+  },
+  {
+   "type": "fighting",
+   "quote": "This buff physique isn't just for show!"
+  },
+  {
+   "type": "poison",
+   "quote": "Coiled and ready to strike!"
+  },
+  {
+   "type": "ground",
+   "quote": "You'll be defeated into the ground!"
+  },
+  {
+   "type": "flying",
+   "quote": "Battle against my Flying-type Pokémon!"
+  },
+  {
+   "type": "psychic",
+   "quote": "Are you scared of psychics that use unseen power?"
+  },
+  {
+   "type": "bug",
+   "quote": "Go, my super bug Pokémon!"
+  },
+  {
+   "type": "rock",
+   "quote": "Let's rock and roll!"
+  },
+  {
+   "type": "ghost",
+   "quote": "Ke...ke...ke...ke...ke...ke!"
+  },
+  {
+   "type": "dragon",
+   "quote": "ROAR! …How'd that sound?"
+  },
+  {
+   "type": "dark",
+   "quote": "Wherever there is light, there is also shadow."
+  },
+  {
+   "type": "steel",
+   "quote": "You're no match for my iron will!"
+  },
+  {
+   "type": "fairy",
+   "quote": "Check out my cute Pokémon!"
+  },
+  {
+   "type": "",
+   "quote": "Fooled ya, twerp"
+  }
+ ],
+ "typeChart": {
+  "normal": {
+   "normal": 1,
+   "fire": 1,
+   "water": 1,
+   "electric": 1,
+   "grass": 1,
+   "ice": 1,
+   "fighting": 1,
+   "poison": 1,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 1,
+   "bug": 1,
+   "rock": 0.625,
+   "ghost": 0.390625,
+   "dragon": 1,
+   "dark": 1,
+   "steel": 0.625,
+   "fairy": 1
+  },
+  "fire": {
+   "normal": 1,
+   "fire": 0.625,
+   "water": 0.625,
+   "electric": 1,
+   "grass": 1.6,
+   "ice": 1.6,
+   "fighting": 1,
+   "poison": 1,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 1,
+   "bug": 1.6,
+   "rock": 0.625,
+   "ghost": 1,
+   "dragon": 0.625,
+   "dark": 1,
+   "steel": 1.6,
+   "fairy": 1
+  },
+  "water": {
+   "normal": 1,
+   "fire": 1.6,
+   "water": 0.625,
+   "electric": 1,
+   "grass": 0.625,
+   "ice": 1,
+   "fighting": 1,
+   "poison": 1,
+   "ground": 1.6,
+   "flying": 1,
+   "psychic": 1,
+   "bug": 1,
+   "rock": 1.6,
+   "ghost": 1,
+   "dragon": 0.625,
+   "dark": 1,
+   "steel": 1,
+   "fairy": 1
+  },
+  "electric": {
+   "normal": 1,
+   "fire": 1,
+   "water": 1.6,
+   "electric": 0.625,
+   "grass": 0.625,
+   "ice": 1,
+   "fighting": 1,
+   "poison": 1,
+   "ground": 0.390625,
+   "flying": 1.6,
+   "psychic": 1,
+   "bug": 1,
+   "rock": 1,
+   "ghost": 1,
+   "dragon": 0.625,
+   "dark": 1,
+   "steel": 1,
+   "fairy": 1
+  },
+  "grass": {
+   "normal": 1,
+   "fire": 0.625,
+   "water": 1.6,
+   "electric": 1,
+   "grass": 0.625,
+   "ice": 1,
+   "fighting": 1,
+   "poison": 0.625,
+   "ground": 1.6,
+   "flying": 0.625,
+   "psychic": 1,
+   "bug": 0.625,
+   "rock": 1.6,
+   "ghost": 1,
+   "dragon": 0.625,
+   "dark": 1,
+   "steel": 0.625,
+   "fairy": 1
+  },
+  "ice": {
+   "normal": 1,
+   "fire": 0.625,
+   "water": 0.625,
+   "electric": 1,
+   "grass": 1.6,
+   "ice": 0.625,
+   "fighting": 1,
+   "poison": 1,
+   "ground": 1.6,
+   "flying": 1.6,
+   "psychic": 1,
+   "bug": 1,
+   "rock": 1,
+   "ghost": 1,
+   "dragon": 1.6,
+   "dark": 1,
+   "steel": 0.625,
+   "fairy": 1
+  },
+  "fighting": {
+   "normal": 1.6,
+   "fire": 1,
+   "water": 1,
+   "electric": 1,
+   "grass": 1,
+   "ice": 1.6,
+   "fighting": 1,
+   "poison": 0.625,
+   "ground": 1,
+   "flying": 0.625,
+   "psychic": 0.625,
+   "bug": 0.625,
+   "rock": 1.6,
+   "ghost": 0.390625,
+   "dragon": 1,
+   "dark": 1.6,
+   "steel": 1.6,
+   "fairy": 0.625
+  },
+  "poison": {
+   "normal": 1,
+   "fire": 1,
+   "water": 1,
+   "electric": 1,
+   "grass": 1.6,
+   "ice": 1,
+   "fighting": 1,
+   "poison": 0.625,
+   "ground": 0.625,
+   "flying": 1,
+   "psychic": 1,
+   "bug": 1,
+   "rock": 0.625,
+   "ghost": 0.625,
+   "dragon": 1,
+   "dark": 1,
+   "steel": 0.390625,
+   "fairy": 1.6
+  },
+  "ground": {
+   "normal": 1,
+   "fire": 1.6,
+   "water": 1,
+   "electric": 1.6,
+   "grass": 0.625,
+   "ice": 1,
+   "fighting": 1,
+   "poison": 1.6,
+   "ground": 1,
+   "flying": 0.390625,
+   "psychic": 1,
+   "bug": 0.625,
+   "rock": 1.6,
+   "ghost": 1,
+   "dragon": 1,
+   "dark": 1,
+   "steel": 1.6,
+   "fairy": 1
+  },
+  "flying": {
+   "normal": 1,
+   "fire": 1,
+   "water": 1,
+   "electric": 0.625,
+   "grass": 1.6,
+   "ice": 1,
+   "fighting": 1.6,
+   "poison": 1,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 1,
+   "bug": 1.6,
+   "rock": 0.625,
+   "ghost": 1,
+   "dragon": 1,
+   "dark": 1,
+   "steel": 0.625,
+   "fairy": 1
+  },
+  "psychic": {
+   "normal": 1,
+   "fire": 1,
+   "water": 1,
+   "electric": 1,
+   "grass": 1,
+   "ice": 1,
+   "fighting": 1.6,
+   "poison": 1.6,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 0.625,
+   "bug": 1,
+   "rock": 1,
+   "ghost": 1,
+   "dragon": 1,
+   "dark": 0.390625,
+   "steel": 0.625,
+   "fairy": 1
+  },
+  "bug": {
+   "normal": 1,
+   "fire": 0.625,
+   "water": 1,
+   "electric": 1,
+   "grass": 1.6,
+   "ice": 1,
+   "fighting": 0.625,
+   "poison": 0.625,
+   "ground": 1,
+   "flying": 0.625,
+   "psychic": 1.6,
+   "bug": 1,
+   "rock": 1,
+   "ghost": 0.625,
+   "dragon": 1,
+   "dark": 1.6,
+   "steel": 0.625,
+   "fairy": 0.625
+  },
+  "rock": {
+   "normal": 1,
+   "fire": 1.6,
+   "water": 1,
+   "electric": 1,
+   "grass": 1,
+   "ice": 1.6,
+   "fighting": 0.625,
+   "poison": 1,
+   "ground": 0.625,
+   "flying": 1.6,
+   "psychic": 1,
+   "bug": 1.6,
+   "rock": 1,
+   "ghost": 1,
+   "dragon": 1,
+   "dark": 1,
+   "steel": 0.625,
+   "fairy": 1
+  },
+  "ghost": {
+   "normal": 0.390625,
+   "fire": 1,
+   "water": 1,
+   "electric": 1,
+   "grass": 1,
+   "ice": 1,
+   "fighting": 1,
+   "poison": 1,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 1.6,
+   "bug": 1,
+   "rock": 1,
+   "ghost": 1.6,
+   "dragon": 1,
+   "dark": 0.625,
+   "steel": 1,
+   "fairy": 1
+  },
+  "dragon": {
+   "normal": 1,
+   "fire": 1,
+   "water": 1,
+   "electric": 1,
+   "grass": 1,
+   "ice": 1,
+   "fighting": 1,
+   "poison": 1,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 1,
+   "bug": 1,
+   "rock": 1,
+   "ghost": 1,
+   "dragon": 1.6,
+   "dark": 1,
+   "steel": 0.625,
+   "fairy": 0.390625
+  },
+  "dark": {
+   "normal": 1,
+   "fire": 1,
+   "water": 1,
+   "electric": 1,
+   "grass": 1,
+   "ice": 1,
+   "fighting": 0.625,
+   "poison": 1,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 1.6,
+   "bug": 1,
+   "rock": 1,
+   "ghost": 1.6,
+   "dragon": 1,
+   "dark": 0.625,
+   "steel": 1,
+   "fairy": 0.625
+  },
+  "steel": {
+   "normal": 1,
+   "fire": 0.625,
+   "water": 0.625,
+   "electric": 0.625,
+   "grass": 1,
+   "ice": 1.6,
+   "fighting": 1,
+   "poison": 1,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 1,
+   "bug": 1,
+   "rock": 1.6,
+   "ghost": 1,
+   "dragon": 1,
+   "dark": 1,
+   "steel": 0.625,
+   "fairy": 1.6
+  },
+  "fairy": {
+   "normal": 1,
+   "fire": 0.625,
+   "water": 1,
+   "electric": 1,
+   "grass": 1,
+   "ice": 1,
+   "fighting": 1.6,
+   "poison": 0.625,
+   "ground": 1,
+   "flying": 1,
+   "psychic": 1,
+   "bug": 1,
+   "rock": 1,
+   "ghost": 1,
+   "dragon": 1.6,
+   "dark": 1.6,
+   "steel": 0.625,
+   "fairy": 1
+  }
+ }
+}
