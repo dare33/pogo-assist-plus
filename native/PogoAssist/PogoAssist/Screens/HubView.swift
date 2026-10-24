@@ -9,6 +9,9 @@ struct HubView: View {
     @Environment(\.accent) private var accent
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var rankingInfo = false
+    /// False while another tab is showing. The two tabs stay alive under each other, and a menu (the account and More buttons) stays
+    /// reachable by accessibility even from a hidden stack, so the header's menus are left out until this tab is the one shown.
+    var active = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,8 +40,10 @@ struct HubView: View {
     /// The account name, centred in the accent's ink (it opens the account menu), and the More circle at the trailing edge.
     private var header: some View {
         ZStack {
-            AccountMenu(hub: true).padding(.horizontal, 56)
-            HStack { Spacer(); MoreButton() }
+            if active {
+                AccountMenu(hub: true).padding(.horizontal, 56)
+                HStack { Spacer(); MoreButton() }
+            }
         }
         .padding(.horizontal, Theme.Space.screen)
         .frame(minHeight: 52)
@@ -133,15 +138,20 @@ struct HubView: View {
     // MARK: tiles
 
     private var tiles: some View {
-        let one = typeSize >= .accessibility1
-        let columns = one ? [GridItem(.flexible())] : [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+        let per = typeSize >= .accessibility1 ? 1 : 2
         var builds: [BoxAdvice.Build]?
         if case .ready(let a) = model.advice { builds = a.builds }
-        return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(ContentType.allCases) { type in
-                NavigationLink(value: type) { HubTile(type: type, count: builds.map { HubModel.count($0, for: type.key) }) }
-                    .buttonStyle(PressStyle())
-                    .accessibilityIdentifier("hub-tile-\(type.rawValue)")
+        let types = ContentType.allCases
+        // Rows of a Grid, so the two tiles of a row are as tall as the taller one.
+        return Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+            ForEach(Array(stride(from: 0, to: types.count, by: per)), id: \.self) { start in
+                GridRow {
+                    ForEach(types[start..<min(start + per, types.count)]) { type in
+                        NavigationLink(value: type) { HubTile(type: type, count: builds.map { HubModel.count($0, for: type.key) }) }
+                            .buttonStyle(PressStyle())
+                            .accessibilityIdentifier("hub-tile-\(type.rawValue)")
+                    }
+                }
             }
         }
     }
@@ -204,7 +214,7 @@ struct HubTile: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 92, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .panelShadow()
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))

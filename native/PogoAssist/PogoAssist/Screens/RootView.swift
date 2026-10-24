@@ -24,7 +24,7 @@ struct RootView: View {
             ZStack {
                 NavigationStack { BoxView().navigationDestination(isPresented: scanBinding(for: .box)) { ScanView().hidesTabBar() } }
                     .opacity(tab == .box ? 1 : 0).allowsHitTesting(tab == .box).accessibilityHidden(tab != .box)
-                NavigationStack { HubView().navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
+                NavigationStack { HubView(active: tab == .next).navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
                     .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)
             }
             .contentColumn()
