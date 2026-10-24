@@ -333,7 +333,7 @@ public struct BoxAdvice: Codable, Equatable {
     /// `src/advise.js` (which decides the tag; this only words the Weak reason), so change the pair together.
     public static let fitIVPercent = 80.0
 
-    /// How well one copy suits one non-league activity area, as `src/advise.js` `fit` says it. The bridge carries `[tag, as, tier, reason]`
+    /// How well one copy suits one non-league activity area, as `src/advise.js` `fit` says it. The bridge carries `[tag, as, tier, reason, ivPct]`
     /// (tag s / o / w) and the app composes the sentence (`line`) from that and the copy's own row, as the engine words it.
     public struct Fit: Codable, Equatable {
         /// "strong" (one of the copy's own builds lists the area), "ok" (a table entry in reach and IVs at `fitIVPercent` or more) or "weak".
@@ -357,7 +357,9 @@ public struct BoxAdvice: Codable, Equatable {
                 let tierPart = tier.map { " \($0)" } ?? ""
                 return "\(label)\(tierPart) as \(asName ?? species)\(area == "max" ? " (needs a Dynamax copy)" : "")"
             case .weak:
-                switch reason ?? .none {
+                // A reason code this build does not know must not read as "no table entry": say only that the copy is weak here.
+                guard let reason else { return "Weak for \(label)" }
+                switch reason {
                 case .none: return "No table entry for \(species) in \(label)"
                 case .ivUnknown: return "IVs not known"
                 case .shadowNoMega: return "A Shadow copy cannot Mega evolve"
@@ -370,13 +372,16 @@ public struct BoxAdvice: Codable, Equatable {
             }
         }
 
-        /// Decodes one area's compact `[tag, as, tier, reason]`; nil when the tag is not one the app knows.
+        /// Decodes one area's compact `[tag, as, tier, reason, ivPct]`; nil when the tag is not one the app knows. `ivPercent` is the fallback for a
+        /// reason "iv" that carries no figure of its own; the engine's one-decimal figure at index 4 wins when present (it prefers the row's imported %).
         static func decode(area: String, _ v: JSONValue, species: String, ivPercent: Double?) -> Fit? {
             guard let a = v.arrayValue, case .string(let t)? = a.first else { return nil }
             func str(_ i: Int) -> String? { if i < a.count, case .string(let s) = a[i] { return s } else { return nil } }
             let tag: Tag
             switch t { case "s": tag = .strong; case "o": tag = .ok; case "w": tag = .weak; default: return nil }
-            return Fit(area: area, tag: tag, asName: str(1), tier: str(2), reason: str(3).flatMap(Reason.init(rawValue:)), species: species, ivPercent: ivPercent)
+            var pct = ivPercent
+            if 4 < a.count, case .number(let n) = a[4] { pct = n }
+            return Fit(area: area, tag: tag, asName: str(1), tier: str(2), reason: str(3).flatMap(Reason.init(rawValue:)), species: species, ivPercent: pct)
         }
     }
     /// entry id -> "raids" | "gym" | "rocket" | "max" -> that area's fit. Empty for an advice the JavaScript wrote without `fit`.
@@ -461,9 +466,11 @@ public struct BoxAdvice: Codable, Equatable {
             let row = entries[Int(n) - 1].row
             let ivPercent = row.ivs.map { Double($0.atk + $0.def + $0.hp) / 45 * 100 }
             var fits = [String: Fit]()
+            // The engine names a species with its form ("Meowth (Galarian)"); the row's name and form give the same, bar the spelling of a few names.
+            let species = row.form.isEmpty || row.form == "Normal" ? row.name : "\(row.name) (\(row.form))"
             if case .object(let areas)? = e["fit"] {
                 for (area, v) in areas {
-                    if let f = Fit.decode(area: area, v, species: row.name, ivPercent: ivPercent) { fits[area] = f }
+                    if let f = Fit.decode(area: area, v, species: species, ivPercent: ivPercent) { fits[area] = f }
                 }
             }
             if !fits.isEmpty { out.fit[eid] = fits }

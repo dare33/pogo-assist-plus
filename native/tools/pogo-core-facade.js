@@ -12,10 +12,11 @@ const out = (v) => JSON.stringify(v, replacer);
 // The app reads only each Pokémon's CSV index, whether it resolved, its leagues, and its activity fit; the rest of the analysis record (the whole
 // game-master species, every hit) was 5 MB of the 6.7 MB for 2,000 entries and the replacer ran on every value of it. Nothing in
 // the slimmed entries can be a Map or a Set, so they go through plain JSON.stringify.
-// fit crosses as a compact array per area, [tag, as, tier, reason] with tag s / o / w (strong, ok, weak): as and tier are null for weak, reason
-// (none, iv, ivUnknown, shadowNoMega) only for weak. The engine's sentence (`line`) is not sent; the app composes it from these and the copy's own row.
+// fit crosses as a compact array per area, [tag, as, tier, reason, ivPct] with tag s / o / w (strong, ok, weak): as and tier are null for weak, reason
+// (none, iv, ivUnknown, shadowNoMega) only for weak, and ivPct (the engine's one-decimal IV %, which prefers the row's imported figure) only for
+// reason iv, so the app words "IVs 79.9%" from the engine's number rather than recomputing it from the IVs. The engine's sentence (`line`) is not sent; the app composes it from these and the copy's own row.
 const FIT_TAG = { strong: 's', ok: 'o', weak: 'w' };
-const slimFit = (fit) => Object.fromEntries(Object.entries(fit).map(([area, f]) => [area, f.tag === 'weak' ? ['w', null, null, f.reason] : [FIT_TAG[f.tag], f.as, f.tier]]));
+const slimFit = (fit) => Object.fromEntries(Object.entries(fit).map(([area, f]) => [area, f.tag === 'weak' ? (f.reason === 'iv' ? ['w', null, null, 'iv', f.ivPct] : ['w', null, null, f.reason]) : [FIT_TAG[f.tag], f.as, f.tier]]));
 const slim = (e) => {
   if (e.unresolved) return { p: { index: e.p.index }, unresolved: true };
   const o = { p: { index: e.p.index }, speciesId: e.resolved.speciesId, leagues: e.leagues, fit: slimFit(e.fit) };

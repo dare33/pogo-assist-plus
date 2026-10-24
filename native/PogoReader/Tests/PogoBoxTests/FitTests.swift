@@ -57,6 +57,12 @@ final class FitTests: XCTestCase {
         XCTAssertEqual(weak.line, "IVs 51.1%, below 80%")
         let ok = try XCTUnwrap(BoxAdvice.Fit.decode(area: "raids", try JSONDecoder().decode(JSONValue.self, from: Data(#"["o","Mega Delphox","S"]"#.utf8)), species: "Fennekin", ivPercent: 90))
         XCTAssertEqual(ok.line, "Raids S as Mega Delphox")
+        // The engine's own one-decimal figure (index 4) wins over the app's recomputation from the IVs.
+        let engine = try XCTUnwrap(BoxAdvice.Fit.decode(area: "gym", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"iv",79.9]"#.utf8)), species: "Eevee", ivPercent: 80.0))
+        XCTAssertEqual(engine.line, "IVs 79.9%, below 80%")
+        // An unrecognised reason code is not "no table entry".
+        let odd = try XCTUnwrap(BoxAdvice.Fit.decode(area: "rocket", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"somethingNew"]"#.utf8)), species: "Eevee", ivPercent: nil))
+        XCTAssertEqual(odd.line, "Weak for Rocket")
         XCTAssertNil(BoxAdvice.Fit.decode(area: "raids", try JSONDecoder().decode(JSONValue.self, from: Data(#"["x"]"#.utf8)), species: "", ivPercent: nil), "an unknown tag is skipped")
     }
 
@@ -81,5 +87,19 @@ final class FitTests: XCTestCase {
         XCTAssertEqual(advice.fit(for: "c1")["rocket"]?.line, "IVs 66.7%, below 80%")
         XCTAssertEqual(advice.fit(for: "c2")["rocket"]?.line, "Rocket A as Charizard")
         XCTAssertEqual(advice.fit(for: "c2")["gym"]?.line, "No table entry for Charmander in Gym")
+    }
+
+    /// A species with a form reads as the engine writes it, from the row's name and form.
+    func testNoTableEntryNamesTheFormOfTheSpecies() throws {
+        let json = #"{"pokemon":[{"p":{"index":1},"fit":{"raids":["w",null,null,"none"]}},{"p":{"index":2},"fit":{"raids":["w",null,null,"none"]}}]}"#
+        let report = try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        func entry(_ i: Int, _ form: String) -> BoxEntry {
+            let row = ScanRow(index: i, name: "Meowth", display: "Meowth", form: form, speciesId: "", dex: nil, cp: 0, hp: nil, ivs: nil, ivsRead: nil, ivsGuess: nil,
+                              level: nil, levelMax: nil, dust: nil, solveStatus: "exact", flags: [], frames: [])
+            return BoxEntry(id: "m\(i)", row: row, firstSeen: date, lastSeen: date)
+        }
+        let advice = BoxAdvice.make(from: report, entries: [entry(1, "Galarian"), entry(2, "Normal")])
+        XCTAssertEqual(advice.fit(for: "m1")["raids"]?.line, "No table entry for Meowth (Galarian) in Raids")
+        XCTAssertEqual(advice.fit(for: "m2")["raids"]?.line, "No table entry for Meowth in Raids")
     }
 }

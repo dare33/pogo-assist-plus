@@ -34,8 +34,11 @@ test('adviseJSON: pokemon entries are only { p: { index }, unresolved, speciesId
   assert.deepEqual(Object.keys(r.pokemon[0].fit), ['raids', 'gym', 'rocket', 'max']);
   for (const f of Object.values(r.pokemon[0].fit)) {
     assert.ok(Array.isArray(f) && ['s', 'o', 'w'].includes(f[0]));
-    if (f[0] === 'w') assert.deepEqual([f[1], f[2], ['none', 'iv', 'ivUnknown', 'shadowNoMega'].includes(f[3])], [null, null, true]);
-    else assert.equal(typeof f[1], 'string');
+    if (f[0] === 'w') {
+      assert.deepEqual([f[1], f[2], ['none', 'iv', 'ivUnknown', 'shadowNoMega'].includes(f[3])], [null, null, true]);
+      assert.equal(f.length, f[3] === 'iv' ? 5 : 4);
+      if (f[3] === 'iv') assert.equal(typeof f[4], 'number');
+    } else assert.equal(typeof f[1], 'string');
   }
   assert.ok(r.pokemon.every((e) => e.unresolved || !('bestOf' in e) || (Array.isArray(e.bestOf) && e.bestOf.length)), 'bestOf is left out when empty');
   assert.deepEqual(r.pokemon[0].p, { index: box[0].index });
@@ -53,8 +56,20 @@ test('adviseJSON: 2,000 entries come back at 6.9 MB or less (6.7 MB before the s
   const r = JSON.parse(text);
   assert.equal(r.pokemon.length, 2000);
   const pokemonBytes = JSON.stringify(r.pokemon).length;
-  // The compact fit (and bestOf) added 257,900 bytes to both figures (6,417,866 total and 4,520,798 pokemon part before, 6,675,766 and 4,778,698 now); both caps rose by that, keeping the 182,134 and 79,202 bytes of headroom the old caps had.
+  // The compact fit (and bestOf) added 257,900 bytes to both figures (6,417,866 total and 4,520,798 pokemon part before, 6,675,766 and 4,778,698 after it; the iv figure in the weak arrays then made them 6,678,554 and 4,781,486 characters, leaving 179,346 and 76,414 of headroom); both caps rose by the 257,900, keeping the 182,134 and 79,202 of headroom the old caps had, less the 2,788 the figure added.
   // ~2.2 KB of leagues per entry (the shown pick plus all members' own ratings, moves only on the shown and experimental ones) is most of it; builds and hygiene still carry whole Pokemon records (1.9 MB for this box).
   assert.ok(pokemonBytes < 4.8579e6, `pokemon ${(pokemonBytes / 1e6).toFixed(2)} MB`);
   assert.ok(text.length < 6.8579e6, `${(text.length / 1e6).toFixed(2)} MB`);
+});
+
+test('adviseJSON: the whole fixture keeps bestOf and a string tier on every strong / ok fit, and an IV % on every iv-weak fit', () => {
+  const r = JSON.parse(core.adviseJSON(JSON.stringify(box)));
+  assert.equal(r.pokemon.length, 311);
+  assert.ok(r.pokemon.some((e) => Array.isArray(e.bestOf) && e.bestOf.length), 'bestOf reaches the app');
+  const fits = r.pokemon.flatMap((e) => Object.values(e.fit ?? {}));
+  assert.ok(fits.some((f) => f[0] === 's') && fits.some((f) => f[0] === 'o') && fits.some((f) => f[0] === 'w' && f[3] === 'iv'));
+  for (const f of fits) {
+    if (f[0] !== 'w') assert.equal(typeof f[2], 'string', `tier of ${JSON.stringify(f)}`);
+    else if (f[3] === 'iv') assert.equal(typeof f[4], 'number');
+  }
 });

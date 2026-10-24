@@ -229,7 +229,7 @@ test('fit: a spare copy is ok through an evolution when decently rolled, weak wh
   const [top, spare, poor] = fitOf([cp('Charmander', ...HUNDO), cp('Charmander', ...GOOD), cp('Charmander', ...LOW)]);
   assert.equal(top.rocket.tag, 'strong');
   assert.deepEqual(spare.rocket, { tag: 'ok', as: 'Charizard', tier: 'A', line: 'Rocket A as Charizard' });
-  assert.deepEqual(poor.rocket, { tag: 'weak', as: null, tier: null, reason: 'iv', line: 'IVs 66.7%, below 80%' });
+  assert.deepEqual(poor.rocket, { tag: 'weak', as: null, tier: null, reason: 'iv', line: 'IVs 66.7%, below 80%', ivPct: 66.7 });
   assert.equal(spare.gym.tag, 'weak');
   assert.equal(spare.gym.line, 'No table entry for Charmander in Gym');
   assert.equal(spare.gym.reason, 'none');
@@ -313,11 +313,25 @@ test('fit: Strong and OK name the entry alike (the best-tier hit entry as the ta
 });
 
 test('fit: a shadow-flagged entry that keeps a plain species id (Shadow Pheromosa) is for Shadow copies only', () => {
-  const plain = fitOf([cp('Pheromosa', ...HUNDO), cp('Pheromosa', ...GOOD)]);
+  const plainBox = analyseBox([cp('Pheromosa', ...HUNDO), cp('Pheromosa', ...GOOD)], ctx);
+  const plain = plainBox.pokemon.map((e) => e.fit);
+  assert.ok(!plainBox.builds.some((b) => b.areas.includes('raids')), 'a plain Pheromosa has no raids build (the entry is Shadow Pheromosa)');
+  assert.deepEqual(plain[0].raids, { tag: 'weak', as: null, tier: null, reason: 'none', line: 'No table entry for Pheromosa in Raids' });
   assert.deepEqual(plain[1].raids, { tag: 'weak', as: null, tier: null, reason: 'none', line: 'No table entry for Pheromosa in Raids' });
-  const shadow = fitOf([cp('Pheromosa', ...HUNDO, { shadow: true }), cp('Pheromosa', ...GOOD, { shadow: true })]);
+  const shadowBox = analyseBox([cp('Pheromosa', ...HUNDO, { shadow: true }), cp('Pheromosa', ...GOOD, { shadow: true })], ctx);
+  const shadow = shadowBox.pokemon.map((e) => e.fit);
+  assert.ok(shadowBox.builds.some((b) => b.areas.includes('raids')), 'a Shadow Pheromosa has the raids build');
+  assert.equal(shadow[0].raids.tag, 'strong');
+  assert.equal(shadow[0].raids.as, 'Shadow Pheromosa');
   assert.equal(shadow[1].raids.tag, 'ok');
   assert.equal(shadow[1].raids.as, 'Shadow Pheromosa');
+});
+
+test('fit: the same Pokémon object twice in a box is two copies: strong for the first position only', () => {
+  const p = cp('Charmander', ...HUNDO);
+  const f = fitOf([p, p]);
+  assert.equal(f[0].rocket.tag, 'strong');
+  assert.notEqual(f[1].rocket.tag, 'strong');
 });
 
 test('fit: a Gigantamax entry is never credited (a plain Charmander spare is not Max ok as Gigantamax Charizard)', () => {
