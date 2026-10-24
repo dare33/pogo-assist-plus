@@ -229,9 +229,10 @@ test('fit: a spare copy is ok through an evolution when decently rolled, weak wh
   const [top, spare, poor] = fitOf([cp('Charmander', ...HUNDO), cp('Charmander', ...GOOD), cp('Charmander', ...LOW)]);
   assert.equal(top.rocket.tag, 'strong');
   assert.deepEqual(spare.rocket, { tag: 'ok', as: 'Charizard', tier: 'A', line: 'Rocket A as Charizard' });
-  assert.deepEqual(poor.rocket, { tag: 'weak', as: null, tier: null, line: 'IVs 66.7%, below 80%' });
+  assert.deepEqual(poor.rocket, { tag: 'weak', as: null, tier: null, reason: 'iv', line: 'IVs 66.7%, below 80%' });
   assert.equal(spare.gym.tag, 'weak');
   assert.equal(spare.gym.line, 'No table entry for Charmander in Gym');
+  assert.equal(spare.gym.reason, 'none');
 });
 
 test('fit: the IV threshold is FIT_IV_PCT (80 is ok, 79 is weak) and unknown IVs never qualify', () => {
@@ -242,7 +243,8 @@ test('fit: the IV threshold is FIT_IV_PCT (80 is ok, 79 is weak) and unknown IVs
   assert.equal(eighty.rocket.tag, 'ok');
   assert.equal(seventyNine.rocket.tag, 'weak');
   assert.equal(seventyNine.rocket.line, 'IVs 79.9%, below 80%');
-  assert.deepEqual(unknown.rocket, { tag: 'weak', as: null, tier: null, line: 'IVs not known' });
+  assert.equal(seventyNine.rocket.reason, 'iv');
+  assert.deepEqual(unknown.rocket, { tag: 'weak', as: null, tier: null, reason: 'ivUnknown', line: 'IVs not known' });
 });
 
 test('fit: a Mega entry counts for a non-Shadow copy of its base species, not for a Shadow copy', () => {
@@ -250,7 +252,8 @@ test('fit: a Mega entry counts for a non-Shadow copy of its base species, not fo
   assert.deepEqual(plain.raids, { tag: 'ok', as: 'Mega Delphox', tier: 'S', line: 'Raids S as Mega Delphox' });
   const shadow = fitOf([cp('Fennekin', ...HUNDO, { shadow: true }), cp('Fennekin', ...GOOD, { shadow: true })]);
   for (const f of shadow) assert.equal(f.raids.tag, 'weak', 'a Shadow copy cannot Mega evolve, however well rolled');
-  assert.equal(shadow[1].raids.line, 'No table entry for Fennekin in Raids');
+  // Its only raid entry is the Mega one, so the reason is the Mega rule, not a missing entry.
+  assert.deepEqual(shadow[1].raids, { tag: 'weak', as: null, tier: null, reason: 'shadowNoMega', line: 'A Shadow copy cannot Mega evolve' });
 });
 
 test('fit: a Shadow-only entry counts for a Shadow copy and not for a plain one; a plain entry counts for both', () => {
@@ -300,4 +303,36 @@ test('fit and bestOf: no species is best twice, and every resolved copy carries 
     for (const a of e.bestOf) { const k = `${e.resolved.speciesId}|${a}`; assert.ok(!per.has(k), `${k} best twice`); per.set(k, e); assert.notEqual(e.fit[a].tag, 'weak'); }
   }
   assert.ok(per.size > 0);
+});
+
+test('fit: Strong and OK name the entry alike (the best-tier hit entry as the table spells it, not the build target)', () => {
+  const [top, spare] = fitOf([cp('Fennekin', ...HUNDO), cp('Fennekin', ...GOOD)]);
+  assert.equal(top.raids.as, 'Mega Delphox', 'the build targets Delphox; the entry is Mega Delphox');
+  assert.equal(top.raids.line, 'Raids S as Mega Delphox');
+  assert.equal(spare.raids.as, top.raids.as);
+});
+
+test('fit: a shadow-flagged entry that keeps a plain species id (Shadow Pheromosa) is for Shadow copies only', () => {
+  const plain = fitOf([cp('Pheromosa', ...HUNDO), cp('Pheromosa', ...GOOD)]);
+  assert.deepEqual(plain[1].raids, { tag: 'weak', as: null, tier: null, reason: 'none', line: 'No table entry for Pheromosa in Raids' });
+  const shadow = fitOf([cp('Pheromosa', ...HUNDO, { shadow: true }), cp('Pheromosa', ...GOOD, { shadow: true })]);
+  assert.equal(shadow[1].raids.tag, 'ok');
+  assert.equal(shadow[1].raids.as, 'Shadow Pheromosa');
+});
+
+test('fit: a Gigantamax entry is never credited (a plain Charmander spare is not Max ok as Gigantamax Charizard)', () => {
+  const [, spare] = fitOf([cp('Charmander', ...HUNDO), cp('Charmander', ...GOOD)]);
+  assert.equal(spare.max.tag, 'weak');
+  assert.equal(spare.max.reason, 'none');
+});
+
+test('fit: with equal-tier entries at two stages the nearest stage wins (a spare Chansey is OK as Chansey, not Blissey)', () => {
+  const [, spare] = fitOf([cp('Chansey', ...HUNDO), cp('Chansey', ...GOOD)]);
+  assert.equal(spare.gym.tag, 'ok');
+  assert.equal(spare.gym.as, 'Chansey');
+});
+
+test('bestOf: a Shadow and a plain copy of one species are separate groups (hygiene\'s resolved species, not the base species)', () => {
+  const res = analyseBox([cp('Charmander', ...GOOD), cp('Charmander', ...GOOD, { shadow: true })], ctx);
+  assert.deepEqual(res.pokemon.map((e) => e.bestOf.includes('rocket')), [true, true]);
 });

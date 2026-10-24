@@ -347,16 +347,23 @@ export function analyseBox(box, ctx) {
       let strong = null;
       for (const b of myBuilds) {
         if (!b.areas.includes(area)) continue;
-        const t = b.hits.filter((h) => h.area === area).reduce((best, h) => (TIER_W[h.tier] > (TIER_W[best] ?? 0) ? h.tier : best), null);
-        if (!strong || (TIER_W[t] ?? 0) > (TIER_W[strong.tier] ?? 0)) strong = { as: b.targetName, tier: t };
+        // The build's best-tier hit in the area names the entry (as an OK copy's does); the build's target name only if no hit is found.
+        const hit = b.hits.filter((h) => h.area === area).reduce((best, h) => (TIER_W[h.tier] > (TIER_W[best?.tier] ?? 0) ? h : best), null);
+        const t = hit?.tier ?? null;
+        if (!strong || (TIER_W[t] ?? 0) > (TIER_W[strong.tier] ?? 0)) strong = { as: hit?.name ?? b.targetName, tier: t };
       }
+      // Three entries (Shadow Pheromosa, Roserade, Giratina Origin) are shadow-flagged yet keep the plain species id: not for a plain copy.
       let reachBest = null;
-      for (const id of members) for (const e of entriesBy[area].get(id) ?? []) if (!reachBest || TIER_W[e.tier] > TIER_W[reachBest.tier]) reachBest = e;
-      const weak = (line) => ({ tag: 'weak', as: null, tier: null, line });
+      for (const id of members) for (const e of entriesBy[area].get(id) ?? []) if (!(e.flags?.shadow && !p.shadow) && (!reachBest || TIER_W[e.tier] > TIER_W[reachBest.tier])) reachBest = e;
+      // reason: a short code the bridge carries instead of the sentence (the app composes it): none, shadowNoMega, ivUnknown, iv.
+      const weak = (reason, line) => ({ tag: 'weak', as: null, tier: null, reason, line });
+      // A Shadow copy whose only entries here are Mega ones: say so rather than that there is no entry.
+      const megaOnly = p.shadow && !reachBest && reach.some((id) => megaIdsOf(gm, id).some((m) => entriesBy[area].has(m)));
       if (strong) entry.fit[area] = { tag: 'strong', as: strong.as, tier: strong.tier ?? reachBest?.tier ?? null, line: `${label}${strong.tier ? ` ${strong.tier}` : ''} as ${strong.as}${dyn}` };
-      else if (!reachBest) entry.fit[area] = weak(`No table entry for ${family} in ${label}`);
-      else if (ivPct == null) entry.fit[area] = weak('IVs not known');
-      else if (ivPct < FIT_IV_PCT) entry.fit[area] = weak(`IVs ${Number(ivPct.toFixed(1))}%, below ${FIT_IV_PCT}%`);
+      else if (megaOnly) entry.fit[area] = weak('shadowNoMega', 'A Shadow copy cannot Mega evolve');
+      else if (!reachBest) entry.fit[area] = weak('none', `No table entry for ${family} in ${label}`);
+      else if (ivPct == null) entry.fit[area] = weak('ivUnknown', 'IVs not known');
+      else if (ivPct < FIT_IV_PCT) entry.fit[area] = weak('iv', `IVs ${Number(ivPct.toFixed(1))}%, below ${FIT_IV_PCT}%`);
       else entry.fit[area] = { tag: 'ok', as: reachBest.name, tier: reachBest.tier, line: `${label} ${reachBest.tier} as ${reachBest.name}${dyn}` };
     }
   }
