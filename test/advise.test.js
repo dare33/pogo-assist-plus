@@ -269,3 +269,11 @@ test('a copy marked not Dynamax does not cover a Max entry in the gaps; unset an
   assert.equal(maxGap([{ ...base, dynamax: false }]), true, 'every Chansey marked No: the entry is a gap');
   assert.equal(maxGap([{ ...base, dynamax: false }, { ...base }]), false, 'one copy not marked No still covers it');
 });
+
+test('hygiene reports how many keeps are Dynamax extras, only when there are some', () => {
+  const base = box.find((p) => p.name === 'Chansey');
+  const yes = { ...base, dynamax: true, ivPercent: 0, cp: 100 };
+  const best = { ...base, ivPercent: 100, cp: 200 };
+  assert.equal(analyseBox([yes, best], ctx).hygiene.find((h) => h.speciesId === 'chansey').dynamaxExtras, 1);
+  assert.ok(!('dynamaxExtras' in analyseBox([{ ...yes, dynamax: undefined }, best], ctx).hygiene.find((h) => h.speciesId === 'chansey')));
+});

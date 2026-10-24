@@ -313,8 +313,9 @@ export function analyseBox(box, ctx) {
     const legendary = (gm.byId.get(id)?.tags ?? []).some((t) => ['legendary', 'mythical', 'ultrabeast'].includes(t));
     const keepCount = legendary ? Math.min(2, es.length) : 1;
     // A copy the player has marked as caught as a Dynamax is never one to transfer (it is the only kind that can join Max battles): it is kept as well.
-    const kept = sorted.slice(0, keepCount), rest = sorted.slice(keepCount);
-    hygiene.push({ speciesId: id, name: gm.byId.get(id).speciesName, count: es.length, keep: [...kept, ...rest.filter((e) => e.p.dynamax === true)].map((e) => e.p), transfer: rest.filter((e) => e.p.dynamax !== true).map((e) => e.p) });
+    // `dynamaxExtras` (only when there are some) says how many of the trailing keeps are there for that reason, so the app can word them.
+    const kept = sorted.slice(0, keepCount), rest = sorted.slice(keepCount), extras = rest.filter((e) => e.p.dynamax === true);
+    hygiene.push({ speciesId: id, name: gm.byId.get(id).speciesName, count: es.length, keep: [...kept, ...extras].map((e) => e.p), transfer: rest.filter((e) => e.p.dynamax !== true).map((e) => e.p), ...(extras.length ? { dynamaxExtras: extras.length } : {}) });
   }
   hygiene.sort((a, b) => b.transfer.length - a.transfer.length);
 
