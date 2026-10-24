@@ -6,12 +6,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadGamemaster } from '../src/node/load.js';
-import { resolveSpecies } from '../src/gamemaster.js';
+import { resolveSpecies, tokenKey } from '../src/gamemaster.js';
 
 const [srcDir = 'data/source', outPath = 'data/hub.json'] = process.argv.slice(2);
 const gm = loadGamemaster();
 
-const KINDS = ['5star', 'mega', 'shadow', 'maxmon', 'battleday', 'event', 'raidhour'];
+const KINDS = ['5star', 'mega', 'shadow', 'maxmon', 'maxevent', 'battleday', 'raidhour'];
 const TIES = ['everything', 'raids', 'gym', 'rocket', 'pvp', 'max'];
 const TYPES = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy'];
 const MULTIPLIERS = [1, 1.6, 0.625, 0.390625];
@@ -55,35 +55,59 @@ function date(text, where) {
   return text;
 }
 
+// Words the name carries as flags rather than as part of the species.
+const FLAG_WORDS = new Set(['shadow', 'mega', 'primal', 'dynamax', 'gigantamax', 'gmax']);
+
+// resolveSpecies is lenient (it guesses a species from the first word of a name it does not know), which is right for a scan and wrong
+// for hand-written data: a name that resolves only by that guess, or whose Mega flag does not end on a Mega id, fails the build.
 function pokemon(name, where) {
   const r = resolveSpecies(gm, name);
   if (!r) { fail(`${where}: cannot resolve "${name}"`); return null; }
+  const have = new Set(tokenKey(r.species.speciesName).split(' '));
+  const missing = tokenKey(name).split(' ').filter((w) => w && !FLAG_WORDS.has(w) && !have.has(w));
+  if (missing.length) { fail(`${where}: "${name}" only resolves by a guess to ${r.speciesId} (no match for ${missing.join(', ')})`); return null; }
+  if (r.flags.mega && !/_(mega(_[xy])?|primal)$/.test(r.speciesId)) { fail(`${where}: "${name}" is marked Mega but resolves to ${r.speciesId}, which is not a Mega`); return null; }
   // The game master pads single-type species with "none".
-  return { name, speciesId: r.speciesId, types: r.species.types.filter((t) => t && t !== 'none') };
+  const boss = { name, speciesId: r.speciesId, types: r.species.types.filter((t) => t && t !== 'none') };
+  // A Shadow the game master does not list yet resolves to the plain species: keep the name and say it is a Shadow.
+  if (r.flags.shadow && !/_shadow$/.test(r.speciesId)) boss.shadow = true;
+  return boss;
+}
+
+// Every row must have as many cells as the header (a stray or missing | would shift the columns silently).
+function checkWidth(t, where) {
+  t.rows.forEach((r, n) => { if (r.length !== t.header.length) fail(`${where} row ${n + 1}: ${r.length} cells, the header has ${t.header.length}`); });
+  return t;
 }
 
 // ---- rotation and events (10-hub-rotation.md)
 const ROT = '10-hub-rotation.md';
 const rotMd = read(ROT);
 const rot = findTable(rotMd, ROT, 'rotation (From | To | Kind | ...)', (t) => t.header.includes('kind'));
+checkWidth(rot, `${ROT} rotation`);
 const ri = columns(rot, ['from', 'to', 'kind', 'title', 'boss', 'note', 'source'], ROT);
 const rotation = rot.rows.map((r, n) => {
   const where = `${ROT} rotation row ${n + 1}`;
   const from = date(r[ri.from], where), to = date(r[ri.to], where);
   if (from > to) fail(`${where}: from is after to`);
   if (!KINDS.includes(r[ri.kind])) fail(`${where}: unknown kind "${r[ri.kind]}"`);
+  if (!r[ri.title]) fail(`${where}: no title`);
   const cell = r[ri.boss];
   // "to be announced" is a published row whose boss is not known yet: no species, and no failure.
   const bosses = !cell || TBA.test(cell) ? [] : cell.split(/\s+&\s+|,\s+/).map((nm) => pokemon(nm, where)).filter(Boolean);
-  return { from, to, kind: r[ri.kind], title: r[ri.title], bosses, note: r[ri.note], source: r[ri.source] };
+  const row = { from, to, kind: r[ri.kind], title: r[ri.title], bosses, note: r[ri.note], source: r[ri.source] };
+  if (TBA.test(cell)) row.tba = true;
+  return row;
 });
 
 const ev = findTable(rotMd, ROT, 'events (From | To | Title | Line | Tie | Source)', (t) => t.header.includes('line'));
+checkWidth(ev, `${ROT} events`);
 const ei = columns(ev, ['from', 'to', 'title', 'line', 'tie', 'source'], ROT);
 const events = ev.rows.map((r, n) => {
   const where = `${ROT} events row ${n + 1}`;
   const from = date(r[ei.from], where), to = date(r[ei.to], where);
   if (from > to) fail(`${where}: from is after to`);
+  if (!r[ei.title]) fail(`${where}: no title`);
   if (r[ei.tie] && !TIES.includes(r[ei.tie])) fail(`${where}: unknown tie "${r[ei.tie]}"`);
   return { from, to, title: r[ei.title], line: r[ei.line], tie: r[ei.tie], source: r[ei.source] };
 });
@@ -92,6 +116,7 @@ const events = ev.rows.map((r, n) => {
 const RK = '11-rocket-lineups.md';
 const rkMd = read(RK);
 const ld = findTable(rkMd, RK, 'leaders', (t) => t.header[0] === 'leader');
+checkWidth(ld, `${RK} leaders`);
 const li = columns(ld, ['leader', 'slot 1', 'slot 2', 'slot 3', 'since', 'source'], RK);
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const leaders = ld.rows.map((r) => {
@@ -109,15 +134,23 @@ const leaders = ld.rows.map((r) => {
   return { name: r[li.leader], since, slots, source: r[li.source] };
 });
 const gr = findTable(rkMd, RK, 'grunt quotes', (t) => t.header[0] === 'type');
-const gi = columns(gr, ['type', 'quote'], RK);
-// The Decoy grunt has no type: its type is the empty string.
-const grunts = gr.rows.map((r) => ({ type: r[gi.type] === 'decoy' ? '' : r[gi.type], quote: r[gi.quote] }));
+checkWidth(gr, `${RK} grunts`);
+const gi = columns(gr, ['type', 'quote', 'label'], RK);
+// The generic (mixed team) grunt and the Decoy have no type: an empty Type and a Label saying which they are.
+const grunts = gr.rows.map((r, n) => {
+  const type = r[gi.type], label = r[gi.label];
+  if (type && !TYPES.includes(type)) fail(`${RK} grunt row ${n + 1}: "${type}" is not one of the 18 types`);
+  if (!type && !label) fail(`${RK} grunt row ${n + 1}: a grunt with no type needs a label`);
+  if (!r[gi.quote]) fail(`${RK} grunt row ${n + 1}: no quote`);
+  return { type, quote: r[gi.quote], label };
+});
 for (const t of TYPES) if (!grunts.some((g) => g.type === t)) fail(`${RK}: no grunt quote for ${t}`);
 
 // ---- type chart (12-type-chart.md)
 const CH = '12-type-chart.md';
 const [ch] = [...tables(read(CH))];
 if (!ch) throw new Error(`${CH}: no matrix table`);
+checkWidth(ch, CH);
 const typeChart = {};
 const defs = ch.header.slice(1);
 if (defs.join() !== TYPES.join()) fail(`${CH}: columns must be ${TYPES.join(', ')} in that order`);
