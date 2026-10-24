@@ -140,6 +140,17 @@ export function analyseBox(box, ctx) {
         const targetId = /_(mega(_[xy])?|primal)$/.test(id) ? baseSpeciesId(gm, id) : id;
         hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId, viaMega: targetId !== id ? id : null, needsDynamax: e.area === 'max', moves: e.moves, obtain: e.obtain, notes: e.notes });
       }
+      // A Shadow copy also does the job of the plain species' raid and Rocket entries (a Shadow attacks as well as, and harder than, the plain
+      // one). Not the plain gym entry (a Shadow defends worse, 0.83x; a manager call) and not max (a Shadow is never a Dynamax catch).
+      // Credited to the _shadow id, the copy stays Shadow; when the _shadow id already has an entry for the same area and section, the
+      // plain one is not added whatever its tier. The gap check below mirrors this rule.
+      if (id.endsWith('_shadow') && gm.byId.has(id.replace(/_shadow$/, ''))) {
+        for (const e of tiers.bySpecies.get(id.replace(/_shadow$/, '')) || []) {
+          if (e.area !== 'raids' && e.area !== 'rocket') continue;
+          if (hits.some((h) => h.kind === 'tier' && h.targetId === id && h.area === e.area && h.section === e.section)) continue;
+          hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId: id, viaMega: null, needsDynamax: false, moves: e.moves, obtain: e.obtain, notes: e.notes });
+        }
+      }
       for (const [league, map] of Object.entries(rankings.byLeague)) {
         const row = map.get(id);
         if (row && row.score >= PVP_SCORE[league]) {
@@ -288,6 +299,8 @@ export function analyseBox(box, ctx) {
     const reachable = [...ownedIds].some((id) => {
       const reach = [id, ...evolutionsOf(gm, id), ...formChangesOf(gm, id)];
       if (reach.includes(e.speciesId)) return true;
+      // Same rule as the Shadow credit above: a Shadow of the species covers its plain raid and Rocket entries.
+      if ((e.area === 'raids' || e.area === 'rocket') && reach.includes(`${e.speciesId}_shadow`)) return true;
       return !id.endsWith('_shadow') && reach.some((r) => megaIdsOf(gm, r).includes(e.speciesId));
     });
     if (reachable) continue;
