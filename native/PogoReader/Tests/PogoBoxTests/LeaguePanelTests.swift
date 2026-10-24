@@ -295,7 +295,9 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertEqual(LeaguePanel.worthSentence(tinkaton, key: "gl"), "S-tier species, IVs in the top 3% for Great League")
         XCTAssertEqual(LeaguePanel.tier(score: 91.7), "A", "the band alone")
         // The table is per league: an id the Great League table names is judged by its score in a league whose table does not.
-        XCTAssertEqual(LeaguePanel.tier(speciesId: "tinkaton", key: "ul", score: 94.3), "S")
+        XCTAssertEqual(LeaguePanel.tableTiers["gl/altaria"], "S"); XCTAssertNil(LeaguePanel.tableTiers["ul/altaria"])
+        XCTAssertNil(LeaguePanel.tier(speciesId: "altaria", key: "ul", score: 80.5), "no Ultra entry and below the B line")
+        XCTAssertEqual(LeaguePanel.tier(speciesId: "altaria", key: "ul", score: 90.5), "A", "no Ultra entry: the score band")
         XCTAssertEqual(LeaguePanel.tier(speciesId: "tinkaton", key: "ml", score: 80), LeaguePanel.tableTiers["ml/tinkaton"] ?? nil)
         // No table entry: the score band applies (S >= 92, A >= 90, B >= 88, below none).
         XCTAssertNil(LeaguePanel.tableTiers["gl/notaspecies"])
@@ -348,10 +350,17 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertEqual(b.worthText, "S-tier · IVs 51.1%")
         b.ivs = "15/15/15"; XCTAssertEqual(b.worthText, "S-tier · IVs 100.0%")
         b.ivs = nil; XCTAssertEqual(b.worthText, "S-tier · IVs not read")
-        // No dust, candy or XL: "none" only when no step is left.
-        b.steps = []; XCTAssertEqual(b.effortText, "none")
-        b.steps = [.init(kind: "formChange", to: "X"), .init(kind: "megaEvolve"), .init(kind: "eliteTM", count: 2), .init(kind: "secondMove"), .init(kind: "needsDynamaxCopy")]
-        XCTAssertEqual(b.effortText, "Form change, Mega evolve, Elite TM, Second move, Dynamax copy")
+        // A league build's roll is the league IV rank percentile; a league build that also covers an activity shows both; the IV % never stands in for it.
+        b.ivs = "11/0/0"; b.pvpLeague = "gl"; b.pvpRankPct = 95
+        XCTAssertEqual(b.worthText, "S-tier · GL rank top 5%")
+        b.areas = ["GL", "Raids"]; XCTAssertEqual(b.worthText, "S-tier · GL rank top 5% · IVs 24.4%")
+        b.ivs = nil; XCTAssertEqual(b.worthText, "S-tier · GL rank top 5% · IVs not read")
+        b.areas = ["UL"]; b.pvpLeague = "ul"; b.pvpRankPct = 100; XCTAssertEqual(b.worthText, "S-tier · UL rank top 1%", "never top 0%")
+        b.pvpRankPct = 82.9; XCTAssertEqual(b.worthText, "S-tier · UL rank top 18%")
+        // EFFORT is the cost figures only; the steps are the action line.
+        b.steps = [.init(kind: "formChange", to: "X"), .init(kind: "eliteTM", count: 2)]
+        XCTAssertEqual(b.effortText, "No dust or candy")
+        b.steps = []; XCTAssertEqual(b.effortText, "No dust or candy")
         b.dust = 56_800; b.candy = 10
         XCTAssertEqual(b.effortText, b.costText, "a cost is shown as the cost")
     }

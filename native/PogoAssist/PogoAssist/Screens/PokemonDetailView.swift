@@ -381,10 +381,10 @@ struct BuildRow: View {
             }
             if showName {
                 // The Next list: the advisor's order mixes worth with ease, so the two are shown apart. Worth is the build's best tier among its areas;
-                // effort is the dust, candy and XL it costs.
+                // effort is the dust, candy and XL it costs ("No dust or candy" when none; the steps are the action line above).
                 Text(build.areas.joined(separator: ", ")).font(.footnote).foregroundStyle(.secondary)
                 HStack(alignment: .top, spacing: 24) {
-                    // The tag on the Box list is per copy (its roll included); this tier is the build target's, so the copy's roll is shown beside it.
+                    // The tag on the Box list is per copy (its roll included); this tier is the build target's, so the copy's roll (league rank or IV %) is shown beside it.
                     labelled("Worth", build.worthText)
                     labelled("Effort", build.effortText)
                 }
