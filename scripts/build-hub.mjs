@@ -57,15 +57,21 @@ function date(text, where) {
 
 // Words the name carries as flags rather than as part of the species.
 const FLAG_WORDS = new Set(['shadow', 'mega', 'primal', 'dynamax', 'gigantamax', 'gmax']);
+// The form words resolveSpecies adds itself for a species whose plain name is a specific form (DEFAULT_FORMS in src/gamemaster.js, which does not export it).
+const DEFAULT_FORM_WORDS = new Set(['ordinary', 'altered', 'incarnate', 'land', 'confined', 'standard', 'average', 'baile', 'aria', 'normal']);
 
 // resolveSpecies is lenient (it guesses a species from the first word of a name it does not know), which is right for a scan and wrong
 // for hand-written data: a name that resolves only by that guess, or whose Mega flag does not end on a Mega id, fails the build.
 function pokemon(name, where) {
   const r = resolveSpecies(gm, name);
   if (!r) { fail(`${where}: cannot resolve "${name}"`); return null; }
-  const have = new Set(tokenKey(r.species.speciesName).split(' '));
-  const missing = tokenKey(name).split(' ').filter((w) => w && !FLAG_WORDS.has(w) && !have.has(w));
-  if (missing.length) { fail(`${where}: "${name}" only resolves by a guess to ${r.speciesId} (no match for ${missing.join(', ')})`); return null; }
+  // Exact: the name's words (without the Shadow / Mega words) must be the species' words, with the game's default-form words allowed on the species
+  // ("Keldeo" for "Keldeo (Ordinary)"); a repeated or extra word means resolveSpecies guessed.
+  const mine = tokenKey(name).split(' ').filter((w) => w && !FLAG_WORDS.has(w));
+  const theirs = tokenKey(r.species.speciesName).split(' ').filter((w) => w && !FLAG_WORDS.has(w));
+  const extra = theirs.filter((w) => !mine.includes(w));
+  const exact = mine.length === new Set(mine).size && mine.every((w) => theirs.includes(w)) && extra.every((w) => DEFAULT_FORM_WORDS.has(w));
+  if (!exact) { fail(`${where}: "${name}" only resolves by a guess to ${r.speciesId}`); return null; }
   if (r.flags.mega && !/_(mega(_[xy])?|primal)$/.test(r.speciesId)) { fail(`${where}: "${name}" is marked Mega but resolves to ${r.speciesId}, which is not a Mega`); return null; }
   // The game master pads single-type species with "none".
   const boss = { name, speciesId: r.speciesId, types: r.species.types.filter((t) => t && t !== 'none') };
@@ -93,6 +99,8 @@ const rotation = rot.rows.map((r, n) => {
   if (!KINDS.includes(r[ri.kind])) fail(`${where}: unknown kind "${r[ri.kind]}"`);
   if (!r[ri.title]) fail(`${where}: no title`);
   const cell = r[ri.boss];
+  // A raid or Max Monday row names its boss or says it is still to be announced; only Raid Hours and Dynamax Trails may have no boss cell.
+  if (!cell && ['5star', 'mega', 'shadow', 'maxmon', 'battleday'].includes(r[ri.kind])) fail(`${where}: a ${r[ri.kind]} row needs a boss or "to be announced"`);
   // "to be announced" is a published row whose boss is not known yet: no species, and no failure.
   const bosses = !cell || TBA.test(cell) ? [] : cell.split(/\s+&\s+|,\s+/).map((nm) => pokemon(nm, where)).filter(Boolean);
   const row = { from, to, kind: r[ri.kind], title: r[ri.title], bosses, note: r[ri.note], source: r[ri.source] };

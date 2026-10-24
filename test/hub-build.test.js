@@ -125,7 +125,9 @@ const ROT = '10-hub-rotation.md', RK = '11-rocket-lineups.md', CH = '12-type-cha
 for (const [label, file, from, to, message] of [
   ['an unresolvable boss name', ROT, '| Palkia |', '| Zzyzx |', /cannot resolve "Zzyzx"/],
   ['a name that resolves only by the first-word guess', ROT, '| Palkia |', '| Cryogonal Zzyzx |', /only resolves by a guess/],
+  ['a name with a repeated word', ROT, '| Palkia |', '| Cryogonal Cryogonal |', /only resolves by a guess/],
   ['a Mega name that does not end on a Mega', ROT, '| Palkia |', '| Mega Palkia |', /not a Mega/],
+  ['a 5-star row with no boss', ROT, '| 5star | 5-star raid | Palkia |', '| 5star | 5-star raid | |', /needs a boss or "to be announced"/],
   ['a row with a missing cell', ROT, '| 5star | 5-star raid | Palkia | |', '| 5star | 5-star raid | Palkia |', /cells, the header has 7/],
   ['a row with an extra cell', ROT, '| 5star | 5-star raid | Palkia |', '| 5star | 5-star raid | Palkia | | extra |', /cells, the header has 7/],
   ['an unknown kind', ROT, '| 5star | 5-star raid | Palkia |', '| 5star2 | 5-star raid | Palkia |', /unknown kind "5star2"/],
