@@ -320,12 +320,14 @@ struct PokemonDetailView: View {
         }
     }
 
-    /// Whether this Pokémon was caught as a Dynamax. The game does not show it, so the person sets it: Not set | Yes | No.
+    /// Whether this Pokémon was caught as a Dynamax. The game shows a Dynamax badge, but the app cannot read it, so the person sets it: Not set | Yes | No.
     /// Max battles use only the ones set to Yes. The switch is one adjustable element; the label beside it is hidden from VoiceOver (the switch names itself).
     private func dynamaxRow(_ e: BoxEntry) -> some View {
         let selection = Binding<BoxMerge.DynamaxEdit>(
             get: { BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) },
             set: { new in
+                // A repeat tap on the segment already selected would otherwise save a box version and re-run the advice for nothing.
+                guard new != BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) else { return }
                 Task {
                     let result = await model.correct(e.id, BoxMerge.Edit(dynamax: new))
                     if let error = result.error { model.message = error }

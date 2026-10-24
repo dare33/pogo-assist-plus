@@ -9,10 +9,18 @@ public struct HubData: Codable, Equatable {
         public var speciesId: String
         /// One or two lowercase type names, as the game master spells them.
         public var types: [String]
+        /// True for a Shadow the game master does not list yet: `speciesId` is the plain species.
+        public var shadow: Bool?
     }
 
+    /// Raids: `fiveStar`, `mega`, `shadow`, `battleDay` (a Super Mega Raid Day) and `raidHour`. Max battles: `maxMonday` and `maxEvent` (Dynamax Trails).
+    /// A kind this app does not know decodes as `.other`, so one new kind in the data cannot make the whole file unreadable.
     public enum Kind: String, Codable, Equatable {
-        case fiveStar = "5star", mega, shadow, maxMonday = "maxmon", battleDay = "battleday", event, raidHour = "raidhour"
+        case fiveStar = "5star", mega, shadow, maxMonday = "maxmon", maxEvent = "maxevent", battleDay = "battleday", raidHour = "raidhour", other
+
+        public init(from decoder: Decoder) throws {
+            self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .other
+        }
     }
 
     /// One dated row of the rotation. `from` and `to` are local calendar days, `yyyy-mm-dd`. `bosses` is empty
@@ -25,6 +33,8 @@ public struct HubData: Codable, Equatable {
         public var bosses: [Boss]
         public var note: String
         public var source: String
+        /// True when the boss is "to be announced" (`bosses` is empty); nil otherwise.
+        public var tba: Bool?
     }
 
     /// One card of the events strip. `tie` is the Hub screen it opens ("everything", "raids", "gym", "rocket",
@@ -47,10 +57,12 @@ public struct HubData: Codable, Equatable {
         public var source: String
     }
 
-    /// A grunt's opening quote and the type of its team; the Decoy grunt has an empty type.
+    /// A grunt's opening quote and the type of its team. The generic grunt of a mixed team and the Decoy have an empty type and a `label`
+    /// ("Mixed team", "Decoy"); typed grunts have an empty label.
     public struct Grunt: Codable, Equatable {
         public var type: String
         public var quote: String
+        public var label: String
     }
 
     public var generated: String

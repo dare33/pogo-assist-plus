@@ -161,4 +161,20 @@ final class ScanReportTests: XCTestCase {
         let lines = try lib.editsAfter(account: "Zorblax", scanId: s.id)
         XCTAssertEqual(lines, ["Corrected by hand: Pidgey: CP 100 to 1990.", "Removed from the box: Pidgey, CP 200."], "only Pokémon first seen at this scan; the earlier scan's correction is not included")
     }
+
+    func testEditsAfterListsADynamaxChange() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-rep-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        let d = Date(timeIntervalSince1970: 1_790_000_000)
+        let a = BoxEntry(id: "a", row: ScanRow(index: 1, name: "Pidgey", display: "Pidgey", form: "", speciesId: "pidgey", dex: 16, cp: 100, hp: 40, ivs: nil, ivsRead: nil, ivsGuess: nil, level: 5, levelMax: 5, dust: 1,
+                                               solveStatus: "exact", flags: [], frames: []), firstSeen: d, lastSeen: d)
+        let s = try lib.store.save(ScanResult(rows: [], review: [], unmatched: []), account: "Zorblax", scanDate: d, source: "broadcast", replayLog: Data("x\n".utf8))
+        try lib.commit(account: "Zorblax", entries: [a], reason: .scan, note: "scan", scanId: s.id, scanKind: .full, scanDate: d)
+        var yes = a; yes.row.dynamax = true
+        try lib.commit(account: "Zorblax", entries: [yes], reason: .edit, note: "Dynamax set for Pidgey", now: d.addingTimeInterval(10))
+        var cleared = a; cleared.row.dynamax = nil
+        try lib.commit(account: "Zorblax", entries: [cleared], reason: .edit, note: "Dynamax set for Pidgey", now: d.addingTimeInterval(20))
+        XCTAssertEqual(try lib.editsAfter(account: "Zorblax", scanId: s.id),
+                       ["Corrected by hand: Pidgey: Dynamax set to Yes.", "Corrected by hand: Pidgey: Dynamax cleared."])
+    }
 }
