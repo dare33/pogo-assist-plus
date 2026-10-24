@@ -1,0 +1,296 @@
+import SwiftUI
+import UIKit
+import PogoBox
+
+/// The Pogo Hub, the second tab (design handoff section 4): what is on in Pokémon GO, then six tiles that open the type screens
+/// (`HubTypeScreen`). It replaces the old Next list, whose builds now live on the Everything screen.
+struct HubView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.accent) private var accent
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var rankingInfo = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    eventsHeader
+                    eventsStrip
+                    whatNext
+                    if rankingInfo { RankingExplainer(identifier: "hub-ranking-explainer") }
+                    adviceLine
+                    tiles
+                }
+                .padding(.horizontal, Theme.Space.screen)
+                .padding(.bottom, 16)
+            }
+        }
+        .background(Theme.bg.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
+        .navigationDestination(for: ContentType.self) { HubTypeDestination(type: $0) }
+    }
+
+    // MARK: header
+
+    /// The account name, centred in the accent's ink (it opens the account menu), and the More circle at the trailing edge.
+    private var header: some View {
+        ZStack {
+            AccountMenu(hub: true).padding(.horizontal, 56)
+            HStack { Spacer(); MoreButton() }
+        }
+        .padding(.horizontal, Theme.Space.screen)
+        .frame(minHeight: 52)
+    }
+
+    // MARK: events
+
+    private var eventsHeader: some View {
+        HubHeaderLine("HAPPENING IN POKÉMON GO") {
+            Link(destination: URL(string: "https://pokemongo.com/news")!) {
+                Text("All news ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("hub-all-news")
+        }
+    }
+
+    @ViewBuilder private var eventsStrip: some View {
+        let today = HubModel.dayKey(Date())
+        if let hub = try? HubData.bundled() {
+            let events = HubModel.upcoming(hub.events, today: today)
+            if events.isEmpty {
+                Text("Nothing on right now").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+                    .accessibilityIdentifier("hub-no-events")
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) { ForEach(events.indices, id: \.self) { eventCard(events[$0], today: today) } }
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .scrollClipDisabled()
+                .accessibilityIdentifier("hub-events")
+            }
+        } else {
+            Text("The events list could not be read.").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+        }
+    }
+
+    @ViewBuilder private func eventCard(_ e: HubData.Event, today: String) -> some View {
+        let tie = ContentType(rawValue: e.tie)
+        let span = HubModel.span(from: e.from, to: e.to, today: today)
+        let card = HubCard(kicker: span.kicker, title: e.title, line: e.line, pill: tie.flatMap(Self.pillText), base: tie.map { $0.ink(accent) } ?? accent.ink)
+        if let tie {
+            NavigationLink(value: tie) { card }.buttonStyle(PressStyle())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(e.title), \(span.spoken), \(e.line), opens \(tie.title)")
+                .accessibilityAddTraits(.isButton)
+        } else {
+            card.accessibilityElement(children: .ignore).accessibilityLabel("\(e.title), \(span.spoken), \(e.line)")
+        }
+    }
+
+    static func pillText(_ type: ContentType) -> String? {
+        switch type {
+        case .everything: return nil
+        case .raids: return "See raid picks"
+        case .pvp: return "See PvP picks"
+        case .max: return "See Max picks"
+        case .gym: return "See gym picks"
+        case .rocket: return "See Rocket picks"
+        }
+    }
+
+    // MARK: what next
+
+    private var whatNext: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                Text("WHAT NEXT").modifier(HubHeaderStyle())
+                Spacer(minLength: 8)
+                RankingSwitch(infoOpen: $rankingInfo, identifier: "hub-ranking")
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("WHAT NEXT").modifier(HubHeaderStyle())
+                RankingSwitch(infoOpen: $rankingInfo, identifier: "hub-ranking")
+            }
+        }
+    }
+
+    @ViewBuilder private var adviceLine: some View {
+        switch model.advice {
+        case .none:
+            Text("Scan your Pokémon and the Hub will fill in").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+                .accessibilityIdentifier("hub-advice-none")
+        case .computing:
+            HStack(spacing: 10) { ProgressView(); Text("Working out advice").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted) }
+                .accessibilityElement(children: .combine)
+        case .failed(let message):
+            Text("Advice could not be worked out: \(message)").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+        case .ready: EmptyView()
+        }
+    }
+
+    // MARK: tiles
+
+    private var tiles: some View {
+        let one = typeSize >= .accessibility1
+        let columns = one ? [GridItem(.flexible())] : [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+        var builds: [BoxAdvice.Build]?
+        if case .ready(let a) = model.advice { builds = a.builds }
+        return LazyVGrid(columns: columns, spacing: 10) {
+            ForEach(ContentType.allCases) { type in
+                NavigationLink(value: type) { HubTile(type: type, count: builds.map { HubModel.count($0, for: type.key) }) }
+                    .buttonStyle(PressStyle())
+                    .accessibilityIdentifier("hub-tile-\(type.rawValue)")
+            }
+        }
+    }
+}
+
+// MARK: content types
+
+extension ContentType {
+    /// The advisor areas this screen is for (`HubModel` counts and filters by it).
+    var key: ContentKey { ContentKey(rawValue: rawValue) ?? .everything }
+
+    /// SF Symbols that exist on iOS 17 (first shipped: line.3.horizontal 15, diamond 14, building.columns 14, sparkle 14, figure.fencing 16, sparkles 13).
+    var glyph: String {
+        switch self {
+        case .everything: return "line.3.horizontal"
+        case .raids: return "diamond"
+        case .gym: return "building.columns"
+        case .rocket: return "sparkle"
+        case .pvp: return "figure.fencing"
+        case .max: return "sparkles"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .everything: return "Every build, best first"
+        case .raids: return "Attackers for raid bosses"
+        case .gym: return "Defenders and gym attackers"
+        case .rocket: return "Counters for grunts and leaders"
+        case .pvp: return "Great, Ultra and Master picks"
+        case .max: return "Dynamax and Gigantamax"
+        }
+    }
+}
+
+/// "5 builds" / "1 build".
+func buildsText(_ n: Int) -> String { "\(n) \(n == 1 ? "build" : "builds")" }
+
+struct HubTile: View {
+    let type: ContentType
+    /// nil while the advice is not ready: no chip.
+    let count: Int?
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top) {
+                Image(systemName: type.glyph).font(.figtree(22, .semibold, relativeTo: .title2)).foregroundStyle(type.ink(accent))
+                    .accessibilityHidden(true)
+                Spacer(minLength: 8)
+                if let count {
+                    Text(verbatim: String(count)).font(.figtree(12, .heavy, relativeTo: .caption)).monospacedDigit().foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(Theme.surface2, in: Capsule())
+                        .accessibilityHidden(true)
+                }
+            }
+            Text(type.title).font(.figtree(16, .heavy, relativeTo: .body)).foregroundStyle(Theme.ink)
+            Text(type.blurb).font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .panelShadow()
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(count.map { "\(type.title), \(buildsText($0)). \(type.blurb)" } ?? "\(type.title). \(type.blurb)")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+// MARK: shared pieces
+
+/// 13/700 muted caps: the section headers on the Hub and the type screens.
+struct HubHeaderStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content.font(.figtree(13, .bold, relativeTo: .footnote)).tracking(0.04 * 13).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A header line (13/700 muted, .04em) with an optional trailing control (a link in the accent's ink).
+struct HubHeaderLine<Trailing: View>: View {
+    let text: String
+    @ViewBuilder var trailing: Trailing
+
+    init(_ text: String, @ViewBuilder trailing: () -> Trailing) { self.text = text; self.trailing = trailing() }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(text).modifier(HubHeaderStyle())
+            Spacer(minLength: 8)
+            trailing
+        }
+    }
+}
+
+extension HubHeaderLine where Trailing == EmptyView {
+    init(_ text: String) { self.init(text) { EmptyView() } }
+}
+
+/// A card of the horizontal strips (the Hub's events, the Everything screen's headlines): 236 pt wide, radius 22, padding 14 by 16, at
+/// least 112 pt tall. In light mode a gradient of `base` under white text; in dark mode a dark solid of `base` under `base` text (the
+/// ink values are the light ones in dark mode). Both keep the text at 4.5:1 or better, which is why the base is a type's ink and
+/// not its brighter solid colour.
+struct HubCard: View {
+    let kicker: String
+    let title: String
+    let line: String
+    var pill: String? = nil
+    let base: Color
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let dark = scheme == .dark
+        let text: Color = dark ? base : .white
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(kicker).font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.08 * 11)
+            Text(title).font(.figtree(17, .heavy, relativeTo: .headline)).lineLimit(2)
+            Text(line).font(.figtree(13, .semibold, relativeTo: .footnote)).lineLimit(2)
+            Spacer(minLength: 6)
+            if let pill {
+                Text(pill).font(.figtree(11, .heavy, relativeTo: .caption2))
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(dark ? base.opacity(0.22) : Color.black.opacity(0.22), in: Capsule())
+            }
+        }
+        .foregroundStyle(text)
+        .multilineTextAlignment(.leading)
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .frame(width: 236, alignment: .topLeading)
+        .frame(minHeight: 112, maxHeight: .infinity, alignment: .topLeading)
+        .background {
+            if dark {
+                ZStack { shape.fill(Theme.surface); shape.fill(base.opacity(0.3)) }
+            } else {
+                shape.fill(LinearGradient(colors: [base, Self.darker(base, 0.2)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+        }
+        .contentShape(shape)
+    }
+
+    /// `c` with its channels scaled towards black (the gradient's far corner stays at least as dark as its start, so white keeps its contrast).
+    private static func darker(_ c: Color, _ f: CGFloat) -> Color {
+        Color(uiColor: UIColor { trait in
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            UIColor(c).resolvedColor(with: trait).getRed(&r, green: &g, blue: &b, alpha: &a)
+            return UIColor(red: r * (1 - f), green: g * (1 - f), blue: b * (1 - f), alpha: a)
+        })
+    }
+}

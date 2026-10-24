@@ -24,7 +24,7 @@ struct RootView: View {
             ZStack {
                 NavigationStack { BoxView().navigationDestination(isPresented: scanBinding(for: .box)) { ScanView().hidesTabBar() } }
                     .opacity(tab == .box ? 1 : 0).allowsHitTesting(tab == .box).accessibilityHidden(tab != .box)
-                NavigationStack { NextView().navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
+                NavigationStack { HubView().navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
                     .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)
             }
             .contentColumn()
@@ -139,9 +139,12 @@ struct BusyOverlay: View {
 struct AccountMenu: View {
     /// The UI v1 header look: monogram, name and chevron on a surface pill (see `AccountPill`).
     var pill = false
+    /// The Pogo Hub's header look: the name in the accent's ink, 22/700, with a chevron.
+    var hub = false
     /// Display only (no menu, no chevron): a finished scan waiting for review belongs to the account named, so the account cannot be switched under it.
     var locked = false
     @EnvironmentObject var model: AppModel
+    @Environment(\.accent) private var accent
     @State private var asking = false
     @State private var newName = ""
 
@@ -176,6 +179,12 @@ struct AccountMenu: View {
         } label: {
             if pill {
                 pillLabel(chevron: true)
+            } else if hub {
+                HStack(spacing: 6) {
+                    Text(model.account ?? "Account").font(.figtree(22, .bold, relativeTo: .title2)).foregroundStyle(accent.ink).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.figtree(12, .bold)).foregroundStyle(accent.ink)
+                }
+                .frame(minHeight: 44).contentShape(Rectangle())
             } else {
                 HStack(spacing: 4) {
                     Text(model.account ?? "Account").font(.headline).lineLimit(1)
@@ -183,7 +192,7 @@ struct AccountMenu: View {
                 }
             }
         }
-        .accessibilityLabel(pill ? "Account, \(model.account ?? "none")" : (model.account ?? "Account"))
+        .accessibilityLabel(pill || hub ? "Account, \(model.account ?? "none")" : (model.account ?? "Account"))
         .alert("New account", isPresented: $asking) {
             TextField("Trainer name", text: $newName).accountNameField()
             Button("Create") { model.createAccount(newName) }
