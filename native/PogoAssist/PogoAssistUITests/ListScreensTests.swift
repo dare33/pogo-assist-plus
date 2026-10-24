@@ -149,12 +149,13 @@ final class ListScreensTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Moltres · 3 of 6 for Raids"].exists, "the header counts the Strong and OK copies under the chip")
         XCTAssertEqual(app.staticTexts["species-order"].label, "Raids first")
         let tags = app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex.map(\.label)
-        for t in app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(t.frame.height, 43, "tap target of \(t.label)") }
+        // The tag's tap target is the chip (about 20 pt) plus 6 pt above and below, about 32 pt: no more, so that two rows' targets and the IVs line are never overlapped.
+        for t in app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(t.frame.height, 30, "tap target of \(t.label)"); XCTAssertLessThan(t.frame.height, 40, "and not 44: \(t.label)") }
         XCTAssertEqual(tags.count, 6, "every copy has its tag: " + tags.joined(separator: " | "))
         let rank = { (t: String) in t.hasPrefix("Strong") ? 0 : t.hasPrefix("OK") ? 1 : 2 }
         XCTAssertEqual(tags.map(rank), tags.map(rank).sorted(), "Weak last: " + tags.joined(separator: " | "))
         XCTAssertTrue(tags.contains { $0.hasPrefix("Weak") })
-        XCTAssertTrue(tags.contains { $0.contains(", best of 6") }, "the best-of tag for the area is merged into the status tag: " + tags.joined(separator: " | "))
+        XCTAssertTrue(tags.contains { $0.contains(", best as ") }, "the best-of tag for the area is merged into the status tag: " + tags.joined(separator: " | "))
         let weak = app.buttons.matching(NSPredicate(format: "identifier == 'pokemon-tag' AND label BEGINSWITH 'Weak'")).firstMatch
         weak.tap()
         let line = app.staticTexts["pokemon-tag-line"]
@@ -163,11 +164,19 @@ final class ListScreensTests: XCTestCase {
         sleep(1); shot("species-raids-chip")
         weak.tap()
         XCTAssertFalse(app.staticTexts["pokemon-tag-line"].exists, "tapping again closes it")
-        // A tap on the row away from the chips (left of centre, then right of the chips on the CP figure) opens the copy, not the tag.
-        for dx in [0.15, 0.93] {
+        // A tap on the row away from the chips opens the copy, not the tag: left of centre near the top, and beside the chip at the chip's own height (right of it, on
+        // the same line), where a tap that reached the chip's tap target would open its line instead.
+        for (dx, centredOnChip) in [(0.15, false), (0.93, true)] {
             let copy = app.buttons.matching(identifier: "pokemon-row").firstMatch
-            copy.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: 0.25)).tap()
-            XCTAssertTrue(copy.waitForNonExistence(timeout: 5), "a tap at \(dx) across the row opens the copy")
+            var dy = 0.25
+            if centredOnChip {
+                let tag = app.buttons.matching(identifier: "pokemon-tag").firstMatch
+                XCTAssertTrue(tag.waitForExistence(timeout: 5))
+                dy = Double((tag.frame.midY - copy.frame.minY) / copy.frame.height)
+            }
+            copy.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: dy)).tap()
+            XCTAssertTrue(copy.waitForNonExistence(timeout: 5), "a tap at \(dx), \(dy) across the row opens the copy")
+            XCTAssertFalse(app.staticTexts["pokemon-tag-line"].exists)
             app.buttons["Back"].firstMatch.tap()
             XCTAssertTrue(app.buttons["pokemon-row"].firstMatch.waitForExistence(timeout: 5))
         }
@@ -188,6 +197,12 @@ final class ListScreensTests: XCTestCase {
         let line = app.staticTexts["activity-raids-line"]
         XCTAssertTrue(line.waitForExistence(timeout: 3))
         XCTAssertTrue(line.label.hasPrefix("Raids"), line.label)
+        // The rows' tap targets are 6 pt taller than the chip each way and do not overlap: a tap on the bottom edge of Raids' target opens Raids, not Gym's line.
+        raids.tap()
+        XCTAssertTrue(line.waitForNonExistence(timeout: 3))
+        raids.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.97)).tap()
+        XCTAssertTrue(line.waitForExistence(timeout: 3), "the bottom of the Raids target opens Raids")
+        XCTAssertFalse(app.staticTexts["activity-gym-line"].exists, "and not the Gym line under it")
         sleep(1); shot("detail-activities")
     }
 
@@ -270,6 +285,50 @@ final class ListScreensTests: XCTestCase {
         large.launch()
         XCTAssertTrue(large.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
         session(large, "large")
+    }
+
+    /// The species list under Raids at the default size, xxxLarge and the accessibility sizes 3 and 5: the merged chip wraps instead of running off the edge, the
+    /// order label is whole ("Raids first") and the ranking switch is on the screen. The Pokémon list's sort line is shot at xxxLarge and AX1 too.
+    func testSpeciesListUnderRaidsAtTheDefaultSize() throws { try speciesListUnderRaids("default", "UICTContentSizeCategoryL") }
+    func testSpeciesListUnderRaidsAtXXXLarge() throws { try speciesListUnderRaids("xxxl", "UICTContentSizeCategoryXXXL") }
+    func testSpeciesListUnderRaidsAtAX1() throws { try speciesListUnderRaids("ax1", "UICTContentSizeCategoryAccessibilityM") }
+    func testSpeciesListUnderRaidsAtAX3() throws { try speciesListUnderRaids("ax3", "UICTContentSizeCategoryAccessibilityXL") }
+    func testSpeciesListUnderRaidsAtAX5() throws { try speciesListUnderRaids("ax5", "UICTContentSizeCategoryAccessibilityXXXL") }
+
+    private func speciesListUnderRaids(_ name: String, _ category: String) throws {
+        do {
+            let app: XCUIApplication
+            if category.contains("Accessibility") && category != "UICTContentSizeCategoryAccessibilityM" {
+                // The sample-scan set-up screens do not fit at the largest sizes: build the box at the default size, then relaunch at this one with the box kept.
+                launchPopulated().terminate()
+                app = XCUIApplication()
+                app.launchArguments = ["-appearance", "light", "-UIPreferredContentSizeCategoryName", category]
+                app.launch()
+                XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
+                let ready = NSPredicate(format: "label CONTAINS 'Great League'")
+                expectation(for: ready, evaluatedWith: rows(app).firstMatch)
+                waitForExpectations(timeout: 60)
+            } else {
+                app = launchPopulated(["-appearance", "light", "-UIPreferredContentSizeCategoryName", category])
+            }
+            sleep(1); app.swipeUp(velocity: .slow); sleep(1)   // the saved panel pushes the chips and the sort line down at the large sizes
+            shot("size-\(name)-list")
+            let sort = app.descendants(matching: .any)["sort-menu"], list = app.descendants(matching: .any)["list-scoring"]
+            XCTAssertTrue(sort.waitForExistence(timeout: 10) && list.exists, "\(name): the sort line")
+            XCTAssertLessThanOrEqual(list.frame.maxX, app.frame.width + 0.5, "\(name): the ranking switch is on the screen")
+            app.buttons["chip-raids"].tap()
+            openSpecies(app, "Moltres")
+            XCTAssertTrue(app.buttons["pokemon-tag"].firstMatch.waitForExistence(timeout: 10), name)
+            sleep(1); shot("size-\(name)-species-raids")
+            XCTAssertEqual(app.staticTexts["species-order"].label, "Raids first", name)
+            let order = app.staticTexts["species-order"].frame, switchFrame = app.descendants(matching: .any)["species-scoring"].frame
+            XCTAssertGreaterThanOrEqual(order.width, 60, "\(name): the label is not squeezed")
+            XCTAssertLessThanOrEqual(switchFrame.maxX, app.frame.width + 0.5, "\(name): the switch is on the screen")
+            for t in app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex where t.isHittable {
+                XCTAssertLessThanOrEqual(t.frame.maxX, app.frame.width + 0.5, "\(name): the chip stays on the screen: \(t.label)")
+            }
+            app.terminate()
+        }
     }
 
     /// A fresh account with the sample scan reviewed and saved; leaves the app on the list.
