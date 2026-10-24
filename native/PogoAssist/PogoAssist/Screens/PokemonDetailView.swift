@@ -330,7 +330,7 @@ struct PokemonDetailView: View {
         return VStack(alignment: .leading, spacing: 6) {
             FlowLayout(spacing: 8) {
                 Button { if open { activityOpen.remove(a.rawValue) } else { activityOpen.insert(a.rawValue) } } label: {
-                    WorthTag(activity: a, worth: worth).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
+                    WorthTag(activity: a, worth: worth).padding(.vertical, 12).contentShape(Rectangle()).padding(.vertical, -12)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(a.title): \(worth.label)")

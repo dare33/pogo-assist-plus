@@ -108,14 +108,14 @@ struct SpeciesListView: View {
     /// "Best IVs first" on the left, the ranking switch and its "i" on the right, the explainer under them. The tags and the order follow the switch.
     private var sortLine: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // One line at the usual sizes, the label shrinking first (the switch wraps its own caption where it must, as in RankingControls); stacked from the accessibility sizes.
+            // One line at the usual sizes, the label never shrinking or truncating (the switch drops its RANKING caption first, then wraps its own caption where it must, as in RankingControls); stacked from the accessibility sizes.
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 0) { order; RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring") }
             } else {
                 HStack(spacing: 8) {
-                    order.lineLimit(1).minimumScaleFactor(0.6).layoutPriority(-1)
+                    order.lineLimit(1).layoutPriority(1)
                     Spacer(minLength: 4)
-                    RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring").layoutPriority(1)
+                    RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring", captionDroppable: true)
                 }
             }
             if rankingInfo { RankingExplainer(identifier: "species-scoring-explainer").transition(.opacity) }
@@ -125,9 +125,10 @@ struct SpeciesListView: View {
     }
 
     private var order: some View {
-        Label(activity.flatMap { a in store.insight == nil ? nil : "Best for \(a.title) first" } ?? "Best IVs first", systemImage: "arrow.down").labelStyle(.titleAndIcon)
+        Label(activity.flatMap { a in store.insight == nil ? nil : "\(a.league != nil ? a.title + " League" : a.title) first" } ?? "Best IVs first", systemImage: "arrow.down").labelStyle(.titleAndIcon)
             .font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
             .frame(minHeight: 44, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityIdentifier("species-order")
     }
 
@@ -198,8 +199,8 @@ struct SpeciesListView: View {
             WorthTag(activity: a, worth: w, bestOf: bestOf).accessibilityHidden(true)
         } else {
             Button { if lineOpen.contains(it.id) { lineOpen.remove(it.id) } else { lineOpen.insert(it.id) } } label: {
-                // 44 pt tall by padding (the chip is about 20), so the target is not smaller than a button's.
-                WorthTag(activity: a, worth: w, bestOf: bestOf).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
+                // The hit area is 44 pt tall (the chip is about 20) without changing the layout: padded out, shaped, then padded back.
+                WorthTag(activity: a, worth: w, bestOf: bestOf).padding(.vertical, 12).contentShape(Rectangle()).padding(.vertical, -12)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(w?.label ?? "Not rated") for \(a.title)" + (bestOf.map { ", best of \($0)" } ?? ""))
@@ -277,7 +278,7 @@ struct SpeciesListView: View {
                 .accessibilityLabel(spoken)
                 if status != nil || !best.isEmpty {
                     FlowLayout(spacing: 6) {
-                        if let (a, w) = status { statusTag(it, a, w, bestOf: merged ? copiesOfSpecies : nil) }
+                        if let (a, w) = status { statusTag(it, a, w, bestOf: merged ? copiesOfSpecies : nil).fixedSize(horizontal: true, vertical: false) }
                         ForEach(shown) { tagView($0).accessibilityHidden(true) }
                     }
                     if let (a, w) = status, w != nil, lineOpen.contains(it.id), !selecting, let line = tagLine(it, a) {

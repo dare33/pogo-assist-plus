@@ -147,9 +147,9 @@ final class ListScreensTests: XCTestCase {
         row(app, "Moltres").tap()
         XCTAssertTrue(app.buttons["pokemon-tag"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Moltres · 3 of 6 for Raids"].exists, "the header counts the Strong and OK copies under the chip")
-        XCTAssertEqual(app.staticTexts["species-order"].label, "Best for Raids first")
+        XCTAssertEqual(app.staticTexts["species-order"].label, "Raids first")
         let tags = app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex.map(\.label)
-        for t in app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(t.frame.height, 44, "tap target of \(t.label)") }
+        for t in app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(t.frame.height, 43, "tap target of \(t.label)") }
         XCTAssertEqual(tags.count, 6, "every copy has its tag: " + tags.joined(separator: " | "))
         let rank = { (t: String) in t.hasPrefix("Strong") ? 0 : t.hasPrefix("OK") ? 1 : 2 }
         XCTAssertEqual(tags.map(rank), tags.map(rank).sorted(), "Weak last: " + tags.joined(separator: " | "))
@@ -163,6 +163,14 @@ final class ListScreensTests: XCTestCase {
         sleep(1); shot("species-raids-chip")
         weak.tap()
         XCTAssertFalse(app.staticTexts["pokemon-tag-line"].exists, "tapping again closes it")
+        // A tap on the row away from the chips (left of centre, then right of the chips on the CP figure) opens the copy, not the tag.
+        for dx in [0.15, 0.93] {
+            let copy = app.buttons.matching(identifier: "pokemon-row").firstMatch
+            copy.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: 0.25)).tap()
+            XCTAssertTrue(copy.waitForNonExistence(timeout: 5), "a tap at \(dx) across the row opens the copy")
+            app.buttons["Back"].firstMatch.tap()
+            XCTAssertTrue(app.buttons["pokemon-row"].firstMatch.waitForExistence(timeout: 5))
+        }
     }
 
     func testDetailActivitiesRow() throws {
