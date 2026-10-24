@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		001212376B49D46CEFA31541 /* ListTags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F57A24972BBD21055BBC8A5 /* ListTags.swift */; };
 		010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2851EAE92D472650A78CD032 /* SampleHandler.swift */; };
 		011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */; };
 		0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */; };
@@ -142,6 +143,7 @@
 		00B7030AC596BFDD03757B5C /* SetupStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepView.swift; sourceTree = "<group>"; };
 		01F723B7B2F32D040376093D /* SetupChecklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistView.swift; sourceTree = "<group>"; };
 		09D08E55E9B50EC09258EFF1 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		0F57A24972BBD21055BBC8A5 /* ListTags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListTags.swift; sourceTree = "<group>"; };
 		1222BDC1C6F45E94BECD7F63 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
 		167560673B06A1C7DF3C9ACE /* ScreenshotImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImportSheet.swift; sourceTree = "<group>"; };
 		1BB1A15D6F733EEE0586D675 /* RankingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingControls.swift; sourceTree = "<group>"; };
@@ -398,6 +400,7 @@
 				1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */,
 				51C5D5C5A5E06415BB056093 /* GuideFlow.swift */,
 				4D8E6A568314AEC10B511E50 /* LeaguesPanel.swift */,
+				0F57A24972BBD21055BBC8A5 /* ListTags.swift */,
 				5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */,
 				55460A514386DA8E46320B36 /* NextView.swift */,
 				33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */,
@@ -660,6 +663,7 @@
 				68A28061D9146D4EA5A538CC /* GameSearch.swift in Sources */,
 				205415EE687703C0379569F7 /* GuideFlow.swift in Sources */,
 				B240DFB4A51535986CADBF9D /* LeaguesPanel.swift in Sources */,
+				001212376B49D46CEFA31541 /* ListTags.swift in Sources */,
 				7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */,
 				AF7D163058C2BCD0E1E66334 /* NextView.swift in Sources */,
 				83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */,
