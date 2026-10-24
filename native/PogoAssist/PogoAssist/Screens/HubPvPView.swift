@@ -18,7 +18,7 @@ struct HubPvPView: View {
     var body: some View {
         var count: String?
         if case .ready(let a) = model.advice { count = buildsText(HubModel.count(a.builds, for: .pvp)) }
-        return HubTypeScreen(type: .pvp, sub: "A \(LeaguePanel.name(league)) team from your box", count: count) {
+        return HubTypeScreen(type: .pvp, sub: "\(league == "ul" ? "An" : "A") \(LeaguePanel.name(league)) team from your box", count: count) {
             SegmentedSwitch(
                 segments: LeaguePanel.keys.map { k in
                     let l = League(rawValue: k) ?? .gl
