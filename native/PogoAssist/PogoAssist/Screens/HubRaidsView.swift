@@ -9,10 +9,10 @@ struct HubRaidsView: View {
     var body: some View {
         var count: String?
         if case .ready(let a) = model.advice { count = buildsText(HubModel.count(a.builds, for: .raids)) }
-        return HubTypeScreen(type: .raids, sub: "Bosses to 1 Dec", count: count) {
-            HubAdviceGate { advice in
-                HubTimeline(screen: .raids, advice: advice, entries: model.entries, closers: true)
-            }
+        let sub = (try? HubData.bundled()).flatMap { HubRaidsModel.lastDay(rows: $0.rotation, screen: .raids) }.map { "Bosses to \($0)" }
+        return HubTypeScreen(type: .raids, sub: sub, count: count) {
+            HubTimeline(screen: .raids, advice: model.hubAdvice, entries: model.entries, closers: true)
+            HubAdviceGate { _ in EmptyView() }
             HubScheduleLink()
         }
         .accessibilityIdentifier("hub-screen-raids")
@@ -36,7 +36,8 @@ struct HubScheduleLink: View {
 /// gaps of the rows on show.
 struct HubTimeline: View {
     let screen: HubRaidsModel.Screen
-    let advice: BoxAdvice
+    /// nil while the advice is not ready: the schedule needs none, so the rows show without readiness.
+    let advice: BoxAdvice?
     let entries: [BoxEntry]
     let closers: Bool
     @Environment(\.accent) private var accent
@@ -50,7 +51,7 @@ struct HubTimeline: View {
 
     var body: some View {
         if let hub = try? HubData.bundled(), let gm = try? GameMaster.bundled() {
-            let line = HubRaidsModel.timeline(rows: hub.rotation, screen: screen, today: HubModel.dayKey(Date()))
+            let line = HubRaidsModel.timeline(rows: hub.rotation, screen: screen, today: HubModel.today())
             let segment = choice ?? (line.now.isEmpty ? .comingUp : .now)
             let shown = segment == .now ? line.now : line.comingUp
             SegmentedSwitch(
@@ -71,14 +72,14 @@ struct HubTimeline: View {
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .panelShadow()
             }
-            if closers { gapClosers(rows: shown.map(\.row), hub: hub, gm: gm) }
+            if closers, let advice { gapClosers(rows: shown.map(\.row), advice: advice, hub: hub, gm: gm) }
         } else {
             Text("The Hub's schedule could not be read.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
         }
     }
 
-    @ViewBuilder private func gapClosers(rows: [HubData.RotationRow], hub: HubData, gm: GameMaster) -> some View {
-        let all = HubRaidsModel.gapClosers(rows: rows, builds: advice.builds, entries: entries, gm: gm, hub: hub, screen: screen)
+    @ViewBuilder private func gapClosers(rows: [HubData.RotationRow], advice: BoxAdvice, hub: HubData, gm: GameMaster) -> some View {
+        let all = HubRaidsModel.gapClosers(rows: rows, advice: advice, entries: entries, gm: gm, hub: hub, screen: screen)
         HubHeaderLine("BUILDS THAT CLOSE THE GAPS") {
             if all.count > 3 {
                 Button { withAnimation(.easeOut(duration: 0.15)) { showAllClosers.toggle() } } label: {
@@ -104,10 +105,11 @@ private struct HubTimelineRow: View {
     let type: ContentType
     let hub: HubData
     let gm: GameMaster
-    let advice: BoxAdvice
+    let advice: BoxAdvice?
     let entries: [BoxEntry]
     let screen: HubRaidsModel.Screen
     @Environment(\.accent) private var accent
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let row = entry.row
@@ -115,68 +117,80 @@ private struct HubTimelineRow: View {
         let name = HubRaidsModel.name(row)
         let chip = HubRaidsModel.kindChip(row.kind)
         let bring = HubRaidsModel.bring(row: row, hub: hub)
-        let ready = HubRaidsModel.readiness(row: row, builds: advice.builds, entries: entries, gm: gm, hub: hub, screen: screen)
-        let todo = HubRaidsModel.toDo(row: row, builds: advice.builds, entries: entries, gm: gm, hub: hub, screen: screen)
-        let counters = ready.built == ready.needed ? "\(ready.needed) of \(ready.needed) ready" : "\(ready.built) of \(ready.needed) counters"
+        let ready = advice.map { HubRaidsModel.readiness(row: row, advice: $0, entries: entries, gm: gm, hub: hub, screen: screen) }
+        let todo = advice.map { HubRaidsModel.toDo(row: row, advice: $0, entries: entries, gm: gm, hub: hub, screen: screen) } ?? (row.bosses.isEmpty ? row.note : "")
         let ink = type.ink(accent)
-        return HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(dates.dates).font(.figtree(11, .heavy, relativeTo: .caption2)).foregroundStyle(entry.isNow ? ink : Theme.muted)
-                Text(dates.when).font(.figtree(11, .semibold, relativeTo: .caption2)).foregroundStyle(Theme.muted)
-            }
-            .frame(width: 54, alignment: .leading)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-                    if !chip.isEmpty {
-                        Text(chip).font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.04 * 10).foregroundStyle(Theme.muted)
-                            .padding(.horizontal, 7).padding(.vertical, 2).background(Theme.off, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .fixedSize()
-                    }
+        let counters = ready.map { $0.built == $0.needed ? "\($0.needed) of \($0.needed) ready" : "\($0.built) of \($0.needed) counters" }
+        let barColour = ready.map { $0.built == $0.needed ? Theme.greenInk : $0.built == 0 ? Theme.red : ink } ?? ink
+        let stacked = typeSize.isAccessibilitySize
+        let dateColumn = VStack(alignment: .leading, spacing: 2) {
+            Text(dates.dates).font(.figtree(11, .heavy, relativeTo: .caption2)).foregroundStyle(entry.isNow ? ink : Theme.muted)
+            Text(dates.when).font(.figtree(11, .semibold, relativeTo: .caption2)).foregroundStyle(Theme.muted)
+        }
+        let details = VStack(alignment: .leading, spacing: 8) {
+            FlowLayout(spacing: 8) {
+                Text(name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                if !chip.isEmpty {
+                    Text(chip).font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.04 * 10).foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 7).padding(.vertical, 2).background(Theme.off, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
-                if ready.needed > 0 {
+            }
+            if let ready, let counters, ready.needed > 0 {
+                let label = Text(counters).font(.figtree(11, .bold, relativeTo: .caption2)).monospacedDigit().foregroundStyle(barColour)
+                if stacked {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ReadinessBar(fraction: Double(ready.built) / Double(ready.needed), colour: barColour).frame(height: 6)
+                        label
+                    }
+                } else {
                     HStack(spacing: 8) {
-                        ReadinessBar(fraction: Double(ready.built) / Double(ready.needed),
-                                     colour: ready.built == ready.needed ? Theme.greenInk : ready.built == 0 ? Theme.red : ink)
-                            .frame(height: 6)
-                        Text(counters).font(.figtree(11, .bold, relativeTo: .caption2)).monospacedDigit().foregroundStyle(Theme.muted).fixedSize()
+                        ReadinessBar(fraction: Double(ready.built) / Double(ready.needed), colour: barColour).frame(height: 6)
+                        label.fixedSize()
                     }
-                    WrapLayout(spacing: 6) {
-                        Text("BRING").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint)
-                        ForEach(bring, id: \.self) { t in
-                            Text(t.uppercased()).font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.04 * 10)
-                                .foregroundStyle(Theme.pokemonTypeText(t)).padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(Theme.pokemonType(t) ?? Theme.off, in: Capsule())
-                        }
-                    }
-                }
-                if !todo.isEmpty {
-                    Text(todo).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if !bring.isEmpty {
+                FlowLayout(spacing: 6) {
+                    Text("BRING").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint)
+                    ForEach(bring, id: \.self) { t in
+                        Text(t.uppercased()).font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.04 * 10)
+                            .foregroundStyle(Theme.pokemonTypeText(t)).padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Theme.pokemonType(t) ?? Theme.off, in: Capsule())
+                    }
+                }
+            }
+            if !todo.isEmpty {
+                Text(todo).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        return Group {
+            if stacked {
+                VStack(alignment: .leading, spacing: 6) { dateColumn; details }
+            } else {
+                HStack(alignment: .top, spacing: 12) { dateColumn.frame(width: 54, alignment: .leading); details }
+            }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(entry.isNow ? type.tint(accent) : Color.clear)
+        // One element for the whole row. The label gives the bring types in words, so nothing depends on the chips inside.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken(dates: dates, name: name, chip: chip, counters: ready.needed > 0 ? counters : nil, bring: bring, todo: todo))
+        .accessibilityLabel(spoken(when: HubRaidsModel.spokenDates(entry), name: name, chip: chip, counters: ready.flatMap { $0.needed > 0 ? counters : nil }, bring: bring, todo: todo))
     }
 
-    private func spoken(dates: (dates: String, when: String), name: String, chip: String, counters: String?, bring: [String], todo: String) -> String {
-        var parts = ["\(dates.dates), \(dates.when)", name]
+    private func spoken(when: String, name: String, chip: String, counters: String?, bring: [String], todo: String) -> String {
+        var parts = [when, name]
         if !chip.isEmpty { parts.append(chip.replacingOccurrences(of: "5★", with: "5 star").lowercased()) }
-        if let counters {
-            let types = bring.map(HubRaidsModel.typeName)
-            let list = types.count > 1 ? types.dropLast().joined(separator: ", ") + " and " + types[types.count - 1] : types.joined()
-            parts.append("\(counters), bring \(list)")
-        }
+        let types = bring.map(HubRaidsModel.typeName)
+        let list = types.count > 1 ? types.dropLast().joined(separator: ", ") + " and " + types[types.count - 1] : types.joined()
+        if let counters { parts.append("\(counters), bring \(list)") } else if !types.isEmpty { parts.append("Bring \(list)") }
         if !todo.isEmpty { parts.append(todo) }
         return parts.joined(separator: ". ")
     }
 }
 
-/// A 6 pt rounded bar: `fraction` of the track in `colour`, the rest on the `off` colour.
+/// A 6 pt rounded bar: `fraction` of the track in `colour` (a 6 pt stub at zero, so the red shows), the rest on the `off` colour.
 private struct ReadinessBar: View {
     let fraction: Double
     let colour: Color
@@ -185,34 +199,14 @@ private struct ReadinessBar: View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.off)
-                if fraction > 0 { Capsule().fill(colour).frame(width: max(6, g.size.width * min(1, fraction))) }
+                Capsule().fill(colour).frame(width: max(6, g.size.width * min(1, fraction)))
             }
         }
         .accessibilityHidden(true)
     }
 }
 
-/// Lays its children out left to right and starts a new line when one does not fit, so the type chips stay readable at large text sizes.
-struct WrapLayout: Layout {
-    var spacing: CGFloat = 6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        arrange(width: proposal.width ?? .infinity, subviews: subviews).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let laid = arrange(width: bounds.width, subviews: subviews)
-        for (i, p) in laid.origins.enumerated() { subviews[i].place(at: CGPoint(x: bounds.minX + p.x, y: bounds.minY + p.y), proposal: .unspecified) }
-    }
-
-    private func arrange(width: CGFloat, subviews: Subviews) -> (origins: [CGPoint], size: CGSize) {
-        var origins = [CGPoint](), x: CGFloat = 0, y: CGFloat = 0, lineHeight: CGFloat = 0, widest: CGFloat = 0
-        for s in subviews {
-            let size = s.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width { x = 0; y += lineHeight + spacing; lineHeight = 0 }
-            origins.append(CGPoint(x: x, y: y))
-            x += size.width + spacing; lineHeight = max(lineHeight, size.height); widest = max(widest, x - spacing)
-        }
-        return (origins, CGSize(width: widest, height: y + lineHeight))
-    }
+extension AppModel {
+    /// The advice once it is ready; nil while it is being worked out or when there is none.
+    var hubAdvice: BoxAdvice? { if case .ready(let a) = advice { return a } else { return nil } }
 }

@@ -9,18 +9,17 @@ struct HubMaxView: View {
     var body: some View {
         var count: String?
         if case .ready(let a) = model.advice { count = buildsText(HubModel.count(a.builds, for: .max)) }
-        return HubTypeScreen(type: .max, sub: "Max Mondays and events to 1 Dec", count: count) {
-            HubAdviceGate { advice in
-                HubTimeline(screen: .max, advice: advice, entries: model.entries, closers: false)
-                roster(advice)
-            }
+        let sub = (try? HubData.bundled()).flatMap { HubRaidsModel.lastDay(rows: $0.rotation, screen: .max) }.map { "Max Mondays and events to \($0)" }
+        return HubTypeScreen(type: .max, sub: sub, count: count) {
+            HubTimeline(screen: .max, advice: model.hubAdvice, entries: model.entries, closers: false)
+            HubAdviceGate { advice in roster(advice) }
             HubScheduleLink()
         }
         .accessibilityIdentifier("hub-screen-max")
     }
 
     @ViewBuilder private func roster(_ advice: BoxAdvice) -> some View {
-        let roster = HubRaidsModel.maxRoster(entries: model.entries, builds: advice.builds)
+        let roster = HubRaidsModel.maxRoster(entries: model.entries, advice: advice)
         HubHeaderLine("YOUR MAX ROSTER")
         if roster.tiles.isEmpty {
             Text("No Pokémon are marked Dynamax yet.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
@@ -35,7 +34,7 @@ struct HubMaxView: View {
                 .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                 .accessibilityIdentifier("hub-max-unset")
         }
-        Text("Only Pokémon marked Dynamax can take part; the readiness bar counts those only.")
+        Text("Only Pokémon caught as Dynamax can take part; the readiness bar counts the copies you have marked.")
             .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
     }
 }
@@ -51,7 +50,7 @@ private struct RosterTileView: View {
                 Text(tile.name.uppercased()).font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.05 * 11).foregroundStyle(Theme.muted).lineLimit(2)
                 Text(tile.line).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(tile.hasUse ? Theme.ink : Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("CP \(tile.cp)").font(.figtree(12, .regular, relativeTo: .caption)).monospacedDigit().foregroundStyle(Theme.muted)
+                Text(tile.state.isEmpty ? "CP \(tile.cp)" : "\(tile.state) · CP \(tile.cp)").font(.figtree(12, .regular, relativeTo: .caption)).monospacedDigit().foregroundStyle(Theme.muted)
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -63,7 +62,7 @@ private struct RosterTileView: View {
         }
         .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(tile.name), \(tile.line), CP \(tile.cp)")
+        .accessibilityLabel("\(tile.name), \(tile.line)\(tile.state.isEmpty ? "" : ", \(tile.state)"), CP \(tile.cp)")
         .accessibilityIdentifier("hub-max-tile")
     }
 }

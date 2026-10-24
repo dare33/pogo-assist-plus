@@ -76,7 +76,7 @@ public enum HubRaidsModel {
         case .fiveStar: return "5★"
         case .mega: return "MEGA"
         case .shadow: return "SHADOW"
-        case .battleDay: return "RAID DAY"
+        case .battleDay: return "BATTLE DAY"
         case .raidHour: return "RAID HOUR"
         case .maxMonday: return "MAX MON"
         case .maxEvent: return "EVENT"
@@ -84,9 +84,31 @@ public enum HubRaidsModel {
         }
     }
 
+    private static let monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+    /// The date column for VoiceOver: "28 October to 3 November, in 3 days"; "26 October, in 1 day"; "21 October to 27 October, now".
+    public static func spokenDates(_ e: Entry) -> String {
+        func long(_ key: String) -> String? {
+            let p = key.split(separator: "-").compactMap { Int($0) }
+            return p.count == 3 && (1...12).contains(p[1]) ? "\(p[2]) \(monthNames[p[1] - 1])" : nil
+        }
+        let when = e.isNow ? "now" : "in \(e.daysUntil) \(e.daysUntil == 1 ? "day" : "days")"
+        guard let f = long(e.row.from), let t = long(e.row.to) else { return when }
+        return (e.row.from == e.row.to ? f : "\(f) to \(t)") + ", " + when
+    }
+
+    /// The last day any row of the screen runs to, as "1 Dec"; nil when there are no rows. The screens' sub line reads "Bosses to 1 Dec".
+    public static func lastDay(rows: [HubData.RotationRow], screen: Screen) -> String? {
+        guard let last = rows.filter({ screen.kinds.contains($0.kind) }).map(\.to).max(), let d = short(last) else { return nil }
+        return "\(d.d) \(d.m.prefix(1))\(d.m.dropFirst().lowercased())"
+    }
+
     /// What a row is called: its bosses joined with " · "; a row still "to be announced" reads its title and says so; a row with no boss
     /// (a Raid Hour, Dynamax Trails) reads its title.
     public static func name(_ row: HubData.RotationRow) -> String {
+        // Four forms of one species ("Deoxys", "Deoxys (Speed)", ...) read as one name.
+        let bases = Set(row.bosses.map { $0.name.components(separatedBy: " (").first ?? $0.name })
+        if row.bosses.count > 2, bases.count == 1, let base = bases.first { return "\(base) (\(row.bosses.count) formes)" }
         if !row.bosses.isEmpty { return row.bosses.map(\.name).joined(separator: " · ") }
         return row.tba == true ? "\(row.title) to be announced" : row.title
     }
@@ -107,23 +129,91 @@ public enum HubRaidsModel {
 
     // MARK: built
 
-    private static func types(of b: BoxAdvice.Build, _ gm: GameMaster) -> [String] { gm.byId[b.targetId]?.types ?? [] }
-
-    /// A build is built for a screen when it counts there and nothing is left but the Dynamax requirement. On the Max screen the copy must
-    /// also be marked Dynamax: the requirement is the person's to set, so an unmarked copy is not ready. A build read without steps counts
-    /// as built, as the brief for this screen words it.
-    static func isBuilt(_ b: BoxAdvice.Build, entries: [BoxEntry], screen: Screen) -> Bool {
-        guard b.areas.contains(screen.area) else { return false }
-        if let steps = b.steps, steps.contains(where: { $0.kind != "needsDynamaxCopy" }) { return false }
-        if screen == .max { return entries.first { $0.id == b.entryId }?.row.dynamax == true }
-        return true
+    /// The tier tables list a build's target under an attacking type; this is the rule the Hub uses for what a counter counts for.
+    ///
+    /// **Raids.** A counter of type T is a built build (Raids area, nothing left but the Dynamax requirement; a build read without `steps`
+    /// is not built, as in `HubModel.needsSomething`) whose TARGET species has a Raids `pve-by-type` entry (tier S, A or B) in the section T.
+    /// A build that mega evolves also reads the target's Mega entries (`lucario` counts under Fighting through `lucario_mega`). A target with
+    /// Raids entries but none sectioned by a type (a high-tier table) counts for its own species' types; a target the Raids table does not
+    /// list counts for nothing. The section, not the species' types, decides: Kartana is Grass/Steel and is listed under Grass and Fighting.
+    ///
+    /// **Max.** The Max table has no type sections, so a Dynamax-Yes COPY counts for the types of the species of its Max entry. The copy
+    /// reaches an entry through its own species (a Blissey), or through a build whose target has one and which covers the copy as its carrier or
+    /// as a spare (the advisor emits one build per species and target, so a spare copy has none of its own); then it counts once that build
+    /// has nothing left to do. A copy marked No or not set counts for nothing.
+    static func typesCounted(by b: BoxAdvice.Build, screen: Screen, table: TierTable, gm: GameMaster) -> Set<String> {
+        switch screen {
+        case .raids:
+            var entries = table.entries(for: b.targetId, area: "raids")
+            if b.viaMega {
+                entries += table.entries.filter { $0.area == "raids" && $0.flags.mega && ($0.speciesId.hasPrefix(b.targetId + "_mega") || $0.speciesId.hasPrefix(b.targetId + "_primal")) }
+            }
+            let typed = Set(entries.map { $0.section.lowercased() }).intersection(HubData.typeOrder)
+            if !typed.isEmpty { return typed }
+            return entries.isEmpty ? [] : Set(gm.byId[b.targetId]?.types ?? [])
+        case .max:
+            return maxTypes(of: b.targetId, table: table, gm: gm)
+        }
     }
 
-    /// How many of the row's bring types the box has a built counter for, how many it needs, and the types it lacks (in bring order).
-    public static func readiness(row: HubData.RotationRow, builds: [BoxAdvice.Build], entries: [BoxEntry], gm: GameMaster, hub: HubData, screen: Screen)
+    private static func maxTypes(of speciesId: String, table: TierTable, gm: GameMaster) -> Set<String> {
+        table.entries(for: speciesId, area: "max").isEmpty ? [] : Set(gm.byId[speciesId]?.types ?? [])
+    }
+
+    /// Nothing left to do but the Dynamax requirement.
+    static func isFinished(_ b: BoxAdvice.Build) -> Bool { !HubModel.needsSomething(b) }
+
+    /// The copies a build serves: its carrier and the spares the advisor names.
+    static func copies(of b: BoxAdvice.Build, advice: BoxAdvice) -> [String] {
+        [b.entryId] + advice.spareBuilds.filter { $0.value.contains { $0.id == b.id } }.map(\.key).sorted()
+    }
+
+    /// A build is built for a screen when it counts there and is finished; on the Max screen a copy it serves must also be marked Dynamax.
+    static func isBuilt(_ b: BoxAdvice.Build, advice: BoxAdvice, entries: [BoxEntry], screen: Screen) -> Bool {
+        guard b.areas.contains(screen.area), isFinished(b) else { return false }
+        if screen == .raids { return true }
+        let yes = Set(entries.filter { $0.row.dynamax == true }.map(\.id))
+        if copies(of: b, advice: advice).contains(where: { yes.contains($0) }) { return true }
+        // Another copy of the carrier's species marked Yes serves too, so the to-do never asks for a mark that is already there.
+        guard let species = entries.first(where: { $0.id == b.entryId })?.row.speciesId else { return false }
+        return entries.contains { $0.row.dynamax == true && $0.row.speciesId == species }
+    }
+
+    /// The Max table entry a copy takes part under, with whether the copy already is what the entry names. Own species first; else the builds
+    /// that cover the copy (carrier or spare) in the advisor's order, built once finished. Of several entries of one species the best tier wins.
+    struct MaxUse: Equatable {
+        var entry: TierTable.Entry
+        var built: Bool
+        var build: BoxAdvice.Build?
+    }
+    static func maxUse(of copy: BoxEntry, advice: BoxAdvice, table: TierTable) -> MaxUse? {
+        func best(_ id: String) -> TierTable.Entry? { table.entries(for: id, area: "max").min { $0.tier < $1.tier } }
+        if let e = best(copy.row.speciesId) { return MaxUse(entry: e, built: true, build: nil) }
+        for b in advice.builds where b.areas.contains("Max") && (b.entryId == copy.id || (advice.spareBuilds[copy.id] ?? []).contains { $0.id == b.id }) {
+            if let e = best(b.targetId) { return MaxUse(entry: e, built: isFinished(b), build: b) }
+        }
+        return nil
+    }
+
+    /// The types the box has a counter for on this screen.
+    static func covered(advice: BoxAdvice, entries: [BoxEntry], gm: GameMaster, screen: Screen) -> Set<String> {
+        guard let table = try? TierTable.bundled() else { return [] }
+        switch screen {
+        case .raids:
+            return advice.builds.filter { isBuilt($0, advice: advice, entries: entries, screen: .raids) }
+                .reduce(into: Set<String>()) { $0.formUnion(typesCounted(by: $1, screen: .raids, table: table, gm: gm)) }
+        case .max:
+            return entries.filter { $0.row.dynamax == true }.reduce(into: Set<String>()) { acc, e in
+                if let u = maxUse(of: e, advice: advice, table: table), u.built { acc.formUnion(maxTypes(of: u.entry.speciesId, table: table, gm: gm)) }
+            }
+        }
+    }
+
+    /// How many of the row's bring types the box has a counter for, how many it needs, and the types it lacks (in bring order).
+    public static func readiness(row: HubData.RotationRow, advice: BoxAdvice, entries: [BoxEntry], gm: GameMaster, hub: HubData, screen: Screen)
         -> (built: Int, needed: Int, missing: [String]) {
         let need = bring(row: row, hub: hub)
-        let have = Set(builds.filter { isBuilt($0, entries: entries, screen: screen) }.flatMap { types(of: $0, gm) })
+        let have = covered(advice: advice, entries: entries, gm: gm, screen: screen)
         let missing = need.filter { !have.contains($0) }
         return (need.count - missing.count, need.count, missing)
     }
@@ -133,60 +223,90 @@ public enum HubRaidsModel {
 
     // MARK: to do
 
-    /// A build's action with the Pokémon named: "Evolve Pupitar to Tyranitar", "Power up Moltres to level 30 (Raids)", "Mega evolve Lucario".
+    /// A build's action with the Pokémon named: "Evolve Pupitar to Tyranitar", "Power up Moltres to level 30", "Mega evolve Lucario".
     static func sentence(for b: BoxAdvice.Build) -> String {
-        for prefix in ["Evolve to ", "Form change to "] where b.action.hasPrefix(prefix) {
+        // The cost follows in brackets, so the power-up's own area bracket ("to level 35 (Raids)") is dropped.
+        let action = b.action.replacingOccurrences(of: #"(to level [0-9.]+) \([^)]*\)"#, with: "$1", options: .regularExpression)
+        for prefix in ["Evolve to ", "Form change to "] where action.hasPrefix(prefix) {
             let verb = prefix.dropLast(4)   // drops " to ": "Evolve", "Form change"
-            return "\(verb) \(b.title) to \(b.action.dropFirst(prefix.count))"
+            return "\(verb) \(b.title) to \(action.dropFirst(prefix.count))"
         }
-        for verb in ["Power up", "Mega evolve", "Second move", "Elite TM"] where b.action.hasPrefix(verb) {
-            return "\(verb) \(b.title)\(b.action.dropFirst(verb.count))"
+        for verb in ["Power up", "Mega evolve", "Second move", "Elite TM"] where action.hasPrefix(verb) {
+            return "\(verb) \(b.title)\(action.dropFirst(verb.count))"
         }
-        return "\(b.title): \(b.action)"
+        return "\(b.title): \(action)"
     }
 
-    /// The sentence under the readiness bar: "Ready." when nothing is missing; else the first unbuilt build, in the advisor's order, that
-    /// brings a missing type ("Evolve Pupitar to Tyranitar (100 candy)."); else the first missing type with no build for it.
-    public static func toDo(row: HubData.RotationRow, builds: [BoxAdvice.Build], entries: [BoxEntry], gm: GameMaster, hub: HubData, screen: Screen) -> String {
+    /// The sentence under the readiness bar: "Ready." when nothing is missing; else, for the FIRST missing type, the first unbuilt build of the
+    /// area in the advisor's order that counts for that type ("Evolve Pupitar to Tyranitar (100 candy)."); only when no build counts for it, the
+    /// same for the next missing type; else "No <first missing type> counter in your box."
+    public static func toDo(row: HubData.RotationRow, advice: BoxAdvice, entries: [BoxEntry], gm: GameMaster, hub: HubData, screen: Screen) -> String {
         if row.bosses.isEmpty { return row.tba == true ? "Boss not announced yet." : row.note }
-        let r = readiness(row: row, builds: builds, entries: entries, gm: gm, hub: hub, screen: screen)
+        let r = readiness(row: row, advice: advice, entries: entries, gm: gm, hub: hub, screen: screen)
         guard let first = r.missing.first else { return "Ready." }
-        if let b = builds.first(where: { $0.areas.contains(screen.area) && !isBuilt($0, entries: entries, screen: screen) && !Set(types(of: $0, gm)).isDisjoint(with: r.missing) }) {
-            if screen == .max, !HubModel.needsSomething(b) { return "Mark \(b.title) as Dynamax on its page." }
-            return "\(sentence(for: b)) (\(HubModel.costShort(b)))."
+        if let table = try? TierTable.bundled() {
+            for type in r.missing {
+                if let b = advice.builds.first(where: { $0.areas.contains(screen.area) && !isBuilt($0, advice: advice, entries: entries, screen: screen)
+                                                        && typesCounted(by: $0, screen: screen, table: table, gm: gm).contains(type) }) {
+                    if screen == .max, isFinished(b) { return "Mark \(b.title) as Dynamax on its page." }
+                    return "\(sentence(for: b)) (\(HubModel.costShort(b)))."
+                }
+            }
         }
-        return "No \(typeName(first)) counter in your box."
+        return screen == .max ? "No \(typeName(first)) Max attacker marked Dynamax." : "No \(typeName(first)) counter in your box."
     }
 
-    /// The unbuilt builds for this screen that bring a type the shown rows ask for, in the advisor's order.
-    public static func gapClosers(rows: [HubData.RotationRow], builds: [BoxAdvice.Build], entries: [BoxEntry], gm: GameMaster, hub: HubData, screen: Screen) -> [BoxAdvice.Build] {
+    /// The unbuilt builds for this screen that count for a type the shown rows ask for, in the advisor's order.
+    public static func gapClosers(rows: [HubData.RotationRow], advice: BoxAdvice, entries: [BoxEntry], gm: GameMaster, hub: HubData, screen: Screen) -> [BoxAdvice.Build] {
+        guard let table = try? TierTable.bundled() else { return [] }
         let wanted = Set(rows.flatMap { bring(row: $0, hub: hub) })
-        return builds.filter { $0.areas.contains(screen.area) && !isBuilt($0, entries: entries, screen: screen) && !Set(types(of: $0, gm)).isDisjoint(with: wanted) }
+        return advice.builds.filter { $0.areas.contains(screen.area) && !isBuilt($0, advice: advice, entries: entries, screen: screen)
+                                      && !typesCounted(by: $0, screen: screen, table: table, gm: gm).isDisjoint(with: wanted) }
     }
 
     // MARK: Max roster
 
-    /// One Dynamax-Yes copy on the Max screen: its name, CP and the best Max build for it ("S · Already built") or "No Max use in the tables".
+    /// One Dynamax-Yes copy on the Max screen: its name, CP, the Max entry's tier and role ("S · Tank and healer"; "S · Attackers" for an entry
+    /// with no role), and whether the species' build is done ("Built", "To build"); "No Max use in the tables" with no state when it has no entry.
     public struct RosterTile: Equatable {
         public var entryId: String
         public var name: String
         public var cp: Int
         public var line: String
+        public var state: String
         public var hasUse: Bool
     }
 
-    /// The copies marked Dynamax, those with a Max use first (the advisor's order), then by CP. `unsetCount` is how many copies not yet
-    /// marked either way carry a Max build, which marking would put in the roster.
-    public static func maxRoster(entries: [BoxEntry], builds: [BoxAdvice.Build]) -> (tiles: [RosterTile], unsetCount: Int) {
-        func best(_ e: BoxEntry) -> (Int, BoxAdvice.Build)? {
-            builds.enumerated().first { $0.element.entryId == e.id && $0.element.areas.contains("Max") }.map { ($0.offset, $0.element) }
-        }
-        let tiles = entries.filter { $0.row.dynamax == true }.map { e -> (Int, RosterTile) in
-            let b = best(e)
-            return (b?.0 ?? Int.max, RosterTile(entryId: e.id, name: e.row.title, cp: e.row.cp,
-                                                line: b.map { "\($0.1.tier) · \($0.1.action)" } ?? "No Max use in the tables", hasUse: b != nil))
+    /// The copies marked Dynamax, those with a Max entry first (best tier, then CP). `unsetCount` is how many copies not yet marked either way
+    /// have a Max entry, which marking would put in the roster.
+    public static func maxRoster(entries: [BoxEntry], advice: BoxAdvice) -> (tiles: [RosterTile], unsetCount: Int) {
+        guard let table = try? TierTable.bundled() else { return ([], 0) }
+        let tiles = entries.filter { $0.row.dynamax == true }.map { e -> (String, RosterTile) in
+            guard let u = maxUse(of: e, advice: advice, table: table) else {
+                return ("Z", RosterTile(entryId: e.id, name: e.row.title, cp: e.row.cp, line: "No Max use in the tables", state: "", hasUse: false))
+            }
+            return (u.entry.tier, RosterTile(entryId: e.id, name: e.row.title, cp: e.row.cp, line: "\(u.entry.tier) · \(u.entry.role ?? u.entry.section)",
+                                             state: u.built ? "Built" : "To build", hasUse: true))
         }
         .sorted { $0.0 != $1.0 ? $0.0 < $1.0 : $0.1.cp > $1.1.cp }.map(\.1)
-        return (tiles, entries.filter { $0.row.dynamax == nil && best($0) != nil }.count)
+        return (tiles, entries.filter { $0.row.dynamax == nil && maxUse(of: $0, advice: advice, table: table) != nil }.count)
+    }
+}
+
+// MARK: today
+
+extension HubModel {
+    /// The local calendar day the Hub's timelines count from. A debug build honours `-uitest-today yyyy-mm-dd` so the UI tests do not depend on
+    /// the date they run on; a release build always reads the clock.
+    public static func today(now: Date = Date(), arguments: [String] = ProcessInfo.processInfo.arguments) -> String {
+        #if DEBUG
+        if let i = arguments.firstIndex(of: "-uitest-today"), i + 1 < arguments.count, arguments[i + 1].range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+            return arguments[i + 1]
+        }
+        #endif
+        // Always the Gregorian calendar: a device set to the Buddhist or Japanese calendar numbers its years differently.
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone.current
+        let c = cal.dateComponents([.year, .month, .day], from: now)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 }
