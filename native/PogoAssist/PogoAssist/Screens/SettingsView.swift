@@ -65,21 +65,18 @@ struct SettingsView: View {
                     }
                     Panel(padding: 0, spacing: 0) {
                         // The whole row is the menu's label, so a tap anywhere on it opens the menu; the identifier sits on that one element, whose label starts "Mega Pokémon".
-                        // The "i" sits beside the Menu, not inside its label, so a tap on it never opens the menu.
-                        HStack(spacing: 0) {
-                            Menu {
-                                Picker("Mega Pokémon", selection: $megaDefault) {
-                                    ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
-                                }
-                                .pickerStyle(.inline)
-                            } label: {
-                                SettingsRowLabel(title: "Mega Pokémon", value: MegaDefault(rawValue: megaDefault)?.title, chevron: true, chevronName: "chevron.up.chevron.down")
+                        // The "i" sits in the row beside the title, outside the Menu's label: the label leaves a gap there and the "i" is drawn over it, so a tap on it never opens the menu.
+                        Menu {
+                            Picker("Mega Pokémon", selection: $megaDefault) {
+                                ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
                             }
-                            .buttonStyle(PressStyle())
-                            .accessibilityIdentifier("settings-mega")
-                            InfoButton(isOpen: $megaInfoOpen, size: 24, label: "About Mega Pokémon", identifier: "settings-mega-info")
-                                .padding(.trailing, 4)
+                            .pickerStyle(.inline)
+                        } label: {
+                            SettingsRowLabel(title: "Mega Pokémon", value: MegaDefault(rawValue: megaDefault)?.title, chevron: true, chevronName: "chevron.up.chevron.down", infoSlot: true)
                         }
+                        .buttonStyle(PressStyle())
+                        .accessibilityIdentifier("settings-mega")
+                        .infoOverlay(title: "Mega Pokémon", isOpen: $megaInfoOpen, label: "About Mega Pokémon", identifier: "settings-mega-info")
                         if megaInfoOpen {
                             ExplainerCard(text: "Which form a Pokémon's page shows first when it has a Mega form. You can switch on the page.", identifier: "settings-mega-explainer")
                                 .padding(.horizontal, 16).padding(.bottom, 12)
@@ -101,12 +98,9 @@ struct SettingsView: View {
                     }
                     Panel(padding: 0, spacing: 0) {
                         panelTitle("Box for \(model.account ?? "this account")")
-                        HStack(spacing: 0) {
-                            Button { confirmPrevious = true } label: { rowLabel("Restore previous box", action: true) }
-                                .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
-                            InfoButton(isOpen: $restoreInfoOpen, size: 24, label: "About restoring", identifier: "settings-restore-info")
-                                .padding(.trailing, 4)
-                        }
+                        Button { confirmPrevious = true } label: { SettingsRowLabel(title: "Restore previous box", action: true, infoSlot: true) }
+                            .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
+                            .infoOverlay(title: "Restore previous box", isOpen: $restoreInfoOpen, label: "About restoring", identifier: "settings-restore-info")
                         if restoreInfoOpen {
                             ExplainerCard(text: previousFooter, identifier: "settings-restore-explainer")
                                 .padding(.horizontal, 16).padding(.bottom, 12)
@@ -156,19 +150,81 @@ private struct SettingsRowLabel: View {
     var chevronName = "chevron.right"
     /// An action row (Rename, Restore) is drawn in the accent ink; a navigation row in the plain ink.
     var action = false
+    /// Leaves a gap after the title for the "i" that `infoOverlay` draws over it (outside this label, so it is not part of the control).
+    var infoSlot = false
     @Environment(\.accent) private var accent
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .footnote) private var circle: CGFloat = 24
 
-    var body: some View {
+    private var titleText: some View {
+        Text(title).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(ink).multilineTextAlignment(.leading)
+    }
+    private var trailing: some View {
         HStack(spacing: 12) {
-            Text(title).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(ink).multilineTextAlignment(.leading)
-            Spacer(minLength: 8)
             if let value { Text(value).font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(enabled ? Theme.muted : Theme.faint) }
             if chevron { Image(systemName: chevronName).font(.figtree(14, .bold, relativeTo: .body)).foregroundStyle(enabled ? accent.ink : Theme.faint).accessibilityHidden(true) }
+        }
+    }
+
+    var body: some View {
+        Group {
+            if infoSlot && typeSize.isAccessibilitySize {
+                // Large text: the title and the "i" on the first line, the value and chevron on the second.
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 0) { titleText; Color.clear.frame(width: InfoOverlay.reserve(circle), height: InfoOverlay.slot) }
+                    HStack(spacing: 0) { Spacer(minLength: 0); trailing }
+                }
+            } else {
+                HStack(spacing: 12) {
+                    HStack(spacing: 0) {
+                        titleText
+                        if infoSlot { Color.clear.frame(width: InfoOverlay.reserve(circle), height: 24) }
+                    }
+                    Spacer(minLength: 8)
+                    trailing
+                }
+            }
         }
         .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 52)
         .contentShape(Rectangle())
     }
 
     private var ink: Color { !enabled ? Theme.faint : (action ? accent.ink : Theme.ink) }
+}
+
+/// The "i" over the gap `SettingsRowLabel(infoSlot:)` leaves after the title. A hidden copy of the title sets where the gap is.
+private struct InfoOverlay: ViewModifier {
+    /// The "i" button's hit frame (44 pt; its circle is 24 at the default text size).
+    static let slot: CGFloat = 44
+    /// The circle is `circle` pt (to at most 44) in the middle of the frame, so it sits (slot - circle) / 2 in from the frame's edge.
+    /// The title-to-circle gap is 8, so the frame starts `8 - inset` after the title (negative while the circle is small); the label reserves frame plus that.
+    static func inset(_ circle: CGFloat) -> CGFloat { (slot - min(circle, slot)) / 2 }
+    static func spacing(_ circle: CGFloat) -> CGFloat { 8 - inset(circle) }
+    static func reserve(_ circle: CGFloat) -> CGFloat { slot + spacing(circle) }
+    let title: String
+    @Binding var isOpen: Bool
+    let label: String
+    let identifier: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .footnote) private var circle: CGFloat = 24
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: typeSize.isAccessibilitySize ? .topLeading : .leading) {
+            HStack(spacing: Self.spacing(circle)) {   // the 44 pt frame holds the circle, so this puts the circle 8 pt after the title
+                Text(title).font(.figtree(16, .semibold, relativeTo: .body)).multilineTextAlignment(.leading).hidden()
+                    .allowsHitTesting(false).accessibilityHidden(true)
+                InfoButton(isOpen: $isOpen, size: 24, label: label, identifier: identifier)
+                    .frame(width: Self.slot, height: Self.slot)
+            }
+            .padding(.leading, 16)
+            .padding(.top, typeSize.isAccessibilitySize ? 12 : 0)
+        }
+    }
+}
+
+private extension View {
+    func infoOverlay(title: String, isOpen: Binding<Bool>, label: String, identifier: String) -> some View {
+        modifier(InfoOverlay(title: title, isOpen: isOpen, label: label, identifier: identifier))
+    }
 }

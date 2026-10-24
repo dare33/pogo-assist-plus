@@ -157,56 +157,68 @@ final class GuideScreensTests: XCTestCase {
 
     /// The Mega and Restore rows' "i" buttons open their explanation inline; the Mega row itself still opens its menu.
     func testSettingsInfoRows() throws {
-        for mode in ["light", "dark"] {
-            let app = XCUIApplication()
-            app.launchArguments = ["-uitest-reset", "-appearance", mode]
-            app.launch()
-            let field = app.textFields["Trainer name"]
-            XCTAssertTrue(field.waitForExistence(timeout: 10))
-            field.tap(); field.typeText("Greg main")
-            app.buttons["Create account"].tap()
-            XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
-            app.buttons["More"].tap()
-            let settings = app.buttons["Settings"]
-            XCTAssertTrue(settings.waitForExistence(timeout: 5))
-            settings.tap()
-            if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
-            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), "Settings did not open")
+        for mode in ["light", "dark"] { try settingsInfoTour(["-appearance", mode], tag: mode) }
+    }
 
-            let megaInfo = app.buttons["settings-mega-info"], megaCard = app.descendants(matching: .any)["settings-mega-explainer"]
-            let restoreInfo = app.buttons["settings-restore-info"], restoreCard = app.descendants(matching: .any)["settings-restore-explainer"]
-            XCTAssertTrue(megaInfo.waitForExistence(timeout: 5))
-            XCTAssertFalse(megaCard.exists, "the Mega explanation starts closed")
-            XCTAssertEqual(megaInfo.value as? String, "Collapsed")
-            megaInfo.tap()
-            XCTAssertTrue(megaCard.waitForExistence(timeout: 3))
-            XCTAssertTrue(megaCard.label.contains("Which form a Pokémon's page shows first"), "card text: \(megaCard.label)")
-            XCTAssertEqual(megaInfo.value as? String, "Expanded")
-            shot("si-\(mode)-mega-open")
-            megaInfo.tap()
-            XCTAssertTrue(megaCard.waitForNonExistence(timeout: 3), "a second tap closes it")
+    /// The same at the AX3 text size: no word breaks mid-word, the "i" stays beside the title (read from the screenshots).
+    func testSettingsInfoRowsLargeText() throws {
+        try settingsInfoTour(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"], tag: "ax3")
+    }
 
-            reveal(app, restoreInfo)
-            XCTAssertTrue(restoreInfo.waitForExistence(timeout: 5))
-            XCTAssertFalse(restoreCard.exists, "the restore explanation starts closed")
-            restoreInfo.tap()
-            XCTAssertTrue(restoreCard.waitForExistence(timeout: 3))
-            XCTAssertTrue(restoreCard.label.contains("no earlier box"), "card text: \(restoreCard.label)")
-            reveal(app, restoreCard)
-            shot("si-\(mode)-restore-open")
-            restoreInfo.tap()
-            XCTAssertTrue(restoreCard.waitForNonExistence(timeout: 3))
+    private func settingsInfoTour(_ extra: [String], tag: String) throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset"] + extra
+        app.launch()
+        let field = app.textFields["Trainer name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap(); field.typeText("Greg main")
+        app.buttons["Create account"].tap()
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
+        app.buttons["More"].tap()
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), "Settings did not open")
 
-            // The row itself, not the "i", opens the menu.
-            let mega = app.buttons["settings-mega"]
-            for _ in 0..<6 where !mega.isHittable { app.swipeDown() }
-            mega.tap()
-            XCTAssertTrue(app.buttons["Normal"].waitForExistence(timeout: 3) && app.buttons["Mega"].exists, "the menu's options appear")
-            shot("si-\(mode)-mega-menu")
-            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.95)).tap()   // dismiss the menu
-            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
-            app.terminate()
-        }
+        let megaInfo = app.buttons["settings-mega-info"], megaCard = app.descendants(matching: .any)["settings-mega-explainer"]
+        let restoreInfo = app.buttons["settings-restore-info"], restoreCard = app.descendants(matching: .any)["settings-restore-explainer"]
+        XCTAssertTrue(megaInfo.waitForExistence(timeout: 5))
+        XCTAssertFalse(megaCard.exists, "the Mega explanation starts closed")
+        XCTAssertEqual(megaInfo.value as? String, "Collapsed")
+        shot("si-\(tag)-closed")
+        megaInfo.tap()
+        XCTAssertTrue(megaCard.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Normal"].exists, "a tap on the \"i\" does not open the menu")
+        XCTAssertTrue(megaCard.label.contains("Which form a Pokémon's page shows first"), "card text: \(megaCard.label)")
+        XCTAssertEqual(megaInfo.value as? String, "Expanded")
+        shot("si-\(tag)-mega-open")
+        megaInfo.tap()
+        XCTAssertTrue(megaCard.waitForNonExistence(timeout: 3), "a second tap closes it")
+
+        reveal(app, restoreInfo)
+        XCTAssertTrue(restoreInfo.waitForExistence(timeout: 5))
+        XCTAssertFalse(restoreCard.exists, "the restore explanation starts closed")
+        XCTAssertTrue(restoreInfo.isEnabled, "the \"i\" works on the disabled row")
+        XCTAssertFalse(app.buttons["Restore previous box"].isEnabled, "a fresh account has nothing to restore")
+        restoreInfo.tap()
+        XCTAssertTrue(restoreCard.waitForExistence(timeout: 3))
+        XCTAssertTrue(restoreCard.label.contains("no earlier box"), "card text: \(restoreCard.label)")
+        reveal(app, restoreCard)
+        shot("si-\(tag)-restore-open")
+        restoreInfo.tap()
+        XCTAssertTrue(restoreCard.waitForNonExistence(timeout: 3))
+
+        // The row itself, not the "i", opens the menu.
+        let mega = app.buttons["settings-mega"]
+        for _ in 0..<6 where !mega.isHittable { app.swipeDown() }
+        mega.tap()
+        XCTAssertTrue(app.buttons["Normal"].waitForExistence(timeout: 3) && app.buttons["Mega"].exists, "the menu's options appear")
+        shot("si-\(tag)-mega-menu")
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.95)).tap()   // dismiss the menu
+        XCTAssertTrue(app.buttons["Normal"].waitForNonExistence(timeout: 3), "the menu closes")
+        XCTAssertTrue(app.navigationBars["Settings"].exists)
+        app.terminate()
     }
 
     /// The choices are read by the root: launched with them, the Guide me level shows its way in to the guided questions.
