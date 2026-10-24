@@ -280,6 +280,119 @@ final class HubRaidsModelTests: XCTestCase {
         XCTAssertEqual(roster.tiles[1].cp, es[xerneas].row.cp)
     }
 
+    /// A copy of species `id` added to the box, with no build of its own.
+    private func adding(_ es: [BoxEntry], _ id: String, name: String, copyId: String, cp: Int = 1500) -> [BoxEntry] {
+        var b = es[0]; b.id = copyId
+        b.row.speciesId = id; b.row.name = name; b.row.display = name; b.row.form = ""; b.row.cp = cp; b.row.dynamax = true; b.row.shadow = nil
+        return es + [b]
+    }
+
+    func testAGigantamaxEntryIsNeverUsedForAnOrdinaryDynamaxCopy() throws {
+        let table = try TierTable.bundled()
+        XCTAssertEqual(table.entries(for: "gengar", area: "max").map(\.tier), ["S"], "the table lists Gengar only as Gigantamax")
+        XCTAssertEqual(HubRaidsModel.maxEntries("gengar", table).count, 0)
+        XCTAssertEqual(table.entries(for: "kingler", area: "max").map(\.tier), ["S", "A"])
+        XCTAssertEqual(HubRaidsModel.maxEntries("kingler", table).map(\.tier), ["A"], "the plain Kingler entry, not the Gigantamax S")
+        var es = adding(try entries(), "gengar", name: "Gengar", copyId: "gengar")
+        es = adding(es, "kingler", name: "Kingler", copyId: "kingler")
+        let roster = HubRaidsModel.maxRoster(entries: es, advice: try advice(es))
+        XCTAssertEqual(roster.tiles.map(\.name), ["Kingler", "Gengar"])
+        XCTAssertEqual(roster.tiles[0].line, "A · Attackers"); XCTAssertTrue(roster.tiles[0].hasUse)
+        XCTAssertEqual(roster.tiles[1].line, "No Max use in the tables"); XCTAssertFalse(roster.tiles[1].hasUse)
+        // Gengar (ghost) does not count for a ghost boss either; Kingler (water) does.
+        let gm = try GameMaster.bundled(), hub = try HubData.bundled()
+        let covered = HubRaidsModel.covered(advice: try advice(es), entries: es, gm: gm, screen: .max)
+        XCTAssertTrue(covered.contains("water")); XCTAssertFalse(covered.contains("ghost")); _ = hub
+    }
+
+    func testADynamaxCopyBelowTheTablesTargetIsToBuildNotReady() throws {
+        let gm = try GameMaster.bundled()
+        let es = withBlissey(try entries()).map { e -> BoxEntry in var e = e; if e.id == "bliss" { e.row.dynamax = true }; return e }
+        var a = try advice(es)
+        // The advisor wants a Max power-up of this Blissey (here a build made by hand: the fixture has none for it).
+        XCTAssertTrue(a.builds.contains { $0.entryId == "bliss" }, "the advisor already has a finished build for this Blissey")
+        var b = try XCTUnwrap(a.builds.first)
+        a.builds.removeAll { $0.entryId == "bliss" }
+        b.entryId = "bliss"; b.title = "Blissey"; b.targetId = "blissey"; b.targetName = "Blissey"; b.areas = ["Max"]
+        b.steps = [.init(kind: "powerUp", toLevel: 30, areas: ["max"])]; b.spares = 0
+        a.builds.append(b)
+        XCTAssertEqual(HubRaidsModel.maxRoster(entries: es, advice: a).tiles.map(\.state), ["To build"])
+        XCTAssertEqual(HubRaidsModel.covered(advice: a, entries: es, gm: gm, screen: .max), [], "an unfinished Max build is not ready")
+        // Finished (or no build at all, as before): Blissey is ready and counts for its type.
+        a.builds[a.builds.count - 1].steps = []
+        XCTAssertEqual(HubRaidsModel.maxRoster(entries: es, advice: a).tiles.map(\.state), ["Built"])
+        XCTAssertEqual(HubRaidsModel.covered(advice: a, entries: es, gm: gm, screen: .max), ["normal"])
+        // A build covering it without the Max area (it wants to become something else) also reads To build.
+        a.builds[a.builds.count - 1].areas = ["Raids"]
+        XCTAssertEqual(HubRaidsModel.maxRoster(entries: es, advice: a).tiles.map(\.state), ["To build"])
+    }
+
+    func testASpareOnlyYesCopyCountsOnlyOnceTheBuildIsFinishedAndTheToDoNeverNamesTheCarrier() throws {
+        let hub = try HubData.bundled(), gm = try GameMaster.bundled()
+        var es = try entries()
+        let hero = try XCTUnwrap(es.first { $0.row.title == "Zamazenta (Hero)" })
+        var twin = hero; twin.id = "twin"; es.append(twin)
+        let a0 = try advice(es)
+        let build = try XCTUnwrap(a0.builds.first { $0.targetId == "zamazenta_crowned_shield" })
+        let spare = build.entryId == hero.id ? "twin" : hero.id
+        es[es.firstIndex { $0.id == spare }!].row.dynamax = true
+        let cryogonal = try row(hub, .maxMonday, from: "2026-11-30")
+        // Unfinished: the spare is marked but the build is not done, so nothing counts, and the to-do asks for the build, not for a mark.
+        XCTAssertEqual(HubRaidsModel.readiness(row: cryogonal, advice: a0, entries: es, gm: gm, hub: hub, screen: .max).built, 0)
+        let todo = HubRaidsModel.toDo(row: cryogonal, advice: a0, entries: es, gm: gm, hub: hub, screen: .max)
+        XCTAssertFalse(todo.hasPrefix("Mark"), todo); XCTAssertTrue(todo.hasPrefix("Form change Zamazenta"), todo)
+        // Finished: the spare counts, and with fire still missing the to-do names no copy to mark.
+        let finished = try with(a0, "zamazenta_crowned_shield") { $0.steps = [.init(kind: "needsDynamaxCopy")] }
+        XCTAssertEqual(HubRaidsModel.readiness(row: cryogonal, advice: finished, entries: es, gm: gm, hub: hub, screen: .max).built, 2)
+        XCTAssertEqual(HubRaidsModel.toDo(row: cryogonal, advice: finished, entries: es, gm: gm, hub: hub, screen: .max), "No Fire Max attacker marked Dynamax.")
+    }
+
+    func testAShadowEntryUnderAPlainIdIsNotCreditedToANonShadowCopy() throws {
+        let gm = try GameMaster.bundled(), table = try TierTable.bundled(), a = try advice(try entries())
+        var b = try XCTUnwrap(a.builds.first); b.targetId = "pheromosa"; b.viaMega = false
+        XCTAssertEqual(table.entries(for: "pheromosa", area: "raids").map(\.flags.shadow), [true], "the table lists only Shadow Pheromosa, under the plain id")
+        XCTAssertEqual(HubRaidsModel.typesCounted(by: b, screen: .raids, table: table, gm: gm), [], "a plain Pheromosa is not the Shadow one")
+        XCTAssertEqual(HubRaidsModel.typesCounted(by: b, screen: .raids, table: table, gm: gm, shadow: true), ["bug"])
+        // The copy decides: a Shadow row, or a `_shadow` target.
+        var es = try entries(); var pher = es[0]; pher.id = "pher"; pher.row.speciesId = "pheromosa"; pher.row.shadow = 1; es.append(pher)
+        b.entryId = "pher"
+        XCTAssertTrue(HubRaidsModel.isShadow(b, entries: es))
+        pher.row.shadow = nil; es[es.count - 1] = pher
+        XCTAssertFalse(HubRaidsModel.isShadow(b, entries: es))
+        b.targetId = "tyranitar_shadow"
+        XCTAssertTrue(HubRaidsModel.isShadow(b, entries: es))
+    }
+
+    func testBestTierFirstAndGigantamaxOnlySpeciesAreNotUnset() throws {
+        let table = try TierTable.bundled()
+        XCTAssertEqual(HubRaidsModel.tierRank("S"), 0); XCTAssertEqual(HubRaidsModel.tierRank("A"), 1); XCTAssertEqual(HubRaidsModel.tierRank("B"), 2)
+        // A species with an S and an A plain entry picks S (strings would pick A).
+        let two = table.entries.filter { $0.area == "max" && !$0.name.contains("Gigantamax") }.filter { e in table.entries(for: e.speciesId, area: "max").filter { !$0.name.contains("Gigantamax") }.map(\.tier).contains("A") && table.entries(for: e.speciesId, area: "max").filter { !$0.name.contains("Gigantamax") }.map(\.tier).contains("S") }
+        if let e = two.first { XCTAssertEqual(HubRaidsModel.maxEntries(e.speciesId, table).min { HubRaidsModel.tierRank($0.tier) < HubRaidsModel.tierRank($1.tier) }?.tier, "S") }
+        // Blissey (S) and Lapras (A), both marked Yes with CP favouring Lapras: Blissey is first.
+        var es = adding(try entries(), "lapras", name: "Lapras", copyId: "lapras", cp: 2900)
+        es = adding(es, "blissey", name: "Blissey", copyId: "bliss", cp: 1000)
+        XCTAssertEqual(table.entries(for: "lapras", area: "max").map(\.tier), ["A", "A"])
+        let roster = HubRaidsModel.maxRoster(entries: es, advice: try advice(es))
+        XCTAssertEqual(roster.tiles.map(\.name), ["Blissey", "Lapras"]); XCTAssertEqual(roster.tiles.map(\.line), ["S · Tank and healer", "A · Attackers"], "of equal tiers the first entry in the table")
+        // Species with only a Gigantamax Max entry are not "not set" and do not count.
+        for id in ["gengar", "rillaboom", "cinderace", "machamp", "charizard", "garbodor"] {
+            XCTAssertTrue(HubRaidsModel.maxEntries(id, table).isEmpty, id)
+            var unset = adding(try entries(), id, name: id, copyId: "x")
+            unset[unset.count - 1].row.dynamax = nil
+            let base = HubRaidsModel.maxRoster(entries: try entries(), advice: try advice(try entries())).unsetCount
+            XCTAssertEqual(HubRaidsModel.maxRoster(entries: unset, advice: try advice(unset)).unsetCount, base, id)
+        }
+    }
+
+    func testTheMaxToDoDropsTheDynamaxBracket() throws {
+        let hub = try HubData.bundled(), gm = try GameMaster.bundled(), es = try entries(), a = try advice(es)
+        let cryogonal = try row(hub, .maxMonday, from: "2026-11-30")
+        let todo = HubRaidsModel.toDo(row: cryogonal, advice: a, entries: es, gm: gm, hub: hub, screen: .max)
+        XCTAssertFalse(todo.contains("Dynamax copy"), todo)
+        XCTAssertTrue(todo.hasPrefix("Form change Zamazenta (Hero) to Zamazenta (Crowned Shield)"), todo)
+    }
+
     func testGapClosersAreTheUnbuiltBuildsForTheShownBossesTypes() throws {
         let hub = try HubData.bundled(), gm = try GameMaster.bundled(), es = try entries(), a = try advice(es)
         let sableye = try row(hub, .mega, from: "2026-10-28"), palkia = try row(hub, .fiveStar, from: "2026-10-21")

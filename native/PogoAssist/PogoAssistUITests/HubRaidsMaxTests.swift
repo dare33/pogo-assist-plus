@@ -149,6 +149,8 @@ final class HubRaidsMaxTests: XCTestCase {
         shot("max-01-light-roster")
         XCTAssertTrue(tiles.firstMatch.exists, "the roster holds the Pokémon marked Dynamax")
         XCTAssertEqual(tiles.count, 1)
+        // The tile reads the Max table's tier and role, then the build state, then the CP: the sample box's first Pokémon is a Blissey.
+        XCTAssertTrue(tiles.firstMatch.label.contains("S · Tank and healer, Built, CP"), tiles.firstMatch.label)
         // The member row reads like "Name, CP ..." and the tile like "Name, line, CP n": the first words agree.
         let name = memberLabel.components(separatedBy: CharacterSet(charactersIn: ",\n")).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
         XCTAssertFalse(name.isEmpty, memberLabel)
