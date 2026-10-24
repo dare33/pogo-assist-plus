@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var renaming = false
     @State private var newName = ""
     @State private var renameProblem: String?
+    @State private var megaInfoOpen = false
+    @State private var restoreInfoOpen = false
     @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
 
     @Environment(\.accent) private var accent
@@ -63,17 +65,25 @@ struct SettingsView: View {
                     }
                     Panel(padding: 0, spacing: 0) {
                         // The whole row is the menu's label, so a tap anywhere on it opens the menu; the identifier sits on that one element, whose label starts "Mega Pokémon".
-                        Menu {
-                            Picker("Mega Pokémon", selection: $megaDefault) {
-                                ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
+                        // The "i" sits beside the Menu, not inside its label, so a tap on it never opens the menu.
+                        HStack(spacing: 0) {
+                            Menu {
+                                Picker("Mega Pokémon", selection: $megaDefault) {
+                                    ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
+                                }
+                                .pickerStyle(.inline)
+                            } label: {
+                                SettingsRowLabel(title: "Mega Pokémon", value: MegaDefault(rawValue: megaDefault)?.title, chevron: true, chevronName: "chevron.up.chevron.down")
                             }
-                            .pickerStyle(.inline)
-                        } label: {
-                            SettingsRowLabel(title: "Mega Pokémon", value: MegaDefault(rawValue: megaDefault)?.title, chevron: true, chevronName: "chevron.up.chevron.down")
+                            .buttonStyle(PressStyle())
+                            .accessibilityIdentifier("settings-mega")
+                            InfoButton(isOpen: $megaInfoOpen, size: 24, label: "About Mega Pokémon", identifier: "settings-mega-info")
+                                .padding(.trailing, 4)
                         }
-                        .buttonStyle(PressStyle())
-                        .accessibilityIdentifier("settings-mega")
-                        note("Which form a Pokémon's page shows first when it has a Mega form. You can switch on the page.")
+                        if megaInfoOpen {
+                            ExplainerCard(text: "Which form a Pokémon's page shows first when it has a Mega form. You can switch on the page.", identifier: "settings-mega-explainer")
+                                .padding(.horizontal, 16).padding(.bottom, 12)
+                        }
                     }
                     Panel(padding: 0, spacing: 0) {
                         panelTitle("Accounts")
@@ -91,12 +101,19 @@ struct SettingsView: View {
                     }
                     Panel(padding: 0, spacing: 0) {
                         panelTitle("Box for \(model.account ?? "this account")")
-                        Button { confirmPrevious = true } label: { rowLabel("Restore previous box", action: true) }
-                            .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
+                        HStack(spacing: 0) {
+                            Button { confirmPrevious = true } label: { rowLabel("Restore previous box", action: true) }
+                                .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
+                            InfoButton(isOpen: $restoreInfoOpen, size: 24, label: "About restoring", identifier: "settings-restore-info")
+                                .padding(.trailing, 4)
+                        }
+                        if restoreInfoOpen {
+                            ExplainerCard(text: previousFooter, identifier: "settings-restore-explainer")
+                                .padding(.horizontal, 16).padding(.bottom, 12)
+                        }
                         separator
                         NavigationLink { HistoryScansView() } label: { rowLabel("History and scans", chevron: true) }
                             .buttonStyle(PressStyle()).accessibilityIdentifier("settings-history-row")
-                        note(previousFooter)
                     }
                     Panel(padding: 0, spacing: 0) {
                         panelTitle("About")
