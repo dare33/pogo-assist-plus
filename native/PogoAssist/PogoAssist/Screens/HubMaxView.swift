@@ -29,7 +29,6 @@ struct HubMaxView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10, alignment: .top), GridItem(.flexible(), spacing: 10, alignment: .top)], spacing: 10) {
                 ForEach(roster.tiles, id: \.entryId) { RosterTileView(tile: $0) }
             }
-            .accessibilityIdentifier("hub-max-roster")
         }
         if roster.unsetCount > 0 {
             Text("\(roster.unsetCount) Pokémon not set: mark Dynamax on each Pokémon's page")
