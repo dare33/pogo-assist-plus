@@ -107,7 +107,8 @@ public enum HubTeams {
     /// "beats all 3", "beats Machamp only", "beats Rhyperior and Machamp"; a slot with a single option reads "beats Persian".
     public static func beatsText(by b: BoxAdvice.Build, options: [HubData.Boss], gm: GameMaster, hub: HubData) -> String {
         let names = beaten(by: b, options: options, gm: gm, hub: hub)
-        if options.count == 1 { return names.isEmpty ? "beats none" : "beats \(names[0])" }
+        if names.isEmpty { return "beats none" }
+        if options.count == 1 { return "beats \(names[0])" }
         if names.count == options.count { return "beats all \(names.count)" }
         if names.count == 1 { return "beats \(names[0]) only" }
         return "beats " + list(names, capitalise: false)
@@ -201,7 +202,7 @@ public enum HubTeams {
         public var score: Double
         public var ivRank: Int?
         public var ivPct: Double?
-        /// True when the copy is already the option and none of its builds has anything left to do ("Built"); else "To build".
+        /// "Built" when the option is the copy itself with no cost left (dust, candy, XL) and no move to learn; else "To build".
         public var built: Bool
         public var speciesId: String { option.speciesId }
         public var name: String { option.name }
@@ -226,7 +227,10 @@ public enum HubTeams {
             guard let r = ratings[league] else { continue }
             let o = r.options[LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)]
             guard !o.overCap, let s = o.strength, s.score >= candidateFloor else { continue }
-            let done = o.isSelf && advice.builds.filter { $0.entryId == id }.allSatisfy(isBuilt)
+            // From the option's own league data, not the advice's builds (a copy under the advisor's floor, or a spare, has none): built when it is the
+            // copy itself with nothing left to pay and no recommended move to learn; an evolution is always still to build.
+            let c = o.cost
+            let done = o.isSelf && (c == nil || (c!.dust == 0 && c!.candy == 0 && c!.xl == 0)) && (o.needs ?? []).isEmpty
             all.append(Candidate(entryId: id, option: o, copyTitle: r.options.first(where: \.isSelf)?.name ?? "", score: s.score, ivRank: o.iv?.rank, ivPct: o.iv?.pct, built: done))
         }
         all.sort {

@@ -141,7 +141,7 @@ struct HubRocketView: View {
         case .built: sub = "\(word) · built"
         case .toBuild(let b): sub = "\(word) · \(HubTeams.todo(b))"
         case .gap, .none: sub = "\(word) · \(c.gapText ?? "no counter")"
-        case .anyAttacker: sub = "any strong attacker"
+        case .anyAttacker: sub = "\(word) · any strong attacker"
         }
         let value = c == .anyAttacker ? "—" : c.name
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -158,6 +158,6 @@ struct HubRocketView: View {
         .clipShape(shape)
         .panelShadow()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(g.quote) \(word). \(value == "—" ? "No counter" : value), \(sub)")
+        .accessibilityLabel(c == .anyAttacker ? "\(g.quote) \(word). Any strong attacker" : "\(g.quote) \(word). \(value == "—" ? "No counter" : value), \(sub)")
     }
 }
