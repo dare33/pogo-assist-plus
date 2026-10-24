@@ -13,6 +13,8 @@ public struct GameMaster {
         public var evolutions: [String]
         /// Base attack, defence and stamina (for the CP and HP formulas); nil when the entry has none.
         public var baseStats: BaseStats?
+        /// One or two lowercase type names as the game master spells them (the Pogo Hub's type chart lookups); empty when the entry has none.
+        public var types: [String] = []
     }
 
     public enum Failure: Error, LocalizedError {
@@ -26,13 +28,13 @@ public struct GameMaster {
     public init(data: Data) throws {
         struct Family: Decodable { var parent: String?; var evolutions: [String]? }
         struct Stats: Decodable { var atk: Int; var def: Int; var hp: Int }
-        struct Entry: Decodable { var dex: Int; var speciesId: String; var speciesName: String; var family: Family?; var baseStats: Stats? }
+        struct Entry: Decodable { var dex: Int; var speciesId: String; var speciesName: String; var family: Family?; var baseStats: Stats?; var types: [String]? }
         struct File: Decodable { var pokemon: [Entry] }
         let file: File
         do { file = try JSONDecoder().decode(File.self, from: data) } catch { throw Failure.unreadable("\(error)") }
         var map = [String: Species](), names = [String: String]()
         for e in file.pokemon {
-            map[e.speciesId] = Species(id: e.speciesId, name: e.speciesName, dex: e.dex, parent: e.family?.parent, evolutions: e.family?.evolutions ?? [], baseStats: e.baseStats.map { BaseStats(atk: $0.atk, def: $0.def, hp: $0.hp) })
+            map[e.speciesId] = Species(id: e.speciesId, name: e.speciesName, dex: e.dex, parent: e.family?.parent, evolutions: e.family?.evolutions ?? [], baseStats: e.baseStats.map { BaseStats(atk: $0.atk, def: $0.def, hp: $0.hp) }, types: (e.types ?? []).filter { $0 != "none" })
             // First entry wins, so "Vulpix" is the plain species and not a later duplicate of the name.
             if names[e.speciesName.lowercased()] == nil { names[e.speciesName.lowercased()] = e.speciesId }
         }
