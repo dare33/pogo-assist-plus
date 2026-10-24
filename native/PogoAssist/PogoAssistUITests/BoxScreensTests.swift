@@ -575,7 +575,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(ul.label.contains("This copy 96.2 percent, IV rank 1,766"), ul.label)
         XCTAssertTrue(ul.label.contains("Target level 40, target CP 2,500, 160,000 dust, 190 candy"), ul.label)
         XCTAssertTrue(ml.label.hasPrefix("Master League, no CP cap. Pick: "), ml.label)
-        // The tag: Scyther's Ultra pick (71.8; its own build, Scizor for Raids, does not cover Ultra) is Weak, and the spoken card says so; a No viable option card has none.
+        // The tag: Scyther's Ultra pick (71.8, below the B-tier line; its own build, Scizor for Raids, does not cover Ultra, so no "Advice builds it" marker either) is Weak, and the spoken card says so; a No viable option card has none.
         XCTAssertTrue(ul.label.contains("Pick: Scyther. Weak for Ultra League. Species 71.8"), ul.label)
         XCTAssertTrue(app.buttons["league-ul-worth"].exists, "the tag is a tap target of its own")
         XCTAssertFalse(app.buttons["league-gl-worth"].exists || gl.label.contains("for Great League. Species"), "no tag on a No viable option card")
@@ -678,7 +678,8 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertEqual(tag.value as? String, "Collapsed")
         tag.tap()
         // The line sits inside the card's one accessibility element, so the tag's value carries it.
-        XCTAssertEqual(tag.value as? String, "Not a strong pick for Ultra League.")
+        // Weak because the species (71.8) is below the B-tier line; the tag is worth alone now, so it says why rather than "not a strong pick".
+        XCTAssertEqual(tag.value as? String, "Species below the B-tier line for Ultra League")
         XCTAssertFalse(app.buttons["leagues-back"].exists, "tapping the tag does not open the league view")
         shot("worth-tag-open")
         tag.tap()

@@ -74,24 +74,51 @@ public enum LeaguePanel {
         public var ivPct: Double?
         /// The tag on the card: nil on a "No viable option" card.
         public var worth: Worth? = nil
-        /// For a Strong tag whose build is for another member than the one shown (the Wartortle card, the Blastoise build): that build's target.
-        public var worthTarget: String? = nil
+        /// The shown member's tier by PvPoke score (S, A or B); nil when it is unranked or scores below the B line.
+        public var tier: String? = nil
+        /// This copy's IV rank percentile for the league as the shown member (100 is the best spread); nil when the IVs are not read.
+        public var roll: Double? = nil
+        /// The separate marker: the copy's own Advice has a build covering this league (the old Strong), whatever the tag says. Cost-aware advice,
+        /// where the tag is worth alone.
+        public var buildsIt: Bool = false
+        /// For a build whose target is another member than the one shown (the Wartortle card, the Blastoise build): that build's target.
+        public var buildTarget: String? = nil
     }
 
     // MARK: the worth tag
 
-    /// How worth building the shown member is for this copy in a league: Strong when one of the copy's OWN Advice builds covers the league (the same
-    /// source as the Advice panel, so they never disagree; a build another copy carries does not count), else OK from `okScore`, else Weak.
+    /// How well the shown member suits this copy in a league, free of cost: Strong = an S-tier species (PvPoke score at or above `sScore`) with a decent
+    /// roll, OK = an A or B tier species with a decent roll, Weak otherwise (unranked, a lower score, a poor roll, IVs not read). Whether the advisor
+    /// builds the copy for the league is a separate marker (`Card.buildsIt`), because it mixes in how easy the build is.
     public enum Worth: Equatable {
         case strong, ok, weak
         public var label: String { self == .strong ? "Strong" : self == .ok ? "OK" : "Weak" }
     }
 
-    /// The PvPoke score from which a member that no build covers still reads OK. A display threshold of this screen, not the advisor's bar.
-    public static let okScore = 80.0
+    /// The PvPoke score tiers: from `sScore` S, from `aScore` A, from `bScore` B. `sScore` and `aScore` are the engine's tier cut-offs in `advise.js`
+    /// (the `row.score >= 92 ? 'S' : >= 90 ? 'A'` of the league hits); `bScore` mirrors `PVP_SCORE` there (88), the floor under which a species is not
+    /// PvP-relevant unless a tier table names it. Change each pair together.
+    public static let sScore = 92.0, aScore = 90.0, bScore = 88.0
+
+    /// A decent roll for a league: this copy's IV rank percentile for the league (`iv.rankPct`, 100 the best of the 4,096 spreads) at or above this,
+    /// the top fifth. The league counterpart of `BoxAdvice.fitIVPercent` (80, the IV % that decides the activity tags): the same number, a different
+    /// measure, so change them together if the bar moves.
+    public static let decentRollPercentile = 80.0
+
+    /// S, A or B by the PvPoke score of the shown member; nil when unranked or below the B line.
+    public static func tier(score: Double?) -> String? {
+        guard let score else { return nil }
+        return score >= sScore ? "S" : score >= aScore ? "A" : score >= bScore ? "B" : nil
+    }
+
+    /// The tag from the shown member's tier and this copy's roll (nil when the IVs are not read).
+    public static func worth(tier: String?, roll: Double?) -> Worth {
+        guard let tier, let roll, roll >= decentRollPercentile else { return .weak }
+        return tier == "S" ? .strong : .ok
+    }
 
     /// The target of the covering build when none of the covering builds is for the shown member (names compared without a "(Shadow)" suffix).
-    public static func worthTarget(_ o: BoxAdvice.LeagueRating.Option, key: String, builds: [BoxAdvice.Build]) -> String? {
+    public static func buildTarget(_ o: BoxAdvice.LeagueRating.Option, key: String, builds: [BoxAdvice.Build]) -> String? {
         let label = BoxAdvice.areaLabel[key] ?? key
         func plain(_ s: String) -> String { s.replacingOccurrences(of: " (Shadow)", with: "") }
         let covering = builds.filter { $0.areas.contains(label) }
@@ -99,20 +126,23 @@ public enum LeaguePanel {
         return first.targetName
     }
 
-    public static func worth(_ o: BoxAdvice.LeagueRating.Option, key: String, builds: [BoxAdvice.Build]) -> Worth {
-        let label = BoxAdvice.areaLabel[key] ?? key
-        if builds.contains(where: { $0.areas.contains(label) }) { return .strong }
-        return (o.strength?.score ?? -1) >= okScore ? .ok : .weak
-    }
-
-    /// The line a tap on the tag opens.
-    /// "Better kept for trading or transferring" is only said when the Advice panel says the same: the copy has no build and hygiene would transfer it
-    /// (`transfers`); a Weak tag under other advice says only that it is not a strong pick.
-    public static func worthSentence(_ w: Worth, key: String, transfers: Bool = false, target: String? = nil) -> String {
+    /// The line a tap on the tag opens: the tier and the roll behind it ("S-tier species, IVs in the top 20% for Great League"). A Weak tag says which
+    /// of them fell short. "Better kept for trading or transferring" is only added when the Advice panel says the same: the copy has no build and
+    /// hygiene would transfer it (`transfers`).
+    public static func worthSentence(_ c: Card, key: String, transfers: Bool = false) -> String? {
+        guard let w = c.worth else { return nil }
+        let league = name(key), top = Int(100 - decentRollPercentile)
+        func topText(_ roll: Double) -> String { "the top \(max(1, Int((100 - roll).rounded(.up))))%" }
         switch w {
-        case .strong: return target.map { "Worth building for \(name(key)) as \($0)." } ?? "Worth building for \(name(key))."
-        case .ok: return "A solid choice for \(name(key)), though stronger options exist."
-        case .weak: return transfers ? "Better kept for trading or transferring than for \(name(key))." : "Not a strong pick for \(name(key))."
+        case .strong, .ok:
+            return "\(c.tier ?? "?")-tier species, IVs in \(topText(c.roll ?? 0)) for \(league)"
+        case .weak:
+            var s: String
+            if c.roll == nil { s = "IVs not read, so no roll to judge for \(league)" }
+            else if c.tier == nil { s = c.option.strength == nil ? "Species not ranked for \(league)" : "Species below the B-tier line for \(league)" }
+            else { s = "\(c.tier ?? "?")-tier species, but IVs only in \(topText(c.roll ?? 0)) for \(league); a good roll is the top \(top)%" }
+            if transfers { s += ". Better kept for trading or transferring" }
+            return s
         }
     }
 
@@ -160,7 +190,7 @@ public enum LeaguePanel {
     }
 
     /// Everything one pick card shows. `level` is the Pokémon's own level (nil when not known).
-    /// `builds` are the copy's own Advice builds, which decide the Strong tag.
+    /// `builds` are the copy's own Advice builds, which decide the separate `buildsIt` marker (not the tag).
     public static func card(_ r: BoxAdvice.LeagueRating, shown: Int, key: String, level now: Double?, builds: [BoxAdvice.Build] = []) -> Card {
         let shownOption = r.options[min(max(shown, 0), r.options.count - 1)]
         let overCount = r.options.filter(\.overCap).count
@@ -187,13 +217,16 @@ public enum LeaguePanel {
                     ivStrong: (o.iv?.rank ?? Int.max) <= 500,
                     costItems: read && costNote(o, key: key, level: now) == nil ? costItems(o) : [],
                     costNote: read ? costNote(o, key: key, level: now) : (now == nil ? costNote(o, key: key, level: now) : nil),
-                    moves: moveChips(o), ivPct: o.iv?.pct, worth: worth(o, key: key, builds: builds), worthTarget: worthTarget(o, key: key, builds: builds))
+                    moves: moveChips(o), ivPct: o.iv?.pct, worth: worth(tier: tier(score: o.strength?.score), roll: o.iv?.rankPct),
+                    tier: tier(score: o.strength?.score), roll: o.iv?.rankPct,
+                    buildsIt: builds.contains { $0.areas.contains(BoxAdvice.areaLabel[key] ?? key) }, buildTarget: buildTarget(o, key: key, builds: builds))
     }
 
     /// The spoken summary of a pick card, as one element.
     public static func spoken(_ c: Card, key: String, chip: String) -> String {
         var parts = ["\(name(key)), \(capText(key).lowercasedFirst)", "\(chip): \(c.title)"]
         if let w = c.worth { parts.append("\(w.label) for \(name(key))") }
+        if c.buildsIt { parts.append(c.buildTarget.map { "Advice builds it as \($0)" } ?? "Advice builds it") }
         if c.overCapCount > 0 { parts.append("\(c.overCapCount) over cap") }
         if let n = c.bestAvailableNote { parts.append(n) }
         if c.status == .noViable {

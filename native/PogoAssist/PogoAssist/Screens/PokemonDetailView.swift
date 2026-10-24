@@ -379,9 +379,26 @@ struct BuildRow: View {
             if showName {
                 Text("CP \(build.cp)" + (build.ivs.map { ", IVs \($0)" } ?? "") + (build.level.map { ", level \(Fmt.number($0))" } ?? "")).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
             }
-            Text("\(build.areas.joined(separator: ", ")) · tier \(build.tier)").font(.footnote).foregroundStyle(.secondary)
+            if showName {
+                // The Next list: the advisor's order mixes worth with ease, so the two are shown apart. Worth is the build's best tier among its areas;
+                // effort is the dust, candy and XL it costs.
+                Text(build.areas.joined(separator: ", ")).font(.footnote).foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 24) {
+                    labelled("Worth", "\(build.tier)-tier")
+                    labelled("Effort", build.dust == 0 && build.candy == 0 && build.xl == 0 ? "none" : build.costText)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
+                Text("\(build.areas.joined(separator: ", ")) · tier \(build.tier)").font(.footnote).foregroundStyle(.secondary)
+            }
             Text(costLine).font(.footnote).foregroundStyle(.secondary)
             if build.spares > 0 { Text("\(build.spares) spare \(build.spares == 1 ? "copy" : "copies")").font(.footnote).foregroundStyle(.secondary) }
+        }
+    }
+    private func labelled(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+            Text(value).font(.footnote.weight(.semibold)).monospacedDigit()
         }
     }
     var costLine: String {
