@@ -28,6 +28,10 @@ public struct BoxAdvice: Codable, Equatable {
         public var xl: Int
         /// "GL rank 12" when the build is a league one.
         public var pvp: String?
+        /// The league build's league key ("gl", "ul", "ml") and this copy's IV rank percentile there (`pvpCost.rankPct`, 100 the best spread); nil on a
+        /// build with no league cost. A report cached before these fields existed decodes them as nil, which reads as an IV percentage.
+        public var pvpLeague: String? = nil
+        public var pvpRankPct: Double? = nil
         public var score: Double
         /// One thing still to do, as `steps` in `src/advise.js` lists them. `kind` is evolve (to, candy), formChange (to), megaEvolve,
         /// powerUp (toLevel, areas: the area keys that share that level), secondMove (certain: false when the copy's moves are unknown),
@@ -109,31 +113,21 @@ public struct BoxAdvice: Codable, Equatable {
             let p = (ivs ?? "").split(separator: "/").compactMap { Double($0) }
             return p.count == 3 ? p.reduce(0, +) / 45 * 100 : nil
         }
-        /// The Next list's WORTH: the build target's tier and this copy's roll ("S-tier · IVs 17.8%", "S-tier · IVs not read"), so species worth and the copy are both shown.
-        public var worthText: String {
-            "\(tier)-tier · " + (ivPercent.map { "IVs " + String(format: "%.1f", $0) + "%" } ?? "IVs not read")
+        /// The roll in the Next list's words. A league build's roll is the copy's IV rank percentile for that league ("GL rank top 5%", N = 100 minus
+        /// the percentile rounded up, at least 1: the figure the league card's sentence uses); an activity build's roll is the IV percentage ("IVs 24.4%").
+        /// A build that covers both shows both, the league first.
+        public var rollText: String {
+            let ivText = ivPercent.map { "IVs " + String(format: "%.1f", $0) + "%" } ?? "IVs not read"
+            guard let league = pvpLeague, let rankPct = pvpRankPct else { return ivText }
+            let rank = "\(BoxAdvice.areaLabel[league] ?? league.uppercased()) rank top \(max(1, Int((100 - rankPct).rounded(.up))))%"
+            let leagueLabels = ["gl", "ul", "ml"].compactMap { BoxAdvice.areaLabel[$0] }
+            return areas.allSatisfy(leagueLabels.contains) ? rank : rank + " · " + ivText
         }
-        /// The Next list's EFFORT: the cost when there is one, else the steps still left in words (a form change, a Mega, an Elite TM, a second move, a
-        /// Dynamax copy cost no dust or candy but are not "none"); "none" only when no step is left.
-        public var effortText: String {
-            if dust != 0 || candy != 0 || xl != 0 { return costText }
-            guard let steps else { return powerUp ? "none" : formChange ? "Form change" : "Evolve" }
-            var words = [String]()
-            for st in steps {
-                switch st.kind {
-                case "evolve": words.append("Evolve")
-                case "formChange": words.append("Form change")
-                case "megaEvolve": words.append("Mega evolve")
-                case "powerUp": words.append("Power up")
-                case "secondMove": words.append("Second move")
-                case "eliteTM": words.append("Elite TM")
-                case "cdMove": words.append("Community Day move")
-                case "needsDynamaxCopy": words.append("Dynamax copy")
-                default: words.append("More to do")
-                }
-            }
-            return words.isEmpty ? "none" : words.joined(separator: ", ")
-        }
+        /// The Next list's WORTH: the build target's tier and this copy's roll ("S-tier · IVs 17.8%", "S-tier · GL rank top 5%", "S-tier · IVs not read"), so species worth and the copy are both shown.
+        public var worthText: String { "\(tier)-tier · " + rollText }
+        /// The Next list's EFFORT: the cost figures only ("120k dust, 150 candy, 8 XL candy"); "No dust or candy" when all are zero. The steps themselves
+        /// (a form change, a Mega, an Elite TM, a second move, a Dynamax copy) are the action line above, so they are not repeated here.
+        public var effortText: String { dust != 0 || candy != 0 || xl != 0 ? costText : "No dust or candy" }
         /// "120k dust, 150 candy, 8 XL". Elite TMs and the Community Day move are steps of `action`, not repeated here.
         public var costText: String {
             var parts = [String]()
@@ -482,7 +476,7 @@ public struct BoxAdvice: Codable, Equatable {
                               formChange: bool(b["formChange"]), viaMega: bool(b["viaMega"]), needsDynamax: bool(b["needsDynamax"]), spares: spares.count,
                               areas: (b["areas"]?.arrayValue ?? []).compactMap { str($0) }.map { areaLabel[$0] ?? $0 },
                               tier: str(b["bestTier"]) ?? "", targetLevel: num(b["targetLevel"]), dust: int(cost?["dust"]), candy: int(cost?["candy"]), xl: int(cost?["xl"]),
-                              pvp: pvp, score: num(b["score"]) ?? 0,
+                              pvp: pvp, pvpLeague: str(b["pvpCost"]?["league"]), pvpRankPct: num(b["pvpCost"]?["rankPct"]), score: num(b["score"]) ?? 0,
                               steps: b["steps"]?.arrayValue.map { $0.map(Build.Step.init(json:)) },
                               leavesLeague: (b["leavesLeague"]?.arrayValue ?? []).compactMap { v in
                                   guard case .string(let l)? = v["league"], case .number(let at)? = v["bestLevel"] else { return nil }

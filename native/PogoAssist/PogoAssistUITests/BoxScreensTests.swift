@@ -380,6 +380,20 @@ final class BoxScreensTests: XCTestCase {
         }
         XCTAssertTrue(sawSpare, "one of the Moltres is a spare for a better copy")
         XCTAssertTrue(sawBuilt, "one of the Moltres carries the build")
+
+        // The chip must appear somewhere, or the wording check above could never fail: in the 51-Pokémon sample the Zamazenta (Hero) with CP 2661 and
+        // IVs 13/10/11 has an Advice build that covers Master League, so its Master League card carries "Advice builds it".
+        app.buttons["Back"].tap()
+        let search = app.textFields["box-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Zamazenta")
+        let zam = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Zamazenta'")).firstMatch
+        XCTAssertTrue(zam.waitForExistence(timeout: 5), "Zamazenta is in the sample box"); zam.tap()
+        let built = app.buttons.matching(NSPredicate(format: "identifier == 'pokemon-row' AND label CONTAINS '2661'")).firstMatch
+        XCTAssertTrue(built.waitForExistence(timeout: 5), "the Zamazenta with CP 2661"); built.tap()
+        _ = app.staticTexts["ADVICE"].waitForExistence(timeout: 20)
+        let ml = app.buttons["league-ml-pick"]
+        XCTAssertTrue(ml.waitForExistence(timeout: 10), "the Master League card")
+        XCTAssertTrue(ml.label.contains("Advice builds it"), ml.label)
     }
 
     /// A league view open on the Normal form closes with its panel when the page goes to the Mega form (no Leagues there), the Advice panel is

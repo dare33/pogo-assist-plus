@@ -41,6 +41,36 @@ final class FitTests: XCTestCase {
         for f in all where f.tag != .weak { XCTAssertTrue(f.line.contains(" as \(f.asName ?? "?")"), f.line) }
     }
 
+    /// The Next list's WORTH on the real export: the two copies whose IV sum % and league IV rank disagreed across the 80 bar.
+    func testTheNextListRollIsTheLeagueRankForALeagueBuildOnTheExportFixture() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let csv = try String(contentsOf: root.appendingPathComponent("fixtures/greg-2026-09-25.pokegenie.csv"), encoding: .utf8)
+        let box = try sharedEngine.importPokeGenie(csv: csv)
+        let report = try CoreEngine().advise(box: box)
+        let es = (0..<311).map { i -> BoxEntry in
+            let row = ScanRow(index: i + 1, name: "?", display: "?", form: "", speciesId: "", dex: nil, cp: 0, hp: nil, ivs: nil, ivsRead: nil, ivsGuess: nil,
+                              level: nil, levelMax: nil, dust: nil, solveStatus: "exact", flags: [], frames: [])
+            return BoxEntry(id: "e\(i)", row: row, firstSeen: date, lastSeen: date)
+        }
+        let advice = BoxAdvice.make(from: report, entries: es)
+        // CSV row 75: Mankey, IVs 24.4%, Great League build to Annihilape (rank top 5%).
+        let mankey = try XCTUnwrap(advice.builds.first { $0.entryId == "e74" && $0.pvpLeague == "gl" })
+        XCTAssertEqual(mankey.targetName, "Annihilape")
+        XCTAssertTrue(mankey.worthText.hasSuffix(" · GL rank top 5%"), mankey.worthText)
+        XCTAssertFalse(mankey.worthText.contains("IVs"), mankey.worthText)
+        // CSV row 259: Munchlax, IVs 88.9% but an IV rank percentile of 17 for Ultra League (top 83%); the build also covers an activity, so both show.
+        let munchlax = try XCTUnwrap(advice.builds.first { $0.entryId == "e258" && $0.pvpLeague == "ul" })
+        XCTAssertEqual(munchlax.targetName, "Snorlax")
+        XCTAssertTrue(munchlax.worthText.hasSuffix(" · UL rank top 83% · IVs 88.9%"), munchlax.worthText)
+        // A build with no league cost keeps the IV %.
+        let activity = try XCTUnwrap(advice.builds.first { $0.pvpLeague == nil && $0.ivs != nil })
+        XCTAssertTrue(activity.worthText.contains(" · IVs "), activity.worthText)
+        // Every league-only build on the fixture reads a league rank, never an IV %.
+        for b in advice.builds where b.pvpLeague != nil && b.areas.allSatisfy({ ["GL", "UL", "ML"].contains($0) }) {
+            XCTAssertTrue(b.worthText.contains(" rank top "), b.worthText); XCTAssertFalse(b.worthText.contains("IVs"), b.worthText)
+        }
+    }
+
     private func fit(_ tag: BoxAdvice.Fit.Tag, area: String = "raids", asName: String? = nil, tier: String? = nil, reason: BoxAdvice.Fit.Reason? = nil, ivPercent: Double? = nil) -> BoxAdvice.Fit {
         .init(area: area, tag: tag, asName: asName, tier: tier, reason: reason, species: reason == BoxAdvice.Fit.Reason.none ? "Charmander" : nil, ivPercent: ivPercent)
     }
@@ -79,7 +109,7 @@ final class FitTests: XCTestCase {
         // A Strong or OK array without its build species and tier strings is skipped, not read as Strong.
         XCTAssertNil(try decode(#"["s"]"#)); XCTAssertNil(try decode(#"["s","Mega Delphox"]"#)); XCTAssertNil(try decode(#"["o",null,"S"]"#)); XCTAssertNil(try decode(#"["s",5,6]"#))
         XCTAssertNotNil(try decode(#"["s","Mega Delphox","S"]"#))
-        // The build tail goes through the range-checked whole-number reading: a fraction, a huge or a non-finite figure drops the tail, never traps.
+        // The build tail goes through the range-checked whole-number reading: a fraction or a figure out of range (1e300 is finite but far past Int, 9e15 is past the whole-number limit) drops the tail, never traps.
         XCTAssertEqual(try decode(#"["s","Mega Delphox","S",true,"Mega Delphox",1000,50,0]"#)?.buildCost, .init(dust: 1000, candy: 50, xl: 0))
         for bad in ["1.5", "1e300", "-1e300", "9e15"] {
             let f = try XCTUnwrap(try decode(#"["s","Mega Delphox","S",true,"Mega Delphox",\#(bad),50,0]"#), bad)

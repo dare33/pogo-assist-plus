@@ -111,8 +111,8 @@ public enum LeaguePanel {
         return score >= sScore ? "S" : score >= aScore ? "A" : score >= bScore ? "B" : nil
     }
 
-    /// The league tiers of the bundled `tiers.json` (`kind` "pvp", `area` gl / ul / ml), keyed "area/speciesId": the letters the Next list and the Advice
-    /// panel show. A Shadow table entry has its own species id ("ninetales_shadow"), so it never matches a member's plain id. Read once; empty when the
+    /// The league tiers of the bundled `tiers.json` (`kind` "pvp", `area` gl / ul / ml), keyed "area/speciesId": the letters the engine gives the same species
+    /// and league. A Shadow copy the engine resolves as the plain species can differ from the card until that engine fix lands. A Shadow table entry has its own species id ("ninetales_shadow"), so it never matches a member's plain id. Read once; empty when the
     /// resource cannot be read, which leaves the score bands.
     static let tableTiers: [String: String] = {
         guard let url = Bundle.module.url(forResource: "tiers", withExtension: "json"), let data = try? Data(contentsOf: url),
@@ -120,6 +120,7 @@ public enum LeaguePanel {
         var out = [String: String]()
         for e in entries where e["kind"] as? String == "pvp" {
             guard let area = e["area"] as? String, let id = e["speciesId"] as? String, let tier = e["tier"] as? String else { continue }
+            // Shadow-flagged plain-id entries are not filtered here: no pvp entry has one today (the engine filters them).
             if out["\(area)/\(id)"] == nil { out["\(area)/\(id)"] = tier }
         }
         return out
