@@ -10,13 +10,47 @@ struct SettingsView: View {
     @State private var renameProblem: String?
     @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
 
+    @Environment(\.accent) private var accent
+
     private func accountLabel(_ name: String) -> some View {
         let selected: Bool = name == model.account
-        return HStack {
-            Text(name).foregroundStyle(Color.primary)
+        return HStack(spacing: 12) {
+            Text(name).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(Theme.ink)
             Spacer()
-            if selected { Image(systemName: "checkmark") }
+            if selected { Image(systemName: "checkmark").font(.figtree(16, .heavy, relativeTo: .body)).foregroundStyle(accent.ink).accessibilityHidden(true) }
         }
+        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 52)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: pieces (the same card, header and inset-row shapes as Appearance and the setup checklist)
+
+    private func panelTitle(_ text: String) -> some View {
+        Text(text).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+            .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 4)
+    }
+
+    private func note(_ text: String, tint: Color = Theme.muted) -> some View {
+        Text(text).font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(tint)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    private var separator: some View { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 16) }
+
+    private func chevron() -> some View {
+        Image(systemName: "chevron.right").font(.figtree(14, .bold)).foregroundStyle(accent.ink).accessibilityHidden(true)
+    }
+
+    private func rowLabel(_ title: String, value: String? = nil, chevron showsChevron: Bool = false, ink: Color = Theme.ink) -> some View {
+        HStack(spacing: 12) {
+            Text(title).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(ink).multilineTextAlignment(.leading)
+            Spacer(minLength: 8)
+            if let value { Text(value).font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted) }
+            if showsChevron { chevron() }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 52)
+        .contentShape(Rectangle())
     }
 
     private var previousFooter: String {
@@ -27,50 +61,68 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    NavigationLink("Appearance") { AppearanceView() }.accessibilityIdentifier("settings-appearance")
-                    NavigationLink { SetupChecklistView() } label: {
-                        HStack {
-                            Text("Get ready to scan")
-                            Spacer()
-                            Text(model.setup.isDone ? "Done" : "\(model.setup.doneCount) of \(SetupProgress.count) done").foregroundStyle(.secondary)
+            ScrollView {
+                VStack(spacing: Theme.Space.panelGap) {
+                    Panel(padding: 0, spacing: 0) {
+                        NavigationLink { AppearanceView() } label: { rowLabel("Appearance", chevron: true) }
+                            .buttonStyle(PressStyle()).accessibilityIdentifier("settings-appearance")
+                        separator
+                        NavigationLink { SetupChecklistView() } label: {
+                            rowLabel("Get ready to scan", value: model.setup.isDone ? "Done" : "\(model.setup.doneCount) of \(SetupProgress.count) done", chevron: true)
+                        }
+                        .buttonStyle(PressStyle()).accessibilityIdentifier("settings-get-ready")
+                    }
+                    Panel(padding: 0, spacing: 0) {
+                        HStack(spacing: 12) {
+                            // The menu picker shows only its value in a card, so the title is drawn here; the picker keeps it as its accessibility label.
+                            Text("Mega Pokémon").font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(Theme.ink).accessibilityHidden(true)
+                            Spacer(minLength: 8)
+                            Picker("Mega Pokémon", selection: $megaDefault) {
+                                ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
+                            }
+                            .pickerStyle(.menu).labelsHidden()
+                            .font(.figtree(16, .semibold, relativeTo: .body)).tint(accent.ink)
+                            .accessibilityIdentifier("settings-mega")
+                        }
+                        .padding(.horizontal, 16).frame(minHeight: 52)
+                        note("Which form a Pokémon's page shows first when it has a Mega form. You can switch on the page.")
+                    }
+                    Panel(padding: 0, spacing: 0) {
+                        panelTitle("Accounts")
+                        ForEach(Array(model.accounts.enumerated()), id: \.element) { i, name in
+                            Button { model.select(name) } label: { accountLabel(name) }.buttonStyle(PressStyle())
+                            if i < model.accounts.count - 1 { separator }
                         }
                     }
-                    .accessibilityIdentifier("settings-get-ready")
-                }
-                Section {
-                    Picker("Mega Pokémon", selection: $megaDefault) {
-                        ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
+                    Panel(padding: 0, spacing: 0) {
+                        Button { newName = model.account ?? ""; renaming = true } label: { rowLabel("Rename account", ink: accent.ink) }
+                            .buttonStyle(PressStyle()).disabled(model.account == nil || model.isReviewing)
+                        if let p = renameProblem { note(p, tint: Theme.red) }
+                        else if model.isReviewing { note("A scan is open. Save or discard it before renaming the account.") }
                     }
-                    .accessibilityIdentifier("settings-mega")
-                } footer: { Text("Which form a Pokémon's page shows first when it has a Mega form. You can switch on the page.") }
-                Section("Accounts") {
-                    ForEach(model.accounts, id: \.self) { name in
-                        Button { model.select(name) } label: { accountLabel(name) }
+                    Panel(padding: 0, spacing: 0) {
+                        panelTitle("Box for \(model.account ?? "this account")")
+                        Button { confirmPrevious = true } label: { rowLabel("Restore previous box", ink: accent.ink) }
+                            .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
+                        separator
+                        NavigationLink { HistoryScansView() } label: { rowLabel("History and scans", chevron: true) }
+                            .buttonStyle(PressStyle()).accessibilityIdentifier("settings-history-row")
+                        note(previousFooter)
+                    }
+                    Panel(padding: 0, spacing: 0) {
+                        panelTitle("About")
+                        note("Reader mode is set to accurate. The mode picker is in Diagnostics.")
+                        // Trademark notice, needed by Apple's review and fair to the owners of the names: the app reads a player's own screen and is nobody's partner.
+                        note("Pogo Assist+ is not affiliated with, endorsed by or connected to Niantic, Nintendo or The Pokémon Company. Pokémon and Pokémon GO are trademarks of their owners.")
+                            .accessibilityIdentifier("about-affiliation")
+                        note("League ratings and recommended moves come from PvPoke (pvpoke.com), used under its MIT licence.")
+                            .accessibilityIdentifier("about-pvpoke")
                     }
                 }
-                Section {
-                    Button("Rename account") { newName = model.account ?? ""; renaming = true }.disabled(model.account == nil || model.isReviewing)
-                } footer: {
-                    if let p = renameProblem { Text(p).foregroundStyle(.red) }
-                    else if model.isReviewing { Text("A scan is open. Save or discard it before renaming the account.") }
-                }
-                Section {
-                    Button("Restore previous box") { confirmPrevious = true }.disabled(model.previous == nil || model.boxNeedsNewerApp)
-                    NavigationLink("History and scans") { HistoryScansView() }.accessibilityIdentifier("settings-history-row")
-                } header: { Text("Box for \(model.account ?? "this account")") } footer: {
-                    Text(previousFooter)
-                }
-                Section("About") {
-                    Text("Reader mode is set to accurate. The mode picker is in Diagnostics.").font(.footnote)
-                    // Trademark notice, needed by Apple's review and fair to the owners of the names: the app reads a player's own screen and is nobody's partner.
-                    Text("Pogo Assist+ is not affiliated with, endorsed by or connected to Niantic, Nintendo or The Pokémon Company. Pokémon and Pokémon GO are trademarks of their owners.").font(.footnote)
-                        .accessibilityIdentifier("about-affiliation")
-                    Text("League ratings and recommended moves come from PvPoke (pvpoke.com), used under its MIT licence.").font(.footnote)
-                        .accessibilityIdentifier("about-pvpoke")
-                }
+                .padding(.horizontal, Theme.Space.screen).padding(.top, 6).padding(.bottom, 32)
             }
+            .scrollIndicators(.hidden)
+            .background(Theme.bg.ignoresSafeArea())
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
