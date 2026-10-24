@@ -42,6 +42,23 @@ final class AdviceNotesTests: XCTestCase {
         XCTAssertNil(BoxAdvice.adviceNotes(entry(builds: mine, id: "me"), name: "Eevee").spare)
     }
 
+    /// A copy kept beyond the IV-ranked keeps because it is marked as caught as a Dynamax says so; the IV wording counts only the IV-ranked keeps.
+    func testADynamaxExtraKeepSaysWhyAndDoesNotChangeTheIVWording() {
+        func verdict(_ d: BoxAdvice.Duplicate, id: String) -> String? { BoxAdvice.adviceNotes(entry(dup: d, id: id), name: "Eevee").verdict }
+        func make(count: Int, keep: [String], ids: [String]) -> BoxAdvice.Duplicate {
+            var d = dup(count: count, keep: keep, transfer: ["CP 3, 1/1/1"], keepIds: ids); d.dynamaxExtras = 1; return d
+        }
+        // Not a legendary: the best copy is the single best, the 0% Yes copy is kept for being a Dynamax.
+        let one = make(count: 2, keep: ["CP 200, 15/15/15", "CP 100, 0/0/0"], ids: ["best", "yes"])
+        XCTAssertEqual(verdict(one, id: "best"), "One of 2 Eevee in your box. **Keep it:** it has your best IVs of the 2.")
+        XCTAssertEqual(verdict(one, id: "yes"), "One of 2 Eevee in your box. **Keep it:** it is marked as caught as a Dynamax.")
+        // A legendary keeps two on IVs; the Dynamax extra comes after them.
+        let two = make(count: 6, keep: ["CP 1, 15/15/15", "CP 2, 14/15/15", "CP 4, 0/0/0"], ids: ["a", "b", "yes"])
+        XCTAssertEqual(verdict(two, id: "a"), "One of 6 Eevee in your box. **Keep it:** it has one of your two best IV sets of the 6.")
+        XCTAssertEqual(verdict(two, id: "b"), "One of 6 Eevee in your box. **Keep it:** it has one of your two best IV sets of the 6.")
+        XCTAssertEqual(verdict(two, id: "yes"), "One of 6 Eevee in your box. **Keep it:** it is marked as caught as a Dynamax.")
+    }
+
     func testEveryKeepVerdictSaysWhy() {
         func verdict(_ d: BoxAdvice.Duplicate, id: String = "me") -> String? { BoxAdvice.adviceNotes(entry(dup: d, id: id), name: "Eevee").verdict }
         // Won on IVs: known and strictly above every copy it did not keep.

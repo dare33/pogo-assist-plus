@@ -159,7 +159,7 @@ final class ScanReportTests: XCTestCase {
         try lib.commit(account: "Zorblax", entries: [old2, a2, b], reason: .edit, note: "Corrected", now: d.addingTimeInterval(10))
         try lib.commit(account: "Zorblax", entries: [old2, a2], reason: .edit, note: "Removed", now: d.addingTimeInterval(20))
         let lines = try lib.editsAfter(account: "Zorblax", scanId: s.id)
-        XCTAssertEqual(lines, ["Corrected by hand: Pidgey: CP 100 to 1990.", "Removed from the box: Pidgey, CP 200."], "only Pokémon first seen at this scan; the earlier scan's correction is not included")
+        XCTAssertEqual(lines, ["Corrected or set by hand: Pidgey: CP 100 to 1990.", "Removed from the box: Pidgey, CP 200."], "only Pokémon first seen at this scan; the earlier scan's correction is not included")
     }
 
     func testEditsAfterListsADynamaxChange() throws {
@@ -175,6 +175,6 @@ final class ScanReportTests: XCTestCase {
         var cleared = a; cleared.row.dynamax = nil
         try lib.commit(account: "Zorblax", entries: [cleared], reason: .edit, note: "Dynamax set for Pidgey", now: d.addingTimeInterval(20))
         XCTAssertEqual(try lib.editsAfter(account: "Zorblax", scanId: s.id),
-                       ["Corrected by hand: Pidgey: Dynamax set to Yes.", "Corrected by hand: Pidgey: Dynamax cleared."])
+                       ["Corrected or set by hand: Pidgey: Dynamax set to Yes.", "Corrected or set by hand: Pidgey: Dynamax cleared."])
     }
 }

@@ -20,6 +20,8 @@ struct PokemonDetailView: View {
     @State private var leaguesMode: String?
     /// "How it was read" is one line that opens its notes beneath it.
     @State private var notesOpen = false
+    /// The Dynamax choice just made, until its save has landed: the switch shows it at once, and further taps wait (two quick taps would save twice).
+    @State private var pendingDynamax: BoxMerge.DynamaxEdit?
 
     /// The Mega form the page shows now: only for an entry whose Mega form has a CP, and only while the switch is on Mega.
     private func megaShown(_ e: BoxEntry) -> MegaForm? {
@@ -324,12 +326,14 @@ struct PokemonDetailView: View {
     /// Max battles use only the ones set to Yes. The switch is one adjustable element; the label beside it is hidden from VoiceOver (the switch names itself).
     private func dynamaxRow(_ e: BoxEntry) -> some View {
         let selection = Binding<BoxMerge.DynamaxEdit>(
-            get: { BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) },
+            get: { pendingDynamax ?? BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) },
             set: { new in
-                // A repeat tap on the segment already selected would otherwise save a box version and re-run the advice for nothing.
-                guard new != BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) else { return }
+                // A tap on the segment already selected (or any tap while a save is under way) would otherwise save a box version and re-run the advice for nothing.
+                guard pendingDynamax == nil, new != BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) else { return }
+                pendingDynamax = new
                 Task {
                     let result = await model.correct(e.id, BoxMerge.Edit(dynamax: new))
+                    pendingDynamax = nil
                     if let error = result.error { model.message = error }
                 }
             })

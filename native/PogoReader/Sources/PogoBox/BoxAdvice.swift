@@ -132,6 +132,8 @@ public struct BoxAdvice: Codable, Equatable {
         public var transfer: [String]
         public var keepIds: [String]
         public var transferIds: [String]
+        /// How many of the last `keep` entries are kept only because the person marked them as caught as a Dynamax (nil: none).
+        public var dynamaxExtras: Int?
     }
 
     /// One league's ratings of one Pokémon, as `src/leagues.js` `leaguesFor` returns them (null becomes nil).
@@ -383,7 +385,8 @@ public struct BoxAdvice: Codable, Equatable {
             }
             let keep = h["keep"]?.arrayValue ?? [], transfer = h["transfer"]?.arrayValue ?? []
             out.duplicates.append(Duplicate(name: str(h["name"]) ?? "?", count: int(h["count"]), keep: keep.map(line), transfer: transfer.map(line),
-                                            keepIds: keep.compactMap { id($0) }, transferIds: transfer.compactMap { id($0) }))
+                                            keepIds: keep.compactMap { id($0) }, transferIds: transfer.compactMap { id($0) },
+                                            dynamaxExtras: h["dynamaxExtras"].flatMap { if case .number(let n) = $0 { return Int(n) } else { return nil } }))
         }
         for e in report["pokemon"]?.arrayValue ?? [] where bool(e["unresolved"]) { if let eid = id(e["p"]) { out.unresolved.append(eid) } }
         for e in report["pokemon"]?.arrayValue ?? [] {

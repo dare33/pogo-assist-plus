@@ -86,7 +86,7 @@ extension BoxLibrary {
                 if now.row.ivs != e.row.ivs { changes.append("IVs \(e.row.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "none") to \(now.row.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "none")") }
                 if now.row.speciesId != e.row.speciesId { changes.append("species \(e.row.speciesId) to \(now.row.speciesId)") }
                 if now.row.dynamax != e.row.dynamax { changes.append("Dynamax \(now.row.dynamax.map { $0 ? "set to Yes" : "set to No" } ?? "cleared")") }
-                if !changes.isEmpty { lines.append("Corrected by hand: \(e.row.title): \(changes.joined(separator: ", ")).") }
+                if !changes.isEmpty { lines.append("Corrected or set by hand: \(e.row.title): \(changes.joined(separator: ", ")).") }
             }
             before = after
         }
