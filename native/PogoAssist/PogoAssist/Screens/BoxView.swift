@@ -24,7 +24,8 @@ struct BoxView: View {
     @State private var chip = BoxIndex.Chip.all
     @State private var sort = BoxIndex.Sort.name
     @State private var sections: [BoxIndex.Section] = []
-    @State private var sectionsReady = false
+    /// The index key `sections` were computed for; they show only while it is the current account's and box version's.
+    @State private var sectionsFor: String?
     @State private var jumped: String?
     @State private var rankingInfo = false
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
@@ -37,6 +38,12 @@ struct BoxView: View {
     #endif
 
     private var indexKey: String { "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)" }
+    /// What the store's index and the sections must be built for to be shown (the synthetic box installs its own).
+    private var wantedKey: String { synthetic ? "synthetic" : indexKey }
+    /// The sections are the current account's and box version's. A big box builds its index away from the main thread, so after a switch of account the previous
+    /// account's sections can still be in `sections`: they are never shown, the progress view stands in until the new ones are computed.
+    private var sectionsCurrent: Bool { Self.showsSections(computedFor: sectionsFor, current: wantedKey) }
+    static func showsSections(computedFor: String?, current: String) -> Bool { computedFor == current }
     private var index: BoxIndex { store.index }
 
     private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }
@@ -44,8 +51,11 @@ struct BoxView: View {
     private var readyAdvice: BoxAdvice? { if case .ready(let a) = model.advice { return a } else { return nil } }
     private var adviceState: InsightKey.State { InsightKey.State(model.advice) }
     private var insightKey: InsightKey { InsightKey(account: model.account, seq: model.snapshot?.seq, state: adviceState) }
-    /// No insight yet because the advice is still being worked out (a failed advice is not waiting: it never arrives).
-    private var insightWaiting: Bool { store.insight == nil && adviceState == .waiting }
+    /// The insight read for this account (never another account's).
+    private var insight: BoxInsight? { store.insight(forAccount: model.account) }
+    /// The advice is still being worked out, or it is ready but the insight is not yet built for this box version (cached advice at launch or after a switch of
+    /// account): "…" and "Working out…", not "—". A failed advice is not waiting: it never arrives.
+    private var insightWaiting: Bool { insightKey.isWaiting(builtFor: store.insightBuiltFor) }
 
     private struct SectionKey: Equatable { var query: String; var chip: BoxIndex.Chip; var sort: BoxIndex.Sort; var version: Int; var insightVersion: Int; var pogoAssist: Bool }
 
@@ -56,6 +66,7 @@ struct BoxView: View {
                 if let problem = model.boxProblem { problemState(problem) }
                 else if !model.boxLoaded && model.entries.isEmpty && !synthetic { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
                 else if model.entries.isEmpty && !synthetic { emptyState }
+                else if !sectionsCurrent { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
                 else { list }
             }
         }
@@ -174,10 +185,10 @@ struct BoxView: View {
                     chips
                     if chip == .toCheck { rescanButton }
                     sortLine
-                    if sectionsReady && sections.isEmpty {
+                    if sections.isEmpty {
                         // An activity chip waits for the advice: until then nothing can be Strong or OK, which is not the same as no match. A failed advice says so.
                         let isActivity: Bool = { if case .activity = chip { return true } else { return false } }()
-                        Text(isActivity && store.insight == nil ? (adviceState == .failed ? "Advice could not be worked out" : "Working out advice…") : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
+                        Text(isActivity && insight == nil ? (adviceState == .failed ? "Advice could not be worked out" : "Working out advice…") : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
                     }
                     ForEach(sections) { sectionView($0) }
                 }
@@ -256,7 +267,7 @@ struct BoxView: View {
 
     /// How many Pokémon pass the search and chip, once the debounced search has run.
     private var matchCount: Int? {
-        guard sectionsReady, applied == BoxIndex.Query(query) else { return nil }
+        guard sectionsCurrent, applied == BoxIndex.Query(query) else { return nil }
         return sections.reduce(0) { $0 + $1.rows.reduce(0) { $0 + $1.stats.count } }
     }
 
@@ -397,7 +408,7 @@ struct BoxView: View {
         let check = r.stats.toCheck > 0 ? "\(r.stats.toCheck) to check" : nil
         var label = "\(r.title), \(r.stats.count) Pokémon"
         if let activity, let lead = r.lead { label += ", \(lead.label) for \(activity.title)" }
-        label += ". " + LeagueTiles.spoken(title: r.title, insight: store.insight, waiting: insightWaiting, pogoAssist: pogoAssist)
+        label += ". " + LeagueTiles.spoken(title: r.title, insight: insight, waiting: insightWaiting, pogoAssist: pogoAssist)
         if let check { label += ". " + check }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
@@ -415,7 +426,7 @@ struct BoxView: View {
                     .background(Theme.surface2, in: Capsule())
                 Image(systemName: "chevron.right").font(.figtree(13, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
             }
-            LeagueTiles(title: r.title, insight: store.insight, waiting: insightWaiting, pogoAssist: pogoAssist)
+            LeagueTiles(title: r.title, insight: insight, waiting: insightWaiting, pogoAssist: pogoAssist)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(minHeight: 56)
@@ -535,13 +546,14 @@ struct BoxView: View {
         let q = BoxIndex.Query(query)
         if q != applied { try? await Task.sleep(nanoseconds: 150_000_000) }
         if Task.isCancelled { return }
-        let idx = index, chip = chip, sort = sort
-        let scoring = BoxIndex.Scoring(insight: store.insight, pogoAssist: pogoAssist)
+        let idx = index, built = store.indexKey, chip = chip, sort = sort
+        let scoring = BoxIndex.Scoring(insight: insight, pogoAssist: pogoAssist)
         let result: [BoxIndex.Section]
         if idx.count < 2000 { result = idx.sections(query: q, chip: chip, sort: sort, scoring: scoring) }
         else { result = await Task.detached(priority: .userInitiated) { idx.sections(query: q, chip: chip, sort: sort, scoring: scoring) }.value }
-        if Task.isCancelled { return }
-        applied = q; sections = result; sectionsReady = true
+        // Only for the index still on the store: a detached pass for the previous account or box version must not land on this one.
+        if Task.isCancelled || built != store.indexKey { return }
+        applied = q; sections = result; sectionsFor = built
     }
 }
 

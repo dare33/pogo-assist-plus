@@ -330,7 +330,8 @@ struct PokemonDetailView: View {
         return VStack(alignment: .leading, spacing: 6) {
             FlowLayout(spacing: 8) {
                 Button { if open { activityOpen.remove(a.rawValue) } else { activityOpen.insert(a.rawValue) } } label: {
-                    WorthTag(activity: a, worth: worth).padding(.vertical, 12).contentShape(Rectangle()).padding(.vertical, -12)
+                    // 6 pt above and below the chip (half the Panel's 12 pt row gap, so two rows' areas never overlap): about 32 pt to hit with the chip's ~20 pt, laid out as before.
+                    WorthTag(activity: a, worth: worth).padding(.vertical, 6).contentShape(Rectangle()).padding(.vertical, -6)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(a.title): \(worth.label)")

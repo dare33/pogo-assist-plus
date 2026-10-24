@@ -169,4 +169,47 @@ final class BoxInsightTests: XCTestCase {
         XCTAssertTrue(insight.species.values.contains { $0.contains { $0.status == .fits } }, "some tile has a value")
         XCTAssertTrue(es.contains { insight.copies[$0.id]?.suits(.raids, pogoAssist: false) == true })
     }
+
+    // MARK: the lines and the best-of text live in the insight
+
+    private func shadowEntry(_ id: String, _ title: String, shadow: Bool) -> BoxEntry {
+        var e = entry(id, title)
+        e.row.shadow = shadow ? 1 : 0
+        return e
+    }
+
+    /// A species list rebuilt from the insight alone (the advice is being recalculated) still has every tag's line and every best-of area.
+    func testTheInsightCarriesTheLinesAndTheBestOfAreas() {
+        let es = [entry("a", "Tyranitar")]
+        let fit = BoxAdvice.Fit(area: "raids", tag: .ok, asName: "Tyranitar", tier: "A", reason: nil, species: nil, ivPercent: 98)
+        var adv = advice(["a": ["gl": R(options: [option("flareon", score: 93, pct: 97.2, rankPct: 95)])]], fit: ["a": ["raids": fit]])
+        adv.bestOf = ["a": ["raids"]]
+        let insight = BoxInsight.make(advice: adv, entries: es)
+        XCTAssertEqual(insight.copies["a"]?.line(.raids, pogoAssist: false), fit.line)
+        XCTAssertNil(insight.copies["a"]?.line(.gym, pogoAssist: false), "no tag, no line")
+        let r = adv.leagues(for: "a")["gl"]!
+        let c = LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: false), key: "gl", level: nil)
+        XCTAssertEqual(insight.copies["a"]?.line(.gl, pogoAssist: false), LeaguePanel.worthSentence(c, key: "gl") ?? c.blockedText)
+        XCTAssertNotNil(insight.copies["a"]?.line(.gl, pogoAssist: true))
+        XCTAssertEqual(insight.copies["a"]?.best, [.init(area: "raids", asName: "Tyranitar")])
+    }
+
+    /// The merged chip names what the copy is best as, not a count: a plain and a Shadow copy of one title are each their own best, and their chips differ by the suffix.
+    func testTheMergedChipTextNamesTheBestAsAndTellsPlainFromShadow() {
+        let es = [shadowEntry("p", "Tyranitar", shadow: false), shadowEntry("s", "Tyranitar", shadow: true)]
+        func fit() -> BoxAdvice.Fit { BoxAdvice.Fit(area: "raids", tag: .ok, asName: "Tyranitar", tier: "A", reason: nil, species: nil, ivPercent: 98) }
+        var adv = advice(["p": ["gl": R(options: [option("flareon", score: 93, pct: 97.2, rankPct: 95)])]], fit: ["p": ["raids": fit()], "s": ["raids": fit()]])
+        adv.bestOf = ["p": ["raids"], "s": ["raids"]]
+        let insight = BoxInsight.make(advice: adv, entries: es)
+        XCTAssertEqual(insight.bestText(of: "p", title: "Tyranitar", .raids, pogoAssist: false), "best as Tyranitar")
+        XCTAssertEqual(insight.bestText(of: "s", title: "Tyranitar", .raids, pogoAssist: false), "best as Tyranitar (Shadow)")
+        XCTAssertNil(insight.bestText(of: "p", title: "Tyranitar", .gym, pogoAssist: false), "not best for Gym")
+        // An engine name that already says Shadow gets no second suffix.
+        var named = fit(); named.asName = "Tyranitar (Shadow)"
+        adv.fit["s"] = ["raids": named]
+        XCTAssertEqual(BoxInsight.make(advice: adv, entries: es).bestText(of: "s", title: "Tyranitar", .raids, pogoAssist: false), "best as Tyranitar (Shadow)")
+        // A league chip keeps the member and the roll.
+        XCTAssertEqual(insight.bestText(of: "p", title: "Tyranitar", .gl, pogoAssist: false), "best: Flareon 97.2%")
+        XCTAssertNil(insight.bestText(of: "s", title: "Tyranitar", .gl, pogoAssist: false), "the tile is another copy's")
+    }
 }

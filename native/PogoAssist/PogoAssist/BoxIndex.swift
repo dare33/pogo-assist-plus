@@ -288,30 +288,56 @@ struct InsightKey: Hashable {
     var state: State
 
     init(account: String?, seq: Int?, state: State) { self.account = account ?? ""; self.seq = seq ?? -1; self.state = state }
+
+    /// The tiles and chips say "…" and "Working out…" while the insight for this key is still to come: the advice is being worked out, or it is ready but the insight
+    /// has not been built for this key yet (cached advice at launch, or just after a switch of account). A failed advice never arrives, so it is not waiting.
+    func isWaiting(builtFor built: InsightKey?) -> Bool {
+        switch state {
+        case .failed: return false
+        case .waiting: return true
+        case .ready: return built != self
+        }
+    }
 }
 
 /// Owns the current `BoxIndex`: rebuilt when the box is loaded or saved (a new version), away from the main thread for a large box.
+///
+/// Every published result carries the key it was built for, and a result is published only when that key is still the one most recently asked for. Task
+/// cancellation alone is not enough: a detached build for account A cannot be cancelled once it runs, and its result would otherwise land on account B's screen.
 @MainActor
 final class BoxIndexStore: ObservableObject {
     @Published private(set) var index = BoxIndex.empty
-    /// The tags and tiles read from the advice; nil until the advice is ready, and while it has failed. Built once per box version, for both rankings.
+    /// The key `index` was built for ("account|seq"); nil before the first build.
+    @Published private(set) var indexKey: String?
+    /// The insight read for the tags and tiles: built from the advice, nil until it is ready and while it has failed. Built once per box version, for both rankings.
+    /// Use `insight(forAccount:)` to read it for a screen: a result that is not this account's is never shown.
     @Published private(set) var insight: BoxInsight?
+    /// The key `insight` was built for: the account, box version and a ready advice. Behind `insightVersion`, the same-account insight kept on show while a new
+    /// one is built still carries the older version's key.
+    @Published private(set) var insightBuiltFor: InsightKey?
     @Published private(set) var insightVersion = 0
     /// Bumped on each rebuild, so a view can recompute what it derived from the index.
     @Published private(set) var version = 0
-    private var builtFor: String?
+    private var indexWanted: String?
+    private var insightWanted: InsightKey?
     private var insightFor: InsightKey?
 
     func refresh(key: String, entries: [BoxEntry]) async {
-        guard builtFor != key else { return }
+        guard indexKey != key else { return }
+        indexWanted = key
         let built: BoxIndex
         if entries.count < 2000 {
             built = BoxIndex(entries: entries)
         } else {
             built = await Task.detached(priority: .userInitiated) { BoxIndex(entries: entries) }.value
         }
-        guard !Task.isCancelled else { return }
-        index = built; builtFor = key; version += 1
+        guard !Task.isCancelled, indexWanted == key else { return }
+        index = built; indexKey = key; version += 1
+    }
+
+    /// The insight, only if it was built for this account (a newer box version of the same account stays on show while its own is built).
+    func insight(forAccount account: String?) -> BoxInsight? {
+        insightBuiltFor?.account == (account ?? "") ? insight : nil
     }
 
     /// Keeps the insight in step with the advice. Another ACCOUNT's insight is dropped at once, so its tags and tiles never show on this account's Pokémon. A new box
@@ -319,9 +345,10 @@ final class BoxIndexStore: ObservableObject {
     /// are stable, so it stays close, and the list does not blank after every edit); a failed advice drops it, since nothing can then be said about the new version.
     func refreshInsight(key: InsightKey, advice: BoxAdvice?, entries: [BoxEntry]) async {
         guard insightFor != key else { return }
-        if let was = insightFor, was.account != key.account, insight != nil { insight = nil; insightVersion += 1 }
+        insightWanted = key
+        if let was = insightBuiltFor, was.account != key.account, insight != nil { insight = nil; insightBuiltFor = nil; insightVersion += 1 }
         guard key.state == .ready, let advice else {
-            if key.state != .waiting, insight != nil { insight = nil; insightVersion += 1 }
+            if key.state != .waiting, insight != nil { insight = nil; insightBuiltFor = nil; insightVersion += 1 }
             insightFor = key
             return
         }
@@ -331,13 +358,13 @@ final class BoxIndexStore: ObservableObject {
         } else {
             built = await Task.detached(priority: .userInitiated) { BoxInsight.make(advice: advice, entries: entries) }.value
         }
-        guard !Task.isCancelled else { return }
-        insight = built; insightFor = key; insightVersion += 1
+        guard !Task.isCancelled, insightWanted == key else { return }
+        insight = built; insightBuiltFor = key; insightFor = key; insightVersion += 1
     }
 
     #if DEBUG
     /// DEBUG only: put a ready-made index in place (the synthetic 15,000 box).
-    func install(_ built: BoxIndex, key: String) { index = built; builtFor = key; version += 1 }
+    func install(_ built: BoxIndex, key: String) { index = built; indexKey = key; indexWanted = key; version += 1 }
     #endif
 }
 

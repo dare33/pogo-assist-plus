@@ -126,10 +126,11 @@ final class BoxInsightStoreTests: XCTestCase {
     }
 
     func testTheTagWordsForEachWorth() {
-        XCTAssertEqual(WorthTag.detail(.ok, bestOf: 6), "OK · best of 6")
-        XCTAssertEqual(WorthTag.detail(.strong, bestOf: nil), "Strong")
-        XCTAssertEqual(WorthTag.detail(.weak, bestOf: nil), "Weak")
-        XCTAssertEqual(WorthTag.detail(nil, bestOf: nil), "Not rated", "a copy with no fit for the area")
+        XCTAssertEqual(WorthTag.detail(.ok, best: "best as Tyranitar (Shadow)"), "OK · best as Tyranitar (Shadow)")
+        XCTAssertEqual(WorthTag.detail(.strong, best: "best: Flareon 97.2%"), "Strong · best: Flareon 97.2%")
+        XCTAssertEqual(WorthTag.detail(.strong, best: nil), "Strong")
+        XCTAssertEqual(WorthTag.detail(.weak, best: nil), "Weak")
+        XCTAssertEqual(WorthTag.detail(nil, best: nil), "Not rated", "a copy with no fit for the area")
     }
 
     func testAnUnreadCopyGivesTheIVsNotReadTile() {
@@ -141,5 +142,95 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertNil(LeagueTiles.percent(tile))
         XCTAssertTrue(LeagueTiles.spoken(title: "Eevee", insight: insight, waiting: false, pogoAssist: false).contains("Great League: IVs not read"))
         XCTAssertTrue(LeagueTiles.spoken(title: "Eevee", insight: nil, waiting: false, pogoAssist: false).contains("Great League: —"))
+    }
+
+    // MARK: results are kept to the key they were built for
+
+    private func many(_ n: Int, prefix: String) -> [BoxEntry] { (0..<n).map { entry("\(prefix)\($0)", "Eevee") } }
+
+    /// A big box builds its index off the main thread, and that work is not cancelled by the switch: A's result arriving after the switch to B must not replace B's.
+    func testADetachedIndexForAccountAArrivingAfterTheSwitchToBIsDiscarded() async {
+        let store = BoxIndexStore()
+        let a = Task { await store.refresh(key: "A|1", entries: many(2_000, prefix: "a")) }   // not cancelled: only the key can discard it
+        await Task.yield()
+        await store.refresh(key: "B|1", entries: [entry("b", "Pidgey")])
+        XCTAssertEqual(store.indexKey, "B|1")
+        await a.value
+        XCTAssertEqual(store.indexKey, "B|1", "A's finished index is not published over B's")
+        XCTAssertEqual(store.index.count, 1)
+        XCTAssertEqual(store.index.items.first?.id, "b")
+    }
+
+    func testADetachedInsightForAccountAArrivingAfterTheSwitchToBIsDiscarded() async {
+        let store = BoxIndexStore(), (adv, _) = oneCopy()
+        let a = Task { await store.refreshInsight(key: InsightKey(account: "A", seq: 1, state: .ready), advice: adv, entries: many(2_000, prefix: "a")) }
+        await Task.yield()
+        await store.refreshInsight(key: InsightKey(account: "B", seq: 1, state: .waiting), advice: nil, entries: [])
+        await a.value
+        XCTAssertNil(store.insight, "A's insight is not published once B is the key")
+        XCTAssertNil(store.insightBuiltFor)
+        XCTAssertNil(store.insight(forAccount: "B"))
+        // A box edit of the same account does the same: the build for the older version does not land on the newer one.
+        let b = Task { await store.refreshInsight(key: InsightKey(account: "B", seq: 2, state: .ready), advice: adv, entries: many(2_000, prefix: "b")) }
+        await Task.yield()
+        await store.refreshInsight(key: InsightKey(account: "B", seq: 3, state: .waiting), advice: nil, entries: [])
+        await b.value
+        XCTAssertNil(store.insight)
+    }
+
+    func testTheInsightIsReadOnlyForTheAccountItWasBuiltFor() async {
+        let store = BoxIndexStore(), (adv, es) = oneCopy()
+        await store.refreshInsight(key: InsightKey(account: "A", seq: 1, state: .ready), advice: adv, entries: es)
+        XCTAssertNotNil(store.insight(forAccount: "A"))
+        XCTAssertNil(store.insight(forAccount: "B"), "the view has switched to B before the store has: B must not read A's tags")
+        XCTAssertEqual(store.insightBuiltFor, InsightKey(account: "A", seq: 1, state: .ready))
+    }
+
+    /// The sections on a screen are the ones computed for its account and box version; those of the previous account stay in memory but are not shown.
+    func testSectionsWithAStaleKeyAreNotShown() {
+        XCTAssertTrue(BoxView.showsSections(computedFor: "A|1", current: "A|1"))
+        XCTAssertFalse(BoxView.showsSections(computedFor: "A|1", current: "B|1"), "another account's")
+        XCTAssertFalse(BoxView.showsSections(computedFor: "A|1", current: "A|2"), "an older box version")
+        XCTAssertFalse(BoxView.showsSections(computedFor: nil, current: "A|1"), "nothing computed yet")
+    }
+
+    // MARK: waiting
+
+    /// Cached advice at launch, or after a switch: the key is ready while the insight is not built yet. That is waiting ("…", "Working out…"), not "—".
+    func testReadyAdviceWithoutItsInsightIsWaiting() async {
+        let ready = InsightKey(account: "A", seq: 1, state: .ready)
+        XCTAssertTrue(ready.isWaiting(builtFor: nil), "cached advice at launch")
+        XCTAssertTrue(ready.isWaiting(builtFor: InsightKey(account: "A", seq: 0, state: .ready)), "an older version's insight is on show while this one is built")
+        XCTAssertTrue(ready.isWaiting(builtFor: InsightKey(account: "B", seq: 1, state: .ready)), "another account's")
+        XCTAssertFalse(ready.isWaiting(builtFor: ready), "built for this key")
+        XCTAssertTrue(InsightKey(account: "A", seq: 1, state: .waiting).isWaiting(builtFor: nil))
+        XCTAssertFalse(InsightKey(account: "A", seq: 1, state: .failed).isWaiting(builtFor: nil), "a failed advice never arrives")
+        // Through the store: waiting until the build lands, then not.
+        let store = BoxIndexStore(), (adv, es) = oneCopy()
+        XCTAssertTrue(ready.isWaiting(builtFor: store.insightBuiltFor))
+        await store.refreshInsight(key: ready, advice: adv, entries: es)
+        XCTAssertFalse(ready.isWaiting(builtFor: store.insightBuiltFor))
+        XCTAssertEqual(LeagueTiles.line(nil, waiting: ready.isWaiting(builtFor: nil)), "…")
+    }
+
+    // MARK: the tag lines live in the insight
+
+    /// A hand fix recalculates the advice (`.computing`) while the previous insight stays on show: its tags still have their lines and best-of areas, because they
+    /// are kept in the insight, not read from the advice.
+    func testATagStillHasItsLineWhileTheAdviceIsRecalculated() async {
+        let fit = BoxAdvice.Fit(area: "raids", tag: .ok, asName: "Eevee", tier: "A", reason: nil, species: nil, ivPercent: 98)
+        var adv = advice(["a": ["gl": R(options: [option("flareon", score: 93, pct: 97, rankPct: 95)])]])
+        adv.fit = ["a": ["raids": fit]]; adv.bestOf = ["a": ["raids"]]
+        let store = BoxIndexStore(), es = [entry("a", "Eevee")]
+        await store.refreshInsight(key: InsightKey(account: "A", seq: 1, state: .ready), advice: adv, entries: es)
+        // The advice for the edited version is being worked out: the key is waiting, the insight is kept.
+        let recalculating = InsightKey(account: "A", seq: 2, state: InsightKey.State(.computing))
+        await store.refreshInsight(key: recalculating, advice: nil, entries: es)
+        let insight = store.insight(forAccount: "A")
+        XCTAssertNotNil(insight)
+        XCTAssertEqual(insight?.copies["a"]?.line(.raids, pogoAssist: false), fit.line, "the activity tag's line")
+        XCTAssertNotNil(insight?.copies["a"]?.line(.gl, pogoAssist: false), "the league tag's line")
+        XCTAssertEqual(insight?.bestText(of: "a", title: "Eevee", .raids, pogoAssist: false), "best as Eevee", "the best-of area is kept too")
+        XCTAssertEqual(insight?.copies["a"]?.best.map(\.area), ["raids"])
     }
 }

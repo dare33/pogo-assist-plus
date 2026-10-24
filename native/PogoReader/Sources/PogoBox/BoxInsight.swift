@@ -34,6 +34,28 @@ public struct BoxInsight {
         public var slots: [LeaguePanel.Slot?]
         /// The fit tag in `areas` order; nil where the advice has none.
         public var fit: [LeaguePanel.Worth?]
+        /// The areas the advice calls this copy the best of its species for, each with the table entry it is rated as (a Shadow copy's name says so; nil for Max).
+        public var best: [BestTag] = []
+        /// The sentence a tap on the copy's tag opens, kept here with the tags so that a list rebuilt from this insight never needs the advice: in `areas` order,
+        /// and in the order of `slots`.
+        public var areaLines: [String?] = []
+        public var leagueLines: [String?] = []
+
+        public struct BestTag: Equatable {
+            public var area: String
+            public var asName: String?
+            public init(area: String, asName: String?) { self.area = area; self.asName = asName }
+        }
+
+        /// The line a tag for the chip opens: the activity's `fit` line, or the league card's tier-and-roll sentence; nil where the copy has no tag.
+        public func line(_ a: Activity, pogoAssist: Bool) -> String? {
+            if let league = a.league, let l = LeaguePanel.keys.firstIndex(of: league) {
+                let i = (pogoAssist ? 3 : 0) + l
+                return leagueLines.indices.contains(i) ? leagueLines[i] : nil
+            }
+            guard let i = a.area.flatMap({ BoxInsight.areas.firstIndex(of: $0) }) else { return nil }
+            return areaLines.indices.contains(i) ? areaLines[i] : nil
+        }
 
         public func slot(_ league: String, pogoAssist: Bool) -> LeaguePanel.Slot? {
             guard let l = LeaguePanel.keys.firstIndex(of: league) else { return nil }
@@ -75,6 +97,18 @@ public struct BoxInsight {
     /// The tag of a copy for a chip, nil when unknown.
     public func worth(of id: String, _ a: Activity, pogoAssist: Bool) -> LeaguePanel.Worth? { copies[id]?.worth(a, pogoAssist: pogoAssist) }
 
+    /// What a chip's merged tag adds once the copy is also its species' best for the same area: "best as Tyranitar (Shadow)" for an activity (the engine's own `as`
+    /// text, Shadow-suffixed), "best: Flareon 97.2%" for a league (the tile's member and roll). It carries no count: the engine ranks per resolved species, so a plain
+    /// and a Shadow copy of one title are each their own best. nil where the copy is not the best for it.
+    public func bestText(of id: String, title: String, _ a: Activity, pogoAssist: Bool) -> String? {
+        if let key = a.league {
+            guard tile(title: title, league: key, pogoAssist: pogoAssist)?.copyId == id, let slot = copies[id]?.slot(key, pogoAssist: pogoAssist), slot.status == .fits else { return nil }
+            return "best: \(slot.member)" + (slot.pct.map { " " + LeaguePanel.percent($0) } ?? "")
+        }
+        guard let b = copies[id]?.best.first(where: { $0.area == a.rawValue }) else { return nil }
+        return "best" + (b.asName.map { " as " + $0 } ?? "")
+    }
+
     /// 0 for Strong, 1 for OK, 2 for Weak or no tag: lower is better.
     static func worthRank(_ w: LeaguePanel.Worth?) -> Int { w == .strong ? 0 : w == .ok ? 1 : 2 }
 
@@ -90,17 +124,25 @@ public struct BoxInsight {
         for e in entries {
             let ratings = advice.leagues(for: e.id)
             var slots = [LeaguePanel.Slot?](repeating: nil, count: 6)
+            var leagueLines = [String?](repeating: nil, count: 6)
             for (l, key) in LeaguePanel.keys.enumerated() {
                 guard let r = ratings[key] else { continue }
-                slots[l] = LeaguePanel.slot(r, shown: LeaguePanel.shownIndex(r, pogoAssist: false), key: key)
-                slots[3 + l] = LeaguePanel.slot(r, shown: LeaguePanel.shownIndex(r, pogoAssist: true), key: key)
+                for (i, assist) in [(l, false), (3 + l, true)] {
+                    let shown = LeaguePanel.shownIndex(r, pogoAssist: assist)
+                    slots[i] = LeaguePanel.slot(r, shown: shown, key: key)
+                    let c = LeaguePanel.card(r, shown: shown, key: key, level: nil)
+                    leagueLines[i] = LeaguePanel.worthSentence(c, key: key) ?? c.blockedText
+                }
             }
             let fits = advice.fit(for: e.id)
             let fit: [LeaguePanel.Worth?] = areas.map { area in
                 guard let f = fits[area] else { return nil }
                 return f.tag == .strong ? .strong : f.tag == .ok ? .ok : .weak
             }
-            out.copies[e.id] = Copy(slots: slots, fit: fit)
+            let bestTags = advice.bestOf(for: e.id).map { area in
+                Copy.BestTag(area: area, asName: area == "max" ? nil : fits[area]?.asNameLabel(shadow: e.row.shadow == 1))
+            }
+            out.copies[e.id] = Copy(slots: slots, fit: fit, best: bestTags, areaLines: areas.map { fits[$0]?.line }, leagueLines: leagueLines)
 
             let title = e.row.title
             var b = best[title] ?? [Best?](repeating: nil, count: 6)

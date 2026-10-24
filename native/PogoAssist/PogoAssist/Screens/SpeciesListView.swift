@@ -24,11 +24,13 @@ struct SpeciesListView: View {
     private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }
     /// The activity chip the list was opened under (nil under All, To check and Fixed by hand).
     private var activity: BoxInsight.Activity? { if case .activity(let a) = route.chip { return a } else { return nil } }
-    private var readyAdvice: BoxAdvice? { if case .ready(let a) = model.advice { return a } else { return nil } }
+    /// The tags, tiles, lines and best-of areas all come from the insight, which holds them itself: a rebuild of the advice for the same account (a hand fix) leaves the
+    /// insight on show, and the tags and their lines with it, so nothing here reads the advice.
+    private var insight: BoxInsight? { store.insight(forAccount: model.account) }
 
     /// A copy's tag for the chip: the league's or the activity's. A copy over the cap for a league has no worth of its own and reads Weak; no tag where the copy has no rating.
     private func chipWorth(_ id: String) -> LeaguePanel.Worth? {
-        guard let a = activity, let copy = store.insight?.copies[id] else { return nil }
+        guard let a = activity, let copy = insight?.copies[id] else { return nil }
         if let w = copy.worth(a, pogoAssist: pogoAssist) { return w }
         return a.league.flatMap { copy.slot($0, pogoAssist: pogoAssist) } != nil ? .weak : nil
     }
@@ -37,17 +39,15 @@ struct SpeciesListView: View {
     /// reads as a ranking and the Weak copies are last.
     private var members: [Int] {
         let ms = index.members(of: route.title, query: route.query, chip: route.chip)
-        guard activity != nil, store.insight != nil else { return ms }
+        guard activity != nil, insight != nil else { return ms }
         func rank(_ i: Int) -> Int { switch chipWorth(index.items[i].id) { case .strong?: return 0; case .ok?: return 1; default: return 2 } }
         return ms.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
     }
 
-    /// How many copies of the species the box holds (the "best of 6" and the "3 of 6" count them all, whatever the search keeps).
-    private var copiesOfSpecies: Int { index.groups.first { $0.title == route.title }?.stats.count ?? 0 }
-
-    /// "Moltres · 6", or under an activity or league chip with its advice "Moltres · 3 of 6 for Raids": the copies that are Strong or OK for it, of those listed.
+    /// "Moltres · 6", or under an activity or league chip with its advice "Moltres · 3 of 6 for Raids": the copies that are Strong or OK for it, of those listed. Both
+    /// numbers count the listed copies, so with a search on, the 6 is what the search keeps, not what the box holds.
     private func headerTitle(_ ms: [Int]) -> String {
-        guard let a = activity, store.insight != nil else { return "\(route.title) · \(ms.count.formatted())" }
+        guard let a = activity, insight != nil else { return "\(route.title) · \(ms.count.formatted())" }
         let suit = ms.filter { chipWorth(index.items[$0].id).map { $0 == .strong || $0 == .ok } ?? false }.count
         return "\(route.title) · \(suit.formatted()) of \(ms.count.formatted()) for \(a.league != nil ? a.title + " League" : a.title)"
     }
@@ -108,15 +108,12 @@ struct SpeciesListView: View {
     /// "Best IVs first" on the left, the ranking switch and its "i" on the right, the explainer under them. The tags and the order follow the switch.
     private var sortLine: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // One line at the usual sizes, the label never shrinking or truncating (the switch drops its RANKING caption first, then wraps its own caption where it must, as in RankingControls); stacked from the accessibility sizes.
-            if typeSize.isAccessibilitySize {
+            // Chosen by the width that is there, at every text size: the label and the captioned switch on one line; else the label and the switch without its RANKING caption;
+            // else stacked. The label never shrinks or truncates.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { order; Spacer(minLength: 4); RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring") }
+                HStack(spacing: 8) { order; Spacer(minLength: 4); RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring", showsCaption: false) }
                 VStack(alignment: .leading, spacing: 0) { order; RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring") }
-            } else {
-                HStack(spacing: 8) {
-                    order.lineLimit(1).layoutPriority(1)
-                    Spacer(minLength: 4)
-                    RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring", captionDroppable: true)
-                }
             }
             if rankingInfo { RankingExplainer(identifier: "species-scoring-explainer").transition(.opacity) }
         }
@@ -125,10 +122,10 @@ struct SpeciesListView: View {
     }
 
     private var order: some View {
-        Label(activity.flatMap { a in store.insight == nil ? nil : "\(a.league != nil ? a.title + " League" : a.title) first" } ?? "Best IVs first", systemImage: "arrow.down").labelStyle(.titleAndIcon)
+        Label(activity.flatMap { a in insight == nil ? nil : "\(a.league != nil ? a.title + " League" : a.title) first" } ?? "Best IVs first", systemImage: "arrow.down").labelStyle(.titleAndIcon)
             .font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
             .frame(minHeight: 44, alignment: .leading)
-            .fixedSize(horizontal: true, vertical: false)
+            .lineLimit(1).fixedSize(horizontal: true, vertical: false)
             .accessibilityIdentifier("species-order")
     }
 
@@ -142,21 +139,18 @@ struct SpeciesListView: View {
     }
 
     /// The copy's tags: a league tag for each league it is the species' best for (the tile's copy), and an activity tag for each area the advisor rates it
-    /// the species' best for. Both follow the ranking where it matters (the leagues).
+    /// the species' best for. Both follow the ranking where it matters (the leagues). Read from the insight alone.
     private func bestTags(_ it: BoxIndex.Item) -> [TagItem] {
         var out = [TagItem]()
-        if let insight = store.insight, let copy = insight.copies[it.id] {
-            for key in LeaguePanel.keys {
-                guard insight.tile(title: route.title, league: key, pogoAssist: pogoAssist)?.copyId == it.id, let slot = copy.slot(key, pogoAssist: pogoAssist), slot.status == .fits,
-                      let a = BoxInsight.Activity(rawValue: key) else { continue }
-                out.append(TagItem(id: "\(it.id)|\(key)", kind: .league(key, a, slot.member, slot.pct.map(LeaguePanel.percent) ?? "")))
-            }
+        guard let insight, let copy = insight.copies[it.id] else { return out }
+        for key in LeaguePanel.keys {
+            guard insight.tile(title: route.title, league: key, pogoAssist: pogoAssist)?.copyId == it.id, let slot = copy.slot(key, pogoAssist: pogoAssist), slot.status == .fits,
+                  let a = BoxInsight.Activity(rawValue: key) else { continue }
+            out.append(TagItem(id: "\(it.id)|\(key)", kind: .league(key, a, slot.member, slot.pct.map(LeaguePanel.percent) ?? "")))
         }
-        if let advice = readyAdvice {
-            for area in advice.bestOf(for: it.id) {
-                guard let a = BoxInsight.Activity(rawValue: area) else { continue }
-                out.append(TagItem(id: "\(it.id)|\(area)", kind: .activity(a, area == "max" ? nil : advice.fit(for: it.id)[area]?.asNameLabel(shadow: it.shadow))))
-            }
+        for b in copy.best {
+            guard let a = BoxInsight.Activity(rawValue: b.area) else { continue }
+            out.append(TagItem(id: "\(it.id)|\(b.area)", kind: .activity(a, b.asName)))
         }
         return out
     }
@@ -183,28 +177,31 @@ struct SpeciesListView: View {
         }
     }
 
-    /// The sentence a tap on the chip's tag opens: the activity's `fit` line, or the league card's tier-and-roll sentence.
+    /// The sentence a tap on the chip's tag opens: the activity's `fit` line, or the league card's tier-and-roll sentence, both kept in the insight.
     private func tagLine(_ it: BoxIndex.Item, _ a: BoxInsight.Activity) -> String? {
-        guard let advice = readyAdvice else { return nil }
-        if let area = a.area { return advice.fit(for: it.id)[area]?.line }
-        guard let key = a.league, let r = advice.leagues(for: it.id)[key] else { return nil }
-        let c = LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist), key: key, level: nil)
-        return LeaguePanel.worthSentence(c, key: key) ?? c.blockedText
+        insight?.copies[it.id]?.line(a, pogoAssist: pogoAssist)
     }
 
-    /// The Strong / OK / Weak (or "Not rated") tag for the chosen activity, a button that opens its line (plain while Select mode is on, when a tap picks the row).
-    /// `bestOf` is the merged "best of N" when the copy is also the species' best for the same area.
-    @ViewBuilder private func statusTag(_ it: BoxIndex.Item, _ a: BoxInsight.Activity, _ w: LeaguePanel.Worth?, bestOf: Int?) -> some View {
+    /// The Strong / OK / Weak tag for the chosen activity, a button that opens its line (plain while Select mode is on, when a tap picks the row). `best` is the
+    /// merged "best as Tyranitar (Shadow)" when the copy is also the species' best for the same area. "Not rated" has no line to open, so it is plain text, not a button.
+    @ViewBuilder private func statusTag(_ it: BoxIndex.Item, _ a: BoxInsight.Activity, _ w: LeaguePanel.Worth?, best: String?) -> some View {
+        let spokenBest = best.map { ", " + $0 } ?? ""
         if selecting {
-            WorthTag(activity: a, worth: w, bestOf: bestOf).accessibilityHidden(true)
+            WorthTag(activity: a, worth: w, best: best).accessibilityHidden(true)
+        } else if w == nil {
+            WorthTag(activity: a, worth: w, best: best)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Not rated for \(a.title)" + spokenBest)
+                .accessibilityIdentifier("pokemon-tag-unrated")
         } else {
             Button { if lineOpen.contains(it.id) { lineOpen.remove(it.id) } else { lineOpen.insert(it.id) } } label: {
-                // The hit area is 44 pt tall (the chip is about 20) without changing the layout: padded out, shaped, then padded back.
-                WorthTag(activity: a, worth: w, bestOf: bestOf).padding(.vertical, 12).contentShape(Rectangle()).padding(.vertical, -12)
+                // The hit area grows by 6 pt above and below the chip (half the 12 pt gap between rows, so it never reaches the neighbour's chip or the IVs line):
+                // padded out, shaped, then padded back so the layout does not change. The chip is about 20 pt tall, so a tap lands within about 32 pt.
+                WorthTag(activity: a, worth: w, best: best).padding(.vertical, 6).contentShape(Rectangle()).padding(.vertical, -6)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(w?.label ?? "Not rated") for \(a.title)" + (bestOf.map { ", best of \($0)" } ?? ""))
-            .accessibilityHint(w == nil ? "" : "Shows why")
+            .accessibilityLabel("\(w?.label ?? "Not rated") for \(a.title)" + spokenBest)
+            .accessibilityHint("Shows why")
             .accessibilityValue(lineOpen.contains(it.id) ? (tagLine(it, a) ?? "") : "")
             .accessibilityAddTraits(lineOpen.contains(it.id) ? .isSelected : [])
             .accessibilityIdentifier("pokemon-tag")
@@ -242,9 +239,10 @@ struct SpeciesListView: View {
         let ivs = it.ivs.map { "\($0) · \(it.pct ?? 0)%" } ?? "IVs not read"
         let best = bestTags(it)
         // Under a chip with its advice every copy has a status tag (Strong, OK, Weak or Not rated). A "best for" tag for the same area is merged into it.
-        let status: (BoxInsight.Activity, LeaguePanel.Worth?)? = store.insight == nil ? nil : activity.map { ($0, chipWorth(it.id)) }
+        let status: (BoxInsight.Activity, LeaguePanel.Worth?)? = insight == nil ? nil : activity.map { ($0, chipWorth(it.id)) }
         let shown = best.filter { t in status.map { area(t) != $0.0 } ?? true }
-        let merged = shown.count != best.count
+        // The status tag and a "best for" tag of the same area are one chip: "RAIDS · OK · best as Tyranitar (Shadow)", "GL · Strong · best: Flareon 97.2%".
+        let mergedBest: String? = status.flatMap { insight?.bestText(of: it.id, title: route.title, $0.0, pogoAssist: pogoAssist) }
         var spoken = "\(it.title), \(it.cp > 0 ? "CP \(it.cp)" : "CP not known"), \(ivs)\(it.hasMega ? ", has a Mega form" : "")\(it.needsCheck ? ", to check" : "")\(it.fixed ? ", fixed by hand" : "")"
         // Select mode hides the tags from VoiceOver as separate elements, so the status is read with the row.
         if selecting, let (a, w) = status { spoken += ". \(w?.label ?? "Not rated") for \(a.title)" }
@@ -278,7 +276,7 @@ struct SpeciesListView: View {
                 .accessibilityLabel(spoken)
                 if status != nil || !best.isEmpty {
                     FlowLayout(spacing: 6) {
-                        if let (a, w) = status { statusTag(it, a, w, bestOf: merged ? copiesOfSpecies : nil).fixedSize(horizontal: true, vertical: false) }
+                        if let (a, w) = status { statusTag(it, a, w, best: mergedBest) }
                         ForEach(shown) { tagView($0).accessibilityHidden(true) }
                     }
                     if let (a, w) = status, w != nil, lineOpen.contains(it.id), !selecting, let line = tagLine(it, a) {
