@@ -288,7 +288,8 @@ public struct BoxAdvice: Codable, Equatable {
     /// `moves` (before, only the shown and experimental ones did). Advice cached at 2 to 8 has the old shape or the old rules, so it is dropped and recomputed too.
     /// Versions 10 and 11 were written by dev builds of a branch that carried interim payload fields (since removed), so they are taken: the next real
     /// bump must be 12 or higher, or such a cache would pass for the new shape (`loadAdvice` keeps any version at or above this one).
-    public static let currentVersion = 9
+    /// 12 since each Pokémon carries `fit` (a Strong / OK / Weak tag per Raids, Gym, Rocket and Max) and `bestOf` (the areas it is its species' best copy for).
+    public static let currentVersion = 12
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -328,7 +329,24 @@ public struct BoxAdvice: Codable, Equatable {
 
     public func leagues(for id: String) -> [String: LeagueRating] { leagues[id] ?? [:] }
 
-    private enum CodingKeys: String, CodingKey { case version, builds, gaps, duplicates, unresolved, spareBuilds, leagues }
+    /// How well one copy suits one non-league activity area, as `src/advise.js` `fit` says it: `tag` is "strong" (one of the copy's own builds
+    /// lists the area), "ok" (a table entry in reach and IVs of 80% or more) or "weak"; `asName` (JSON "as") is the member it is rated as.
+    public struct Fit: Codable, Equatable {
+        public var tag: String
+        public var asName: String?
+        public var tier: String?
+        public var line: String
+        private enum CodingKeys: String, CodingKey { case tag, asName = "as", tier, line }
+    }
+    /// entry id -> "raids" | "gym" | "rocket" | "max" -> that area's fit. Empty for an advice the JavaScript wrote without `fit`.
+    public var fit: [String: [String: Fit]] = [:]
+    /// entry id -> the areas this copy is the best of its species for (at most one copy per species per area).
+    public var bestOf: [String: [String]] = [:]
+
+    public func fit(for id: String) -> [String: Fit] { fit[id] ?? [:] }
+    public func bestOf(for id: String) -> [String] { bestOf[id] ?? [] }
+
+    private enum CodingKeys: String, CodingKey { case version, builds, gaps, duplicates, unresolved, spareBuilds, leagues, fit, bestOf }
 
     // MARK: - from the JavaScript's JSON
 
@@ -395,6 +413,20 @@ public struct BoxAdvice: Codable, Equatable {
                 byLeague[key] = rating
             }
             if !byLeague.isEmpty { out.leagues[eid] = byLeague }
+        }
+        // Optional: a report without `fit` / `bestOf` (older JavaScript) still decodes, with no tags.
+        for e in report["pokemon"]?.arrayValue ?? [] {
+            guard let eid = id(e["p"]) else { continue }
+            var fits = [String: Fit]()
+            if case .object(let areas)? = e["fit"] {
+                for (area, v) in areas {
+                    guard let tag = str(v["tag"]), let line = str(v["line"]) else { continue }
+                    fits[area] = Fit(tag: tag, asName: str(v["as"]), tier: str(v["tier"]), line: line)
+                }
+            }
+            if !fits.isEmpty { out.fit[eid] = fits }
+            let best = (e["bestOf"]?.arrayValue ?? []).compactMap { str($0) }
+            if !best.isEmpty { out.bestOf[eid] = best }
         }
         return out
     }
