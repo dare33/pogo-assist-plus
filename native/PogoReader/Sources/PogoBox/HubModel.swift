@@ -100,3 +100,38 @@ public enum HubModel {
         return words.isEmpty ? costShort(b) : "\(words) · \(costShort(b))"
     }
 }
+
+// MARK: the events strip
+
+extension HubModel {
+    /// The local calendar day as `yyyy-mm-dd`, the form the rotation and events carry.
+    public static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    /// The events whose last day is `today` or later, by first day (events starting the same day keep their order in the file).
+    public static func upcoming(_ events: [HubData.Event], today: String) -> [HubData.Event] {
+        events.enumerated().filter { $0.element.to >= today }
+            .sorted { ($0.element.from, $0.offset) < ($1.element.from, $1.offset) }.map(\.element)
+    }
+
+    private static let months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    private static func day(_ key: String) -> (d: Int, m: String)? {
+        let p = key.split(separator: "-")
+        guard p.count == 3, let m = Int(p[1]), let d = Int(p[2]), (1...12).contains(m) else { return nil }
+        return (d, months[m - 1])
+    }
+
+    /// An event's dates: `kicker` is the card's small caps line ("1 – 5 NOV", "28 OCT – 3 NOV", "21 NOV", "NOW TO 1 DEC" once it has begun),
+    /// `spoken` the same for VoiceOver ("1 to 5 November", "now to 1 December").
+    public static func span(from: String, to: String, today: String) -> (kicker: String, spoken: String) {
+        guard let f = day(from), let t = day(to) else { return ("", "") }
+        func short(_ x: (d: Int, m: String)) -> String { "\(x.d) \(x.m.prefix(3).uppercased())" }
+        func long(_ x: (d: Int, m: String)) -> String { "\(x.d) \(x.m)" }
+        if from < today { return ("NOW TO \(short(t))", "now to \(long(t))") }
+        if from == to { return (short(f), long(f)) }
+        if f.m == t.m { return ("\(f.d) – \(short(t))", "\(f.d) to \(long(t))") }
+        return ("\(short(f)) – \(short(t))", "\(long(f)) to \(long(t))")
+    }
+}

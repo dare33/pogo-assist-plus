@@ -92,4 +92,33 @@ final class HubModelTests: XCTestCase {
         XCTAssertEqual(HubModel.areaLabel(for: variant(b[4], areas: ["GL", "UL"], dust: 6_600)), "PvP · 6,600 dust")
         XCTAssertEqual(HubModel.areaLabel(for: variant(b[4], areas: ["Raids", "Rocket", "GL"], dust: 0, candy: 100)), "Raids, Rocket, PvP · 100 candy")
     }
+
+    func testEventsStripIsSortedAndDropsPastEvents() throws {
+        let events = try HubData.bundled().events
+        let today = "2026-10-25"
+        let strip = HubModel.upcoming(events, today: today)
+        XCTAssertEqual(strip.first?.title, "GO Battle League: Twilight Trails", "it began on 8 Sep and runs to 1 Dec")
+        XCTAssertFalse(strip.contains { $0.title == "Zorua Community Day" }, "10 Oct is past")
+        XCTAssertEqual(strip.map(\.from), strip.map(\.from).sorted())
+        XCTAssertEqual(strip.count, events.count - 1)
+        XCTAssertEqual(HubModel.upcoming(events, today: "2026-11-21").first?.title, "GO Battle League: Twilight Trails")
+        XCTAssertTrue(HubModel.upcoming(events, today: "2026-12-02").isEmpty)
+        // An event on its last day is still shown.
+        XCTAssertTrue(HubModel.upcoming(events, today: "2026-12-01").contains { $0.to == "2026-12-01" })
+    }
+
+    func testEventDates() {
+        let today = "2026-10-25"
+        XCTAssertEqual(HubModel.span(from: "2026-11-01", to: "2026-11-05", today: today).kicker, "1 – 5 NOV")
+        XCTAssertEqual(HubModel.span(from: "2026-11-01", to: "2026-11-05", today: today).spoken, "1 to 5 November")
+        XCTAssertEqual(HubModel.span(from: "2026-11-21", to: "2026-11-21", today: today).kicker, "21 NOV")
+        XCTAssertEqual(HubModel.span(from: "2026-09-08", to: "2026-12-01", today: today).kicker, "NOW TO 1 DEC")
+        XCTAssertEqual(HubModel.span(from: "2026-09-08", to: "2026-12-01", today: today).spoken, "now to 1 December")
+        XCTAssertEqual(HubModel.span(from: "2026-10-28", to: "2026-11-03", today: today).kicker, "28 OCT – 3 NOV")
+        XCTAssertEqual(HubModel.span(from: "2026-10-25", to: "2026-10-25", today: today).kicker, "25 OCT", "a one-day event today")
+        XCTAssertEqual(HubModel.span(from: "2026-10-25", to: "2026-10-27", today: today).kicker, "25 – 27 OCT", "starts today: not yet 'now to'")
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Australia/Sydney")!
+        let d = cal.date(from: DateComponents(year: 2026, month: 10, day: 25, hour: 23, minute: 30))!
+        XCTAssertEqual(HubModel.dayKey(d, calendar: cal), "2026-10-25")
+    }
 }
