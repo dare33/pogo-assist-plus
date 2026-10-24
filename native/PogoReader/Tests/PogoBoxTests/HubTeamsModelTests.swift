@@ -56,43 +56,83 @@ final class HubTeamsModelTests: XCTestCase {
         XCTAssertEqual(HubTeams.gymEmptyHints(builds: list, slots: 3), ["Power up Lapras", nil, nil])
     }
 
+    func testEmptyGymSlotsNameUnbuiltBuildsThenGymGaps() throws {
+        let a = try advice()
+        let unbuilt = variant(a.builds[3], id: "lapras", name: "Lapras", areas: ["Gym"], steps: [.init(kind: "powerUp")])
+        let gaps = [BoxAdvice.Gap(area: "Gym", section: nil, tier: "S", name: "Snorlax", obtain: nil, haveBase: false),
+                    BoxAdvice.Gap(area: "Max", section: nil, tier: "S", name: "Lapras", obtain: nil, haveBase: false),     // not a Gym gap
+                    BoxAdvice.Gap(area: "Gym", section: nil, tier: "B", name: "Slowbro", obtain: nil, haveBase: false),    // not S or A
+                    BoxAdvice.Gap(area: "Gym", section: nil, tier: "A", name: "Togekiss", obtain: nil, haveBase: false)]
+        XCTAssertEqual(HubTeams.gymEmptyHints(builds: [unbuilt], gaps: gaps, slots: 4), ["Power up Lapras", "Catch Snorlax", "Catch Togekiss", nil])
+        XCTAssertEqual(HubTeams.gymEmptyHints(builds: a.builds, gaps: a.gaps, slots: 2), ["Catch Blissey", "Catch Chansey"], "the fixture has no Gym build; its S gaps follow the report's order")
+    }
+
     // MARK: Rocket
 
     func testGiovanniOnTheFixture() throws {
-        let b = try advice().builds
+        let a = try advice(), b = a.builds
         let giovanni = hub.leaders.first { $0.name == "Giovanni" }!
-        // Slot 1 is Persian (Normal): the only Fighting counter in the box is Lucario, which still has to Mega evolve.
-        let team = HubTeams.leaderTeam(leader: giovanni, builds: b, gm: gm, hub: hub)
-        XCTAssertEqual(team.map(\.name), ["Lucario", "Staraptor", "Xerneas"])
-        XCTAssertEqual(team.map(\.gapText), ["gap: mega evolve Lucario", nil, "gap: power up Xerneas"])
-        XCTAssertEqual(team.map(\.isBuilt), [false, true, false])
-        // Lucario hits all three of slot 2 (Fighting beats Kangaskhan and Rhyperior, Steel beats Rhyperior) but is not built, so the built Staraptor
-        // (Flying beats Machamp) wins; with Staraptor taken, Lucario is the answer to be built.
-        XCTAssertEqual(HubTeams.counter(for: giovanni.slots[1], builds: b, gm: gm, hub: hub).name, "Staraptor")
-        XCTAssertEqual(HubTeams.counter(for: giovanni.slots[1], builds: b, gm: gm, hub: hub, excluding: ["staraptor"]), .toBuild(b[0]))
-        // Once it is built, slot 1 takes it as a built counter.
+        // Slot 2 (Kangaskhan, Rhyperior, Machamp): Lucario (S, not built) beats Kangaskhan and Rhyperior; Staraptor (B, built) beats Machamp only. Hits come first.
+        let slot2 = HubTeams.counter(for: giovanni.slots[1], builds: b, gm: gm, hub: hub)
+        XCTAssertEqual(slot2, .toBuild(b[0]))
+        XCTAssertEqual(HubTeams.beatsText(by: b[0], options: giovanni.slots[1], gm: gm, hub: hub), "beats Kangaskhan and Rhyperior")
+        XCTAssertEqual(HubTeams.beatsText(by: b[3], options: giovanni.slots[1], gm: gm, hub: hub), "beats Machamp only")
+        XCTAssertEqual(HubTeams.beatsText(by: b[0], options: giovanni.slots[0], gm: gm, hub: hub), "beats Persian")
+        // The team gives Lucario to slot 1 (the only Fighting counter), so slot 2 takes the next copy that hits most.
+        let team = HubTeams.leaderTeam(leader: giovanni, builds: b, gaps: a.gaps, gm: gm, hub: hub)
+        XCTAssertEqual(team.map(\.name), ["Lucario", "Zamazenta (Crowned Shield)", "Xerneas"])
+        XCTAssertEqual(team.map(\.gapText), ["gap: mega evolve Lucario", "gap: form change Zamazenta (Hero)", "gap: power up Xerneas"])
+        XCTAssertEqual(team.compactMap(\.build).map(\.entryId).count, Set(team.compactMap(\.build).map(\.entryId)).count, "a copy serves one slot")
+        // Once Lucario is built, slot 1 takes it as a built counter.
         var built = b; built[0].steps = []
         XCTAssertEqual(HubTeams.leaderTeam(leader: giovanni, builds: built, gm: gm, hub: hub).first, .built(built[0]))
     }
 
-    func testASlotWithNoCounterReadsDash() throws {
-        let cliff = hub.leaders.first { $0.name == "Cliff" }!   // slot 1 Cubone (Ground): nothing in the fixture box is Water, Grass or Ice
-        let team = HubTeams.leaderTeam(leader: cliff, builds: try advice().builds, gm: gm, hub: hub)
-        XCTAssertEqual(team.first, HubTeams.Counter.none)
-        XCTAssertEqual(team.first?.name, "—")
-        XCTAssertNil(team.first?.gapText)
+    func testACopyServesOneSlotButTwoCopiesOfASpeciesMayServeTwo() throws {
+        let b = try advice().builds
+        let giovanni = hub.leaders.first { $0.name == "Giovanni" }!
+        let lucario = variant(b[3], id: "lucario", name: "Lucario", areas: ["Rocket"], tier: "S", score: 9, built: true)
+        var twin = lucario; twin.entryId = "second-lucario"; twin.score = 8
+        let one = HubTeams.leaderTeam(leader: giovanni, builds: [lucario], gm: gm, hub: hub)
+        XCTAssertEqual(one.map(\.name), ["Lucario", "—", "—"], "one copy is not reused when nothing else will do")
+        let two = HubTeams.leaderTeam(leader: giovanni, builds: [lucario, twin], gm: gm, hub: hub)
+        XCTAssertEqual(two.compactMap(\.build).map(\.entryId), ["v-lucario", "second-lucario"])
     }
 
-    func testTheCounterThatHitsMostOptionsWinsAndTiesPreferRocket() throws {
-        let b = try advice().builds
-        let base = b[3]
-        let rhyperiorMachamp = hub.leaders.first { $0.name == "Giovanni" }!.slots[1]   // Kangaskhan, Rhyperior, Machamp
-        let water = variant(base, id: "swampert", name: "Swampert", areas: ["Raids"], tier: "S", score: 1)     // Water hits Rhyperior (Ground/Rock)
-        let fighting = variant(base, id: "lucario", name: "Lucario", areas: ["Raids"], tier: "B", score: 1, built: true)   // Fighting hits Kangaskhan, Rhyperior
-        XCTAssertEqual(HubTeams.counter(for: rhyperiorMachamp, builds: [water, fighting], gm: gm, hub: hub).name, "Lucario", "hits two options to one")
-        let rocketTwin = variant(fighting, id: "hariyama", name: "Hariyama", areas: ["Rocket"], tier: "B", score: 0.5)
-        XCTAssertEqual(HubTeams.counter(for: rhyperiorMachamp, builds: [fighting, rocketTwin], gm: gm, hub: hub).name, "Hariyama", "a tie goes to the Rocket area first")
-        XCTAssertEqual(HubTeams.counter(for: rhyperiorMachamp, builds: [variant(base, areas: ["Max"], built: true)], gm: gm, hub: hub), HubTeams.Counter.none, "Max alone is not a Rocket area")
+    func testASlotWithNoCounterTakesTheGapFallbackElseReadsDash() throws {
+        let a = try advice()
+        let cliff = hub.leaders.first { $0.name == "Cliff" }!   // slot 1 Cubone (Ground): nothing in the fixture box is Water, Grass or Ice
+        let bare = HubTeams.leaderTeam(leader: cliff, builds: a.builds, gm: gm, hub: hub)
+        XCTAssertEqual(bare.first, HubTeams.Counter.none)
+        XCTAssertEqual(bare.first?.name, "—")
+        XCTAssertNil(bare.first?.gapText)
+        // With the gaps: the first S gap of the Rocket area that a Water or Ground type fills (Swampert, Water/Ground).
+        let withGaps = HubTeams.leaderTeam(leader: cliff, builds: a.builds, gaps: a.gaps, gm: gm, hub: hub)
+        XCTAssertEqual(withGaps.first?.gapText, "gap: Swampert")
+        XCTAssertEqual(withGaps.first?.name, "—")
+    }
+
+    func testSlotRankingHitsThenBuiltThenRocketThenTierThenScore() throws {
+        let base = try advice().builds[3]
+        let slot = hub.leaders.first { $0.name == "Giovanni" }!.slots[1]   // Kangaskhan (Normal), Rhyperior (Rock/Ground), Machamp (Fighting)
+        func pick(_ list: [BoxAdvice.Build]) -> String { HubTeams.counter(for: slot, builds: list, gm: gm, hub: hub).name }
+        let three = variant(base, id: "hawlucha", name: "Hawlucha", areas: ["Raids"], tier: "B", score: 1, steps: [.init(kind: "powerUp")])   // Fighting/Flying: all 3, not built
+        let water = variant(base, id: "swampert", name: "Swampert", areas: ["Raids"], tier: "S", score: 9, built: true)                       // Rhyperior only, built
+        XCTAssertEqual(HubTeams.beatsText(by: three, options: slot, gm: gm, hub: hub), "beats all 3")
+        XCTAssertEqual(pick([water, three]), "Hawlucha", "the most options beaten comes before built, tier and score")
+        let fighting = variant(base, id: "lucario", name: "Lucario", areas: ["Raids"], tier: "B", score: 1, steps: [.init(kind: "powerUp")])   // Kangaskhan and Rhyperior
+        let fightingBuilt = variant(fighting, id: "hariyama", name: "Hariyama", steps: [])
+        XCTAssertEqual(pick([fightingBuilt, three]), "Hawlucha")
+        let sameHits = variant(fighting, id: "heracross", name: "Heracross", steps: [])        // 2 hits, built
+        let sameHitsUnbuilt = variant(fighting, id: "hariyama", name: "Hariyama", steps: [.init(kind: "powerUp")])
+        XCTAssertEqual(pick([sameHitsUnbuilt, sameHits]), "Heracross", "at equal hits a built copy wins")
+        let rocket = variant(sameHits, id: "machamp", name: "Machamp", areas: ["Rocket"])
+        XCTAssertEqual(pick([sameHits, rocket]), "Machamp", "then the Rocket area")
+        let tierS = variant(sameHits, id: "conkeldurr", name: "Conkeldurr", tier: "S", score: 0.1)
+        XCTAssertEqual(pick([sameHits, tierS]), "Conkeldurr", "then tier")
+        let scored = variant(sameHits, id: "blaziken", name: "Blaziken", score: 9)
+        XCTAssertEqual(pick([sameHits, scored]), "Blaziken", "then score")
+        XCTAssertEqual(HubTeams.counter(for: slot, builds: [variant(base, areas: ["Max"], built: true)], gm: gm, hub: hub), HubTeams.Counter.none, "Max alone is not a Rocket area")
     }
 
     func testGruntCounters() throws {
@@ -105,23 +145,39 @@ final class HubTeamsModelTests: XCTestCase {
         XCTAssertEqual(g.name, "Swampert")
         XCTAssertEqual(c("fire").gapText, "gap: Swampert")
         XCTAssertEqual(c("fire").name, "—")
-        // Grass grunt: Staraptor (Flying) is built.
-        XCTAssertEqual(c("grass"), .built(a.builds[3]))
-        // Normal grunt: Lucario (Fighting) still has to Mega evolve.
+        XCTAssertEqual(c("grass"), .built(a.builds[3]), "Staraptor (Flying) is built")
         XCTAssertEqual(c("normal"), .toBuild(a.builds[0]))
         XCTAssertEqual(c("normal").gapText, "gap: mega evolve Lucario")
-        // Built beats unbuilt even when the unbuilt one is better ranked: Staraptor (Flying) and Lucario (Fighting) both answer Bug.
-        XCTAssertEqual(c("bug"), .built(a.builds[3]))
-        // Nothing, with no gap either.
+        XCTAssertEqual(c("bug"), .built(a.builds[3]), "built beats unbuilt")
         XCTAssertEqual(c("fire", gaps: []), HubTeams.Counter.none)
-        // The pupitar case from the design: a build still to evolve.
         let pupitar = variant(a.builds[3], id: "tyranitar", name: "Tyranitar", areas: ["Rocket"], tier: "S", steps: [.init(kind: "evolve", to: "Tyranitar")])
         var named = pupitar; named.title = "Pupitar"
         XCTAssertEqual(c("psychic", [named]).gapText, "gap: evolve Pupitar")   // Dark answers Psychic
-        // Rocket area beats Raids at the same standing.
         let raid = variant(a.builds[3], id: "tyranitar", name: "Tyranitar", areas: ["Raids"], tier: "S", score: 99, built: true)
         let rocket = variant(a.builds[3], id: "honchkrow", name: "Honchkrow", areas: ["Rocket"], tier: "B", score: 1, built: true)
-        XCTAssertEqual(c("psychic", [raid, rocket]).name, "Honchkrow")
+        XCTAssertEqual(c("psychic", [raid, rocket]).name, "Honchkrow", "Rocket area beats Raids at the same standing")
+    }
+
+    func testGapFallbackFiltersByTierAreaAndTakesTypesFromTheSpeciesId() throws {
+        func gap(_ name: String, _ id: String?, tier: String = "S", area: String = "Rocket") -> BoxAdvice.Gap {
+            BoxAdvice.Gap(area: area, section: nil, tier: tier, name: name, obtain: nil, haveBase: false, speciesId: id)
+        }
+        func fire(_ gaps: [BoxAdvice.Gap]) -> HubTeams.Counter { HubTeams.gruntCounter(type: "fire", builds: [], gaps: gaps, gm: gm, hub: hub) }
+        XCTAssertEqual(fire([gap("Swampert", "swampert", tier: "B")]), HubTeams.Counter.none, "a B gap is not offered")
+        XCTAssertEqual(fire([gap("Swampert", "swampert", area: "Gym")]), HubTeams.Counter.none, "only the Rocket and Raids areas")
+        XCTAssertEqual(fire([gap("Machamp", "machamp")]), HubTeams.Counter.none, "a Fighting type does not beat Fire")
+        XCTAssertEqual(fire([gap("Swampert", "swampert", tier: "A")]).gapText, "gap: Swampert", "an A gap is")
+        XCTAssertEqual(fire([gap("Swampert", "swampert", tier: "A"), gap("Rhyperior", "rhyperior", tier: "S")]).gapText, "gap: Rhyperior", "S before A")
+        XCTAssertEqual(fire([gap("Rhyperior", "rhyperior", area: "Raids"), gap("Swampert", "swampert")]).gapText, "gap: Swampert", "Rocket area before Raids")
+        // The id decides, not the words in the name: a Mega's own types, and a name that is no species at all.
+        XCTAssertEqual(fire([gap("Mega Garchomp", "garchomp_mega", area: "Raids")]).gapText, "gap: Mega Garchomp", "Ground/Dragon Mega beats Fire")
+        XCTAssertEqual(fire([gap("Shadow Swampert", "swampert_shadow")]).gapText, "gap: Shadow Swampert")
+        XCTAssertEqual(fire([gap("Not A Species", "swampert")]).gapText, "gap: Not A Species")
+        XCTAssertEqual(fire([gap("Swampert", nil)]).gapText, "gap: Swampert", "no id: the name")
+        XCTAssertEqual(fire([gap("Shadow Swampert", nil)]), HubTeams.Counter.none, "no id and no such name: skipped")
+        // A report cached before the engine sent ids decodes with none.
+        let old = #"{"area":"Rocket","tier":"S","name":"Swampert","haveBase":false}"#.data(using: .utf8)!
+        XCTAssertNil(try JSONDecoder().decode(BoxAdvice.Gap.self, from: old).speciesId)
     }
 
     func testTypelessGruntsGetNoCounter() throws {
@@ -136,30 +192,33 @@ final class HubTeamsModelTests: XCTestCase {
 
     // MARK: PvP
 
-    private func rating(_ id: String, _ name: String, score: Double, ivRank: Int, over: Bool = false, selfName: String? = nil) -> BoxAdvice.LeagueRating {
-        let option = BoxAdvice.LeagueRating.Option(speciesId: id, name: name, isSelf: selfName == nil, strength: .init(score: score, rank: 5, of: 200), moves: nil,
+    private func rating(_ id: String, _ name: String, score: Double, ivRank: Int, over: Bool = false, selfName: String? = nil, gender: String? = nil) -> BoxAdvice.LeagueRating {
+        let option = BoxAdvice.LeagueRating.Option(speciesId: id, name: name, isSelf: selfName == nil, genderLocked: gender, strength: .init(score: score, rank: 5, of: 200), moves: nil,
                                                     iv: .init(rank: ivRank, pct: 97.5, rankPct: 99, level: 25, cp: 1490), overCap: over)
         guard let selfName else { return .init(options: [option]) }
         return .init(options: [.init(speciesId: "x", name: selfName, isSelf: true), option], pick: 1)
     }
 
-    func testTheFixtureHasMasterLeagueCandidatesOnly() throws {
+    func testTheFixtureCandidates() throws {
         let a = try advice()
-        XCTAssertTrue(HubTeams.candidates(league: "gl", advice: a).isEmpty, "no fixture copy reaches the B floor (88) in Great League")
-        XCTAssertTrue(HubTeams.candidates(league: "ul", advice: a).isEmpty)
+        let gl = HubTeams.candidates(league: "gl", advice: a), ul = HubTeams.candidates(league: "ul", advice: a)
         let ml = HubTeams.candidates(league: "ml", advice: a)
         XCTAssertEqual(ml.map(\.name), ["Xerneas", "Zamazenta (Crowned Shield)"])
         XCTAssertEqual(ml.map(\.score), [94.0, 92.2])
         XCTAssertEqual(ml.map(\.ivRank), [249, 339])
         XCTAssertEqual(ml.map(\.tier), ["S", "S"])
         XCTAssertEqual(ml.map(\.fromText), [nil, "From Zamazenta (Hero)"])
+        XCTAssertEqual(ml.map(\.stateText), ["To build", "To build"], "Xerneas still has steps to do; Zamazenta is a form change")
         XCTAssertEqual(ml[0].subText, "#249 · 95.8%")
+        XCTAssertTrue(gl.allSatisfy { $0.score >= 80 } && ul.allSatisfy { $0.score >= 80 })
         let team = HubTeams.suggestedTeam(candidates: ml, gm: gm, hub: hub)
         XCTAssertEqual(team.map(\.name), ["Xerneas", "Zamazenta (Crowned Shield)"], "only two candidates, so a team of two")
         // Fairy: Fighting, Dragon, Dark. Fighting: Normal, Ice, Rock, Dark, Steel. Steel: Ice, Rock, Fairy. Eight different types.
         XCTAssertEqual(HubTeams.coverage(team: team, gm: gm, hub: hub), 8)
         XCTAssertEqual(HubTeams.weaknessNote(team: team, candidates: ml, gm: gm, hub: hub), "No shared weakness.")
         XCTAssertTrue(HubTeams.others(candidates: ml, team: team).isEmpty)
+        XCTAssertEqual(HubTeams.weaknessNote(team: [team[0]], gm: gm, hub: hub), "", "a team of one has no shared weakness to name")
+        XCTAssertEqual(HubTeams.weaknessNote(team: [], gm: gm, hub: hub), "")
     }
 
     func testCandidatesFilterSortAndKeepTheBestCopyPerSpecies() {
@@ -167,15 +226,41 @@ final class HubTeamsModelTests: XCTestCase {
         a.leagues = ["c1": ["gl": rating("azumarill", "Azumarill", score: 96, ivRank: 40)],
                      "c2": ["gl": rating("azumarill", "Azumarill", score: 96, ivRank: 10)],        // the better copy of the same species
                      "c3": ["gl": rating("medicham", "Medicham", score: 96, ivRank: 30)],           // ties on score; IV rank 30 is worse than Azumarill's 10
-                     "c4": ["gl": rating("skarmory", "Skarmory", score: 87.9, ivRank: 1)],          // under the B floor
+                     "c4": ["gl": rating("skarmory", "Skarmory", score: 79.9, ivRank: 1)],          // under the candidate floor
                      "c5": ["gl": rating("registeel", "Registeel", score: 99, ivRank: 1, over: true)],   // past the cap
-                     "c6": ["gl": rating("swampert", "Swampert", score: 91, ivRank: 7, selfName: "Mudkip")]]
+                     "c6": ["gl": rating("swampert", "Swampert", score: 91, ivRank: 7, selfName: "Mudkip")],
+                     "c7": ["gl": rating("lanturn", "Lanturn", score: 80, ivRank: 7)],              // the floor itself is in, with no tier chip
+                     "c8": ["gl": rating("hypno", "Hypno", score: 89, ivRank: 7)]]
         let c = HubTeams.candidates(league: "gl", advice: a)
-        XCTAssertEqual(c.map(\.name), ["Azumarill", "Medicham", "Swampert"])
-        XCTAssertEqual(c.map(\.entryId), ["c2", "c3", "c6"])
-        XCTAssertEqual(c.map(\.tier), ["S", "S", "A"])
+        XCTAssertEqual(c.map(\.name), ["Azumarill", "Medicham", "Swampert", "Hypno", "Lanturn"])
+        XCTAssertEqual(c.map(\.entryId), ["c2", "c3", "c6", "c8", "c7"])
+        XCTAssertEqual(c.map(\.tier), ["S", "S", "A", "B", ""])
         XCTAssertEqual(c[2].fromText, "From Mudkip")
         XCTAssertEqual(HubTeams.tier(score: 88), "B"); XCTAssertEqual(HubTeams.tier(score: 90), "A"); XCTAssertEqual(HubTeams.tier(score: 92), "S"); XCTAssertEqual(HubTeams.tier(score: 87.99), "")
+    }
+
+    func testTheRankingSwitchChoosesTheShownOption() {
+        // Pick 0 is Azumarill (91); the experimental member is Medicham (95).
+        let first = rating("azumarill", "Azumarill", score: 91, ivRank: 4)
+        let second = rating("medicham", "Medicham", score: 95, ivRank: 9)
+        var a = BoxAdvice()
+        a.leagues = ["c": ["gl": .init(options: first.options + second.options, pick: 0, experimental: 1)]]
+        XCTAssertEqual(HubTeams.candidates(league: "gl", advice: a, pogoAssist: false).map(\.name), ["Azumarill"])
+        XCTAssertEqual(HubTeams.candidates(league: "gl", advice: a, pogoAssist: true).map(\.name), ["Medicham"])
+        XCTAssertEqual(HubTeams.candidates(league: "gl", advice: a, pogoAssist: true).first?.score, 95)
+    }
+
+    func testToBuildAndBuiltStates() throws {
+        var a = try advice()
+        a.leagues = ["e0": ["gl": rating("staraptor", "Staraptor", score: 90, ivRank: 1)],                             // built copy, itself
+                     "e1": ["gl": rating("lucario", "Lucario", score: 89, ivRank: 1)],                                 // itself, but its build still has steps
+                     "free": ["gl": rating("azumarill", "Azumarill", score: 88, ivRank: 1)],                           // itself, no build at all
+                     "evo": ["gl": rating("gallade", "Gallade", score: 87, ivRank: 1, selfName: "Kirlia", gender: "male")]]   // an evolution of the copy
+        let c = HubTeams.candidates(league: "gl", advice: a)
+        XCTAssertEqual(c.map(\.name), ["Staraptor", "Lucario", "Azumarill", "Gallade"])
+        XCTAssertEqual(c.map(\.stateText), ["Built", "To build", "Built", "To build"])
+        XCTAssertEqual(c.map(\.displayName), ["Staraptor", "Lucario", "Azumarill", "Gallade, if it is male"])
+        XCTAssertEqual(c[3].fromText, "From Kirlia")
     }
 
     func testSuggestedTeamAddsTheMostNewTypesAndNotesSharedWeakness() {
@@ -193,22 +278,43 @@ final class HubTeamsModelTests: XCTestCase {
         XCTAssertEqual(HubTeams.others(candidates: c, team: team).map(\.name), ["Metagross"])
         XCTAssertEqual(HubTeams.weaknessNote(team: team, gm: gm, hub: hub), "No shared weakness.")
         // Zamazenta (Fire, Ground, Fighting, Flying, Psychic, Fairy) and Metagross (Fire, Ground, Ghost, Dark) share Fire and Ground.
-        let pair = [c[1], c[3]]
-        XCTAssertEqual(HubTeams.weaknessNote(team: pair, gm: gm, hub: hub), "Weak to Fire and Ground.")
+        XCTAssertEqual(HubTeams.weaknessNote(team: [c[1], c[3]], gm: gm, hub: hub), "Weak to Fire and Ground.")
+    }
+
+    func testTheTieBreakIsTheBetterScore() {
+        // After Xerneas, Lucario and Zamazenta (Crowned Shield) are both Fighting/Steel and add the same five types: the better score is taken.
+        var a = BoxAdvice()
+        a.leagues = ["x": ["gl": rating("xerneas", "Xerneas", score: 99, ivRank: 1)],
+                     "l": ["gl": rating("lucario", "Lucario", score: 95, ivRank: 1)],
+                     "z": ["gl": rating("zamazenta_crowned_shield", "Zamazenta (Crowned Shield)", score: 94, ivRank: 1)]]
+        let c = HubTeams.candidates(league: "gl", advice: a)
+        XCTAssertEqual(HubTeams.suggestedTeam(candidates: c, gm: gm, hub: hub).map(\.name), ["Xerneas", "Lucario", "Zamazenta (Crowned Shield)"])
+        // And a lower-scored candidate adding more beats a higher-scored one adding less.
+        a.leagues["s"] = ["gl": rating("swampert", "Swampert", score: 80, ivRank: 1)]
+        XCTAssertEqual(HubTeams.suggestedTeam(candidates: HubTeams.candidates(league: "gl", advice: a), gm: gm, hub: hub).map(\.name).prefix(2), ["Xerneas", "Swampert"])
     }
 
     func testTheSwapNote() {
         var a = BoxAdvice()
         a.leagues = ["x": ["gl": rating("xerneas", "Xerneas", score: 99, ivRank: 1)],
-                     "z": ["gl": rating("zamazenta_crowned_shield", "Zamazenta (Crowned Shield)", score: 95, ivRank: 1)],
-                     "m": ["gl": rating("metagross", "Metagross", score: 94, ivRank: 1)],
-                     "s": ["gl": rating("swampert", "Swampert", score: 90, ivRank: 1)]]
+                     "m": ["gl": rating("metagross", "Metagross", score: 95, ivRank: 1)],
+                     "z": ["gl": rating("zamazenta_crowned_shield", "Zamazenta (Crowned Shield)", score: 94, ivRank: 1)],
+                     "c": ["gl": rating("charizard", "Charizard", score: 92, ivRank: 1)],      // covers Grass and Bug: 10 types
+                     "s": ["gl": rating("swampert", "Swampert", score: 90, ivRank: 1)]]       // covers Fire, Electric, Ground, Poison: 12 types
         let c = HubTeams.candidates(league: "gl", advice: a)
-        // A hand-picked team (not the greedy one) so a swap helps: Xerneas, Zamazenta, Metagross cover Fighting, Dragon, Dark, Normal, Ice, Rock, Steel, Fairy, Poison = 9.
-        let team = [c[0], c[1], c[2]]
+        func at(_ names: [String]) -> [HubTeams.Candidate] { names.map { n in c.first { $0.name == n }! } }
+        // The lead is never the one to go, and the lowest-scored of the others is: Zamazenta (94) rather than Metagross (95); the better of the
+        // two improving candidates is named even though the other has the higher score.
+        let team = at(["Xerneas", "Metagross", "Zamazenta (Crowned Shield)"])
         XCTAssertEqual(HubTeams.coverage(team: team, gm: gm, hub: hub), 9)
-        let note = HubTeams.weaknessNote(team: team, candidates: c, gm: gm, hub: hub)
-        // Swampert covers Fire, Ground, Electric as well as Rock, Poison, Steel: swapping out the lower-ranked of the two non-lead members gains the most.
-        XCTAssertTrue(note.hasSuffix("Swapping Metagross for Swampert covers Fire, Electric and Ground."), note)
+        XCTAssertTrue(HubTeams.weaknessNote(team: team, candidates: c, gm: gm, hub: hub).hasSuffix("Swapping Zamazenta (Crowned Shield) for Swampert covers Fire, Electric and Ground."),
+                      HubTeams.weaknessNote(team: team, candidates: c, gm: gm, hub: hub))
+        // A lead that scores lowest still stays: the lowest-scored of the rest (Metagross, 95) goes.
+        let odd = at(["Zamazenta (Crowned Shield)", "Metagross", "Xerneas"])
+        let note = HubTeams.weaknessNote(team: odd, candidates: c, gm: gm, hub: hub)
+        XCTAssertTrue(note.contains("Swapping Metagross for "), note)
+        XCTAssertFalse(note.contains("Swapping Zamazenta"), note)
+        // No candidate outside the team: no swap sentence.
+        XCTAssertFalse(HubTeams.weaknessNote(team: team, candidates: team, gm: gm, hub: hub).contains("Swapping"))
     }
 }

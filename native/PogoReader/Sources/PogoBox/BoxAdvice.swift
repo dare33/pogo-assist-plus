@@ -122,6 +122,8 @@ public struct BoxAdvice: Codable, Equatable {
         public var name: String
         public var obtain: String?
         public var haveBase: Bool
+        /// The game master id of the species the table names (Megas and forms included); nil in an advice cached before the engine sent it.
+        public var speciesId: String? = nil
     }
 
     public struct Duplicate: Codable, Equatable, Identifiable {
@@ -373,7 +375,7 @@ public struct BoxAdvice: Codable, Equatable {
         }
         for g in report["gaps"]?.arrayValue ?? [] {
             out.gaps.append(Gap(area: areaLabel[str(g["area"]) ?? ""] ?? str(g["area"]) ?? "", section: str(g["section"]), tier: str(g["tier"]) ?? "", name: str(g["name"]) ?? "?",
-                                obtain: str(g["obtain"]), haveBase: bool(g["haveBase"])))
+                                obtain: str(g["obtain"]), haveBase: bool(g["haveBase"]), speciesId: str(g["speciesId"])))
         }
         for h in report["hygiene"]?.arrayValue ?? [] {
             func line(_ p: JSONValue) -> String {
