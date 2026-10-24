@@ -319,8 +319,9 @@ export function analyseBox(box, ctx) {
   }
   hygiene.sort((a, b) => b.transfer.length - a.transfer.length);
 
-  // Fit: per copy and non-league area, Strong / OK / Weak, so a list can filter by activity. Strong is the copy's own build; OK is a table
-  // entry in its reach on a decently rolled copy; both are read off the same reach and builds as above, so nothing here feeds back into them.
+  // Fit: per copy and non-league area, Strong / OK / Weak, so a list can filter by activity. The tag is worth alone, free of cost: a table
+  // entry in the copy's reach on a decently rolled copy (S tier is Strong, A or B is OK). The advisor's build is a separate marker on the copy
+  // that carries it. Everything is read off the same reach and builds as above, so nothing here feeds back into them.
   const entriesBy = Object.fromEntries(FIT_AREAS.map((a) => [a, new Map()])); // area -> speciesId -> S/A/B entries
   for (const e of tiers.entries) {
     if (!entriesBy[e.area] || !TIER_W[e.tier]) continue;
@@ -349,35 +350,31 @@ export function analyseBox(box, ctx) {
     entry.fit = {};
     for (const area of FIT_AREAS) {
       const label = AREA_LABEL[area], dyn = area === 'max' ? ' (needs a Dynamax copy)' : '';
-      let strong = null;
-      for (const b of myBuilds) {
-        if (!b.areas.includes(area)) continue;
-        // The build's best-tier hit in the area names the entry (as an OK copy's does); the build's target name only if no hit is found.
-        const hit = b.hits.filter((h) => h.area === area).reduce((best, h) => (TIER_W[h.tier] > (TIER_W[best?.tier] ?? 0) ? h : best), null);
-        const t = hit?.tier ?? null;
-        if (!strong || (TIER_W[t] ?? 0) > (TIER_W[strong.tier] ?? 0)) strong = { as: hit?.name ?? b.targetName, tier: t };
-      }
+      // The advisor's primary build for the area: the first listed (builds are in score order). It is a separate marker, not the tag: the
+      // tag is worth alone, the build adds ease of completion (cost) to it, and the two are advice of different kinds.
+      const mine = myBuilds.find((b) => b.areas.includes(area));
+      const buildMark = mine ? { build: true, buildAs: mine.targetName, buildCost: { dust: mine.cost.dust, candy: mine.cost.candy, xl: mine.cost.xl } } : { build: false };
       // Three entries (Shadow Pheromosa, Roserade, Giratina Origin) are shadow-flagged yet keep the plain species id: not for a plain copy.
       let reachBest = null;
       for (const id of members) for (const e of entriesBy[area].get(id) ?? []) if (!(e.flags?.shadow && !p.shadow) && (!reachBest || TIER_W[e.tier] > TIER_W[reachBest.tier])) reachBest = e;
       // reason: a short code the bridge carries instead of the sentence (the app composes it): none, shadowNoMega, ivUnknown, iv.
-      const weak = (reason, line, extra) => ({ tag: 'weak', as: null, tier: null, reason, line, ...extra });
+      const weak = (reason, line, extra) => ({ tag: 'weak', as: null, tier: null, reason, line, ...extra, ...buildMark });
       // A Shadow copy whose only entries here are Mega ones: say so rather than that there is no entry.
       const megaOnly = p.shadow && !reachBest && reach.some((id) => megaIdsOf(gm, id).some((m) => entriesBy[area].has(m)));
-      if (strong) entry.fit[area] = { tag: 'strong', as: strong.as, tier: strong.tier ?? reachBest?.tier ?? null, line: `${label}${strong.tier ? ` ${strong.tier}` : ''} as ${strong.as}${dyn}` };
-      else if (megaOnly) entry.fit[area] = weak('shadowNoMega', 'A Shadow copy cannot Mega evolve');
-      else if (!reachBest) entry.fit[area] = weak('none', `No table entry for ${family} in ${label}`);
+      if (megaOnly) entry.fit[area] = weak('shadowNoMega', 'A Shadow copy cannot Mega evolve');
+      else if (!reachBest) entry.fit[area] = weak('none', `No table entry for ${family} in ${label}`, { species: family });
       else if (ivPct == null) entry.fit[area] = weak('ivUnknown', 'IVs not known');
       else if (ivPct < FIT_IV_PCT) entry.fit[area] = weak('iv', `IVs ${Number(ivPct.toFixed(1))}%, below ${FIT_IV_PCT}%`, { ivPct: Number(ivPct.toFixed(1)) });
-      else entry.fit[area] = { tag: 'ok', as: reachBest.name, tier: reachBest.tier, line: `${label} ${reachBest.tier} as ${reachBest.name}${dyn}` };
+      else entry.fit[area] = { tag: reachBest.tier === 'S' ? 'strong' : 'ok', as: reachBest.name, tier: reachBest.tier, line: `${label} ${reachBest.tier} as ${reachBest.name}${dyn}`, ...buildMark };
     }
   }
-  // Best copy of each species per area: strong before ok, then IV %, then CP, then input order. Species grouped as hygiene groups them.
+  // Best copy of each species per area, among the strong and ok ones: tier (S over A over B), then IV %, then CP, then input order. Cost-free,
+  // so the advisor's build does not enter. Species grouped as hygiene groups them.
   const fitGroups = new Map();
   for (const e of pokemon) { if (e.unresolved) continue; e.bestOf = []; const k = e.resolved.speciesId; if (!fitGroups.has(k)) fitGroups.set(k, []); fitGroups.get(k).push(e); }
   for (const es of fitGroups.values()) {
     for (const area of FIT_AREAS) {
-      const rate = (e) => (e.fit[area].tag === 'strong' ? 2 : e.fit[area].tag === 'ok' ? 1 : 0);
+      const rate = (e) => (e.fit[area].tag === 'weak' ? 0 : TIER_W[e.fit[area].tier]);
       const iv = (e) => ivPcts.get(e) ?? 0;
       const beats = (e, a) => rate(e) > rate(a) || (rate(e) === rate(a) && (iv(e) > iv(a) || (iv(e) === iv(a) && e.p.cp > a.p.cp)));
       let best = null;
