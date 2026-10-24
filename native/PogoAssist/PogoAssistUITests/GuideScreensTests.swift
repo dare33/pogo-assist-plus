@@ -160,20 +160,32 @@ final class GuideScreensTests: XCTestCase {
         for mode in ["light", "dark"] { try settingsInfoTour(["-appearance", mode], tag: mode) }
     }
 
-    /// The same at the AX3 text size: no word breaks mid-word, the "i" stays beside the title (read from the screenshots).
+    /// The same at AX3 (UICTContentSizeCategoryAccessibilityXL; M is AX1, L AX2): no word breaks mid-word, the Mega "i" stays beside its title (read from the screenshots).
     func testSettingsInfoRowsLargeText() throws {
-        try settingsInfoTour(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"], tag: "ax3")
+        try settingsInfoTour(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"], tag: "ax3")
     }
 
-    private func settingsInfoTour(_ extra: [String], tag: String) throws {
+    /// The same at AX5 (UICTContentSizeCategoryAccessibilityXXXL), where the Mega title is most likely to wrap.
+    func testSettingsInfoRowsLargestText() throws {
+        try settingsInfoTour(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"], tag: "ax5", createFirst: true)
+    }
+
+    /// `createFirst`: the account is made at the normal text size and the app relaunched at the large one with the account kept (the first screen does not fit at AX5).
+    private func settingsInfoTour(_ extra: [String], tag: String, createFirst: Bool = false) throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-uitest-reset"] + extra
+        app.launchArguments = ["-uitest-reset"] + (createFirst ? [] : extra)
         app.launch()
         let field = app.textFields["Trainer name"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap(); field.typeText("Greg main")
         app.buttons["Create account"].tap()
         XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
+        if createFirst {
+            app.terminate()
+            app.launchArguments = extra
+            app.launch()
+            XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 10))
+        }
         app.buttons["More"].tap()
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
@@ -215,7 +227,7 @@ final class GuideScreensTests: XCTestCase {
         mega.tap()
         XCTAssertTrue(app.buttons["Normal"].waitForExistence(timeout: 3) && app.buttons["Mega"].exists, "the menu's options appear")
         shot("si-\(tag)-mega-menu")
-        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.95)).tap()   // dismiss the menu
+        app.buttons["Normal"].tap()   // re-selecting the current value dismisses the menu
         XCTAssertTrue(app.buttons["Normal"].waitForNonExistence(timeout: 3), "the menu closes")
         XCTAssertTrue(app.navigationBars["Settings"].exists)
         app.terminate()

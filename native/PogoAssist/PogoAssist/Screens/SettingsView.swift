@@ -65,7 +65,7 @@ struct SettingsView: View {
                     }
                     Panel(padding: 0, spacing: 0) {
                         // The whole row is the menu's label, so a tap anywhere on it opens the menu; the identifier sits on that one element, whose label starts "Mega Pokémon".
-                        // The "i" sits in the row beside the title, outside the Menu's label: the label leaves a gap there and the "i" is drawn over it, so a tap on it never opens the menu.
+                        // The "i" sits in the row beside the title (as the prototype does for this row only; the Restore row's "i" is at the trailing edge), outside the Menu's label: the label leaves a gap there and the "i" is drawn over it, so a tap on it never opens the menu.
                         Menu {
                             Picker("Mega Pokémon", selection: $megaDefault) {
                                 ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
@@ -76,7 +76,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(PressStyle())
                         .accessibilityIdentifier("settings-mega")
-                        .infoOverlay(title: "Mega Pokémon", isOpen: $megaInfoOpen, label: "About Mega Pokémon", identifier: "settings-mega-info")
+                        .infoOverlay(title: "Mega Pokémon", value: MegaDefault(rawValue: megaDefault)?.title, chevron: true, chevronName: "chevron.up.chevron.down", isOpen: $megaInfoOpen, label: "About Mega Pokémon", identifier: "settings-mega-info")
                         if megaInfoOpen {
                             ExplainerCard(text: "Which form a Pokémon's page shows first when it has a Mega form. You can switch on the page.", identifier: "settings-mega-explainer")
                                 .padding(.horizontal, 16).padding(.bottom, 12)
@@ -98,9 +98,13 @@ struct SettingsView: View {
                     }
                     Panel(padding: 0, spacing: 0) {
                         panelTitle("Box for \(model.account ?? "this account")")
-                        Button { confirmPrevious = true } label: { SettingsRowLabel(title: "Restore previous box", action: true, infoSlot: true) }
-                            .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
-                            .infoOverlay(title: "Restore previous box", isOpen: $restoreInfoOpen, label: "About restoring", identifier: "settings-restore-info")
+                        // The Restore "i" is at the trailing edge (the prototype groups an "i" with its title only on the Mega row). The "i" is outside the Button, so it works while the row is disabled.
+                        HStack(spacing: 0) {
+                            Button { confirmPrevious = true } label: { rowLabel("Restore previous box", action: true) }
+                                .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
+                            InfoButton(isOpen: $restoreInfoOpen, size: 24, label: "About restoring", identifier: "settings-restore-info")
+                                .padding(.trailing, 4)
+                        }
                         if restoreInfoOpen {
                             ExplainerCard(text: previousFooter, identifier: "settings-restore-explainer")
                                 .padding(.horizontal, 16).padding(.bottom, 12)
@@ -152,19 +156,33 @@ private struct SettingsRowLabel: View {
     var action = false
     /// Leaves a gap after the title for the "i" that `infoOverlay` draws over it (outside this label, so it is not part of the control).
     var infoSlot = false
+    /// Set only on the overlay's copy of the row: the same layout with every piece hidden and the real "i" in the gap.
+    var mirror: InfoMirror?
     @Environment(\.accent) private var accent
     @Environment(\.isEnabled) private var enabled
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .footnote) private var circle: CGFloat = 24
 
     private var titleText: some View {
-        Text(title).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(ink).multilineTextAlignment(.leading)
+        Text(title).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(ink).multilineTextAlignment(.leading).hiddenIfMirror(mirror != nil)
     }
     private var trailing: some View {
         HStack(spacing: 12) {
             if let value { Text(value).font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(enabled ? Theme.muted : Theme.faint) }
             if chevron { Image(systemName: chevronName).font(.figtree(14, .bold, relativeTo: .body)).foregroundStyle(enabled ? accent.ink : Theme.faint).accessibilityHidden(true) }
         }
+        .hiddenIfMirror(mirror != nil)
+    }
+    /// The gap after the title: empty in the row, the real "i" in the overlay's copy (so it is exactly where the row left room).
+    private func slot(height: CGFloat) -> some View {
+        Color.clear.frame(width: InfoOverlay.reserve(circle), height: height)
+            .overlay(alignment: .leading) {
+                if let mirror {
+                    InfoButton(isOpen: mirror.isOpen, size: 24, label: mirror.label, identifier: mirror.identifier)
+                        .frame(width: InfoOverlay.slot, height: InfoOverlay.slot)
+                        .padding(.leading, InfoOverlay.spacing(circle))
+                }
+            }
     }
 
     var body: some View {
@@ -172,14 +190,14 @@ private struct SettingsRowLabel: View {
             if infoSlot && typeSize.isAccessibilitySize {
                 // Large text: the title and the "i" on the first line, the value and chevron on the second.
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 0) { titleText; Color.clear.frame(width: InfoOverlay.reserve(circle), height: InfoOverlay.slot) }
+                    HStack(spacing: 0) { titleText; slot(height: InfoOverlay.slot) }
                     HStack(spacing: 0) { Spacer(minLength: 0); trailing }
                 }
             } else {
                 HStack(spacing: 12) {
                     HStack(spacing: 0) {
                         titleText
-                        if infoSlot { Color.clear.frame(width: InfoOverlay.reserve(circle), height: 24) }
+                        if infoSlot { slot(height: 24) }
                     }
                     Spacer(minLength: 8)
                     trailing
@@ -187,13 +205,28 @@ private struct SettingsRowLabel: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 52)
-        .contentShape(Rectangle())
+        .modifier(RowShape(solid: mirror == nil))
     }
 
     private var ink: Color { !enabled ? Theme.faint : (action ? accent.ink : Theme.ink) }
 }
 
-/// The "i" over the gap `SettingsRowLabel(infoSlot:)` leaves after the title. A hidden copy of the title sets where the gap is.
+struct InfoMirror {
+    var isOpen: Binding<Bool>
+    var label: String
+    var identifier: String
+}
+
+private extension View {
+    @ViewBuilder func hiddenIfMirror(_ on: Bool) -> some View {
+        if on { hidden().accessibilityHidden(true) } else { self }
+    }
+}
+
+/// The "i" over the gap `SettingsRowLabel(infoSlot:)` leaves after the title.
+/// The overlay is a second copy of the whole row (title, value and chevron hidden, the real "i" in the gap) rather than a hidden title alone:
+/// the title wraps against the value and chevron and the row's padding, so only a copy with every one of them in the same layout is
+/// certain to break on the same words and to put the "i" 8 pt after the visible title at any text size.
 private struct InfoOverlay: ViewModifier {
     /// The "i" button's hit frame (44 pt; its circle is 24 at the default text size).
     static let slot: CGFloat = 44
@@ -202,29 +235,25 @@ private struct InfoOverlay: ViewModifier {
     static func inset(_ circle: CGFloat) -> CGFloat { (slot - min(circle, slot)) / 2 }
     static func spacing(_ circle: CGFloat) -> CGFloat { 8 - inset(circle) }
     static func reserve(_ circle: CGFloat) -> CGFloat { slot + spacing(circle) }
-    let title: String
-    @Binding var isOpen: Bool
-    let label: String
-    let identifier: String
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .footnote) private var circle: CGFloat = 24
+    let row: SettingsRowLabel
 
     func body(content: Content) -> some View {
-        content.overlay(alignment: typeSize.isAccessibilitySize ? .topLeading : .leading) {
-            HStack(spacing: Self.spacing(circle)) {   // the 44 pt frame holds the circle, so this puts the circle 8 pt after the title
-                Text(title).font(.figtree(16, .semibold, relativeTo: .body)).multilineTextAlignment(.leading).hidden()
-                    .allowsHitTesting(false).accessibilityHidden(true)
-                InfoButton(isOpen: $isOpen, size: 24, label: label, identifier: identifier)
-                    .frame(width: Self.slot, height: Self.slot)
-            }
-            .padding(.leading, 16)
-            .padding(.top, typeSize.isAccessibilitySize ? 12 : 0)
-        }
+        content.overlay(alignment: .topLeading) { row }
     }
 }
 
 private extension View {
-    func infoOverlay(title: String, isOpen: Binding<Bool>, label: String, identifier: String) -> some View {
-        modifier(InfoOverlay(title: title, isOpen: isOpen, label: label, identifier: identifier))
+    func infoOverlay(title: String, value: String? = nil, chevron: Bool = false, chevronName: String = "chevron.right", action: Bool = false,
+                     isOpen: Binding<Bool>, label: String, identifier: String) -> some View {
+        modifier(InfoOverlay(row: SettingsRowLabel(title: title, value: value, chevron: chevron, chevronName: chevronName, action: action, infoSlot: true,
+                                                   mirror: InfoMirror(isOpen: isOpen, label: label, identifier: identifier))))
+    }
+}
+
+/// The row's whole area takes the tap, except in the overlay's copy, where only the "i" does.
+private struct RowShape: ViewModifier {
+    let solid: Bool
+    func body(content: Content) -> some View {
+        if solid { content.contentShape(Rectangle()) } else { content }
     }
 }
