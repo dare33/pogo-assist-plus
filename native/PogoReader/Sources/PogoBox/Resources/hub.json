@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-24T13:47:20.404Z",
+ "generated": "2026-10-24T15:27:26.938Z",
  "rotation": [
   {
    "from": "2026-10-21",
@@ -273,7 +273,8 @@
    "title": "Max Monday",
    "bosses": [],
    "note": "6:00 am to 9:00 pm local time",
-   "source": "https://leekduck.com/events/max-mondays-2026-11-16/"
+   "source": "https://leekduck.com/events/max-mondays-2026-11-16/",
+   "tba": true
   },
   {
    "from": "2026-11-30",
@@ -317,12 +318,13 @@
    "title": "Super Mega Raid Day",
    "bosses": [],
    "note": "Time to be announced",
-   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
+   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/",
+   "tba": true
   },
   {
    "from": "2026-11-16",
    "to": "2026-11-23",
-   "kind": "event",
+   "kind": "maxevent",
    "title": "Dynamax Trails",
    "bosses": [],
    "note": "Max battle event",
@@ -363,69 +365,6 @@
    "bosses": [],
    "note": "6:00 pm to 7:00 pm local time",
    "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
-  },
-  {
-   "from": "2026-11-21",
-   "to": "2026-11-21",
-   "kind": "event",
-   "title": "Pawniard Community Day",
-   "bosses": [
-    {
-     "name": "Pawniard",
-     "speciesId": "pawniard",
-     "types": [
-      "dark",
-      "steel"
-     ]
-    }
-   ],
-   "note": "2:00 pm to 5:00 pm local time; Kowtow Cleave when Bisharp evolves to Kingambit",
-   "source": "https://pokemongo.com/news/communityday-november-2026-pawniard"
-  },
-  {
-   "from": "2026-11-01",
-   "to": "2026-11-05",
-   "kind": "event",
-   "title": "Halloween Part Two",
-   "bosses": [],
-   "note": "Seasonal event",
-   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
-  },
-  {
-   "from": "2026-11-09",
-   "to": "2026-11-13",
-   "kind": "event",
-   "title": "Into the Wild",
-   "bosses": [],
-   "note": "Steel and Dragon types",
-   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
-  },
-  {
-   "from": "2026-11-14",
-   "to": "2026-11-15",
-   "kind": "event",
-   "title": "Global GO Wild Area",
-   "bosses": [],
-   "note": "",
-   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
-  },
-  {
-   "from": "2026-11-14",
-   "to": "2026-11-19",
-   "kind": "event",
-   "title": "Minior Showers: Leonidis",
-   "bosses": [],
-   "note": "Meteor Pokémon event",
-   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
-  },
-  {
-   "from": "2026-11-24",
-   "to": "2026-11-30",
-   "kind": "event",
-   "title": "Twilight Wishes",
-   "bosses": [],
-   "note": "",
-   "source": "https://pokemongohub.net/post/event/pokemon-go-november-2026-events/"
   }
  ],
  "events": [
@@ -433,7 +372,7 @@
    "from": "2026-09-08",
    "to": "2026-12-01",
    "title": "GO Battle League: Twilight Trails",
-   "line": "Season ends 1 Dec, 10:00 am PT. Mega Edition leagues: Great, Ultra and Little Cup from 13 Oct; Ultra, Master Mega Edition and Fantasy Cup: Great League Edition from 20 Oct; Master League and Mega Halloween Cup: Great League Edition from 27 Oct.",
+   "line": "Season ends 1 Dec, 10:00 am PT. 13 to 20 Oct: Great League, Ultra League: Mega Edition, Little Cup. 20 to 27 Oct: Ultra League, Master League: Mega Edition, Fantasy Cup (Great League edition). 27 Oct to 3 Nov: Master League, Mega Halloween Cup (Great League edition).",
    "tie": "pvp",
    "source": "https://pokemongo.com/news/go-battle-league-twilight-trails ; https://leekduck.com/events/?name=Twilight%20Trails"
   },
@@ -521,7 +460,7 @@
  "leaders": [
   {
    "name": "Giovanni",
-   "since": "2026-10-04",
+   "since": "2026-10",
    "slots": [
     [
      {
@@ -533,6 +472,14 @@
      }
     ],
     [
+     {
+      "name": "Shadow Kangaskhan",
+      "speciesId": "kangaskhan",
+      "types": [
+       "normal"
+      ],
+      "shadow": true
+     },
      {
       "name": "Shadow Rhyperior",
       "speciesId": "rhyperior_shadow",
@@ -547,13 +494,6 @@
       "types": [
        "fighting"
       ]
-     },
-     {
-      "name": "Shadow Kangaskhan",
-      "speciesId": "kangaskhan",
-      "types": [
-       "normal"
-      ]
      }
     ],
     [
@@ -563,11 +503,12 @@
       "types": [
        "dragon",
        "electric"
-      ]
+      ],
+      "shadow": true
      }
     ]
    ],
-   "source": "https://dnyuz.com/2026/10/05/pokemon-go-giovanni-lineup-and-best-counters-for-october-2026-takeover/ ; https://www.giga.de/games/giovanni-in-pokemon-go-besiegen-oktober-2026--01J4S5HWNXED3VMC2SZH26QCQT"
+   "source": "https://leekduck.com/rocket-lineups/ (read 25 Oct 2026; the page says updated 2 Oct 2026); https://dnyuz.com/2026/10/05/pokemon-go-giovanni-lineup-and-best-counters-for-october-2026-takeover/"
   },
   {
    "name": "Sierra",
@@ -579,7 +520,8 @@
       "speciesId": "pancham",
       "types": [
        "fighting"
-      ]
+      ],
+      "shadow": true
      }
     ],
     [
@@ -596,6 +538,14 @@
       "types": [
        "ground",
        "dragon"
+      ]
+     },
+     {
+      "name": "Shadow Ferrothorn",
+      "speciesId": "ferrothorn_shadow",
+      "types": [
+       "grass",
+       "steel"
       ]
      }
     ],
@@ -614,10 +564,18 @@
        "dark",
        "fire"
       ]
+     },
+     {
+      "name": "Shadow Steelix",
+      "speciesId": "steelix_shadow",
+      "types": [
+       "steel",
+       "ground"
+      ]
      }
     ]
    ],
-   "source": "https://leekduck.com/rocket-lineups/"
+   "source": "https://leekduck.com/rocket-lineups/ (read 25 Oct 2026; the page says updated 2 Oct 2026)"
   },
   {
    "name": "Cliff",
@@ -647,6 +605,14 @@
        "ground",
        "ghost"
       ]
+     },
+     {
+      "name": "Shadow Galarian Weezing",
+      "speciesId": "weezing_galarian_shadow",
+      "types": [
+       "poison",
+       "fairy"
+      ]
      }
     ],
     [
@@ -657,10 +623,26 @@
        "rock",
        "dark"
       ]
+     },
+     {
+      "name": "Shadow Camerupt",
+      "speciesId": "camerupt_shadow",
+      "types": [
+       "fire",
+       "ground"
+      ]
+     },
+     {
+      "name": "Shadow Gallade",
+      "speciesId": "gallade_shadow",
+      "types": [
+       "psychic",
+       "fighting"
+      ]
      }
     ]
    ],
-   "source": "https://leekduck.com/rocket-lineups/"
+   "source": "https://leekduck.com/rocket-lineups/ (read 25 Oct 2026; the page says updated 2 Oct 2026)"
   },
   {
    "name": "Arlo",
@@ -683,6 +665,14 @@
       "types": [
        "steel",
        "ground"
+      ]
+     },
+     {
+      "name": "Shadow Golurk",
+      "speciesId": "golurk_shadow",
+      "types": [
+       "ground",
+       "ghost"
       ]
      },
      {
@@ -720,85 +710,109 @@
      }
     ]
    ],
-   "source": "https://leekduck.com/rocket-lineups/"
+   "source": "https://leekduck.com/rocket-lineups/ (read 25 Oct 2026; the page says updated 2 Oct 2026)"
   }
  ],
  "grunts": [
   {
    "type": "normal",
-   "quote": "Winning is for winners"
+   "quote": "Normal does not mean weak.",
+   "label": ""
   },
   {
    "type": "fire",
-   "quote": "Do you know how hot Pokémon fire breath can get?"
+   "quote": "Do you know how hot Pokémon fire breath can get?",
+   "label": ""
   },
   {
    "type": "water",
-   "quote": "These waters are treacherous!"
+   "quote": "These waters are treacherous!",
+   "label": ""
   },
   {
    "type": "electric",
-   "quote": "Get ready to be shocked!"
+   "quote": "Get ready to be shocked!",
+   "label": ""
   },
   {
    "type": "grass",
-   "quote": "Don't tangle with us!"
+   "quote": "Don't tangle with us!",
+   "label": ""
   },
   {
    "type": "ice",
-   "quote": "You're gonna be frozen in your tracks."
+   "quote": "You're gonna be frozen in your tracks.",
+   "label": ""
   },
   {
    "type": "fighting",
-   "quote": "This buff physique isn't just for show!"
+   "quote": "This buff physique isn't just for show!",
+   "label": ""
   },
   {
    "type": "poison",
-   "quote": "Coiled and ready to strike!"
+   "quote": "Coiled and ready to strike!",
+   "label": ""
   },
   {
    "type": "ground",
-   "quote": "You'll be defeated into the ground!"
+   "quote": "You'll be defeated into the ground!",
+   "label": ""
   },
   {
    "type": "flying",
-   "quote": "Battle against my Flying-type Pokémon!"
+   "quote": "Battle against my Flying-type Pokémon!",
+   "label": ""
   },
   {
    "type": "psychic",
-   "quote": "Are you scared of psychics that use unseen power?"
+   "quote": "Are you scared of psychics that use unseen power?",
+   "label": ""
   },
   {
    "type": "bug",
-   "quote": "Go, my super bug Pokémon!"
+   "quote": "Go, my super bug Pokémon!",
+   "label": ""
   },
   {
    "type": "rock",
-   "quote": "Let's rock and roll!"
+   "quote": "Let's rock and roll!",
+   "label": ""
   },
   {
    "type": "ghost",
-   "quote": "Ke...ke...ke...ke...ke...ke!"
+   "quote": "Ke...ke...ke...ke...ke...ke!",
+   "label": ""
   },
   {
    "type": "dragon",
-   "quote": "ROAR! …How'd that sound?"
+   "quote": "ROAR! …How'd that sound?",
+   "label": ""
   },
   {
    "type": "dark",
-   "quote": "Wherever there is light, there is also shadow."
+   "quote": "Wherever there is light, there is also shadow.",
+   "label": ""
   },
   {
    "type": "steel",
-   "quote": "You're no match for my iron will!"
+   "quote": "You're no match for my iron will!",
+   "label": ""
   },
   {
    "type": "fairy",
-   "quote": "Check out my cute Pokémon!"
+   "quote": "Check out my cute Pokémon!",
+   "label": ""
   },
   {
    "type": "",
-   "quote": "Fooled ya, twerp"
+   "quote": "Winning is for winners",
+   "label": "Mixed team"
+  },
+  {
+   "type": "",
+   "quote": "Fooled ya, twerp",
+   "label": "Decoy"
   }
  ],
  "typeChart": {
