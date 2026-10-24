@@ -136,6 +136,8 @@ export function analyseBox(box, ctx) {
       for (const e of tiers.bySpecies.get(id) || []) {
         // A Gigantamax entry is only ever satisfied by a Gigantamax catch, which an export cannot show: never credit it to a box Pokémon.
         if (e.area === 'max' && /gigantamax|g-max/i.test(e.name)) continue;
+        // A copy the player has marked "not caught as a Dynamax" cannot take part in Max battles: no Max hit at all. (Unset, `undefined`, is unknown: the hit stays.)
+        if (e.area === 'max' && p.dynamax === false) continue;
         // Mega targets are the same Pokémon plus Mega Energy: credit them to the base target.
         const targetId = /_(mega(_[xy])?|primal)$/.test(id) ? baseSpeciesId(gm, id) : id;
         hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId, viaMega: targetId !== id ? id : null, needsDynamax: e.area === 'max', moves: e.moves, obtain: e.obtain, notes: e.notes });
@@ -201,7 +203,8 @@ export function analyseBox(box, ctx) {
       const bestTier = ths.reduce((t, h) => (TIER_W[h.tier] > TIER_W[t] ? h.tier : t), 'B');
       const isMega = false;
       const viaMega = ths.some((h) => h.viaMega);
-      const needsDynamax = ths.some((h) => h.needsDynamax);
+      // A copy marked "caught as a Dynamax" already has the copy its Max hits need: no step for it (and the build says it does not need one).
+      const needsDynamax = ths.some((h) => h.needsDynamax) && p.dynamax !== true;
       const stepTarget = targetId;
       const path = evolutionPath(gm, r.speciesId, stepTarget) ?? [];
       const evoCandy = path.reduce((s, [from, to]) => s + (FORM_CHANGES[from]?.includes(to) ? 0 : evolveCandy(gm, from, to)), 0);

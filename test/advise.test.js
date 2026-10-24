@@ -212,3 +212,34 @@ test('a Pokémon with no league-viable target carries only its other areas (Abra
   const abra = analyseBox([copy('Abra', 17, { atk: 0, def: 14, hp: 15 })], ctx).builds;
   assert.deepEqual(abra.map((b) => [b.targetId, b.areas]), [['alakazam', ['raids']]]);
 });
+
+test('a hand-set Dynamax flag: true drops the Dynamax-copy step, false drops the Max hits, unset is as before', () => {
+  const chansey = box.find((p) => p.name === 'Chansey');
+  assert.ok(chansey);
+  const run = (dynamax) => {
+    const p = { ...chansey };
+    if (dynamax !== undefined) p.dynamax = dynamax;
+    const r = analyseBox([p], ctx);
+    return r.builds.filter((b) => b.speciesId === 'chansey' && b.targetId === 'blissey');
+  };
+  const unset = run(undefined);
+  assert.equal(unset.length, 1);
+  assert.ok(unset[0].hits.some((h) => h.area === 'max'), 'Chansey has a Max entry in the tier tables');
+  assert.ok(unset[0].steps.some((s) => s.kind === 'needsDynamaxCopy'));
+  assert.equal(unset[0].needsDynamax, true);
+
+  const yes = run(true);
+  assert.equal(yes.length, 1);
+  assert.ok(yes[0].hits.some((h) => h.area === 'max'), 'the Max hits are complete, not removed');
+  assert.ok(!yes[0].steps.some((s) => s.kind === 'needsDynamaxCopy'));
+  assert.equal(yes[0].needsDynamax, false);
+
+  const no = run(false);
+  // Max was this copy's only reason to be a build, or it stays a build for its other areas without any Max area or step.
+  for (const b of no) {
+    assert.ok(!b.hits.some((h) => h.area === 'max'));
+    assert.ok(!b.areas.includes('max'));
+    assert.ok(!b.steps.some((s) => s.kind === 'needsDynamaxCopy'));
+    assert.equal(b.needsDynamax, false);
+  }
+});
