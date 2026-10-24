@@ -402,7 +402,7 @@ What the app will call after a scan: `let engine = CoreEngine()` (own queue) the
 
 ### Rebuild the bundle
 
-`PogoBox/Resources/pogo-core.js` and the three data files are generated from a checkout of the JavaScript (they are
+`PogoBox/Resources/pogo-core.js` and the four data files (game master, tiers, PvP rankings, Hub data) are generated from a checkout of the JavaScript (they are
 committed; do not edit them):
 
     node native/tools/build-js-bundle.mjs --repo <checkout> --out native/PogoReader/Sources/PogoBox/Resources
