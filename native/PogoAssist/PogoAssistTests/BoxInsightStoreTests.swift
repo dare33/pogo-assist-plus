@@ -196,16 +196,21 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertNotNil(store.insight(forAccount: "A"))
     }
 
-    /// The same for the index.
-    func testAToBackToAIndexIsRebuilt() async {
+    /// The index path never drops a published index, so A's stays while B is requested (even with B's build cancelled) and A's second request returns early:
+    /// this checks that the index is kept and returned without a rebuild, not that it is rebuilt.
+    func testTheIndexOfAIsKeptWhileBIsRequestedAndReturnedWithoutARebuild() async {
         let store = BoxIndexStore()
         await store.refresh(key: "A|1", entries: [entry("a", "Eevee")])
+        let published = store.index, versionBefore = store.version
         let task = Task { await store.refresh(key: "B|1", entries: many(2_000, prefix: "b")) }
         await Task.yield()
         task.cancel()
         await task.value
+        XCTAssertEqual(store.indexKey, "A|1", "B's cancelled build did not publish and A's index was not dropped")
         await store.refresh(key: "A|1", entries: [entry("a", "Eevee")])
         XCTAssertEqual(store.indexKey, "A|1")
+        XCTAssertEqual(store.version, versionBefore, "no rebuild: the version is unchanged after the round trip")
+        XCTAssertEqual(store.index.items.map(\.id), published.items.map(\.id))
         XCTAssertEqual(store.index.items.first?.id, "a")
     }
 
@@ -213,8 +218,11 @@ final class BoxInsightStoreTests: XCTestCase {
     func testAnOlderBuildOfTheSameKeyFinishingAfterANewerRequestIsDiscarded() async {
         let store = BoxIndexStore(), (adv, _) = oneCopy()
         let key = InsightKey(account: "A", seq: 1, state: .ready)
+        let started = expectation(description: "older build started")
+        store.onBuildStarted = { started.fulfill() }
         let older = Task { await store.refreshInsight(key: key, advice: adv, entries: many(2_000, prefix: "old")) }
-        await Task.yield()
+        await fulfillment(of: [started], timeout: 10)   // the older detached build is under way before the newer request is made
+        store.onBuildStarted = nil
         await store.refreshInsight(key: key, advice: adv, entries: [entry("new", "Eevee")])
         let versionAfterNewer = store.insightVersion
         await older.value
@@ -223,10 +231,48 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertNil(store.insight?.copies["old0"])
     }
 
-    func testAnOlderIndexOfTheSameKeyFinishingAfterANewerRequestIsDiscarded() async {
+    /// The same key: an older detached build of "A|1" under way, then `install` (which bumps the generation) for "A|1": the older result is discarded.
+    func testAnOlderIndexOfTheSameKeyFinishingAfterANewerInstallIsDiscarded() async {
         let store = BoxIndexStore()
+        let started = expectation(description: "older build started")
+        store.onBuildStarted = { started.fulfill() }
         let older = Task { await store.refresh(key: "A|1", entries: many(2_000, prefix: "old")) }
-        await Task.yield()
+        await fulfillment(of: [started], timeout: 10)
+        store.onBuildStarted = nil
+        store.install(BoxIndex(entries: [entry("new", "Eevee")]), key: "A|1")
+        let versionAfterNewer = store.version
+        await older.value
+        XCTAssertEqual(store.version, versionAfterNewer, "the older build did not publish")
+        XCTAssertEqual(store.indexKey, "A|1")
+        XCTAssertEqual(store.index.items.first?.id, "new")
+        XCTAssertEqual(store.index.count, 1)
+    }
+
+    /// The same key requested again while the older build is under way: the newer request returns early (the key is not yet published), so it builds too and
+    /// publishes first (small box, synchronous); the older, taken before it, is discarded by its generation.
+    func testAnOlderIndexOfTheSameKeyFinishingAfterANewerRequestForItIsDiscarded() async {
+        let store = BoxIndexStore()
+        let started = expectation(description: "older build started")
+        store.onBuildStarted = { started.fulfill() }
+        let older = Task { await store.refresh(key: "A|1", entries: many(2_000, prefix: "old")) }
+        await fulfillment(of: [started], timeout: 10)
+        store.onBuildStarted = nil
+        await store.refresh(key: "A|1", entries: [entry("new", "Eevee")])
+        let versionAfterNewer = store.version
+        await older.value
+        XCTAssertEqual(store.version, versionAfterNewer, "the older build did not publish")
+        XCTAssertEqual(store.index.items.first?.id, "new")
+        XCTAssertEqual(store.index.count, 1)
+    }
+
+    /// A different key ("A|1" then "A|2"): the older, detached build is discarded.
+    func testAnOlderIndexOfAnotherKeyFinishingAfterANewerRequestIsDiscarded() async {
+        let store = BoxIndexStore()
+        let started = expectation(description: "older build started")
+        store.onBuildStarted = { started.fulfill() }
+        let older = Task { await store.refresh(key: "A|1", entries: many(2_000, prefix: "old")) }
+        await fulfillment(of: [started], timeout: 10)
+        store.onBuildStarted = nil
         await store.refresh(key: "A|2", entries: [entry("new", "Eevee")])
         await older.value
         XCTAssertEqual(store.indexKey, "A|2")

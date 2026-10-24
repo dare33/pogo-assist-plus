@@ -332,6 +332,9 @@ final class BoxIndexStore: ObservableObject {
         if entries.count < 2000 {
             built = BoxIndex(entries: entries)
         } else {
+            #if DEBUG
+            onBuildStarted?()
+            #endif
             built = await Task.detached(priority: .userInitiated) { BoxIndex(entries: entries) }.value
         }
         guard !Task.isCancelled, indexGeneration == generation else { return }
@@ -361,6 +364,9 @@ final class BoxIndexStore: ObservableObject {
         if entries.count < 2000 {
             built = BoxInsight.make(advice: advice, entries: entries)
         } else {
+            #if DEBUG
+            onBuildStarted?()
+            #endif
             built = await Task.detached(priority: .userInitiated) { BoxInsight.make(advice: advice, entries: entries) }.value
         }
         guard !Task.isCancelled, insightGeneration == generation, insightWanted == key else { return }
@@ -368,6 +374,8 @@ final class BoxIndexStore: ObservableObject {
     }
 
     #if DEBUG
+    /// DEBUG only, for tests: called on the main actor just before a detached build is awaited, so a test can wait until an older build is under way.
+    var onBuildStarted: (() -> Void)?
     /// DEBUG only: put a ready-made index in place (the synthetic 15,000 box).
     func install(_ built: BoxIndex, key: String) { index = built; indexKey = key; indexGeneration += 1; version += 1 }
     #endif
