@@ -82,7 +82,7 @@ struct ReviewNotices: View {
     private func laterText(_ r: RereadPlan) -> String {
         var parts = [String]()
         if r.laterScans > 0 { parts.append("Scans saved after this one are not included; read them again too.") }
-        if r.laterEdits > 0 { parts.append("Corrections made after it are not included either.") }
+        if r.laterEdits > 0 { parts.append("Corrections and settings made after it are not included either.") }
         return parts.joined(separator: " ") + " Saving makes a new box version from the earlier box; every earlier version stays in Settings."
     }
 }

@@ -1,6 +1,6 @@
 # Raid, Max and event rotation, 23 Oct to 1 Dec 2026
 
-Dates are local calendar days (`yyyy-mm-dd`), as published by Pokémon GO Hub and Leek Duck on 23 Oct 2026; later announcements may change them. `Kind` is one of `5star`, `mega`, `shadow`, `maxmon`, `battleday`, `event`, `raidhour`. Several bosses in a row are separated by " & ". Names are written the way the game master resolves them; `npm run build:hub` fails on any it cannot resolve. "to be announced" means the boss is not published yet. Edit this file, then run `npm run build:hub`.
+Dates are local calendar days (`yyyy-mm-dd`), as published by Pokémon GO Hub and Leek Duck on 23 Oct 2026; later announcements may change them. The rotation holds raids and Max battles only; the seasonal events, Community Days and the GBL season are in the events strip below. `Kind` is one of `5star`, `mega`, `shadow` and `battleday` (a Super Mega Raid Day, shown with the raids) for raids, `maxmon` (a Max Monday) and `maxevent` (Dynamax Trails) for Max battles, and `raidhour`. Several bosses in a row are separated by " & ". Names are written the way the game master resolves them; `npm run build:hub` fails on any it cannot resolve. "to be announced" means the boss is not published yet (the build writes `tba: true` and no species); an empty Boss cell means the row has no boss to name. Edit this file, then run `npm run build:hub`.
 
 ## Rotation
 
@@ -23,17 +23,11 @@ Dates are local calendar days (`yyyy-mm-dd`), as published by Pokémon GO Hub an
 | 2026-11-30 | 2026-11-30 | maxmon | Max Monday | Cryogonal | 6:00 am to 9:00 pm local time | https://leekduck.com/events/max-mondays-2026-11-30/ |
 | 2026-10-31 | 2026-10-31 | battleday | Super Mega Raid Day | Chandelure | Time to be announced | https://pokemongohub.net/post/event/october-2026-events/ |
 | 2026-11-28 | 2026-11-28 | battleday | Super Mega Raid Day | to be announced | Time to be announced | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
-| 2026-11-16 | 2026-11-23 | event | Dynamax Trails | to be announced | Max battle event | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
+| 2026-11-16 | 2026-11-23 | maxevent | Dynamax Trails | | Max battle event | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
 | 2026-10-28 | 2026-10-28 | raidhour | Raid Hour | | 6:00 pm to 7:00 pm local time | https://pokemongohub.net/post/event/october-2026-events/ |
 | 2026-11-04 | 2026-11-04 | raidhour | Raid Hour | | 6:00 pm to 7:00 pm local time | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
 | 2026-11-18 | 2026-11-18 | raidhour | Raid Hour | | 6:00 pm to 7:00 pm local time | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
 | 2026-11-25 | 2026-11-25 | raidhour | Raid Hour | | 6:00 pm to 7:00 pm local time | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
-| 2026-11-21 | 2026-11-21 | event | Pawniard Community Day | Pawniard | 2:00 pm to 5:00 pm local time; Kowtow Cleave when Bisharp evolves to Kingambit | https://pokemongo.com/news/communityday-november-2026-pawniard |
-| 2026-11-01 | 2026-11-05 | event | Halloween Part Two | | Seasonal event | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
-| 2026-11-09 | 2026-11-13 | event | Into the Wild | | Steel and Dragon types | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
-| 2026-11-14 | 2026-11-15 | event | Global GO Wild Area | | | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
-| 2026-11-14 | 2026-11-19 | event | Minior Showers: Leonidis | | Meteor Pokémon event | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
-| 2026-11-24 | 2026-11-30 | event | Twilight Wishes | | | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |
 
 ## Events
 
@@ -41,7 +35,7 @@ The static events strip. `Tie` is the Hub screen the card opens: one of everythi
 
 | From | To | Title | Line | Tie | Source |
 |---|---|---|---|---|---|
-| 2026-09-08 | 2026-12-01 | GO Battle League: Twilight Trails | Season ends 1 Dec, 10:00 am PT. Mega Edition leagues: Great, Ultra and Little Cup from 13 Oct; Ultra, Master Mega Edition and Fantasy Cup: Great League Edition from 20 Oct; Master League and Mega Halloween Cup: Great League Edition from 27 Oct. | pvp | https://pokemongo.com/news/go-battle-league-twilight-trails ; https://leekduck.com/events/?name=Twilight%20Trails |
+| 2026-09-08 | 2026-12-01 | GO Battle League: Twilight Trails | Season ends 1 Dec, 10:00 am PT. 13 to 20 Oct: Great League, Ultra League: Mega Edition, Little Cup. 20 to 27 Oct: Ultra League, Master League: Mega Edition, Fantasy Cup (Great League edition). 27 Oct to 3 Nov: Master League, Mega Halloween Cup (Great League edition). | pvp | https://pokemongo.com/news/go-battle-league-twilight-trails ; https://leekduck.com/events/?name=Twilight%20Trails |
 | 2026-10-10 | 2026-10-10 | Zorua Community Day | 2:00 pm to 5:00 pm local time. Sucker Punch when Zorua evolves to Zoroark. | | https://pokemongo.com/news/communityday-october-2026-zorua |
 | 2026-10-31 | 2026-10-31 | Super Mega Raid Day | Chandelure featured. | raids | https://pokemongohub.net/post/event/october-2026-events/ |
 | 2026-11-01 | 2026-11-05 | Halloween Part Two | Seasonal event continues. | | https://pokemongohub.net/post/event/pokemon-go-november-2026-events/ |

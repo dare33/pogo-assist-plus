@@ -1064,6 +1064,8 @@ public enum BoxMerge {
                     // first-seen date is kept on the base entry). Any other answer than "this one" keeps both.
                     guard id == u.candidates.first, u.candidates.count == 2, let m = byId[u.candidates[1]] else { break }
                     byId[id]?.firstSeen = min(e.firstSeen, m.firstSeen)
+                    // The Dynamax flag is hand-set and belongs to the Pokémon: the removed entry's value is kept when the base entry has none.
+                    if byId[id]?.row.dynamax == nil, let d = m.row.dynamax { byId[id]?.row.dynamax = d }
                     touch(id)
                     // The other entry's values keep their OWN last-seen date (a base scan did not see the Mega form), so an existing, more recently seen Mega form wins over them; then a Mega row
                     // the scan read (CP fitting a level) is stored on top like an automatic Same pair, so what ends up held is what was read now.
