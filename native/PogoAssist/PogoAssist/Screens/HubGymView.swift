@@ -12,7 +12,7 @@ struct HubGymView: View {
         return HubTypeScreen(type: .gym, count: count) {
             HubAdviceGate { advice in
                 let defenders = HubTeams.topDefenders(builds: advice.builds)
-                let hints = HubTeams.gymEmptyHints(builds: advice.builds, slots: 6 - defenders.count)
+                let hints = HubTeams.gymEmptyHints(builds: advice.builds, gaps: advice.gaps, slots: 6 - defenders.count)
                 HubSlotsPanel(title: "Top defenders", type: .gym) {
                     ForEach(0..<6, id: \.self) { i in
                         if defenders.indices.contains(i) {
@@ -22,8 +22,8 @@ struct HubGymView: View {
                                 .accessibilityIdentifier("hub-gym-slot-\(i + 1)")
                         } else {
                             let hint = hints[i - defenders.count]
-                            HubSlotTile(type: .gym, disc: "+", name: "Empty", sub: hint ?? "No Gym build yet", filled: false,
-                                        label: "Slot \(i + 1), empty. \(hint ?? "No Gym build yet")")
+                            HubSlotTile(type: .gym, disc: "+", name: "Empty", sub: hint ?? "Nothing to add", filled: false,
+                                        label: "Slot \(i + 1), empty. \(hint ?? "Nothing to add")")
                                 .accessibilityIdentifier("hub-gym-slot-\(i + 1)")
                         }
                     }
@@ -51,6 +51,7 @@ struct HubSlotsPanel<Tiles: View, Trailing: View>: View {
     let type: ContentType
     @ViewBuilder var tiles: Tiles
     @ViewBuilder var trailing: Trailing
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(title: String, type: ContentType, @ViewBuilder tiles: () -> Tiles, @ViewBuilder trailing: () -> Trailing) {
         self.title = title; self.type = type; self.tiles = tiles(); self.trailing = trailing()
@@ -63,7 +64,7 @@ struct HubSlotsPanel<Tiles: View, Trailing: View>: View {
                 Spacer(minLength: 8)
                 trailing
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: 3), spacing: 8) { tiles }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: typeSize.isAccessibilitySize ? 1 : 3), spacing: 8) { tiles }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -77,28 +78,31 @@ extension HubSlotsPanel where Trailing == EmptyView {
 }
 
 /// One read-only slot (radius 16, at least 84 pt tall). Filled: the type's tint, a 34 pt disc in its ink holding `disc`, the name 13/700 and a
-/// 11 muted line. Not filled: a 2 pt dashed hairline, the disc on `off`. `label` is the whole tile for VoiceOver.
+/// 11 muted line, then any `extra` lines. Not filled: a 2 pt dashed hairline, the disc on `off`. `state` is a "Built" or "To build" chip. `label` is
+/// the whole tile for VoiceOver.
 struct HubSlotTile: View {
     let type: ContentType
     let disc: String
     let name: String
     var sub: String
-    var sub2: String? = nil
+    var extra: [String] = []
     let filled: Bool
+    var state: String? = nil
     let label: String
     @Environment(\.accent) private var accent
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         VStack(alignment: .leading, spacing: 4) {
-            Text(disc).font(.figtree(filled ? 15 : 20, .heavy, relativeTo: .subheadline))
+            Text(disc).font(.figtree(disc == "+" || disc.first?.isNumber == true ? 20 : 15, .heavy, relativeTo: .subheadline))
                 .foregroundStyle(filled ? Theme.surface : Theme.muted)
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(filled ? type.ink(accent) : Theme.off))
                 .accessibilityHidden(true)
             Text(name).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(filled ? Theme.ink : Theme.muted).lineLimit(2)
             Text(sub).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.muted).lineLimit(2)
-            if let sub2 { Text(sub2).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.muted).lineLimit(2) }
+            ForEach(extra, id: \.self) { Text($0).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.muted).lineLimit(2) }
+            if let state { StateChip(built: state == "Built", text: state) }
         }
         .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
         .padding(.horizontal, 10).padding(.vertical, 8)
@@ -106,5 +110,19 @@ struct HubSlotTile: View {
         .overlay { if !filled { shape.strokeBorder(Theme.line, style: StrokeStyle(lineWidth: 2, dash: [5, 4])) } }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
+    }
+}
+
+/// "Built" (green) or "To build" (orange), as the design's candidate rows and slots state it.
+struct StateChip: View {
+    let built: Bool
+    let text: String
+
+    var body: some View {
+        Text(text).font(.figtree(10, .heavy, relativeTo: .caption2))
+            .foregroundStyle(built ? Theme.greenInk : Theme.orangeInk)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(built ? Theme.greenTint : Theme.orangeTint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .accessibilityHidden(true)
     }
 }

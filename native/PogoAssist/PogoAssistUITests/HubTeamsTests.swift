@@ -73,12 +73,22 @@ final class HubTeamsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["YOUR TEAM FOR GIOVANNI"].exists)
         sleep(1)
         shot("rocket-01-light")
+        // Slot 2 of Giovanni's team and slot 1 are read now, so the change of leader can be seen in them.
+        let slot1 = app.descendants(matching: .any)["hub-rocket-slot-1"]
+        let slot2 = app.descendants(matching: .any)["hub-rocket-slot-2"]
+        XCTAssertTrue(slot2.exists)
+        let giovanniSlot1 = slot1.label, giovanniSlot2 = slot2.label
+        // Lucario is the Fighting counter for Persian (slot 1); a copy serves one slot, so slot 2 (Kangaskhan, Rhyperior, Machamp) takes the next
+        // copy that beats the most of them, Zamazenta (Crowned Shield), which beats two.
+        XCTAssertTrue(giovanniSlot1.contains("Lucario"), giovanniSlot1)
+        XCTAssertTrue(giovanniSlot2.contains("Zamazenta") && giovanniSlot2.contains("beats Kangaskhan and Rhyperior"), giovanniSlot2)
         app.buttons["hub-change-leader"].tap()
         let sierra = app.buttons["Sierra"]
         XCTAssertTrue(sierra.waitForExistence(timeout: 5), "the menu lists Sierra")
         for name in ["Giovanni", "Cliff", "Arlo"] { XCTAssertTrue(app.buttons[name].exists, "the menu lists \(name)") }
         sierra.tap()
         XCTAssertTrue(app.staticTexts["YOUR TEAM FOR SIERRA"].waitForExistence(timeout: 5))
+        XCTAssertNotEqual(slot1.label, giovanniSlot1, "slot 1 changed with the leader")
         let normal = find(app, label: "Normal does not mean weak")
         XCTAssertTrue(normal.exists, "the Normal grunt's tile")
         sleep(1)
@@ -86,7 +96,7 @@ final class HubTeamsTests: XCTestCase {
         app.buttons["Back"].tap()
         XCTAssertTrue(app.buttons["hub-tile-pvp"].waitForExistence(timeout: 5))
 
-        // PvP: Ultra, the team and its coverage, then a candidate opens the Pokémon page.
+        // PvP: Ultra, the team and its coverage; Great League has no candidate in this box; Master has a team of two.
         app.buttons["hub-tile-pvp"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-league"].waitForExistence(timeout: 10))
         let ultra = app.buttons["hub-pvp-league-ul"]
@@ -96,21 +106,24 @@ final class HubTeamsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Coverage'")).firstMatch.exists, "the coverage line")
         sleep(1)
         shot("pvp-01-light-ultra")
-        // The sample scan has at most three candidates in a league and all of them sit on the team, so OTHER CANDIDATES is not on screen here
-        // (the candidate list is pinned by HubTeamsModelTests, not driven). When a league does list one, its row opens the Pokémon page.
-        for key in ["gl", "ml"] {
-            app.buttons["hub-pvp-league-\(key)"].tap()
-            XCTAssertTrue(app.staticTexts["Suggested team"].waitForExistence(timeout: 3) || app.staticTexts["hub-pvp-none"].exists
-                          || app.descendants(matching: .any)["hub-pvp-none"].waitForExistence(timeout: 3), "league \(key) answers")
-            if key == "ml" { shot("pvp-02-light-master") }
-        }
+        // With the 80 floor the sample scan's Ultra League lists another candidate under OTHER CANDIDATES: its row opens the Pokémon page.
+        XCTAssertTrue(app.staticTexts["OTHER CANDIDATES"].exists)
         let row = app.buttons.matching(identifier: "hub-pvp-candidate").firstMatch
-        if row.exists {
-            row.tap()
-            XCTAssertTrue(app.buttons["Back"].waitForExistence(timeout: 10))
-            XCTAssertFalse(app.staticTexts["Suggested team"].exists, "a Pokémon page replaced the screen")
-            shot("pvp-03-light-pokemon")
-        }
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "a candidate row")
+        row.tap()
+        XCTAssertTrue(app.buttons["Back"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["Suggested team"].exists, "a Pokémon page replaced the screen")
+        shot("pvp-03-light-pokemon")
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.staticTexts["Suggested team"].waitForExistence(timeout: 10))
+        app.buttons["hub-pvp-league-gl"].tap()
+        XCTAssertTrue(app.staticTexts["hub-pvp-none"].waitForExistence(timeout: 5) || app.descendants(matching: .any)["hub-pvp-none"].waitForExistence(timeout: 5), "Great League has no candidate")
+        XCTAssertFalse(app.staticTexts["Suggested team"].exists)
+        app.buttons["hub-pvp-league-ml"].tap()
+        XCTAssertTrue(app.staticTexts["Suggested team"].waitForExistence(timeout: 5), "Master League shows a team")
+        XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-2"].exists, "a second team member")
+        sleep(1)
+        shot("pvp-02-light-master")
         app.terminate()
 
         // Dark: the box is kept; the Rocket screen.

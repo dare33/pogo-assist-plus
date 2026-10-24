@@ -41,7 +41,7 @@ struct HubPvPView: View {
         let team = HubTeams.suggestedTeam(candidates: candidates, gm: gm, hub: hub)
         let others = HubTeams.others(candidates: candidates, team: team)
         if candidates.isEmpty {
-            Text("No \(LeaguePanel.name(league)) candidate in your box scores \(Int(HubTeams.bFloor)) or more.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+            Text("No \(LeaguePanel.name(league)) candidate in your box scores \(Int(HubTeams.candidateFloor)) or more.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
                 .accessibilityIdentifier("hub-pvp-none")
         } else {
             let covered = HubTeams.coverage(team: team, gm: gm, hub: hub)
@@ -52,7 +52,8 @@ struct HubPvPView: View {
                             let c = team[i]
                             let types = (gm.byId[c.speciesId]?.types ?? []).map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: "/")
                             let sub = types + (i == 0 ? " · lead" : "")
-                            HubSlotTile(type: .pvp, disc: String(c.name.prefix(1)), name: c.name, sub: sub, filled: true, label: "Slot \(i + 1), \(c.name), \(sub)")
+                            HubSlotTile(type: .pvp, disc: String(c.name.prefix(1)), name: c.displayName, sub: sub, filled: c.built, state: c.stateText,
+                                        label: "Slot \(i + 1), \(c.displayName), \(sub), \(c.stateText.lowercased())")
                                 .accessibilityIdentifier("hub-pvp-slot-\(i + 1)")
                         } else {
                             HubSlotTile(type: .pvp, disc: "+", name: "Empty", sub: "No other candidate", filled: false, label: "Slot \(i + 1), empty")
@@ -63,8 +64,11 @@ struct HubPvPView: View {
                     Text("Coverage \(covered) of 18 types").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                         .accessibilityIdentifier("hub-pvp-coverage")
                 }
-                Text(HubTeams.weaknessNote(team: team, candidates: others, gm: gm, hub: hub)).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-                    .padding(.horizontal, 4).accessibilityIdentifier("hub-pvp-weakness")
+                let note = HubTeams.weaknessNote(team: team, candidates: others, gm: gm, hub: hub)
+                if !note.isEmpty {
+                    Text(note).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 4).accessibilityIdentifier("hub-pvp-weakness")
+                }
             }
             if !others.isEmpty {
                 HubHeaderLine("OTHER CANDIDATES") {
@@ -102,8 +106,9 @@ struct HubPvPView: View {
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text(c.name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(2)
+                    Text(c.displayName).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(2)
                     if !c.tier.isEmpty { TierChip(tier: c.tier, type: .pvp) }
+                    StateChip(built: c.built, text: c.stateText)
                 }
                 if let from = c.fromText { Text(from).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.ink) }
                 Text(c.subText).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted)
@@ -119,7 +124,7 @@ struct HubPvPView: View {
         .frame(minHeight: 56)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(c.name), tier \(c.tier). \(c.fromText.map { $0 + ". " } ?? "")\(c.subText)")
+        .accessibilityLabel("\(c.displayName), \(c.tier.isEmpty ? "" : "tier \(c.tier), ")\(c.stateText.lowercased()). \(c.fromText.map { $0 + ". " } ?? "")\(c.subText)")
         .accessibilityValue("score \(score)")
     }
 
