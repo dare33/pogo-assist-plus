@@ -38,19 +38,8 @@ struct SettingsView: View {
 
     private var separator: some View { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 16) }
 
-    private func chevron() -> some View {
-        Image(systemName: "chevron.right").font(.figtree(14, .bold)).foregroundStyle(accent.ink).accessibilityHidden(true)
-    }
-
-    private func rowLabel(_ title: String, value: String? = nil, chevron showsChevron: Bool = false, ink: Color = Theme.ink) -> some View {
-        HStack(spacing: 12) {
-            Text(title).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(ink).multilineTextAlignment(.leading)
-            Spacer(minLength: 8)
-            if let value { Text(value).font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted) }
-            if showsChevron { chevron() }
-        }
-        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 52)
-        .contentShape(Rectangle())
+    private func rowLabel(_ title: String, value: String? = nil, chevron showsChevron: Bool = false, action: Bool = false) -> some View {
+        SettingsRowLabel(title: title, value: value, chevron: showsChevron, action: action)
     }
 
     private var previousFooter: String {
@@ -73,36 +62,36 @@ struct SettingsView: View {
                         .buttonStyle(PressStyle()).accessibilityIdentifier("settings-get-ready")
                     }
                     Panel(padding: 0, spacing: 0) {
-                        HStack(spacing: 12) {
-                            // The menu picker shows only its value in a card, so the title is drawn here; the picker keeps it as its accessibility label.
-                            Text("Mega Pokémon").font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(Theme.ink).accessibilityHidden(true)
-                            Spacer(minLength: 8)
+                        // The whole row is the menu's label, so a tap anywhere on it opens the menu; the identifier sits on that one element, whose label starts "Mega Pokémon".
+                        Menu {
                             Picker("Mega Pokémon", selection: $megaDefault) {
                                 ForEach(MegaDefault.allCases) { Text($0.title).tag($0.rawValue) }
                             }
-                            .pickerStyle(.menu).labelsHidden()
-                            .font(.figtree(16, .semibold, relativeTo: .body)).tint(accent.ink)
-                            .accessibilityIdentifier("settings-mega")
+                            .pickerStyle(.inline)
+                        } label: {
+                            SettingsRowLabel(title: "Mega Pokémon", value: MegaDefault(rawValue: megaDefault)?.title, chevron: true, chevronName: "chevron.up.chevron.down")
                         }
-                        .padding(.horizontal, 16).frame(minHeight: 52)
+                        .buttonStyle(PressStyle())
+                        .accessibilityIdentifier("settings-mega")
                         note("Which form a Pokémon's page shows first when it has a Mega form. You can switch on the page.")
                     }
                     Panel(padding: 0, spacing: 0) {
                         panelTitle("Accounts")
                         ForEach(Array(model.accounts.enumerated()), id: \.element) { i, name in
                             Button { model.select(name) } label: { accountLabel(name) }.buttonStyle(PressStyle())
+                                .accessibilityAddTraits(name == model.account ? .isSelected : [])
                             if i < model.accounts.count - 1 { separator }
                         }
                     }
                     Panel(padding: 0, spacing: 0) {
-                        Button { newName = model.account ?? ""; renaming = true } label: { rowLabel("Rename account", ink: accent.ink) }
+                        Button { newName = model.account ?? ""; renaming = true } label: { rowLabel("Rename account", action: true) }
                             .buttonStyle(PressStyle()).disabled(model.account == nil || model.isReviewing)
                         if let p = renameProblem { note(p, tint: Theme.red) }
                         else if model.isReviewing { note("A scan is open. Save or discard it before renaming the account.") }
                     }
                     Panel(padding: 0, spacing: 0) {
                         panelTitle("Box for \(model.account ?? "this account")")
-                        Button { confirmPrevious = true } label: { rowLabel("Restore previous box", ink: accent.ink) }
+                        Button { confirmPrevious = true } label: { rowLabel("Restore previous box", action: true) }
                             .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
                         separator
                         NavigationLink { HistoryScansView() } label: { rowLabel("History and scans", chevron: true) }
@@ -140,4 +129,29 @@ struct SettingsView: View {
             } message: { Text("The box as it is now stays in the history, so you can come back to it.") }
         }
     }
+}
+
+/// A row's label. It reads isEnabled itself because the environment value is set on the Button, below the screen that builds the row.
+private struct SettingsRowLabel: View {
+    let title: String
+    var value: String?
+    var chevron = false
+    var chevronName = "chevron.right"
+    /// An action row (Rename, Restore) is drawn in the accent ink; a navigation row in the plain ink.
+    var action = false
+    @Environment(\.accent) private var accent
+    @Environment(\.isEnabled) private var enabled
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title).font(.figtree(16, .semibold, relativeTo: .body)).foregroundStyle(ink).multilineTextAlignment(.leading)
+            Spacer(minLength: 8)
+            if let value { Text(value).font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(enabled ? Theme.muted : Theme.faint) }
+            if chevron { Image(systemName: chevronName).font(.figtree(14, .bold, relativeTo: .body)).foregroundStyle(enabled ? accent.ink : Theme.faint).accessibilityHidden(true) }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 52)
+        .contentShape(Rectangle())
+    }
+
+    private var ink: Color { !enabled ? Theme.faint : (action ? accent.ink : Theme.ink) }
 }
