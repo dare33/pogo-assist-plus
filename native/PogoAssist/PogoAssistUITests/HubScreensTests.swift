@@ -54,6 +54,12 @@ final class HubScreensTests: XCTestCase {
         expectation(for: counted, evaluatedWith: everything)
         waitForExpectations(timeout: 60)
         XCTAssertTrue(everything.label.contains("build"), everything.label)
+        // Every tile carries its count once the advice is in.
+        for t in tiles {
+            let label = app.buttons["hub-tile-\(t)"].label
+            XCTAssertNotNil(label.rangeOfCharacter(from: .decimalDigits), "tile \(t) has no count: \(label)")
+        }
+        let total = everything.label.components(separatedBy: CharacterSet.decimalDigits.inverted).first { !$0.isEmpty } ?? "?"
         XCTAssertTrue(app.staticTexts["HAPPENING IN POKÉMON GO"].exists)
         XCTAssertTrue(app.buttons["hub-ranking-info"].exists)
         sleep(1)
@@ -64,24 +70,35 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["hub-stardust-change"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Not set"].exists)
         shot("hub-02-light-everything-unset")
+        // A rejected entry says so and changes nothing.
+        app.buttons["hub-stardust-change"].tap()
+        XCTAssertTrue(app.alerts.textFields.firstMatch.waitForExistence(timeout: 5))
+        app.alerts.textFields.firstMatch.typeText("1234567890")   // ten digits: too many
+        app.alerts.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["hub-stardust-problem"].waitForExistence(timeout: 5), "a bad entry is explained")
+        XCTAssertTrue(app.staticTexts["Not set"].exists)
         app.buttons["hub-stardust-change"].tap()
         let field = app.alerts.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText("100000")
         app.alerts.buttons["Save"].tap()
         XCTAssertTrue(app.staticTexts["100,000"].waitForExistence(timeout: 5), "the card shows the stardust")
+        XCTAssertFalse(app.staticTexts["hub-stardust-problem"].exists, "a valid entry clears the line")
         XCTAssertTrue(app.staticTexts["THESE FIT"].exists)
-        XCTAssertGreaterThanOrEqual(app.buttons.matching(identifier: "hub-build-row").count, 1, "at least one build fits")
+        let rows = app.buttons.matching(identifier: "hub-build-row")
+        XCTAssertGreaterThanOrEqual(rows.count, 1, "at least one build fits")
+        let figures = (0..<rows.count).map { (rows.element(boundBy: $0).value as? String) ?? "" }
+        XCTAssertTrue(figures.contains { $0.lowercased().contains("dust") }, "a fitting build costs dust, not only Free: \(figures)")
+        XCTAssertEqual(app.buttons["hub-show-all"].label, "SHOW ALL \(total) ›")
         sleep(1)
         shot("hub-03-light-everything-fit")
 
         // Show all: the full list, then the gaps.
         app.buttons["hub-show-all"].tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'GAPS'")).firstMatch.waitForExistence(timeout: 5)
-                      || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'DUPLICATES'")).firstMatch.waitForExistence(timeout: 5), "the gaps or duplicates follow the full list")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'GAPS'")).firstMatch.waitForExistence(timeout: 5), "the gaps follow the full list")
         app.swipeUp()
         shot("hub-04-light-everything-all")
-        app.buttons["Back"].tap()
+        app.buttons["hub-back"].tap()
         XCTAssertTrue(app.buttons["hub-tile-everything"].waitForExistence(timeout: 5))
         app.terminate()
 
@@ -94,6 +111,7 @@ final class HubScreensTests: XCTestCase {
         shot("hub-05-dark-hub")
         dark.buttons["hub-tile-everything"].tap()
         XCTAssertTrue(dark.buttons["hub-stardust-change"].waitForExistence(timeout: 10))
+        XCTAssertTrue(dark.staticTexts["100,000"].exists, "the stardust is kept")
         sleep(1)
         shot("hub-06-dark-everything")
         dark.terminate()
@@ -107,6 +125,7 @@ final class HubScreensTests: XCTestCase {
         shot("hub-07-ax1-hub")
         large.buttons["hub-tile-everything"].tap()
         XCTAssertTrue(large.buttons["hub-stardust-change"].waitForExistence(timeout: 10))
+        XCTAssertTrue(large.staticTexts["100,000"].exists, "the stardust is kept")
         sleep(1)
         shot("hub-08-ax1-everything")
         large.terminate()
