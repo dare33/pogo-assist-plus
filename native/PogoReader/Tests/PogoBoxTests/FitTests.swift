@@ -28,11 +28,21 @@ final class FitTests: XCTestCase {
         XCTAssertTrue(all.contains { $0.tag == .weak && $0.asName == nil && $0.reason != nil }, "a weak fit with its reason")
         XCTAssertEqual(es.filter { !advice.fit(for: $0.id).isEmpty }.count, 311, "every entry carries its fit")
         XCTAssertTrue(es.contains { !advice.bestOf(for: $0.id).isEmpty }, "bestOf reaches the app")
+        // The build marker: carried with its target and cost, on strong, ok and weak copies alike (it is not the tag).
+        let builds = all.filter { $0.build }
+        XCTAssertFalse(builds.isEmpty, "some fit carries a build")
+        for f in builds { XCTAssertNotNil(f.buildAs); XCTAssertNotNil(f.buildCost) }
+        for f in all where !f.build { XCTAssertNil(f.buildAs); XCTAssertNil(f.buildCost) }
+        XCTAssertTrue(builds.contains { $0.tag == .strong } && builds.contains { $0.tag == .ok } && builds.contains { $0.tag == .weak && $0.reason == .iv })
+        // A weak "none" line names the species from the engine, not from the row (these rows are named "?").
+        let none = all.filter { $0.reason == BoxAdvice.Fit.Reason.none }
+        XCTAssertFalse(none.isEmpty)
+        for f in none { XCTAssertNotNil(f.species); XCTAssertFalse(f.line.contains("?"), f.line) }
         for f in all where f.tag != .weak { XCTAssertTrue(f.line.contains(" as \(f.asName ?? "?")"), f.line) }
     }
 
     private func fit(_ tag: BoxAdvice.Fit.Tag, area: String = "raids", asName: String? = nil, tier: String? = nil, reason: BoxAdvice.Fit.Reason? = nil, ivPercent: Double? = nil) -> BoxAdvice.Fit {
-        .init(area: area, tag: tag, asName: asName, tier: tier, reason: reason, species: "Charmander", ivPercent: ivPercent)
+        .init(area: area, tag: tag, asName: asName, tier: tier, reason: reason, species: reason == BoxAdvice.Fit.Reason.none ? "Charmander" : nil, ivPercent: ivPercent)
     }
 
     func testStrongAndOkLinesNameAreaTierAndEntry() {
@@ -52,21 +62,48 @@ final class FitTests: XCTestCase {
     }
 
     func testTheCompactFormDecodes() throws {
-        let weak = try XCTUnwrap(BoxAdvice.Fit.decode(area: "gym", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"iv"]"#.utf8)), species: "Eevee", ivPercent: 51.1))
+        let weak = try XCTUnwrap(BoxAdvice.Fit.decode(area: "gym", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"iv"]"#.utf8)), ivPercent: 51.1))
         XCTAssertEqual(weak.tag, .weak); XCTAssertEqual(weak.reason, .iv); XCTAssertNil(weak.asName)
         XCTAssertEqual(weak.line, "IVs 51.1%, below 80%")
-        let ok = try XCTUnwrap(BoxAdvice.Fit.decode(area: "raids", try JSONDecoder().decode(JSONValue.self, from: Data(#"["o","Mega Delphox","S"]"#.utf8)), species: "Fennekin", ivPercent: 90))
+        let ok = try XCTUnwrap(BoxAdvice.Fit.decode(area: "raids", try JSONDecoder().decode(JSONValue.self, from: Data(#"["o","Mega Delphox","S"]"#.utf8)), ivPercent: 90))
         XCTAssertEqual(ok.line, "Raids S as Mega Delphox")
+        XCTAssertFalse(ok.build); XCTAssertNil(ok.buildAs); XCTAssertNil(ok.buildCost)
         // The engine's own one-decimal figure (index 4) wins over the app's recomputation from the IVs.
-        let engine = try XCTUnwrap(BoxAdvice.Fit.decode(area: "gym", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"iv",79.9]"#.utf8)), species: "Eevee", ivPercent: 80.0))
+        let engine = try XCTUnwrap(BoxAdvice.Fit.decode(area: "gym", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"iv",79.9]"#.utf8)), ivPercent: 80.0))
         XCTAssertEqual(engine.line, "IVs 79.9%, below 80%")
         // An unrecognised reason code is not "no table entry".
-        let odd = try XCTUnwrap(BoxAdvice.Fit.decode(area: "rocket", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"somethingNew"]"#.utf8)), species: "Eevee", ivPercent: nil))
+        let odd = try XCTUnwrap(BoxAdvice.Fit.decode(area: "rocket", try JSONDecoder().decode(JSONValue.self, from: Data(#"["w",null,null,"somethingNew"]"#.utf8)), ivPercent: nil))
         XCTAssertEqual(odd.line, "Weak for Rocket")
-        XCTAssertNil(BoxAdvice.Fit.decode(area: "raids", try JSONDecoder().decode(JSONValue.self, from: Data(#"["x"]"#.utf8)), species: "", ivPercent: nil), "an unknown tag is skipped")
+        XCTAssertNil(BoxAdvice.Fit.decode(area: "raids", try JSONDecoder().decode(JSONValue.self, from: Data(#"["x"]"#.utf8)), ivPercent: nil), "an unknown tag is skipped")
     }
 
-    /// End to end on three Charmander: the hundo carries the build, the 66.7% copy reads from its own row, a copy with no gym entry says so.
+    /// The build tail: from index 3 for strong / ok, from 5 for weak (index 4 then holds the extra, or null).
+    func testTheBuildMarkerDecodesFromItsTail() throws {
+        func decode(_ json: String, _ area: String = "rocket", _ pct: Double? = nil) throws -> BoxAdvice.Fit {
+            try XCTUnwrap(BoxAdvice.Fit.decode(area: area, try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)), ivPercent: pct))
+        }
+        let ok = try decode(#"["o","Charizard","A",true,"Charizard",150000,200,40]"#)
+        XCTAssertEqual(ok.tag, .ok); XCTAssertTrue(ok.build); XCTAssertEqual(ok.buildAs, "Charizard")
+        XCTAssertEqual(ok.buildCost, BoxAdvice.Fit.BuildCost(dust: 150000, candy: 200, xl: 40))
+        XCTAssertEqual(ok.line, "Rocket A as Charizard", "the marker does not change the line")
+        let weakIV = try decode(#"["w",null,null,"iv",66.7,true,"Blissey",0,50,0]"#, "gym")
+        XCTAssertEqual([weakIV.tag == .weak, weakIV.build, weakIV.buildAs == "Blissey", weakIV.ivPercent == 66.7], [true, true, true, true])
+        XCTAssertEqual(weakIV.buildCost, BoxAdvice.Fit.BuildCost(dust: 0, candy: 50, xl: 0))
+        XCTAssertEqual(weakIV.line, "IVs 66.7%, below 80%")
+        // A weak reason with no extra still carries a build: index 4 is null, the tail starts at 5.
+        let weakNoExtra = try decode(#"["w",null,null,"ivUnknown",null,true,"Mewtwo",1,2,3]"#, "raids")
+        XCTAssertTrue(weakNoExtra.build); XCTAssertEqual(weakNoExtra.buildCost?.xl, 3); XCTAssertEqual(weakNoExtra.line, "IVs not known")
+        // A weak "none" takes the engine's name from index 4, and a build after it.
+        let none = try decode(#"["w",null,null,"none","Meowth (Galarian)",true,"Perrserker",10,20,30]"#, "gym")
+        XCTAssertEqual(none.species, "Meowth (Galarian)"); XCTAssertEqual(none.buildAs, "Perrserker")
+        XCTAssertEqual(none.line, "No table entry for Meowth (Galarian) in Gym")
+        // A tail that is not whole is no build.
+        XCTAssertFalse(try decode(#"["o","Charizard","A",true,"Charizard",150000]"#).build)
+        XCTAssertFalse(try decode(#"["o","Charizard","A",false,"Charizard",1,2,3]"#).build)
+    }
+
+    /// End to end on three Charmander: the hundo carries the build (and is OK on worth: Rocket Charizard is A tier), the 66.7% copy reads from its own row,
+    /// a copy with no gym entry says so with the engine's species name.
     func testLinesComposedFromARealEngineReport() throws {
         func record(_ index: Int, _ ivs: (Int, Int, Int)) -> JSONValue {
             let json = """
@@ -83,23 +120,28 @@ final class FitTests: XCTestCase {
             return BoxEntry(id: "c\(i)", row: row, firstSeen: date, lastSeen: date)
         }
         let advice = BoxAdvice.make(from: report, entries: es)
-        XCTAssertEqual(advice.fit(for: "c0")["rocket"]?.tag, .strong)
+        let top = try XCTUnwrap(advice.fit(for: "c0")["rocket"])
+        XCTAssertEqual(top.tag, .ok); XCTAssertTrue(top.build); XCTAssertEqual(top.buildAs, "Charizard"); XCTAssertNotNil(top.buildCost)
+        XCTAssertEqual(top.line, "Rocket A as Charizard")
+        XCTAssertFalse(try XCTUnwrap(advice.fit(for: "c1")["rocket"]).build)
         XCTAssertEqual(advice.fit(for: "c1")["rocket"]?.line, "IVs 66.7%, below 80%")
         XCTAssertEqual(advice.fit(for: "c2")["rocket"]?.line, "Rocket A as Charizard")
+        XCTAssertEqual(advice.fit(for: "c2")["rocket"]?.build, false)
         XCTAssertEqual(advice.fit(for: "c2")["gym"]?.line, "No table entry for Charmander in Gym")
     }
 
-    /// A species with a form reads as the engine writes it, from the row's name and form.
-    func testNoTableEntryNamesTheFormOfTheSpecies() throws {
-        let json = #"{"pokemon":[{"p":{"index":1},"fit":{"raids":["w",null,null,"none"]}},{"p":{"index":2},"fit":{"raids":["w",null,null,"none"]}}]}"#
+    /// The engine's name for a species arrives as it is, whatever the row says ("Galarian" is Poke Genie's spelling of the form, and the row could
+    /// be named differently still): no form is composed in Swift.
+    func testNoTableEntryUsesTheEnginesNameNotTheRows() throws {
+        let json = #"{"pokemon":[{"p":{"index":1},"fit":{"raids":["w",null,null,"none","Meowth (Galarian)"]}},{"p":{"index":2},"fit":{"raids":["w",null,null,"none","Meowth"]}}]}"#
         let report = try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
         func entry(_ i: Int, _ form: String) -> BoxEntry {
             let row = ScanRow(index: i, name: "Meowth", display: "Meowth", form: form, speciesId: "", dex: nil, cp: 0, hp: nil, ivs: nil, ivsRead: nil, ivsGuess: nil,
                               level: nil, levelMax: nil, dust: nil, solveStatus: "exact", flags: [], frames: [])
             return BoxEntry(id: "m\(i)", row: row, firstSeen: date, lastSeen: date)
         }
-        let advice = BoxAdvice.make(from: report, entries: [entry(1, "Galarian"), entry(2, "Normal")])
+        let advice = BoxAdvice.make(from: report, entries: [entry(1, "Galar"), entry(2, "Galar")])
         XCTAssertEqual(advice.fit(for: "m1")["raids"]?.line, "No table entry for Meowth (Galarian) in Raids")
-        XCTAssertEqual(advice.fit(for: "m2")["raids"]?.line, "No table entry for Meowth in Raids")
+        XCTAssertEqual(advice.fit(for: "m2")["raids"]?.line, "No table entry for Meowth in Raids", "the row's form does not enter")
     }
 }
