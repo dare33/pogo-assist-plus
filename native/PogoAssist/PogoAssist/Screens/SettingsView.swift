@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var renameProblem: String?
     @State private var megaInfoOpen = false
     @State private var restoreInfoOpen = false
+    @ScaledMetric(relativeTo: .footnote) private var restoreCircle: CGFloat = 24
     @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
 
     @Environment(\.accent) private var accent
@@ -103,7 +104,7 @@ struct SettingsView: View {
                             Button { confirmPrevious = true } label: { rowLabel("Restore previous box", action: true) }
                                 .buttonStyle(PressStyle()).disabled(model.previous == nil || model.boxNeedsNewerApp)
                             InfoButton(isOpen: $restoreInfoOpen, size: 24, label: "About restoring", identifier: "settings-restore-info")
-                                .padding(.trailing, 4)
+                                .padding(.trailing, 16 - InfoOverlay.inset(restoreCircle))   // the circle's right edge 16 pt in, like the rows' padding
                         }
                         if restoreInfoOpen {
                             ExplainerCard(text: previousFooter, identifier: "settings-restore-explainer")
@@ -211,7 +212,7 @@ private struct SettingsRowLabel: View {
     private var ink: Color { !enabled ? Theme.faint : (action ? accent.ink : Theme.ink) }
 }
 
-struct InfoMirror {
+private struct InfoMirror {
     var isOpen: Binding<Bool>
     var label: String
     var identifier: String
