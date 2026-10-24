@@ -25,6 +25,12 @@ public enum HubModel {
         return builds.filter { b in b.areas.contains { labels.contains($0) } }
     }
 
+    /// The gaps (top-tier Pokémon nothing in the box can become) for a screen, by the area label the report gives them.
+    public static func gaps(_ gaps: [BoxAdvice.Gap], for key: ContentKey) -> [BoxAdvice.Gap] {
+        guard let labels = key.areaLabels else { return gaps }
+        return gaps.filter { labels.contains($0.area) }
+    }
+
     public static func count(_ builds: [BoxAdvice.Build], for key: ContentKey) -> Int { self.builds(builds, for: key).count }
 
     /// The builds, in the advisor's order, that the stardust pays for: each dusty build is taken while the running total stays within the
@@ -72,7 +78,8 @@ public enum HubModel {
         return m == m.rounded() ? "\(Int(m))M" : "\(m)M"
     }
 
-    private static func grouped(_ n: Int) -> String {
+    /// 612400 as "612,400".
+    public static func grouped(_ n: Int) -> String {
         let f = NumberFormatter(); f.numberStyle = .decimal; f.locale = Locale(identifier: "en_US"); f.groupingSeparator = ","
         return f.string(from: NSNumber(value: n)) ?? String(n)
     }
@@ -92,6 +99,27 @@ public enum HubModel {
         if leagues.count == 1 && words.isEmpty { return names[leagues[0]] ?? leagues[0] }
         if !leagues.isEmpty { words.append("PvP") }
         return words.joined(separator: ", ")
+    }
+
+    /// A headline card's title: what to do first, then the Pokémon. "Evolve Eevee → Flareon", "Mega evolve Lucario", "Power up Xerneas";
+    /// the Pokémon's name alone when nothing is left to do.
+    public static func headline(for b: BoxAdvice.Build) -> String {
+        switch b.steps?.first?.kind {
+        case "evolve": return "Evolve \(b.title) → \(b.steps?.first?.to ?? b.targetName)"
+        case "formChange": return "Form change \(b.title) → \(b.steps?.first?.to ?? b.targetName)"
+        case "megaEvolve": return "Mega evolve \(b.title)"
+        case "powerUp": return "Power up \(b.title)"
+        case "secondMove": return "Second move for \(b.title)"
+        case "eliteTM": return "Elite TM for \(b.title)"
+        case "cdMove": return "Community Day move for \(b.title)"
+        default: return b.title
+        }
+    }
+
+    /// A headline card's line: the cost, then the first area ("75k dust · Raids").
+    public static func cardLine(for b: BoxAdvice.Build) -> String {
+        let first = areaWords(b).components(separatedBy: ", ").first ?? ""
+        return first.isEmpty ? costShort(b) : "\(costShort(b)) · \(first)"
     }
 
     /// The design's sub line: "Gym, Max · 10k dust".

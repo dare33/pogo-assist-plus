@@ -29,6 +29,26 @@ final class HubModelTests: XCTestCase {
         XCTAssertEqual(HubModel.builds(b, for: .rocket).map(\.targetName), ["Lucario"])
     }
 
+    func testHeadlineCardWording() throws {
+        let b = try advice().builds
+        XCTAssertEqual(b.map(HubModel.headline(for:)), ["Mega evolve Lucario", "Form change Zamazenta (Hero) → Zamazenta (Crowned Shield)", "Power up Xerneas", "Staraptor (Mega)", "Power up Moltres"])
+        XCTAssertEqual(b.map(HubModel.cardLine(for:)), ["75k dust · Raids", "206k dust · Raids", "206k dust · Raids", "Free · Raids", "137k dust · Raids"])
+        var eevee = b[4]; eevee.title = "Eevee"; eevee.targetName = "Flareon"; eevee.dust = 6_600
+        eevee.steps = [.init(kind: "evolve", to: "Flareon", candy: 25)]; eevee.areas = ["GL"]
+        XCTAssertEqual(HubModel.headline(for: eevee), "Evolve Eevee → Flareon")
+        XCTAssertEqual(HubModel.cardLine(for: eevee), "6,600 dust · Great League")
+    }
+
+    func testGapsFollowTheirArea() {
+        let g = [BoxAdvice.Gap(area: "Raids", section: "Dark", tier: "S", name: "Tyranitar", obtain: nil, haveBase: false),
+                 BoxAdvice.Gap(area: "GL", section: nil, tier: "A", name: "Azumarill", obtain: nil, haveBase: false),
+                 BoxAdvice.Gap(area: "ML", section: nil, tier: "S", name: "Dialga", obtain: nil, haveBase: false)]
+        XCTAssertEqual(HubModel.gaps(g, for: .everything).count, 3)
+        XCTAssertEqual(HubModel.gaps(g, for: .pvp).map(\.name), ["Azumarill", "Dialga"])
+        XCTAssertEqual(HubModel.gaps(g, for: .raids).map(\.name), ["Tyranitar"])
+        XCTAssertTrue(HubModel.gaps(g, for: .max).isEmpty)
+    }
+
     func testFittingStopsAtTheFirstBuildThatDoesNotFit() throws {
         let b = try advice().builds
         let none = HubModel.fitting(b, stardust: 0)
