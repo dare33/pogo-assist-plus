@@ -9,10 +9,19 @@ let ctx = null;
 const need = () => { if (!ctx) throw new Error('PogoCore.load(gamemaster, tiers, rankings) has not been called'); return ctx; };
 const replacer = (k, v) => (v instanceof Map ? Object.fromEntries(v) : v instanceof Set ? [...v] : v);
 const out = (v) => JSON.stringify(v, replacer);
-// The app reads only each Pokémon's CSV index, whether it resolved, and its leagues; the rest of the analysis record (the whole
+// The app reads only each Pokémon's CSV index, whether it resolved, its leagues, and its activity fit; the rest of the analysis record (the whole
 // game-master species, every hit) was 5 MB of the 6.7 MB for 2,000 entries and the replacer ran on every value of it. Nothing in
 // the slimmed entries can be a Map or a Set, so they go through plain JSON.stringify.
-const slim = (e) => (e.unresolved ? { p: { index: e.p.index }, unresolved: true } : { p: { index: e.p.index }, speciesId: e.resolved.speciesId, leagues: e.leagues });
+// fit crosses as a compact array per area, [tag, as, tier, reason] with tag s / o / w (strong, ok, weak): as and tier are null for weak, reason
+// (none, iv, ivUnknown, shadowNoMega) only for weak. The engine's sentence (`line`) is not sent; the app composes it from these and the copy's own row.
+const FIT_TAG = { strong: 's', ok: 'o', weak: 'w' };
+const slimFit = (fit) => Object.fromEntries(Object.entries(fit).map(([area, f]) => [area, f.tag === 'weak' ? ['w', null, null, f.reason] : [FIT_TAG[f.tag], f.as, f.tier]]));
+const slim = (e) => {
+  if (e.unresolved) return { p: { index: e.p.index }, unresolved: true };
+  const o = { p: { index: e.p.index }, speciesId: e.resolved.speciesId, leagues: e.leagues, fit: slimFit(e.fit) };
+  if (e.bestOf.length) o.bestOf = e.bestOf;
+  return o;
+};
 global.PogoCore = {
   // raw module functions (objects in, objects out)
   indexGamemaster: G.indexGamemaster, indexTiers: D.indexTiers, indexRankings: D.indexRankings,

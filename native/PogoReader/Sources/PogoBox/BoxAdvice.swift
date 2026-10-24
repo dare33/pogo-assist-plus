@@ -288,7 +288,7 @@ public struct BoxAdvice: Codable, Equatable {
     /// `moves` (before, only the shown and experimental ones did). Advice cached at 2 to 8 has the old shape or the old rules, so it is dropped and recomputed too.
     /// Versions 10 and 11 were written by dev builds of a branch that carried interim payload fields (since removed), so they are taken: the next real
     /// bump must be 12 or higher, or such a cache would pass for the new shape (`loadAdvice` keeps any version at or above this one).
-    /// 12 since each Pokémon carries `fit` (a Strong / OK / Weak tag per Raids, Gym, Rocket and Max) and `bestOf` (the areas it is its species' best copy for).
+    /// 12 since each Pokémon carries `fit` (a Strong / OK / Weak tag per Raids, Gym, Rocket and Max, in the compact form the bridge sends) and `bestOf` (the areas it is its species' best copy for).
     public static let currentVersion = 12
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
@@ -329,14 +329,55 @@ public struct BoxAdvice: Codable, Equatable {
 
     public func leagues(for id: String) -> [String: LeagueRating] { leagues[id] ?? [:] }
 
-    /// How well one copy suits one non-league activity area, as `src/advise.js` `fit` says it: `tag` is "strong" (one of the copy's own builds
-    /// lists the area), "ok" (a table entry in reach and IVs of 80% or more) or "weak"; `asName` (JSON "as") is the member it is rated as.
+    /// IV % (the average of the three IVs) at or above which a copy with a table entry in reach is OK rather than Weak. Mirror of `FIT_IV_PCT` in
+    /// `src/advise.js` (which decides the tag; this only words the Weak reason), so change the pair together.
+    public static let fitIVPercent = 80.0
+
+    /// How well one copy suits one non-league activity area, as `src/advise.js` `fit` says it. The bridge carries `[tag, as, tier, reason]`
+    /// (tag s / o / w) and the app composes the sentence (`line`) from that and the copy's own row, as the engine words it.
     public struct Fit: Codable, Equatable {
-        public var tag: String
+        /// "strong" (one of the copy's own builds lists the area), "ok" (a table entry in reach and IVs at `fitIVPercent` or more) or "weak".
+        public enum Tag: String, Codable { case strong, ok, weak }
+        /// Why a Weak copy is weak: no table entry in reach, IVs below the threshold, IVs unknown, or a Shadow copy whose only entries are Mega ones.
+        public enum Reason: String, Codable { case none, iv, ivUnknown, shadowNoMega }
+        public var area: String
+        public var tag: Tag
+        /// The table entry the copy is rated as ("Mega Delphox"); nil for weak.
         public var asName: String?
         public var tier: String?
-        public var line: String
-        private enum CodingKeys: String, CodingKey { case tag, asName = "as", tier, line }
+        public var reason: Reason?
+        /// What the Weak sentences name: the copy's species name and IV %, from its own row.
+        public var species: String
+        public var ivPercent: Double?
+
+        public var line: String {
+            let label = BoxAdvice.areaLabel[area] ?? area
+            switch tag {
+            case .strong, .ok:
+                let tierPart = tier.map { " \($0)" } ?? ""
+                return "\(label)\(tierPart) as \(asName ?? species)\(area == "max" ? " (needs a Dynamax copy)" : "")"
+            case .weak:
+                switch reason ?? .none {
+                case .none: return "No table entry for \(species) in \(label)"
+                case .ivUnknown: return "IVs not known"
+                case .shadowNoMega: return "A Shadow copy cannot Mega evolve"
+                case .iv:
+                    // One decimal, a whole number without it ("80%", "66.7%"), as the engine's Number(toFixed(1)) prints it.
+                    let pct = ((ivPercent ?? 0) * 10).rounded() / 10
+                    let text = pct == pct.rounded() ? String(Int(pct)) : String(format: "%.1f", pct)
+                    return "IVs \(text)%, below \(Int(BoxAdvice.fitIVPercent))%"
+                }
+            }
+        }
+
+        /// Decodes one area's compact `[tag, as, tier, reason]`; nil when the tag is not one the app knows.
+        static func decode(area: String, _ v: JSONValue, species: String, ivPercent: Double?) -> Fit? {
+            guard let a = v.arrayValue, case .string(let t)? = a.first else { return nil }
+            func str(_ i: Int) -> String? { if i < a.count, case .string(let s) = a[i] { return s } else { return nil } }
+            let tag: Tag
+            switch t { case "s": tag = .strong; case "o": tag = .ok; case "w": tag = .weak; default: return nil }
+            return Fit(area: area, tag: tag, asName: str(1), tier: str(2), reason: str(3).flatMap(Reason.init(rawValue:)), species: species, ivPercent: ivPercent)
+        }
     }
     /// entry id -> "raids" | "gym" | "rocket" | "max" -> that area's fit. Empty for an advice the JavaScript wrote without `fit`.
     public var fit: [String: [String: Fit]] = [:]
@@ -416,12 +457,13 @@ public struct BoxAdvice: Codable, Equatable {
         }
         // Optional: a report without `fit` / `bestOf` (older JavaScript) still decodes, with no tags.
         for e in report["pokemon"]?.arrayValue ?? [] {
-            guard let eid = id(e["p"]) else { continue }
+            guard let eid = id(e["p"]), case .number(let n)? = e["p"]?["index"] else { continue }
+            let row = entries[Int(n) - 1].row
+            let ivPercent = row.ivs.map { Double($0.atk + $0.def + $0.hp) / 45 * 100 }
             var fits = [String: Fit]()
             if case .object(let areas)? = e["fit"] {
                 for (area, v) in areas {
-                    guard let tag = str(v["tag"]), let line = str(v["line"]) else { continue }
-                    fits[area] = Fit(tag: tag, asName: str(v["as"]), tier: str(v["tier"]), line: line)
+                    if let f = Fit.decode(area: area, v, species: row.name, ivPercent: ivPercent) { fits[area] = f }
                 }
             }
             if !fits.isEmpty { out.fit[eid] = fits }
