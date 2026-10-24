@@ -50,6 +50,17 @@
                ReferencedContainer = "container:PogoAssist.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "664445FC324D984CF08F06CC"
+               BuildableName = "PogoAssistTests.xctest"
+               BlueprintName = "PogoAssistTests"
+               ReferencedContainer = "container:PogoAssist.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

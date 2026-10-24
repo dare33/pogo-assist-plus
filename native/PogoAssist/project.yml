@@ -142,6 +142,19 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(SHARE_EXTENSION_BUNDLE_ID)
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
+  # Unit tests for the app's own logic that has no UI to drive (the Box index, the insight store); hosted in the app so `@testable import PogoAssist` works.
+  PogoAssistTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - PogoAssistTests
+    dependencies:
+      - target: PogoAssist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).unittests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
   PogoAssistUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -172,3 +185,4 @@ schemes:
       config: Debug
       targets:
         - PogoAssistUITests
+        - PogoAssistTests

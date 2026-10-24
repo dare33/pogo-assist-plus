@@ -42,7 +42,10 @@ struct BoxView: View {
     private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }
     /// The advice, once it is ready for this box version (the tags, tiles and activity chips read it).
     private var readyAdvice: BoxAdvice? { if case .ready(let a) = model.advice { return a } else { return nil } }
-    private var insightKey: String { "\(indexKey)|\(readyAdvice == nil ? "waiting" : "ready")" }
+    private var adviceState: InsightKey.State { InsightKey.State(model.advice) }
+    private var insightKey: InsightKey { InsightKey(account: model.account, seq: model.snapshot?.seq, state: adviceState) }
+    /// No insight yet because the advice is still being worked out (a failed advice is not waiting: it never arrives).
+    private var insightWaiting: Bool { store.insight == nil && adviceState == .waiting }
 
     private struct SectionKey: Equatable { var query: String; var chip: BoxIndex.Chip; var sort: BoxIndex.Sort; var version: Int; var insightVersion: Int; var pogoAssist: Bool }
 
@@ -172,9 +175,9 @@ struct BoxView: View {
                     if chip == .toCheck { rescanButton }
                     sortLine
                     if sectionsReady && sections.isEmpty {
-                        // An activity chip waits for the advice: until then nothing can be Strong or OK, which is not the same as no match.
-                        let waiting: Bool = { if case .activity = chip { return store.insight == nil } else { return false } }()
-                        Text(waiting ? "Working out advice…" : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
+                        // An activity chip waits for the advice: until then nothing can be Strong or OK, which is not the same as no match. A failed advice says so.
+                        let isActivity: Bool = { if case .activity = chip { return true } else { return false } }()
+                        Text(isActivity && store.insight == nil ? (adviceState == .failed ? "Advice could not be worked out" : "Working out advice…") : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
                     }
                     ForEach(sections) { sectionView($0) }
                 }
@@ -394,7 +397,7 @@ struct BoxView: View {
         let check = r.stats.toCheck > 0 ? "\(r.stats.toCheck) to check" : nil
         var label = "\(r.title), \(r.stats.count) Pokémon"
         if let activity, let lead = r.lead { label += ", \(lead.label) for \(activity.title)" }
-        label += ". " + LeagueTiles.spoken(title: r.title, insight: store.insight, pogoAssist: pogoAssist)
+        label += ". " + LeagueTiles.spoken(title: r.title, insight: store.insight, waiting: insightWaiting, pogoAssist: pogoAssist)
         if let check { label += ". " + check }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
@@ -412,7 +415,7 @@ struct BoxView: View {
                     .background(Theme.surface2, in: Capsule())
                 Image(systemName: "chevron.right").font(.figtree(13, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
             }
-            LeagueTiles(title: r.title, insight: store.insight, pogoAssist: pogoAssist)
+            LeagueTiles(title: r.title, insight: store.insight, waiting: insightWaiting, pogoAssist: pogoAssist)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(minHeight: 56)

@@ -27,13 +27,16 @@ extension BoxInsight.Activity {
 // MARK: a soft tag
 
 /// A soft chip (radius 8, padding 3 by 8, 11/800): a 10 pt label with .08em tracking, and after a dimmed "·" the words. Used for the league and activity tags.
+/// `border` draws a 1 pt line just inside the shape (it adds no size), which is how OK and Weak differ from Strong and from each other by shape as well as colour.
 struct SoftTag: View {
     let label: String
     var detail: String? = nil
     let ink: Color
     let tint: Color
+    var border: Color? = nil
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
         HStack(spacing: 4) {
             Text(label).font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.08 * 10)
             if let detail {
@@ -44,18 +47,34 @@ struct SoftTag: View {
         .foregroundStyle(ink)
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(tint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(tint, in: shape)
+        .overlay { if let border { shape.strokeBorder(border, lineWidth: 1) } }
     }
 }
 
-/// The Strong / OK / Weak tag for an activity: the activity's colours for Strong and OK, the muted off tone for Weak.
+/// The Strong / OK / Weak tag for an activity, three shapes: Strong is the activity's ink on its tint; OK is the same with a 1 pt border in the ink (Rocket's OK was
+/// graphite on grey, near-identical to Weak); Weak is a plain outline in `Theme.line` with `Theme.muted` text and no fill. `Theme.muted` (6A7085) is 4.9:1 on
+/// `Theme.surface` (white) in light mode, over the 4.5:1 the small text needs (computed with `Theme.contrast`; the row it sits on is `Theme.surface`).
+/// `worth` nil is a copy the advice has no rating for: "Not rated", muted text with no fill or outline. `bestOf` merges the "best of N" tag of the same area into
+/// this one ("RAIDS · OK · best of 6").
 struct WorthTag: View {
     let activity: BoxInsight.Activity
-    let worth: LeaguePanel.Worth
+    let worth: LeaguePanel.Worth?
+    var bestOf: Int? = nil
     @Environment(\.accent) private var accent
 
+    static func detail(_ worth: LeaguePanel.Worth?, bestOf: Int?) -> String {
+        (worth?.label ?? "Not rated") + (bestOf.map { " · best of \($0.formatted())" } ?? "")
+    }
+
     var body: some View {
-        SoftTag(label: activity.tagLabel, detail: worth.label, ink: worth == .weak ? Theme.muted : activity.ink(accent), tint: worth == .weak ? Theme.off : activity.tint(accent))
+        let ink = activity.ink(accent), detail = Self.detail(worth, bestOf: bestOf)
+        switch worth {
+        case .strong?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent))
+        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent), border: ink)
+        case .weak?: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear, border: Theme.line)
+        case nil: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear)
+        }
     }
 }
 
@@ -76,12 +95,14 @@ struct BuildsChip: View {
 struct LeagueTiles: View {
     let title: String
     let insight: BoxInsight?
+    /// The advice is still being worked out ("…"); a failed advice is not, and reads "—" like a league with no rating.
+    let waiting: Bool
     let pogoAssist: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
 
     /// The second line of a tile and its spoken words: the member, "Over cap", "IVs not read", "—" (no rating), "…" while the advice is being worked out.
-    static func line(_ t: BoxInsight.Tile?, ready: Bool) -> String {
-        guard ready else { return "…" }
+    static func line(_ t: BoxInsight.Tile?, waiting: Bool) -> String {
+        guard !waiting || t != nil else { return "…" }
         switch t?.status {
         case .fits?: return t?.member ?? "—"
         case .ivsNotRead?: return "IVs not read"
@@ -93,18 +114,21 @@ struct LeagueTiles: View {
     static func percent(_ t: BoxInsight.Tile?) -> String? { t?.status == .fits ? t?.pct.map(LeaguePanel.percent) : nil }
 
     /// The tiles as one sentence for the row's spoken label.
-    static func spoken(title: String, insight: BoxInsight?, pogoAssist: Bool) -> String {
+    static func spoken(title: String, insight: BoxInsight?, waiting: Bool, pogoAssist: Bool) -> String {
         LeaguePanel.keys.map { key in
             let t = insight?.tile(title: title, league: key, pogoAssist: pogoAssist)
             let value = percent(t).map { ", " + $0.dropLast() + " percent" } ?? ""
-            return "\(LeaguePanel.name(key)): \(line(t, ready: insight != nil))\(value)"
+            return "\(LeaguePanel.name(key)): \(line(t, waiting: waiting))\(value)"
         }.joined(separator: ". ")
     }
+
+    /// One column from the accessibility text sizes, three across below them (a test reads this; the tiles are hidden from accessibility, so their frames cannot be read).
+    static func stacked(_ size: DynamicTypeSize) -> Bool { size.isAccessibilitySize }
 
     var body: some View {
         let tiles = LeaguePanel.keys.map { key in (key, insight?.tile(title: title, league: key, pogoAssist: pogoAssist)) }
         Group {
-            if typeSize.isAccessibilitySize {
+            if Self.stacked(typeSize) {
                 VStack(spacing: 6) { ForEach(tiles, id: \.0) { tile($0.0, $0.1) } }
             } else {
                 HStack(spacing: 6) { ForEach(tiles, id: \.0) { tile($0.0, $0.1) } }
@@ -116,7 +140,7 @@ struct LeagueTiles: View {
     private func tile(_ key: String, _ t: BoxInsight.Tile?) -> some View {
         let league = League(rawValue: key) ?? .gl
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        let line = Self.line(t, ready: insight != nil)
+        let line = Self.line(t, waiting: waiting)
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 Text(key.uppercased()).font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.08 * 10)

@@ -92,6 +92,7 @@
 		E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83DD8DD5AEC769BBE964440 /* ScanDone.swift */; };
 		ECC2E9A5E07CE0B2908A1D1A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F387A3B2C09806D90C1232DB /* PrivacyInfo.xcprivacy */; };
 		EDABA9EEAC727744599A9E39 /* ReportSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F5275BA12DBF318D759175 /* ReportSupport.swift */; };
+		F2025255259D74D0143F1857 /* BoxInsightStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D04F07048F190593A9DCBE6 /* BoxInsightStoreTests.swift */; };
 		F4EC58D5E187857BA98309EC /* BarsAndAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */; };
 		F8C6E92B9CF663047CCCC108 /* SetupChecklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F723B7B2F32D040376093D /* SetupChecklistView.swift */; };
 		F9863E5471B04F338208E6E9 /* ReviewSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */; };
@@ -107,6 +108,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = F6C3F189EE2FAAB3FF30832F;
 			remoteInfo = PogoShare;
+		};
+		A308B161B028C169E07F05E3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABF508185C418D773A2E16EA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 282114AC3DFA08D4C66E6E04;
+			remoteInfo = PogoAssist;
 		};
 		D6CBB60EDDFC066527674173 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -160,6 +168,7 @@
 		36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBroadcastButton.swift; sourceTree = "<group>"; };
 		384EC74CAE6F7A853DC89045 /* ScreenshotImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImport.swift; sourceTree = "<group>"; };
 		3AA7DC367A1E8DE143CF1386 /* BoxIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxIndex.swift; sourceTree = "<group>"; };
+		3D04F07048F190593A9DCBE6 /* BoxInsightStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxInsightStoreTests.swift; sourceTree = "<group>"; };
 		3D753F1DDCCB14FE57185CE0 /* DesignGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignGallery.swift; sourceTree = "<group>"; };
 		3EF2F19209145E4C035F933E /* ReviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSupport.swift; sourceTree = "<group>"; };
 		3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanOptionsPanel.swift; sourceTree = "<group>"; };
@@ -182,6 +191,7 @@
 		5C6AA316B422945EDE86A699 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeScansBetterSheet.swift; sourceTree = "<group>"; };
 		60BF710F03812439C395ED03 /* Figtree-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Figtree-Variable.ttf"; sourceTree = "<group>"; };
+		6314EDE939A5A48F12FA3DDE /* PogoAssistTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PogoAssistTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6875B047C21F1CC4B7701507 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		6B793340E977374E8287D10D /* ReviewWording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewWording.swift; sourceTree = "<group>"; };
 		6B9E2F476A7C0759293BCB1F /* StateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateModel.swift; sourceTree = "<group>"; };
@@ -309,6 +319,7 @@
 			isa = PBXGroup;
 			children = (
 				F391C1A79CF135A501834207 /* PogoAssist.app */,
+				6314EDE939A5A48F12FA3DDE /* PogoAssistTests.xctest */,
 				A0F17C7995A34F075324B10F /* PogoAssistUITests.xctest */,
 				5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */,
 				7799DA33C637F5569E469B10 /* PogoShare.appex */,
@@ -350,6 +361,14 @@
 			name = Packages;
 			sourceTree = "<group>";
 		};
+		898B24E273621CFD68B845A4 /* PogoAssistTests */ = {
+			isa = PBXGroup;
+			children = (
+				3D04F07048F190593A9DCBE6 /* BoxInsightStoreTests.swift */,
+			);
+			path = PogoAssistTests;
+			sourceTree = "<group>";
+		};
 		925C26FEB7FE904576C497C8 /* PogoShare */ = {
 			isa = PBXGroup;
 			children = (
@@ -367,6 +386,7 @@
 				136978DFB9C1E3E522338822 /* Config */,
 				83D4555883DC4E6375E28D61 /* Packages */,
 				D1230AB8CB500A6F206667F1 /* PogoAssist */,
+				898B24E273621CFD68B845A4 /* PogoAssistTests */,
 				80C169478E600852506F6E05 /* PogoAssistUITests */,
 				33DC935E8680C780EF432B5E /* PogoBroadcast */,
 				925C26FEB7FE904576C497C8 /* PogoShare */,
@@ -526,6 +546,24 @@
 			productReference = A0F17C7995A34F075324B10F /* PogoAssistUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		664445FC324D984CF08F06CC /* PogoAssistTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CD614A0DD0BEDD67DF21E15C /* Build configuration list for PBXNativeTarget "PogoAssistTests" */;
+			buildPhases = (
+				6312734461D8BD354405B601 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D4239CD6E40284D218CB6DE5 /* PBXTargetDependency */,
+			);
+			name = PogoAssistTests;
+			packageProductDependencies = (
+			);
+			productName = PogoAssistTests;
+			productReference = 6314EDE939A5A48F12FA3DDE /* PogoAssistTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		F6C3F189EE2FAAB3FF30832F /* PogoShare */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 185DEB06F1AE4172C9F933E9 /* Build configuration list for PBXNativeTarget "PogoShare" */;
@@ -565,6 +603,9 @@
 						ProvisioningStyle = Automatic;
 						TestTargetID = 282114AC3DFA08D4C66E6E04;
 					};
+					664445FC324D984CF08F06CC = {
+						ProvisioningStyle = Automatic;
+					};
 					F6C3F189EE2FAAB3FF30832F = {
 						ProvisioningStyle = Automatic;
 					};
@@ -590,6 +631,7 @@
 				282114AC3DFA08D4C66E6E04 /* PogoAssist */,
 				1F7F526800B6D63AAD20F8D3 /* PogoBroadcast */,
 				F6C3F189EE2FAAB3FF30832F /* PogoShare */,
+				664445FC324D984CF08F06CC /* PogoAssistTests */,
 				4B49FD7AA675776B5AA780D6 /* PogoAssistUITests */,
 			);
 		};
@@ -628,6 +670,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		6312734461D8BD354405B601 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F2025255259D74D0143F1857 /* BoxInsightStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D3BE7B2F1E1FC244F871B954 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -745,6 +795,11 @@
 			target = 1F7F526800B6D63AAD20F8D3 /* PogoBroadcast */;
 			targetProxy = D6CBB60EDDFC066527674173 /* PBXContainerItemProxy */;
 		};
+		D4239CD6E40284D218CB6DE5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 282114AC3DFA08D4C66E6E04 /* PogoAssist */;
+			targetProxy = A308B161B028C169E07F05E3 /* PBXContainerItemProxy */;
+		};
 		E29FBF303217780F82AA7F1E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F6C3F189EE2FAAB3FF30832F /* PogoShare */;
@@ -787,6 +842,23 @@
 			};
 			name = Release;
 		};
+		2269BF9B8EEF66385F752B4A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID).unittests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PogoAssist.app/PogoAssist";
+			};
+			name = Release;
+		};
 		443FCD486119C4E24EC55995 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -818,6 +890,23 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "$(SHARE_EXTENSION_BUNDLE_ID)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6DA60460194CEC79D52E950E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID).unittests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PogoAssist.app/PogoAssist";
 			};
 			name = Debug;
 		};
@@ -1068,6 +1157,15 @@
 			buildConfigurations = (
 				99B724FD294EE3CC8D97D75A /* Debug */,
 				443FCD486119C4E24EC55995 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CD614A0DD0BEDD67DF21E15C /* Build configuration list for PBXNativeTarget "PogoAssistTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6DA60460194CEC79D52E950E /* Debug */,
+				2269BF9B8EEF66385F752B4A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

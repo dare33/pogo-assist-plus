@@ -66,6 +66,41 @@ final class BoxInsightTests: XCTestCase {
         XCTAssertEqual(unread.tile(title: "Eevee", league: "gl", pogoAssist: false)?.status, .ivsNotRead)
     }
 
+    /// Eevee-shaped: copy "flare" has the better IV rank percentile but a Weak Flareon rating; copy "umbre" is Strong as Umbreon at a lower percentile. The tile (and
+    /// so the species list's league tag) names the Strong copy, and among equals the rank percentile, then IV %, then the box order decide.
+    func testTheTilePrefersStrongThenOkThenWeakBeforeTheIVRank() {
+        let es = [entry("flare", "Eevee"), entry("umbre", "Eevee"), entry("ok1", "Eevee"), entry("ok2", "Eevee"), entry("t1", "Vulpix"), entry("t2", "Vulpix"), entry("t3", "Vulpix")]
+        let adv = advice([
+            "flare": ["gl": R(options: [option("flareon", score: 70, pct: 99, rankPct: 99)])],
+            "umbre": ["gl": R(options: [option("umbreon", score: 93, pct: 90, rankPct: 85)])],
+            "ok1": ["gl": R(options: [option("espeon", score: 90, pct: 92, rankPct: 88)])],
+            "ok2": ["gl": R(options: [option("espeon", score: 90, pct: 92, rankPct: 97)])],
+            "t1": ["gl": R(options: [option("ninetales", score: 93, pct: 90, rankPct: 90)])],
+            "t2": ["gl": R(options: [option("ninetales", score: 93, pct: 95, rankPct: 90)])],
+            "t3": ["gl": R(options: [option("ninetales", score: 93, pct: 95, rankPct: 90)])],
+        ])
+        let insight = BoxInsight.make(advice: adv, entries: es)
+        XCTAssertEqual(insight.copies["flare"]?.slot("gl", pogoAssist: false)?.worth, .weak)
+        XCTAssertEqual(insight.copies["umbre"]?.slot("gl", pogoAssist: false)?.worth, .strong)
+        XCTAssertEqual(insight.tile(title: "Eevee", league: "gl", pogoAssist: false)?.copyId, "umbre", "Strong beats a Weak copy with the higher IV rank")
+        XCTAssertEqual(insight.tile(title: "Eevee", league: "gl", pogoAssist: false)?.member, "Umbreon")
+        // Without the Strong copy, the OK copy with the better percentile beats the Weak one.
+        let noStrong = BoxInsight.make(advice: adv, entries: es.filter { $0.id != "umbre" })
+        XCTAssertEqual(noStrong.tile(title: "Eevee", league: "gl", pogoAssist: false)?.copyId, "ok2")
+        // Equal worth and percentile: IV %, then the first in the box.
+        XCTAssertEqual(insight.tile(title: "Vulpix", league: "gl", pogoAssist: false)?.copyId, "t2")
+    }
+
+    func testAShadowCopysBestOfTagNamesTheShadow() {
+        var f = BoxAdvice.Fit(area: "raids", tag: .strong, asName: "Tyranitar", tier: "S", reason: nil, species: nil, ivPercent: 90)
+        XCTAssertEqual(f.asNameLabel(shadow: true), "Tyranitar (Shadow)")
+        XCTAssertEqual(f.asNameLabel(shadow: false), "Tyranitar")
+        f.asName = "Tyranitar (Shadow)"
+        XCTAssertEqual(f.asNameLabel(shadow: true), "Tyranitar (Shadow)", "not doubled")
+        f.asName = nil
+        XCTAssertNil(f.asNameLabel(shadow: true))
+    }
+
     func testAChipKeepsStrongAndOkCopies() {
         let es = [entry("a", "Eevee"), entry("b", "Eevee")]
         let strong = BoxAdvice.Fit(area: "raids", tag: .strong, asName: "Tyranitar", tier: "S", reason: nil, species: nil, ivPercent: 90)
@@ -124,9 +159,11 @@ final class BoxInsightTests: XCTestCase {
         for (title, tiles) in insight.species {
             for (i, t) in tiles.enumerated() where t.status == .fits {
                 let mine = es.filter { $0.row.title == title }
-                let rolls = mine.compactMap { insight.copies[$0.id]?.slots[i] }.filter { $0.status == .fits }.compactMap(\.rankPct)
+                // The best is Strong before OK before Weak, then the higher rank percentile.
+                func key(_ s: LeaguePanel.Slot) -> [Double] { [Double(-BoxInsight.worthRank(s.worth)), s.rankPct ?? 0] }
+                let fitting = mine.compactMap { insight.copies[$0.id]?.slots[i] }.filter { $0.status == .fits }
                 let tile = try XCTUnwrap(insight.copies[try XCTUnwrap(t.copyId)]?.slots[i])
-                XCTAssertEqual(tile.rankPct, rolls.max(), title)
+                XCTAssertTrue(fitting.allSatisfy { !key(tile).lexicographicallyPrecedes(key($0)) }, title)
             }
         }
         XCTAssertTrue(insight.species.values.contains { $0.contains { $0.status == .fits } }, "some tile has a value")

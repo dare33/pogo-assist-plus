@@ -26,6 +26,8 @@ struct BoxIndex {
         var fixed: Bool
         /// The entry has a Mega form with a known CP. It is still one Pokémon, and every figure here (CP, best IV, top CP) is its normal form's.
         var hasMega = false
+        /// A Shadow copy (the game's flag on the row); the engine's best-of is per resolved species, so a plain and a Shadow copy are told apart by it.
+        var shadow = false
     }
 
     struct Group {
@@ -70,6 +72,7 @@ struct BoxIndex {
             var item = Item(id: e.id, title: title, name: r.name.lowercased(), key: key, cp: r.cp, hp: r.hp, noLevelFits: GameSearch.noLevelFits(r.flags), ivs: r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }, ivSum: sum,
                             needsCheck: e.needsCheck, fixed: e.isHandCorrected)
             item.hasMega = mega != nil
+            item.shadow = r.shadow == 1
             if item.needsCheck { toCheckCount += 1 }
             if item.fixed { fixedCount += 1 }
             species.insert(r.dex.map { "dex\($0)" } ?? r.name.lowercased())
@@ -267,17 +270,37 @@ struct BoxIndex {
     }
 }
 
+/// What the insight is built for: the account and box version, and where the advice for them stands. Three states, not two: a failed advice must not read as one that
+/// is still being worked out (the list would say "Working out advice…" for ever).
+struct InsightKey: Hashable {
+    enum State: Hashable {
+        case waiting, ready, failed
+        init(_ advice: AppModel.AdviceState) {
+            switch advice {
+            case .ready: self = .ready
+            case .failed: self = .failed
+            case .none, .computing: self = .waiting
+            }
+        }
+    }
+    var account: String
+    var seq: Int
+    var state: State
+
+    init(account: String?, seq: Int?, state: State) { self.account = account ?? ""; self.seq = seq ?? -1; self.state = state }
+}
+
 /// Owns the current `BoxIndex`: rebuilt when the box is loaded or saved (a new version), away from the main thread for a large box.
 @MainActor
 final class BoxIndexStore: ObservableObject {
     @Published private(set) var index = BoxIndex.empty
-    /// The tags and tiles read from the advice; nil until the advice is ready. Built once per box version, for both rankings.
+    /// The tags and tiles read from the advice; nil until the advice is ready, and while it has failed. Built once per box version, for both rankings.
     @Published private(set) var insight: BoxInsight?
     @Published private(set) var insightVersion = 0
     /// Bumped on each rebuild, so a view can recompute what it derived from the index.
     @Published private(set) var version = 0
     private var builtFor: String?
-    private var insightFor: String?
+    private var insightFor: InsightKey?
 
     func refresh(key: String, entries: [BoxEntry]) async {
         guard builtFor != key else { return }
@@ -291,10 +314,17 @@ final class BoxIndexStore: ObservableObject {
         index = built; builtFor = key; version += 1
     }
 
-    /// Builds the insight when the advice is ready (and drops it while the advice is recalculating, so a tag never belongs to another box version).
-    func refreshInsight(key: String, advice: BoxAdvice?, entries: [BoxEntry]) async {
+    /// Keeps the insight in step with the advice. Another ACCOUNT's insight is dropped at once, so its tags and tiles never show on this account's Pokémon. A new box
+    /// version of the same account (a hand fix, a saved scan) keeps the previous insight on show while the advice is recalculated and the new one built (copy ids
+    /// are stable, so it stays close, and the list does not blank after every edit); a failed advice drops it, since nothing can then be said about the new version.
+    func refreshInsight(key: InsightKey, advice: BoxAdvice?, entries: [BoxEntry]) async {
         guard insightFor != key else { return }
-        guard let advice else { insight = nil; insightFor = key; insightVersion += 1; return }
+        if let was = insightFor, was.account != key.account, insight != nil { insight = nil; insightVersion += 1 }
+        guard key.state == .ready, let advice else {
+            if key.state != .waiting, insight != nil { insight = nil; insightVersion += 1 }
+            insightFor = key
+            return
+        }
         let built: BoxInsight
         if entries.count < 2000 {
             built = BoxInsight.make(advice: advice, entries: entries)

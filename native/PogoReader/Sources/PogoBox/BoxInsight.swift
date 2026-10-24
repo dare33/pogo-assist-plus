@@ -75,11 +75,16 @@ public struct BoxInsight {
     /// The tag of a copy for a chip, nil when unknown.
     public func worth(of id: String, _ a: Activity, pogoAssist: Bool) -> LeaguePanel.Worth? { copies[id]?.worth(a, pogoAssist: pogoAssist) }
 
+    /// 0 for Strong, 1 for OK, 2 for Weak or no tag: lower is better.
+    static func worthRank(_ w: LeaguePanel.Worth?) -> Int { w == .strong ? 0 : w == .ok ? 1 : 2 }
+
     public static func make(advice: BoxAdvice, entries: [BoxEntry]) -> BoxInsight {
         var out = BoxInsight()
         out.copies.reserveCapacity(entries.count)
-        // Per species and slot: the best copy so far. Best = highest IV rank percentile among the copies that fit, then IV %, then the first in the box.
-        struct Best { var rankPct: Double; var pct: Double; var tile: Tile }
+        // Per species and slot: the best copy so far. Best = the copy the row calls best for the league: Strong before OK before Weak (the tag the copy itself
+        // carries, so a tile never names a Weak copy while another copy of the species is Strong), then the higher IV rank percentile, then IV %, then the
+        // first in the box. The IV rank alone put a Weak Flareon copy on Eevee's Great League tile above its Strong Umbreon copy.
+        struct Best { var worth: Int; var rankPct: Double; var pct: Double; var tile: Tile }
         var best = [String: [Best?]]()
         var weakest = [String: [Tile]]()
         for e in entries {
@@ -104,9 +109,9 @@ public struct BoxInsight {
                 guard let s = slots[i] else { continue }
                 switch s.status {
                 case .fits:
-                    let rp = s.rankPct ?? 0, p = s.pct ?? 0
-                    if let cur = b[i], (rp, p) <= (cur.rankPct, cur.pct) { continue }
-                    b[i] = Best(rankPct: rp, pct: p, tile: Tile(status: .fits, member: s.member, pct: s.pct, copyId: e.id))
+                    let rp = s.rankPct ?? 0, p = s.pct ?? 0, wr = Self.worthRank(s.worth)
+                    if let cur = b[i], (-wr, rp, p) <= (-cur.worth, cur.rankPct, cur.pct) { continue }
+                    b[i] = Best(worth: wr, rankPct: rp, pct: p, tile: Tile(status: .fits, member: s.member, pct: s.pct, copyId: e.id))
                 case .ivsNotRead:
                     if w[i].status == .noData || w[i].status == .overCap { w[i] = Tile(status: .ivsNotRead, member: s.member, pct: nil, copyId: nil) }
                 case .overCap:
@@ -124,6 +129,12 @@ public struct BoxInsight {
 }
 
 extension BoxAdvice.Fit {
+    /// The table entry the copy is rated as, for a "best for" tag: a Shadow copy's name says so ("Tyranitar (Shadow)"), because the engine's best-of is per resolved
+    /// species and a plain and a Shadow copy of one species are each their own best. Nothing is added where the engine's name already says Shadow.
+    public func asNameLabel(shadow: Bool) -> String? {
+        asName.map { shadow && !$0.contains("(Shadow)") ? $0 + " (Shadow)" : $0 }
+    }
+
     /// "ADVICE BUILDS IT" on the copy that carries the advisor's primary build for the area, "ADVICE BUILDS MEGA CHARIZARD X" when the build's target is
     /// not the copy itself (compared without a "(Shadow)" suffix and without regard to case against `ownNames`, the copy's name and title); nil without a build.
     /// The same marker as the league cards' (`LeaguePanel.buildsChipText`).
