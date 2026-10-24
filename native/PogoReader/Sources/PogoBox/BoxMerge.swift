@@ -1137,6 +1137,8 @@ public enum BoxMerge {
             row.level = s.level ?? row.level; row.levelMax = s.levelMax ?? row.levelMax; row.dust = s.dust ?? row.dust
         }
         row.shadow = s.shadow ?? row.shadow
+        // Dynamax is set by hand only; a scan never reads it, so the saved value stays (as corrections do).
+        row.dynamax = e.row.dynamax
         // The scan's flags about IVs it did not read do not apply to IVs that were kept.
         let scanFlags = keepIVs ? s.flags.filter { FlagInfo.field(of: $0) != .ivs } : s.flags
         row.flags = FlagInfo.remaining(scanFlags, corrected: fix)
@@ -1160,7 +1162,18 @@ public enum BoxMerge {
         public var hp: Int?
         public var ivs: IVs?
         public var speciesName: String?
-        public init(cp: Int? = nil, hp: Int? = nil, ivs: IVs? = nil, speciesName: String? = nil) { self.cp = cp; self.hp = hp; self.ivs = ivs; self.speciesName = speciesName }
+        /// nil leaves the flag alone; `.notSet` clears it back to unknown (unlike the other fields, which cannot be cleared).
+        public var dynamax: DynamaxEdit?
+        public init(cp: Int? = nil, hp: Int? = nil, ivs: IVs? = nil, speciesName: String? = nil, dynamax: DynamaxEdit? = nil) {
+            self.cp = cp; self.hp = hp; self.ivs = ivs; self.speciesName = speciesName; self.dynamax = dynamax
+        }
+    }
+
+    /// The Dynamax switch on the Pokémon page: Not set (unknown, nil), Yes (caught as a Dynamax), No.
+    public enum DynamaxEdit: Equatable {
+        case notSet, yes, no
+        public var value: Bool? { switch self { case .notSet: return nil; case .yes: return true; case .no: return false } }
+        public init(_ value: Bool?) { self = value == nil ? .notSet : (value! ? .yes : .no) }
     }
 
     /// Apply a hand correction. A value equal to the current one is not a correction. The first correction of a value
@@ -1192,6 +1205,8 @@ public enum BoxMerge {
                 row.speciesId = id; row.name = nf.name; row.display = nf.name; row.form = nf.form; row.dex = sp.dex
             }
         }
+        // Not a correction of a read value: nothing is remembered as "was", and a scan never contradicts it.
+        if let d = edit.dynamax, d.value != row.dynamax { row.dynamax = d.value }
         row.flags = FlagInfo.remaining(row.flags, corrected: fix)
         out.row = row; out.corrections = fix
         return out

@@ -50,18 +50,22 @@ public struct ScanRow: Codable, Equatable {
     public var shadow: Int?
     /// Set only by a clip merge: the clip the row came from.
     public var clip: String?
+    /// Set only by hand on the Pokémon page: true when the Pokémon was caught as a Dynamax, false when it was not, nil when
+    /// unknown (the app cannot read it from the game). The reader never sets it; a re-scan merge carries it over.
+    public var dynamax: Bool?
 
     public init(index: Int, name: String, display: String, form: String, speciesId: String, dex: Int?, cp: Int, hp: Int?, ivs: IVs?, ivsRead: IVs?,
                 ivsGuess: IVs?, level: Double?, levelMax: Double?, dust: Int?, solveStatus: String, flags: [String], frames: [FrameLabel],
-                merged: Int? = nil, shadow: Int? = nil, clip: String? = nil) {
+                merged: Int? = nil, shadow: Int? = nil, clip: String? = nil, dynamax: Bool? = nil) {
         self.index = index; self.name = name; self.display = display; self.form = form; self.speciesId = speciesId; self.dex = dex; self.cp = cp
         self.hp = hp; self.ivs = ivs; self.ivsRead = ivsRead; self.ivsGuess = ivsGuess; self.level = level; self.levelMax = levelMax; self.dust = dust
         self.solveStatus = solveStatus; self.flags = flags; self.frames = frames; self.merged = merged; self.shadow = shadow; self.clip = clip
+        self.dynamax = dynamax
     }
 
     private enum Key: String, CodingKey {
         case index, name, display, form, speciesId, dex, cp, hp, ivs, ivsRead, ivsGuess, level, levelMax, dust
-        case solveStatus, flags, frames, merged, shadow, clip
+        case solveStatus, flags, frames, merged, shadow, clip, dynamax
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -86,6 +90,7 @@ public struct ScanRow: Codable, Equatable {
         try c.encodeIfPresent(merged, forKey: .merged)
         try c.encodeIfPresent(shadow, forKey: .shadow)
         try c.encodeIfPresent(clip, forKey: .clip)
+        try c.encodeIfPresent(dynamax, forKey: .dynamax)
     }
 }
 
