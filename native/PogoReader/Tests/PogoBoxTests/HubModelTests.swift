@@ -52,18 +52,22 @@ final class HubModelTests: XCTestCase {
     func testFittingStopsAtTheFirstBuildThatDoesNotFit() throws {
         let b = try advice().builds
         let none = HubModel.fitting(b, stardust: 0)
-        XCTAssertEqual(none.fits.map(\.targetName), ["Staraptor"], "with no stardust only the free build fits")
+        XCTAssertTrue(none.fits.isEmpty, "Staraptor is already built, so it is not listed; nothing else is free")
         XCTAssertEqual(none.used, 0); XCTAssertEqual(none.left, 0)
         let some = HubModel.fitting(b, stardust: 100_000)
-        XCTAssertEqual(some.fits.map(\.targetName), ["Lucario", "Staraptor"])
+        XCTAssertEqual(some.fits.map(\.targetName), ["Lucario"])
         XCTAssertEqual(some.used, 75_000); XCTAssertEqual(some.left, 25_000)
         let most = HubModel.fitting(b, stardust: 612_400)
-        XCTAssertEqual(most.fits.map(\.targetName), ["Lucario", "Zamazenta (Crowned Shield)", "Xerneas", "Staraptor"])
+        XCTAssertEqual(most.fits.map(\.targetName), ["Lucario", "Zamazenta (Crowned Shield)", "Xerneas"])
         XCTAssertEqual(most.used, 487_000); XCTAssertEqual(most.left, 125_400)
-        // Moltres (137,000) would not fit the 125,400 left, and a cheaper later build must not jump the queue; a free one still does.
-        let queue = [b[0], variant(b[4], dust: 300_000), variant(b[2], dust: 1_000), variant(b[3])]
+        // A dearer build ends the dust spending, a cheaper later one must not jump the queue; a candy-only build that still has a step does fit.
+        var candyOnly = b[2]; candyOnly.dust = 0; candyOnly.candy = 100
+        let queue = [b[0], variant(b[4], dust: 300_000), variant(b[2], dust: 1_000), candyOnly, b[3]]
         let r = HubModel.fitting(queue, stardust: 100_000)
-        XCTAssertEqual(r.fits.map(\.id), [b[0].id, b[3].id])
+        XCTAssertEqual(r.fits.map(\.id), [b[0].id, candyOnly.id], "the built Staraptor is left out")
+        // The boundary: a build that takes exactly what is left fits.
+        XCTAssertEqual(HubModel.fitting([b[0]], stardust: 75_000).fits.count, 1)
+        XCTAssertEqual(HubModel.fitting([b[0]], stardust: 74_999).fits.count, 0)
     }
 
     func testHeadlinesOnTheFixture() throws {
@@ -78,6 +82,35 @@ final class HubModelTests: XCTestCase {
         XCTAssertEqual(high.cheapWin?.targetName, "Zamazenta (Crowned Shield)")
         XCTAssertNil(high.worthSavingFor, "nothing costs more than 612,400")
         XCTAssertNil(HubModel.headlines([], stardust: nil).doFirst)
+    }
+
+    func testDoFirstSkipsABuildWithNothingLeftToDo() throws {
+        let b = try advice().builds
+        let h = HubModel.headlines([b[3], b[0], b[1]], stardust: nil)
+        XCTAssertEqual(h.doFirst?.targetName, "Lucario", "Staraptor is already built")
+        XCTAssertNil(HubModel.headlines([b[3]], stardust: nil).doFirst)
+    }
+
+    func testWorthSavingForUsesScoreWhenStardustIsKnownAndDustWhenItIsNot() throws {
+        let b = try advice().builds
+        func mk(_ base: BoxAdvice.Build, _ id: String, tier: String, dust: Int, score: Double) -> BoxAdvice.Build {
+            var v = base; v.entryId = id; v.tier = tier; v.dust = dust; v.score = score; return v
+        }
+        let first = b[0]
+        let cheap = mk(b[2], "c", tier: "S", dust: 1_000, score: 1)   // takes the cheap-win card, so it is not a candidate here
+        let dearButWeak = mk(b[2], "x1", tier: "A", dust: 300_000, score: 5)
+        let strong = mk(b[2], "x2", tier: "S", dust: 200_000, score: 9)
+        let cheapS = mk(b[2], "x3", tier: "S", dust: 120_000, score: 20)
+        // Known stardust: the highest score among those it cannot pay for, not the dearest.
+        var h = HubModel.headlines([first, cheap, dearButWeak, strong], stardust: 100_000)
+        XCTAssertEqual(h.worthSavingFor?.entryId, "x2")
+        // Unknown stardust: the highest-dust S build, so an A build that costs more is passed over.
+        h = HubModel.headlines([first, cheap, dearButWeak, strong, cheapS], stardust: nil)
+        XCTAssertEqual(h.worthSavingFor?.entryId, "x2", "A-tier x1 costs more but is not S; x3 is S but cheaper than x2")
+        // The boundary: a build that costs exactly the stardust is affordable, one dust more is worth saving for.
+        let exact = mk(b[2], "y1", tier: "S", dust: 200_000, score: 9)
+        XCTAssertNil(HubModel.headlines([first, cheap, exact], stardust: 200_000).worthSavingFor)
+        XCTAssertEqual(HubModel.headlines([first, cheap, exact], stardust: 199_999).worthSavingFor?.entryId, "y1")
     }
 
     func testCheapWinSkipsFinishedBuildsAndLowerTiers() throws {
@@ -123,6 +156,13 @@ final class HubModelTests: XCTestCase {
         XCTAssertEqual(strip.count, events.count - 1)
         XCTAssertEqual(HubModel.upcoming(events, today: "2026-11-21").first?.title, "GO Battle League: Twilight Trails")
         XCTAssertTrue(HubModel.upcoming(events, today: "2026-12-02").isEmpty)
+        // The order does not depend on the order in the file; ties on the first day keep the file's order.
+        let shuffled = Array(events.reversed())
+        let again = HubModel.upcoming(shuffled, today: today)
+        XCTAssertEqual(again.map(\.from), again.map(\.from).sorted())
+        let sameDay = events.filter { $0.from == "2026-11-14" }
+        XCTAssertEqual(sameDay.count, 2)
+        XCTAssertEqual(again.filter { $0.from == "2026-11-14" }.map(\.title), sameDay.reversed().map(\.title))
         // An event on its last day is still shown.
         XCTAssertTrue(HubModel.upcoming(events, today: "2026-12-01").contains { $0.to == "2026-12-01" })
     }
@@ -140,5 +180,10 @@ final class HubModelTests: XCTestCase {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Australia/Sydney")!
         let d = cal.date(from: DateComponents(year: 2026, month: 10, day: 25, hour: 23, minute: 30))!
         XCTAssertEqual(HubModel.dayKey(d, calendar: cal), "2026-10-25")
+        // A device on the Japanese or Buddhist calendar still gets the Gregorian day the data uses.
+        for id in [Calendar.Identifier.japanese, .buddhist, .islamicUmmAlQura] {
+            var other = Calendar(identifier: id); other.timeZone = TimeZone(identifier: "Australia/Sydney")!
+            XCTAssertEqual(HubModel.dayKey(d, calendar: other), "2026-10-25", "\(id)")
+        }
     }
 }

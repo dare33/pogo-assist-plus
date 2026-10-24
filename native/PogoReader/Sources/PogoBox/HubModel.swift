@@ -35,10 +35,10 @@ public enum HubModel {
 
     /// The builds, in the advisor's order, that the stardust pays for: each dusty build is taken while the running total stays within the
     /// stardust, and the first one that does not fit ends the dust spending (a cheaper build further down does not jump the queue).
-    /// A build that needs no dust always fits.
+    /// A build that needs no dust still fits (an evolve paid in candy), but a build with nothing left to do is not listed at all.
     public static func fitting(_ builds: [BoxAdvice.Build], stardust: Int) -> (fits: [BoxAdvice.Build], used: Int, left: Int) {
         var fits = [BoxAdvice.Build](), used = 0, open = true
-        for b in builds {
+        for b in builds where needsSomething(b) {
             if b.dust <= 0 { fits.append(b); continue }
             guard open else { continue }
             if used + b.dust <= stardust { fits.append(b); used += b.dust } else { open = false }
@@ -53,11 +53,11 @@ public enum HubModel {
         return steps.contains { $0.kind != "needsDynamaxCopy" }
     }
 
-    /// `doFirst`: the advisor's first build. `cheapWin`: the lowest-dust S or A build (then lowest candy, then advisor order) that still
+    /// `doFirst`: the advisor's first build that has something to do. `cheapWin`: the lowest-dust S or A build (then lowest candy, then advisor order) that still
     /// needs something and is not `doFirst`. `worthSavingFor`: the highest-score build that costs more dust than is on hand (without a
     /// known stardust: the highest-dust S-tier build), and neither of the other two.
     public static func headlines(_ builds: [BoxAdvice.Build], stardust: Int?) -> (doFirst: BoxAdvice.Build?, cheapWin: BoxAdvice.Build?, worthSavingFor: BoxAdvice.Build?) {
-        let first = builds.first
+        let first = builds.first(where: needsSomething)
         let cheap = builds.filter { ($0.tier == "S" || $0.tier == "A") && $0.id != first?.id && needsSomething($0) }
             .enumerated().min { l, r in (l.element.dust, l.element.candy, l.offset) < (r.element.dust, r.element.candy, r.offset) }?.element
         let rest = builds.filter { $0.id != first?.id && $0.id != cheap?.id }
@@ -133,8 +133,12 @@ public enum HubModel {
 
 extension HubModel {
     /// The local calendar day as `yyyy-mm-dd`, the form the rotation and events carry.
+    /// The dates in `hub.json` are Gregorian, so the day is read with a Gregorian calendar in the device's time zone, whatever calendar
+    /// the device uses (a Japanese or Buddhist year would otherwise give "0008-10-25").
     public static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
-        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
+        let c = gregorian.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
