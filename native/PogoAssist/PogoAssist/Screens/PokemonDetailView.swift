@@ -312,11 +312,42 @@ struct PokemonDetailView: View {
                     Text(f.1).font(.figtree(15, .bold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink).multilineTextAlignment(.trailing)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
-                .overlay(alignment: .bottom) { if n < facts.count - 1 { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 16) } }
+                .overlay(alignment: .bottom) { if n < facts.count - 1 || mega == nil { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 16) } }
                 .accessibilityElement(children: .combine)
             }
+            // The Dynamax flag belongs to the Pokémon, not to its Mega form.
+            if mega == nil { dynamaxRow(e) }
         }
     }
+
+    /// Whether this Pokémon was caught as a Dynamax. The game does not show it, so the person sets it: Not set | Yes | No.
+    /// Max battles use only the ones set to Yes. The switch is one adjustable element; the label beside it is hidden from VoiceOver (the switch names itself).
+    private func dynamaxRow(_ e: BoxEntry) -> some View {
+        let selection = Binding<BoxMerge.DynamaxEdit>(
+            get: { BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) },
+            set: { new in
+                Task {
+                    let result = await model.correct(e.id, BoxMerge.Edit(dynamax: new))
+                    if let error = result.error { model.message = error }
+                }
+            })
+        let label = Text("Dynamax").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.muted).accessibilityHidden(true)
+        let control = SegmentedSwitch(
+            segments: [.init(value: .notSet, title: "Not set"), .init(value: .yes, title: "Yes"), .init(value: .no, title: "No")],
+            selection: selection, metrics: .compact, label: "Dynamax", identifier: "dynamax-switch", adjustable: true, singleLine: true)
+        return VStack(alignment: .leading, spacing: 4) {
+            // At large text sizes the switch drops under its label rather than squeezing it.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { label.frame(maxWidth: .infinity, alignment: .leading); control }.fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) { label; control }
+            }
+            Text("Only Pokémon caught as Dynamax can join Max battles. The app cannot read this from the game.")
+                .font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
 
     // MARK: how it was read
 

@@ -1170,7 +1170,7 @@ public enum BoxMerge {
     }
 
     /// The Dynamax switch on the Pokémon page: Not set (unknown, nil), Yes (caught as a Dynamax), No.
-    public enum DynamaxEdit: Equatable {
+    public enum DynamaxEdit: Equatable, Hashable {
         case notSet, yes, no
         public var value: Bool? { switch self { case .notSet: return nil; case .yes: return true; case .no: return false } }
         public init(_ value: Bool?) { self = value == nil ? .notSet : (value! ? .yes : .no) }
