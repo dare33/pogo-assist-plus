@@ -43,7 +43,12 @@ struct BoxView: View {
     /// The sections are the current account's and box version's. A big box builds its index away from the main thread, so after a switch of account the previous
     /// account's sections can still be in `sections`: they are never shown, the progress view stands in until the new ones are computed.
     private var sectionsCurrent: Bool { Self.showsSections(computedFor: sectionsFor, current: wantedKey) }
-    static func showsSections(computedFor: String?, current: String) -> Bool { computedFor == current }
+    /// Keys read "account|seq". Sections of the same account stay up while a newer box version is indexed (a hand fix keeps the rows and the scroll position); another account's never show.
+    static func showsSections(computedFor: String?, current: String) -> Bool {
+        guard let computedFor else { return false }
+        func account(_ k: String) -> Substring { k.lastIndex(of: "|").map { k[..<$0] } ?? k[...] }
+        return account(computedFor) == account(current)
+    }
     private var index: BoxIndex { store.index }
 
     private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }

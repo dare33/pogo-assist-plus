@@ -186,11 +186,11 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertEqual(store.insightBuiltFor, InsightKey(account: "A", seq: 1, state: .ready))
     }
 
-    /// The sections on a screen are the ones computed for its account and box version; those of the previous account stay in memory but are not shown.
+    /// The sections on a screen are the ones computed for its account and box version; those of the previous account stay in memory but are not shown, while a stale box version of the same account stays visible until the new sections arrive.
     func testSectionsWithAStaleKeyAreNotShown() {
         XCTAssertTrue(BoxView.showsSections(computedFor: "A|1", current: "A|1"))
         XCTAssertFalse(BoxView.showsSections(computedFor: "A|1", current: "B|1"), "another account's")
-        XCTAssertFalse(BoxView.showsSections(computedFor: "A|1", current: "A|2"), "an older box version")
+        XCTAssertTrue(BoxView.showsSections(computedFor: "A|1", current: "A|2"), "an older box version of the same account stays visible")
         XCTAssertFalse(BoxView.showsSections(computedFor: nil, current: "A|1"), "nothing computed yet")
     }
 
