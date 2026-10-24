@@ -61,7 +61,7 @@ struct HubView: View {
     }
 
     @ViewBuilder private var eventsStrip: some View {
-        let today = HubModel.dayKey(Date())
+        let today = HubModel.today()   // the Gregorian day in the device zone; a DEBUG build honours -uitest-today (HubRaidsModel.swift)
         if let hub = try? HubData.bundled() {
             let events = HubModel.upcoming(hub.events, today: today)
             if events.isEmpty {
