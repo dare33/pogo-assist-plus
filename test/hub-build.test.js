@@ -126,6 +126,7 @@ for (const [label, file, from, to, message] of [
   ['an unresolvable boss name', ROT, '| Palkia |', '| Zzyzx |', /cannot resolve "Zzyzx"/],
   ['a name that resolves only by the first-word guess', ROT, '| Palkia |', '| Cryogonal Zzyzx |', /only resolves by a guess/],
   ['a name with a repeated word', ROT, '| Palkia |', '| Cryogonal Cryogonal |', /only resolves by a guess/],
+  ['a repeated Shadow word', ROT, '| Palkia |', '| Shadow Shadow Palkia |', /only resolves by a guess/],
   ['a Mega name that does not end on a Mega', ROT, '| Palkia |', '| Mega Palkia |', /not a Mega/],
   ['a 5-star row with no boss', ROT, '| 5star | 5-star raid | Palkia |', '| 5star | 5-star raid | |', /needs a boss or "to be announced"/],
   ['a row with a missing cell', ROT, '| 5star | 5-star raid | Palkia | |', '| 5star | 5-star raid | Palkia |', /cells, the header has 7/],

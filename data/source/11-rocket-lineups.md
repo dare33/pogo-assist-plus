@@ -13,7 +13,6 @@ Leader lineups as read from Leek Duck's lineup page on 25 Oct 2026 (the page say
 
 What a grunt says before the battle tells you the type of its team. The two typeless rows have an empty Type and a Label: the generic grunt (male or female) of a mixed team, and the Decoy. Sources: Leek Duck's lineup page (read 25 Oct 2026) and Bulbapedia's Team GO Rocket Grunt page (https://bulbapedia.bulbagarden.net/wiki/Team_GO_Rocket_Grunt); the Pokémon GO Hub and Dexerto guides in the 23 Oct research gave "Winning is for winners" as the Normal grunt's quote, which is the generic grunt's.
 
-
 | Type | Quote | Label |
 |---|---|---|
 | normal | Normal does not mean weak. | |

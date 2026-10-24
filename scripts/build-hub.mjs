@@ -66,11 +66,12 @@ function pokemon(name, where) {
   const r = resolveSpecies(gm, name);
   if (!r) { fail(`${where}: cannot resolve "${name}"`); return null; }
   // Exact: the name's words (without the Shadow / Mega words) must be the species' words, with the game's default-form words allowed on the species
-  // ("Keldeo" for "Keldeo (Ordinary)"); a repeated or extra word means resolveSpecies guessed.
-  const mine = tokenKey(name).split(' ').filter((w) => w && !FLAG_WORDS.has(w));
+  // ("Keldeo" for "Keldeo (Ordinary)"); a repeated word (a flag word too: "Shadow Shadow Palkia") or an extra one means resolveSpecies guessed.
+  const words = tokenKey(name).split(' ').filter(Boolean);
+  const mine = words.filter((w) => !FLAG_WORDS.has(w));
   const theirs = tokenKey(r.species.speciesName).split(' ').filter((w) => w && !FLAG_WORDS.has(w));
   const extra = theirs.filter((w) => !mine.includes(w));
-  const exact = mine.length === new Set(mine).size && mine.every((w) => theirs.includes(w)) && extra.every((w) => DEFAULT_FORM_WORDS.has(w));
+  const exact = words.length === new Set(words).size && mine.every((w) => theirs.includes(w)) && extra.every((w) => DEFAULT_FORM_WORDS.has(w));
   if (!exact) { fail(`${where}: "${name}" only resolves by a guess to ${r.speciesId}`); return null; }
   if (r.flags.mega && !/_(mega(_[xy])?|primal)$/.test(r.speciesId)) { fail(`${where}: "${name}" is marked Mega but resolves to ${r.speciesId}, which is not a Mega`); return null; }
   // The game master pads single-type species with "none".
