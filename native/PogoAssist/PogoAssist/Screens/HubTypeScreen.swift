@@ -54,6 +54,8 @@ struct HubTypeDestination: View {
     var body: some View {
         switch type {
         case .everything: HubEverythingView()
+        case .raids: HubRaidsView()
+        case .max: HubMaxView()
         case .gym: HubGymView()
         case .rocket: HubRocketView()
         case .pvp: HubPvPView()
