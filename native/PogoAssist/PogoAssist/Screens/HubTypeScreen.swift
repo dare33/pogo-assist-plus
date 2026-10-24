@@ -29,8 +29,7 @@ struct HubTypeScreen<Content: View>: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
-                .accessibilityIdentifier("hub-back")
+            IconButton(systemImage: "chevron.left", kind: .floating, label: "Back", identifier: "hub-back") { dismiss() }
             VStack(alignment: .leading, spacing: 1) {
                 Text(type.title).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink).lineLimit(2)
                     .accessibilityAddTraits(.isHeader)
@@ -97,7 +96,6 @@ struct HubAreaScreen: View {
                 HubGapList(gaps: HubModel.gaps(advice.gaps, for: type.key), type: type)
             }
         }
-        .accessibilityIdentifier("hub-screen-\(type.rawValue)")
     }
 }
 
@@ -131,7 +129,7 @@ struct HubBuildList: View {
             Text(verbatim: String(i + 1)).font(.figtree(13, .heavy, relativeTo: .footnote)).monospacedDigit()
                 .foregroundStyle(lit ? Color.white : Theme.muted)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(lit ? type.ink(accent) : Theme.surface2))
+                .background(Circle().fill(lit ? type.solid(accent) : Theme.surface2))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
@@ -184,11 +182,13 @@ struct TierChip: View {
 struct HubGapList: View {
     let gaps: [BoxAdvice.Gap]
     let type: ContentType
+    /// The Everything screen shows the header and its count even with no gaps, as the old Next list did.
+    var alwaysShowsHeader = false
 
     var body: some View {
         let top = gaps.filter { $0.tier == "S" }, others = gaps.filter { $0.tier == "A" }.count
+        if !top.isEmpty || others > 0 || alwaysShowsHeader { HubHeaderLine("GAPS (\(top.count) S TIER)") }
         if !top.isEmpty || others > 0 {
-            HubHeaderLine("GAPS (\(top.count) S TIER)")
             VStack(spacing: 0) {
                 ForEach(Array(top.enumerated()), id: \.element.id) { i, g in
                     VStack(alignment: .leading, spacing: 2) {

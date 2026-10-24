@@ -9,6 +9,8 @@ struct HubEverythingView: View {
     @State private var showAll = false
     @State private var asking = false
     @State private var entry = ""
+    /// The last entry was rejected; cleared by the next valid one.
+    @State private var rejected = false
 
     var body: some View {
         var count: String?
@@ -18,10 +20,10 @@ struct HubEverythingView: View {
                 ready(advice)
             } else {
                 stardustCard(builds: [])
+                problemLine
                 HubAdviceGate { _ in EmptyView() }
             }
         }
-        .accessibilityIdentifier("hub-screen-everything")
         .alert("Stardust", isPresented: $asking) {
             TextField("Stardust", text: $entry).keyboardType(.numberPad).accessibilityIdentifier("hub-stardust-field")
             Button("Save") { save() }
@@ -37,6 +39,7 @@ struct HubEverythingView: View {
         if heads.doFirst != nil { headlineStrip(heads) }
         let fit = stardust.map { HubModel.fitting(a.builds, stardust: $0) }
         stardustCard(builds: fit?.fits ?? [], used: fit?.used, left: fit?.left)
+        problemLine
         if a.builds.isEmpty {
             Text("The advisor found nothing worth building in this box.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
         }
@@ -62,7 +65,7 @@ struct HubEverythingView: View {
             HubBuildList(builds: a.builds, type: .everything, highlightFirst: fit == nil)
         }
         if showAll || a.builds.isEmpty {
-            HubGapList(gaps: a.gaps, type: .everything).accessibilityIdentifier("hub-gaps")
+            HubGapList(gaps: a.gaps, type: .everything, alwaysShowsHeader: true)
             duplicates(a)
         }
     }
@@ -71,12 +74,11 @@ struct HubEverythingView: View {
 
     private func headlineStrip(_ h: (doFirst: BoxAdvice.Build?, cheapWin: BoxAdvice.Build?, worthSavingFor: BoxAdvice.Build?)) -> some View {
         let cards: [(String, BoxAdvice.Build?, Color)] = [
-            ("DO FIRST", h.doFirst, ContentType.raids.ink(accent)),
-            ("CHEAP WIN", h.cheapWin, League.gl.ink),
-            ("WORTH SAVING FOR", h.worthSavingFor, League.ml.ink),
+            ("DO FIRST", h.doFirst, ContentType.raids.solid(accent)),
+            ("CHEAP WIN", h.cheapWin, League.gl.solid),
+            ("WORTH SAVING FOR", h.worthSavingFor, League.ml.solid),
         ]
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+        return HubCardStrip {
                 ForEach(cards.indices, id: \.self) { i in
                     if let b = cards[i].1 {
                         NavigationLink(value: b.entryId) {
@@ -89,10 +91,7 @@ struct HubEverythingView: View {
                         .accessibilityIdentifier("hub-card-\(i)")
                     }
                 }
-            }
-            .fixedSize(horizontal: false, vertical: true)
         }
-        .scrollClipDisabled()
     }
 
     // MARK: stardust
@@ -144,19 +143,27 @@ struct HubEverythingView: View {
         .accessibilityIdentifier("hub-stardust-change")
     }
 
-    /// Digits only (commas and spaces are fine); empty clears; anything else leaves it as it was.
+    @ViewBuilder private var problemLine: some View {
+        if rejected {
+            Text("Stardust must be a whole number, up to 999,999,999.").font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.red)
+                .padding(.horizontal, 4)
+                .accessibilityIdentifier("hub-stardust-problem")
+        }
+    }
+
+    /// Digits only (commas and spaces are fine, at most nine digits); empty clears; anything else leaves it as it was and says so.
     private func save() {
         let trimmed = entry.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty { model.stardust = nil; return }
+        if trimmed.isEmpty { model.stardust = nil; rejected = false; return }
         let digits = trimmed.filter { $0 != "," && $0 != " " }
-        if digits.allSatisfy(\.isNumber), digits.count <= 9, let n = Int(digits) { model.stardust = n }
+        if !digits.isEmpty, digits.allSatisfy({ $0.isASCII && $0.isNumber }), digits.count <= 9, let n = Int(digits) { model.stardust = n; rejected = false } else { rejected = true }
     }
 
     // MARK: duplicates
 
     @ViewBuilder private func duplicates(_ a: BoxAdvice) -> some View {
-        HubHeaderLine("DUPLICATES (\(a.duplicates.count) SPECIES)")
         if !a.duplicates.isEmpty {
+            HubHeaderLine("DUPLICATES (\(a.duplicates.count) SPECIES)")
             VStack(spacing: 0) {
                 let shown = Array(a.duplicates.prefix(15))
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, d in

@@ -22,7 +22,7 @@ struct RootView: View {
             Theme.bg.ignoresSafeArea()
             // The two stacks sit in one capped, centred column; the background above stays outside it so it fills the screen.
             ZStack {
-                NavigationStack { BoxView().navigationDestination(isPresented: scanBinding(for: .box)) { ScanView().hidesTabBar() } }
+                NavigationStack { BoxView(active: tab == .box).navigationDestination(isPresented: scanBinding(for: .box)) { ScanView().hidesTabBar() } }
                     .opacity(tab == .box ? 1 : 0).allowsHitTesting(tab == .box).accessibilityHidden(tab != .box)
                 NavigationStack { HubView(active: tab == .next).navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
                     .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)

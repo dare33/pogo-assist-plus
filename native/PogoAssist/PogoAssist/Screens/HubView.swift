@@ -68,12 +68,8 @@ struct HubView: View {
                 Text("Nothing on right now").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
                     .accessibilityIdentifier("hub-no-events")
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) { ForEach(events.indices, id: \.self) { eventCard(events[$0], today: today) } }
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .scrollClipDisabled()
-                .accessibilityIdentifier("hub-events")
+                HubCardStrip { ForEach(events.indices, id: \.self) { eventCard(events[$0], today: today) } }
+                    .accessibilityIdentifier("hub-events")
             }
         } else {
             Text("The events list could not be read.").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
@@ -83,7 +79,7 @@ struct HubView: View {
     @ViewBuilder private func eventCard(_ e: HubData.Event, today: String) -> some View {
         let tie = ContentType(rawValue: e.tie)
         let span = HubModel.span(from: e.from, to: e.to, today: today)
-        let card = HubCard(kicker: span.kicker, title: e.title, line: e.line, pill: tie.flatMap(Self.pillText), base: tie.map { $0.ink(accent) } ?? accent.ink)
+        let card = HubCard(kicker: span.kicker, title: e.title, line: e.line, pill: tie.flatMap(Self.pillText), base: (tie ?? .everything).solid(accent))
         if let tie {
             NavigationLink(value: tie) { card }.buttonStyle(PressStyle())
                 .accessibilityElement(children: .ignore)
@@ -253,10 +249,11 @@ extension HubHeaderLine where Trailing == EmptyView {
     init(_ text: String) { self.init(text) { EmptyView() } }
 }
 
-/// A card of the horizontal strips (the Hub's events, the Everything screen's headlines): 236 pt wide, radius 22, padding 14 by 16, at
-/// least 112 pt tall. In light mode a gradient of `base` under white text; in dark mode a dark solid of `base` under `base` text (the
-/// ink values are the light ones in dark mode). Both keep the text at 4.5:1 or better, which is why the base is a type's ink and
-/// not its brighter solid colour.
+/// A card of the Hub's strips (the events, the Everything screen's headlines): 236 pt wide, radius 22, padding 14 by 16, at least 112 pt
+/// tall, white text on `base`, the type's fixed light-mode ink (`ContentType.solid`, 5.28:1 or better in white). In light mode a gradient
+/// that darkens towards the far corner, in dark mode the plain solid; the same colour in both, because the dark-mode ink values are pale
+/// and white on a 30% wash of them fell under 4.5:1. The pill is black at 22% (white text 7.6:1 or better; the design's white at 22%
+/// leaves white text at 3.5 to 4.5:1 on several of the colours). At accessibility text sizes the card is full width and nothing is cut off.
 struct HubCard: View {
     let kicker: String
     let title: String
@@ -264,30 +261,30 @@ struct HubCard: View {
     var pill: String? = nil
     let base: Color
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let dark = scheme == .dark
-        let text: Color = dark ? base : .white
+        let big = typeSize.isAccessibilitySize
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
         VStack(alignment: .leading, spacing: 4) {
             Text(kicker).font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.08 * 11)
-            Text(title).font(.figtree(17, .heavy, relativeTo: .headline)).lineLimit(2)
-            Text(line).font(.figtree(13, .semibold, relativeTo: .footnote)).lineLimit(2)
+            Text(title).font(.figtree(17, .heavy, relativeTo: .headline)).lineLimit(big ? nil : 2).fixedSize(horizontal: false, vertical: big)
+            Text(line).font(.figtree(13, .semibold, relativeTo: .footnote)).lineLimit(big ? nil : 2).fixedSize(horizontal: false, vertical: big)
             Spacer(minLength: 6)
             if let pill {
                 Text(pill).font(.figtree(11, .heavy, relativeTo: .caption2))
                     .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(dark ? base.opacity(0.22) : Color.black.opacity(0.22), in: Capsule())
+                    .background(Color.black.opacity(0.22), in: Capsule())
             }
         }
-        .foregroundStyle(text)
+        .foregroundStyle(Color.white)
         .multilineTextAlignment(.leading)
         .padding(.horizontal, 16).padding(.vertical, 14)
-        .frame(width: 236, alignment: .topLeading)
-        .frame(minHeight: 112, maxHeight: .infinity, alignment: .topLeading)
+        .frame(width: big ? nil : 236, alignment: .topLeading)
+        .frame(maxWidth: big ? .infinity : nil, minHeight: 112, maxHeight: big ? nil : .infinity, alignment: .topLeading)
         .background {
-            if dark {
-                ZStack { shape.fill(Theme.surface); shape.fill(base.opacity(0.3)) }
+            if scheme == .dark {
+                shape.fill(base)
             } else {
                 shape.fill(LinearGradient(colors: [base, Self.darker(base, 0.2)], startPoint: .topLeading, endPoint: .bottomTrailing))
             }
@@ -302,5 +299,22 @@ struct HubCard: View {
             UIColor(c).resolvedColor(with: trait).getRed(&r, green: &g, blue: &b, alpha: &a)
             return UIColor(red: r * (1 - f), green: g * (1 - f), blue: b * (1 - f), alpha: a)
         })
+    }
+}
+
+/// The cards side by side in a strip that scrolls sideways and bleeds to the screen edge; at accessibility text sizes they stack, full width.
+struct HubCardStrip<Content: View>: View {
+    @ViewBuilder var content: Content
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(spacing: 10) { content }
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) { content }.fixedSize(horizontal: false, vertical: true)
+            }
+            .scrollClipDisabled()
+        }
     }
 }

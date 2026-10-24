@@ -239,6 +239,8 @@ struct IconButton: View {
     let systemImage: String
     var kind: IconButtonKind = .neutral
     let label: String
+    /// The button's accessibility identifier, for a UI test.
+    var identifier: String? = nil
     var action: () -> Void
     @Environment(\.accent) private var accent
 
@@ -246,6 +248,7 @@ struct IconButton: View {
         Button(action: action) { face }
             .buttonStyle(PressStyle())
             .accessibilityLabel(label)
+            .accessibilityIdentifier(identifier ?? "")
     }
 
     /// The circle without the button, for use as a Menu's label.
