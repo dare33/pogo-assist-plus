@@ -10,6 +10,7 @@ struct SpeciesListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accent) private var accent
     @Environment(\.showToast) private var showToast
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selecting = false
     @State private var choosingExport = false
     @State private var picked = Set<String>()
@@ -41,11 +42,21 @@ struct SpeciesListView: View {
         return ms.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
     }
 
+    /// How many copies of the species the box holds (the "best of 6" and the "3 of 6" count them all, whatever the search keeps).
+    private var copiesOfSpecies: Int { index.groups.first { $0.title == route.title }?.stats.count ?? 0 }
+
+    /// "Moltres · 6", or under an activity or league chip with its advice "Moltres · 3 of 6 for Raids": the copies that are Strong or OK for it, of those listed.
+    private func headerTitle(_ ms: [Int]) -> String {
+        guard let a = activity, store.insight != nil else { return "\(route.title) · \(ms.count.formatted())" }
+        let suit = ms.filter { chipWorth(index.items[$0].id).map { $0 == .strong || $0 == .ok } ?? false }.count
+        return "\(route.title) · \(suit.formatted()) of \(ms.count.formatted()) for \(a.league != nil ? a.title + " League" : a.title)"
+    }
+
     var body: some View {
         let ms = members
         let ids = ms.map { index.items[$0].id }
         VStack(spacing: 0) {
-            header(count: ms.count, ids: ids)
+            header(count: ms.count, title: headerTitle(ms), ids: ids)
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
                     sortLine
@@ -73,7 +84,7 @@ struct SpeciesListView: View {
 
     // MARK: header
 
-    @ViewBuilder private func header(count: Int, ids: [String]) -> some View {
+    @ViewBuilder private func header(count: Int, title: String, ids: [String]) -> some View {
         HStack(spacing: 8) {
             if selecting {
                 HeaderTextButton(title: "Cancel") { selecting = false; picked = [] }
@@ -82,7 +93,7 @@ struct SpeciesListView: View {
                 HeaderTextButton(title: picked.count == count ? "None" : "All \(count.formatted())") { picked = picked.count == count ? [] : Set(ids) }
             } else {
                 IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
-                Text("\(route.title) · \(count.formatted())").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+                Text(title).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
                     .lineLimit(2).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                     .accessibilityAddTraits(.isHeader)
                 HeaderTextButton(title: "Select") { selecting = true }
@@ -97,9 +108,15 @@ struct SpeciesListView: View {
     /// "Best IVs first" on the left, the ranking switch and its "i" on the right, the explainer under them. The tags and the order follow the switch.
     private var sortLine: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { order; Spacer(minLength: 8); RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring") }
+            // One line at the usual sizes, the label shrinking first (the switch wraps its own caption where it must, as in RankingControls); stacked from the accessibility sizes.
+            if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 0) { order; RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring") }
+            } else {
+                HStack(spacing: 8) {
+                    order.lineLimit(1).minimumScaleFactor(0.6).layoutPriority(-1)
+                    Spacer(minLength: 4)
+                    RankingSwitch(infoOpen: $rankingInfo, identifier: "species-scoring").layoutPriority(1)
+                }
             }
             if rankingInfo { RankingExplainer(identifier: "species-scoring-explainer").transition(.opacity) }
         }
@@ -108,7 +125,7 @@ struct SpeciesListView: View {
     }
 
     private var order: some View {
-        Label(activity.map { "Best for \($0.title) first" } ?? "Best IVs first", systemImage: "arrow.down").labelStyle(.titleAndIcon)
+        Label(activity.flatMap { a in store.insight == nil ? nil : "Best for \(a.title) first" } ?? "Best IVs first", systemImage: "arrow.down").labelStyle(.titleAndIcon)
             .font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
             .frame(minHeight: 44, alignment: .leading)
             .accessibilityIdentifier("species-order")
@@ -137,10 +154,15 @@ struct SpeciesListView: View {
         if let advice = readyAdvice {
             for area in advice.bestOf(for: it.id) {
                 guard let a = BoxInsight.Activity(rawValue: area) else { continue }
-                out.append(TagItem(id: "\(it.id)|\(area)", kind: .activity(a, area == "max" ? nil : advice.fit(for: it.id)[area]?.asName)))
+                out.append(TagItem(id: "\(it.id)|\(area)", kind: .activity(a, area == "max" ? nil : advice.fit(for: it.id)[area]?.asNameLabel(shadow: it.shadow))))
             }
         }
         return out
+    }
+
+    /// The activity a tag is for (a league tag's is the league's chip).
+    private func area(_ t: TagItem) -> BoxInsight.Activity {
+        switch t.kind { case .league(_, let a, _, _), .activity(let a, _): return a }
     }
 
     private func words(_ t: TagItem) -> String {
@@ -169,17 +191,19 @@ struct SpeciesListView: View {
         return LeaguePanel.worthSentence(c, key: key) ?? c.blockedText
     }
 
-    /// The Strong / OK / Weak tag for the chosen activity, a button that opens its line (plain while Select mode is on, when a tap picks the row).
-    @ViewBuilder private func statusTag(_ it: BoxIndex.Item, _ a: BoxInsight.Activity, _ w: LeaguePanel.Worth) -> some View {
+    /// The Strong / OK / Weak (or "Not rated") tag for the chosen activity, a button that opens its line (plain while Select mode is on, when a tap picks the row).
+    /// `bestOf` is the merged "best of N" when the copy is also the species' best for the same area.
+    @ViewBuilder private func statusTag(_ it: BoxIndex.Item, _ a: BoxInsight.Activity, _ w: LeaguePanel.Worth?, bestOf: Int?) -> some View {
         if selecting {
-            WorthTag(activity: a, worth: w).accessibilityHidden(true)
+            WorthTag(activity: a, worth: w, bestOf: bestOf).accessibilityHidden(true)
         } else {
             Button { if lineOpen.contains(it.id) { lineOpen.remove(it.id) } else { lineOpen.insert(it.id) } } label: {
-                WorthTag(activity: a, worth: w).padding(.vertical, 8).contentShape(Rectangle()).padding(.vertical, -8)
+                // 44 pt tall by padding (the chip is about 20), so the target is not smaller than a button's.
+                WorthTag(activity: a, worth: w, bestOf: bestOf).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(w.label) for \(a.title)")
-            .accessibilityHint("Shows why")
+            .accessibilityLabel("\(w?.label ?? "Not rated") for \(a.title)" + (bestOf.map { ", best of \($0)" } ?? ""))
+            .accessibilityHint(w == nil ? "" : "Shows why")
             .accessibilityValue(lineOpen.contains(it.id) ? (tagLine(it, a) ?? "") : "")
             .accessibilityAddTraits(lineOpen.contains(it.id) ? .isSelected : [])
             .accessibilityIdentifier("pokemon-tag")
@@ -216,8 +240,13 @@ struct SpeciesListView: View {
         let on = selecting && picked.contains(it.id)
         let ivs = it.ivs.map { "\($0) · \(it.pct ?? 0)%" } ?? "IVs not read"
         let best = bestTags(it)
-        let status = activity.flatMap { a in chipWorth(it.id).map { (a, $0) } }
+        // Under a chip with its advice every copy has a status tag (Strong, OK, Weak or Not rated). A "best for" tag for the same area is merged into it.
+        let status: (BoxInsight.Activity, LeaguePanel.Worth?)? = store.insight == nil ? nil : activity.map { ($0, chipWorth(it.id)) }
+        let shown = best.filter { t in status.map { area(t) != $0.0 } ?? true }
+        let merged = shown.count != best.count
         var spoken = "\(it.title), \(it.cp > 0 ? "CP \(it.cp)" : "CP not known"), \(ivs)\(it.hasMega ? ", has a Mega form" : "")\(it.needsCheck ? ", to check" : "")\(it.fixed ? ", fixed by hand" : "")"
+        // Select mode hides the tags from VoiceOver as separate elements, so the status is read with the row.
+        if selecting, let (a, w) = status { spoken += ". \(w?.label ?? "Not rated") for \(a.title)" }
         if !best.isEmpty { spoken += ". " + best.map(words).joined(separator: ". ") }
         return HStack(alignment: .top, spacing: 12) {
             if selecting {
@@ -248,10 +277,10 @@ struct SpeciesListView: View {
                 .accessibilityLabel(spoken)
                 if status != nil || !best.isEmpty {
                     FlowLayout(spacing: 6) {
-                        if let (a, w) = status { statusTag(it, a, w) }
-                        ForEach(best) { tagView($0).accessibilityHidden(true) }
+                        if let (a, w) = status { statusTag(it, a, w, bestOf: merged ? copiesOfSpecies : nil) }
+                        ForEach(shown) { tagView($0).accessibilityHidden(true) }
                     }
-                    if let (a, _) = status, lineOpen.contains(it.id), !selecting, let line = tagLine(it, a) {
+                    if let (a, w) = status, w != nil, lineOpen.contains(it.id), !selecting, let line = tagLine(it, a) {
                         Text(line).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
                             .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityIdentifier("pokemon-tag-line")

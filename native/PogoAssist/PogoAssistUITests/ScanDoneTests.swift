@@ -223,7 +223,7 @@ final class ScanDoneTests: XCTestCase {
             XCTAssertTrue(confirm.waitForExistence(timeout: 5))
             confirm.tap()
             // The flow is idle, so the Scan screen closes with the scan (as after a discard from the review) and the tabs are back with no pill over them.
-            XCTAssertTrue(app.buttons["Box"].waitForExistence(timeout: 10), "the Scan screen did not close")
+            XCTAssertTrue(app.buttons["Pokémon"].waitForExistence(timeout: 10), "the Scan screen did not close")
             XCTAssertFalse(app.buttons["scan-done-open"].exists)
             XCTAssertFalse(app.buttons["scan-done-pill"].waitForExistence(timeout: 2), "a discarded scan left a pill")
             // Scan opens at its start view, not at a Done screen.

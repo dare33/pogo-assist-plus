@@ -325,11 +325,12 @@ struct PokemonDetailView: View {
         let worth: LeaguePanel.Worth = f.tag == .strong ? .strong : f.tag == .ok ? .ok : .weak
         let open = activityOpen.contains(a.rawValue)
         let chip = f.buildsChipText(ownNames: [e.row.name, e.row.title])
-        let cost = f.buildCost.map { ", \($0.dust.formatted()) dust, \($0.candy.formatted()) candy" + ($0.xl > 0 ? ", \($0.xl.formatted()) XL" : "") } ?? ""
+        // LeaguePanel.grouped, not .formatted(): the figures read the same whatever the phone's region, as the league cards' do.
+        let cost = f.buildCost.map { ", \(LeaguePanel.grouped($0.dust)) dust, \(LeaguePanel.grouped($0.candy)) candy" + ($0.xl > 0 ? ", \(LeaguePanel.grouped($0.xl)) XL" : "") } ?? ""
         return VStack(alignment: .leading, spacing: 6) {
             FlowLayout(spacing: 8) {
                 Button { if open { activityOpen.remove(a.rawValue) } else { activityOpen.insert(a.rawValue) } } label: {
-                    WorthTag(activity: a, worth: worth).padding(.vertical, 8).contentShape(Rectangle()).padding(.vertical, -8)
+                    WorthTag(activity: a, worth: worth).padding(.vertical, 8).frame(minHeight: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(a.title): \(worth.label)")
