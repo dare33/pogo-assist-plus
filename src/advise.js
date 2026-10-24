@@ -95,6 +95,10 @@ export function markedMoves(texts) {
 const normMove = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const TIER_W = { S: 3, A: 2, B: 1 };
+// The areas `fit` rates (the leagues are rated per option by leaguesFor, and the app derives their tags from that).
+const FIT_AREAS = ['raids', 'gym', 'rocket', 'max'];
+// IV % (the export's IV average) at or above which a copy that has a table entry in reach counts as OK rather than Weak.
+export const FIT_IV_PCT = 80;
 // How much a hit in each area is worth relative to a raid hit. Gym is shallow; Max hits need a Dynamax-capable copy.
 const AREA_W = { raids: 1, gl: 1, ul: 1, ml: 1, rocket: 0.6, max: 0.6, gym: 0.35 };
 // PvPoke overall score at or above which a species counts as PvP-relevant even if no tier table names it.
@@ -310,6 +314,65 @@ export function analyseBox(box, ctx) {
     hygiene.push({ speciesId: id, name: gm.byId.get(id).speciesName, count: es.length, keep: sorted.slice(0, keepCount).map((e) => e.p), transfer: sorted.slice(keepCount).map((e) => e.p) });
   }
   hygiene.sort((a, b) => b.transfer.length - a.transfer.length);
+
+  // Fit: per copy and non-league area, Strong / OK / Weak, so a list can filter by activity. Strong is the copy's own build; OK is a table
+  // entry in its reach on a decently rolled copy; both are read off the same reach and builds as above, so nothing here feeds back into them.
+  const entriesBy = Object.fromEntries(FIT_AREAS.map((a) => [a, new Map()])); // area -> speciesId -> S/A/B entries
+  for (const e of tiers.entries) {
+    if (!entriesBy[e.area] || !TIER_W[e.tier]) continue;
+    if (e.area === 'max' && /gigantamax|g-max/i.test(e.name)) continue; // same exclusion as the hits: an export cannot show a G-Max catch
+    const m = entriesBy[e.area];
+    if (!m.has(e.speciesId)) m.set(e.speciesId, []);
+    m.get(e.speciesId).push(e);
+  }
+  const buildsOf = new Map();
+  // Only the builds the report lists (the best copy of each build), as the app does: a spare copy is not strong for what its twin carries.
+  for (const b of primaryBuilds) { if (!buildsOf.has(b.pokemon)) buildsOf.set(b.pokemon, []); buildsOf.get(b.pokemon).push(b); }
+  const ivPcts = new Map();
+  for (const entry of pokemon) {
+    if (entry.unresolved) continue;
+    const { p, resolved: r } = entry;
+    const ivPct = p.ivs ? p.ivPercent ?? ((p.ivs.atk + p.ivs.def + p.ivs.hp) / 45) * 100 : null;
+    ivPcts.set(entry, ivPct);
+    // Members in order of stage (itself first), then Megas (never for a Shadow copy). A Shadow copy also takes the plain entries.
+    const reach = [r.speciesId, ...evolutionsOf(gm, r.speciesId), ...formChangesOf(gm, r.speciesId)];
+    const members = [];
+    for (const id of reach) { members.push(id); if (p.shadow) { const b = baseSpeciesId(gm, id); if (b !== id) members.push(b); } }
+    if (!p.shadow) for (const id of reach) members.push(...megaIdsOf(gm, id));
+    const family = gm.byId.get(baseSpeciesId(gm, r.speciesId))?.speciesName ?? p.name;
+    const myBuilds = buildsOf.get(p) ?? [];
+    entry.fit = {};
+    for (const area of FIT_AREAS) {
+      const label = AREA_LABEL[area], dyn = area === 'max' ? ' (needs a Dynamax copy)' : '';
+      let strong = null;
+      for (const b of myBuilds) {
+        if (!b.areas.includes(area)) continue;
+        const t = b.hits.filter((h) => h.area === area).reduce((best, h) => (TIER_W[h.tier] > (TIER_W[best] ?? 0) ? h.tier : best), null);
+        if (!strong || (TIER_W[t] ?? 0) > (TIER_W[strong.tier] ?? 0)) strong = { as: b.targetName, tier: t };
+      }
+      let reachBest = null;
+      for (const id of members) for (const e of entriesBy[area].get(id) ?? []) if (!reachBest || TIER_W[e.tier] > TIER_W[reachBest.tier]) reachBest = e;
+      const weak = (line) => ({ tag: 'weak', as: null, tier: null, line });
+      if (strong) entry.fit[area] = { tag: 'strong', as: strong.as, tier: strong.tier ?? reachBest?.tier ?? null, line: `${label}${strong.tier ? ` ${strong.tier}` : ''} as ${strong.as}${dyn}` };
+      else if (!reachBest) entry.fit[area] = weak(`No table entry for ${family} in ${label}`);
+      else if (ivPct == null) entry.fit[area] = weak('IVs not known');
+      else if (ivPct < FIT_IV_PCT) entry.fit[area] = weak(`IVs ${Number(ivPct.toFixed(1))}%, below ${FIT_IV_PCT}%`);
+      else entry.fit[area] = { tag: 'ok', as: reachBest.name, tier: reachBest.tier, line: `${label} ${reachBest.tier} as ${reachBest.name}${dyn}` };
+    }
+  }
+  // Best copy of each species per area: strong before ok, then IV %, then CP, then input order. Species grouped as hygiene groups them.
+  const fitGroups = new Map();
+  for (const e of pokemon) { if (e.unresolved) continue; e.bestOf = []; const k = e.resolved.speciesId; if (!fitGroups.has(k)) fitGroups.set(k, []); fitGroups.get(k).push(e); }
+  for (const es of fitGroups.values()) {
+    for (const area of FIT_AREAS) {
+      const rate = (e) => (e.fit[area].tag === 'strong' ? 2 : e.fit[area].tag === 'ok' ? 1 : 0);
+      const iv = (e) => ivPcts.get(e) ?? 0;
+      const beats = (e, a) => rate(e) > rate(a) || (rate(e) === rate(a) && (iv(e) > iv(a) || (iv(e) === iv(a) && e.p.cp > a.p.cp)));
+      let best = null;
+      for (const e of es) if (rate(e) && (!best || beats(e, best))) best = e;
+      if (best) best.bestOf.push(area);
+    }
+  }
 
   // The IV rank tables are only worth keeping while this box is being analysed; the app caches the advice per box snapshot.
   clearRankCache();
