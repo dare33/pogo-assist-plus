@@ -232,6 +232,7 @@ test('a hand-set Dynamax flag: true drops the Dynamax-copy step, false drops the
   assert.equal(yes.length, 1);
   assert.ok(yes[0].hits.some((h) => h.area === 'max'), 'the Max hits are complete, not removed');
   assert.ok(!yes[0].steps.some((s) => s.kind === 'needsDynamaxCopy'));
+  assert.ok(yes[0].hits.filter((h) => h.area === 'max').every((h) => !h.needsDynamax), 'the hit agrees with the build');
   assert.equal(yes[0].needsDynamax, false);
 
   const no = run(false);
@@ -242,4 +243,29 @@ test('a hand-set Dynamax flag: true drops the Dynamax-copy step, false drops the
     assert.ok(!b.steps.some((s) => s.kind === 'needsDynamaxCopy'));
     assert.equal(b.needsDynamax, false);
   }
+});
+
+test('hygiene never transfers a copy marked Dynamax (it is kept as an extra keep)', () => {
+  const base = box.find((p) => p.name === 'Chansey');
+  const yes = { ...base, dynamax: true, ivPercent: 0, cp: 100 };
+  const best = { ...base, ivPercent: 100, cp: 200 };
+  const plain = analyseBox([yes, best], ctx).hygiene.find((h) => h.speciesId === 'chansey');
+  assert.equal(plain.keep.length, 2);
+  assert.equal(plain.transfer.length, 0);
+  assert.ok(plain.keep.some((p) => p.dynamax === true));
+  // Unset (or No) at 0% is still the one transferred, as before.
+  for (const flag of [undefined, false]) {
+    const h = analyseBox([{ ...yes, dynamax: flag }, best], ctx).hygiene.find((x) => x.speciesId === 'chansey');
+    assert.equal(h.keep.length, 1);
+    assert.equal(h.transfer.length, 1);
+  }
+});
+
+test('a copy marked not Dynamax does not cover a Max entry in the gaps; unset and Yes copies do', () => {
+  const base = box.find((p) => p.name === 'Chansey');
+  const maxGap = (copies) => analyseBox(copies, ctx).gaps.some((g) => g.area === 'max' && g.speciesId === 'blissey');
+  assert.equal(maxGap([{ ...base }]), false, 'unset: Chansey can become the Blissey entry');
+  assert.equal(maxGap([{ ...base, dynamax: true }]), false);
+  assert.equal(maxGap([{ ...base, dynamax: false }]), true, 'every Chansey marked No: the entry is a gap');
+  assert.equal(maxGap([{ ...base, dynamax: false }, { ...base }]), false, 'one copy not marked No still covers it');
 });
