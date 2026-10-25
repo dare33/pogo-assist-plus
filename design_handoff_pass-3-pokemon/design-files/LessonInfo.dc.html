@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lesson: rationale behind an i</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="lesson" style="height: 860px">
+<div class="lrow"><div class="lcol"><div class="lcap">TODAY: THE REASONS ARE ALWAYS SHOWN</div></div><div class="lcol"><div class="lcap">WITH THE LESSON: REASONS BEHIND THE TAG OR AN "i"</div></div></div>
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="lrow">
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Great League card</div>
+<div class="pick" style="cursor: default"><div class="ptop"><span class="ptitle">Eevee</span><span class="pchip">PICK</span><span class="worth Weak">WEAK</span><span class="overcap">▲ 8 over cap</span></div><div class="pnote">Umbreon is the stronger species, but this copy is already over 1,500 CP as Umbreon.</div></div>
+<div class="lnote">Pogo Assist is currently unable to detect Shadow Pokémon.</div>
+<div class="what">Advice notes</div>
+<div class="panel tint-acc" style="padding: 14px 16px"><div class="adv-line">Also a spare for Umbreon: a better copy is already planned.</div></div>
+<div class="what">Dynamax</div>
+<div class="panel flush"><div class="dyn" style="padding-top: 12px"><div class="dyn-row"><span class="fl">Dynamax</span><span class="seg"><button class="on">Not set</button><button>Yes</button><button>No</button></span></div><div class="fnote">Only Pokémon caught as Dynamax can join Max battles. The app cannot read this from the game.</div></div></div>
+</div>
+</div>
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Great League card (the note opens with a tap on the tag)</div>
+<div class="pick" style="cursor: default"><div class="ptop"><span class="ptitle">Eevee</span><span class="pchip">PICK</span><span class="worth Weak">WEAK</span><span class="overcap">▲ 8 over cap</span></div></div>
+<div class="lhead" style="padding: 0 4px"><span class="plabel">LEAGUES</span><span class="rk"><span class="seg"><button class="on">Classic</button><button>Pogo Assist</button></span><span class="info-hit"><span class="info">i</span></span></span></div>
+<div class="what">Advice notes</div>
+<div class="panel tint-acc" style="padding: 10px 12px 10px 16px"><div style="display: flex; align-items: center; gap: 8px"><div class="tags" style="flex: 1"><span class="tag">Spare for Umbreon</span></div><span class="info-hit"><span class="info sm">i</span></span></div></div>
+<div class="what">Dynamax (the "i" shown open)</div>
+<div class="panel flush"><div class="dyn" style="padding-top: 12px"><div class="dyn-row"><span class="fl">Dynamax</span><span class="info-hit"><span class="info sm on">i</span></span><span class="seg"><button class="on">Not set</button><button>Yes</button><button>No</button></span></div><div class="explain" style="margin-top: 6px">Only Pokémon caught as Dynamax can join Max battles. The app cannot read this from the game.</div></div></div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() { return { themes: [{ cls: 't-light' }, { cls: 't-dark' }] }; }
+}
+</script>
+</body>
+</html>

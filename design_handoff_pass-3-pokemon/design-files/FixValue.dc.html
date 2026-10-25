@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fix a value</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="board" style="width: 844px; height: 906px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="col">
+<div class="mode">{{t.label}}</div>
+<div class="phone {{t.cls}}">
+<div class="hdr"><span class="circle"></span></div>
+<div class="page"><div class="heading"><div class="pname">Eevee</div><div class="cpline"><span class="cp">CP 782</span><span class="meta">Level 30 · HP 111</span></div></div></div>
+<div class="dimmer"></div>
+<div class="sheet">
+<div class="navbar"><span>Cancel</span><b>Fix a value</b><span class="save">Save</span></div>
+<div class="fsec"><div class="fsec-h">Name</div><div class="fcells"><div class="fcell"><span class="fk">Eevee</span></div></div></div>
+<div class="fsec"><div class="fsec-h">Values</div><div class="fcells"><div class="fcell"><span class="fk">CP</span><span class="fval">782</span></div><div class="fcell"><span class="fk">HP</span><span class="fval">111</span></div></div></div>
+<div class="fsec"><div class="fsec-h">IVs</div><div class="fcells"><div class="fcell"><span class="fk">Attack</span><span class="fval">2</span></div><div class="fcell"><span class="fk">Defence</span><span class="fval">11</span></div><div class="fcell"><span class="fk">Stamina</span><span class="fval">6</span></div></div></div>
+<div class="fsec"><div class="fcells"><div class="ffoot" style="padding: 12px 16px">A value you change is marked as corrected by hand, and the check for it is cleared. The level and dust are worked out again from the new values. A later scan will not overwrite it unless the Pokémon has really changed.</div></div></div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":906}}'>
+class Component extends DCLogic {
+  renderVals() { return { themes: [{ cls: 't-light', label: 'LIGHT' }, { cls: 't-dark', label: 'DARK' }] }; }
+}
+</script>
+</body>
+</html>
