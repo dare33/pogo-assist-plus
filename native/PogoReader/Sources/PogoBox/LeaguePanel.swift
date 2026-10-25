@@ -92,7 +92,7 @@ public enum LeaguePanel {
     /// builds the copy for the league is a separate marker (`Card.buildsIt`), because it mixes in how easy the build is.
     public enum Worth: Equatable {
         case strong, ok, weak
-        public var label: String { self == .strong ? "Strong" : self == .ok ? "OK" : "Weak" }
+        public var label: String { self == .strong ? "Top" : self == .ok ? "Good" : "Weak" }
     }
 
     /// The PvPoke score tiers: from `sScore` S, from `aScore` A, from `bScore` B. `sScore` and `aScore` are the engine's tier cut-offs in `advise.js`

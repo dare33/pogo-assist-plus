@@ -105,7 +105,7 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertTrue(index.matches(index.items[0], .none, .activity(.gl), .init(insight: insight, pogoAssist: true)))
         XCTAssertFalse(index.matches(index.items[0], .none, .activity(.gl), .init(insight: insight, pogoAssist: false)))
         XCTAssertTrue(titles(false).count == 1 && index.sections(query: .none, chip: .activity(.gl), sort: .name, scoring: .init(insight: insight, pogoAssist: false)).flatMap(\.rows).first?.lead == .strong)
-        XCTAssertTrue(index.sections(query: .none, chip: .activity(.gl), sort: .name, scoring: .none).isEmpty, "no insight: nothing is Strong or OK yet")
+        XCTAssertTrue(index.sections(query: .none, chip: .activity(.gl), sort: .name, scoring: .none).isEmpty, "no insight: nothing is Top or Good yet")
     }
 
     // MARK: the tiles
@@ -126,12 +126,12 @@ final class BoxInsightStoreTests: XCTestCase {
     }
 
     func testTheTagWordsForEachWorth() {
-        XCTAssertEqual(WorthTag.detail(.ok, best: "best as Tyranitar (Shadow)"), "OK · best as Tyranitar (Shadow)")
-        XCTAssertEqual(WorthTag.detail(.strong, best: "best: Flareon 97.2%"), "Strong · best: Flareon 97.2%")
-        XCTAssertEqual(WorthTag.detail(.strong, best: nil), "Strong")
+        XCTAssertEqual(WorthTag.detail(.ok, best: "best as Tyranitar (Shadow)"), "Good · best as Tyranitar (Shadow)")
+        XCTAssertEqual(WorthTag.detail(.strong, best: "best: Flareon 97.2%"), "Top · best: Flareon 97.2%")
+        XCTAssertEqual(WorthTag.detail(.strong, best: nil), "Top")
         XCTAssertEqual(WorthTag.detail(.weak, best: nil), "Weak")
         XCTAssertEqual(WorthTag.detail(.weak, best: "best: Flareon 97.2%"), "Weak · best: Flareon 97.2%", "a species whose every copy is Weak still has a best copy: both words show")
-        XCTAssertEqual(WorthTag.detail(.ok, best: "best (needs a Dynamax copy)"), "OK · best (needs a Dynamax copy)")
+        XCTAssertEqual(WorthTag.detail(.ok, best: "best (needs a Dynamax copy)"), "Good · best (needs a Dynamax copy)")
         XCTAssertEqual(WorthTag.detail(nil, best: nil), "Not rated", "a copy with no fit for the area")
     }
 

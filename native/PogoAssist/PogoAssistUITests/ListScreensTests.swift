@@ -61,9 +61,9 @@ final class ListScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["chip-raids"].isSelected)
         let moltres = reveal(app, "Moltres")
         XCTAssertTrue(moltres.waitForExistence(timeout: 5))
-        XCTAssertTrue(moltres.label.hasPrefix("Moltres, 3 Pokémon, OK for Raids"), "the capsule counts the matching copies: " + moltres.label)
-        XCTAssertFalse(row(app, "Blissey").exists, "a species with no Strong or OK copy for Raids is gone")
-        XCTAssertTrue(reveal(app, "Lucario").label.contains("Strong for Raids"), reveal(app, "Lucario").label)
+        XCTAssertTrue(moltres.label.hasPrefix("Moltres, 3 Pokémon, Good for Raids"), "the capsule counts the matching copies: " + moltres.label)
+        XCTAssertFalse(row(app, "Blissey").exists, "a species with no Top or Good copy for Raids is gone")
+        XCTAssertTrue(reveal(app, "Lucario").label.contains("Top for Raids"), reveal(app, "Lucario").label)
         sleep(1); shot("list-raids-chip")
         app.buttons["chip-all"].tap()
         XCTAssertTrue(row(app, "Blissey").waitForExistence(timeout: 5))
@@ -77,8 +77,8 @@ final class ListScreensTests: XCTestCase {
         app.buttons["chip-ml"].tap()
         let xerneas = reveal(app, "Xerneas")
         XCTAssertTrue(xerneas.waitForExistence(timeout: 5))
-        XCTAssertTrue(xerneas.label.hasPrefix("Xerneas, 2 Pokémon, Strong for Master"), xerneas.label)
-        XCTAssertFalse(row(app, "Blissey").exists, "a species with no Strong or OK copy for Master League is gone")
+        XCTAssertTrue(xerneas.label.hasPrefix("Xerneas, 2 Pokémon, Top for Master"), xerneas.label)
+        XCTAssertFalse(row(app, "Blissey").exists, "a species with no Top or Good copy for Master League is gone")
         for r in rows(app).allElementsBoundByIndex { XCTAssertTrue(r.label.contains("for Master"), r.label) }
         app.buttons["chip-gl"].tap()
         XCTAssertTrue(app.staticTexts["No Pokémon match."].waitForExistence(timeout: 5), "nothing in this box fits Great League")
@@ -152,13 +152,13 @@ final class ListScreensTests: XCTestCase {
         app.buttons["chip-raids"].tap()
         row(app, "Moltres").tap()
         XCTAssertTrue(app.buttons["pokemon-tag"].firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Moltres · 3 of 6 for Raids"].exists, "the header counts the Strong and OK copies under the chip")
+        XCTAssertTrue(app.staticTexts["Moltres · 3 of 6 for Raids"].exists, "the header counts the Top and Good copies under the chip")
         XCTAssertEqual(app.staticTexts["species-order"].label, "Raids first")
         let tags = app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex.map(\.label)
         // The tag's tap target is the chip (about 20 pt) plus 6 pt above and below, about 32 pt: no more, so that two rows' targets and the IVs line are never overlapped.
         for t in app.buttons.matching(identifier: "pokemon-tag").allElementsBoundByIndex { XCTAssertGreaterThanOrEqual(t.frame.height, 30, "tap target of \(t.label)"); XCTAssertLessThan(t.frame.height, 40, "and not 44: \(t.label)") }
         XCTAssertEqual(tags.count, 6, "every copy has its tag: " + tags.joined(separator: " | "))
-        let rank = { (t: String) in t.hasPrefix("Strong") ? 0 : t.hasPrefix("OK") ? 1 : 2 }
+        let rank = { (t: String) in t.hasPrefix("Top") ? 0 : t.hasPrefix("Good") ? 1 : 2 }
         XCTAssertEqual(tags.map(rank), tags.map(rank).sorted(), "Weak last: " + tags.joined(separator: " | "))
         XCTAssertTrue(tags.contains { $0.hasPrefix("Weak") })
         XCTAssertTrue(tags.contains { $0.contains(", best as ") }, "the best-of tag for the area is merged into the status tag: " + tags.joined(separator: " | "))
@@ -196,7 +196,7 @@ final class ListScreensTests: XCTestCase {
         var n = 0
         while !raids.isHittable && n < 8 { app.swipeUp(); n += 1 }
         XCTAssertTrue(raids.waitForExistence(timeout: 20))
-        XCTAssertEqual(raids.label, "Raids: OK")
+        XCTAssertEqual(raids.label, "Raids: Good")
         for area in ["gym", "rocket", "max"] { XCTAssertTrue(app.buttons["activity-\(area)"].exists, area) }
         XCTAssertTrue(app.staticTexts["activities-panel"].exists)
         raids.tap()
