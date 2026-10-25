@@ -393,6 +393,8 @@ public struct BoxAdvice: Codable, Equatable {
         /// That build's target name and cost; nil unless `build`.
         public var buildAs: String?
         public var buildCost: BuildCost?
+        /// The copy is marked Dynamax or Gigantamax by hand, so its Max line does not say it needs a Dynamax copy.
+        public var dynamaxMarked = false
 
         public var line: String {
             let label = BoxAdvice.areaLabel[area] ?? area
@@ -400,7 +402,7 @@ public struct BoxAdvice: Codable, Equatable {
             case .strong, .ok:
                 let tierPart = tier.map { " \($0)" } ?? ""
                 let asPart = asName.map { " as \($0)" } ?? ""
-                return "\(label)\(tierPart)\(asPart)\(area == "max" ? " (needs a Dynamax copy)" : "")"
+                return "\(label)\(tierPart)\(asPart)\(area == "max" && !dynamaxMarked ? " (needs a Dynamax copy)" : "")"
             case .weak:
                 // A reason code this build does not know must not read as "no table entry": say only that the copy is weak here.
                 guard let reason else { return "Weak for \(label)" }
@@ -529,7 +531,7 @@ public struct BoxAdvice: Codable, Equatable {
             var fits = [String: Fit]()
             if case .object(let areas)? = e["fit"] {
                 for (area, v) in areas {
-                    if let f = Fit.decode(area: area, v, ivPercent: ivPercent) { fits[area] = f }
+                    if var f = Fit.decode(area: area, v, ivPercent: ivPercent) { f.dynamaxMarked = row.dynamax == true || row.gigantamax == true; fits[area] = f }
                 }
             }
             if !fits.isEmpty { out.fit[eid] = fits }

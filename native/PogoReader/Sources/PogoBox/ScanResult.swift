@@ -102,6 +102,7 @@ public struct ScanRow: Codable, Equatable {
         // The old "No" (false) is gone: it decodes as not marked, in stored boxes, saved scans and pending scans alike.
         dynamax = (try c.decodeIfPresent(Bool.self, forKey: .dynamax)) == true ? true : nil
         gigantamax = (try c.decodeIfPresent(Bool.self, forKey: .gigantamax)) == true ? true : nil
+        if gigantamax == true { dynamax = true }   // Gigantamax is a kind of Dynamax: a hand-made or older row with only the one reads as both
         lucky = (try c.decodeIfPresent(Bool.self, forKey: .lucky)) == true ? true : nil
         details = try c.decodeIfPresent(CopyDetails.self, forKey: .details)
     }

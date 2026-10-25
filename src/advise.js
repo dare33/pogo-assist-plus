@@ -303,10 +303,11 @@ export function analyseBox(box, ctx) {
     }
   }
   builds.sort((a, b) => b.score - a.score);
-  // One row per (species, target): the best copy carries the build, the rest are spares.
+  // One row per (species, target): the best copy carries the build, the rest are spares. A build that carries a Gigantamax hit (only a copy marked
+  // Gigantamax has one) is its own row: folded under a better unmarked copy, the marked one would lose that credit and its Dynamax-free step.
   const seenBuild = new Map();
   for (const b of builds) {
-    const key = `${b.speciesId}|${b.targetId}`;
+    const key = `${b.speciesId}|${b.targetId}${b.hits.some(isGmaxEntry) ? '|gmax' : ''}`;
     if (seenBuild.has(key)) { seenBuild.get(key).spares.push(b.pokemon); b.duplicate = true; } else { b.spares = []; seenBuild.set(key, b); }
   }
   const primaryBuilds = builds.filter((b) => !b.duplicate);
@@ -378,7 +379,7 @@ export function analyseBox(box, ctx) {
     const myBuilds = buildsOf.get(entry) ?? [];
     entry.fit = {};
     for (const area of FIT_AREAS) {
-      const label = AREA_LABEL[area], dyn = area === 'max' ? ' (needs a Dynamax copy)' : '';
+      const label = AREA_LABEL[area], dyn = area === 'max' && !isDynamaxCopy(p) ? ' (needs a Dynamax copy)' : '';
       // The advisor's primary build for the area: the first listed (builds are in score order). It is a separate marker, not the tag: the
       // tag is worth alone, the build adds ease of completion (cost) to it, and the two are advice of different kinds.
       const mine = myBuilds.find((b) => b.areas.includes(area));

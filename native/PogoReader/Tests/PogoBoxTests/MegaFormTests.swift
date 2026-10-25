@@ -276,6 +276,17 @@ final class MegaFormTests: XCTestCase {
         }
     }
 
+    /// A join that takes the removed entry's Gigantamax mark also sets Dynamax, even when the removed entry itself (hand-made rows) had it off.
+    func testJoiningATakenGigantamaxMarkImpliesDynamax() throws {
+        for removedDynamax in [true, nil] as [Bool?] {
+            var saved = savedPair()
+            saved[0].row.dynamax = nil; saved[1].row.gigantamax = true; saved[1].row.dynamax = removedDynamax
+            let p = plan([row("staraptor", cp: 2819)], saved, .full)
+            let out = try BoxMerge.apply(p, resolutions: [0: .existing("base")], to: saved)
+            XCTAssertEqual(out[0].row.gigantamax, true); XCTAssertEqual(out[0].row.dynamax, true, "removed dynamax \(String(describing: removedDynamax))")
+        }
+    }
+
     func testJoiningThroughTheBaseRowKeepsTheAdoptedValuesOwnDatesAndALaterFormWins() throws {
         var saved = savedPair()
         saved[1].row.level = 39

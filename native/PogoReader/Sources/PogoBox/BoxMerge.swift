@@ -1143,9 +1143,8 @@ public enum BoxMerge {
             row.solveStatus = s.ivs != nil ? s.solveStatus : (row.ivs != nil ? row.solveStatus : s.solveStatus)
             row.level = s.level ?? row.level; row.levelMax = s.levelMax ?? row.levelMax; row.dust = s.dust ?? row.dust
         }
-        row.shadow = s.shadow ?? row.shadow
+        row.shadow = row.shadow ?? s.shadow   // a saved mark (0, 1 or 2, a hand mark or an earlier merge's) stays; a scan fills only an unknown one
         // Dynamax, Gigantamax, Lucky and the details are set by hand only; a scan never reads them, so the saved values stay (as corrections do).
-        // Shadow/Purified above follows a clip merge's value when it carries one and keeps the saved (possibly hand) mark otherwise.
         row.dynamax = e.row.dynamax; row.gigantamax = e.row.gigantamax; row.lucky = e.row.lucky; row.details = e.row.details
         // The scan's flags about IVs it did not read do not apply to IVs that were kept.
         let scanFlags = keepIVs ? s.flags.filter { FlagInfo.field(of: $0) != .ivs } : s.flags

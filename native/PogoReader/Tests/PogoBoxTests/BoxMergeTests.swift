@@ -361,11 +361,15 @@ final class BoxMergeTests: XCTestCase {
         XCTAssertFalse(s.isHandCorrected)
         XCTAssertEqual(BoxMerge.ShadowEdit(nil), .neither); XCTAssertEqual(BoxMerge.ShadowEdit(0), .neither)
         XCTAssertEqual(BoxMerge.ShadowEdit(1), .shadow); XCTAssertEqual(BoxMerge.ShadowEdit(2), .purified)
-        // A hand mark survives a re-scan row that carries none; a clip merge's value replaces it as it always did.
-        var hand = s; hand.row.shadow = 0
-        XCTAssertEqual(BoxMerge.updated(hand, with: row(cp: 450), date: date(11)).row.shadow, 0)
+        // A saved mark (0, 1 or 2) is kept by a re-scan whatever the scanned row carries, as Dynamax is; a scanned value only fills an unknown one.
         var clip = row(cp: 450); clip.shadow = 1
-        XCTAssertEqual(BoxMerge.updated(hand, with: clip, date: date(11)).row.shadow, 1)
+        for saved in [0, 1, 2] {
+            var hand = s; hand.row.shadow = saved
+            XCTAssertEqual(BoxMerge.updated(hand, with: row(cp: 450), date: date(11)).row.shadow, saved)
+            XCTAssertEqual(BoxMerge.updated(hand, with: clip, date: date(11)).row.shadow, saved, "saved \(saved)")
+        }
+        var unknown = s; unknown.row.shadow = nil
+        XCTAssertEqual(BoxMerge.updated(unknown, with: clip, date: date(11)).row.shadow, 1)
     }
 
     func testLuckyAndDetailsEditsAreSavedWithoutBeingCorrections() throws {
@@ -387,6 +391,15 @@ final class BoxMergeTests: XCTestCase {
         let v = entry(row(), id: "a")
         let e = try BoxMerge.correct(v, with: BoxMerge.Edit(details: CopyDetails(chargedMove: "A", chargedMove2: "A")), gameMaster: gm)
         XCTAssertEqual(e.row.details?.chargedMove, "A"); XCTAssertNil(e.row.details?.chargedMove2)
+    }
+
+    func testAGigantamaxRowWithoutDynamaxDecodesWithBoth() throws {
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(row())) as! [String: Any]
+        object["gigantamax"] = true
+        let r = try JSONDecoder().decode(ScanRow.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(r.gigantamax, true); XCTAssertEqual(r.dynamax, true)
+        object["dynamax"] = false
+        XCTAssertEqual(try JSONDecoder().decode(ScanRow.self, from: JSONSerialization.data(withJSONObject: object)).dynamax, true, "an old No beside Gigantamax reads as both too")
     }
 
     func testRowsDecodeWithAndWithoutTheDynamaxKey() throws {

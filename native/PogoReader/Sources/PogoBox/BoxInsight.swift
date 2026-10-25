@@ -40,6 +40,8 @@ public struct BoxInsight {
         /// and in the order of `slots`.
         public var areaLines: [String?] = []
         public var leagueLines: [String?] = []
+        /// Marked Dynamax or Gigantamax by hand: its Max tag does not say it needs a Dynamax copy.
+        public var dynamaxMarked = false
 
         public struct BestTag: Equatable {
             public var area: String
@@ -106,7 +108,7 @@ public struct BoxInsight {
             return "best: \(slot.member)" + (slot.pct.map { " " + LeaguePanel.percent($0) } ?? "")
         }
         guard let b = copies[id]?.best.first(where: { $0.area == a.rawValue }) else { return nil }
-        if a == .max { return "best (needs a Dynamax copy)" }
+        if a == .max { return copies[id]?.dynamaxMarked == true ? "best" : "best (needs a Dynamax copy)" }
         return "best" + (b.asName.map { " as " + $0 } ?? "")
     }
 
@@ -143,7 +145,8 @@ public struct BoxInsight {
             let bestTags = advice.bestOf(for: e.id).map { area in
                 Copy.BestTag(area: area, asName: area == "max" ? nil : fits[area]?.asNameLabel(shadow: e.row.shadow == 1))
             }
-            out.copies[e.id] = Copy(slots: slots, fit: fit, best: bestTags, areaLines: areas.map { fits[$0]?.line }, leagueLines: leagueLines)
+            out.copies[e.id] = Copy(slots: slots, fit: fit, best: bestTags, areaLines: areas.map { fits[$0]?.line }, leagueLines: leagueLines,
+                                       dynamaxMarked: e.row.dynamax == true || e.row.gigantamax == true)
 
             let title = e.row.title
             var b = best[title] ?? [Best?](repeating: nil, count: 6)

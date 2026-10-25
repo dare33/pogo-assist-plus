@@ -427,6 +427,39 @@ final class HubRaidsModelTests: XCTestCase {
         XCTAssertEqual(HubRaidsModel.maxRoster(entries: es, advice: try advice(es)).unsetCount, plain.unsetCount)
     }
 
+    /// Two Charmander copies (the best unmarked, a weak one marked Gigantamax): the Max table lists Charizard only as Gigantamax.
+    private func gmaxSpare(_ es: [BoxEntry]) throws -> (entries: [BoxEntry], id: String) {
+        var es = adding(adding(es, "charmander", name: "Charmander", copyId: "c1", cp: 600), "charmander", name: "Charmander", copyId: "c2", cp: 300)
+        let i1 = es.firstIndex { $0.id == "c1" }!, i2 = es.firstIndex { $0.id == "c2" }!
+        es[i1].row.ivs = IVs(atk: 15, def: 15, hp: 15); es[i1].row.dynamax = nil
+        es[i2].row.ivs = IVs(atk: 1, def: 1, hp: 1); es[i2].row.gigantamax = true; es[i2].row.dynamax = true
+        return (es, "c2")
+    }
+
+    /// A Gigantamax-marked spare keeps its Gigantamax credit: the advisor gives it a build of its own, and the Hub reads the Max entry from it.
+    func testAGigantamaxMarkedSpareKeepsItsCreditAndTheHubCountsIt() throws {
+        let gm = try GameMaster.bundled(), hub = try HubData.bundled(), table = try TierTable.bundled()
+        let (es, id) = try gmaxSpare(try entries())
+        let a = try advice(es)
+        let mine = try XCTUnwrap(a.builds.first { $0.entryId == id && $0.targetId == "charizard" }, "the marked copy carries a build")
+        XCTAssertFalse(mine.needsDynamax)
+        let copy = try XCTUnwrap(es.first { $0.id == id })
+        XCTAssertTrue((HubRaidsModel.maxUse(of: copy, advice: a, table: table)?.entry.name ?? "").lowercased().contains("gigantamax"))
+        // typesCounted with the carrier's mark: Charizard has only a Gigantamax Max entry, so it counts for fire only for a marked carrier.
+        XCTAssertTrue(HubRaidsModel.isGigantamax(mine, entries: es))
+        XCTAssertTrue(HubRaidsModel.typesCounted(by: mine, screen: .max, table: table, gm: gm, gigantamax: true).contains("fire"))
+        XCTAssertTrue(HubRaidsModel.typesCounted(by: mine, screen: .max, table: table, gm: gm, gigantamax: false).isEmpty)
+        // toDo / readiness: with the marked copy finished and Dynamax-marked, fire is covered; unmarked as Gigantamax it is not.
+        let cryogonal = try row(hub, .maxMonday, from: "2026-11-30")   // fire, fighting, rock, steel
+        var finished = a
+        for i in finished.builds.indices where finished.builds[i].entryId == id { finished.builds[i].steps = [] }
+        func missing(_ es: [BoxEntry]) -> [String] { HubRaidsModel.readiness(row: cryogonal, advice: finished, entries: es, gm: gm, hub: hub, screen: .max).missing }
+        XCTAssertFalse(missing(es).contains("fire"))
+        var plain = es; plain[plain.firstIndex { $0.id == id }!].row.gigantamax = nil
+        XCTAssertTrue(missing(plain).contains("fire"))
+        XCTAssertFalse(HubRaidsModel.toDo(row: cryogonal, advice: finished, entries: es, gm: gm, hub: hub, screen: .max).contains("Fire"), "no Fire gap is named for the marked carrier")
+    }
+
     func testBestTierFirstAndGigantamaxOnlySpeciesAreNotUnset() throws {
         let table = try TierTable.bundled()
         XCTAssertEqual(HubRaidsModel.tierRank("S"), 0); XCTAssertEqual(HubRaidsModel.tierRank("A"), 1); XCTAssertEqual(HubRaidsModel.tierRank("B"), 2)
