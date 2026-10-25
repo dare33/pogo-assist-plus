@@ -59,6 +59,9 @@ struct SpeciesListView: View {
             header(count: ms.count, title: headerTitle(ms), ids: ids)
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
+                    // Over the whole species, whatever the search or the chip: the places never shift as the list is filtered or re-sorted.
+                    let best = BestCard.cards(title: route.title, insight: insight, index: index, pogoAssist: pogoAssist)
+                    if !best.isEmpty { SpeciesBestSection(cards: best, inert: selecting) }
                     sortLine
                     rows(ms)
                     Text("Tags mark the copy that is your best for a league, raid, gym, Rocket or Max use, under the scoring chosen above.")

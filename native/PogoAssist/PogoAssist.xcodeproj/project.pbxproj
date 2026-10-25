@@ -14,6 +14,7 @@
 		07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */; };
 		097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0A3EC8BBA5B78347A0413F5C /* ReviewWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B793340E977374E8287D10D /* ReviewWording.swift */; };
+		0C187F71378A2C77EC2C19E2 /* SpeciesBest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD137EFAD6E7F01FB0C0E81 /* SpeciesBest.swift */; };
 		0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4B281BB0B64267189CDB87 /* SetupProgress.swift */; };
 		0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052B76A429D7B08291119B9 /* ReviewResult.swift */; };
 		1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 00436FF3692616EF8377125B /* PogoReader */; };
@@ -159,6 +160,7 @@
 		1BB1A15D6F733EEE0586D675 /* RankingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingControls.swift; sourceTree = "<group>"; };
 		1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSearch.swift; sourceTree = "<group>"; };
 		1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesListView.swift; sourceTree = "<group>"; };
+		1FD137EFAD6E7F01FB0C0E81 /* SpeciesBest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesBest.swift; sourceTree = "<group>"; };
 		1FFAC0B18897FB5A85E55764 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarsAndAccounts.swift; sourceTree = "<group>"; };
 		2174CAD06ADF7ECC068B88FD /* SampleScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleScan.swift; sourceTree = "<group>"; };
@@ -451,6 +453,7 @@
 				01F723B7B2F32D040376093D /* SetupChecklistView.swift */,
 				EC4B281BB0B64267189CDB87 /* SetupProgress.swift */,
 				00B7030AC596BFDD03757B5C /* SetupStepView.swift */,
+				1FD137EFAD6E7F01FB0C0E81 /* SpeciesBest.swift */,
 				1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */,
 			);
 			path = Screens;
@@ -755,6 +758,7 @@
 				0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */,
 				31CA236599307F00B33A65CA /* SetupStepView.swift in Sources */,
 				CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */,
+				0C187F71378A2C77EC2C19E2 /* SpeciesBest.swift in Sources */,
 				FCC6A2B1D4B58BED4B8BA355 /* SpeciesListView.swift in Sources */,
 				53E565D8D2134740F880785D /* StateModel.swift in Sources */,
 				408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */,

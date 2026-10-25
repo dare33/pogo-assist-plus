@@ -61,6 +61,8 @@ struct WorthTag: View {
     let activity: BoxInsight.Activity
     let worth: LeaguePanel.Worth?
     var best: String? = nil
+    /// False on a card that already names its activity: the chip then reads the rating alone ("TOP"), in the same three shapes.
+    var showsActivity = true
     @Environment(\.accent) private var accent
     /// The middle rating is a lighter version of the top one everywhere (Greg, 25 Oct 2026): the tint at half strength and a faded ink border, the text still the
     /// full ink (more contrast, not less: a lighter ground under the same text). These are how much of the tint and of the ink it keeps.
@@ -77,12 +79,14 @@ struct WorthTag: View {
     }
 
     var body: some View {
-        let ink = activity.ink(accent), detail = Self.detail(worth, best: best), style = Self.style(for: worth)
+        let ink = activity.ink(accent), style = Self.style(for: worth)
+        let detail = showsActivity ? Self.detail(worth, best: best) : nil
+        let label = showsActivity ? activity.tagLabel : (worth?.label ?? "Not rated").uppercased()
         switch worth {
-        case .strong?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent))
-        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent).opacity(style.tintOpacity), border: ink.opacity(style.borderOpacity ?? 0))
-        case .weak?: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear, border: Theme.line)
-        case nil: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear)
+        case .strong?: SoftTag(label: label, detail: detail, ink: ink, tint: activity.tint(accent))
+        case .ok?: SoftTag(label: label, detail: detail, ink: ink, tint: activity.tint(accent).opacity(style.tintOpacity), border: ink.opacity(style.borderOpacity ?? 0))
+        case .weak?: SoftTag(label: label, detail: detail, ink: Theme.muted, tint: .clear, border: Theme.line)
+        case nil: SoftTag(label: label, detail: detail, ink: Theme.muted, tint: .clear)
         }
     }
 }
