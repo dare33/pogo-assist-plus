@@ -27,7 +27,7 @@ extension BoxInsight.Activity {
 // MARK: a soft tag
 
 /// A soft chip (radius 8, padding 3 by 8, 11/800): a 10 pt label with .08em tracking, and after a dimmed "·" the words. Used for the league and activity tags.
-/// `border` draws a 1 pt line just inside the shape (it adds no size), which is how OK and Weak differ from Strong and from each other by shape as well as colour.
+/// `border` draws a 1 pt line just inside the shape (it adds no size), which is how Good and Weak differ from Top and from each other by shape as well as colour.
 struct SoftTag: View {
     let label: String
     var detail: String? = nil
@@ -52,26 +52,35 @@ struct SoftTag: View {
     }
 }
 
-/// The Strong / OK / Weak tag for an activity, three shapes: Strong is the activity's ink on its tint; OK is the same with a 1 pt border in the ink (Rocket's OK was
+/// The Top / Good / Weak tag for an activity, three shapes: Top is the activity's ink on its tint; Good is the same, lighter: the tint at half strength with a 1 pt border in the ink at 40% (Rocket's old middle rating was
 /// graphite on grey, near-identical to Weak); Weak is a plain outline in `Theme.line` with `Theme.muted` text and no fill. `Theme.muted` (6A7085) is 4.9:1 on
 /// `Theme.surface` (white) in light mode, over the 4.5:1 the small text needs (computed with `Theme.contrast`; the row it sits on is `Theme.surface`).
 /// `worth` nil is a copy the advice has no rating for: "Not rated", muted text with no fill or outline. `best` merges the "best for" tag of the same area into
-/// this one ("RAIDS · OK · best as Tyranitar (Shadow)", "GL · Strong · best: Flareon 97.2%"; the words come from `BoxInsight.bestText`).
+/// this one ("RAIDS · Good · best as Tyranitar (Shadow)", "GL · Top · best: Flareon 97.2%"; the words come from `BoxInsight.bestText`).
 struct WorthTag: View {
     let activity: BoxInsight.Activity
     let worth: LeaguePanel.Worth?
     var best: String? = nil
     @Environment(\.accent) private var accent
+    /// The middle rating is a lighter version of the top one everywhere (Greg, 25 Oct 2026): the tint at half strength and a faded ink border, the text still the
+    /// full ink (more contrast, not less: a lighter ground under the same text). These are how much of the tint and of the ink it keeps.
+    static let fadedTint = 0.5, fadedBorder = 0.4
+
+    /// How much of its tint a rating keeps and whether it carries a faded ink border: Top the full tint, Good the faded one with the border, Weak and unrated
+    /// their own fill untouched. The tag here and the league card's chip both read this, so a view that stopped applying it would fail the test that pins it.
+    static func style(for worth: LeaguePanel.Worth?) -> (tintOpacity: Double, borderOpacity: Double?) {
+        worth == .ok ? (fadedTint, fadedBorder) : (1, nil)
+    }
 
     static func detail(_ worth: LeaguePanel.Worth?, best: String?) -> String {
         (worth?.label ?? "Not rated") + (best.map { " · " + $0 } ?? "")
     }
 
     var body: some View {
-        let ink = activity.ink(accent), detail = Self.detail(worth, best: best)
+        let ink = activity.ink(accent), detail = Self.detail(worth, best: best), style = Self.style(for: worth)
         switch worth {
         case .strong?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent))
-        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent), border: ink)
+        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent).opacity(style.tintOpacity), border: ink.opacity(style.borderOpacity ?? 0))
         case .weak?: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear, border: Theme.line)
         case nil: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear)
         }

@@ -303,7 +303,7 @@ struct PokemonDetailView: View {
 
     // MARK: activities
 
-    /// Raids, Gym, Rocket and Max for this copy, read from the cached advice: the tag is worth alone (Strong, OK or Weak in the area's colours; a tap opens its line),
+    /// Raids, Gym, Rocket and Max for this copy, read from the cached advice: the tag is worth alone (Top, Good or Weak in the area's colours; a tap opens its line),
     /// and "Advice builds it" marks an area the copy's own primary build covers, as the league cards do. It stays under the Leagues panel and gives way with it
     /// while a league view is open.
     @ViewBuilder private func activitiesPanel(_ e: BoxEntry) -> some View {

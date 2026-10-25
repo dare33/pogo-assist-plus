@@ -105,7 +105,7 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertTrue(index.matches(index.items[0], .none, .activity(.gl), .init(insight: insight, pogoAssist: true)))
         XCTAssertFalse(index.matches(index.items[0], .none, .activity(.gl), .init(insight: insight, pogoAssist: false)))
         XCTAssertTrue(titles(false).count == 1 && index.sections(query: .none, chip: .activity(.gl), sort: .name, scoring: .init(insight: insight, pogoAssist: false)).flatMap(\.rows).first?.lead == .strong)
-        XCTAssertTrue(index.sections(query: .none, chip: .activity(.gl), sort: .name, scoring: .none).isEmpty, "no insight: nothing is Strong or OK yet")
+        XCTAssertTrue(index.sections(query: .none, chip: .activity(.gl), sort: .name, scoring: .none).isEmpty, "no insight: nothing is Top or Good yet")
     }
 
     // MARK: the tiles
@@ -126,12 +126,12 @@ final class BoxInsightStoreTests: XCTestCase {
     }
 
     func testTheTagWordsForEachWorth() {
-        XCTAssertEqual(WorthTag.detail(.ok, best: "best as Tyranitar (Shadow)"), "OK · best as Tyranitar (Shadow)")
-        XCTAssertEqual(WorthTag.detail(.strong, best: "best: Flareon 97.2%"), "Strong · best: Flareon 97.2%")
-        XCTAssertEqual(WorthTag.detail(.strong, best: nil), "Strong")
+        XCTAssertEqual(WorthTag.detail(.ok, best: "best as Tyranitar (Shadow)"), "Good · best as Tyranitar (Shadow)")
+        XCTAssertEqual(WorthTag.detail(.strong, best: "best: Flareon 97.2%"), "Top · best: Flareon 97.2%")
+        XCTAssertEqual(WorthTag.detail(.strong, best: nil), "Top")
         XCTAssertEqual(WorthTag.detail(.weak, best: nil), "Weak")
         XCTAssertEqual(WorthTag.detail(.weak, best: "best: Flareon 97.2%"), "Weak · best: Flareon 97.2%", "a species whose every copy is Weak still has a best copy: both words show")
-        XCTAssertEqual(WorthTag.detail(.ok, best: "best (needs a Dynamax copy)"), "OK · best (needs a Dynamax copy)")
+        XCTAssertEqual(WorthTag.detail(.ok, best: "best (needs a Dynamax copy)"), "Good · best (needs a Dynamax copy)")
         XCTAssertEqual(WorthTag.detail(nil, best: nil), "Not rated", "a copy with no fit for the area")
     }
 
@@ -334,5 +334,71 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertNotNil(insight?.copies["a"]?.line(.gl, pogoAssist: false), "the league tag's line")
         XCTAssertEqual(insight?.bestText(of: "a", title: "Eevee", .raids, pogoAssist: false), "best as Eevee", "the best-of area is kept too")
         XCTAssertEqual(insight?.copies["a"]?.best.map(\.area), ["raids"])
+    }
+}
+
+/// Colour rules that have no screen of their own: Max is a pink, and the lighter middle rating on the Pokémon page keeps its text readable in both appearances.
+final class ListTagColourTests: XCTestCase {
+    private func resolve(_ c: Color, _ dark: Bool) -> (r: Double, g: Double, b: Double, a: Double) {
+        var (r, g, b, a) = (CGFloat(0), CGFloat(0), CGFloat(0), CGFloat(0))
+        UIColor(c).resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light)).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(r), Double(g), Double(b), Double(a))
+    }
+    private func lum(_ c: (r: Double, g: Double, b: Double, a: Double)) -> Double {
+        func f(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b)
+    }
+    private func over(_ top: (r: Double, g: Double, b: Double, a: Double), _ base: (r: Double, g: Double, b: Double, a: Double), opacity: Double = 1) -> (r: Double, g: Double, b: Double, a: Double) {
+        let a = top.a * opacity
+        return (top.r * a + base.r * (1 - a), top.g * a + base.g * (1 - a), top.b * a + base.b * (1 - a), 1)
+    }
+    private func ratio(_ a: (r: Double, g: Double, b: Double, a: Double), _ b: (r: Double, g: Double, b: Double, a: Double)) -> Double {
+        let (x, y) = (lum(a), lum(b)); return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    func testMaxIsAPinkNotThePurpleItWas() {
+        for dark in [false, true] {
+            let ink = resolve(ContentType.max.ink(.blue), dark), purple = resolve(Theme.changeInk, dark)
+            XCTAssertGreaterThan(ink.r, ink.g, "red over green: pink")
+            XCTAssertGreaterThan(ink.r, ink.b - 0.05, "red at least as strong as blue, where the purple's blue led")
+            XCTAssertGreaterThan(purple.b, purple.r, "the change purple is still the change purple")
+        }
+        XCTAssertGreaterThanOrEqual(Theme.contrast(0xFFFFFF, Theme.maxInkLight), 4.5, "white on the Max ink")
+        for dark in [false, true] {
+            let surface = resolve(Theme.surface, dark)
+            let tint = over(resolve(ContentType.max.tint(.blue), dark), surface)
+            XCTAssertGreaterThanOrEqual(ratio(resolve(ContentType.max.ink(.blue), dark), tint), 4.5, "Max ink on its tint, dark \(dark)")
+        }
+    }
+
+    /// The three tags' text on the ground each draws, over the page's surface, both appearances, every activity and every accent the app offers (page, list rows and
+    /// species page share `WorthTag`): Top is the ink on the full tint, Good the same ink on the lighter tint, Weak the muted text on no fill. The card's green is checked too.
+    /// Good is pinned through `WorthTag.style(for:)`, which the tag and the league card's chip both read: a smaller tint strength than Top's, a border Top lacks, Weak untouched,
+    /// so a change to that function fails here. That the views apply it is by their sharing it; the contrast checks below use its tint strength.
+    func testTheThreeRatingsKeepFourAndAHalfToOneAndGoodStaysLighter() {
+        let activities = BoxInsight.Activity.allCases   // every tag the lists and the page draw, the leagues in their own colours
+        let top = WorthTag.style(for: .strong), good = WorthTag.style(for: .ok), weak = WorthTag.style(for: .weak)
+        XCTAssertLessThan(good.tintOpacity, top.tintOpacity, "Good's tint is weaker than Top's")
+        XCTAssertNotNil(good.borderOpacity, "Good carries a border")
+        XCTAssertGreaterThan(good.borderOpacity ?? 0, 0, "Good's border is visible")
+        XCTAssertNil(top.borderOpacity, "Top has no border")
+        XCTAssertEqual(weak.tintOpacity, 1, "Weak keeps its own fill")
+        XCTAssertNil(weak.borderOpacity, "Weak has no faded border")
+        for dark in [false, true] {
+            let surface = resolve(Theme.surface, dark)
+            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.muted, dark), surface), 4.5, "Weak: muted text on the surface, dark \(dark)")
+            for accent in Accent.allCases {
+                for a in activities {
+                    let ink = resolve(a.ink(accent), dark), full = over(resolve(a.tint(accent), dark), surface)
+                    let good = over(resolve(a.tint(accent), dark), surface, opacity: good.tintOpacity)
+                    XCTAssertGreaterThanOrEqual(ratio(ink, full), 4.5, "Top: \(a) \(accent) dark \(dark)")
+                    XCTAssertGreaterThanOrEqual(ratio(ink, good), 4.5, "Good: \(a) \(accent) dark \(dark)")
+                    XCTAssertGreaterThan(ratio(ink, good), ratio(ink, full) - 0.0001, "Good's lighter ground gives the ink no less contrast than Top's: \(a) \(accent) dark \(dark)")
+                }
+            }
+            let tint = resolve(Theme.greenTint, dark), base = resolve(Theme.surface2, dark)
+            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), over(tint, base)), 4.5, "league card Top, dark \(dark)")
+            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), over(tint, base, opacity: good.tintOpacity)), 4.5, "league card Good, dark \(dark)")
+        }
     }
 }

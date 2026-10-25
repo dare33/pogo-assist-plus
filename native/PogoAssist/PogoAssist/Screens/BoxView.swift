@@ -28,6 +28,8 @@ struct BoxView: View {
     @State private var sectionsFor: String?
     @State private var jumped: String?
     @State private var rankingInfo = false
+    @State private var headerContentHeight: CGFloat = 0
+    @State private var listAreaHeight: CGFloat = 0
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @FocusState private var searching: Bool
     #if DEBUG
@@ -180,18 +182,55 @@ struct BoxView: View {
 
     private var showsIndex: Bool { sections.count >= 3 && query.isEmpty }
 
+    /// The count line, search, chips and sort line (with the ranking switch and its explainer) stay fixed while the species list scrolls under them (Greg, 25 Oct 2026).
+    /// The saved-scan panel is not part of that block; it stays at the top of the scrolling list. An open ranking explainer sits inside the fixed block and pushes the list down.
     private var list: some View {
+        VStack(spacing: 0) {
+            frozenHeader
+            listScroll
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listAreaHeight = $0 }
+    }
+
+    /// The fixed block is as tall as its content up to `headerShare` of the list's area; beyond that (an open ranking explainer at the largest text sizes would
+    /// otherwise fill the screen and cut itself off) it scrolls inside itself and the list keeps the rest. Below that share nothing scrolls.
+    private static let headerShare: CGFloat = 0.55
+
+    private var frozenHeader: some View {
+        ScrollViewReader { headerProxy in
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
+                countLine
+                searchField
+                chips
+                if chip == .toCheck { rescanButton }
+                sortLine
+            }
+            .padding(.horizontal, Theme.Space.screen)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerContentHeight = $0 }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        // An opened explainer is brought into view inside the capped block.
+        .onChange(of: rankingInfo) { _, open in
+            // After the explainer's first layout, or the scroll runs to where its end was.
+            if open { Task { try? await Task.sleep(nanoseconds: 250_000_000); withAnimation { headerProxy.scrollTo("ranking-explainer", anchor: .bottom) } } }
+        }
+        .frame(height: headerContentHeight > 0 && listAreaHeight > 0 ? min(headerContentHeight, listAreaHeight * Self.headerShare) : nil)
+        .background(Theme.bg)
+        .zIndex(1)
+        }
+    }
+
+    private var listScroll: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Theme.Space.panelGap) {
                     if let s = savedSummary { savedPanel(s) }
-                    countLine
-                    searchField
-                    chips
-                    if chip == .toCheck { rescanButton }
-                    sortLine
                     if sections.isEmpty {
-                        // An activity chip waits for the advice: until then nothing can be Strong or OK, which is not the same as no match. A failed advice says so.
+                        // An activity chip waits for the advice: until then nothing can be Top or Good, which is not the same as no match. A failed advice says so.
                         let isActivity: Bool = { if case .activity = chip { return true } else { return false } }()
                         Text(isActivity && insight == nil ? (adviceState == .failed ? "Advice could not be worked out" : "Working out advice…") : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
                     }
@@ -199,7 +238,7 @@ struct BoxView: View {
                 }
                 .padding(.leading, Theme.Space.screen)
                 .padding(.trailing, Theme.Space.screen + (showsIndex ? 18 : 0))
-                .padding(.top, 6)
+                .padding(.top, 4)
                 .padding(.bottom, 12)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -278,7 +317,7 @@ struct BoxView: View {
 
     // MARK: chips and sort
 
-    /// The activity filter: All, then Raids, Gym, Rocket, Great, Ultra, Master and Max (each in its colours), and Fixed by hand after them while the box has any hand
+    /// The activity filter: All, then Great, Ultra, Master, Raids, Gym, Rocket and Max (each in its colours; the order of `BoxInsight.Activity`), and Fixed by hand after them while the box has any hand
     /// corrections. "To check" moved to the badge in the count line. There is no "Not seen" chip: the saved box does not record which entries a Full scan saw but could
     /// not read ("On screen but not read", "Stationed"), so an old last-seen date cannot say "not seen".
     private var chips: some View {
@@ -360,7 +399,7 @@ struct BoxView: View {
                 HStack(spacing: 8) { sortMenu; Spacer(minLength: 8); RankingSwitch(infoOpen: $rankingInfo, identifier: "list-scoring") }
                 VStack(alignment: .leading, spacing: 0) { sortMenu; RankingSwitch(infoOpen: $rankingInfo, identifier: "list-scoring") }
             }
-            if rankingInfo { RankingExplainer(identifier: "list-scoring-explainer").transition(.opacity) }
+            if rankingInfo { RankingExplainer(identifier: "list-scoring-explainer").id("ranking-explainer").transition(.opacity) }
         }
         .animation(.easeOut(duration: 0.15), value: rankingInfo)
         .padding(.horizontal, 4)

@@ -251,7 +251,7 @@ final class LeaguePanelTests: XCTestCase {
         XCTAssertEqual(LeaguePanel.worthSentence(card(80, rolled(99)), key: "ml", transfers: true), "Species below the B-tier line for Master League. Better kept for trading or transferring")
         XCTAssertEqual(LeaguePanel.worthSentence(card(95, rolled(97)), key: "gl", transfers: true), "S-tier species, IVs in the top 3% for Great League", "transferring is only said of a Weak tag")
         let fit = card(89, rolled(97), key: "ml")
-        XCTAssertTrue(LeaguePanel.spoken(fit, key: "ml", chip: "Pick").contains("Pick: A. OK for Master League. Species 89.0"), LeaguePanel.spoken(fit, key: "ml", chip: "Pick"))
+        XCTAssertTrue(LeaguePanel.spoken(fit, key: "ml", chip: "Pick").contains("Pick: A. Good for Master League. Species 89.0"), LeaguePanel.spoken(fit, key: "ml", chip: "Pick"))
     }
 
     func testASpareCopyDoesNotGetTheBuildMarkerFromAnotherCopysBuild() {

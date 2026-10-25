@@ -101,6 +101,17 @@ final class BoxInsightTests: XCTestCase {
         XCTAssertNil(f.asNameLabel(shadow: true))
     }
 
+    /// The chips run Great, Ultra, Master, Raids, Gym, Rocket, Max (Max last); the page rows read `areas`, whose order is separate and unchanged.
+    func testTheChipsRunTheThreeLeaguesFirstAndMaxLast() {
+        XCTAssertEqual(BoxInsight.Activity.allCases.map(\.title), ["Great", "Ultra", "Master", "Raids", "Gym", "Rocket", "Max"])
+        XCTAssertEqual(BoxInsight.areas, ["raids", "gym", "rocket", "max"])
+    }
+
+    /// The words a person sees and hears for the three ratings (Greg, 25 Oct 2026): Weak, Good, Top; the cases keep their names.
+    func testTheRatingWordsAreWeakGoodTop() {
+        XCTAssertEqual([LeaguePanel.Worth.weak, .ok, .strong].map(\.label), ["Weak", "Good", "Top"])
+    }
+
     func testAChipKeepsStrongAndOkCopies() {
         let es = [entry("a", "Eevee"), entry("b", "Eevee")]
         let strong = BoxAdvice.Fit(area: "raids", tag: .strong, asName: "Tyranitar", tier: "S", reason: nil, species: nil, ivPercent: 90)
