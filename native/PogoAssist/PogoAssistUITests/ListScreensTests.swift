@@ -27,7 +27,7 @@ final class ListScreensTests: XCTestCase {
     /// Types a species into the search so its row is built (the list is lazy), then opens the species.
     private func openSpecies(_ app: XCUIApplication, _ name: String) {
         let search = app.textFields["box-search"]
-        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText(name)
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText(name + "\n")   // Return puts the keyboard away, so the opened species is not under it
         // A species with a form reads "Zamazenta (Hero), 3 Pokémon", so match the name's start, not "name,".
         let r = rows(app).matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
         XCTAssertTrue(r.waitForExistence(timeout: 5), "\(name) is in the sample box")

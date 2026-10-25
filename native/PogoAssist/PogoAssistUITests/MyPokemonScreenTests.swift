@@ -19,7 +19,8 @@ extension XCUIApplication {
         while !all.waitForExistence(timeout: 3), n < 4 { nudgeUp(); n += 1 }
         if !all.exists { XCTContext.runActivity(named: "species did not open") { $0.add(XCTAttachment(screenshot: screenshot())) } }
         XCTAssertTrue(all.exists, "the species did not open in place")
-        if !all.isHittable { nudgeUp() }
+        n = 0
+        while !all.isHittable, n < 4 { nudgeUp(); n += 1 }   // under the tab bar's Scan button a tap would start a scan
         all.tap()
     }
 }
