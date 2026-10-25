@@ -58,7 +58,7 @@ fi
 # being removed. The lock file itself is never removed (see xcb.sh: a waiter that had opened it would
 # otherwise lock a vanished file while a new build locks its replacement). A dry run opens an existing
 # lock file read-only and creates nothing.
-for slot in main review-a review-b merge; do
+for slot in main main-2 review-a review-b merge; do
   dir="$ROOT/$slot"; l="$ROOT/$slot.lock"
   if [[ -d "$l" ]]; then
     echo "skip: $l is a lock directory from the previous (mkdir) scheme; when nothing is building, rm -rf it by hand" >&2; rc=1; continue
@@ -87,7 +87,7 @@ for path in "$ROOT"/*; do
   [[ -e "$path" ]] || continue
   name=$(basename "$path")
   case "$name" in
-    sims.txt|main|review-a|review-b|merge|*.lock) continue ;;
+    sims.txt|main|main-2|review-a|review-b|merge|*.lock) continue ;;
     swift-*|review-copy-*|sims.txt.tmp.*)
       if (( dry )); then echo "would remove: $path"; else echo "remove: $path"; rm -rf "$path"; fi ;;
     *) echo "leave: $path (not a folder these helpers make; remove it by hand if it is yours)" ;;
