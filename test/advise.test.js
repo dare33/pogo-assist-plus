@@ -277,4 +277,27 @@ test('gaps: a Shadow covers its plain raid and Rocket entries but not its gym en
   assert.ok(snorlax.some((g) => g.speciesId === 'snorlax' && g.area === 'gym' && g.tier === 'S'), 'the gym S gap for Snorlax stays');
   const plain = analyseBox([copy('Swampert')], ctx).gaps;
   assert.ok(!plain.some((g) => g.speciesId === 'swampert' && g.area === 'rocket'));
+// ---- one copy, several builds (the Pokémon page's Advice panel lists every build a copy carries, best first) ----
+const copy = (name, level, ivs) => {
+  const proto = box[0];
+  return { ...proto, name, form: 'Normal', cp: 300, level, ivs, ivPercent: Math.round(((ivs.atk + ivs.def + ivs.hp) / 45) * 1000) / 10, shadow: false, purified: false };
+};
+
+test('a copy with several targets carries one build per target, best score first', () => {
+  const eevee = analyseBox([copy('Eevee', 20, { atk: 10, def: 12, hp: 11 })], ctx).builds;
+  assert.ok(eevee.length >= 2, `Eevee should carry several builds, got ${eevee.map((b) => b.targetId).join(', ')}`);
+  assert.equal(new Set(eevee.map((b) => b.targetId)).size, eevee.length, 'one build per target');
+  for (let i = 1; i < eevee.length; i++) assert.ok(eevee[i - 1].score >= eevee[i].score, 'best first');
+});
+
+test('a league build for a target the copy is already over the cap for is dropped', () => {
+  const targets = (level) => analyseBox([copy('Duskull', level, { atk: 10, def: 12, hp: 11 })], ctx).builds.map((b) => b.targetId);
+  assert.ok(targets(20).includes('dusclops'), 'a low-level Duskull still has the Great League Dusclops build');
+  assert.ok(!targets(40).includes('dusclops'), 'at level 40 Dusclops is over the Great League cap: no build left, so none shown');
+  assert.ok(targets(40).includes('dusknoir'), 'the Ultra League Dusknoir build stays');
+});
+
+test('a Pokémon with no league-viable target carries only its other areas (Abra: Alakazam raids, not GL/UL/ML)', () => {
+  const abra = analyseBox([copy('Abra', 17, { atk: 0, def: 14, hp: 15 })], ctx).builds;
+  assert.deepEqual(abra.map((b) => [b.targetId, b.areas]), [['alakazam', ['raids']]]);
 });

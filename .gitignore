@@ -10,3 +10,10 @@ scratch/
 out/
 # the owner's Apple team id; copy Config/Signing.local.xcconfig.example
 native/PogoAssist/Config/Signing.local.xcconfig
+# the design handoff screenshots (12 MB) are kept local to keep git lean; the source zip is Greg's
+design_handoff_league_options_and_hub/screenshots/
+# design-pass box export (Greg's own box data); handed to the design session by hand, never committed
+box-data.json
+box-data.js
+# design-pass handoff screenshots; kept local, never committed
+design_handoff_*/screenshots/

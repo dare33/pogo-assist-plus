@@ -318,7 +318,8 @@ export function analyseBox(box, ctx) {
   }
   gaps.sort((a, b) => TIER_W[b.tier] - TIER_W[a.tier] || a.area.localeCompare(b.area));
 
-  // Hygiene: duplicates by resolved species; keep the best IV (and anything with a tier-S hit), transfer the rest.
+  // Hygiene: duplicates by resolved species; keep the best IV % (unknown IVs count as 0, ties go to the higher CP) and transfer the rest. A legendary,
+  // mythical or ultra beast keeps two. The builds do not enter into it: a copy built into something can still be the one this would transfer.
   const groups = new Map();
   for (const e of pokemon) { if (e.unresolved) continue; const k = e.resolved.speciesId; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); }
   const hygiene = [];

@@ -677,15 +677,15 @@ test('experimental is never a member the copy is already too strong for; only a 
   assert.equal(all.experimental, all.pick);
 });
 
-test('moves are carried only on the shown and the experimental option', () => {
+test('moves are carried on every option PvPoke ranks, and only on those', () => {
   const L = rawOf(entry('Eevee', { ivs: { atk: 6, def: 7, hp: 12 }, level: 17 }));
   for (const league of ['gl', 'ul', 'ml']) {
     const l = L[league];
-    l.options.forEach((o, i) => {
-      if (i === l.pick || i === l.experimental) assert.ok(o.strength ? o.moves : o.moves === null, `${league} ${o.speciesId}`);
+    l.options.forEach((o) => {
+      if (o.strength) assert.ok(o.moves && o.moves.fast && Array.isArray(o.moves.charged), `${league} ${o.speciesId}`);
       else assert.equal(o.moves, null, `${league} ${o.speciesId}`);
     });
-    assert.ok(l.options.filter((o) => o.moves).length <= 2);
+    assert.ok(l.options.filter((o) => o.moves).length >= 3, `${league}: more than the shown and experimental option carry moves`);
   }
 });
 

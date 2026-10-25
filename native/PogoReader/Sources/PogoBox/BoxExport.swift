@@ -92,7 +92,8 @@ public enum BoxExport {
             parts.append("\(what) [\(detail.joined(separator: "; "))]")
         }
         for b in a.spareFor { parts.append("spare for the \(b.targetName) build (\(b.title))") }
-        if let d = a.duplicateOf { parts.append("duplicate of \(d.name), \(a.keep ? "keep" : "transfer")") }
+        // The Advice panel's rule: a copy with a build of its own carries no keep or transfer verdict (hygiene ignores builds, so it could contradict the build).
+        if a.builds.isEmpty, let d = a.duplicateOf { parts.append("duplicate of \(d.name), \(a.keep ? "keep" : "transfer")") }
         return parts.joined(separator: " / ")
     }
 

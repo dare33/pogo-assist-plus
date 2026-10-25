@@ -14,7 +14,9 @@ struct PogoAssistApp: App {
     var body: some Scene {
         WindowGroup {
             #if DEBUG
-            if CommandLine.arguments.contains("-ui-gallery") { ComponentGallery() } else { RootView() }
+            if CommandLine.arguments.contains("-ui-gallery") { ComponentGallery() }
+            else if CommandLine.arguments.contains("-design-gallery") { DesignGallery() }
+            else { RootView() }
             #else
             RootView()
             #endif
