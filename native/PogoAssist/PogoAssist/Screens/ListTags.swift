@@ -66,15 +66,21 @@ struct WorthTag: View {
     /// full ink (more contrast, not less: a lighter ground under the same text). These are how much of the tint and of the ink it keeps.
     static let fadedTint = 0.5, fadedBorder = 0.4
 
+    /// How much of its tint a rating keeps and whether it carries a faded ink border: Top the full tint, Good the faded one with the border, Weak and unrated
+    /// their own fill untouched. The tag here and the league card's chip both read this, so a view that stopped applying it would fail the test that pins it.
+    static func style(for worth: LeaguePanel.Worth?) -> (tintOpacity: Double, borderOpacity: Double?) {
+        worth == .ok ? (fadedTint, fadedBorder) : (1, nil)
+    }
+
     static func detail(_ worth: LeaguePanel.Worth?, best: String?) -> String {
         (worth?.label ?? "Not rated") + (best.map { " · " + $0 } ?? "")
     }
 
     var body: some View {
-        let ink = activity.ink(accent), detail = Self.detail(worth, best: best)
+        let ink = activity.ink(accent), detail = Self.detail(worth, best: best), style = Self.style(for: worth)
         switch worth {
         case .strong?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent))
-        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent).opacity(Self.fadedTint), border: ink.opacity(Self.fadedBorder))
+        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent).opacity(style.tintOpacity), border: ink.opacity(style.borderOpacity ?? 0))
         case .weak?: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear, border: Theme.line)
         case nil: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear)
         }

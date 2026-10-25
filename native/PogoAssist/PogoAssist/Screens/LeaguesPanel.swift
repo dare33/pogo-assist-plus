@@ -177,12 +177,13 @@ struct LeaguesPanel: View {
     /// reads as a step down in the same hue; it was orange), or the muted off tone for Weak. It is only drawn here: the card is one
     /// accessibility element that hides its children, so the tap target is `worthButton`, laid over the chip's frame outside the card.
     private func worthTag(_ w: LeaguePanel.Worth) -> some View {
-        let (ink, tint): (Color, Color) = w == .strong ? (Theme.greenInk, Theme.greenTint) : w == .ok ? (Theme.greenInk, Theme.greenTint.opacity(WorthTag.fadedTint)) : (Theme.muted, Theme.off)
+        let style = WorthTag.style(for: w)
+        let (ink, tint): (Color, Color) = w == .strong ? (Theme.greenInk, Theme.greenTint) : w == .ok ? (Theme.greenInk, Theme.greenTint.opacity(style.tintOpacity)) : (Theme.muted, Theme.off)
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
         return Text(w.label.uppercased()).font(.figtree(12, .bold, relativeTo: .caption)).tracking(0.07 * 12)
             .foregroundStyle(ink).padding(.horizontal, 8).padding(.vertical, 4)
             .background(tint, in: shape)
-            .overlay { if w == .ok { shape.strokeBorder(ink.opacity(WorthTag.fadedBorder), lineWidth: 1) } }
+            .overlay { if let border = style.borderOpacity { shape.strokeBorder(ink.opacity(border), lineWidth: 1) } }
             .anchorPreference(key: WorthBounds.self, value: .bounds) { $0 }
     }
 
