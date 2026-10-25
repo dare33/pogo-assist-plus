@@ -251,6 +251,11 @@ test('Mega hits and Mega gaps agree: a name-only Shadow Charizard leaves Mega Ch
   const plain = analyseBox([copy('Charizard')], ctx);
   assert.ok(plain.builds.some((b) => b.viaMega), 'plain Charizard has a Mega build');
   assert.ok(!plain.gaps.some((g) => g.speciesId === 'charizard_mega_y'), 'and no Mega gap');
+  // An id-style name resolves to charizard_shadow with the resolver's flag false (its word match stops at the underscore): still a Shadow here.
+  const idStyle = analyseBox([copy('charizard_shadow')], ctx);
+  assert.equal(idStyle.pokemon[0].resolved.speciesId, 'charizard_shadow');
+  assert.ok(!idStyle.builds.some((b) => b.viaMega), 'no Mega build for an id-style Shadow name');
+  assert.ok(idStyle.gaps.some((g) => g.speciesId === 'charizard_mega_y'), 'Mega Charizard Y is a gap for it');
 });
 
 test('a Shadow flag on a species with no _shadow id still blocks the Mega, in hits and gaps (Lucario: Mega Lucario is raids/Fighting S)', () => {
