@@ -15,6 +15,21 @@ public struct GameMaster {
         public var baseStats: BaseStats?
         /// One or two lowercase type names as the game master spells them (the Pogo Hub's type chart lookups); empty when the entry has none.
         public var types: [String] = []
+        /// PvPoke's `released` flag and `tags` ("mega", "shadow", "legendary", "mythical", "ultrabeast", "duplicate", ...). Collection counts read them.
+        public var released: Bool = false
+        public var tags: [String] = []
+        /// Move ids the species can learn (`AIR_SLASH`), and those of them only an Elite TM or an event gives (`eliteMoves`). The Pokémon page's advanced
+        /// details list them; names and types are in `GameMaster.moves`.
+        public var fastMoves: [String] = []
+        public var chargedMoves: [String] = []
+        public var eliteMoves: [String] = []
+    }
+
+    /// One move: its id as the species lists it, its name and its lowercase type.
+    public struct Move: Equatable {
+        public var id: String
+        public var name: String
+        public var type: String
     }
 
     public enum Failure: Error, LocalizedError {
@@ -23,22 +38,30 @@ public struct GameMaster {
     }
 
     public let byId: [String: Species]
+    /// Every entry in the file's order (`byId` has no order); a species with two entries of one id appears twice here and once in `byId`.
+    public let ordered: [Species]
+    public let moves: [String: Move]
     private let byLowerName: [String: String]
 
     public init(data: Data) throws {
         struct Family: Decodable { var parent: String?; var evolutions: [String]? }
         struct Stats: Decodable { var atk: Int; var def: Int; var hp: Int }
-        struct Entry: Decodable { var dex: Int; var speciesId: String; var speciesName: String; var family: Family?; var baseStats: Stats?; var types: [String]? }
-        struct File: Decodable { var pokemon: [Entry] }
+        struct Entry: Decodable { var dex: Int; var speciesId: String; var speciesName: String; var family: Family?; var baseStats: Stats?; var types: [String]?
+                       var released: Bool?; var tags: [String]?; var fastMoves: [String]?; var chargedMoves: [String]?; var eliteMoves: [String]? }
+        struct MoveEntry: Decodable { var moveId: String; var name: String; var type: String }
+        struct File: Decodable { var pokemon: [Entry]; var moves: [MoveEntry]? }
         let file: File
         do { file = try JSONDecoder().decode(File.self, from: data) } catch { throw Failure.unreadable("\(error)") }
-        var map = [String: Species](), names = [String: String]()
+        var map = [String: Species](), names = [String: String](), all = [Species]()
         for e in file.pokemon {
-            map[e.speciesId] = Species(id: e.speciesId, name: e.speciesName, dex: e.dex, parent: e.family?.parent, evolutions: e.family?.evolutions ?? [], baseStats: e.baseStats.map { BaseStats(atk: $0.atk, def: $0.def, hp: $0.hp) }, types: (e.types ?? []).filter { $0 != "none" })
+            let species = Species(id: e.speciesId, name: e.speciesName, dex: e.dex, parent: e.family?.parent, evolutions: e.family?.evolutions ?? [], baseStats: e.baseStats.map { BaseStats(atk: $0.atk, def: $0.def, hp: $0.hp) }, types: (e.types ?? []).filter { $0 != "none" },
+                              released: e.released ?? false, tags: e.tags ?? [], fastMoves: e.fastMoves ?? [], chargedMoves: e.chargedMoves ?? [], eliteMoves: e.eliteMoves ?? [])
+            map[e.speciesId] = species; all.append(species)
             // First entry wins, so "Vulpix" is the plain species and not a later duplicate of the name.
             if names[e.speciesName.lowercased()] == nil { names[e.speciesName.lowercased()] = e.speciesId }
         }
-        byId = map; byLowerName = names
+        byId = map; byLowerName = names; ordered = all
+        moves = Dictionary((file.moves ?? []).map { ($0.moveId, Move(id: $0.moveId, name: $0.name, type: $0.type)) }, uniquingKeysWith: { a, _ in a })
     }
 
     /// The bundled game master. Loaded once per process (a static initialiser is thread-safe).

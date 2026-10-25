@@ -221,7 +221,9 @@ public enum HubTeams {
 
     /// The candidates for a league (`gl`, `ul` or `ml`): per copy in the box its shown option (the Pogo Assist pick when `pogoAssist`), when it
     /// is not past the cap and scores `candidateFloor` or more. Best score first, then the better IV rank; one entry per species (the best copy).
-    public static func candidates(league: String, advice: BoxAdvice, pogoAssist: Bool = false) -> [Candidate] {
+    /// `allowed` is asked before the one-per-species step, so a species whose best copy is not allowed (Available: not the copy itself) still lists its next
+    /// best copy that is.
+    public static func candidates(league: String, advice: BoxAdvice, pogoAssist: Bool = false, allowed: (Candidate) -> Bool = { _ in true }) -> [Candidate] {
         var all = [Candidate]()
         for (id, ratings) in advice.leagues {
             guard let r = ratings[league] else { continue }
@@ -233,7 +235,8 @@ public enum HubTeams {
             // known recommended move still to learn does.
             let c = o.cost
             let done = o.isSelf && c != nil && c!.dust == 0 && c!.candy == 0 && c!.xl == 0 && (o.needs ?? []).isEmpty
-            all.append(Candidate(entryId: id, option: o, copyTitle: r.options.first(where: \.isSelf)?.name ?? "", score: s.score, ivRank: o.iv?.rank, ivPct: o.iv?.pct, built: done))
+            let candidate = Candidate(entryId: id, option: o, copyTitle: r.options.first(where: \.isSelf)?.name ?? "", score: s.score, ivRank: o.iv?.rank, ivPct: o.iv?.pct, built: done)
+            if allowed(candidate) { all.append(candidate) }
         }
         all.sort {
             if $0.score != $1.score { return $0.score > $1.score }
