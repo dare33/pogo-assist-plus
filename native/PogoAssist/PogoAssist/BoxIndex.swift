@@ -10,6 +10,8 @@ struct BoxIndex {
         var id: String
         /// Name with form in brackets, as the rows show it ("Zamazenta (Hero)").
         var title: String
+        /// The game master's species id (the row's types come from it).
+        var speciesId: String = ""
         /// The lowercase name the game's search takes ("staraptor"); the form is not part of it.
         var name: String
         /// Lowercase text a typed search is matched against: the title and the display name with its form ("Mega Charizard X", "Alolan Raichu"), so "mega" or "alola" find them.
@@ -71,6 +73,7 @@ struct BoxIndex {
             let key = title.lowercased() + "|" + r.display.lowercased() + (mega.map { "|" + $0.title.lowercased() + "|" + $0.display.lowercased() } ?? "")
             var item = Item(id: e.id, title: title, name: r.name.lowercased(), key: key, cp: r.cp, hp: r.hp, noLevelFits: GameSearch.noLevelFits(r.flags), ivs: r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }, ivSum: sum,
                             needsCheck: e.needsCheck, fixed: e.isHandCorrected)
+            item.speciesId = r.speciesId
             item.hasMega = mega != nil
             item.shadow = r.shadow == 1
             if item.needsCheck { toCheckCount += 1 }
@@ -182,6 +185,10 @@ struct BoxIndex {
         var id: String { title }
         var title: String
         var stats: Stats
+        /// The copies the row counts (positions in `items`, best IVs first): the build mark and the types read them.
+        var members: [Int] = []
+        /// The first copy's species id: the row's type icons.
+        var speciesId = ""
         /// With an activity chip: the best tag among the copies that pass it (Strong when any is, else OK).
         var lead: LeaguePanel.Worth?
     }
@@ -200,14 +207,14 @@ struct BoxIndex {
         var rows = [Row]()
         rows.reserveCapacity(groups.count)
         for g in groups {
-            if !filtered { rows.append(Row(title: g.title, stats: g.stats)); continue }
+            if !filtered { rows.append(Row(title: g.title, stats: g.stats, members: g.members, speciesId: g.members.first.map { items[$0].speciesId } ?? "")); continue }
             let m = g.members.filter { matches(items[$0], query, chip, scoring) }
             if m.isEmpty { continue }
             var lead: LeaguePanel.Worth?
             if case .activity(let a) = chip {
                 lead = m.contains { scoring.insight?.copies[items[$0].id]?.worth(a, pogoAssist: scoring.pogoAssist) == .strong } ? .strong : .ok
             }
-            rows.append(Row(title: g.title, stats: stats(of: m), lead: lead))
+            rows.append(Row(title: g.title, stats: stats(of: m), members: m, speciesId: items[m[0]].speciesId, lead: lead))
         }
         switch sort {
         case .name:

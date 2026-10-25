@@ -67,7 +67,7 @@ final class BoxScreensTests: XCTestCase {
         if toCheck.exists { toCheck.tap(); sleep(1); shot("box-03-\(mode)-chip-to-check"); app.buttons["All"].tap() }
 
         // A species list, then select mode with the search built from the picked Pokémon.
-        rows.element(boundBy: 0).tap()
+        app.openSpeciesList(rows.element(boundBy: 0))
         let members = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5))
         sleep(1)
@@ -96,7 +96,7 @@ final class BoxScreensTests: XCTestCase {
         // A detail with a check.
         if toCheck.exists {
             toCheck.tap()
-            rows.element(boundBy: 0).tap()
+            app.openSpeciesList(rows.element(boundBy: 0))
             // The species list is pushed with the To check filter on; its rows appear after the push, so wait for them rather than tapping at once.
             XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 10), "the species list under the To check chip shows its Pokémon")
             members.element(boundBy: 0).tap()
@@ -132,7 +132,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(large.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
         sleep(1)
         shot("box-08-large-text-box")
-        large.buttons.matching(identifier: "species-row").element(boundBy: 0).tap()
+        large.openSpeciesList(large.buttons.matching(identifier: "species-row").element(boundBy: 0))
         large.buttons.matching(identifier: "pokemon-row").firstMatch.tap()
         XCTAssertTrue(large.buttons["Fix a value"].waitForExistence(timeout: 5))
         sleep(1)
@@ -171,7 +171,7 @@ final class BoxScreensTests: XCTestCase {
 
         // Select mode's export asks too, and the picked Pokémon go in the file.
         XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 10))
-        app.buttons.matching(identifier: "species-row").element(boundBy: 0).tap()
+        app.openSpeciesList(app.buttons.matching(identifier: "species-row").element(boundBy: 0))
         XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5))
         app.buttons["Select"].tap()
         app.buttons.matching(identifier: "pokemon-row").element(boundBy: 0).tap()
@@ -311,7 +311,7 @@ final class BoxScreensTests: XCTestCase {
 
     private func openBlaziken(_ app: XCUIApplication) {
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); XCTAssertTrue(waitHittable(row), "the Blaziken row is tappable"); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); XCTAssertTrue(waitHittable(row), "the Blaziken row is tappable"); app.openSpeciesList(row)
         let one = app.buttons.matching(identifier: "pokemon-row").firstMatch
         // A tap during a screen transition can reach nothing: if the list has not appeared and the species row is still there, tap it once more.
         if !one.waitForExistence(timeout: 3), row.exists { row.tap() }
@@ -333,7 +333,7 @@ final class BoxScreensTests: XCTestCase {
         app.launch()
         populate(app)
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Moltres'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); app.openSpeciesList(row)
         let copies = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(copies.firstMatch.waitForExistence(timeout: 5))
         let n = copies.count
@@ -387,7 +387,7 @@ final class BoxScreensTests: XCTestCase {
         let search = app.textFields["box-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Zamazenta")
         let zam = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Zamazenta'")).firstMatch
-        XCTAssertTrue(zam.waitForExistence(timeout: 5), "Zamazenta is in the sample box"); zam.tap()
+        XCTAssertTrue(zam.waitForExistence(timeout: 5), "Zamazenta is in the sample box"); app.openSpeciesList(zam)
         let built = app.buttons.matching(NSPredicate(format: "identifier == 'pokemon-row' AND label CONTAINS '2661'")).firstMatch
         XCTAssertTrue(built.waitForExistence(timeout: 5), "the Zamazenta with CP 2661"); built.tap()
         _ = app.staticTexts["ADVICE"].waitForExistence(timeout: 20)
@@ -401,7 +401,7 @@ final class BoxScreensTests: XCTestCase {
     func testMegaFormWithALeagueViewOpen() throws {
         let app = saveMegaPair(["-appearance", "light"])
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); app.openSpeciesList(row)
         let one = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(one.firstMatch.waitForExistence(timeout: 5)); one.firstMatch.tap()
         XCTAssertTrue(app.buttons["form-mega"].waitForExistence(timeout: 5))
@@ -430,7 +430,7 @@ final class BoxScreensTests: XCTestCase {
         shot("mega-light-01-box")
 
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.exists); row.tap()
+        XCTAssertTrue(row.exists); app.openSpeciesList(row)
         let one = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(one.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(one.count, 1, "the species list has one Blaziken")
@@ -497,7 +497,7 @@ final class BoxScreensTests: XCTestCase {
         sleep(1)
         shot("mega-dark-01-box")
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); app.openSpeciesList(row)
         XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5))
         sleep(1)
         shot("mega-dark-02-species-row")
@@ -512,7 +512,7 @@ final class BoxScreensTests: XCTestCase {
         let app = saveMegaPair(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])
         sleep(1)
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); app.openSpeciesList(row)
         XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5))
         sleep(1)
         shot("mega-large-01-species-row")
@@ -560,7 +560,7 @@ final class BoxScreensTests: XCTestCase {
         search.tap(); search.typeText(name)
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", "\(name),")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5), "\(name) is in the sample box")
-        row.tap()
+        app.openSpeciesList(row)
         let member = app.buttons.matching(identifier: "pokemon-row").firstMatch
         XCTAssertTrue(member.waitForExistence(timeout: 5))
         member.tap()
@@ -858,7 +858,7 @@ final class BoxScreensTests: XCTestCase {
         let members = app.buttons.matching(identifier: "pokemon-row")
         func openFirstPokemon() {
             let species = app.buttons.matching(identifier: "species-row").firstMatch
-            XCTAssertTrue(species.waitForExistence(timeout: 10)); species.tap()
+            XCTAssertTrue(species.waitForExistence(timeout: 10)); app.openSpeciesList(species)
             XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5)); members.firstMatch.tap()
             XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
         }

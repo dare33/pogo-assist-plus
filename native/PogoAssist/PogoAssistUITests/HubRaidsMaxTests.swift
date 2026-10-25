@@ -114,7 +114,7 @@ final class HubRaidsMaxTests: XCTestCase {
 
         // Mark the first Pokémon Dynamax on its page.
         let species = app.buttons.matching(identifier: "species-row").firstMatch
-        XCTAssertTrue(species.waitForExistence(timeout: 10)); species.tap()
+        XCTAssertTrue(species.waitForExistence(timeout: 10)); app.openSpeciesList(species)
         let members = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5))
         let memberLabel = members.firstMatch.label

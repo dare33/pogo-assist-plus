@@ -16,7 +16,7 @@ struct PokemonDetailView: View {
     @Environment(\.showToast) private var showToast
     /// The switch's position once the person has moved it; until then the Settings choice.
     @State private var chosenMega: Bool?
-    /// The league the Leagues panel has open (nil on its base cards); the Advice panel waits while one is.
+    /// The league the Leagues panel has open (nil on its base cards); the Advice panel waits while one is. A TOP PVP copy on My Pokémon opens the page with its league chosen.
     @State private var leaguesMode: String?
     /// "How it was read" is one line that opens its notes beneath it.
     @State private var notesOpen = false
@@ -24,6 +24,11 @@ struct PokemonDetailView: View {
     @State private var pendingDynamax: BoxMerge.DynamaxEdit?
     /// Activities whose tag was tapped open: the one line it explains.
     @State private var activityOpen = Set<String>()
+
+    init(id: String, league: String? = nil) {
+        self.id = id
+        _leaguesMode = State(initialValue: league)
+    }
 
     /// The Mega form the page shows now: only for an entry whose Mega form has a CP, and only while the switch is on Mega.
     private func megaShown(_ e: BoxEntry) -> MegaForm? {

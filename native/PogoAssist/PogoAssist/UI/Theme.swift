@@ -14,6 +14,8 @@ enum Theme {
     enum Space {
         static let screen: CGFloat = 14
         static let panelGap: CGFloat = 12
+        /// My Pokémon: the list and the search field sit 24 pt in from both edges, so the list is centred under the Scan button; the A-Z index lives in the right gutter (design pass 3, D23).
+        static let listGutter: CGFloat = 24
     }
 
     /// Widest the content gets. The screens are laid out as a phone (the widest is about 440 pt); in a regular-width
