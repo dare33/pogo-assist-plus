@@ -94,6 +94,9 @@ export function markedMoves(texts) {
 }
 const normMove = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
+/** A resolved copy is a Shadow when the resolver flagged it (the row's flag, or "Shadow" in the name) or its id is a `_shadow` id. */
+const isShadow = (r) => Boolean(r.flags?.shadow) || r.speciesId.endsWith('_shadow');
+
 const TIER_W = { S: 3, A: 2, B: 1 };
 // The areas `fit` rates (the leagues are rated per option by leaguesFor, and the app derives their tags from that).
 const FIT_AREAS = ['raids', 'gym', 'rocket', 'max'];
@@ -125,15 +128,19 @@ export function analyseBox(box, ctx) {
   const pokemon = [];
   const ownedBase = new Set();       // base species ids present in the box (any variant)
   const ownedIds = new Set();
+  const megaCapable = new Set();     // resolved ids owned by at least one non-Shadow copy: only those can reach a Mega
   const needLeagues = [];            // entries whose leagues are worked out after the loop, grouped by species
 
   for (const p of box) {
     const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
     if (!r) { pokemon.push({ p, unresolved: true }); continue; }
-    ownedIds.add(r.speciesId); ownedBase.add(baseSpeciesId(gm, r.speciesId));
+    ownedIds.add(r.speciesId); if (!isShadow(r)) megaCapable.add(r.speciesId); ownedBase.add(baseSpeciesId(gm, r.speciesId));
     const reach = [r.speciesId, ...evolutionsOf(gm, r.speciesId), ...formChangesOf(gm, r.speciesId)];
     const targets = new Set(reach);
-    if (!p.shadow) for (const id of reach) for (const m of megaIdsOf(gm, id)) targets.add(m);
+    // A Shadow can never Mega evolve. isShadow reads the resolver's flag OR the resolved id, so a copy flagged Shadow, one named "Shadow X"
+    // without the flag, and one named id-style ("charizard_shadow", which the resolver's word match misses) are excluded alike, including a
+    // Shadow of a species the game master lists no `_shadow` form for (it resolves to the plain id). The gap check mirrors it via megaCapable.
+    if (!isShadow(r)) for (const id of reach) for (const m of megaIdsOf(gm, id)) targets.add(m);
 
     const hits = [];
     for (const id of targets) {
@@ -145,6 +152,17 @@ export function analyseBox(box, ctx) {
         // Mega targets are the same Pokémon plus Mega Energy: credit them to the base target.
         const targetId = /_(mega(_[xy])?|primal)$/.test(id) ? baseSpeciesId(gm, id) : id;
         hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId, viaMega: targetId !== id ? id : null, needsDynamax: e.area === 'max', moves: e.moves, obtain: e.obtain, notes: e.notes });
+      }
+      // A Shadow copy also does the job of the plain species' raid and Rocket entries (a Shadow attacks as well as, and harder than, the plain
+      // one). Not the plain gym entry (a Shadow defends worse, 0.83x; a manager call) and not max (a Shadow is never a Dynamax catch).
+      // Credited to the _shadow id, the copy stays Shadow; when the _shadow id already has an entry for the same area and section, the
+      // plain one is not added whatever its tier. The gap check below mirrors this rule.
+      if (id.endsWith('_shadow') && gm.byId.has(id.replace(/_shadow$/, ''))) {
+        for (const e of tiers.bySpecies.get(id.replace(/_shadow$/, '')) || []) {
+          if (e.area !== 'raids' && e.area !== 'rocket') continue;
+          if (hits.some((h) => h.kind === 'tier' && h.targetId === id && h.area === e.area && h.section === e.section)) continue;
+          hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId: id, viaMega: null, needsDynamax: false, moves: e.moves, obtain: e.obtain, notes: e.notes });
+        }
       }
       for (const [league, map] of Object.entries(rankings.byLeague)) {
         const row = map.get(id);
@@ -296,7 +314,10 @@ export function analyseBox(box, ctx) {
     const reachable = [...ownedIds].some((id) => {
       const reach = [id, ...evolutionsOf(gm, id), ...formChangesOf(gm, id)];
       if (reach.includes(e.speciesId)) return true;
-      return !id.endsWith('_shadow') && reach.some((r) => megaIdsOf(gm, r).includes(e.speciesId));
+      // Same rule as the Shadow credit above: a Shadow of the species covers its plain raid and Rocket entries.
+      if ((e.area === 'raids' || e.area === 'rocket') && reach.includes(`${e.speciesId}_shadow`)) return true;
+      // megaCapable never holds a `_shadow` id (isShadow checks the suffix too), so this also covers the old suffix test.
+      return megaCapable.has(id) && reach.some((r) => megaIdsOf(gm, r).includes(e.speciesId));
     });
     if (reachable) continue;
     const key = `${e.area}|${e.speciesId}`;
