@@ -202,7 +202,7 @@ public enum HubTeams {
         public var score: Double
         public var ivRank: Int?
         public var ivPct: Double?
-        /// "Built" when the option is the copy itself with no cost left (dust, candy, XL) and no move to learn; else "To build".
+        /// "Built" when the option is the copy itself with a known cost of nothing left (dust, candy, XL) and no known move to learn; else "To build".
         public var built: Bool
         public var speciesId: String { option.speciesId }
         public var name: String { option.name }
@@ -228,9 +228,11 @@ public enum HubTeams {
             let o = r.options[LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)]
             guard !o.overCap, let s = o.strength, s.score >= candidateFloor else { continue }
             // From the option's own league data, not the advice's builds (a copy under the advisor's floor, or a spare, has none): built when it is the
-            // copy itself with nothing left to pay and no recommended move to learn; an evolution is always still to build.
+            // copy itself with nothing left to pay; an evolution is always still to build. A nil cost is unknown (IVs or level not read), not
+            // free, so it reads "To build". Unknown moves (`needs` nil, always so on scanned boxes, which carry no moves) do NOT block "Built"; only a
+            // known recommended move still to learn does.
             let c = o.cost
-            let done = o.isSelf && (c == nil || (c!.dust == 0 && c!.candy == 0 && c!.xl == 0)) && (o.needs ?? []).isEmpty
+            let done = o.isSelf && c != nil && c!.dust == 0 && c!.candy == 0 && c!.xl == 0 && (o.needs ?? []).isEmpty
             all.append(Candidate(entryId: id, option: o, copyTitle: r.options.first(where: \.isSelf)?.name ?? "", score: s.score, ivRank: o.iv?.rank, ivPct: o.iv?.pct, built: done))
         }
         all.sort {

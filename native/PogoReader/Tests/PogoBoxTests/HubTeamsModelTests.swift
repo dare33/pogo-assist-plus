@@ -192,9 +192,11 @@ final class HubTeamsModelTests: XCTestCase {
 
     // MARK: PvP
 
-    private func rating(_ id: String, _ name: String, score: Double, ivRank: Int, over: Bool = false, selfName: String? = nil, gender: String? = nil) -> BoxAdvice.LeagueRating {
+    private func rating(_ id: String, _ name: String, score: Double, ivRank: Int, over: Bool = false, selfName: String? = nil, gender: String? = nil,
+                         cost: BoxAdvice.LeagueRating.Cost? = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 25)) -> BoxAdvice.LeagueRating {
         let option = BoxAdvice.LeagueRating.Option(speciesId: id, name: name, isSelf: selfName == nil, genderLocked: gender, strength: .init(score: score, rank: 5, of: 200), moves: nil,
-                                                    iv: .init(rank: ivRank, pct: 97.5, rankPct: 99, level: 25, cp: 1490), overCap: over)
+                                                    iv: .init(rank: ivRank, pct: 97.5, rankPct: 99, level: 25, cp: 1490), overCap: over,
+                                                    cost: cost)
         guard let selfName else { return .init(options: [option]) }
         return .init(options: [.init(speciesId: "x", name: selfName, isSelf: true), option], pick: 1)
     }
@@ -253,7 +255,7 @@ final class HubTeamsModelTests: XCTestCase {
     func testToBuildAndBuiltStates() throws {
         var a = try advice()
         a.leagues = ["e0": ["gl": rating("staraptor", "Staraptor", score: 90, ivRank: 1)],                             // built copy, itself
-                     "e1": ["gl": rating("lucario", "Lucario", score: 89, ivRank: 1)],                                 // itself; its build has steps, but the option has no cost
+                     "e1": ["gl": rating("lucario", "Lucario", score: 89, ivRank: 1)],                                 // itself; its build has steps, but the option has nothing left to pay
                      "free": ["gl": rating("azumarill", "Azumarill", score: 88, ivRank: 1)],                           // itself, no build at all
                      "evo": ["gl": rating("gallade", "Gallade", score: 87, ivRank: 1, selfName: "Kirlia", gender: "male")]]   // an evolution of the copy
         let c = HubTeams.candidates(league: "gl", advice: a)
@@ -270,7 +272,7 @@ final class HubTeamsModelTests: XCTestCase {
         }
         var a = BoxAdvice()   // no builds at all: the rule never reads them
         a.leagues = ["done": ["gl": option("azumarill", cost: .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 25))],
-                     "nocost": ["gl": option("medicham")],
+                     "nocost": ["gl": option("medicham")],   // cost unknown (IVs or level not read): not free, so To build
                      "dust": ["gl": option("skarmory", cost: .init(dust: 31_000, candy: 40, xl: 0, evolveCandy: 0, toLevel: 30))],
                      "candy": ["gl": option("lanturn", cost: .init(dust: 0, candy: 12, xl: 0, evolveCandy: 0, toLevel: 30))],
                      "xl": ["gl": option("hypno", cost: .init(dust: 0, candy: 0, xl: 3, evolveCandy: 0, toLevel: 41))],
@@ -279,7 +281,16 @@ final class HubTeamsModelTests: XCTestCase {
                                                    .init(speciesId: "gallade", name: "Gallade", isSelf: false, strength: .init(score: 89, rank: 1, of: 100),
                                                          iv: .init(rank: 1, pct: 99, rankPct: 99, level: 20, cp: 1400), cost: .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 25))], pick: 1)]]
         let states = Dictionary(uniqueKeysWithValues: HubTeams.candidates(league: "gl", advice: a).map { ($0.entryId, $0.stateText) })
-        XCTAssertEqual(states, ["done": "Built", "nocost": "Built", "dust": "To build", "candy": "To build", "xl": "To build", "moves": "To build", "evo": "To build"])
+        XCTAssertEqual(states, ["done": "Built", "nocost": "To build", "dust": "To build", "candy": "To build", "xl": "To build", "moves": "To build", "evo": "To build"])
+    }
+
+    func testACandidateWithAnUnknownCostIsToBuildAndUnknownMovesDoNotBlockBuilt() throws {
+        var a = try advice()
+        a.leagues = ["unread": ["gl": rating("azumarill", "Azumarill", score: 90, ivRank: 1, cost: nil)],
+                     "read": ["gl": rating("medicham", "Medicham", score: 89, ivRank: 1)]]   // needs is nil here (a scanned box has no moves)
+        let c = HubTeams.candidates(league: "gl", advice: a)
+        XCTAssertEqual(c.map(\.name), ["Azumarill", "Medicham"])
+        XCTAssertEqual(c.map(\.stateText), ["To build", "Built"])
     }
 
     func testBeatsTextForNothingBeaten() throws {

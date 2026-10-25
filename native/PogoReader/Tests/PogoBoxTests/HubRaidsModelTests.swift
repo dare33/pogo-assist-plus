@@ -363,12 +363,49 @@ final class HubRaidsModelTests: XCTestCase {
         XCTAssertTrue(HubRaidsModel.isShadow(b, entries: es))
     }
 
+    /// The callers pass the copy's Shadow-ness to `typesCounted`: a finished PLAIN Pheromosa does not cover bug through `covered`, `toDo` or
+    /// `gapClosers` (the table lists only Shadow Pheromosa), and the same build on a Shadow copy does.
+    func testTheRaidsCallersPassTheCopysShadowToTheTable() throws {
+        let hub = try HubData.bundled(), gm = try GameMaster.bundled()
+        var es = try entries(); var pher = es[0]; pher.id = "pher"; pher.row.speciesId = "pheromosa"; pher.row.shadow = nil; es.append(pher)
+        var b = try XCTUnwrap(try advice(es).builds.first)
+        b.targetId = "pheromosa"; b.title = "Pheromosa"; b.entryId = "pher"; b.viaMega = false; b.areas = [HubRaidsModel.Screen.raids.area]
+        var adv = try advice(es); adv.builds = [b]
+        let bugRow = try XCTUnwrap(hub.rotation.first { $0.kind == .fiveStar && HubRaidsModel.bring(row: $0, hub: hub).contains("bug") })
+        func state(shadow: Bool, finished: Bool) -> (covered: Bool, todo: String, closers: [String]) {
+            es[es.count - 1].row.shadow = shadow ? 1 : nil
+            adv.builds[0].steps = finished ? [] : [.init(kind: "secondMove")]
+            return (HubRaidsModel.covered(advice: adv, entries: es, gm: gm, screen: .raids).contains("bug"),
+                    HubRaidsModel.toDo(row: bugRow, advice: adv, entries: es, gm: gm, hub: hub, screen: .raids),
+                    HubRaidsModel.gapClosers(rows: [bugRow], advice: adv, entries: es, gm: gm, hub: hub, screen: .raids).map(\.targetId))
+        }
+        let plain = state(shadow: false, finished: true)
+        XCTAssertFalse(plain.covered, "a finished plain Pheromosa is not the Shadow one")
+        let shadow = state(shadow: true, finished: true)
+        XCTAssertTrue(shadow.covered)
+        XCTAssertFalse(state(shadow: false, finished: false).todo.contains("Pheromosa"), "the to-do does not ask for an unfinished plain Pheromosa")
+        XCTAssertTrue(state(shadow: true, finished: false).todo.contains("Pheromosa"), "but does for an unfinished Shadow one")
+        XCTAssertFalse(state(shadow: false, finished: false).closers.contains("pheromosa"), "an unfinished plain Pheromosa closes no bug gap")
+        XCTAssertTrue(state(shadow: true, finished: false).closers.contains("pheromosa"), "an unfinished Shadow Pheromosa does")
+    }
+
+    /// `maxUse` picks S before A among one species' plain Max entries whatever the table order (strings would pick A); the bundled table has no
+    /// species with both, so the table is built by hand, with a Gigantamax S entry that must be ignored.
+    func testMaxUsePicksTheSEntryOverTheAEntryOfOneSpecies() throws {
+        func entry(_ name: String, _ tier: String) -> TierTable.Entry {
+            .init(area: "max", kind: "max", section: "Attackers", tier: tier, rank: nil, name: name, speciesId: "blissey",
+                  flags: .init(shadow: false, mega: false, max: true), role: nil)
+        }
+        let table = TierTable(entries: [entry("Blissey", "A"), entry("Gigantamax Blissey", "S"), entry("Blissey (Tank)", "S"), entry("Blissey (Spare)", "B")])
+        let es = withBlissey(try entries()), copy = try XCTUnwrap(es.first { $0.id == "bliss" })
+        let use = try XCTUnwrap(HubRaidsModel.maxUse(of: copy, advice: BoxAdvice(), table: table))
+        XCTAssertEqual(use.entry.name, "Blissey (Tank)")
+        XCTAssertEqual(use.entry.tier, "S")
+    }
+
     func testBestTierFirstAndGigantamaxOnlySpeciesAreNotUnset() throws {
         let table = try TierTable.bundled()
         XCTAssertEqual(HubRaidsModel.tierRank("S"), 0); XCTAssertEqual(HubRaidsModel.tierRank("A"), 1); XCTAssertEqual(HubRaidsModel.tierRank("B"), 2)
-        // A species with an S and an A plain entry picks S (strings would pick A).
-        let two = table.entries.filter { $0.area == "max" && !$0.name.contains("Gigantamax") }.filter { e in table.entries(for: e.speciesId, area: "max").filter { !$0.name.contains("Gigantamax") }.map(\.tier).contains("A") && table.entries(for: e.speciesId, area: "max").filter { !$0.name.contains("Gigantamax") }.map(\.tier).contains("S") }
-        if let e = two.first { XCTAssertEqual(HubRaidsModel.maxEntries(e.speciesId, table).min { HubRaidsModel.tierRank($0.tier) < HubRaidsModel.tierRank($1.tier) }?.tier, "S") }
         // Blissey (S) and Lapras (A), both marked Yes with CP favouring Lapras: Blissey is first.
         var es = adding(try entries(), "lapras", name: "Lapras", copyId: "lapras", cp: 2900)
         es = adding(es, "blissey", name: "Blissey", copyId: "bliss", cp: 1000)

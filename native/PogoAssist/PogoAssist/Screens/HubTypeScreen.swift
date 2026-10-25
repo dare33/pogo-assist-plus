@@ -48,7 +48,7 @@ struct HubTypeScreen<Content: View>: View {
     }
 }
 
-/// Where a tile or an event card goes. Everything has its own screen; the others show their builds and gaps until their own screens arrive.
+/// Where a tile or an event card goes: every content type has its own screen.
 struct HubTypeDestination: View {
     let type: ContentType
     var body: some View {
@@ -59,7 +59,6 @@ struct HubTypeDestination: View {
         case .gym: HubGymView()
         case .rocket: HubRocketView()
         case .pvp: HubPvPView()
-        default: HubAreaScreen(type: type)
         }
     }
 }
@@ -77,29 +76,6 @@ struct HubAdviceGate<Content: View>: View {
                 .accessibilityElement(children: .combine)
         case .failed(let m): Text("Advice could not be worked out: \(m)").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
         case .none: Text("Scan your Pokémon and the Hub will fill in").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
-        }
-    }
-}
-
-/// The five type screens that are not built yet: the chrome, the builds that reach this area and the gaps in it.
-struct HubAreaScreen: View {
-    let type: ContentType
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        var count: String?
-        if case .ready(let a) = model.advice { count = buildsText(HubModel.count(a.builds, for: type.key)) }
-        return HubTypeScreen(type: type, count: count) {
-            HubAdviceGate { advice in
-                let builds = HubModel.builds(advice.builds, for: type.key)
-                HubHeaderLine("THESE BUILDS")
-                if builds.isEmpty {
-                    Text("The advisor has no build for this in your box.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
-                } else {
-                    HubBuildList(builds: builds, type: type, highlightFirst: true)
-                }
-                HubGapList(gaps: HubModel.gaps(advice.gaps, for: type.key), type: type)
-            }
         }
     }
 }

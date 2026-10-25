@@ -26,7 +26,7 @@ public struct TierTable {
     public let entries: [Entry]
     private let bySpecies: [String: [Entry]]
 
-    private init(entries: [Entry]) {
+    init(entries: [Entry]) {   // internal so a test can build a table by hand
         self.entries = entries
         bySpecies = Dictionary(grouping: entries, by: \.speciesId)
     }
