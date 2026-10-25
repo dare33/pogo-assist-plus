@@ -33,7 +33,7 @@ Build output from a session never goes in the session scratchpad or in a fresh p
 - Every command-line `xcodebuild` goes through `native/tools/xcb.sh <slot> <args...>`, which builds
   in the fixed, reused `~/Library/Developer/Xcode/DerivedData/pogo-claude-build/<slot>` (slots:
   `main`, `main-2`, `review-a`, `review-b`, `merge`) and holds that slot's lock while the build runs.
-  `main-2` is for a second implementer building at the same time (Greg, 26 Oct 2026). Never pass
+  `main-2` is for a second implementer building at the same time (Greg, 26 Oct 2026 AEDT). Never pass
   `-derivedDataPath`; never build under `/private/tmp/claude-*`; a sixth slot is Greg's call.
   A cold build takes minutes: run it in the background or with a long timeout.
 - `swift build` / `swift test` use the package's own git-ignored `native/PogoReader/.build`, or

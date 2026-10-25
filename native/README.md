@@ -65,13 +65,14 @@ scratchpad. So:
    logs, screenshots, JSON diffs.
 2. **Slots, not per-run folders.** `xcodebuild` output goes to `<location>/<slot>` where `<slot>` is
    one of `main` (the session's own builds and tests), `main-2` (a second implementer building at
-   the same time; added by Greg's ruling of 26 Oct 2026), `review-a` and `review-b` (the two
+   the same time; added by Greg's ruling of 26 Oct 2026, AEDT), `review-a` and `review-b` (the two
    reviewers of the paired gate), `merge` (the manager's merge check). That is the whole set: two
    implementers, two reviewers and a merge check can build at once. Never a fresh folder, never a
    path of your own. If a run genuinely needs more than five builds at once, say so in the PR and
    ask Greg for a further NAMED slot (the list is in `xcb.sh` and here); do not fall back to per-run
-   folders. Every implementer session shares `main`, so a
-   build from another worktree makes the next one cold (about 3.5 minutes); that is the trade.
+   folders. An implementer builds in the slot it was given (`main` unless the manager assigns
+   `main-2`); implementers in one slot share it, so a build from another worktree makes the next
+   one in that slot cold (about 3.5 minutes); that is the trade.
 3. **One `xcodebuild` per slot at a time, through the helper.** Xcode's build database is not safe
    to share between concurrent `xcodebuild` invocations, so each slot has a lock,
    `<location>/<slot>.lock`: an empty file that the helper opens and locks in the kernel with

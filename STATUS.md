@@ -1,5 +1,7 @@
 # Status — Pogo Assist+
 
+**26 Oct 2026 (AEDT): a fifth build slot, `main-2` (branch `chore/build-slot-main-2`, draft PR #22 stacked on #18, not merged).** Greg approved a second implementer slot after builders queued on `main` all of 25 Oct. `xcb.sh`, `sim-temp.sh` and `build-clean.sh` accept and clean `main-2` like `main`; `native/README.md` and `CLAUDE.md` name it. Verified: `bash -n` on the three scripts; `xcb.sh main-2 -version` built in the fixed location under `main-2.lock`; an unknown slot is refused; the Opus reviewer ran all five slots with a fake xcodebuild on a scratch root (main and main-2 concurrently, the cleaner skipping a held main-2). Paired review: both NEEDS-FIX on README wording only, folded.
+
 **25 Oct 2026: build lock on `/usr/bin/lockf` (branch `claude/jolly-hamilton-9e9dc8`, for a draft PR to `main`, not merged; the follow-up Greg
 agreed to the build-hygiene change, which merged as #17, d6f0c17).** The per-slot lock in `native/tools/xcb.sh` and
 `native/tools/build-clean.sh` is no longer a `mkdir` directory with a pid file and a stale-lock reclaim under a second mutex; it
