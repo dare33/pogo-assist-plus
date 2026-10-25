@@ -52,7 +52,7 @@ struct SoftTag: View {
     }
 }
 
-/// The Strong / OK / Weak tag for an activity, three shapes: Strong is the activity's ink on its tint; OK is the same with a 1 pt border in the ink (Rocket's OK was
+/// The Strong / OK / Weak tag for an activity, three shapes: Strong is the activity's ink on its tint; OK is the same, lighter: the tint at half strength with a 1 pt border in the ink at 40% (Rocket's OK was
 /// graphite on grey, near-identical to Weak); Weak is a plain outline in `Theme.line` with `Theme.muted` text and no fill. `Theme.muted` (6A7085) is 4.9:1 on
 /// `Theme.surface` (white) in light mode, over the 4.5:1 the small text needs (computed with `Theme.contrast`; the row it sits on is `Theme.surface`).
 /// `worth` nil is a copy the advice has no rating for: "Not rated", muted text with no fill or outline. `best` merges the "best for" tag of the same area into
@@ -62,6 +62,9 @@ struct WorthTag: View {
     let worth: LeaguePanel.Worth?
     var best: String? = nil
     @Environment(\.accent) private var accent
+    /// The middle rating is a lighter version of the top one everywhere (Greg, 25 Oct 2026): the tint at half strength and a faded ink border, the text still the
+    /// full ink (more contrast, not less: a lighter ground under the same text). These are how much of the tint and of the ink it keeps.
+    static let fadedTint = 0.5, fadedBorder = 0.4
 
     static func detail(_ worth: LeaguePanel.Worth?, best: String?) -> String {
         (worth?.label ?? "Not rated") + (best.map { " · " + $0 } ?? "")
@@ -71,7 +74,7 @@ struct WorthTag: View {
         let ink = activity.ink(accent), detail = Self.detail(worth, best: best)
         switch worth {
         case .strong?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent))
-        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent), border: ink)
+        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent).opacity(Self.fadedTint), border: ink.opacity(Self.fadedBorder))
         case .weak?: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear, border: Theme.line)
         case nil: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear)
         }

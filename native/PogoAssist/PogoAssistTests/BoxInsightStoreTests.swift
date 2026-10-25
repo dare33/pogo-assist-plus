@@ -336,3 +336,52 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertEqual(insight?.copies["a"]?.best.map(\.area), ["raids"])
     }
 }
+
+/// Colour rules that have no screen of their own: Max is a pink, and the lighter middle rating on the Pokémon page keeps its text readable in both appearances.
+final class ListTagColourTests: XCTestCase {
+    private func resolve(_ c: Color, _ dark: Bool) -> (r: Double, g: Double, b: Double, a: Double) {
+        var (r, g, b, a) = (CGFloat(0), CGFloat(0), CGFloat(0), CGFloat(0))
+        UIColor(c).resolvedColor(with: UITraitCollection(userInterfaceStyle: dark ? .dark : .light)).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(r), Double(g), Double(b), Double(a))
+    }
+    private func lum(_ c: (r: Double, g: Double, b: Double, a: Double)) -> Double {
+        func f(_ v: Double) -> Double { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b)
+    }
+    private func over(_ top: (r: Double, g: Double, b: Double, a: Double), _ base: (r: Double, g: Double, b: Double, a: Double), opacity: Double = 1) -> (r: Double, g: Double, b: Double, a: Double) {
+        let a = top.a * opacity
+        return (top.r * a + base.r * (1 - a), top.g * a + base.g * (1 - a), top.b * a + base.b * (1 - a), 1)
+    }
+    private func ratio(_ a: (r: Double, g: Double, b: Double, a: Double), _ b: (r: Double, g: Double, b: Double, a: Double)) -> Double {
+        let (x, y) = (lum(a), lum(b)); return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    func testMaxIsAPinkNotThePurpleItWas() {
+        for dark in [false, true] {
+            let ink = resolve(ContentType.max.ink(.blue), dark), purple = resolve(Theme.changeInk, dark)
+            XCTAssertGreaterThan(ink.r, ink.g, "red over green: pink")
+            XCTAssertGreaterThan(ink.r, ink.b - 0.05, "red at least as strong as blue, where the purple's blue led")
+            XCTAssertGreaterThan(purple.b, purple.r, "the change purple is still the change purple")
+        }
+        XCTAssertGreaterThanOrEqual(Theme.contrast(0xFFFFFF, Theme.maxInkLight), 4.5, "white on the Max ink")
+        for dark in [false, true] {
+            let surface = resolve(Theme.surface, dark)
+            let tint = over(resolve(ContentType.max.tint(.blue), dark), surface)
+            XCTAssertGreaterThanOrEqual(ratio(resolve(ContentType.max.ink(.blue), dark), tint), 4.5, "Max ink on its tint, dark \(dark)")
+        }
+    }
+
+    /// The activity ink on the half-strength tint, over the page's surface, both appearances, every activity (page, list rows and species page share `WorthTag`), and the card's green.
+    func testTheLighterMiddleRatingKeepsFourAndAHalfToOne() {
+        let activities = BoxInsight.Activity.allCases   // every tag the lists and the page draw, the leagues in their own colours
+        for dark in [false, true] {
+            let surface = resolve(Theme.surface, dark)
+            for a in activities {
+                let tint = over(resolve(a.tint(.blue), dark), surface, opacity: WorthTag.fadedTint)
+                XCTAssertGreaterThanOrEqual(ratio(resolve(a.ink(.blue), dark), tint), 4.5, "\(a) dark \(dark)")
+            }
+            let card = over(resolve(Theme.greenTint, dark), resolve(Theme.surface2, dark), opacity: WorthTag.fadedTint)
+            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), card), 4.5, "league card, dark \(dark)")
+        }
+    }
+}
