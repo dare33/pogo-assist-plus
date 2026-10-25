@@ -88,6 +88,13 @@ struct ResultScreen: View {
             Button("Use Full scan", role: .destructive) { Task { await model.setReviewKind(.full) } }
             Button("Keep Add and update", role: .cancel) {}
         } message: { Text("\(confirmFull ?? "") A full scan lists every saved Pokémon this scan did not see, as \"Not seen in this scan\". They are all kept; nothing is removed unless you mark it.") }
+        .confirmationDialog(review.plan.pass.map(PassWording.searchQuestion) ?? "Was this a pass search?", isPresented: Binding(get: { review.askingSearch }, set: { if !$0 && review.askingSearch { Task { await model.answerPassSearch(yes: nil) } } }), titleVisibility: .visible) {
+            if let pass = review.plan.pass {
+                Button("Yes, save as \(pass.passName)") { Task { await model.answerPassSearch(yes: true) } }
+                Button("No, save as Add and update") { Task { await model.answerPassSearch(yes: false) } }
+                Button("No, discard the scan", role: .destructive) { model.discardReview() }
+            }
+        } message: { Text("Many of these Pokémon are not in your box, which a genuine search of your own Pokémon rarely gives. If you typed something else, nothing should be marked.") }
         .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardReview() }
         } message: { Text(review.importPrepared == nil ? "Nothing will be added to the box." : "Nothing will be added to the box. The screenshots stay queued in Import screenshots.") }
@@ -156,7 +163,12 @@ private struct ReviewHeader: View {
         let toCheck = ctx.toCheck.count
         Panel(tint: .accent, padding: 20, spacing: 16) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(ctx.ending.headline).font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
+                if let pass = ctx.review.plan.pass {
+                    Text(PassWording.line(pass, BoxMerge.passTally(ctx.review.plan, resolutions: ctx.review.resolutions, base: ctx.review.base), toCheck: ctx.toCheck.count))
+                        .font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(accent.ink).accessibilityIdentifier("review-pass-line")
+                } else {
+                    Text(ctx.ending.headline).font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(accent.ink)
+                }
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) { hero(read); readIn }
                     VStack(alignment: .leading, spacing: 0) { hero(read); readIn }

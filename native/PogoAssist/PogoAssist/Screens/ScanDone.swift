@@ -11,9 +11,12 @@ struct ScanDoneWords: Equatable {
     /// The questions the review will ask, and the rows it will ask to check in the game (before any answer).
     var questions: Int
     var toCheck: Int
+    /// The filtered pass this scan was, if any: its line replaces the usual headline.
+    var pass: ScanPass?
 
     @MainActor init(_ ctx: ReviewContext) {
         let review = ctx.review
+        pass = review.plan.pass
         read = review.outcome.scan.rows.count
         readIn = ReviewFormat.readIn(review.outcome.duration)
         questions = ctx.total
@@ -21,6 +24,8 @@ struct ScanDoneWords: Equatable {
         // "Your whole box" is only said for a scan that reached the end of the list and that the app judged sound as a Full scan (`ScanKindAdvice`).
         let whole = ctx.ending == .listEnd && review.kind == .full && review.advice?.fullIsSound == true
         switch ctx.ending {
+        case _ where review.plan.pass != nil:
+            headline = PassWording.line(review.plan.pass!, BoxMerge.passTally(review.plan, resolutions: review.resolutions, base: review.base), toCheck: ctx.toCheck.count)
         case _ where whole: headline = "That's your whole box."
         case .longPause: headline = "Stopped after a long pause."
         case .byPerson: headline = "You stopped at \(read.formatted())."
