@@ -790,7 +790,7 @@ final class AppModel: ObservableObject {
 
     private var renaming = false
 
-    /// The per-account settings follow the account's name: the voice records, the one-time set record and the remembered counts and eggs. The old-name records go, so a stale tap-set
+    /// The per-account settings follow the account's name: the voice records, the one-time set record, the remembered counts and eggs, the stardust and the squads. The old-name records go, so a stale tap-set
     /// record under the old name cannot keep the wrong-screen warning on. Used by a rename made here and by one that a recovery finished.
     static func moveAccountKeys(from old: String, to new: String) {
         let d = UserDefaults.standard
@@ -798,7 +798,7 @@ final class AppModel: ObservableObject {
             let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
             if let v = d.data(forKey: k(old)) { d.set(v, forKey: k(new)); d.removeObject(forKey: k(old)) }
         }
-        for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + ".", Keys.stardust + "."] {
+        for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + ".", Keys.stardust + ".", SquadKeeper.keyPrefix] {
             if let v = d.object(forKey: key + old) { d.set(v, forKey: key + new); d.removeObject(forKey: key + old) }
         }
     }
