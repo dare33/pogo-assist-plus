@@ -73,15 +73,22 @@ scratchpad. So:
    build from another worktree makes the next one cold (about 3.5 minutes); that is the trade.
 3. **One `xcodebuild` per slot at a time, through the helper.** Xcode's build database is not safe
    to share between concurrent `xcodebuild` invocations, so each slot has a lock,
-   `<location>/<slot>.lock`: a directory made with `mkdir` (atomic: of two callers racing for it
-   exactly one succeeds) holding the running xcodebuild's pid in `pid`, removed when that
-   xcodebuild ends. A waiter sleeps until `mkdir` succeeds. A lock whose pid is gone, or that has
-   had no pid for 60 seconds, is stale and is removed, but only under a second short-lived mutex
-   (`<location>/.reclaim.lock`), which the owner's release and `build-clean.sh` also take, so no
-   two parties can judge, remove and re-take one lock at once. What remains: the instant between
-   starting xcodebuild and writing its pid, microseconds wide, in which a signal to the shell can
-   leave the lock wrong; and two parties racing to remove a reclaim mutex left by a crashed
-   reclaimer (`xcb.sh` says so in a comment). `native/tools/xcb.sh` does all of this:
+   `<location>/<slot>.lock`: an empty file that the helper opens and locks in the kernel with
+   `/usr/bin/lockf` (`flock`), on a descriptor the xcodebuild it starts inherits. The kernel
+   releases the lock when the last process holding that descriptor exits, so it lasts as long as
+   the shell or the xcodebuild, whichever lives longer: a shell killed mid-build leaves the slot
+   held until the build ends, a build that dies frees it, and there is no pid file to go stale and
+   nothing to reclaim. A waiter blocks in `lockf` and says so every 30 seconds (the first message
+   after 30 seconds). The lock file is never removed, by the helper or by `build-clean.sh`: a
+   waiter that had opened it would otherwise lock a vanished file while a new build locks its
+   replacement, and both would run. What remains: the processes xcodebuild starts (its build
+   service, the compilers) do not inherit the descriptor (measured through a cold build on 25 Oct
+   2026: `lsof` showed only the helper's shell and xcodebuild holding the lock), so a `kill -9` of
+   xcodebuild frees the slot while a compiler it left behind may still write there, as the pid
+   scheme did; a helper from before this scheme, in a checkout that has not taken this change,
+   cannot `mkdir` over the lock file and waits forever without building (safe; update that
+   checkout), and the lock directory such a helper leaves is refused with a message rather than
+   judged (remove it by hand when nothing is building). `native/tools/xcb.sh` does all of this:
 
        native/tools/xcb.sh <slot> <xcodebuild args...>
        native/tools/xcb.sh main -project native/PogoAssist/PogoAssist.xcodeproj -scheme PogoAssist \
@@ -137,10 +144,10 @@ scratchpad. So:
        native/tools/build-clean.sh        # -n shows what would go
 
    It deletes every simulator in `sims.txt` that is not booted, empties each xcodebuild slot while
-   holding its lock (a slot with a live build is skipped), and removes the other folders these
-   helpers make (`swift-<slot>`, `review-copy-*`), which have no lock; anything else under the
-   location is reported and left. The hand version, only when
-   nothing is building and after `sim-temp.sh list` shows no recorded clone left, is
+   holding its lock (a slot with a live build is skipped; the empty `<slot>.lock` files stay), and
+   removes the other folders these helpers make (`swift-<slot>`, `review-copy-*`), which have no
+   lock; anything else under the location is reported and left. The hand version, only when
+   nothing is building or waiting to build and after `sim-temp.sh list` shows no recorded clone left, is
    `rm -rf ~/Library/Developer/Xcode/DerivedData/pogo-claude-build` (the whole folder, `sims.txt`
    included; a brace-and-glob one-liner fails in zsh when a pattern matches nothing). The folder
    is named outside Xcode's own `PogoAssist-<hash>` pattern on purpose (Greg's ruling, 25 Oct 2026),

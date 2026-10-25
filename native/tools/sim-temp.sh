@@ -18,7 +18,7 @@ SIMS="$ROOT/sims.txt"
 
 die() { echo "sim-temp: $*" >&2; exit 2; }
 # A root is ours when every entry in it is a name these helpers define (a slot, a lock, swift-<slot>,
-# review-copy-*, sims.txt). `create` adopts and marks such a root, so a first
+# review-copy-*, sims.txt, the marker). `create` adopts and marks such a root, so a first
 # `mkdir -p .../review-copy-a` or `swift test --scratch-path .../swift-main` does not lock the helpers
 # out; anything else there means a stranger's folder and is refused. `delete` acts on the records, so
 # it requires the marker rather than adopting; `list` only reads and marks nothing.
@@ -28,7 +28,7 @@ adopt_root() {
     for e in "$ROOT"/* "$ROOT"/.[!.]*; do
       [[ -e "$e" ]] || continue
       case "$(basename "$e")" in
-        main|review-a|review-b|merge|*.lock|swift-*|review-copy-*|sims.txt|sims.txt.tmp.*|.reclaim.lock|.DS_Store) ;;
+        main|review-a|review-b|merge|*.lock|swift-*|review-copy-*|sims.txt|sims.txt.tmp.*|.pogo-build-root|.DS_Store) ;;
         *) die "$ROOT holds '$(basename "$e")', which these helpers did not make; refusing to use it as the build root" ;;
       esac
     done
