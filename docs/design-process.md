@@ -2,9 +2,9 @@
 
 How a design pass runs, from the brief for the design session to Greg's phone check. Agreed by Greg on 25 Oct 2026
 after design pass 1 (the league options, list and Pogo Hub handoff of 22 Oct, built as design PRs 1 to 5, pull requests
-#9, #10, #14, #15 and #13, from 23 to 25 Oct), except section 5's open item. `<pass>` below is a short lower-case slug
-naming the pass (for example `pass-2-hub-teams`), used in `docs/<pass>-design-brief.md`, `design/<pass>` and
-`design_handoff_<pass>/`.
+#9, #10, #14, #15 and #13, from 23 to 25 Oct), except section 5's open item. Points marked "the manager's addition" are
+not Greg's rulings. `<pass>` below is a short lower-case slug naming the pass (for example `pass-2-hub-teams`), used in
+`docs/<pass>-design-brief.md`, `design/<pass>` and `design_handoff_<pass>/`.
 
 Pass 1 drew the screens precisely, but most rework came from meaning: what a tag means (Strong was defined three
 times), rule text written without the rule (the ranking explainer did not match `src/leagues.js`), labels that clash
@@ -44,8 +44,8 @@ The HTML prototype reads an export of Greg's own box as the app works it out (pe
 league picks; per species: its tiles) in place of sample data, so he sees his own Pokémon with the rules applied
 while the design can still change cheaply.
 
-- **The file**: `box-data.json` (the prototype may also read a `box-data.js` wrapper of the same data), written by a
-  script under the git-ignored `out/design-data/`. Both names are git-ignored in any folder. The committed handoff
+- **The file**: `box-data.json` (the prototype may also read a `box-data.js` wrapper of the same data), written by
+  the script to the git-ignored `out/design-data/`. Both names are git-ignored in any folder. The committed handoff
   keeps sample data in `design-files/`, so the committed prototype still runs; the prototype loads `box-data.json`
   when it is present beside it.
 - **Permitted content**: per copy its species, form, CP, IV values and %, Shadow/Purified/Dynamax marks, and what the
@@ -53,12 +53,16 @@ while the design can still change cheaply.
   no scan history or dates, no file paths, no device or source fields. `BoxExport.swift` carries an account field, so
   the script must not reuse it as is.
 - **Which code makes it**: from PogoBox, the Swift code the app's screens read (`BoxInsight`, `LeaguePanel` and the
-  advice it decodes), run as a small executable in the PogoReader package, not a re-implementation. The data cannot
-  drift from the app; the export is regenerated whenever those computations change and before the prototype is shown
-  again.
-- **Order**: the script is prepared before the design session, as its own change from `main`. It is a script, so it
-  takes the full review (section 8).
-- Greg gives the file to the design session himself. It is never committed (like the handoff screenshots).
+  advice it decodes), run as a small executable in the PogoReader package, not a re-implementation. The export and the
+  app's screens read the same code; the export is regenerated whenever those computations change and before the
+  prototype is shown again.
+- **Order**: the script is prepared before the design session, as its own change from `main`. It needs pass 1's code
+  (`BoxInsight`, `LeaguePanel`) on `main`, so it is built after pass 1's pull requests merge. Anything the export
+  needs that lives in the app target today (for example `BoxIndex`'s filtering, sorting and per-species lead) moves
+  into PogoBox first, so the app and the export run the same code. It is a script, so it takes the full review
+  (section 8).
+- Greg gives the file to the design session himself. It is never committed (the `.gitignore` rule that covers
+  `box-data.json` and `box-data.js`; the handoff screenshots have their own, see "The handoff folder").
 
 ## 4. Read-back before anything is built
 
@@ -115,17 +119,18 @@ Greg's ruling (25 Oct 2026): a cosmetic change is not load-bearing, so it does n
 - **Cosmetic**: changes only how existing information looks or reads (colour, spacing, type, the layout of elements
   already on the screen, the order of fixed elements such as chips or panels, and the wording of labels, sentences and
   VoiceOver text), and the meaning, the accessibility behaviour (traits, grouping, actions) and which action comes
-  first are unchanged. Gate: the PogoAssist build for an iPhone simulator through `native/tools/xcb.sh`, `swift test`
-  in `native/PogoReader` and `npm test` pass; the affected UI tests pass, one at a time, on the iPhone 17; before and
-  after screenshots of each changed screen; one `reviewer` pass at high effort or above, on the diff and the
-  screenshots. A new word must agree with `CONCEPTS.md`.
+  first are unchanged. Reordering fixed elements such as chips or panels within the same row or screen is not "moving
+  a tap target", provided the first action is unchanged. Gate: the PogoAssist build for an iPhone simulator through
+  `native/tools/xcb.sh`, `swift test` in `native/PogoReader` and `npm test` pass; the affected UI tests pass, one at a
+  time, on the iPhone 17; before and after screenshots of each changed screen; one `reviewer` pass at high effort or
+  above, on the diff and the screenshots. A new word must agree with `CONCEPTS.md`.
 - **Full review** (`reviewer` plus `reviewer-gpt`, a fold, one confirmation round): anything that changes what is
   computed, stored, matched, sorted or filtered, or which items appear; a change to the order of data rows or which
   item the user sees first; a condition that shows or hides an element; a new state or screen (empty, loading,
   error); adding, removing or moving a button or tap target, or changing what a tap does; changing accessibility
   identifiers or any UI test expectation other than text the change itself rewords; a word whose meaning changes; any
-  change to a term or rule in `CONCEPTS.md`; and logic, data, the engine, storage and merging, scripts and build
-  tooling.
+  a change to a term's meaning or to a rule in `CONCEPTS.md` (a rename with the same meaning is cosmetic and updates
+  `CONCEPTS.md`); and logic, data, the engine, storage and merging, scripts and build tooling.
 - A sentence that states a rule (an explainer, a tag's line) may be cosmetic, but the reviewer checks it against the
   `CONCEPTS.md` rule and the code it describes.
 - A change that mixes both, or that the manager is unsure about, takes the full review. The manager names the size in
@@ -139,5 +144,5 @@ Greg's ruling (25 Oct 2026): a cosmetic change is not load-bearing, so it does n
 ## The handoff folder
 
 `design_handoff_<pass>/` in the repo: `README.md` and `design-files/` from the design session (as pass 1),
-`DECISIONS.md` and `CONCEPTS.md` from the design session, `READBACK.md` from the repo. Screenshots stay local, not in
-git.
+`DECISIONS.md` and `CONCEPTS.md` from the design session, `READBACK.md` from the repo. Screenshots stay local: the
+`.gitignore` rule for `design_handoff_*/screenshots/` keeps them out of git.
