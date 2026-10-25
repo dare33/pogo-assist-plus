@@ -129,7 +129,9 @@ export function analyseBox(box, ctx) {
     ownedIds.add(r.speciesId); ownedBase.add(baseSpeciesId(gm, r.speciesId));
     const reach = [r.speciesId, ...evolutionsOf(gm, r.speciesId), ...formChangesOf(gm, r.speciesId)];
     const targets = new Set(reach);
-    if (!p.shadow) for (const id of reach) for (const m of megaIdsOf(gm, id)) targets.add(m);
+    // A Shadow can never Mega evolve. Keyed on the resolved id, like the credit rule and the gap check below, so a copy named "Shadow X"
+    // without the flag is a Shadow here too (it used to read the flag and gave such a copy Mega credit).
+    if (!r.speciesId.endsWith('_shadow')) for (const id of reach) for (const m of megaIdsOf(gm, id)) targets.add(m);
 
     const hits = [];
     for (const id of targets) {

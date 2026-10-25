@@ -230,6 +230,20 @@ test('a copy named Shadow without the flag gets the same credit', () => {
   assert.ok(hitsOf(copy('Shadow Swampert')).some((h) => h.area === 'rocket' && h.tier === 'S' && h.targetId === 'swampert_shadow'));
 });
 
+test('Mega targets are gated on the resolved id: a Shadow by name or by flag gets no Mega credit, a plain copy still does', () => {
+  // Charizard: Mega Charizard Y is a raids/Fire A entry; plain Charizard has a Rocket A entry; charizard_shadow has none of its own.
+  const plain = hitsOf(copy('Charizard'));
+  assert.ok(plain.some((h) => h.viaMega === 'charizard_mega_y' && h.area === 'raids' && h.targetId === 'charizard'), 'plain Charizard reaches Mega Charizard Y');
+  const named = hitsOf(copy('Shadow Charizard'));
+  assert.ok(named.length, 'the named copy still has hits');
+  assert.ok(!named.some((h) => h.viaMega), 'a copy named Shadow Charizard with the flag false gets no Mega hit (it used to)');
+  assert.ok(named.every((h) => h.targetId === 'charizard_shadow'));
+  assert.ok(named.some((h) => h.area === 'rocket' && h.tier === 'A'), 'and keeps the plain Rocket credit');
+  const flagged = hitsOf(copy('Charizard', { shadow: true }));
+  assert.ok(!flagged.some((h) => h.viaMega), 'a flagged Shadow still gets no Mega hit');
+  assert.deepEqual(flagged.map((h) => `${h.area}/${h.tier}/${h.targetId}`).sort(), named.map((h) => `${h.area}/${h.tier}/${h.targetId}`).sort(), 'flag and name give the same hits');
+});
+
 test('gaps: a Shadow covers its plain raid and Rocket entries but not its gym entry', () => {
   const swampert = analyseBox([copy('Swampert', { shadow: true })], ctx).gaps;
   assert.ok(!swampert.some((g) => g.speciesId === 'swampert' && g.area === 'rocket'), 'no Rocket S gap for Swampert');
