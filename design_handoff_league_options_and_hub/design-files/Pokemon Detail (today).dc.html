@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <style>
+    @font-face { font-family: 'Figtree'; src: url('fonts/Figtree-Variable.ttf') format('truetype'); font-weight: 300 900; }
+    body { margin: 0; background: #DADEE6; font-family: 'Figtree', sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+    a { color: #B0235A; } a:hover { color: #D6336C; }
+  </style>
+</helmet>
+<section style="display:flex; gap:40px; padding:40px; align-items:flex-start; flex-wrap:wrap">
+  <sc-for list="{{ themes }}" as="t" hint-placeholder-count="2">
+    <div style="--bg:{{ t.bg }}; --surface:{{ t.surface }}; --ink:{{ t.ink }}; --muted:{{ t.muted }}; --line:{{ t.line }}; --off:{{ t.off }}; --orange:{{ t.orange }}; --orangeInk:{{ t.orangeInk }}; --orangeTint:{{ t.orangeTint }}; --greenInk:{{ t.greenInk }}; --red:{{ t.red }}; --accentInk:{{ t.accentInk }}; --accentTint:{{ t.accentTint }}; --shadow:{{ t.shadow }}; width:393px; background:var(--bg); border-radius:44px; overflow:hidden; color:var(--ink); font-size:15px" data-screen-label="Today, {{ t.name }}">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 30px 0; height:44px; font-weight:700; font-size:15px"><span>9:41</span><span style="font-size:12px; letter-spacing:.04em">●●● ◠ ▮</span></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:0 14px; min-height:52px">
+        <div style="width:40px; height:40px; border-radius:20px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800; font-size:18px">‹</div>
+        <div style="width:40px; height:40px; border-radius:20px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800; font-size:16px">✎</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px; padding:6px 14px 24px">
+        <div style="padding:4px 8px 0">
+          <div style="font-size:34px; font-weight:800; letter-spacing:-0.85px; line-height:1.15">Eevee</div>
+          <div style="display:flex; align-items:baseline; gap:10px"><span style="font-size:22px; font-weight:800">CP 174</span><span style="font-size:15px; font-weight:600; color:var(--muted)">Level 6 · HP 51</span></div>
+        </div>
+        <div style="background:var(--surface); border-radius:28px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:12px">
+          <div style="display:flex; justify-content:space-between; align-items:baseline"><span style="font-size:13px; font-weight:700; color:var(--muted)">IVs</span><span style="font-size:26px; font-weight:800; color:var(--greenInk)">91%</span></div>
+          <div style="display:flex; flex-direction:column; gap:12px; font-size:14px; font-weight:600">
+            <div style="display:flex; align-items:center; gap:10px"><span style="width:62px">Attack</span><span style="flex:1; height:10px; border-radius:5px; background:var(--off); overflow:hidden"><span style="display:block; height:100%; width:100%; border-radius:5px; background:var(--orange)"></span></span><span style="width:22px; text-align:right">15</span></div>
+            <div style="display:flex; align-items:center; gap:10px"><span style="width:62px">Defence</span><span style="flex:1; height:10px; border-radius:5px; background:var(--off); overflow:hidden"><span style="display:block; height:100%; width:80%; border-radius:5px; background:var(--orange)"></span></span><span style="width:22px; text-align:right">12</span></div>
+            <div style="display:flex; align-items:center; gap:10px"><span style="width:62px">HP</span><span style="flex:1; height:10px; border-radius:5px; background:var(--off); overflow:hidden"><span style="display:block; height:100%; width:93.3%; border-radius:5px; background:var(--orange)"></span></span><span style="width:22px; text-align:right">14</span></div>
+          </div>
+        </div>
+        <div style="background:var(--accentTint); border-radius:28px; padding:18px; display:flex; flex-direction:column; gap:8px; line-height:1.45">
+          <div style="font-size:13px; font-weight:700; color:var(--accentInk)">ADVICE</div>
+          <div>A spare copy: a better one is already planned for Umbreon.</div>
+          <div>A spare copy: a better one is already planned for Vaporeon.</div>
+          <div>A spare copy: a better one is already planned for Glaceon.</div>
+          <div>One of 65 Eevee in your box. <b>Keep this one.</b></div>
+        </div>
+        <div style="background:var(--surface); border-radius:28px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px">
+          <div style="font-size:13px; font-weight:700; color:var(--muted)">LEAGUES</div>
+          <div style="display:flex; flex-direction:column; gap:3px; line-height:1.4">
+            <div style="font-size:17px; font-weight:800">Great League</div>
+            <div>PvPoke ranks Eevee 1,039th of 1,152 in Great League, score 54.9</div>
+            <div>IVs rank #26 of 4,096 · 97.0% of best</div>
+            <div>Moves: Quick Attack, Swift, Dig</div>
+            <div>To level 50: 516,400 dust, 294 candy, 296 XL candy</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px; line-height:1.4">
+            <div style="font-size:17px; font-weight:800">Ultra League</div>
+            <div>As Umbreon</div>
+            <div>PvPoke ranks Umbreon 116th of 849 in Ultra League, score 85.5</div>
+            <div>IVs rank #18 of 4,096 · 98.3% of best</div>
+            <div>Moves: Snarl, Dark Pulse, Last Resort</div>
+            <div>To level 50: 516,400 dust, 294 candy, 296 XL candy (25 to evolve)</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px; line-height:1.4">
+            <div style="font-size:17px; font-weight:800">Master League</div>
+            <div>As Sylveon</div>
+            <div>PvPoke ranks Sylveon 70th of 409 in Master League, score 80.1</div>
+            <div>IVs rank #26 of 4,096 · 98.1% of best</div>
+            <div>Moves: Fairy Wind, Draining Kiss, Shadow Ball</div>
+            <div>To level 50: 516,400 dust, 294 candy, 296 XL candy (25 to evolve)</div>
+          </div>
+          <div style="font-size:13px; font-weight:500; color:var(--muted); line-height:1.4">A scan cannot tell a Shadow Pokémon, so a Shadow is rated as its normal form here.</div>
+        </div>
+        <div style="background:var(--surface); border-radius:28px; box-shadow:var(--shadow); overflow:hidden">
+          <div style="display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--line); margin-left:0"><span style="color:var(--muted)">Power-up dust</span><b>600</b></div>
+          <div style="display:flex; justify-content:space-between; padding:12px 16px"><span style="color:var(--muted)">First seen · last seen</span><b>3 Oct · 17 Oct</b></div>
+        </div>
+        <div style="background:var(--surface); border-radius:28px; padding:16px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:10px">
+          <div style="font-size:13px; font-weight:700; color:var(--muted)">How it was read</div>
+          <div style="font-size:14px; font-weight:500; color:var(--muted); line-height:20px">The appraisal bars read differently on different frames.</div>
+        </div>
+        <div style="background:var(--orangeTint); border-radius:20px; padding:10px 10px 10px 16px; min-height:44px; display:flex; align-items:center; gap:10px; box-sizing:border-box">
+          <span style="color:var(--orangeInk); font-weight:700; font-size:16px">⌕</span>
+          <span style="flex:1; color:var(--orangeInk); font-weight:800">eevee&amp;cp174</span>
+          <span style="background:var(--orangeInk); color:var(--surface); font-size:14px; font-weight:800; padding:0 14px; min-height:36px; display:grid; place-items:center; border-radius:18px">Copy</span>
+        </div>
+        <div style="color:var(--red); font-weight:600; min-height:44px; display:grid; place-items:center">Delete from box</div>
+      </div>
+    </div>
+  </sc-for>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return { themes: [
+      { name: 'light', bg: '#F3F5F9', surface: '#FFFFFF', ink: '#15192B', muted: '#6A7085', line: '#E6E9F0', off: '#E3E7EF', orange: '#FF8A1F', orangeInk: '#B34D00', orangeTint: '#FFF1E3', greenInk: '#1C7A3E', red: '#D92D3A', accentInk: '#B0235A', accentTint: '#FCE7EF', shadow: '0 1px 2px rgba(20,30,60,.06)' },
+      { name: 'dark', bg: '#0E1118', surface: '#181C26', ink: '#EEF1F8', muted: '#9097AB', line: '#262B38', off: '#232836', orange: '#FF9A3C', orangeInk: '#FFB273', orangeTint: 'rgba(255,150,60,.16)', greenInk: '#6FD796', red: '#FF6B76', accentInk: '#F7A1C1', accentTint: 'rgba(240,101,149,.18)', shadow: 'none' },
+    ] };
+  }
+}
+</script>
+</body>
+</html>

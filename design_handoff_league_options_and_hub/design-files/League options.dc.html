@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <script src="league-data.js"></script>
+  <style>
+    @font-face { font-family: 'Figtree'; src: url('fonts/Figtree-Variable.ttf') format('truetype'); font-weight: 300 900; }
+    body { margin: 0; background: #DADEE6; font-family: 'Figtree', sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+    a { color: #B0235A; } a:hover { color: #D6336C; }
+  </style>
+</helmet>
+<sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+<section style="padding:40px 40px 8px; display:flex; flex-direction:column; gap:20px">
+  <div style="max-width:720px; display:flex; flex-direction:column; gap:6px">
+    <div style="font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#6A7085">{{ g.kicker }}</div>
+    <div style="font-size:24px; font-weight:800; letter-spacing:-0.02em; color:#15192B">{{ g.title }}</div>
+    <div style="font-size:15px; line-height:1.5; color:#3D4459; text-wrap:pretty">{{ g.blurb }}</div>
+  </div>
+  <div style="display:flex; gap:32px; align-items:flex-start; flex-wrap:wrap">
+  <sc-for list="{{ g.screens }}" as="s" hint-placeholder-count="3">
+    <div id="{{ s.id }}" style="display:flex; flex-direction:column; gap:10px; width:{{ s.width }}px; flex-shrink:0">
+      <div style="display:flex; align-items:center; gap:10px">
+        <span style="background:#15192B; color:#fff; font-size:12px; font-weight:800; padding:3px 8px; border-radius:8px">{{ s.id }}</span>
+        <span style="font-size:14px; font-weight:600; color:#15192B">{{ s.label }}</span>
+      </div>
+      <div style="--bg:{{ s.c.bg }}; --surface:{{ s.c.surface }}; --surface2:{{ s.c.surface2 }}; --ink:{{ s.c.ink }}; --muted:{{ s.c.muted }}; --faint:{{ s.c.faint }}; --line:{{ s.c.line }}; --off:{{ s.c.off }}; --orange:{{ s.c.orange }}; --orangeInk:{{ s.c.orangeInk }}; --orangeTint:{{ s.c.orangeTint }}; --green:{{ s.c.green }}; --greenInk:{{ s.c.greenInk }}; --greenTint:{{ s.c.greenTint }}; --red:{{ s.c.red }}; --accent:{{ s.c.accent }}; --accentInk:{{ s.c.accentInk }}; --accentTint:{{ s.c.accentTint }}; --onAccent:{{ s.c.onAccent }}; --shadow:{{ s.c.shadow }}; width:100%; background:var(--bg); border-radius:44px; overflow:hidden; color:var(--ink); font-size:15px; box-sizing:border-box; zoom:{{ s.textScale }}" data-screen-label="{{ s.id }} {{ s.label }}">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 30px 0; height:44px; font-weight:700; font-size:15px"><span>9:41</span><span style="font-size:12px; letter-spacing:.04em">●●● ◠ ▮</span></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0 14px; min-height:52px">
+          <div style="width:40px; height:40px; border-radius:20px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800; font-size:18px">‹</div>
+          <div style="display:flex; gap:10px">
+            <sc-if value="{{ s.hasScoring }}" hint-placeholder-val="{{ false }}">
+            <div aria-label="Settings" style="width:40px; height:40px; border-radius:20px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800; font-size:17px">⚙</div>
+            </sc-if>
+            <div aria-label="Fix a value" style="width:40px; height:40px; border-radius:20px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800; font-size:16px">✎</div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:12px; padding:6px 14px 24px; max-width:{{ s.colMax }}px; margin:0 auto; box-sizing:border-box">
+          <div style="padding:4px 8px 0">
+            <div style="font-size:34px; font-weight:800; letter-spacing:-0.85px; line-height:1.15">{{ s.p.name }}</div>
+            <div style="display:flex; align-items:baseline; gap:10px"><span style="font-size:22px; font-weight:800">CP {{ s.p.cp }}</span><span style="font-size:15px; font-weight:600; color:var(--muted)">{{ s.p.meta }}</span></div>
+          </div>
+          <sc-if value="{{ s.showIVs }}" hint-placeholder-val="{{ true }}">
+          <div style="background:var(--surface); border-radius:28px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:12px">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px"><span style="font-size:13px; font-weight:700; color:var(--muted)">IVs</span>
+              <sc-if value="{{ s.pvpHeader }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:10px; align-items:baseline">
+                <sc-for list="{{ s.p.pvp }}" as="v" hint-placeholder-count="3">
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0"><span style="font-size:17px; font-weight:800; color:{{ v.color }}">{{ v.pct }}</span><span style="font-size:11px; font-weight:700; letter-spacing:.06em; color:{{ v.color }}">{{ v.short }}</span></div>
+                </sc-for>
+              </div>
+              </sc-if>
+              <sc-if value="{{ s.pveHeader }}" hint-placeholder-val="{{ true }}"><span style="font-size:26px; font-weight:800; color:var(--greenInk)">{{ s.p.ivPctText }}</span></sc-if>
+            </div>
+            <sc-if value="{{ s.p.hasIVs }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; flex-direction:column; gap:12px; font-size:14px; font-weight:600">
+              <sc-for list="{{ s.p.bars }}" as="b" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:10px"><span style="width:62px">{{ b.label }}</span><span style="flex:1; height:10px; border-radius:5px; background:var(--off); overflow:hidden"><span style="display:block; height:100%; width:{{ b.pct }}%; border-radius:5px; background:var(--orange)"></span></span><span style="width:22px; text-align:right">{{ b.v }}</span></div>
+              </sc-for>
+            </div>
+            </sc-if>
+            <sc-if value="{{ s.p.noIVs }}" hint-placeholder-val="{{ false }}"><div style="font-size:14px; font-weight:500; color:var(--muted)">IVs not read</div></sc-if>
+          </div>
+          </sc-if>
+
+          <!-- LEAGUES panel -->
+          <div style="background:var(--surface); border-radius:28px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px" data-accessibility-id="leagues-panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:30px">
+              <div style="display:flex; align-items:center; gap:8px">
+                <sc-if value="{{ s.inDetail }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ s.backToBase }}" role="button" aria-label="All leagues" data-accessibility-id="leagues-back" style="width:30px; height:30px; border-radius:15px; background:var(--surface2); display:grid; place-items:center; font-weight:800; font-size:15px; cursor:pointer; margin-left:-4px">‹</div>
+                </sc-if>
+                <span style="font-size:13px; font-weight:700; color:var(--muted)">LEAGUES</span>
+              </div>
+              <sc-if value="{{ s.hasScoring }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:6px">
+                <div style="display:flex; padding:3px; background:var(--off); border-radius:999px" role="radiogroup" aria-label="Scoring" data-accessibility-id="leagues-scoring">
+                  <sc-for list="{{ s.scoringTabs }}" as="t" hint-placeholder-count="2">
+                  <div onClick="{{ t.select }}" role="radio" aria-checked="{{ t.on }}" style="min-height:26px; padding:0 10px; display:grid; place-items:center; border-radius:999px; font-size:12px; font-weight:700; cursor:pointer; background:{{ t.bg }}; color:var(--ink)">{{ t.label }}</div>
+                  </sc-for>
+                </div>
+                <div onClick="{{ s.toggleInfo }}" role="button" data-accessibility-id="leagues-scoring-info" aria-label="How the two scorings work" aria-expanded="{{ s.infoOpen }}" style="width:26px; height:26px; border-radius:13px; display:grid; place-items:center; font-size:13px; font-weight:800; cursor:pointer; background:{{ s.infoBg }}; color:{{ s.infoInk }}; font-family:Georgia, serif; font-style:italic">i</div>
+              </div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ s.infoOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="background:var(--accentTint); border-radius:16px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; font-size:13px; line-height:1.45; color:var(--ink)">
+              <div><b style="color:var(--accentInk)">Default</b> takes, for each league, the family member where this copy's IVs rank highest under the CP cap (stat product rank out of 4,096), whatever that species' standing.</div>
+              <div><b style="color:var(--accentInk)">Pogo Assist</b> weighs the species first. It ranks each member by PvPoke score and only moves to a weaker one when this copy's IVs fit it clearly better. A stronger species with slightly worse IVs beats a weak one with perfect IVs.</div>
+              <div style="color:var(--muted)">Both use the same IV rank and the same PvPoke rankings; they differ only in which comes first.</div>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ s.segmented }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; padding:4px; background:var(--off); border-radius:999px" role="tablist" aria-label="League" data-accessibility-id="leagues-control">
+              <sc-for list="{{ s.tabs }}" as="t" hint-placeholder-count="3">
+              <div onClick="{{ t.select }}" role="tab" style="flex:1; min-height:38px; display:flex; gap:6px; align-items:center; justify-content:center; border-radius:999px; font-size:15px; font-weight:700; cursor:pointer; background:{{ t.bg }}; color:{{ t.ink }}"><span style="width:8px; height:8px; border-radius:4px; background:{{ t.dot }}"></span>{{ t.short }}</div>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <div style="display:{{ s.leagueLayout }}; grid-template-columns:repeat(3, minmax(0,1fr)); flex-direction:column; gap:{{ s.leagueGap }}px">
+            <sc-for list="{{ s.leagues }}" as="l" hint-placeholder-count="3">
+            <sc-if value="{{ l.visible }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; flex-direction:column; gap:10px; min-width:0" data-accessibility-id="league-{{ l.key }}">
+              <sc-if value="{{ l.showTitle }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px">
+                <span style="display:flex; align-items:center; gap:8px"><span style="width:10px; height:10px; border-radius:5px; background:{{ l.dot }}; flex-shrink:0"></span><span style="font-size:17px; font-weight:800; color:{{ l.titleColor }}">{{ l.name }}</span></span>
+                <span style="font-size:13px; font-weight:600; color:var(--muted)">{{ l.capText }}</span>
+              </div>
+              </sc-if>
+
+              <!-- the shown pick -->
+              <sc-if value="{{ l.showPickCard }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ l.openDetail }}" role="{{ l.cardRole }}" data-accessibility-id="league-{{ l.key }}-pick" style="background:var(--surface2); border-radius:16px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; cursor:{{ l.cardCursor }}">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                  <span style="font-size:19px; font-weight:800; letter-spacing:-0.01em">{{ l.pick.title }}</span>
+                  <span style="font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; padding:4px 8px; border-radius:10px; background:var(--accentTint); color:var(--accentInk)">{{ l.pick.chip }}</span>
+                  <sc-if value="{{ l.cardChevron }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto; color:var(--faint); font-weight:800; font-size:16px">›</span></sc-if>
+                </div>
+                <sc-if value="{{ l.pick.betterOverCap }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:13px; font-weight:600; color:var(--muted); line-height:1.4">{{ l.pick.betterOverCap }}</div>
+                </sc-if>
+                <sc-if value="{{ l.pick.blocked }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:15px; font-weight:600; color:var(--red); line-height:1.4">{{ l.pick.blockedText }}</div>
+                </sc-if>
+                <sc-if value="{{ l.pick.notBlocked }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid; grid-template-columns:{{ s.figCols }}; gap:8px">
+                  <div style="display:flex; flex-direction:column; gap:1px"><span style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">Species</span><span style="font-size:17px; font-weight:800; color:{{ l.pick.scoreColor }}">{{ l.pick.score }}</span><span style="font-size:12px; font-weight:500; color:var(--muted)">{{ l.pick.rank }}</span></div>
+                  <div style="display:flex; flex-direction:column; gap:1px"><span style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">This copy</span><span style="font-size:17px; font-weight:800; color:{{ l.pick.ivColor }}">{{ l.pick.ivPct }}</span><span style="font-size:12px; font-weight:500; color:var(--muted)">{{ l.pick.ivRank }}</span></div>
+                </div>
+                <sc-if value="{{ l.pick.hasCostItems }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid; grid-template-columns:{{ s.figCols }}; gap:4px 8px; font-size:14px; line-height:1.4; border-top:1px solid var(--line); padding-top:8px">
+                  <sc-for list="{{ l.pick.costItems }}" as="ci" hint-placeholder-count="4">
+                  <div style="min-width:0"><span style="color:var(--muted); font-weight:500">{{ ci.label }}</span><span style="font-weight:700">{{ ci.value }}</span></div>
+                  </sc-for>
+                </div>
+                </sc-if>
+                <sc-if value="{{ l.pick.costNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:14px; font-weight:500; color:var(--muted); line-height:1.4">{{ l.pick.costNote }}</div></sc-if>
+                </sc-if>
+                <sc-if value="{{ l.pick.hasMoves }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center">
+                  <sc-for list="{{ l.pick.moveChips }}" as="m" hint-placeholder-count="3">
+                  <span style="font-size:12px; font-weight:700; padding:4px 8px; border-radius:10px; background:{{ m.bg }}; color:{{ m.ink }}">{{ m.text }}</span>
+                  </sc-for>
+                </div>
+                </sc-if>
+              </div>
+              </sc-if>
+              <sc-if value="{{ l.why }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:13px; font-weight:500; color:var(--muted); line-height:1.45; padding:0 2px; text-wrap:pretty">{{ l.why }}</div>
+              </sc-if>
+
+              <!-- the options -->
+              <sc-if value="{{ l.hasOthers }}" hint-placeholder-val="{{ true }}">
+              <sc-if value="{{ l.collapsible }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ l.toggle }}" role="button" aria-expanded="{{ l.listOpen }}" data-accessibility-id="league-{{ l.key }}-more" style="display:flex; justify-content:space-between; align-items:center; min-height:44px; padding:0 2px; cursor:pointer; color:var(--accentInk); font-size:15px; font-weight:700">
+                <span>{{ l.toggleText }}</span><span style="font-size:13px; display:inline-block; transform:rotate({{ l.chevron }}deg); transition:transform .2s">⌄</span>
+              </div>
+              </sc-if>
+              <sc-if value="{{ l.listOpen }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid; grid-template-columns:{{ s.rowCols }}; gap:8px; padding:0 2px 6px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); text-align:right"><span style="text-align:left; white-space:nowrap">Option</span><span>Species</span><span>This copy</span><span>Dust</span></div>
+              <div style="display:flex; flex-direction:column; border-top:1px solid var(--line)">
+                <sc-for list="{{ l.rows }}" as="r" hint-placeholder-count="2">
+                <div style="border-bottom:1px solid var(--line)">
+                  <div onClick="{{ r.toggle }}" role="button" aria-expanded="{{ r.open }}" data-accessibility-id="league-{{ l.key }}-option-{{ r.name }}" style="display:grid; grid-template-columns:{{ s.rowCols }}; gap:8px; align-items:center; min-height:48px; padding:8px 2px; cursor:pointer; background:{{ r.bg }}; border-radius:12px; margin:2px -2px; padding-left:{{ r.padL }}px; padding-right:{{ r.padR }}px">
+                    <div style="display:flex; flex-direction:column; gap:1px; min-width:0">
+                      <span style="font-size:15px; font-weight:700; color:{{ r.nameColor }}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ r.name }}</span>
+                      <span style="font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ r.sub }}</span>
+                    </div>
+                    <sc-if value="{{ r.blocked }}" hint-placeholder-val="{{ false }}">
+                      <div style="grid-column:span 3; font-size:13px; font-weight:600; color:var(--red); text-align:right">{{ r.blockedText }}</div>
+                    </sc-if>
+                    <sc-if value="{{ r.notBlocked }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex; flex-direction:column; gap:1px; text-align:right"><span style="font-size:15px; font-weight:700; color:{{ r.scoreColor }}">{{ r.score }}</span><span style="font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap">{{ r.rank }}</span></div>
+                    <div style="display:flex; flex-direction:column; gap:1px; text-align:right"><span style="font-size:15px; font-weight:700; color:{{ r.ivColor }}">{{ r.ivPct }}</span><span style="font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap">{{ r.ivRank }}</span></div>
+                    <div style="display:flex; flex-direction:column; gap:1px; text-align:right"><span style="font-size:15px; font-weight:700; color:{{ r.costColor }}">{{ r.dust }}</span><span style="font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap">{{ r.candy }}</span></div>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; flex-direction:column; gap:6px; padding:4px 2px 12px; font-size:14px; line-height:1.45; color:var(--ink)">
+                    <div>{{ r.detailLevel }}</div>
+                    <div>{{ r.detailCost }}</div>
+                    <div style="font-family:ui-monospace, Menlo, monospace; font-size:12px; color:var(--muted); border:1px dashed var(--faint); border-radius:8px; padding:6px 8px">{{ r.detailMoves }}</div>
+                  </div>
+                  </sc-if>
+                </div>
+                </sc-for>
+              </div>
+              </sc-if>
+              </sc-if>
+            </div>
+            </sc-if>
+            </sc-for>
+            </div>
+            <div style="font-size:13px; font-weight:500; color:var(--muted); line-height:1.4">Pogo Assist is currently unable to detect Shadow Pokémon.</div>
+          </div>
+          <div style="height:60px; border-radius:28px 28px 0 0; background:var(--surface); box-shadow:var(--shadow); opacity:.6"></div>
+        </div>
+      </div>
+      <sc-if value="{{ s.note }}" hint-placeholder-val="{{ false }}">
+      <div style="font-size:13px; line-height:1.45; color:#3D4459; text-wrap:pretty">{{ s.note }}</div>
+      </sc-if>
+    </div>
+  </sc-for>
+  </div>
+</section>
+</sc-for>
+<section style="padding:32px 40px 60px; max-width:760px; display:flex; flex-direction:column; gap:14px; font-size:14px; line-height:1.55; color:#15192B">
+  <div style="font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#6A7085">Notes for the build (turn 6 state)</div>
+  <div><b>Structure.</b> Base screen (<a href="#5a">5a</a>): the LEAGUES panel holds one pick card per league. Tapping a card pushes the league view (<a href="#5c">5c</a>) inside the same panel: back circle, league control, pick card, "Show more" / "Show less", option rows that expand inline. The Normal / Mega form switch is the model for the control.</div>
+  <div><b>Copy.</b> League lines: "Under 1,500 CP", "Under 2,500 CP", "No CP cap". Chip: "PICK", or "POGO ASSIST PICK" when that scoring is on. Figure labels: "Species", "This copy", "Dust" (list header: "Option"). Cost list: "Target level: 18.5", "Target CP: 1,500", "6,600 dust", "31 candy" (candy is one total; XL appended as ", 296 XL"). Unranked: species figure blank. IVs not read: "—" / "not read", dust "—" / "no cost". Level unknown: dust "—" / "level not known"; card note "Level not known, so no cost". Over cap: card "Already above 1,500 CP, so it cannot be used in Great League as any of the family."; row "Over 1,500 CP as Corviknight"; best-available note "Corviknight is the stronger species, but this copy is already over 1,500 CP as Corviknight." Past its level: "Past its best Ultra League level; 100 candy". At its level: "Already at level 51; 100 candy". Gender lock: "Gallade, if it is male". Move chips: move names; "Needs Overheat" in orange. Footnote: "Pogo Assist is currently unable to detect Shadow Pokémon." Scoring explainer: the three paragraphs in <a href="#5b">5b</a>.</div>
+  <div><b>Accessibility identifiers.</b> Kept: <code>leagues-panel</code>, <code>league-gl</code> / <code>league-ul</code> / <code>league-ml</code>. New: <code>leagues-scoring</code> (the switch), <code>leagues-scoring-info</code>, <code>leagues-control</code> (the league tabs), <code>leagues-back</code>, <code>league-gl-pick</code> (the card), <code>league-gl-more</code> (Show more), <code>league-gl-option-Umbreon</code> (each row, by species id in the build).</div>
+  <div><b>VoiceOver order.</b> Base screen: "Leagues" header → scoring switch (adjustable, "Default" / "Pogo Assist") → info button → three cards, each one button: "Great League, under 1,500 CP. Pick: Flareon. Species 68.9, rank 710 of 1,152. This copy 97.2 percent, IV rank 216. Target level 18.5, target CP 1,500, 6,600 dust, 31 candy. Moves Ember, Overheat, Flamethrower. Button." → footnote. League view: back button "All leagues" → header → switch → tabs ("Great, selected, tab 1 of 3") → pick card (one element, not a button) → "Show more, button, collapsed" → each row as one button: "Umbreon. Level 26.5, CP 1,481. Species 90.2, rank 24. This copy 94.8 percent, IV rank 1,879. 57k dust, 75 candy. Collapsed." → expanded detail as plain text under it.</div>
+  <div><b>Dynamic Type.</b> No fixed heights. Up to xxxLarge the two-column figures and the four-item cost list keep their columns; from AX1 they go to one column and the option row stacks its figures under the name (<a href="#6o">6o</a>). The scoring switch and the "i" wrap under the "LEAGUES" label when they no longer fit beside it.</div>
+  <div><b>Data needs.</b> (1) Moves for non-pick options are trimmed today; the expanded row shows a placeholder for them. Add <code>moves</code> to every option or drop the line. (2) The scoring switch reads <code>experimental</code>. The handover said to keep that hidden; Greg asked for it as a visible Default / Pogo Assist switch, so this is a decision to confirm, and the "Pogo Assist" explainer paragraph must be checked against the real rule in <code>src/leagues.js</code>. (3) The PvP figures in the IVs panel header are the pick's <code>iv.pct</code> per league, already in the shape. (4) Settings access from every screen is a shell change outside this panel. (5) Figures marked illustrative in <code>league-data.js</code> are where the handover listed only part of a league.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { open: {}, rows: {}, tab: {}, mode: {}, scoring: {}, info: {} };
+  // League colours after GO Battle League's own: Great blue, Ultra gold, Master purple. Ink values pass 4.5:1 on each surface.
+  leagueColor = { gl: { light: '#1F5FD1', dark: '#8FB0FF', dot: '#3B82F6', dotDark: '#6FA3FF' }, ul: { light: '#8A5A00', dark: '#F0C33C', dot: '#E0A82A', dotDark: '#F0C33C' }, ml: { light: '#7A2FB5', dark: '#D1A3FF', dot: '#A855F7', dotDark: '#C58CFF' } };
+
+  light = { bg: '#F3F5F9', surface: '#FFFFFF', surface2: '#F3F5F9', ink: '#15192B', muted: '#6A7085', faint: '#8A90A3', line: '#E6E9F0', off: '#E3E7EF', orange: '#FF8A1F', orangeInk: '#B34D00', orangeTint: '#FFF1E3', green: '#22A55A', greenInk: '#1C7A3E', greenTint: '#E6F6EC', red: '#D92D3A', accent: '#D6336C', accentInk: '#B0235A', accentTint: '#FCE7EF', onAccent: '#FFFFFF', shadow: '0 1px 2px rgba(20,30,60,.06)' };
+  dark = { bg: '#0E1118', surface: '#181C26', surface2: '#20242F', ink: '#EEF1F8', muted: '#9097AB', faint: '#6D7489', line: '#262B38', off: '#232836', orange: '#FF9A3C', orangeInk: '#FFB273', orangeTint: 'rgba(255,150,60,.16)', green: '#3DCB7A', greenInk: '#6FD796', greenTint: 'rgba(80,200,120,.16)', red: '#FF6B76', accent: '#F06595', accentInk: '#F7A1C1', accentTint: 'rgba(240,101,149,.18)', onAccent: '#0E1118', shadow: 'none' };
+
+  g = n => n.toLocaleString('en-US');
+  lvl = d => d === Math.round(d) ? String(d) : String(d);
+  dustShort = d => d >= 100000 ? Math.round(d / 1000) + 'k' : d >= 10000 ? (d / 1000).toFixed(1).replace('.0', '') + 'k' : this.g(d);
+  ordinal = n => { const t = n % 100, s = t >= 11 && t <= 13 ? 'th' : ['th','st','nd','rd','th','th','th','th','th','th'][n % 10]; return this.g(n) + s; };
+  names = { gl: 'Great League', ul: 'Ultra League', ml: 'Master League' };
+  caps = { gl: 1500, ul: 2500, ml: null };
+
+  candyText(c) {
+    const p = [];
+    if (c.candy > 0) p.push(this.g(c.candy) + ' candy');
+    if (c.xl > 0) p.push(this.g(c.xl) + ' XL');
+    if (c.evolveCandy > 0) p.push('+' + c.evolveCandy + ' to evolve');
+    return p.join(', ') || 'no candy';
+  }
+  costLine(o, key, level) {
+    const c = o.cost;
+    if (!c) return level == null ? 'Level not known, so no cost' : '';
+    if (level != null && c.toLevel < level) return 'Past its best ' + this.names[key] + ' level' + (c.evolveCandy > 0 ? '; ' + c.evolveCandy + ' candy' : '');
+    if (!c.dust && !c.candy && !c.xl && !c.evolveCandy) return 'Already at level ' + this.lvl(c.toLevel);
+    let s = 'To level ' + this.lvl(c.toLevel) + ': ' + this.g(c.dust) + ' dust';
+    if (c.candy + c.evolveCandy) s += ', ' + this.g(c.candy + c.evolveCandy) + ' candy';
+    if (c.xl) s += ', ' + this.g(c.xl) + ' XL';
+    if (o.iv) s += ' · CP ' + this.g(o.iv.cp);
+    return s;
+  }
+  scoreColor(s, c) { return !s ? c.faint : s.score >= 80 ? c.greenInk : c.ink; }
+  ivColor(iv, c) { return !iv ? c.faint : iv.rank <= 500 ? c.greenInk : c.ink; }
+
+  figures(o, key, c, level, full = false) {
+    const cap = this.caps[key];
+    const cc = x => x.evolveCandy + ' candy';
+    const blocked = o.overCap;
+    const dust = o.cost ? (o.cost.dust || o.cost.candy || o.cost.xl ? this.dustShort(o.cost.dust) : '0') : '—';
+    const short = cc => cc.xl > 0 ? this.g(cc.xl) + ' XL' : (cc.candy + cc.evolveCandy) > 0 ? this.g(cc.candy + cc.evolveCandy) + ' candy' : 'no candy';
+    const candy = o.cost ? (o.cost.dust || o.cost.candy || o.cost.xl ? (full ? this.candyText(o.cost) : short(o.cost)) : (o.cost.evolveCandy ? cc(o.cost) : 'at its level')) : (level == null ? 'level not known' : 'no cost');
+    return {
+      blocked, notBlocked: !blocked,
+      blockedText: cap ? 'Over ' + this.g(cap) + ' CP as ' + o.name : '',
+      score: o.strength ? o.strength.score.toFixed(1) : '—',
+      rank: o.strength ? '#' + this.g(o.strength.rank) + (full ? ' of ' + this.g(o.strength.of) : '') : '',
+      scoreColor: this.scoreColor(o.strength, c),
+      ivPct: o.iv ? o.iv.pct.toFixed(1) + '%' : '—',
+      ivRank: o.iv ? 'IV #' + this.g(o.iv.rank) : 'not read',
+      ivColor: this.ivColor(o.iv, c),
+      dust, candy,
+      costColor: o.cost && o.cost.xl > 0 ? c.muted : c.ink,
+    };
+  }
+
+  why(L, key, p) {
+    const o = L.options, pick = o[L.pick], top = o[0];
+    const name = pick.name;
+    if (L.source === 'fallback') return pick.overCap ? '' : 'Nothing in the family is ranked in ' + this.names[key] + ', so the final evolution is shown.';
+    if (!p.ivs) return 'IVs not read, so the strongest species is shown. Scan the appraisal to rate this copy.';
+    if (L.source === 'ranked') return L.pick === 0 && o.length > 1 ? 'Why ' + name + '? The strongest of the family here by PvPoke score.' : '';
+    if (L.pick !== 0 && top.strength && pick.strength) {
+      return 'Why ' + name + '? Poke Genie picks it: these IVs suit ' + name + ' best of the family (IV #' + this.g(pick.iv.rank) + '), though ' + top.name + ' is the stronger species (#' + this.g(top.strength.rank) + ' against #' + this.g(pick.strength.rank) + ').';
+    }
+    if (L.pick === 0 && o.length > 1) return 'Why ' + name + '? Poke Genie picks it, and it is also the strongest species of the family here.';
+    return '';
+  }
+
+  costItems(o, key, level) {
+    const c = o.cost;
+    if (!c) return { items: [], note: level == null ? 'Level not known, so no cost' : '' };
+    if (level != null && c.toLevel < level) return { items: [], note: 'Past its best ' + this.names[key] + ' level' + (c.evolveCandy > 0 ? '; ' + c.evolveCandy + ' candy' : '') };
+    if (!c.dust && !c.candy && !c.xl) return { items: [], note: 'Already at level ' + this.lvl(c.toLevel) + (c.evolveCandy > 0 ? '; ' + c.evolveCandy + ' candy' : '') };
+    const items = [];
+    items.push({ label: 'Target level: ', value: this.lvl(c.toLevel) });
+    if (o.iv) items.push({ label: 'Target CP: ', value: this.g(o.iv.cp) });
+    items.push({ label: '', value: this.g(c.dust) + ' dust' });
+    const candy = c.candy + c.evolveCandy;
+    items.push({ label: '', value: this.g(candy) + ' candy' + (c.xl > 0 ? ', ' + this.g(c.xl) + ' XL' : '') });
+    return { items, note: '' };
+  }
+
+  league(sid, key, p, variant, c, opts) {
+    const L = p[key], level = p.level;
+    const k = sid + '-' + key;
+    const scoring = this.state.scoring[sid] || opts.scoring || 'default';
+    let pickIdx = scoring === 'pa' ? L.experimental : L.pick;
+    // Best available: when the pick is over the cap, headline the first option that fits and keep the stronger one for the details.
+    let betterOverCap = '';
+    if (opts.bestAvailable && L.options[pickIdx].overCap) {
+      const fit = L.options.findIndex(x => !x.overCap);
+      if (fit >= 0) { betterOverCap = L.options[pickIdx].name + ' is the stronger species, but this copy is already over ' + this.g(this.caps[key]) + ' CP as ' + L.options[pickIdx].name + '.'; pickIdx = fit; }
+    }
+    const pick = L.options[pickIdx];
+    const openKey = this.state.open[k];
+    const alwaysOpen = variant === 'open';
+    const isOpen = alwaysOpen || (openKey == null ? !!opts.defaultOpen : openKey);
+    const others = L.options.filter((_, i) => i !== pickIdx);
+    const f = this.figures(pick, key, c, level, true);
+    const ci = this.costItems(pick, key, level);
+    const title = pick.genderLocked ? pick.name + ', if it is ' + pick.genderLocked : pick.name;
+    const chips = [];
+    if (pick.moves) {
+      const needs = pick.self && pick.needs ? pick.needs : [];
+      [pick.moves.fast, ...pick.moves.charged].forEach(m => {
+        const miss = needs.includes(m);
+        chips.push({ text: miss ? 'Needs ' + m : m, bg: miss ? c.orangeTint : c.off, ink: miss ? c.orangeInk : c.muted });
+      });
+    }
+    const rows = others.map(o => {
+      const rk = k + '-' + o.name;
+      const open = !!this.state.rows[rk];
+      const rf = this.figures(o, key, c, level);
+      return {
+        ...rf, name: o.name, open,
+        sub: o.self ? 'itself, no evolving' : o.genderLocked ? 'if it is ' + o.genderLocked : o.iv && !o.overCap ? 'L' + this.lvl(o.iv.level) + ' · CP ' + this.g(o.iv.cp) : (o.overCap ? 'too high already' : ''),
+        nameColor: o.overCap ? c.muted : c.ink,
+        bg: open ? c.surface2 : 'transparent', padL: open ? 10 : 2, padR: open ? 10 : 2,
+        toggle: () => this.setState(s => ({ rows: { ...s.rows, [rk]: !s.rows[rk] } })),
+        detailLevel: o.iv ? 'Best level ' + this.lvl(o.iv.level) + ' under the cap, CP ' + this.g(o.iv.cp) + '. IVs rank #' + this.g(o.iv.rank) + ' of 4,096, ' + o.iv.pct.toFixed(2) + '% of best.' : (o.overCap ? 'Already above the cap as ' + o.name + '.' : 'IVs not read, so no rank.'),
+        detailCost: this.costLine(o, key, level) || (o.overCap ? '' : 'No cost'),
+        detailMoves: 'moves: not in the data for non-pick options (see Data needs)',
+      };
+    });
+    return {
+      key, name: this.names[key], visible: opts.visible !== false, showTitle: opts.showTitle !== false,
+      titleColor: opts.leagueColors ? (c === this.dark ? this.leagueColor[key].dark : this.leagueColor[key].light) : c.ink,
+      dot: opts.leagueColors ? (c === this.dark ? this.leagueColor[key].dotDark : this.leagueColor[key].dot) : 'transparent',
+      capText: this.caps[key] ? 'Under ' + this.g(this.caps[key]) + ' CP' : 'No CP cap',
+      showPickCard: true,
+      pick: { ...f, title, chip: scoring === 'pa' ? 'Pogo Assist pick' : 'Pick', betterOverCap, hasMoves: chips.length > 0, moveChips: chips, hasCostItems: !f.blocked && ci.items.length > 0, costItems: ci.items, costNote: f.blocked ? '' : (ci.note || (betterOverCap && !pick.cost ? '' : '')), blockedText: this.caps[key] ? 'Already above ' + this.g(this.caps[key]) + ' CP, so it cannot be used in ' + this.names[key] + (others.length ? ' as any of the family' : '') + '.' : '' },
+      why: opts.why ? this.why(L, key, p) : '',
+      hasOthers: others.length > 0 && variant !== 'base',
+      collapsible: !alwaysOpen,
+      listOpen: isOpen, columnHeader: isOpen,
+      openDetail: variant === 'base' ? () => this.setState(s => ({ mode: { ...s.mode, [sid]: key }, tab: { ...s.tab, [sid]: key } })) : null,
+      cardRole: variant === 'base' ? 'button' : null, cardCursor: variant === 'base' ? 'pointer' : 'default', cardChevron: variant === 'base',
+      toggleText: isOpen ? 'Show less' : 'Show more',
+      chevron: isOpen ? 180 : 0,
+      toggle: () => this.setState(s => ({ open: { ...s.open, [k]: !(s.open[k] == null ? !!opts.defaultOpen : s.open[k]) } })),
+      rows,
+    };
+  }
+
+  screen(id, label, p, { theme = 'light', variant = 'collapse', width = 393, open = [], note = '', ipad = null, showIVs = true, scoring = 'default', detail = null, scoringToggle = false, bestAvailable = false, why = false, infoOpen: infoDefault = false, textScale = 1, rowOpen = [] } = {}) {
+    const c = theme === 'dark' ? this.dark : this.light;
+    rowOpen.forEach(rk => { if (!(id + '-' + rk in this.state.rows)) this.state.rows[id + '-' + rk] = true; });
+    // 'base' screens: three pick cards; tapping one goes to the league view (the 1b layout) for that league.
+    const mode = id in this.state.mode ? this.state.mode[id] : detail;
+    const wasBase = variant === 'base';
+    if (wasBase && mode) variant = 'segmented';
+    const tab = this.state.tab[id] || mode || 'gl';
+    const keys = ['gl', 'ul', 'ml'];
+    const leagues = keys.map(key => this.league(id, key, p, variant, c, {
+      defaultOpen: open.includes(key),
+      visible: variant === 'segmented' ? key === tab : true,
+      showTitle: variant !== 'segmented',
+      scoring, bestAvailable, why, leagueColors: scoringToggle,
+    }));
+    const scoringNow = this.state.scoring[id] || scoring;
+    const infoOpen = id in this.state.info ? !!this.state.info[id] : infoDefault;
+    const dotOf = k => c === this.dark ? this.leagueColor[k].dotDark : this.leagueColor[k].dot;
+    const inkOf = k => c === this.dark ? this.leagueColor[k].dark : this.leagueColor[k].light;
+    const pvp = keys.map(k => { const o = p[k].options[scoringNow === 'pa' ? p[k].experimental : p[k].pick]; const fit = p[k].options.find(x => x.iv && !x.overCap); const pick = o.iv && !o.overCap ? o : fit; return { short: this.names[k].replace(' League', '').toUpperCase(), pct: pick && pick.iv ? pick.iv.pct.toFixed(1) + '%' : '—', color: inkOf(k) }; });
+    const src = p.gl.source;
+    const ivs = p.ivs;
+    return {
+      id, label, width, c, note, showIVs, colMax: ipad === 'columns' ? 1130 : 640, textScale, rowCols: textScale > 1.3 ? '1fr' : 'minmax(0,1fr) 64px 64px 78px', figCols: textScale > 1.3 ? '1fr' : 'repeat(2, minmax(0,1fr))',
+      p: { name: p.name, cp: this.g(p.cp), meta: 'Level ' + this.lvl(p.level) + ' · HP ' + p.hp, hasIVs: !!ivs, noIVs: !ivs, ivPctText: p.ivPct != null ? p.ivPct + '%' : '', pvp, bars: ivs ? ['Attack', 'Defence', 'HP'].map((l, i) => ({ label: l, v: ivs[i], pct: ivs[i] / 15 * 100 })) : [] },
+      sourceNote: !ivs ? 'Strongest species shown' : src === 'export' ? 'Picks follow Poke Genie' : src === 'emulated' ? "Picks match Poke Genie's rule" : 'Strongest species shown',
+      segmented: variant === 'segmented',
+      inDetail: wasBase && !!mode, backToBase: () => this.setState(s => ({ mode: { ...s.mode, [id]: null } })),
+      hasScoring: scoringToggle, pvpHeader: scoringToggle && !!p.ivs, pveHeader: !scoringToggle,
+      infoOpen, toggleInfo: () => this.setState(s => ({ info: { ...s.info, [id]: !(id in s.info ? s.info[id] : infoDefault) } })), infoBg: infoOpen ? c.accent : c.off, infoInk: infoOpen ? c.onAccent : c.muted,
+      scoringTabs: [['default', 'Default'], ['pa', 'Pogo Assist']].map(([v, label]) => ({ label, on: scoringNow === v, bg: scoringNow === v ? c.surface : 'transparent', select: () => this.setState(s => ({ scoring: { ...s.scoring, [id]: v } })) })),
+      tabs: keys.map(k => ({ short: this.names[k].replace(' League', ''), bg: k === tab ? c.surface : 'transparent', ink: scoringToggle && k === tab ? inkOf(k) : c.ink, dot: scoringToggle ? dotOf(k) : 'transparent', select: () => this.setState(s => ({ tab: { ...s.tab, [id]: k } })) })),
+      leagueLayout: ipad === 'columns' ? 'grid' : 'flex',
+      leagueGap: ipad === 'columns' ? 24 : (variant === 'segmented' ? 0 : 22),
+      leagues,
+    };
+  }
+
+  renderVals() {
+    const D = window.LEAGUE_DATA;
+    if (!D) return { groups: [] };
+    const base = { variant: 'base', scoringToggle: true, bestAvailable: true };
+    const groups = [
+      { kicker: 'Turn 6 · Completing the set', title: 'Every example on the final layout, dark versions, the two unshown states, and large text', blurb: 'Magnemite, Charmander, IVs not read and Lugia on the turn-5 design, each with a dark twin. Two states that were handled in the logic but never shown: a Kirlia whose sex was not read (Gallade, if it is male) and a level-51 Best Buddy Pupitar past its best Ultra League level. Then the pick card and the option list at the accessibility text size, where the figure columns stack under the name. Accessibility identifiers and the VoiceOver order are in the notes at the foot of the page.', screens: [
+        this.screen('6a', 'Magnemite · base', D.magnemite, { ...base }),
+        this.screen('6b', 'Magnemite · Great League, Show more', D.magnemite, { ...base, detail: 'gl', open: ['gl'] }),
+        this.screen('6c', 'Charmander · Great League, Show more', D.charmander, { ...base, detail: 'gl', open: ['gl'], note: 'Charmander itself is unranked: blank species figure, IV and dust still shown.' }),
+        this.screen('6d', 'IVs not read · base', D.eeveeNoIV, { ...base, note: 'Strongest species per league. Figures read "—" with "not read"; cost "—" with "no cost"; the IVs panel header has nothing to show.' }),
+        this.screen('6e', 'IVs not read · Great League', D.eeveeNoIV, { ...base, detail: 'gl', open: ['gl'] }),
+        this.screen('6f', 'Lugia · base', D.lugia, { ...base, note: 'One member: no Show more, no control needed; the card is still tappable for the league view\'s moves and cost.' }),
+        this.screen('6g', 'Kirlia · sex not read', D.kirlia, { ...base, note: '"Gallade, if it is male" on the card; Gardevoir follows in the list for the other case.' }),
+        this.screen('6h', 'Pupitar · Best Buddy, level 51', D.pupitar, { ...base, note: 'Great League: over the cap as anything. Ultra: "Past its best Ultra League level; 100 candy". Master: "Already at level 51; 100 candy".' }),
+        this.screen('6i', 'Magnemite · dark', D.magnemite, { ...base, theme: 'dark', detail: 'gl', open: ['gl'] }),
+        this.screen('6j', 'Charmander · dark', D.charmander, { ...base, theme: 'dark' }),
+        this.screen('6k', 'IVs not read · dark', D.eeveeNoIV, { ...base, theme: 'dark' }),
+        this.screen('6l', 'Lugia · dark', D.lugia, { ...base, theme: 'dark' }),
+        this.screen('6m', 'Kirlia · dark', D.kirlia, { ...base, theme: 'dark' }),
+        this.screen('6n', 'Pupitar · dark', D.pupitar, { ...base, theme: 'dark' }),
+        this.screen('6o', 'Large text · AX1 (about 1.45×)', D.eevee, { ...base, detail: 'gl', open: ['gl'], textScale: 1.45, width: 393 * 1.45, rowOpen: ['gl-Umbreon'], note: 'At accessibility sizes the pick card\'s figures and cost list go to one column and each option row stacks its three figures under the name. Nothing is fixed-height. Shown as the phone would render it, enlarged to the same point width.' }),
+      ] },
+      { kicker: 'Turn 5 · Round two', title: 'League colours, scoring explainer, PvP figures, settings everywhere', blurb: 'League names take GO Battle League\'s own colours (Great blue, Ultra gold, Master purple) as a dot and tinted title, and the control in the league view carries the same dot. The "i" beside the scoring switch opens a short explainer of the two methods. The IVs panel drops the PvE percentage for this copy\'s PvP fit per league. A settings circle joins the header on every screen. The Shadow note loses its "a".', screens: [
+        this.screen('5a', 'Base · league colours, PvP figures', D.eevee, { variant: 'base', scoringToggle: true, note: 'The IVs panel header now reads this copy\'s % of best as the pick for each league, in that league\'s colour, instead of the 56% PvE figure. Alternative if the three figures feel busy: a single "best PvP fit" with its league.' }),
+        this.screen('5b', 'Scoring explainer open', D.eevee, { variant: 'base', scoringToggle: true, infoOpen: true, note: 'Tap the "i" to open or close. The wording of the Pogo Assist paragraph needs checking against the real rule in src/leagues.js; I have described the principle, not the constants.' }),
+        this.screen('5c', 'League view · Ultra', D.eevee, { variant: 'base', detail: 'ul', scoringToggle: true, open: ['ul'] }),
+        this.screen('5d', 'Rookidee · best available', D.rookidee, { variant: 'base', scoringToggle: true, bestAvailable: true }),
+        this.screen('5e', 'Base · dark', D.eevee, { variant: 'base', theme: 'dark', scoringToggle: true, infoOpen: true }),
+      ] },
+      { kicker: 'Turn 4 · Greg\'s direction', title: 'Summary first, then one league at a time', blurb: 'The base screen is the 2e shape: one pick card per league and nothing else. Tapping a card opens the 1b view for that league: Great / Ultra / Master control, the best pick, and a "Show more" that expands the other options. Why lines, source notes and "not ranked" are gone; the cost reads as a four-item list; the panel header gains the Default / Pogo Assist scoring switch. The screens below are live: tap a card, the control, Show more, a row, or the back circle.', screens: [
+        this.screen('4a', 'Base · Eevee', D.eevee, { variant: 'base', scoringToggle: true, note: 'Three cards, each the best pick for that league. The chevron and the whole card are the tap target.' }),
+        this.screen('4b', 'League view · after tapping Great League', D.eevee, { variant: 'base', detail: 'gl', scoringToggle: true, note: 'The 1b layout. Back circle returns to the base screen. Show more is closed by default.' }),
+        this.screen('4c', 'League view · Show more open', D.eevee, { variant: 'base', detail: 'gl', open: ['gl'], scoringToggle: true, note: 'Unranked rows show a blank species figure. Candy is one total; XL stays separate.' }),
+        this.screen('4d', 'Pogo Assist scoring · Ultra', D.eevee, { variant: 'base', detail: 'ul', scoring: 'pa', scoringToggle: true, note: 'Default scoring is today\'s pick (Flareon). Pogo Assist scoring shows the app\'s own pick (Sylveon). The chip names which one is showing.' }),
+        this.screen('4e', 'Best available · Rookidee at level 35', D.rookidee, { variant: 'base', scoringToggle: true, bestAvailable: true, note: 'Corviknight is over the Great League cap, so the card headlines Corvisquire, the best that fits, and says why. Lugia-style families with nothing that fits keep the red line.' }),
+        this.screen('4f', 'Base · dark', D.eevee, { variant: 'base', theme: 'dark', scoringToggle: true }),
+        this.screen('4g', 'iPad · base', D.eevee, { variant: 'base', width: 1194, scoringToggle: true, note: 'The phone column at 640 pt, as 3b. Tapping a card opens the league view in the same column.' }),
+      ] },
+      { kicker: 'Turn 3 · iPad', title: 'Regular width', blurb: 'Two treatments at 1194 pt. 3a lays the three leagues as columns inside the one panel; 3b keeps the phone column at 640 pt, as every other screen in the app does today.', screens: [
+        this.screen('3a', 'iPad · three leagues side by side', D.eevee, { width: 1194, variant: 'open', ipad: 'columns', note: 'Each column is one league: pick card, why line, then the full option list. Needs the panel to break the 640 pt column cap for this one screen (shown at 1194 pt, landscape 11-inch).' }),
+        this.screen('3b', 'iPad · same column as the phone', D.eevee, { width: 1194, variant: 'collapse', open: ['gl'] }),
+      ] },
+      { kicker: 'Turn 2 · States', title: 'The other examples and the blocking states', blurb: 'All on layout 1a. Magnemite (three options, all ranked), Charmander (unranked options), Rookidee at level 35 (over the Great League cap), a scan with no IVs read, and Lugia, a one-member family. Then Eevee in dark.', screens: [
+        this.screen('2a', 'Magnemite · three ranked options', D.magnemite, { open: ['gl'] }),
+        this.screen('2b', 'Charmander · unranked options', D.charmander, { open: ['gl', 'ul'] }),
+        this.screen('2c', 'Rookidee · over the cap in Great League', D.rookidee, { open: ['gl'] }),
+        this.screen('2d', 'Eevee · IVs not read', D.eeveeNoIV, { open: ['gl'] }),
+        this.screen('2e', 'Lugia · one-member family', D.lugia, {}),
+        this.screen('2f', 'Eevee · dark', D.eevee, { theme: 'dark', open: ['gl'] }),
+        this.screen('2g', 'Eevee · dark, league control', D.eevee, { theme: 'dark', variant: 'segmented' }),
+      ] },
+      { kicker: 'Turn 1 · Layouts', title: 'Three ways to lead with the pick and still show the options', blurb: 'Eevee CP 461, nine options per league. 1a headlines the pick in a card, with the alternatives behind "See all 9 options" (Great League is open here, Ultra and Master closed). 1b is one league at a time behind a Great / Ultra / Master control. 1c keeps all three lists open. Tap an option row in any of them to expand its cost and IV detail; tap a toggle to collapse.', screens: [
+        this.screen('1a', 'Pick card + "See all N options"', D.eevee, { open: ['gl'], note: 'Three figures per option: PvPoke score (green at 80+), how well this copy\'s IVs fit (green inside the top 500 of 4,096), and the dust to reach its best level. Unranked options show a dash. 296-XL costs read as muted "489k" so the cheap ones stand out.' }),
+        this.screen('1b', 'League control, one league at a time', D.eevee, { variant: 'segmented', note: 'Shortest page. The control is the form switch already used for Normal / Mega. Costs a tap to compare leagues.' }),
+        this.screen('1c', 'All three lists open', D.eevee, { variant: 'open', note: 'Nothing hidden, but 27 rows for an Eevee. Fine for 2–3-member families, long for this one.' }),
+      ] },
+    ];
+    return { groups };
+  }
+}
+</script>
+</body>
+</html>
