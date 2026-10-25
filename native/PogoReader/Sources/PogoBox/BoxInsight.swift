@@ -40,6 +40,12 @@ public struct BoxInsight {
         /// and in the order of `slots`.
         public var areaLines: [String?] = []
         public var leagueLines: [String?] = []
+        /// What the species page's ranking reads (the engine's own best-of key, src/advise.js): per area in `areas` order the table tier as 3 for S, 2 for A, 1 for B, 0 for
+        /// none or Weak; the engine's IV % for the area (0 where unknown); the table entry the copy is rated as (Shadow-suffixed); and the copy's CP.
+        public var fitTier: [Int] = []
+        public var fitIVPct: [Double] = []
+        public var asNames: [String?] = []
+        public var cp: Int = 0
 
         public struct BestTag: Equatable {
             public var area: String
@@ -86,6 +92,11 @@ public struct BoxInsight {
     public private(set) var copies: [String: Copy] = [:]
     /// By species title (the row title the list groups by), six tiles in the order of `Copy.slots`.
     public private(set) var species: [String: [Tile]] = [:]
+    /// By species title, the copy ids that rank for each use, best first, at most `topCount`: 14 lists, the seven activities in `Activity.allCases` order under Classic, then under
+    /// Pogo Assist (the area lists are the same under both). Built once with the rest, so the species page never ranks per render.
+    private var tops: [String: [[String]]] = [:]
+    /// How many copies of a species take a place for one use.
+    public static let topCount = 3
 
     public init() {}
 
@@ -110,6 +121,19 @@ public struct BoxInsight {
         return "best" + (b.asName.map { " as " + $0 } ?? "")
     }
 
+    /// The copies of a species title that rank for a use, best first (0 to `topCount` ids). Only Top and Good copies take part; the whole title is ranked, so a plain and a Shadow
+    /// copy of one species are placed together, and neither the search nor a chip changes it. A league: Top before Good, then the IV rank percentile, then IV % of best, then box
+    /// order, the tile's own rule, so place 1 is always the copy on the league tile. Raids, Gym, Rocket and Max: the table tier (S, A, B), then IV %, then CP, then box order.
+    public func top(title: String, _ a: Activity, pogoAssist: Bool) -> [String] {
+        guard let all = tops[title], let i = Activity.allCases.firstIndex(of: a) else { return [] }
+        return all[(pogoAssist ? 7 : 0) + i]
+    }
+
+    /// 1 to `topCount` for a copy in its species' top places for a use, else nil.
+    public func place(of id: String, title: String, _ a: Activity, pogoAssist: Bool) -> Int? {
+        top(title: title, a, pogoAssist: pogoAssist).firstIndex(of: id).map { $0 + 1 }
+    }
+
     /// 0 for Strong, 1 for OK, 2 for Weak or no tag: lower is better.
     static func worthRank(_ w: LeaguePanel.Worth?) -> Int { w == .strong ? 0 : w == .ok ? 1 : 2 }
 
@@ -122,6 +146,8 @@ public struct BoxInsight {
         struct Best { var worth: Int; var rankPct: Double; var pct: Double; var tile: Tile }
         var best = [String: [Best?]]()
         var weakest = [String: [Tile]]()
+        // Per species title, the copies in box order with what the ranking reads of them.
+        var seen = [String: [String]]()
         for e in entries {
             let ratings = advice.leagues(for: e.id)
             var slots = [LeaguePanel.Slot?](repeating: nil, count: 6)
@@ -143,7 +169,13 @@ public struct BoxInsight {
             let bestTags = advice.bestOf(for: e.id).map { area in
                 Copy.BestTag(area: area, asName: area == "max" ? nil : fits[area]?.asNameLabel(shadow: e.row.shadow == 1))
             }
-            out.copies[e.id] = Copy(slots: slots, fit: fit, best: bestTags, areaLines: areas.map { fits[$0]?.line }, leagueLines: leagueLines)
+            let tierWeight = ["S": 3, "A": 2, "B": 1]
+            out.copies[e.id] = Copy(slots: slots, fit: fit, best: bestTags, areaLines: areas.map { fits[$0]?.line }, leagueLines: leagueLines,
+                                    fitTier: areas.map { a in fits[a].flatMap { $0.tag == .weak ? nil : $0.tier.flatMap { tierWeight[$0] } } ?? 0 },
+                                    fitIVPct: areas.map { fits[$0]?.ivPercent ?? 0 },
+                                    asNames: areas.map { fits[$0]?.asNameLabel(shadow: e.row.shadow == 1) },
+                                    cp: e.row.cp)
+            seen[e.row.title, default: []].append(e.id)
 
             let title = e.row.title
             var b = best[title] ?? [Best?](repeating: nil, count: 6)
@@ -167,7 +199,37 @@ public struct BoxInsight {
             let b = best[title] ?? []
             out.species[title] = (0..<6).map { i in b.indices.contains(i) ? (b[i]?.tile ?? w[i]) : w[i] }
         }
+        for (title, ids) in seen { out.tops[title] = out.rankings(ids) }
         return out
+    }
+
+    /// The 14 top lists of one species' copies (given in box order). `sorted(by:)` is not stable, so the box position is part of every key.
+    private func rankings(_ ids: [String]) -> [[String]] {
+        func cap(_ keyed: [(String, [Double])]) -> [String] {
+            let order = keyed.enumerated().sorted { a, b in
+                for (x, y) in zip(a.element.1, b.element.1) where x != y { return x > y }
+                return a.offset < b.offset
+            }
+            return order.prefix(Self.topCount).map { $0.element.0 }
+        }
+        var lists = [[String]](repeating: [], count: 14)
+        for (n, a) in Activity.allCases.enumerated() {
+            if let key = a.league, let l = LeaguePanel.keys.firstIndex(of: key) {
+                for assist in 0...1 {
+                    lists[assist * 7 + n] = cap(ids.compactMap { id in
+                        guard let s = copies[id]?.slots[assist * 3 + l], s.status == .fits, let w = s.worth, w != .weak else { return nil }
+                        return (id, [Double(-Self.worthRank(w)), s.rankPct ?? 0, s.pct ?? 0])
+                    })
+                }
+            } else if let i = a.area.flatMap({ BoxInsight.areas.firstIndex(of: $0) }) {
+                let list = cap(ids.compactMap { id in
+                    guard let c = copies[id], c.fitTier.indices.contains(i), c.fitTier[i] > 0 else { return nil }
+                    return (id, [Double(c.fitTier[i]), c.fitIVPct[i], Double(c.cp)])
+                })
+                lists[n] = list; lists[7 + n] = list
+            }
+        }
+        return lists
     }
 }
 
