@@ -225,7 +225,7 @@ struct BoxView: View {
             }
             .coordinateSpace(name: Self.scrollSpace)
             .scrollDismissesKeyboard(.interactively)
-            .overlay(alignment: .trailing) { if showsIndex { jumpIndex(proxy) } }
+            .overlay(alignment: .trailing) { jumpIndex(proxy) }   // always there: its VoiceOver element does not depend on the letters showing
         }
     }
 
@@ -502,7 +502,7 @@ struct BoxView: View {
     private func jumpIndex(_ proxy: ScrollViewProxy) -> some View {
         let labels: [String] = sort == .name ? ((65...90).map { String(UnicodeScalar($0)!) } + (sections.contains { $0.id == "#" } ? ["#"] : [])) : sections.map(\.short)
         let present = Dictionary(sections.map { ($0.short, $0.id) }, uniquingKeysWith: { a, _ in a })
-        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, jumped: $jumped) { id in proxy.scrollTo(id, anchor: .top) }
+        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, lettersShown: showsIndex, jumped: $jumped) { id in proxy.scrollTo(id, anchor: .top) }
     }
 
     // MARK: saved panel

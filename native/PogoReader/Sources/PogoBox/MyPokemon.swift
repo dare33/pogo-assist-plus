@@ -137,8 +137,8 @@ public enum MyPokemon {
         Array(listed.lazy.filter { $0.ivSum != nil && !shown.contains($0.id) }.prefix(limit).map(\.id))
     }
 
-    /// The keep or transfer tag a copy carries, as the Advice panel words it today: only for a copy with no build of its own (under a build it would contradict
-    /// it), only for a copy that is one of several. "Keep · best IVs of the 65", "Keep · marked as caught as a Dynamax", "Transfer · one of 65".
+    /// The keep or transfer tag a copy carries, as the Advice panel words it: only for a copy that is one of several. A TOP IVS row keeps it whether or not the copy
+    /// has a build (D1: "a copy with a build still shows its upgrade mark"). "Keep · best IVs of the 65", "Keep · marked as caught as a Dynamax", "Transfer · one of 65".
     public struct KeepTag: Equatable {
         public var keep: Bool
         public var detail: String
@@ -146,7 +146,7 @@ public enum MyPokemon {
     }
 
     public static func keepTag(_ a: BoxAdvice.ForEntry) -> KeepTag? {
-        guard a.builds.isEmpty, let d = a.duplicateOf else { return nil }
+        guard let d = a.duplicateOf else { return nil }
         guard a.keep else { return KeepTag(keep: false, detail: "one of \(d.count)") }
         var reason = BoxAdvice.keepReason(d, copy: a.keepIndex ?? 0)
         // "it has your best IVs of the 65" reads "best IVs of 65"; "it is marked as caught as a Dynamax" reads "marked as caught as a Dynamax".

@@ -116,7 +116,7 @@ struct UpgradeMark: View {
 struct FullStrengthBadge: View {
     var size: CGFloat = 18
     var body: some View {
-        SVGGlyph(data: Glyph.tick).stroke(Theme.pair(0xFFFFFF, 0x0E1118), style: StrokeStyle(lineWidth: 3.6, lineCap: .round, lineJoin: .round))
+        SVGGlyph(data: Glyph.tick).stroke(Theme.pair(0xFFFFFF, 0x0E1118), style: StrokeStyle(lineWidth: size * 0.6 / 24 * 3.6, lineCap: .round, lineJoin: .round))   // the board's 3.6 in its 24 unit box, at the glyph's size (1.65 pt at 18 pt)
             .padding(size * 0.2)
             .glyphFrame(size)
             .background(Circle().fill(Theme.green))

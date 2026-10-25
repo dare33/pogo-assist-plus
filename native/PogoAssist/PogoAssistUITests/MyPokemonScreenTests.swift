@@ -125,7 +125,9 @@ final class MyPokemonScreenTests: XCTestCase {
         openMoltres(app)
         app.buttons["top-pvp-row"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 10), "the Pokémon page opened")
-        XCTAssertTrue(app.buttons["leagues-back"].waitForExistence(timeout: 10), "its Ultra League view is the one chosen")
+        XCTAssertTrue(app.buttons["leagues-back"].waitForExistence(timeout: 10), "a league view is the one chosen")
+        XCTAssertTrue(app.descendants(matching: .any)["league-ul"].exists, "it is the row's league, Ultra League")
+        XCTAssertFalse(app.descendants(matching: .any)["league-gl"].exists || app.descendants(matching: .any)["league-ml"].exists, "and no other league's view")
     }
 
     func testATopIVsTapOpensThePageAsToday() throws {
@@ -147,13 +149,40 @@ final class MyPokemonScreenTests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(identifier: "pokemon-row").count, 6)
     }
 
-    func testTheJumpToLetterElementIsThereForVoiceOverWithoutScrolling() throws {
-        let app = launchOnMoltres()
+    func testTheJumpToLetterElementIsAlwaysThereForVoiceOver() throws {
+        let app = launchOnMoltres()   // a search is active: one section (M)
+        let jump = app.descendants(matching: .any)["az-jump"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 5), "the element is there with a search on and one letter showing")
+        XCTAssertEqual(jump.label, "Jump to letter")
+        let search = app.textFields["box-search"]
+        search.tap(); search.clearText(); search.typeText("Zap\n")   // Zapdos: one letter
+        XCTAssertTrue(row(app, "Zapdos").waitForExistence(timeout: 10))
+        XCTAssertTrue(jump.exists, "and with another search")
+        search.tap(); search.clearText(); search.typeText("qqqq\n")   // nothing matches: no letters
+        XCTAssertTrue(app.staticTexts["No Pokémon match."].waitForExistence(timeout: 10))
+        XCTAssertTrue(jump.exists, "and with no Pokémon shown")
+        XCTAssertEqual(jump.value as? String, "No letters")
         app.buttons["Clear search"].tap()
         XCTAssertTrue(row(app, "Blissey").waitForExistence(timeout: 10))
-        let jump = app.descendants(matching: .any)["az-jump"]
-        XCTAssertTrue(jump.waitForExistence(timeout: 5), "the index is reachable while its letters are hidden")
-        XCTAssertEqual(jump.label, "Jump to letter")
+        XCTAssertTrue(jump.exists, "and with the whole box, while the letters are hidden")
+        search.tap(); search.typeText("e\n")   // several letters
+        XCTAssertTrue(jump.waitForExistence(timeout: 5))
+    }
+
+    /// The build mark on a species row and on a copy row, and what VoiceOver says for it: the same cost the mark shows. A TOP IVS copy with a build keeps its
+    /// keep or transfer tag beside the mark (CONCEPTS rule 5).
+    func testBuildMarksAndTheirSpokenCost() throws {
+        let app = launchOnMoltres()
+        XCTAssertTrue(row(app, "Moltres").label.contains("Upgrade available: 1 build to do, 137k dust"), row(app, "Moltres").label)
+        openMoltres(app)
+        let built = app.buttons.matching(NSPredicate(format: "identifier == 'top-ivs-row' AND label CONTAINS 'Upgrade available'")).firstMatch
+        XCTAssertTrue(built.exists, "the copy with the build shows its mark")
+        XCTAssertTrue(built.label.contains("Upgrade available: power up Moltres, 137k dust"), built.label)
+        XCTAssertTrue(built.label.contains("Keep") || built.label.contains("Transfer"), "a TOP IVS copy with a build keeps its tag: " + built.label)
+        let search = app.textFields["box-search"]
+        search.tap(); search.clearText(); search.typeText("Staraptor\n")
+        XCTAssertTrue(row(app, "Staraptor").waitForExistence(timeout: 10))
+        XCTAssertTrue(row(app, "Staraptor").label.contains("Full strength"), row(app, "Staraptor").label)
     }
 
     // MARK: screenshots (design process section 6)
@@ -177,8 +206,10 @@ final class MyPokemonScreenTests: XCTestCase {
             while !(row(app, "Moltres").exists && row(app, "Moltres").isHittable) && n < 25 { app.swipeUp(); n += 1 }
             row(app, "Moltres").tap()
             XCTAssertTrue(app.buttons["top-pvp-row"].firstMatch.waitForExistence(timeout: 60))
+            // Scrolled until the TOP PVP rows are on the screen (at AX5 the open species is taller than the screen).
             n = 0
-            while !app.buttons["see-all"].isHittable && n < 4 { app.swipeUp(velocity: .slow); n += 1 }
+            let pvp = app.buttons["top-pvp-row"].firstMatch
+            while (!pvp.isHittable || pvp.frame.midY > app.frame.height * 0.55) && n < 10 { app.nudgeUp(); n += 1 }
             sleep(1)
             attach("my-pokemon-open-\(mode)-\(size)")
             app.terminate()

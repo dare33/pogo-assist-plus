@@ -328,7 +328,7 @@ final class ListScreensTests: XCTestCase {
                 app.launchArguments = ["-appearance", "light", "-UIPreferredContentSizeCategoryName", category]
                 app.launch()
                 XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
-                sleep(3)   // the advice is read from the box saved by the default-size launch above
+                awaitInsight(app)   // the advice is read from the box saved by the default-size launch above
             } else {
                 app = launchPopulated(["-appearance", "light", "-UIPreferredContentSizeCategoryName", category])
             }
@@ -357,6 +357,52 @@ final class ListScreensTests: XCTestCase {
     /// moved. At the default size and AX5, in light and dark. Screenshots go to POGO_SCREENS.
     func testSearchStaysFixedAtTheDefaultSize() throws { try searchFixed("hdr-default-light", "UICTContentSizeCategoryL", "light") }
     func testSearchStaysFixedInDark() throws { try searchFixed("hdr-default-dark", "UICTContentSizeCategoryL", "dark") }
+    func testSearchStaysFixedAtAX3() throws { try searchFixed("hdr-ax3-light", "UICTContentSizeCategoryAccessibilityXL", "light") }
+    func testSearchStaysFixedAtAX5InDark() throws { try searchFixed("hdr-ax5-dark", "UICTContentSizeCategoryAccessibilityXXXL", "dark") }
+
+    /// Waits until the insight under the chips is built (the Raids chip lists species only then), then puts the chip back on All.
+    private func awaitInsight(_ app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["chip-raids"].waitForExistence(timeout: 20))
+        app.buttons["chip-raids"].tap()
+        let waiting = NSPredicate(format: "exists == false")
+        expectation(for: waiting, evaluatedWith: app.staticTexts["Working out advice…"])
+        waitForExpectations(timeout: 90)
+        XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20), "the Raids chip lists species once the insight is built")
+        app.buttons["chip-all"].tap()
+    }
+
+    /// The saved-scan panel is the top of the scrolling list: right after the save it is there, under the fixed search field, and it scrolls away with the list while
+    /// the search stays (no relaunch: the panel goes with one).
+    func testTheSavedScanPanelScrollsAwayWhileTheSearchStays() throws {
+        let app = launchPopulated()
+        sleep(1)
+        let panel = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Saved to'")).firstMatch
+        let search = app.textFields["box-search"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 10) && panel.isHittable, "the saved-scan panel is on the list right after the save")
+        let frame = search.frame
+        for _ in 0..<3 { app.swipeUp() }
+        sleep(1)
+        XCTAssertEqual(search.frame, frame, "the search field did not move")
+        XCTAssertFalse(panel.isHittable, "the panel scrolled away with the list")
+        shot("hdr-saved-panel")
+    }
+
+    /// The ranking explainer opens inside the scrolling list, under the sort line, and the list is still there under it.
+    func testTheRankingExplainerOpensInTheList() throws {
+        let app = launchPopulated()
+        let info = app.buttons["list-scoring-info"]
+        XCTAssertTrue(info.waitForExistence(timeout: 10))
+        info.tap()
+        let explainer = app.descendants(matching: .any)["list-scoring-explainer"]
+        XCTAssertTrue(explainer.waitForExistence(timeout: 5), "the explainer opens")
+        sleep(1)
+        XCTAssertTrue(explainer.isHittable, "the open explainer is on the screen")
+        XCTAssertTrue(app.textFields["box-search"].isHittable, "the search is still there")
+        XCTAssertGreaterThan(app.buttons.matching(identifier: "species-row").count, 0, "rows follow the explainer in the list")
+        info.tap()
+        XCTAssertTrue(explainer.waitForNonExistence(timeout: 5), "and it closes")
+    }
+
     func testSearchStaysFixedAtAX5() throws { try searchFixed("hdr-ax5-light", "UICTContentSizeCategoryAccessibilityXXXL", "light") }
 
     private func searchFixed(_ name: String, _ category: String, _ appearance: String) throws {
@@ -366,7 +412,7 @@ final class ListScreensTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
         sleep(2)
-        let search = app.textFields["box-search"], chipAll = app.buttons["chip-all"], panel = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Saved to'")).firstMatch
+        let search = app.textFields["box-search"], chipAll = app.buttons["chip-all"]
         XCTAssertTrue(search.waitForExistence(timeout: 10) && chipAll.exists, name)
         XCTAssertTrue(app.staticTexts["tab-title"].exists, "\(name): the header names the tab")
         let searchFrame = search.frame, firstRow = rows(app).firstMatch.label
@@ -376,7 +422,6 @@ final class ListScreensTests: XCTestCase {
         XCTAssertEqual(search.frame, searchFrame, "\(name): the search field did not move")
         XCTAssertTrue(search.isHittable, name)
         XCTAssertFalse(chipAll.isHittable, "\(name): the chips scrolled away with the list")
-        XCTAssertFalse(panel.isHittable, "\(name): so did the saved-scan panel")
         XCTAssertNotEqual(rows(app).firstMatch.label, firstRow, "\(name): the list did scroll")
         shot("\(name)-scrolled")
         // The search focused with the keyboard up: still hittable, and the keyboard closes with Return.

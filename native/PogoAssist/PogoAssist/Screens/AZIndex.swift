@@ -6,17 +6,25 @@ import SwiftUI
 final class ScrollActivity: ObservableObject {
     @Published private(set) var moving = false
     private var last: CGFloat?
-    private var hide: Task<Void, Never>?
+    private var lastMove = Date.distantPast
+    private var timer: Task<Void, Never>?
 
-    /// The list's top offset changed. The first reading is only where the list starts, not a scroll.
+    /// The list's top offset changed. The first reading is only where the list starts, not a scroll. One timer task runs while the list moves and ends a second after
+    /// the last change; a change only stamps the time (no task per frame).
     func offsetChanged(_ y: CGFloat) {
         defer { last = y }
         guard let last, abs(y - last) > 0.5 else { return }
+        lastMove = Date()
         if !moving { moving = true }
-        hide?.cancel()
-        hide = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            if !Task.isCancelled { self?.moving = false }
+        guard timer == nil else { return }
+        timer = Task { [weak self] in
+            while let self, !Task.isCancelled {
+                let left = 1.0 - Date().timeIntervalSince(self.lastMove)
+                if left <= 0 { break }
+                try? await Task.sleep(nanoseconds: UInt64(left * 1_000_000_000) + 20_000_000)
+            }
+            self?.moving = false
+            self?.timer = nil
         }
     }
 }
@@ -31,21 +39,25 @@ struct AZIndex: View {
     let present: [String: String]
     /// Every section in order, for the adjustable action and its spoken value.
     let sections: [(id: String, heading: String)]
+    /// The letters are drawn only when the list is long enough to want them (three sections or more, no search); the VoiceOver element is always there.
+    var lettersShown = true
     @Binding var jumped: String?
     let scrollTo: (String) -> Void
     @Environment(\.accent) private var accent
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragging = false
+    /// The letter the finger is on now: a drag that comes back to a letter after the list was scrolled elsewhere jumps again.
+    @State private var dragLetter: String?
 
     private let rowHeight: CGFloat = 14
 
     private func jump(to label: String) {
         // A letter with nothing under it goes to the next letter that has something.
         guard let at = labels.firstIndex(of: label), let hit = labels[at...].first(where: { present[$0] != nil }) ?? labels.last(where: { present[$0] != nil }), let id = present[hit] else { return }
-        if jumped != id { jumped = id; scrollTo(id) }
+        if dragLetter != hit { dragLetter = hit; jumped = id; scrollTo(id) }
     }
 
-    private var shown: Bool { activity.moving || dragging }
+    private var shown: Bool { lettersShown && (activity.moving || dragging) }
 
     var body: some View {
         letters
@@ -73,7 +85,7 @@ struct AZIndex: View {
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { v in dragging = true; jump(to: labels[min(max(Int(v.location.y / rowHeight), 0), labels.count - 1)]) }
-            .onEnded { _ in dragging = false })
+            .onEnded { _ in dragging = false; dragLetter = nil })
     }
 
     /// Always present, not drawn: the one element VoiceOver finds, whether or not the letters show.
@@ -82,7 +94,7 @@ struct AZIndex: View {
             .allowsHitTesting(false)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Jump to letter")
-            .accessibilityValue(jumped.flatMap { id in sections.first { $0.id == id }?.heading } ?? "")
+            .accessibilityValue(sections.isEmpty ? "No letters" : (jumped.flatMap { id in sections.first { $0.id == id }?.heading } ?? ""))
             .accessibilityIdentifier("az-jump")
             .accessibilityAdjustableAction { direction in
                 let ids = sections.map(\.id)

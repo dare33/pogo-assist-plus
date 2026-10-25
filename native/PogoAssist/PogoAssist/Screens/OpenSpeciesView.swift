@@ -18,11 +18,16 @@ enum BuildMarkWords {
         }
     }
 
-    /// One copy: the first build with work left, as the Hub words it ("Upgrade available: power up Umbreon, 12k dust").
+    /// One copy: the first build with work left, as the Hub words it, with the cost the copy's mark shows (the dust of ALL its builds with work left in total, or
+    /// their candy): "Upgrade available: power up Umbreon, 12k dust". "Full strength" when every build is built; nil without a build.
     static func copy(_ builds: [BoxAdvice.Build]) -> String? {
-        guard let first = builds.first(where: { !HubTeams.isBuilt($0) }) else { return builds.isEmpty ? nil : "Full strength" }
-        let cost = HubModel.costShort(first)
-        return "Upgrade available: " + HubTeams.todo(first) + (cost == "Free" ? "" : ", " + cost)
+        switch MyPokemon.copyMark(builds: builds) {
+        case .none: return nil
+        case .fullStrength: return "Full strength"
+        case .upgrade(let cost, _):
+            let first = builds.first { !HubTeams.isBuilt($0) }
+            return "Upgrade available: " + (first.map(HubTeams.todo) ?? "build") + (cost.map { ", " + $0.words } ?? "")
+        }
     }
 }
 

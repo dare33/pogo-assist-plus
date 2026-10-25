@@ -21,7 +21,7 @@ final class SpeciesTopTests: XCTestCase {
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.clearText(); search.typeText(name)
         let r = rows(app).matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
         XCTAssertTrue(r.waitForExistence(timeout: 5), "\(name) is in the sample box")
-        r.tap()
+        app.openSpeciesList(r)
     }
 
     private func launchPopulated(_ extra: [String] = ["-appearance", "light"]) -> XCUIApplication {
@@ -120,7 +120,7 @@ final class SpeciesTopTests: XCTestCase {
                 app.buttons[chip].tap()
                 let row = rows(app).matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
                 XCTAssertTrue(row.waitForExistence(timeout: 5), "\(name) is listed under \(chip)")
-                row.tap()
+                app.openSpeciesList(row)
                 XCTAssertTrue(app.buttons["pokemon-tag"].firstMatch.waitForExistence(timeout: 10), "under the chip every copy has its tag")
                 XCTAssertEqual(cards(app).map { "\($0.identifier)=\($0.label)" }, before, "\(name) under \(chip): the same cards with the same copies")
                 XCTAssertEqual(Set(copies(app).allElementsBoundByIndex.map(\.label)), Set(rowsBefore), "\(name) under \(chip): each copy keeps its places")
@@ -142,7 +142,7 @@ final class SpeciesTopTests: XCTestCase {
             search.tap(); search.clearText(); search.typeText(name)
             let r = rows(app).matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
             guard r.waitForExistence(timeout: 3) else { continue }
-            r.tap()
+            app.openSpeciesList(r)
             XCTAssertTrue(copies(app).firstMatch.waitForExistence(timeout: 5))
             sleep(1)
             let none = !app.descendants(matching: .any)["species-best"].exists

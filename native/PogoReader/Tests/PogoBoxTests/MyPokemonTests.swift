@@ -200,9 +200,15 @@ final class MyPokemonTests: XCTestCase {
         XCTAssertEqual(MyPokemon.keepTag(entry(dyn, id: "yes"))?.text, "Keep · marked as caught as a Dynamax")
     }
 
-    func testNoTagForACopyWithABuildOrNoDuplicates() {
+    func testACopyWithABuildStillCarriesItsTag() {
+        // CONCEPTS rule 5 / D1: a TOP IVS row keeps its keep or transfer tag, and a copy with a build also shows its upgrade mark.
         let d = BoxAdvice.Duplicate(name: "Eevee", count: 3, keep: ["CP 1, 15/15/15"], transfer: ["CP 3, 1/1/1"], keepIds: ["me"], transferIds: ["you"])
-        XCTAssertNil(MyPokemon.keepTag(entry(d, id: "me", builds: [build("me")])), "under a build the verdict would contradict it")
-        XCTAssertNil(MyPokemon.keepTag(entry(nil, id: "solo")), "a copy that is not one of several")
+        XCTAssertEqual(MyPokemon.keepTag(entry(d, id: "me", builds: [build("me")]))?.text, "Keep · best IVs of 3")
+        XCTAssertEqual(MyPokemon.keepTag(entry(d, id: "you", builds: [build("you")]))?.text, "Transfer · one of 3")
+    }
+
+    func testNoTagForACopyThatIsNotOneOfSeveral() {
+        XCTAssertNil(MyPokemon.keepTag(entry(nil, id: "solo")))
+        XCTAssertNil(MyPokemon.keepTag(entry(nil, id: "solo", builds: [build("solo")])))
     }
 }
