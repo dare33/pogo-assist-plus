@@ -50,14 +50,23 @@ Build output from a session never goes in the session scratchpad or in a fresh p
 ## Design passes
 
 A design pass (a design session's handoff built into the app) follows `docs/design-process.md`, agreed by Greg on
-25 Oct 2026. The binding part:
+25 Oct 2026. The whole of that document is binding; this list is its summary:
 
 - The brief tells the design session to log Greg's changes as he makes them (`DECISIONS.md`) and to write the terms and
-  rules from them at the end (`CONCEPTS.md`), confirmed by Greg. The prototype runs on Greg's own box data.
-- Before any code, the manager writes `READBACK.md` (each screen's behaviour as checkable statements, the rules checked
-  against the engine, every gap as a question) and Greg answers it.
-- One branch `design/<pass>` off `main`, one draft pull request; the local preview build is kept current; screenshots
-  per screen (light, dark, default text and AX5) go on a private page for Greg's comments between phone runs.
-- Review is sized to the change: a cosmetic change (looks and wording only, nothing computed, stored, matched, sorted
-  or filtered) gets the builds, the affected UI tests, before and after screenshots and one `reviewer` pass; anything
-  else, or anything mixed or unsure, gets the full paired review. The size is named in the commit and the pull request.
+  rules from them at the end (`CONCEPTS.md`), confirmed by Greg. The prototype runs on Greg's own box data, from a
+  git-ignored `box-data.json` made by a script from the app's own Swift code.
+- Before any of the handoff is built, the manager writes `READBACK.md` (each screen's behaviour as checkable
+  statements, the rules checked against the engine, every gap as a question) and Greg answers it.
+- One branch `design/<pass>` off `main`, one draft pull request; each screen lands as ONE commit (work-in-progress
+  commits squashed before review, review fixes as later commits naming the screen; engine or data changes first, as
+  their own commits); the local preview build is kept current; screenshots per screen (light, dark, default text and
+  AX5, on the iPhone 17 simulator or a `sim-temp.sh` clone) go on a private page for Greg's comments between phone runs.
+- Review is sized to the change. Cosmetic: only how existing information looks or reads (colour, spacing, type, layout
+  of elements already shown, the order of fixed elements, wording), with meaning, accessibility behaviour and the first
+  action unchanged; the gate is the PogoAssist build through `native/tools/xcb.sh`, `swift test` in
+  `native/PogoReader`, `npm test`, the affected UI tests, before and after screenshots and one `reviewer` pass. Full
+  paired review: anything that changes what is computed, stored, matched, sorted, filtered or shown, the order of data
+  rows, a condition to show or hide an element, a new state or screen, a button or tap target or what a tap does,
+  accessibility identifiers, a word's meaning, a term or rule in `CONCEPTS.md`, and logic, data, scripts and tooling.
+  Anything mixed or unsure gets the full review. A reviewer cannot route work: it returns NEEDS-FULL-REVIEW and the
+  manager runs the paired review. The size is named in the commit and the pull request.
