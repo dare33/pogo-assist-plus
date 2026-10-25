@@ -526,7 +526,7 @@ What the app will call after a scan: `let engine = CoreEngine()` (own queue) the
 
 ### Rebuild the bundle
 
-`PogoBox/Resources/pogo-core.js` and the three data files are generated from a checkout of the JavaScript (they are
+`PogoBox/Resources/pogo-core.js` and the four data files (game master, tiers, PvP rankings, Hub data) are generated from a checkout of the JavaScript (they are
 committed; do not edit them):
 
     node native/tools/build-js-bundle.mjs --repo <checkout> --out native/PogoReader/Sources/PogoBox/Resources
@@ -583,7 +583,13 @@ button, a detail screen per Pokemon (flags in plain words, the advisor's entries
 Scan result: opens by itself when the app finds a `replay.jsonl` that has not been through review (a `replay.processed` marker
 beside it holds the size and time of the last one that was); it runs `ScanPipeline.process` (log, `finish`, `Refine`) and
 `BoxMerge.plan` on one engine queue (`EngineWorker`) and shows New, Updated, Same, Unsure (each answered by hand) and, for a
-full scan, Gone, then Save to box or Discard. Next: the advisor's builds, gaps and duplicates, cached per box version.
+full scan, Gone, then Save to box or Discard. The second tab is the Pogo Hub (below); its Everything screen holds the advisor's builds, gaps and duplicates, cached per box version, that the old Next tab listed.
+
+### Pogo Hub (design handover PR 4, 25 Oct 2026)
+
+The second tab. Its screen: an events strip (static cards from the bundled schedule, "All news" to pokemongo.com/news), the RANKING switch, and six tiles with build counts that push a type screen each: Everything (`DO FIRST` / `CHEAP WIN` / `WORTH SAVING FOR` cards, the stardust card whose figure is typed on the card and kept per account, `THESE FIT`, then every build, the gaps and the duplicates), Raids and Max battles (a `Now | Coming up` timeline with each boss's BRING types from the type chart, a readiness bar of the box's built counters of those types, a to-do sentence and the builds that close the gaps; Max counts only copies marked Dynamax and lists them as `YOUR MAX ROSTER`), Gym battles (`Top defenders` from the built Gym builds, `TOP AVAILABLE`, the Gym gaps), Team Rocket (leader cards, `Slot by slot` counters ranked by how many of a slot's options they beat, the grunt grid by type word), PvP leagues (a suggested three with type coverage, `OTHER CANDIDATES` from score 80). Slot pickers are not built: the teams are read-only suggestions.
+
+Reference data: `data/source/10-hub-rotation.md`, `11-rocket-lineups.md` and `12-type-chart.md` (hand-edited markdown, cited per row) are built by `npm run build:hub` into `data/hub.json`, which the bundle tool copies to `PogoBox/Resources`; the build refuses a name that does not resolve exactly, a wrong row width, an empty boss on a raid row or a bad date. The derivations are Swift (`PogoBox/HubModel.swift`, `HubRaidsModel.swift`, `HubTeamsModel.swift`, `TierTable.swift` for the bundled `tiers.json`, `HubData.swift` for `hub.json`), over the advice report the engine already produces, so the advice bridge and its cache version are unchanged. The per-copy Dynamax flag is a Not set | Yes | No switch in the Pokémon page's facts panel (`ScanRow.dynamax`, nil = unknown), saved as a box version and carried over re-scans; the advisor drops the "needs a Dynamax copy" step for a Yes copy, gives a No copy no Max credit, and hygiene never transfers a Yes copy.
 
 Diagnostics is the old one-screen test rig, unchanged in behaviour, plus "Load sample scan", which copies a bundled device log
 (`Resources/sample-scan.replay.jsonl`, the owner's own 51-Pokemon run) into the app group as if a broadcast had just finished.

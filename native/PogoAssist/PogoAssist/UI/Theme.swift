@@ -94,6 +94,14 @@ enum League: String, CaseIterable, Identifiable {
         case .ml: return Theme.pair(0x7A2FB5, 0xD1A3FF)
         }
     }
+    /// The light-mode ink as a fixed colour in both modes: the background of a Hub card, under white text (white on it: GL 5.81, ML 7.24).
+    var solid: Color {
+        switch self {
+        case .gl: return Color(uiColor: Theme.rgb(0x1F5FD1))
+        case .ul: return Color(uiColor: Theme.rgb(0x8A5A00))
+        case .ml: return Color(uiColor: Theme.rgb(0x7A2FB5))
+        }
+    }
     /// The dot and the tile's left border.
     var dot: Color {
         switch self {
@@ -133,6 +141,19 @@ enum ContentType: String, CaseIterable, Identifiable {
         case .rocket: return Theme.pair(0x2A3042, 0xB5BBCB)
         case .pvp: return Theme.pair(0x7A2FB5, 0xD1A3FF)
         case .max: return Theme.maxInk
+        }
+    }
+    /// The type's light-mode ink as ONE colour in both modes (the darker colour of its pair): the background of a Hub card or a highlighted
+    /// rank disc, under white text. White on it: raids 5.28, gym 5.38, rocket 13.13, pvp 7.24, max 6.72; everything is the accent's light
+    /// ink (`Accent.inkLight`: blue 6.78, indigo 10.81, sky 6.04, teal 5.64, forest 8.88, berry 6.49, plum 9.74, graphite 13.13).
+    func solid(_ accent: Accent) -> Color {
+        switch self {
+        case .everything: return accent.inkLight
+        case .raids: return Color(uiColor: Theme.rgb(0xB34D00))
+        case .gym: return Color(uiColor: Theme.rgb(0x1C7A3E))
+        case .rocket: return Color(uiColor: Theme.rgb(0x2A3042))
+        case .pvp: return Color(uiColor: Theme.rgb(0x7A2FB5))
+        case .max: return Color(uiColor: Theme.rgb(0x5B3FD6))
         }
     }
     func tint(_ accent: Accent) -> Color {
@@ -194,6 +215,8 @@ enum Accent: String, CaseIterable, Identifiable {
 
     var solid: Color { Theme.pair(t.ls, t.ds) }
     var ink: Color { Theme.pair(t.li, t.di) }
+    /// The light-mode ink, the same in dark mode (see `ContentType.solid`).
+    var inkLight: Color { Color(uiColor: Theme.rgb(t.li)) }
     var tint: Color { Theme.pair(t.lt, rgba: t.dt) }
     /// On the light solid the text is always white; in dark mode it is per accent.
     var onSolid: Color { Theme.pair(0xFFFFFF, t.on) }

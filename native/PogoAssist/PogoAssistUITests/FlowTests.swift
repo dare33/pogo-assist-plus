@@ -92,7 +92,7 @@ final class FlowTests: XCTestCase {
         shot("09-detail-advice")
         app.buttons["Back"].tap()
         app.buttons["Back"].tap()
-        app.buttons["Next"].tap()
+        app.buttons["Pogo Hub"].tap()
         sleep(3)
         shot("10-next")
         app.swipeUp(); app.swipeUp()
@@ -142,7 +142,7 @@ final class FlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
         app.buttons["Scan"].tap()
         XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["Next"].exists, "the scan screen hides the floating tab bar")
+        XCTAssertFalse(app.buttons["Pogo Hub"].exists, "the scan screen hides the floating tab bar")
         // The first scan opens in Edit: type the count, then Done brings the steps back.
         let count = app.textFields["Count"]
         XCTAssertTrue(count.waitForExistence(timeout: 5))
@@ -305,7 +305,7 @@ final class FlowTests: XCTestCase {
             app.launch()
             let scroll = app.scrollViews["gallery-scroll"]
             XCTAssertTrue(scroll.waitForExistence(timeout: 10), "the gallery did not open")
-            XCTAssertTrue(app.buttons["Scan"].exists && app.buttons["Pokémon"].exists && app.buttons["Next"].exists, "the tab bar's buttons are labelled Pokémon, Scan, Next")
+            XCTAssertTrue(app.buttons["Scan"].exists && app.buttons["Pokémon"].exists && app.buttons["Pogo Hub"].exists, "the tab bar's buttons are labelled Pokémon, Scan, Pogo Hub")
             let pages = name == "light" || name == "large-text" ? 14 : 9
             for i in 0..<pages {
                 shot("gallery-\(name)-\(String(format: "%02d", i))")

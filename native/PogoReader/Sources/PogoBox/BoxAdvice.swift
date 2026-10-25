@@ -146,6 +146,8 @@ public struct BoxAdvice: Codable, Equatable {
         public var name: String
         public var obtain: String?
         public var haveBase: Bool
+        /// The game master id of the species the table names (Megas and forms included); nil in an advice cached before the engine sent it.
+        public var speciesId: String? = nil
     }
 
     public struct Duplicate: Codable, Equatable, Identifiable {
@@ -156,6 +158,8 @@ public struct BoxAdvice: Codable, Equatable {
         public var transfer: [String]
         public var keepIds: [String]
         public var transferIds: [String]
+        /// How many of the last `keep` entries are kept only because the person marked them as caught as a Dynamax (nil: none).
+        public var dynamaxExtras: Int?
     }
 
     /// One league's ratings of one Pokémon, as `src/leagues.js` `leaguesFor` returns them (null becomes nil).
@@ -487,7 +491,7 @@ public struct BoxAdvice: Codable, Equatable {
         }
         for g in report["gaps"]?.arrayValue ?? [] {
             out.gaps.append(Gap(area: areaLabel[str(g["area"]) ?? ""] ?? str(g["area"]) ?? "", section: str(g["section"]), tier: str(g["tier"]) ?? "", name: str(g["name"]) ?? "?",
-                                obtain: str(g["obtain"]), haveBase: bool(g["haveBase"])))
+                                obtain: str(g["obtain"]), haveBase: bool(g["haveBase"]), speciesId: str(g["speciesId"])))
         }
         for h in report["hygiene"]?.arrayValue ?? [] {
             func line(_ p: JSONValue) -> String {
@@ -499,7 +503,8 @@ public struct BoxAdvice: Codable, Equatable {
             }
             let keep = h["keep"]?.arrayValue ?? [], transfer = h["transfer"]?.arrayValue ?? []
             out.duplicates.append(Duplicate(name: str(h["name"]) ?? "?", count: int(h["count"]), keep: keep.map(line), transfer: transfer.map(line),
-                                            keepIds: keep.compactMap { id($0) }, transferIds: transfer.compactMap { id($0) }))
+                                            keepIds: keep.compactMap { id($0) }, transferIds: transfer.compactMap { id($0) },
+                                            dynamaxExtras: h["dynamaxExtras"].flatMap { if case .number(let n) = $0 { return Int(n) } else { return nil } }))
         }
         for e in report["pokemon"]?.arrayValue ?? [] where bool(e["unresolved"]) { if let eid = id(e["p"]) { out.unresolved.append(eid) } }
         for e in report["pokemon"]?.arrayValue ?? [] {
