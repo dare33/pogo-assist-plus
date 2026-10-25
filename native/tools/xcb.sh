@@ -4,9 +4,9 @@
 # Runs xcodebuild in the project's FIXED derived-data location for the slot, so build output never
 # lands in a fresh per-run folder (25 Oct 2026: 143 GB of them under /private/tmp/claude-*).
 # Slots: main, review-a, review-b, merge (ask Greg for another named one; never invent a path).
-# One xcodebuild per slot at a time: the slot is held by a mkdir mutex (mkdir is atomic, so of two
-# callers racing for it exactly one wins) whose pid file names the running xcodebuild, and it is
-# released when that xcodebuild ends. A -derivedDataPath of your own is refused: the path is not a
+# One xcodebuild per slot at a time: the slot is held by a kernel lock (/usr/bin/lockf) on the slot's
+# lock file, which the running xcodebuild inherits, so it is released once both this shell and that
+# xcodebuild have ended, however either ends. A -derivedDataPath of your own is refused: the path is not a
 # choice. So are SYMROOT/OBJROOT-style overrides, and an output path (result bundle, archive) that is
 # not relative to a checkout or inside the fixed location.
 #
@@ -19,11 +19,8 @@
 set -euo pipefail
 
 ROOT="${POGO_BUILD_ROOT:-$HOME/Library/Developer/Xcode/DerivedData/pogo-claude-build}"
-STALE_AFTER=60   # seconds: a lock with no pid file older than this was left by a run killed mid-claim
 
 die() { echo "xcb: $*" >&2; exit 2; }
-now() { date +%s; }
-age_of() { echo $(( $(now) - $(stat -f %m "$1" 2>/dev/null || now) )); }
 
 [[ $# -ge 2 ]] || die "usage: xcb.sh <slot> <xcodebuild args...>   (slots: main review-a review-b merge)"
 slot=$1; shift
@@ -57,9 +54,8 @@ done
 
 dd="$ROOT/$slot"
 lock="$ROOT/$slot.lock"
-reclaim="$ROOT/.reclaim.lock"   # held only while judging and removing a stale slot lock
 # A root is ours when every entry in it is a name these helpers define (a slot, a lock, swift-<slot>,
-# review-copy-*, sims.txt). Such a root is adopted and marked, so a first `mkdir -p .../review-copy-a`
+# review-copy-*, sims.txt, the marker). Such a root is adopted and marked, so a first `mkdir -p .../review-copy-a`
 # or `swift test --scratch-path .../swift-main` does not lock the helpers out. Anything else there
 # means a stranger's folder, so refuse: build-clean.sh empties whatever carries the marker, and only
 # the helpers that add to a root (this one, sim-temp.sh create) may mark it.
@@ -69,7 +65,7 @@ adopt_root() {
     for e in "$ROOT"/* "$ROOT"/.[!.]*; do
       [[ -e "$e" ]] || continue
       case "$(basename "$e")" in
-        main|review-a|review-b|merge|*.lock|swift-*|review-copy-*|sims.txt|sims.txt.tmp.*|.reclaim.lock|.DS_Store) ;;
+        main|review-a|review-b|merge|*.lock|swift-*|review-copy-*|sims.txt|sims.txt.tmp.*|.pogo-build-root|.DS_Store) ;;
         *) die "$ROOT holds '$(basename "$e")', which these helpers did not make; refusing to use it as the build root" ;;
       esac
     done
@@ -79,67 +75,46 @@ adopt_root() {
 }
 adopt_root
 
-# Take the slot lock. Wait while a live xcodebuild holds it. A stale lock (its pid is gone, or it
-# has had no pid for STALE_AFTER seconds) is removed, but only under the reclaim mutex, so two
-# waiters can never both judge the same lock stale and one of them remove a lock the other has just
-# re-taken; a plain mkdir cannot replace a lock while it exists, so a judgement made under the
-# reclaim mutex stays true until the removal.
-waited=0
-until mkdir "$lock" 2>/dev/null; do
-  if mkdir "$reclaim" 2>/dev/null; then
-    holder=$(cat "$lock/pid" 2>/dev/null || true)
-    stale=0
-    if [[ -n "$holder" ]]; then kill -0 "$holder" 2>/dev/null || stale=1
-    elif [[ -d "$lock" ]] && (( $(age_of "$lock") > STALE_AFTER )); then stale=1; fi
-    if (( stale )); then
-      echo "xcb: reclaiming stale lock $lock (pid '${holder:-none}' is gone)" >&2
-      rm -rf "$lock"
-    fi
-    rmdir "$reclaim" 2>/dev/null || true
-    (( stale )) && continue
-  elif (( $(age_of "$reclaim") > STALE_AFTER )); then
-    rm -rf "$reclaim"; continue   # a reclaimer that died mid-judgement
-  fi
-  if (( waited % 30 == 0 )); then
-    echo "xcb: waiting for slot '$slot' (held by pid ${holder:-?}; lock $lock)" >&2
-  fi
-  sleep 2; waited=$((waited + 2))
-done
-# Release: under the reclaim mutex, and only if the lock still records our build. Without the mutex a
-# waiter could judge our lock stale in the instant after xcodebuild ends, re-take it, and then have
-# this trap remove the lock it just took.
-mine=$$
-release() {
-  local tries=0
-  until mkdir "$reclaim" 2>/dev/null; do
-    if (( $(age_of "$reclaim") > STALE_AFTER )); then rm -rf "$reclaim"; continue; fi
-    # a reclaimer holds the mutex for milliseconds; if it is still held after 5 s something is wrong,
-    # so leave the lock alone: with the build's pid dead it is stale and the next waiter reclaims it
-    (( tries++ < 50 )) || return 0
-    sleep 0.1
-  done
-  [[ "$(cat "$lock/pid" 2>/dev/null)" == "$mine" ]] && rm -rf "$lock"
-  rmdir "$reclaim" 2>/dev/null || true
+# Take the slot lock: a kernel lock (flock, through /usr/bin/lockf) on the slot's lock file, which
+# this shell opens on fd 9. The descriptor is inherited by the xcodebuild started below, so the lock
+# is held while either holder lives (this shell, xcodebuild) and the kernel releases it when the
+# last of them exits: no pid file, no stale-lock
+# judgement, nothing to reclaim. A waiter blocks in lockf, saying so every 30 s (lockf exits 75
+# when the wait times out; anything else is an error). The lock file is empty and permanent: it is
+# never removed, because a waiter that had opened it would otherwise lock a vanished file while a
+# new build locks its replacement, and both would run. Known limits: a helper from before this
+# scheme (a checkout that has not taken this change) cannot mkdir over the file and waits forever,
+# never building (safe; update that checkout); a lock directory it left is refused here, not judged.
+[[ -d "$lock" ]] && die "$lock is a directory left by the previous (mkdir) lock scheme; when nothing is building, rm -rf it and retry"
+# The traps come first so a signal while waiting ends the wait (exit 130/143/129, nothing built;
+# a signal sent to this shell alone, not its process group, takes effect when the current lockf
+# returns, within 30 s). Once the build runs they forward the signal to it: xcodebuild is a
+# background child of a non-interactive shell and ignores INT, so INT sends TERM. $! covers the
+# instant between starting the build and recording its pid; it is unset until then, hence set +u.
+xpid=""
+on_signal() {   # $1 signal to forward to the build, $2 exit status
+  set +u; local pid="${xpid:-$!}"
+  if [[ -n "$pid" ]]; then kill -"$1" "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+  exit "$2"
 }
-trap release EXIT
-echo $$ > "$lock/pid" || die "could not record the lock owner in $lock/pid"
+trap 'on_signal TERM 130' INT
+trap 'on_signal TERM 143' TERM
+trap 'on_signal HUP 129' HUP
+exec 9>>"$lock" || die "could not open the lock file $lock"
+until /usr/bin/lockf -s -t 30 9; do
+  rc=$?; (( rc == 75 )) || die "lockf failed on $lock (exit $rc)"
+  echo "xcb: waiting for slot '$slot' (lock $lock is held by another build)" >&2
+done
 
 echo "xcb: slot '$slot' -> $dd" >&2
-# xcodebuild runs as a child and its own pid goes in the lock, so the slot stays held for as long
-# as the build runs even if this shell is killed (the lock then goes stale when the build ends).
-# Known limit: in the instant (microseconds) between the launch and the pid write below, a SIGKILL
-# leaves the shell's pid in the lock, so a waiter may reclaim it while the build runs; an INT/TERM
-# there kills a build the pid file does not yet name, which leaves a reclaimable lock (harmless).
-# Also residual: two parties finding a reclaim mutex older than 60 s (a crashed reclaimer) can race
-# to remove it. A background child of a non-interactive shell ignores INT, so INT sends TERM.
-xpid=""
-trap 'kill -TERM "$xpid" 2>/dev/null; wait "$xpid" 2>/dev/null || true; exit 130' INT
-trap 'kill -TERM "$xpid" 2>/dev/null; wait "$xpid" 2>/dev/null || true; exit 143' TERM
-trap 'kill -HUP  "$xpid" 2>/dev/null; wait "$xpid" 2>/dev/null || true; exit 129' HUP
+# xcodebuild inherits fd 9, so the slot stays held for as long as xcodebuild runs even if this shell
+# is killed, and the kernel releases it when every holder has exited. The processes xcodebuild
+# starts do not inherit it (measured 25 Oct 2026 through a cold build: lsof showed only this shell
+# and xcodebuild holding the lock, never the build service or a compiler), so the lock lasts as
+# long as this shell or xcodebuild, whichever lives longer. Known limit: a kill -9 of xcodebuild
+# frees the slot while a compiler it left behind may still write there (as the pid scheme did).
 xcodebuild -derivedDataPath "$dd" "$@" </dev/null &
 xpid=$!
-mine=$xpid
-echo "$xpid" > "$lock/pid" || true
 rc=0
 wait "$xpid" || rc=$?
 exit "$rc"
