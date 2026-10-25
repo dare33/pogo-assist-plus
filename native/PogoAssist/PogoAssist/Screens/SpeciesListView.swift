@@ -27,6 +27,11 @@ struct SpeciesListView: View {
     /// The tags, tiles, lines and best-of areas all come from the insight, which holds them itself: a rebuild of the advice for the same account (a hand fix) leaves the
     /// insight on show, and the tags and their lines with it, so nothing here reads the advice.
     private var insight: BoxInsight? { store.insight(forAccount: model.account) }
+    /// The insight on show was built for an older box version (or the advice is being recalculated): its places may name copies that are gone or no longer first, so the row
+    /// markers wait for the new one rather than show them. (The cards and the tags stay, as for the lists: they move on to the next copy that is still there.)
+    private var insightBehind: Bool {
+        InsightKey(account: model.account, seq: model.snapshot?.seq, state: InsightKey.State(model.advice)).isWaiting(builtFor: store.insightBuiltFor)
+    }
 
     /// A copy's tag for the chip: the league's or the activity's. A copy over the cap for a league has no worth of its own and reads Weak; no tag where the copy has no rating.
     private func chipWorth(_ id: String) -> LeaguePanel.Worth? {
@@ -137,7 +142,7 @@ struct SpeciesListView: View {
     /// The places a copy holds among its species' copies, in chip order: one per use where it is in the top three (Top and Good copies only; the whole species is ranked, so
     /// neither the search nor the chip moves a number). Read from the insight alone.
     private func places(_ it: BoxIndex.Item) -> [(activity: BoxInsight.Activity, place: Int)] {
-        guard let insight else { return [] }
+        guard let insight, !insightBehind else { return [] }
         return BoxInsight.Activity.allCases.compactMap { a in
             insight.place(of: it.id, title: route.title, a, pogoAssist: pogoAssist).map { (a, $0) }
         }

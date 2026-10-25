@@ -55,12 +55,10 @@ struct SoftTag: View {
 /// The Top / Good / Weak tag for an activity, three shapes: Top is the activity's ink on its tint; Good is the same, lighter: the tint at half strength with a 1 pt border in the ink at 40% (Rocket's old middle rating was
 /// graphite on grey, near-identical to Weak); Weak is a plain outline in `Theme.line` with `Theme.muted` text and no fill. `Theme.muted` (6A7085) is 4.9:1 on
 /// `Theme.surface` (white) in light mode, over the 4.5:1 the small text needs (computed with `Theme.contrast`; the row it sits on is `Theme.surface`).
-/// `worth` nil is a copy the advice has no rating for: "Not rated", muted text with no fill or outline. `best` merges the "best for" tag of the same area into
-/// this one ("RAIDS · Good · best as Tyranitar (Shadow)", "GL · Top · best: Flareon 97.2%"; the words come from `BoxInsight.bestText`).
+/// `worth` nil is a copy the advice has no rating for: "Not rated", muted text with no fill or outline.
 struct WorthTag: View {
     let activity: BoxInsight.Activity
     let worth: LeaguePanel.Worth?
-    var best: String? = nil
     /// False on a card that already names its activity: the chip then reads the rating alone ("TOP"), in the same three shapes.
     var showsActivity = true
     @Environment(\.accent) private var accent
@@ -74,13 +72,9 @@ struct WorthTag: View {
         worth == .ok ? (fadedTint, fadedBorder) : (1, nil)
     }
 
-    static func detail(_ worth: LeaguePanel.Worth?, best: String?) -> String {
-        (worth?.label ?? "Not rated") + (best.map { " · " + $0 } ?? "")
-    }
-
     var body: some View {
         let ink = activity.ink(accent), style = Self.style(for: worth)
-        let detail = showsActivity ? Self.detail(worth, best: best) : nil
+        let detail = showsActivity ? (worth?.label ?? "Not rated") : nil
         let label = showsActivity ? activity.tagLabel : (worth?.label ?? "Not rated").uppercased()
         switch worth {
         case .strong?: SoftTag(label: label, detail: detail, ink: ink, tint: activity.tint(accent))

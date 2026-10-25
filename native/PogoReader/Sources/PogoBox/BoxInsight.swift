@@ -35,6 +35,7 @@ public struct BoxInsight {
         /// The fit tag in `areas` order; nil where the advice has none.
         public var fit: [LeaguePanel.Worth?]
         /// The areas the advice calls this copy the best of its species for, each with the table entry it is rated as (a Shadow copy's name says so; nil for Max).
+        /// The app no longer reads this (the species page shows places instead); kept as PogoBox API for the tests and the later design pass.
         public var best: [BestTag] = []
         /// The sentence a tap on the copy's tag opens, kept here with the tags so that a list rebuilt from this insight never needs the advice: in `areas` order,
         /// and in the order of `slots`.
@@ -111,6 +112,7 @@ public struct BoxInsight {
     /// What a chip's merged tag adds once the copy is also its species' best for the same area: "best as Tyranitar (Shadow)" for an activity (the engine's own `as`
     /// text, Shadow-suffixed), "best: Flareon 97.2%" for a league (the tile's member and roll). It carries no count: the engine ranks per resolved species, so a plain
     /// and a Shadow copy of one title are each their own best. nil where the copy is not the best for it.
+    /// The app no longer reads this (the species page shows places instead); kept as PogoBox API for the tests and the later design pass.
     public func bestText(of id: String, title: String, _ a: Activity, pogoAssist: Bool) -> String? {
         if let key = a.league {
             guard tile(title: title, league: key, pogoAssist: pogoAssist)?.copyId == id, let slot = copies[id]?.slot(key, pogoAssist: pogoAssist), slot.status == .fits else { return nil }

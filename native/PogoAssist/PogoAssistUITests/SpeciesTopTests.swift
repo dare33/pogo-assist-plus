@@ -66,8 +66,21 @@ final class SpeciesTopTests: XCTestCase {
         XCTAssertTrue(first.exists)
         XCTAssertEqual(cp(first.label), cp(raids.label), "card \(raids.label) vs row \(first.label)")
         sleep(1); shot("lane-b-section")
+        // The copy the card opens is the one the row says is first: its CP and its IVs are on the page.
+        let rowLabel = first.label, rowIVs = rowLabel.range(of: "[0-9]+/[0-9]+/[0-9]+", options: .regularExpression).map { String(rowLabel[$0]) }
         raids.tap()
         XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5), "the card opens the copy")
+        let rowCP = try XCTUnwrap(cp(rowLabel)), page = app.staticTexts.matching(NSPredicate(format: "label == %@", rowCP)).firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 5), "the opened page shows \(rowCP), the place-1 row's CP (\(rowLabel))")
+        if let rowIVs {
+            let parts = rowIVs.split(separator: "/").map(String.init)
+            for (bar, value) in zip(["Attack", "Defence", "HP"], parts) {
+                let hit = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", bar, value)).firstMatch
+                XCTAssertTrue(hit.exists, "and its IVs \(rowIVs): \(bar) \(value)")
+            }
+        } else {
+            XCTAssertTrue(app.staticTexts["IVs not read"].exists, "a copy whose IVs the row does not show reads the same on its page")
+        }
         app.buttons["Back"].firstMatch.tap()
         XCTAssertTrue(copies(app).firstMatch.waitForExistence(timeout: 5))
     }
@@ -90,8 +103,9 @@ final class SpeciesTopTests: XCTestCase {
     }
 
     /// The section does not move when a chip filters and orders the list below it: the same cards for the same copies, and each copy keeps its places, under the Raids chip
-    /// for two species. (No sample species changes its order under a chip: its ratings fall in the same order as its IVs. That the places take no chip as input is
-    /// pinned in BoxTopTests, where `top` has no chip argument at all.)
+    /// for two species. (No sample species changes its row order under a chip, checked on 26 Oct 2026 for every one with two or more copies, under all seven chips: Lapras,
+    /// Meowscarada, Moltres, Staraptor, Xerneas and Zamazenta (Hero) rate in the same order as their IVs. So "cards and places unchanged while the rows re-sort" rests on the
+    /// unit tests: BoxTopTests, where `top` has no chip argument at all, and BoxInsightStoreTests for the order itself.)
     func testTheSectionIsTheSameUnderAChip() throws {
         let app = launchPopulated()
         // A chip keeps only the species that have a copy for it, so each chip is paired with a species that has one.
@@ -155,9 +169,23 @@ final class SpeciesTopTests: XCTestCase {
         XCTAssertFalse(app.buttons["species-best-raids"].exists, "no longer a button")
         raids.tap()
         XCTAssertFalse(app.buttons["Fix a value"].exists, "a tap on a card opens nothing in Select mode")
+        XCTAssertTrue(raids.label.hasSuffix("not available while selecting"), "VoiceOver is told the card is inert: \(raids.label)")
         XCTAssertTrue(app.buttons["Cancel"].exists, "still selecting")
         XCTAssertTrue(copies(app).firstMatch.exists)
         sleep(1); shot("lane-b-select")
+    }
+
+    /// At the default size two cards sit side by side, and a third goes under them (Zamazenta has three).
+    func testAtTheDefaultSizeTheCardsAreTwoAcross() throws {
+        let app = launchPopulated()
+        openSpecies(app, "Zamazenta")
+        XCTAssertTrue(app.descendants(matching: .any)["species-best"].waitForExistence(timeout: 10))
+        let all = cards(app)
+        XCTAssertGreaterThanOrEqual(all.count, 2, "Zamazenta has two or more cards in the sample")
+        XCTAssertEqual(all[0].frame.minY, all[1].frame.minY, accuracy: 1, "the first two share a row")
+        XCTAssertGreaterThanOrEqual(all[1].frame.minX, all[0].frame.maxX - 0.5, "side by side")
+        XCTAssertLessThan(all[0].frame.width, app.frame.width * 0.7, "half a row each, not full width")
+        if all.count > 2 { XCTAssertGreaterThanOrEqual(all[2].frame.minY, all[0].frame.maxY - 0.5, "the third is on the next row") }
     }
 
     /// At the largest accessibility size the cards are one column and nothing runs off the screen.
@@ -167,10 +195,10 @@ final class SpeciesTopTests: XCTestCase {
         app.launchArguments = ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
         XCTAssertTrue(rows(app).firstMatch.waitForExistence(timeout: 20))
-        openSpecies(app, "Charizard")
+        openSpecies(app, "Zamazenta")
         XCTAssertTrue(app.descendants(matching: .any)["species-best"].waitForExistence(timeout: 10))
         let all = cards(app)
-        XCTAssertGreaterThanOrEqual(all.count, 1)
+        XCTAssertGreaterThanOrEqual(all.count, 2, "Zamazenta has two or more cards in the sample, so the stacking is real")
         for c in all {
             XCTAssertGreaterThanOrEqual(c.frame.minX, -0.5, c.identifier)
             XCTAssertLessThanOrEqual(c.frame.maxX, app.frame.width + 0.5, "\(c.identifier) is not clipped on the right")
@@ -184,7 +212,7 @@ final class SpeciesTopTests: XCTestCase {
     func testLightAndDarkScreens() throws {
         for mode in ["light", "dark"] {
             let app = launchPopulated(["-appearance", mode])
-            openSpecies(app, "Moltres")
+            openSpecies(app, "Zamazenta")
             XCTAssertTrue(app.descendants(matching: .any)["species-best"].waitForExistence(timeout: 10))
             sleep(1); shot("lane-b-\(mode)")
             app.terminate()
