@@ -55,12 +55,12 @@ struct SoftTag: View {
 /// The Top / Good / Weak tag for an activity, three shapes: Top is the activity's ink on its tint; Good is the same, lighter: the tint at half strength with a 1 pt border in the ink at 40% (Rocket's old middle rating was
 /// graphite on grey, near-identical to Weak); Weak is a plain outline in `Theme.line` with `Theme.muted` text and no fill. `Theme.muted` (6A7085) is 4.9:1 on
 /// `Theme.surface` (white) in light mode, over the 4.5:1 the small text needs (computed with `Theme.contrast`; the row it sits on is `Theme.surface`).
-/// `worth` nil is a copy the advice has no rating for: "Not rated", muted text with no fill or outline. `best` merges the "best for" tag of the same area into
-/// this one ("RAIDS · Good · best as Tyranitar (Shadow)", "GL · Top · best: Flareon 97.2%"; the words come from `BoxInsight.bestText`).
+/// `worth` nil is a copy the advice has no rating for: "Not rated", muted text with no fill or outline.
 struct WorthTag: View {
     let activity: BoxInsight.Activity
     let worth: LeaguePanel.Worth?
-    var best: String? = nil
+    /// False on a card that already names its activity: the chip then reads the rating alone ("TOP"), in the same three shapes.
+    var showsActivity = true
     @Environment(\.accent) private var accent
     /// The middle rating is a lighter version of the top one everywhere (Greg, 25 Oct 2026): the tint at half strength and a faded ink border, the text still the
     /// full ink (more contrast, not less: a lighter ground under the same text). These are how much of the tint and of the ink it keeps.
@@ -72,18 +72,33 @@ struct WorthTag: View {
         worth == .ok ? (fadedTint, fadedBorder) : (1, nil)
     }
 
-    static func detail(_ worth: LeaguePanel.Worth?, best: String?) -> String {
-        (worth?.label ?? "Not rated") + (best.map { " · " + $0 } ?? "")
+    var body: some View {
+        let ink = activity.ink(accent), style = Self.style(for: worth)
+        let detail = showsActivity ? (worth?.label ?? "Not rated") : nil
+        let label = showsActivity ? activity.tagLabel : (worth?.label ?? "Not rated").uppercased()
+        switch worth {
+        case .strong?: SoftTag(label: label, detail: detail, ink: ink, tint: activity.tint(accent))
+        case .ok?: SoftTag(label: label, detail: detail, ink: ink, tint: activity.tint(accent).opacity(style.tintOpacity), border: ink.opacity(style.borderOpacity ?? 0))
+        case .weak?: SoftTag(label: label, detail: detail, ink: Theme.muted, tint: .clear, border: Theme.line)
+        case nil: SoftTag(label: label, detail: detail, ink: Theme.muted, tint: .clear)
+        }
     }
+}
+
+/// A place on the species page: "GL 1", "RAIDS 2", the activity's ink on its tint. A place is not a rating, so it is always the full tint (the rating tag stays the
+/// two-shade one); the label is the same caps label as the activity's tags.
+struct RankMarker: View {
+    let activity: BoxInsight.Activity
+    let place: Int
+    @Environment(\.accent) private var accent
 
     var body: some View {
-        let ink = activity.ink(accent), detail = Self.detail(worth, best: best), style = Self.style(for: worth)
-        switch worth {
-        case .strong?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent))
-        case .ok?: SoftTag(label: activity.tagLabel, detail: detail, ink: ink, tint: activity.tint(accent).opacity(style.tintOpacity), border: ink.opacity(style.borderOpacity ?? 0))
-        case .weak?: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear, border: Theme.line)
-        case nil: SoftTag(label: activity.tagLabel, detail: detail, ink: Theme.muted, tint: .clear)
-        }
+        Text("\(activity.tagLabel) \(place)")
+            .font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.06 * 11).monospacedDigit()
+            .foregroundStyle(activity.ink(accent))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(activity.tint(accent), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

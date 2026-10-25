@@ -138,8 +138,11 @@ final class ListScreensTests: XCTestCase {
         row(app, "Charizard").tap()
         let copy = app.buttons.matching(identifier: "pokemon-row").firstMatch
         XCTAssertTrue(copy.waitForExistence(timeout: 5))
-        XCTAssertTrue(copy.label.contains("Best for Master League: Charizard 97.1 percent"), copy.label)
-        XCTAssertTrue(copy.label.contains("Best for Raids as Mega Charizard Y"), copy.label)
+        // The numbered places replace the old "best for" tags: the copies that are first for a use say so in their label, and the card carries the member.
+        func placed(_ words: String) -> Bool { app.buttons.matching(identifier: "pokemon-row").matching(NSPredicate(format: "label CONTAINS[c] %@", words)).count > 0 }
+        XCTAssertFalse(placed("for Master League"), "Charizard's Master League copy is Weak, so it is never numbered")
+        XCTAssertTrue(placed("number 1 for Raids"), "a copy is first for Raids")
+        XCTAssertFalse(copy.label.contains("Best for"), copy.label)
         XCTAssertTrue(app.staticTexts["tags-note"].exists)
         XCTAssertFalse(app.buttons["pokemon-tag"].exists, "no per-copy tag without a chip")
         XCTAssertEqual(app.staticTexts["species-order"].label, "Best IVs first")
@@ -161,7 +164,8 @@ final class ListScreensTests: XCTestCase {
         let rank = { (t: String) in t.hasPrefix("Top") ? 0 : t.hasPrefix("Good") ? 1 : 2 }
         XCTAssertEqual(tags.map(rank), tags.map(rank).sorted(), "Weak last: " + tags.joined(separator: " | "))
         XCTAssertTrue(tags.contains { $0.hasPrefix("Weak") })
-        XCTAssertTrue(tags.contains { $0.contains(", best as ") }, "the best-of tag for the area is merged into the status tag: " + tags.joined(separator: " | "))
+        XCTAssertFalse(tags.contains { $0.contains(", best") }, "the status tag no longer carries the merged best-of text: " + tags.joined(separator: " | "))
+        XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").matching(NSPredicate(format: "label CONTAINS[c] %@", "number 1 for Raids")).count > 0, "the first copy for Raids is marked under the chip")
         let weak = app.buttons.matching(NSPredicate(format: "identifier == 'pokemon-tag' AND label BEGINSWITH 'Weak'")).firstMatch
         weak.tap()
         let line = app.staticTexts["pokemon-tag-line"]
