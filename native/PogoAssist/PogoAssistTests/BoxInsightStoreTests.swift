@@ -371,17 +371,28 @@ final class ListTagColourTests: XCTestCase {
         }
     }
 
-    /// The activity ink on the half-strength tint, over the page's surface, both appearances, every activity (page, list rows and species page share `WorthTag`), and the card's green.
-    func testTheLighterMiddleRatingKeepsFourAndAHalfToOne() {
+    /// The three tags' text on the ground each draws, over the page's surface, both appearances, every activity and every accent the app offers (page, list rows and
+    /// species page share `WorthTag`): Top is the ink on the full tint, Good the same ink on the lighter tint, Weak the muted text on no fill. The card's green is checked too.
+    /// Good is pinned as lighter than Top (a smaller tint strength, a different resolved ground) and as carrying its border, so a change that made it the same as Top fails here.
+    func testTheThreeRatingsKeepFourAndAHalfToOneAndGoodStaysLighter() {
         let activities = BoxInsight.Activity.allCases   // every tag the lists and the page draw, the leagues in their own colours
+        XCTAssertLessThan(WorthTag.fadedTint, 1, "Good's tint is weaker than Top's")
+        XCTAssertGreaterThan(WorthTag.fadedBorder, 0, "Good carries its border")
         for dark in [false, true] {
             let surface = resolve(Theme.surface, dark)
-            for a in activities {
-                let tint = over(resolve(a.tint(.blue), dark), surface, opacity: WorthTag.fadedTint)
-                XCTAssertGreaterThanOrEqual(ratio(resolve(a.ink(.blue), dark), tint), 4.5, "\(a) dark \(dark)")
+            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.muted, dark), surface), 4.5, "Weak: muted text on the surface, dark \(dark)")
+            for accent in Accent.allCases {
+                for a in activities {
+                    let ink = resolve(a.ink(accent), dark), full = over(resolve(a.tint(accent), dark), surface)
+                    let good = over(resolve(a.tint(accent), dark), surface, opacity: WorthTag.fadedTint)
+                    XCTAssertGreaterThanOrEqual(ratio(ink, full), 4.5, "Top: \(a) \(accent) dark \(dark)")
+                    XCTAssertGreaterThanOrEqual(ratio(ink, good), 4.5, "Good: \(a) \(accent) dark \(dark)")
+                    XCTAssertNotEqual(lum(good), lum(full), "Good's ground is not Top's: \(a) \(accent) dark \(dark)")
+                }
             }
-            let card = over(resolve(Theme.greenTint, dark), resolve(Theme.surface2, dark), opacity: WorthTag.fadedTint)
-            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), card), 4.5, "league card, dark \(dark)")
+            let tint = resolve(Theme.greenTint, dark), base = resolve(Theme.surface2, dark)
+            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), over(tint, base)), 4.5, "league card Top, dark \(dark)")
+            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), over(tint, base, opacity: WorthTag.fadedTint)), 4.5, "league card Good, dark \(dark)")
         }
     }
 }
