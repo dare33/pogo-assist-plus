@@ -51,9 +51,46 @@ final class GuideScreensTests: XCTestCase {
         }
     }
 
+    /// Luminance (0 dark, 1 light) of the Settings sheet's own background, read from a screenshot: a point in the padding of the Mode panel, just
+    /// right of the mode capsule, so it survives layout changes. The panel is white in light and #181C26 in dark. Whole-screen comparisons cannot do this
+    /// job: the selected-mode capsule and the status-bar clock change the bytes whatever the colour scheme is.
+    private func sheetLuminance(_ app: XCUIApplication) -> Double? {
+        let auto = app.buttons["mode-auto"]
+        guard auto.exists else { return nil }
+        let image = XCUIScreen.main.screenshot().image
+        guard let cg = image.cgImage else { return nil }
+        let screenWidth = app.windows.firstMatch.frame.width
+        let scale = CGFloat(cg.width) / screenWidth   // points to pixels, from the screenshot itself
+        let x = Int((auto.frame.maxX + 12) * scale), y = Int(auto.frame.midY * scale)
+        guard x >= 0, y >= 0, x < cg.width, y < cg.height, let px = cg.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
+        var rgba = [UInt8](repeating: 0, count: 4)
+        let drew = rgba.withUnsafeMutableBytes { buf -> Bool in
+            guard let ctx = CGContext(data: buf.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            ctx.draw(px, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard drew else { return nil }
+        return (0.2126 * Double(rgba[0]) + 0.7152 * Double(rgba[1]) + 0.0722 * Double(rgba[2])) / 255
+    }
+
+    /// Polls until the sheet background is dark (or light), for up to `seconds`; returns the last reading.
+    private func waitForSheet(_ app: XCUIApplication, dark: Bool, seconds: TimeInterval) -> Double? {
+        let end = Date().addingTimeInterval(seconds)
+        var last: Double?
+        repeat {
+            last = sheetLuminance(app)
+            if let l = last, dark ? l < 0.5 : l > 0.5 { return l }
+            Thread.sleep(forTimeInterval: 0.5)
+        } while Date() < end
+        return last
+    }
+
     func testAppearanceSettings() throws {
+        // The system starts light whatever the simulator was in; set before launch so it is in place from the first frame.
+        XCUIDevice.shared.appearance = .light
         let app = XCUIApplication()
-        app.launchArguments = ["-uitest-reset"]
+        app.launchArguments = ["-uitest-reset"]   // clears UserDefaults, so the stored mode starts at Auto
         app.launch()
         let field = app.textFields["Trainer name"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
@@ -79,10 +116,29 @@ final class GuideScreensTests: XCTestCase {
         app.buttons["accent-berry"].tap()
         XCTAssertTrue(app.buttons["accent-berry"].isSelected && !app.buttons["accent-blue"].isSelected, "the accent changes at once")
         shot("a-03-berry")
+        reveal(app, app.buttons["mode-auto"])
+        let start = waitForSheet(app, dark: false, seconds: 5)
+        XCTAssertNotNil(start, "the sheet background could not be sampled")
+        XCTAssertGreaterThan(start ?? 0, 0.5, "Auto on a light system starts light (luminance \(start ?? -1))")
+
         app.buttons["mode-dark"].tap()
         XCTAssertTrue(app.buttons["mode-dark"].isSelected)
-        sleep(1)
+        let dark = waitForSheet(app, dark: true, seconds: 5)
         shot("a-04-dark")
+        XCTAssertLessThan(dark ?? 1, 0.5, "Dark makes the open sheet dark (luminance \(dark ?? -1))")
+
+        // Dark, then Auto with the Settings sheet still open, on a LIGHT system: the sheet must go light again.
+        reveal(app, app.buttons["mode-auto"])
+        app.buttons["mode-auto"].tap()
+        XCTAssertTrue(app.buttons["mode-auto"].isSelected)
+        let autoLight = waitForSheet(app, dark: false, seconds: 5)
+        shot("a-04b-auto-system-light")
+        XCTAssertGreaterThan(autoLight ?? 0, 0.5, "Dark then Auto on a light system leaves the sheet light (luminance \(autoLight ?? -1))")
+
+        // A LIVE system change with Auto selected and the sheet open is not asserted: `XCUIDevice.shared.appearance = .dark` reached the app
+        // within 10 s in every run of this test alone (24 Oct, 5 of 5, both starting appearances) and not in the full-suite run of the same day (the sample stayed light for the 10 s),
+        // so the harness, not the app, is what varies. With the override back at .unspecified, following the system is the OS's job;
+        // check it by hand with `xcrun simctl ui <id> appearance dark` while this screen is open.
         reveal(app, app.buttons["help-guide"])
         app.buttons["help-guide"].tap()
         XCTAssertTrue(app.buttons["help-guide"].isSelected && !app.buttons["help-standard"].isSelected)

@@ -179,15 +179,21 @@ final class ScanDoneTests: XCTestCase {
         discard.tap()
         app.buttons["Discard scan"].tap()
         XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 10))
-        // Read A again from Settings > Scans: it reads A's own log (51), not B's.
+        // Read A again from Settings > History and scans > Scans: it reads A's own log (51), not B's.
         app.buttons["More"].tap()
         let settings = app.buttons["Settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()
         if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 8), "Settings did not open")
+        let historyRow = app.buttons["settings-history-row"]
+        for _ in 0..<6 where !(historyRow.exists && historyRow.isHittable) { app.swipeUp() }
+        XCTAssertTrue(historyRow.waitForExistence(timeout: 5))
+        historyRow.tap()
+        let scansTab = app.buttons["history-tab-scans"]
+        XCTAssertTrue(scansTab.waitForExistence(timeout: 5))
+        scansTab.tap()
         let actions = app.buttons["Scan actions"]
-        for _ in 0..<6 where !(actions.exists && actions.isHittable) { app.swipeUp() }
         XCTAssertTrue(actions.waitForExistence(timeout: 5))
         actions.tap()
         let again = app.buttons["Read again with the latest rules"]
