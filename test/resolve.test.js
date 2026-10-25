@@ -41,3 +41,32 @@ test('families and variants', () => {
   assert.equal(baseSpeciesId(gm, 'rhyperior_shadow'), 'rhyperior');
   assert.deepEqual(megaIdsOf(gm, 'charizard'), ['charizard_mega_x', 'charizard_mega_y']);
 });
+
+test('a Shadow copy resolves to the _shadow id whatever the name sorts like', () => {
+  // The lookup key is sorted tokens. Before the fix " shadow" was appended unsorted, so names sorting after "shadow"
+  // (Tyranitar, Victreebel) missed the index and resolved to the plain species with the shadow flag set.
+  assert.equal(id('Tyranitar', { shadow: true }), 'tyranitar_shadow');
+  assert.equal(id('Victreebel', { shadow: true }), 'victreebel_shadow');
+  assert.equal(id('Alakazam', { shadow: true }), 'alakazam_shadow');
+  assert.equal(id('Shadow Tyranitar'), 'tyranitar_shadow');
+  assert.equal(id('Weezing', { form: 'Galarian', shadow: true }), 'weezing_galarian_shadow');
+  assert.equal(id('Sneasel', { form: 'Hisuian', shadow: true }), 'sneasel_hisuian_shadow');
+  // Poke Genie writes form "Normal" for a plain form; the Shadow lookup must still be sorted then.
+  assert.equal(id('Tyranitar', { form: 'Normal', shadow: true }), 'tyranitar_shadow');
+  assert.equal(id('Zapdos', { form: 'Normal', shadow: true }), 'zapdos_shadow');
+});
+
+test('an unreleased Shadow resolves to the plain species, flagged only when the name says Shadow', () => {
+  // Zekrom has no Shadow in the game master. On the flag path (a box copy) the plain name matches before the unreleased-Shadow
+  // fallback, so flags.unreleasedShadow is not set there; with "Shadow" in the name text (tier-list entries such as
+  // "Shadow Roserade") the plain key misses and the fallback runs and sets it.
+  assert.equal(gm.byId.has('zekrom_shadow'), false);
+  const r = resolveSpecies(gm, 'Zekrom', { shadow: true });
+  assert.equal(r.speciesId, 'zekrom');
+  assert.equal(r.flags.shadow, true);
+  assert.equal(r.flags.unreleasedShadow, undefined);
+  const named = resolveSpecies(gm, 'Shadow Zekrom');
+  assert.equal(named.speciesId, 'zekrom');
+  assert.equal(named.flags.shadow, true);
+  assert.equal(named.flags.unreleasedShadow, true);
+});

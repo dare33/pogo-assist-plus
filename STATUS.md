@@ -1,6 +1,90 @@
 # Status — Pogo Assist+
 
 **24 Oct 2026, branch `feat/settings-info-rows` (PR 5 of 5 of the design handover, stacked on `feat/settings-history-scans`, not merged): Settings "i" rows.** The explanatory lines under Mega Pokémon and Restore previous box are gone from the flow; each row has a 24 pt "i" (`InfoButton`) that opens the text inline as an `ExplainerCard` (accent tint, radius 16; `RankingExplainer` now uses the same card). As in Prototype v2, the Mega row's "i" sits straight after its title (8 pt from the title's text frame by construction, as the overlay mirrors the row; checked by eye at the default size, AX3 and AX5 on the iPhone 17), with the value and chevron at the trailing edge, and the Restore row's "i" is at the trailing edge. The Mega "i" is drawn over a gap the row's label leaves, outside the Menu's label, so a tap on it never opens the menu and a tap elsewhere on the row still does; the overlay is a second, hidden copy of the whole row (title, value, chevron, paddings) so both copies wrap alike. The Restore "i" is outside its Button, so it works while the row is disabled. At accessibility sizes the Mega row wraps: the title and "i" on the first line (at AX5 the title wraps to two lines and the "i" sits beside that block, vertically centred), value and chevron on the next. The Restore "i" has its circle's right edge 16 pt in at every size. Local state, not persisted. Identifiers: `settings-mega-info`, `settings-mega-explainer`, `settings-restore-info`, `settings-restore-explainer`. Deviation from the prototype: the explainer card is drawn inside the panel beneath its row (the prototype shows it as a separate block below the panel). Verified on greg-mb-16, iPhone 17 simulator, iOS 27.0: the unsigned simulator build succeeded; `GuideScreensTests/testSettingsInfoRows` (cards absent, open, text, close, the "i" does not open the menu, Restore button disabled while its "i" is enabled, the Mega row still opens its menu and tapping Normal closes it, light and dark), `testSettingsInfoRowsLargeText` (AX3, `AccessibilityXL`), `testSettingsInfoRowsLargestText` (AX5, `AccessibilityXXXL`; the account is made at the normal size first because the first screen does not fit at AX5) and `testAppearanceSettings` passed; the AX screenshots were read (no word breaks mid-word). Some earlier AX attempts failed or crashed the test runner (a card that did not appear, a runner restart); another xcodebuild was driving the same simulator at the time (the dd-hub xcresults overlap 00:56 to 01:01), the likely cause, and the same tests passed when re-run with no other run on the iPhone 17. Known limit: at AX5 the UI test could not tap the Trainer name field on the welcome screen (it creates the account at the normal size first), which may mean a real user at AX5 cannot create an account; not checked. Not verified: a second accent, iPad, a real device. Paired review (Opus + Sol): three rounds (placement and AX layout, the overlay geometry, the mirrored overlay), the last confirming the code and the tests; passed. The final tidy (the Restore "i" inset, wording) was build-checked and one UI test re-run, not re-reviewed.
+**23 Oct 2026, branch `feat/league-ui-leagues-panel` (PR 2 of 5 of the design handover, stacked on the PR 1 branch, not merged): the Pokémon page.** New Leagues panel (pick cards, league view with the option list, the app-wide ranking switch choosing `pick` or `experimental`), the game search as a chip beside the CP line, a Settings circle in the header, three PvP IV figures in the IVs panel, the Shadow footnote only while `ScanRow.shadow` is nil. Its logic is `PogoBox/LeaguePanel.swift` (replaces `LeagueText`), pinned by `LeaguePanelTests`. `leaguesFor` now keeps `moves` on every option PvPoke ranks; advice cache version 9; `pogo-core.js` rebuilt. The review gate is not passed; not verified on a device.
+**26 Oct 2026 (AEDT): a fifth build slot, `main-2` (branch `chore/build-slot-main-2`, draft PR #22 stacked on #18, not merged).** Greg approved a second implementer slot after builders queued on `main` all of 25 Oct. `xcb.sh`, `sim-temp.sh` and `build-clean.sh` accept and clean `main-2` like `main`; `native/README.md` and `CLAUDE.md` name it. Verified: `bash -n` on the three scripts; `xcb.sh main-2 -version` built in the fixed location under `main-2.lock`; an unknown slot is refused; the Opus reviewer ran all five slots with a fake xcodebuild on a scratch root (main and main-2 concurrently, the cleaner skipping a held main-2). Paired review: both NEEDS-FIX on README wording only, folded.
+
+**25 Oct 2026: build lock on `/usr/bin/lockf` (branch `claude/jolly-hamilton-9e9dc8`, for a draft PR to `main`, not merged; the follow-up Greg
+agreed to the build-hygiene change, which merged as #17, d6f0c17).** The per-slot lock in `native/tools/xcb.sh` and
+`native/tools/build-clean.sh` is no longer a `mkdir` directory with a pid file and a stale-lock reclaim under a second mutex; it
+is a kernel lock (`flock`, through `/usr/bin/lockf`) on an empty, permanent `<location>/<slot>.lock` file that the helper opens
+on a descriptor the xcodebuild it starts inherits, so the lock lasts as long as the helper's shell or xcodebuild, whichever lives
+longer, and the kernel releases it: no pid file, no staleness judgement, no reclaim mutex (about forty lines gone from the two
+scripts). The helpers' interface is unchanged; the refusals are unchanged with one added (a lock directory left by the earlier
+scheme, which `xcb.sh` refuses and the cleaner skips, each saying to remove it by hand when nothing is building); the exit codes
+are unchanged except where they were wrong (below). The messages that named a pid no longer do (`xcb.sh`'s waiting message, now
+first printed after 30 s blocked rather than at once; the cleaner's "in use"); the cleaner has three new messages (a lock file it
+cannot open, a `lockf` failure other than "held", the old-scheme lock directory) and `xcb.sh` two (the lock file cannot be opened,
+a `lockf` failure other than "held"); the old scheme's "reclaiming stale lock", "another run is reclaiming" and "taken just now"
+are gone with it. Two pre-existing defects found by the race proof and the review,
+fixed: `adopt_root` in `xcb.sh` and `sim-temp.sh` could refuse a root because a racing caller had just written the
+`.pogo-build-root` marker, which was not in the list of names the helpers make (one of twelve racers died that way); and a signal
+arriving between starting xcodebuild and recording its pid, or after the build had ended, made the helper exit 1 instead of
+130/143/129 (the traps now also cover a signal while waiting for the slot). Verified by the session that made the change (not by
+Greg), on the MacBook (mb-16, Xcode 27.1 27A9275, macOS 26.6), against the scripts in the commit that carries this entry (`xcb.sh`:
+comment blocks reworded afterwards, the file as run reconstructed to its recorded hash; the race suite re-run on the final
+scripts by the confirmation reviewer): `build-clean.sh`
+emptied the real location's `main` slot (781 MB) with nothing building, then a cold PogoAssist simulator build through `xcb.sh
+main` succeeded (2 min 35 s) with its output only under that slot, `lsof` sampled every five seconds showing the lock held by the
+helper's shell and xcodebuild alone (never the build service or a compiler) and free with no holder the moment the helper
+returned, and nothing new in the repo or the scratchpad beyond the logs; with a fake `xcodebuild` under a scratch root (27 checks),
+twelve callers racing for one slot ran strictly one at a time with every exit 0, a `kill -9` of the helper's shell left the slot
+held until the build ended while a second caller waited for it, an INT to the foreground helper stopped the build and freed the
+lock with exit 130 (TERM: 143), an INT to a helper waiting for the slot ended the wait with exit 130 and built nothing, the
+cleaner skipped the slot while a build held it (the real run and `-n` alike), emptied it once free and left the lock file, went
+on to the other slots past a lock file it could not open, eight callers interleaved with three cleaner runs never overlapped, a
+hold longer than 30 s produced the waiting message, every refusal fired as before plus the two new ones for an old-scheme lock
+directory, the dry run created no lock file, and the build's exit status passed through. `npm test`: 244 tests, 240 pass, 4
+skipped, 0 fail, unchanged. Review gate: paired round (Opus reviewer; Sol through the Codex wrapper), both NEEDS-FIX, every
+finding folded (the mixed-version wait, the launch-window signal, the cleaner's open failure and dry-run misreport, the
+descriptor-inheritance claim reworded to what was measured, wording in this entry and the README), then a paired confirmation
+round: Opus CONFIRMED-OK on every file (three documentation nits), Sol CONFIRMED-OK on three files and NEEDS-FIX on two for
+wording (this entry's "refusals and exit codes unchanged", `xcb.sh`'s opening comment); those five wording edits, in comments,
+this entry and nothing executable, were made after that round and are the only unreviewed lines. The findings are in the pull
+request that carries this branch. Known limits (the scripts' comments and the README): a
+helper from before this change, in a checkout that has not taken it, cannot `mkdir` over the lock file and waits forever without
+building (safe; update that checkout; the lock directory it may leave is refused, not judged); a `kill -9` of xcodebuild frees
+the slot while a compiler it left behind may still write there, as the pid scheme did; the lock file is never removed by the
+helpers (removing one in use would let two builds run), so it goes only with `rm -rf` of the whole location when nothing is
+building or waiting to build; a signal sent to a waiting helper's shell alone takes effect within 30 s, when its `lockf` returns;
+two sessions editing `sims.txt` at the same instant; the output-path refusal is a guard rail, not a proof.
+
+**25 Oct 2026: build hygiene (branch `claude/build-hygiene-e6f0da`, for a draft PR to `main`, not merged).** A standing rule, in
+`CLAUDE.md` ("Build hygiene") and `native/README.md` ("Build hygiene"), after 143 GB of per-run Xcode derived-data folders
+were found in sessions' scratchpads under `/private/tmp/claude-*`: every command-line `xcodebuild` from a session uses the
+fixed, reused `~/Library/Developer/Xcode/DerivedData/pogo-claude-build/<slot>` (slots `main`, `review-a`, `review-b`,
+`merge`), one `xcodebuild` per slot at a time behind a `mkdir` lock that names the running xcodebuild; `swift test` in the
+package's own git-ignored `.build` or `swift-<slot>`; reviewers' read-only copies at `review-copy-a` / `review-copy-b`;
+temporary simulators deleted by the run that cloned them and never two test runs on one simulator; the scratchpad for
+small files only. Helpers: `native/tools/xcb.sh <slot> <xcodebuild args>` (slot path, lock, refuses `-derivedDataPath`
+and `SYMROOT`-style overrides), `native/tools/sim-temp.sh create|delete|list` (records clones in `sims.txt`, drops a
+record only once the clone is gone), `native/tools/build-clean.sh` (empties the location slot by slot under each lock,
+deletes recorded clones that are not booted, refuses a root the building helpers never marked). `native/tools/compare-all.sh` now builds
+through the helper. Verified by the session that made the change (not by Greg), on the MacBook (mb-16, Xcode 27.1
+27A9275), against the scripts in the commit that carries this entry: the PogoAssist simulator build through `xcb.sh main`
+succeeds with its output only under the fixed location (an earlier attempt, on an earlier version of the script, failed
+with "error closing ... for output" when a DerivedData clean-up of `PogoAssist-*` running in another session deleted the
+folder, then named `PogoAssist-claude`, mid-build; Greg ruled the location be renamed outside that pattern, and every rerun
+succeeded, the last under the final name); with a fake `xcodebuild` under a scratch root, twelve callers racing for a
+slot with a pre-seeded stale lock ran strictly one at a time, eight callers interleaved with three `build-clean.sh` runs
+never overlapped (the cleaner emptied the slot once while free and skipped it twice while held), a `kill -9` of the shell
+left the slot held by the build's own pid until it ended, a pid-less lock older than 60 s was reclaimed, an INT to the
+foreground helper stopped the build and released the lock, every refusal fired (`-derivedDataPath`, `SYMROOT=`, output
+paths outside the rule, an unknown slot, a mistyped cleaner option, a root holding a stranger's folder, the cleaner on an
+unmarked root) and a hand-made `review-copy-a` root was adopted by `xcb.sh`; a clone of the iPhone 17 was created, listed and deleted through `sim-temp.sh`. Review gate: paired round (Opus reviewer, Sol through the Codex wrapper), fold, paired
+confirmation round, fold, then narrow paired re-checks of the folds; the rounds' findings and what remains are in the
+pull request that carries this branch. Agreed follow-up after this PR merges (Greg, 25 Oct): replace the `mkdir` mutex with
+`/usr/bin/lockf`, which ties the lock to the build's own lifetime. Known limits (the scripts' comments and the README): a signal in the instant between launching xcodebuild and writing
+its pid; two parties racing to remove a reclaim mutex left by a crashed reclaimer; two sessions editing `sims.txt` at
+the same instant; the output-path refusal is a guard rail, not a proof.
+Nothing was deleted from
+`/private/tmp` or the old DerivedData folders by this change (the cleanup list is with Greg).
+**24 Oct 2026, branch `fix/shadow-lookup-sort` (from `main`, not merged): Shadow lookup for names sorting after "shadow".** Cause: `resolveSpecies` (`src/gamemaster.js`) built the Shadow key as the sorted token string plus " shadow", but the game-master index is keyed by sorted tokens, so the key matched only names whose tokens all sort before "shadow" (Alakazam, Dratini). A Shadow-flagged copy of Tyranitar, Victreebel, Tyrunt and the like (114 of the 474 Shadow species in the game master) missed `<id>_shadow`, fell through to the plain species id with `flags.shadow` true, and the advisor credited plain tier entries and missed `_shadow` ones. Fix: the key is now `tokenKey(`${text} shadow`)`. No other place composes a Shadow key by hand. Tests in `test/resolve.test.js` (the Shadow-sort test, including form "Normal", fails on the old code at Tyranitar).
+**Consequence, for Greg to decide:** with correct ids a Shadow copy of one of those 114 species now reaches only `_shadow` tier entries, so plain-only raid and Rocket entries it was credited by accident no longer count: a Shadow Swampert loses its Rocket S build and plain Swampert shows as a gap; a Shadow Tyranitar loses Rocket B. The stacked branch `fix/shadow-plain-credit` (on top of this one) restores that credit deliberately; it is a separate decision.
+**Fixture effect** (`fixtures/greg-2026-09-25.pokegenie.csv`, 311 rows, 4 Shadows; against main): one row changes, Shadow Tyrunt (CP 567), whose resolved species goes from `tyrunt` to `tyrunt_shadow` (its id and its embedded game-master record); it has no hits either way. Displayed builds 57 to 57, `allBuilds` 123 to 123, gaps 104 to 104, hygiene 69 to 69. Shadow Dratini, Grubbin and Beldum were already right. A Shadow and a plain copy of an affected species are no longer paired as duplicates or spares (none in this fixture). Only one fixture exists, so no Calcy IV or scan export was compared.
+**`flags.unreleasedShadow`:** on the shadow-FLAG path (a box copy) the plain name matches first, so the flag is not set there (Zekrom has no Shadow and resolves plain with `shadow: true`); the fallback does run when the name text contains "Shadow" ("Shadow Zekrom" gives `unreleasedShadow: true`, as the tier entries "Shadow Roserade", "Shadow Pheromosa" and "Shadow Giratina Origin" rely on). Both pinned.
+**Cache version:** `BoxAdvice.currentVersion` stays 8. Cached advice for a box holding a Shadow copy of one of the 114 affected species is stale until PR 2 (version 9) or PR 3 (version 12) merges.
+Verified locally (greg-mb-16): `npm test` 246 tests, 242 pass, 4 skipped, 0 fail (main baseline 244 / 240 / 4; the cold-cache timing test in `test/leagues.test.js` failed once at 5.96 s while Swift builds ran alongside, and passed on re-run); no existing test pinned the old resolution.
 
 **20 Oct 2026: screenshot import (branch `feat/screenshot-import-fold`, on `feat/screenshot-import`, not merged).** Quick import of Pokémon GO appraisal screenshots, from the app (system photo picker) and from
 Photos (Share > Pogo Assist+), each read once, merged as a partial Add and update and saved as source "screenshot import". Design, rules and limits: `native/README.md`, "Screenshot import". The latest reviews (of the ledger-cap fold) were Opus "ship after fixes" and Sol "do not ship" on small items, which this fold addresses; account-name hardening is deliberately on hold (see the known limits below). **The review gate is not passed.** Verified on the Mac (greg-mb-16, Xcode 27.1): `swift test` in `native/PogoReader`
