@@ -1,5 +1,34 @@
 # Status — Pogo Assist+
 
+**25 Oct 2026: build hygiene (branch `claude/build-hygiene-e6f0da`, for a draft PR to `main`, not merged).** A standing rule, in
+`CLAUDE.md` ("Build hygiene") and `native/README.md` ("Build hygiene"), after 143 GB of per-run Xcode derived-data folders
+were found in sessions' scratchpads under `/private/tmp/claude-*`: every command-line `xcodebuild` from a session uses the
+fixed, reused `~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/<slot>` (slots `main`, `review-a`, `review-b`,
+`merge`), one `xcodebuild` per slot at a time behind a `mkdir` lock that names the running xcodebuild; `swift test` in the
+package's own git-ignored `.build` or `swift-<slot>`; reviewers' read-only copies at `review-copy-a` / `review-copy-b`;
+temporary simulators deleted by the run that cloned them and never two test runs on one simulator; the scratchpad for
+small files only. Helpers: `native/tools/xcb.sh <slot> <xcodebuild args>` (slot path, lock, refuses `-derivedDataPath`
+and `SYMROOT`-style overrides), `native/tools/sim-temp.sh create|delete|list` (records clones in `sims.txt`, drops a
+record only once the clone is gone), `native/tools/build-clean.sh` (empties the location slot by slot under each lock,
+deletes recorded clones that are not booted, refuses a root the building helpers never marked). `native/tools/compare-all.sh` now builds
+through the helper. Verified by the session that made the change (not by Greg), on the MacBook (mb-16, Xcode 27.1
+27A9275), against the scripts in the commit that carries this entry: the PogoAssist simulator build through `xcb.sh main`
+succeeds with its output only under the fixed location (an earlier attempt, on an earlier version of the script, failed
+with "error closing ... for output" when a DerivedData clean-up of `PogoAssist-*` running in another session deleted the
+folder mid-build; every rerun succeeded); with a fake `xcodebuild` under a scratch root, twelve callers racing for a
+slot with a pre-seeded stale lock ran strictly one at a time, eight callers interleaved with three `build-clean.sh` runs
+never overlapped (the cleaner emptied the slot once while free and skipped it twice while held), a `kill -9` of the shell
+left the slot held by the build's own pid until it ended, a pid-less lock older than 60 s was reclaimed, an INT to the
+foreground helper stopped the build and released the lock, every refusal fired (`-derivedDataPath`, `SYMROOT=`, output
+paths outside the rule, an unknown slot, a mistyped cleaner option, a root holding a stranger's folder, the cleaner on an
+unmarked root) and a hand-made `review-copy-a` root was adopted by `xcb.sh`; a clone of the iPhone 17 was created, listed and deleted through `sim-temp.sh`. Review gate: paired round (Opus reviewer, Sol through the Codex wrapper), fold, paired
+confirmation round, fold, then narrow paired re-checks of the folds; the rounds' findings and what remains are in the
+pull request that carries this branch. Known limits (the scripts' comments and the README): a signal in the instant between launching xcodebuild and writing
+its pid; two parties racing to remove a reclaim mutex left by a crashed reclaimer; two sessions editing `sims.txt` at
+the same instant; the output-path refusal is a guard rail, not a proof.
+Nothing was deleted from
+`/private/tmp` or the old DerivedData folders by this change (the cleanup list is with Greg).
+
 **20 Oct 2026: screenshot import (branch `feat/screenshot-import-fold`, on `feat/screenshot-import`, not merged).** Quick import of Pokémon GO appraisal screenshots, from the app (system photo picker) and from
 Photos (Share > Pogo Assist+), each read once, merged as a partial Add and update and saved as source "screenshot import". Design, rules and limits: `native/README.md`, "Screenshot import". The latest reviews (of the ledger-cap fold) were Opus "ship after fixes" and Sol "do not ship" on small items, which this fold addresses; account-name hardening is deliberately on hold (see the known limits below). **The review gate is not passed.** Verified on the Mac (greg-mb-16, Xcode 27.1): `swift test` in `native/PogoReader`
 179 + 65 + 707, 0 failures (1 + 6 skipped); `npm test` 244 tests, 240 pass, 4 skipped (the recordings are not in that checkout), 0 fail; the app builds unsigned with the extension; the picker flow

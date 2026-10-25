@@ -23,3 +23,26 @@ is up to. Read both before working.
   data beyond a Pokémon inventory. Do not add other people's exports without asking them.
 - Personal data policy for the future web page: files are read in the browser and never
   uploaded.
+
+## Build hygiene
+
+Build output from a session never goes in the session scratchpad or in a fresh per-run folder: on
+25 Oct 2026 the per-run derived-data folders sessions had left under `/private/tmp/claude-*` came to
+143 GB. The rule in full is in `native/README.md`, "Build hygiene"; the binding part:
+
+- Every command-line `xcodebuild` goes through `native/tools/xcb.sh <slot> <args...>`, which builds
+  in the fixed, reused `~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/<slot>` (slots:
+  `main`, `review-a`, `review-b`, `merge`) and holds that slot's lock while the build runs. Never
+  pass `-derivedDataPath`; never build under `/private/tmp/claude-*`; a fifth slot is Greg's call.
+  A cold build takes minutes: run it in the background or with a long timeout.
+- `swift build` / `swift test` use the package's own git-ignored `native/PogoReader/.build`, or
+  `--scratch-path ~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/swift-<slot>`.
+- A reviewer that must build a read-only copy copies `native/` (without `.build`) to
+  `~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/review-copy-a` (slot `review-a`) or
+  `review-copy-b` (slot `review-b`) and deletes it when the review is returned.
+- A simulator cloned for a run is made with `native/tools/sim-temp.sh create` and deleted with
+  `sim-temp.sh delete` before that run ends. The standing simulators are iPhone 17 (single UI tests)
+  and iPhone Air (full suites); they are never deleted, and two runs never test on one simulator
+  at once.
+- The scratchpad holds small intermediate files only (briefs, logs, screenshots, JSON diffs).
+  `native/tools/build-clean.sh` empties the fixed location when it is stale and nothing is building.
