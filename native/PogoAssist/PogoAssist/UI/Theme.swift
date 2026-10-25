@@ -53,6 +53,12 @@ enum Theme {
     static let copies = pair(0xE0457B, 0xF06595)
     static let copiesInk = pair(0xB02A5B, 0xFF9EC0)
     static let copiesTint = pair(0xFDE8EF, rgba: (240, 101, 149, 0.18))
+    /// Max battles: a Dynamax-style magenta pink (Greg, 25 Oct 2026; it was the change purple). Distinct from `copies` (a rose). Contrast, computed with
+    /// `Theme.contrast`: the light ink BE1E7E is 5.71:1 with white text on it and 4.84:1 on the light tint FDE6F3; the dark ink FF8FCB is 8.15:1 on
+    /// the dark surface 181C26 (the dark tint is translucent, so the text sits on surface plus 18 per cent pink).
+    static let maxInkLight: UInt32 = 0xBE1E7E
+    static let maxInk = pair(maxInkLight, 0xFF8FCB)
+    static let maxTint = pair(0xFDE6F3, rgba: (255, 110, 190, 0.18))
 
     // MARK: building colours
 
@@ -126,7 +132,7 @@ enum ContentType: String, CaseIterable, Identifiable {
         case .gym: return Theme.greenInk
         case .rocket: return Theme.pair(0x2A3042, 0xB5BBCB)
         case .pvp: return Theme.pair(0x7A2FB5, 0xD1A3FF)
-        case .max: return Theme.changeInk
+        case .max: return Theme.maxInk
         }
     }
     func tint(_ accent: Accent) -> Color {
@@ -136,7 +142,7 @@ enum ContentType: String, CaseIterable, Identifiable {
         case .gym: return Theme.greenTint
         case .rocket: return Theme.pair(0xE9EBF0, rgba: (90, 98, 118, 0.3))
         case .pvp: return Theme.pair(0xEFEBFF, rgba: (156, 131, 255, 0.2))
-        case .max: return Theme.changeTint
+        case .max: return Theme.maxTint
         }
     }
 }
