@@ -230,7 +230,7 @@ test('a copy named Shadow without the flag gets the same credit', () => {
   assert.ok(hitsOf(copy('Shadow Swampert')).some((h) => h.area === 'rocket' && h.tier === 'S' && h.targetId === 'swampert_shadow'));
 });
 
-test('Mega targets are gated on the resolved id: a Shadow by name or by flag gets no Mega credit, a plain copy still does', () => {
+test('Mega targets are gated on the resolver\'s Shadow flag: a Shadow by name or by flag gets no Mega credit, a plain copy still does', () => {
   // Charizard: Mega Charizard Y is a raids/Fire A entry; plain Charizard has a Rocket A entry; charizard_shadow has none of its own.
   const plain = hitsOf(copy('Charizard'));
   assert.ok(plain.some((h) => h.viaMega === 'charizard_mega_y' && h.area === 'raids' && h.targetId === 'charizard'), 'plain Charizard reaches Mega Charizard Y');
@@ -242,6 +242,27 @@ test('Mega targets are gated on the resolved id: a Shadow by name or by flag get
   const flagged = hitsOf(copy('Charizard', { shadow: true }));
   assert.ok(!flagged.some((h) => h.viaMega), 'a flagged Shadow still gets no Mega hit');
   assert.deepEqual(flagged.map((h) => `${h.area}/${h.tier}/${h.targetId}`).sort(), named.map((h) => `${h.area}/${h.tier}/${h.targetId}`).sort(), 'flag and name give the same hits');
+});
+
+test('Mega hits and Mega gaps agree: a name-only Shadow Charizard leaves Mega Charizard Y a gap, a plain one covers it', () => {
+  const named = analyseBox([copy('Shadow Charizard')], ctx);
+  assert.ok(!named.builds.some((b) => b.viaMega), 'no Mega build for the named Shadow');
+  assert.ok(named.gaps.some((g) => g.speciesId === 'charizard_mega_y'), 'Mega Charizard Y (raids/Fire A) is a gap');
+  const plain = analyseBox([copy('Charizard')], ctx);
+  assert.ok(plain.builds.some((b) => b.viaMega), 'plain Charizard has a Mega build');
+  assert.ok(!plain.gaps.some((g) => g.speciesId === 'charizard_mega_y'), 'and no Mega gap');
+});
+
+test('a Shadow flag on a species with no _shadow id still blocks the Mega, in hits and gaps (Lucario: Mega Lucario is raids/Fighting S)', () => {
+  const flagged = analyseBox([copy('Lucario', { shadow: true })], ctx);
+  assert.equal(flagged.pokemon[0].resolved.speciesId, 'lucario', 'no lucario_shadow in the game master');
+  assert.ok(!flagged.pokemon[0].hits.some((h) => h.viaMega), 'a flagged Lucario gets no Mega hit');
+  assert.ok(flagged.gaps.some((g) => g.speciesId === 'lucario_mega'), 'Mega Lucario is a gap');
+  const plain = analyseBox([copy('Lucario')], ctx);
+  assert.ok(plain.pokemon[0].hits.some((h) => h.viaMega === 'lucario_mega'), 'a plain Lucario has the Mega hit');
+  assert.ok(!plain.gaps.some((g) => g.speciesId === 'lucario_mega'), 'and no Mega gap');
+  const both = analyseBox([copy('Lucario', { shadow: true }), copy('Lucario')], ctx);
+  assert.ok(!both.gaps.some((g) => g.speciesId === 'lucario_mega'), 'a plain copy beside the flagged one covers the Mega');
 });
 
 test('gaps: a Shadow covers its plain raid and Rocket entries but not its gym entry', () => {

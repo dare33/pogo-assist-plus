@@ -121,17 +121,18 @@ export function analyseBox(box, ctx) {
   const pokemon = [];
   const ownedBase = new Set();       // base species ids present in the box (any variant)
   const ownedIds = new Set();
+  const megaCapable = new Set();     // resolved ids owned by at least one non-Shadow copy: only those can reach a Mega
   const needLeagues = [];            // entries whose leagues are worked out after the loop, grouped by species
 
   for (const p of box) {
     const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
     if (!r) { pokemon.push({ p, unresolved: true }); continue; }
-    ownedIds.add(r.speciesId); ownedBase.add(baseSpeciesId(gm, r.speciesId));
+    ownedIds.add(r.speciesId); if (!r.flags.shadow) megaCapable.add(r.speciesId); ownedBase.add(baseSpeciesId(gm, r.speciesId));
     const reach = [r.speciesId, ...evolutionsOf(gm, r.speciesId), ...formChangesOf(gm, r.speciesId)];
     const targets = new Set(reach);
-    // A Shadow can never Mega evolve. Keyed on the resolved id, like the credit rule and the gap check below, so a copy named "Shadow X"
-    // without the flag is a Shadow here too (it used to read the flag and gave such a copy Mega credit).
-    if (!r.speciesId.endsWith('_shadow')) for (const id of reach) for (const m of megaIdsOf(gm, id)) targets.add(m);
+    // A Shadow can never Mega evolve. Keyed on the resolver's flag, so a copy flagged Shadow, or named "Shadow X" without the flag, is excluded
+    // alike (including a Shadow of a species the game master lists no `_shadow` form for, which resolves to the plain id); the gap check mirrors it via megaCapable.
+    if (!r.flags.shadow) for (const id of reach) for (const m of megaIdsOf(gm, id)) targets.add(m);
 
     const hits = [];
     for (const id of targets) {
@@ -303,7 +304,8 @@ export function analyseBox(box, ctx) {
       if (reach.includes(e.speciesId)) return true;
       // Same rule as the Shadow credit above: a Shadow of the species covers its plain raid and Rocket entries.
       if ((e.area === 'raids' || e.area === 'rocket') && reach.includes(`${e.speciesId}_shadow`)) return true;
-      return !id.endsWith('_shadow') && reach.some((r) => megaIdsOf(gm, r).includes(e.speciesId));
+      // megaCapable never holds a `_shadow` id, so this also covers the old suffix test.
+      return megaCapable.has(id) && reach.some((r) => megaIdsOf(gm, r).includes(e.speciesId));
     });
     if (reachable) continue;
     const key = `${e.area}|${e.speciesId}`;
