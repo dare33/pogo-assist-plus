@@ -588,17 +588,16 @@ test('fit: a Gigantamax-marked copy is Max-rated as Gigantamax Charizard; an unm
   assert.match(g.as, /gigantamax/i);
 });
 
-test('a Gigantamax-marked spare beside a better unmarked copy keeps its G-Max credit and its own build row', () => {
+test('known limit: a Gigantamax-marked copy that is a spare beside a better unmarked copy gets no G-Max credit; a marked carrier does', () => {
   const base = box.find((p) => p.name === 'Snorlax' && !p.shadow);
   const g = { ...base, gigantamax: true, dynamax: true, ivPercent: 10 };
   const plain = { ...base, ivPercent: 100 };
+  const gmax = (b) => b.hits.some((h) => /gigantamax|g-max/i.test(h.name));
   const rows = analyseBox([plain, g], ctx).builds.filter((b) => b.speciesId === 'snorlax' && b.targetId === 'snorlax');
-  const mine = rows.find((b) => b.pokemon.gigantamax);
-  assert.ok(mine, 'the marked copy carries a build');
-  assert.ok(mine.hits.some((h) => /gigantamax|g-max/i.test(h.name)));
-  assert.equal(mine.needsDynamax, false);
-  const other = rows.find((b) => !b.pokemon.gigantamax);
-  assert.ok(other && !other.hits.some((h) => /gigantamax|g-max/i.test(h.name)), 'the unmarked copy still gets none');
+  assert.equal(rows.length, 1, 'one row: the better copy carries the build, the marked one is its spare');
+  assert.ok(!rows[0].pokemon.gigantamax && !gmax(rows[0]));
+  const alone = analyseBox([g], ctx).builds.filter((b) => b.speciesId === 'snorlax' && b.targetId === 'snorlax');
+  assert.ok(alone.length === 1 && gmax(alone[0]) && !alone[0].needsDynamax, 'as the carrier it is credited');
 });
 
 test('the Max fit line says "needs a Dynamax copy" only for a copy not marked Dynamax or Gigantamax', () => {

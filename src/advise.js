@@ -303,11 +303,10 @@ export function analyseBox(box, ctx) {
     }
   }
   builds.sort((a, b) => b.score - a.score);
-  // One row per (species, target): the best copy carries the build, the rest are spares. A build that carries a Gigantamax hit (only a copy marked
-  // Gigantamax has one) is its own row: folded under a better unmarked copy, the marked one would lose that credit and its Dynamax-free step.
+  // One row per (species, target): the best copy carries the build, the rest are spares.
   const seenBuild = new Map();
   for (const b of builds) {
-    const key = `${b.speciesId}|${b.targetId}${b.hits.some(isGmaxEntry) ? '|gmax' : ''}`;
+    const key = `${b.speciesId}|${b.targetId}`;
     if (seenBuild.has(key)) { seenBuild.get(key).spares.push(b.pokemon); b.duplicate = true; } else { b.spares = []; seenBuild.set(key, b); }
   }
   const primaryBuilds = builds.filter((b) => !b.duplicate);

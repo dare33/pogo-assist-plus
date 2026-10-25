@@ -38,14 +38,35 @@ final class DynamaxAdviceTests: XCTestCase {
         return (b["hits"]?.arrayValue ?? []).filter { $0["area"] == .string("max") && ($0["name"]?.stringValue ?? "").lowercased().contains("gigantamax") }
     }
 
-    func testAGigantamaxMarkedSpareBesideABetterCopyKeepsTheCredit() throws {
-        var plain = charmander(gigantamax: nil); plain.index = 1
-        var marked = charmander(gigantamax: true); marked.index = 2; marked.ivs = IVs(atk: 1, def: 1, hp: 1); marked.ivsRead = marked.ivs
-        let report = try sharedEngine.advise(rows: [plain, marked])
-        let builds = try XCTUnwrap(report["builds"]?.arrayValue).filter { $0["targetId"] == .string("charizard") }
-        let mine = try XCTUnwrap(builds.first { $0["pokemon"]?["index"] == .number(2) })
-        XCTAssertTrue((mine["hits"]?.arrayValue ?? []).contains { ($0["name"]?.stringValue ?? "").lowercased().contains("gigantamax") })
-        XCTAssertEqual(mine["needsDynamax"], .bool(false))
+    /// Known limit: a Gigantamax-marked copy that is a spare beside a better unmarked copy gets no G-Max credit; a marked carrier does.
+    /// (Snorlax also has plain Max entries, so the unmarked copy outscores the marked one and carries the build.)
+    func testAGigantamaxMarkedSpareGetsNoCreditButACarrierDoes() throws {
+        func snorlax(_ index: Int, atk: Int, gigantamax: Bool?) -> ScanRow {
+            let iv = IVs(atk: atk, def: atk, hp: atk)
+            return ScanRow(index: index, name: "Snorlax", display: "Snorlax", form: "", speciesId: "snorlax", dex: 143, cp: 2000, hp: 200, ivs: iv, ivsRead: iv,
+                           ivsGuess: nil, level: 20, levelMax: 20, dust: 2500, solveStatus: "exact", flags: [], frames: [], dynamax: gigantamax, gigantamax: gigantamax)
+        }
+        func builds(_ rows: [ScanRow]) throws -> [JSONValue] {
+            try XCTUnwrap(sharedEngine.advise(rows: rows)["builds"]?.arrayValue).filter { $0["targetId"] == .string("snorlax") }
+        }
+        func gmax(_ b: JSONValue) -> Bool { (b["hits"]?.arrayValue ?? []).contains { ($0["name"]?.stringValue ?? "").lowercased().contains("gigantamax") } }
+        let both = try builds([snorlax(1, atk: 15, gigantamax: nil), snorlax(2, atk: 1, gigantamax: true)])
+        XCTAssertEqual(both.count, 1); XCTAssertEqual(both[0]["pokemon"]?["index"], .number(1))
+        XCTAssertFalse(gmax(both[0]))
+        let alone = try builds([snorlax(1, atk: 1, gigantamax: true)])
+        XCTAssertTrue(gmax(alone[0])); XCTAssertEqual(alone[0]["needsDynamax"], .bool(false))
+    }
+
+    func testBestTextForAMarkedCopyDropsTheDynamaxNeed() throws {
+        var advice = BoxAdvice(); advice.bestOf["x"] = ["max"]
+        func text(_ dynamax: Bool?, _ gigantamax: Bool?) -> String? {
+            var row = charmander(gigantamax: gigantamax, dynamax: dynamax); row.dynamax = dynamax
+            let e = BoxEntry(id: "x", row: row, firstSeen: Date(), lastSeen: Date())
+            return BoxInsight.make(advice: advice, entries: [e]).bestText(of: "x", title: "Charmander", .max, pogoAssist: false)
+        }
+        XCTAssertEqual(text(nil, nil), "best (needs a Dynamax copy)")
+        XCTAssertEqual(text(true, nil), "best")
+        XCTAssertEqual(text(true, true), "best")
     }
 
     func testTheMaxFitLineDropsTheDynamaxNeedForAMarkedCopy() throws {
