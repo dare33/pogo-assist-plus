@@ -51,6 +51,27 @@ final class ScanPassFlowTests: XCTestCase {
         XCTAssertTrue(label(app, "scan-step-6").contains("marked Dynamax"))
         XCTAssertFalse(app.staticTexts["When the scan ends, come back to Pogo Assist to meet your new Pokémon or export your collection."].exists)
 
+        // Switching back to Add and update, then Full scan, takes the pass wording away; Special scan brings it back.
+        app.buttons["Scan Options"].tap()
+        app.buttons["Add and update"].tap()
+        XCTAssertFalse(app.buttons["scan-copy-search"].exists, "no Copy search in the options of an ordinary scan")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(step1.waitForExistence(timeout: 5))
+        XCTAssertTrue(step1.label.contains("you want to start at"), step1.label)
+        XCTAssertFalse(step1.label.contains("dynamax"))
+        XCTAssertFalse(label(app, "scan-step-6").contains("marked Dynamax"))
+        XCTAssertFalse(app.buttons["scan-copy-search"].exists)
+        app.buttons["Scan Options"].tap()
+        app.buttons["Full scan"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(step1.waitForExistence(timeout: 5))
+        XCTAssertFalse(step1.label.contains("dynamax")); XCTAssertFalse(app.buttons["scan-copy-search"].exists)
+        app.buttons["Scan Options"].tap()
+        special.tap()
+        app.buttons["pass-kind-dynamax"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(step1.waitForExistence(timeout: 5)); XCTAssertTrue(step1.label.contains("type dynamax"))
+
         // The guide's first page names the search.
         app.buttons["Show the steps again"].tap()
         XCTAssertTrue(app.staticTexts["Search your storage for dynamax"].waitForExistence(timeout: 5))
@@ -74,15 +95,26 @@ final class ScanPassFlowTests: XCTestCase {
         XCTAssertTrue(line.waitForExistence(timeout: 20))
         XCTAssertTrue(line.label.hasPrefix("Dynamax pass: "), line.label)
         XCTAssertFalse(app.buttons["Full scan"].exists)
+        let kindText = app.descendants(matching: .any)["review-scan-kind-pass"].firstMatch
+        for _ in 0..<8 where !kindText.exists { app.swipeUp() }
+        XCTAssertTrue(kindText.exists, "the Review names the pass where the scan kind switch would be")
+        XCTAssertTrue(kindText.label.hasPrefix("Dynamax pass. Saved as a partial scan"), kindText.label)
 
         // Every row of the sample is new to this empty box, so the "Was this a dynamax search?" question comes before the save.
         let save = app.buttons["review-save"]
-        if !save.waitForExistence(timeout: 5) { throw XCTSkip("the sample has questions in this build; the guard is covered in PogoBox tests") }
+        XCTAssertTrue(save.waitForExistence(timeout: 10), "the sample has no questions against an empty box")
         save.tap()
         XCTAssertTrue(app.buttons["Yes, save as Dynamax pass"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["No, save as Add and update"].exists)
         XCTAssertTrue(app.buttons["No, discard the scan"].exists)
         app.buttons["Yes, save as Dynamax pass"].tap()
         XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 20), "saved")
+
+        // The next scan is an ordinary one: the pass was cleared by the save.
+        app.buttons["Scan"].tap()
+        XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Add and update"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["scan-copy-search"].exists)
+        XCTAssertFalse(app.buttons["pass-kind-dynamax"].exists)
     }
 }

@@ -20,7 +20,8 @@ struct ScanDoneWords: Equatable {
         read = review.outcome.scan.rows.count
         readIn = ReviewFormat.readIn(review.outcome.duration)
         questions = ctx.total
-        toCheck = ctx.toCheck.count
+        // The same "to check" total the pass headline says: the scan's check rows plus the hand values a pass kept.
+        toCheck = ctx.toCheck.count + (review.plan.pass == nil ? 0 : BoxMerge.passTally(review.plan, resolutions: review.resolutions, base: review.base).conflicts)
         // "Your whole box" is only said for a scan that reached the end of the list and that the app judged sound as a Full scan (`ScanKindAdvice`).
         let whole = ctx.ending == .listEnd && review.kind == .full && review.advice?.fullIsSound == true
         switch ctx.ending {

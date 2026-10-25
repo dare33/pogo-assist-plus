@@ -99,9 +99,9 @@ final class ScanPassTests: XCTestCase {
             let p = plan([row()], saved, pass)
             let out = try BoxMerge.apply(p, to: saved, engine: nil)[0]
             XCTAssertEqual(out.row.shadow, value, "\(pass) over hand \(hand)")
-            XCTAssertTrue(out.row.flags.contains("pass-conflict:\(pass.rawValue)"))
+            XCTAssertTrue(out.row.flags.contains(BoxMerge.conflictFlag(pass, saved: value)), "\(out.row.flags)")
             XCTAssertTrue(out.needsCheck, "a check item")
-            XCTAssertEqual(FlagInfo.severity(of: "pass-conflict:\(pass.rawValue)", solveStatus: "exact"), .check)
+            XCTAssertEqual(FlagInfo.severity(of: BoxMerge.conflictFlag(pass, saved: value), solveStatus: "exact"), .check)
             XCTAssertEqual(BoxMerge.passTally(p, resolutions: [:], base: saved), BoxMerge.PassTally(marked: 0, new: 0, conflicts: 1, unanswered: 0))
         }
     }
@@ -116,7 +116,7 @@ final class ScanPassTests: XCTestCase {
         XCTAssertEqual(BoxMerge.updated(saved[0], with: scanned, date: date(10)).row.shadow, 1, "the generic merge would take the scanned value")
         let out = try BoxMerge.apply(p, to: saved, engine: nil)[0]
         XCTAssertEqual(out.row.shadow, 2, "the hand value stays")
-        XCTAssertTrue(out.row.flags.contains("pass-conflict:shadow"))
+        XCTAssertTrue(out.row.flags.contains("pass-conflict:shadow:purified"))
         XCTAssertEqual(out.row.ivs, IVs(atk: 9, def: 9, hp: 9), "the rest of the update still happens")
     }
 
@@ -130,7 +130,7 @@ final class ScanPassTests: XCTestCase {
         let hand = try handShadow(first[0], .shadow)
         XCTAssertNil(hand.shadowByPass)
         let kept = try BoxMerge.apply(plan([row()], [hand], .purified), to: [hand], engine: nil)[0]
-        XCTAssertEqual(kept.row.shadow, 1); XCTAssertTrue(kept.row.flags.contains("pass-conflict:purified"))
+        XCTAssertEqual(kept.row.shadow, 1); XCTAssertTrue(kept.row.flags.contains("pass-conflict:purified:shadow"))
         // A pass meeting its own mark changes nothing and raises nothing.
         let again = try BoxMerge.apply(plan([row()], first, .shadow), to: first, engine: nil)[0]
         XCTAssertEqual(again.row.shadow, 1); XCTAssertTrue(again.row.flags.isEmpty)
@@ -162,8 +162,90 @@ final class ScanPassTests: XCTestCase {
         XCTAssertEqual(p.same.count + p.updated.count + p.unsure.count + p.new.count, 61)
         XCTAssertEqual(p.new.count, 14, "unmatched \(p.new.count) of 61, same \(p.same.count), unsure \(p.unsure.count)")
         XCTAssertFalse(BoxMerge.passSearchLooksWrong(p))
+        // The row read as CP 66 is matched to a Moltres CP 1966 by its HP: a part read, so the pass does not mark it (P1).
+        let part = try XCTUnwrap(p.partMatches.first)
+        XCTAssertEqual(p.partMatches.count, 1)
+        let answers = Dictionary(uniqueKeysWithValues: p.unsure.map { ($0.scanned, BoxMerge.Resolution.leaveOut) })
+        let tally = BoxMerge.passTally(p, resolutions: answers, base: box)
+        XCTAssertEqual(tally, BoxMerge.PassTally(marked: 45, new: 14, conflicts: 0, unanswered: 0), "46 Same pairs less the part read")
+        let applied = byId(try BoxMerge.apply(p, resolutions: answers, to: box, engine: nil))
+        XCTAssertNil(applied[part.savedId]?.row.dynamax, "the part-read match stays unmarked")
+        XCTAssertEqual(applied.values.filter { $0.row.dynamax == true }.count, 45 + 14)
         // The same rows against an empty box are all new: a wrong search.
         XCTAssertTrue(BoxMerge.passSearchLooksWrong(BoxMerge.plan(scanned: scan.rows, into: [], kind: .partial, scanDate: scan.scanDate, gameMaster: gm, pass: .dynamax)))
+    }
+
+    // MARK: - review round 1
+
+    func testAMegaPairJoinCarriesTheRemovedEntrysShadowMarkAndThePassIsJudgedAgainstIt() throws {
+        func pair(_ removedShadow: Int, byPass: Bool?) -> [BoxEntry] {
+            var base = entry(row("staraptor", cp: 2819), id: "base"); base.lastSeen = date(2)
+            var mega = entry(row("staraptor_mega", cp: 3970), id: "mega"); mega.row.shadow = removedShadow; mega.shadowByPass = byPass
+            return [base, mega]
+        }
+        // A hand Purified on the removed entry; a Shadow pass keeps it and flags it.
+        var saved = pair(2, byPass: nil)
+        var p = plan([row("staraptor", cp: 2819)], saved, .shadow)
+        XCTAssertEqual(p.unsure.first?.kind, .megaPair)
+        var out = try BoxMerge.apply(p, resolutions: [0: .existing("base")], to: saved, engine: nil)
+        XCTAssertEqual(out.map(\.id), ["base"]); XCTAssertEqual(out[0].row.shadow, 2)
+        XCTAssertTrue(out[0].row.flags.contains("pass-conflict:shadow:purified"))
+        XCTAssertEqual(BoxMerge.passTally(p, resolutions: [0: .existing("base")], base: saved).conflicts, 1, "the tally sees the join's result too")
+        // A Shadow that a pass set on the removed entry; a Purified pass moves it without a conflict.
+        saved = pair(1, byPass: true)
+        p = plan([row("staraptor", cp: 2819)], saved, .purified)
+        out = try BoxMerge.apply(p, resolutions: [0: .existing("base")], to: saved, engine: nil)
+        XCTAssertEqual(out[0].row.shadow, 2); XCTAssertFalse(out[0].row.flags.contains { $0.hasPrefix("pass-conflict") })
+        XCTAssertEqual(BoxMerge.passTally(p, resolutions: [0: .existing("base")], base: saved).conflicts, 0)
+    }
+
+    func testAConflictSurvivesAnOrdinaryUpdateUntilTheMarkMatchesOrThePlayerDecides() throws {
+        let saved = [try handShadow(entry(row(), id: "a"), .purified)]
+        let flagged = try BoxMerge.apply(plan([row()], saved, .shadow), to: saved, engine: nil)[0]
+        let flag = "pass-conflict:shadow:purified"
+        XCTAssertTrue(flagged.row.flags.contains(flag))
+        XCTAssertTrue(BoxMerge.updated(flagged, with: row(cp: 450), date: date(11)).row.flags.contains(flag), "an ordinary update keeps it")
+        var nowShadow = flagged; nowShadow.row.shadow = 1
+        XCTAssertFalse(BoxMerge.updated(nowShadow, with: row(cp: 450), date: date(11)).row.flags.contains(flag), "the mark now is what the pass found")
+        XCTAssertFalse(BoxMerge.updated(BoxMerge.markChecked(flagged), with: row(cp: 450), date: date(11)).row.flags.contains(flag), "checked")
+        let edited = try BoxMerge.correct(flagged, with: BoxMerge.Edit(shadow: .purified), gameMaster: gm)
+        XCTAssertFalse(edited.row.flags.contains(flag), "a hand edit of the mark")
+        XCTAssertFalse(BoxMerge.updated(edited, with: row(cp: 450), date: date(11)).row.flags.contains(flag))
+        // A scanned shadow value that replaces the saved one is no longer one a pass set.
+        var byPass = entry(row(), id: "b"); byPass.shadowByPass = true; byPass.row.shadow = 1
+        var scanned = row(cp: 450); scanned.shadow = 2
+        XCTAssertNil(BoxMerge.updated(byPass, with: scanned, date: date(11)).shadowByPass)
+        XCTAssertEqual(BoxMerge.updated(byPass, with: row(cp: 450), date: date(11)).shadowByPass, true, "a scan that carries none keeps it")
+    }
+
+    func testTheGuardCountsRowsAnsweredNewAndTheLinesUseTheSameNumber() throws {
+        // Eight rows: five unchanged, two power-up questions and one new row. Before any answer 1 of 8 is new; answered "It is new" it is 3 of 8 (37%), over the threshold.
+        let species = ["pidgey", "rattata", "weedle", "caterpie", "zubat", "meowth", "geodude"]
+        let saved = species.enumerated().map { entry(row($0.element, cp: 100 + $0.offset), id: "s\($0.offset)") }
+        var scanned = saved.prefix(5).map(\.row)
+        scanned.append(row("meowth", cp: 900)); scanned.append(row("geodude", cp: 901))   // same IVs, higher CP: a power-up question each
+        scanned.append(row("kakuna", cp: 77, ivs: IVs(atk: 1, def: 1, hp: 1)))             // new
+        let p = plan(scanned, saved, .shadow)
+        XCTAssertEqual(p.new.count, 1); XCTAssertEqual(p.unsure.count, 2)
+        XCTAssertFalse(BoxMerge.passSearchLooksWrong(p), "1 of 8 before any answer")
+        let asNew = Dictionary(uniqueKeysWithValues: p.unsure.map { ($0.scanned, BoxMerge.Resolution.new) })
+        let asSame = Dictionary(uniqueKeysWithValues: p.unsure.map { ($0.scanned, BoxMerge.Resolution.existing($0.candidates[0])) })
+        XCTAssertEqual(BoxMerge.passUnmatched(p, resolutions: asNew), 3)
+        XCTAssertTrue(BoxMerge.passSearchLooksWrong(p, resolutions: asNew), "the answers push it over")
+        XCTAssertFalse(BoxMerge.passSearchLooksWrong(p, resolutions: asSame))
+        XCTAssertEqual(BoxMerge.passTally(p, resolutions: asNew, base: saved).new, BoxMerge.passUnmatched(p, resolutions: asNew), "Done and Review say the same number")
+    }
+
+    func testEveryKeptHandValueHasAReviewLineAndTheFlagReadsNeutrally() throws {
+        var moltres = entry(row("moltres", cp: 1966), id: "m")
+        moltres = try handShadow(moltres, .purified)
+        let saved = [moltres, try handShadow(entry(row("pidgey", cp: 100), id: "x"), .neither)]
+        let p = plan([row("moltres", cp: 1966), row("pidgey", cp: 100)], saved, .shadow)
+        let lines = BoxMerge.passConflictLines(p, resolutions: [:], base: saved)
+        XCTAssertEqual(lines, ["Kept your Purified mark on Moltres CP 1966: the Shadow search found it", "Kept your neither Shadow nor Purified mark on Pidgey CP 100: the Shadow search found it"])
+        XCTAssertTrue(BoxMerge.passConflictLines(plan([row("moltres", cp: 1966)], saved, .dynamax), resolutions: [:], base: saved).isEmpty)
+        XCTAssertEqual(FlagInfo.explain("pass-conflict:shadow:purified"), "Your box already said it was Purified; the Shadow search found it. Check it in the game.")
+        XCTAssertEqual(FlagInfo.explain("pass-conflict:purified:neither"), "Your box already said it was neither Shadow nor Purified; the Purified search found it. Check it in the game.")
     }
 
     // MARK: - support

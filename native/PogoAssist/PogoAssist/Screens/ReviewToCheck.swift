@@ -28,13 +28,14 @@ struct ToCheckScreen: View {
         let parts = rows.map { GameSearch.part(row: plan.scanned[$0]) }
         let search = GameSearch.text(parts)
         let notCovered = parts.count - GameSearch.covered(parts)
+        let kept = ctx.passConflictLines
         return VStack(spacing: 0) {
             ReviewTopBar(title: "To check", onBack: close)
             ScrollView {
                 LazyVStack(spacing: Theme.Space.panelGap) {
                     Panel(padding: 20, spacing: 14) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(rows.count.formatted()).paText(.heroFigure).foregroundStyle(Theme.ink)
+                            Text((rows.count + kept.count).formatted()).paText(.heroFigure).foregroundStyle(Theme.ink)
                             Text("to look at in the game").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
                             if notCovered > 0 { Text("\(notCovered) not in the search: no CP or HP to look for.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
                         }
@@ -90,7 +91,25 @@ struct ToCheckScreen: View {
                             }
                         }
                     }
-                    if rows.isEmpty {
+                    if !kept.isEmpty {
+                        VStack(spacing: 8) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("Kept your marks").font(.figtree(18, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                                Spacer()
+                                Text(kept.count.formatted()).font(.figtree(14, .bold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.muted)
+                            }
+                            .padding(.horizontal, 6).padding(.top, 4)
+                            Panel(padding: 0, spacing: 0) {
+                                ForEach(Array(kept.enumerated()), id: \.offset) { n, line in
+                                    Text(line).paText(.rowTitle).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 16).padding(.vertical, 10)
+                                        .overlay(alignment: .top) { if n > 0 { Rectangle().fill(Theme.line).frame(height: 1) } }
+                                        .accessibilityIdentifier("review-kept-mark")
+                                }
+                            }
+                        }
+                    }
+                    if rows.isEmpty && kept.isEmpty {
                         Text("Nothing needs a check.").paText(.secondary).foregroundStyle(Theme.muted).padding(24)
                     }
                 }

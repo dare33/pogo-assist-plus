@@ -82,9 +82,12 @@ public enum FlagInfo {
         Entry(prefix: "mega-when-scanned", field: .cp) { _ in "This Pokémon was Mega evolved when it was scanned, so its CP, HP and level were not saved (the Mega values are temporary). Scan it again when it is not Mega evolved." },
         // Not tied to the IVs field: the person may have corrected the IVs, and the later scan still read others.
         Entry(prefix: "ivs-rescan-differs", field: nil) { _ in "The latest scan read other IVs for this Pokémon at the same CP and HP. The saved IVs were kept. Check the IVs in the game." },
+        // The detail is `<pass>:<what the box said>` (`shadow:purified`). Neutral about where the saved value came from: a hand edit, a screenshot import or an earlier scan.
         Entry(prefix: "pass-conflict", field: nil) { detail in
-            let word = detail.isEmpty ? "that mark" : detail
-            return "A \(word) pass read this Pokémon, but you had set it the other way by hand, so your setting was kept. Check it in the game."
+            let part = detail.split(separator: ":").map(String.init)
+            let found = part.first.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? "Shadow or Purified"
+            let said = part.count > 1 ? (part[1] == "neither" ? "neither Shadow nor Purified" : part[1].prefix(1).uppercased() + part[1].dropFirst()) : "something else"
+            return "Your box already said it was \(said); the \(found) search found it. Check it in the game."
         },
         Entry(prefix: "ivs-disagree", field: .ivs) { _ in "The appraisal bars read differently on different frames. Check the IVs in the game." },
     ]

@@ -21,3 +21,8 @@ enum PassWording {
     static func summary(_ pass: ScanPass) -> String { "\(pass.passName) · search: \(pass.searchWord)" }
     static func searchQuestion(_ pass: ScanPass) -> String { "Was this a \(pass.searchWord) search?" }
 }
+
+extension ReviewContext {
+    /// One line per Pokémon whose Shadow/Purified value a pass kept (check items that are not scanned rows).
+    var passConflictLines: [String] { BoxMerge.passConflictLines(review.plan, resolutions: review.resolutions, base: review.base) }
+}

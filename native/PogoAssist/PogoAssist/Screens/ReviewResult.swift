@@ -160,7 +160,7 @@ private struct ReviewHeader: View {
 
     var body: some View {
         let read = ctx.review.outcome.scan.rows.count
-        let toCheck = ctx.toCheck.count
+        let toCheck = ctx.toCheck.count + ctx.passConflictLines.count
         Panel(tint: .accent, padding: 20, spacing: 16) {
             VStack(alignment: .leading, spacing: 0) {
                 if let pass = ctx.review.plan.pass {

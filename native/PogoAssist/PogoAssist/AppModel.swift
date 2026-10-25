@@ -160,7 +160,6 @@ final class AppModel: ObservableObject {
     /// The filtered pass chosen on the Scan screen ("Special scan"), or nil. A pass is a partial scan: choosing one sets Add and update underneath, and choosing Full scan clears it.
     @Published var scanPass: ScanPass? {
         didSet {
-            if let scanPass { UserDefaults.standard.set(scanPass.rawValue, forKey: Keys.pass) } else { UserDefaults.standard.removeObject(forKey: Keys.pass) }
             if scanPass != nil, scanKind != .partial { scanKind = .partial }
             refreshReaderSettings()
             if scanPass != oldValue { rescanCount = nil }
@@ -221,7 +220,7 @@ final class AppModel: ObservableObject {
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
-    private enum Keys { static let account = "selectedAccount", kind = "scanKind", pass = "scanPass", count = "storageCount", partial = "partialCount", eggs = "eggCount", stardust = "stardust", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
+    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", partial = "partialCount", eggs = "eggCount", stardust = "stardust", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
 
     // MARK: - "Make scans better"
 
@@ -539,9 +538,9 @@ final class AppModel: ObservableObject {
         }
         library = BoxLibrary(root: libraryRoot)
         pendingStore = PendingScanStore(directory: BoxExportFile.pendingDirectory ?? URL(fileURLWithPath: "/dev/null/pogo-assist-pending", isDirectory: true))
-        let storedKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
-        scanKind = storedKind
-        scanPass = storedKind == .partial ? ScanPass(stored: UserDefaults.standard.string(forKey: Keys.pass)) : nil
+        // A pass is never restored at launch: the next scan after one is an ordinary scan unless the person chooses Special scan again. (A broadcast that was running keeps the pass it
+        // started with in its own state and in the waiting-scan record.)
+        scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
         eggText = ""
         partialCountText = ""
         storageCountText = ""   // read per account by loadVoiceRecord once the account is known
@@ -1386,7 +1385,7 @@ final class AppModel: ObservableObject {
         if let why = saveBlocker(r) { message = why; return }
         if r.importPrepared != nil { await saveImport(r); return }
         // A pass whose rows mostly match nothing in the box was probably searched for wrongly: ask first (a read-again scan was asked when it was first saved).
-        if r.reread == nil, !r.searchConfirmed, BoxMerge.passSearchLooksWrong(r.plan) {
+        if r.reread == nil, !r.searchConfirmed, BoxMerge.passSearchLooksWrong(r.plan, resolutions: r.resolutions) {
             var asking = r; asking.askingSearch = true
             flow = .review(asking)
             return
@@ -1413,6 +1412,7 @@ final class AppModel: ObservableObject {
             if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
             // A scan paged by the voice command is saved: setup counts as done (`SetupProgress.pagedScanSaved`).
             if r.reread == nil, r.paging?.pagedByCommand == true { setup.notePagedScanSaved() }
+            if r.reread == nil { scanPass = nil }   // the scan screen goes back to Add and update; the next scan is an ordinary one
             flow = .idle
             // A scan read again was merged into the box as it was BEFORE that scan, so the box it started from is not the box the person had: no counts for it.
             lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: r.reread == nil)
@@ -1445,7 +1445,7 @@ final class AppModel: ObservableObject {
     func discardReview() {
         switch flow {
         case .review(let r) where r.importPrepared != nil: screenshots.reviewClosedWithoutSaving()   // the screenshots stay queued; discarding them is a choice in Import screenshots
-        case .review(let r): if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
+        case .review(let r): if r.reread == nil { ReplayMarker.markProcessed(r.signature); scanPass = nil }
         case .failed(_, let sig):
             if sig == Self.damagedPrefix { pendingStore.clear(); waitingScan = nil }   // the person's choice: what was kept goes
             else if !sig.hasPrefix(Self.rereadPrefix) { ReplayMarker.markProcessed(sig) }
