@@ -107,13 +107,13 @@ final class ScanPassTests: XCTestCase {
     }
 
     func testTheMergesCarryOverOfAScannedShadowDoesNotOverrideAHandValue() throws {
-        // A saved entry with no IVs is updated when the scan reads them (`ivsNowRead`), and that path copies the scanned row's shadow over the saved one.
+        // A saved entry with no IVs is updated when the scan reads them (`ivsNowRead`); that path keeps a saved mark and fills only a blank one.
         var noIVs = row("rattata", cp: 200, ivs: nil); noIVs.shadow = nil
         let saved = [try handShadow(entry(noIVs, id: "a"), .purified)]
         var scanned = row("rattata", cp: 200, ivs: IVs(atk: 9, def: 9, hp: 9)); scanned.shadow = 1
         let p = plan([scanned], saved, .shadow)
         XCTAssertEqual(p.updated.map(\.savedId), ["a"])
-        XCTAssertEqual(BoxMerge.updated(saved[0], with: scanned, date: date(10)).row.shadow, 1, "the generic merge would take the scanned value")
+        XCTAssertEqual(BoxMerge.updated(saved[0], with: scanned, date: date(10)).row.shadow, 2, "the generic merge keeps the saved mark")
         let out = try BoxMerge.apply(p, to: saved, engine: nil)[0]
         XCTAssertEqual(out.row.shadow, 2, "the hand value stays")
         XCTAssertTrue(out.row.flags.contains("pass-conflict:shadow:purified"))
@@ -211,10 +211,14 @@ final class ScanPassTests: XCTestCase {
         let edited = try BoxMerge.correct(flagged, with: BoxMerge.Edit(shadow: .purified), gameMaster: gm)
         XCTAssertFalse(edited.row.flags.contains(flag), "a hand edit of the mark")
         XCTAssertFalse(BoxMerge.updated(edited, with: row(cp: 450), date: date(11)).row.flags.contains(flag))
-        // A scanned shadow value that replaces the saved one is no longer one a pass set.
+        // A scanned shadow value never replaces a saved mark, so a pass-set mark stays one; a value a scan fills into a blank mark is not one a pass set.
         var byPass = entry(row(), id: "b"); byPass.shadowByPass = true; byPass.row.shadow = 1
         var scanned = row(cp: 450); scanned.shadow = 2
-        XCTAssertNil(BoxMerge.updated(byPass, with: scanned, date: date(11)).shadowByPass)
+        let kept = BoxMerge.updated(byPass, with: scanned, date: date(11))
+        XCTAssertEqual(kept.row.shadow, 1); XCTAssertEqual(kept.shadowByPass, true)
+        var blank = byPass; blank.row.shadow = nil
+        let filled = BoxMerge.updated(blank, with: scanned, date: date(11))
+        XCTAssertEqual(filled.row.shadow, 2); XCTAssertNil(filled.shadowByPass)
         XCTAssertEqual(BoxMerge.updated(byPass, with: row(cp: 450), date: date(11)).shadowByPass, true, "a scan that carries none keeps it")
     }
 
