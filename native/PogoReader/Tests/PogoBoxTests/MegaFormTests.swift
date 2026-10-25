@@ -260,14 +260,19 @@ final class MegaFormTests: XCTestCase {
 
     /// The Dynamax flag is hand-set: a join keeps the base entry's own value and takes the removed Mega-species entry's only when the base has none.
     func testJoiningCarriesTheRemovedEntrysDynamaxFlagOnlyWhereTheBaseHasNone() throws {
-        for (base, removed, want) in [(nil, true, true), (nil, false, false), (false, true, false), (true, nil, true), (nil, nil, nil)] as [(Bool?, Bool?, Bool?)] {
+        for (base, removed, want) in [(nil, true, true), (true, nil, true), (nil, nil, nil)] as [(Bool?, Bool?, Bool?)] {
             var saved = savedPair()
             saved[0].row.dynamax = base; saved[1].row.dynamax = removed
+            // The other hand-set marks follow the same rule; the removed entry's details and Shadow mark are taken where the base has none.
+            saved[0].row.lucky = base; saved[1].row.lucky = removed
+            saved[1].row.gigantamax = removed; saved[1].row.shadow = 2; saved[1].row.details = CopyDetails(fastMove: "X")
             let p = plan([row("staraptor", cp: 2819)], saved, .full)
             XCTAssertEqual(p.unsure.first?.kind, .megaPair)
             let out = try BoxMerge.apply(p, resolutions: [0: .existing("base")], to: saved)
             XCTAssertEqual(out.count, 1)
             XCTAssertEqual(out[0].row.dynamax, want, "base \(String(describing: base)), removed \(String(describing: removed))")
+            XCTAssertEqual(out[0].row.lucky, want); XCTAssertEqual(out[0].row.gigantamax, removed)
+            XCTAssertEqual(out[0].row.shadow, 2); XCTAssertEqual(out[0].row.details, CopyDetails(fastMove: "X"))
         }
     }
 

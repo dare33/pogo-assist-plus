@@ -1064,8 +1064,13 @@ public enum BoxMerge {
                     // first-seen date is kept on the base entry). Any other answer than "this one" keeps both.
                     guard id == u.candidates.first, u.candidates.count == 2, let m = byId[u.candidates[1]] else { break }
                     byId[id]?.firstSeen = min(e.firstSeen, m.firstSeen)
-                    // The Dynamax flag is hand-set and belongs to the Pokémon: the removed entry's value is kept when the base entry has none.
+                    // The hand-set marks (Dynamax, Gigantamax, Shadow/Purified, Lucky, details) belong to the Pokémon: the removed entry's value is kept when the base entry has none.
                     if byId[id]?.row.dynamax == nil, let d = m.row.dynamax { byId[id]?.row.dynamax = d }
+                    if byId[id]?.row.gigantamax == nil, let g = m.row.gigantamax { byId[id]?.row.gigantamax = g }
+                    if byId[id]?.row.lucky == nil, let l = m.row.lucky { byId[id]?.row.lucky = l }
+                    if byId[id]?.row.shadow == nil, let sh = m.row.shadow { byId[id]?.row.shadow = sh }
+                    if byId[id]?.row.details == nil, let d = m.row.details { byId[id]?.row.details = d }
+                    if byId[id]?.row.gigantamax == true { byId[id]?.row.dynamax = true }
                     touch(id)
                     // The other entry's values keep their OWN last-seen date (a base scan did not see the Mega form), so an existing, more recently seen Mega form wins over them; then a Mega row
                     // the scan read (CP fitting a level) is stored on top like an automatic Same pair, so what ends up held is what was read now.
@@ -1139,8 +1144,9 @@ public enum BoxMerge {
             row.level = s.level ?? row.level; row.levelMax = s.levelMax ?? row.levelMax; row.dust = s.dust ?? row.dust
         }
         row.shadow = s.shadow ?? row.shadow
-        // Dynamax is set by hand only; a scan never reads it, so the saved value stays (as corrections do).
-        row.dynamax = e.row.dynamax
+        // Dynamax, Gigantamax, Lucky and the details are set by hand only; a scan never reads them, so the saved values stay (as corrections do).
+        // Shadow/Purified above follows a clip merge's value when it carries one and keeps the saved (possibly hand) mark otherwise.
+        row.dynamax = e.row.dynamax; row.gigantamax = e.row.gigantamax; row.lucky = e.row.lucky; row.details = e.row.details
         // The scan's flags about IVs it did not read do not apply to IVs that were kept.
         let scanFlags = keepIVs ? s.flags.filter { FlagInfo.field(of: $0) != .ivs } : s.flags
         row.flags = FlagInfo.remaining(scanFlags, corrected: fix)
@@ -1164,18 +1170,37 @@ public enum BoxMerge {
         public var hp: Int?
         public var ivs: IVs?
         public var speciesName: String?
-        /// nil leaves the flag alone; `.notSet` clears it back to unknown (unlike the other fields, which cannot be cleared).
+        /// nil leaves the flag alone; `.off` clears it (unlike the other fields, which cannot be cleared). Off also clears Gigantamax.
         public var dynamax: DynamaxEdit?
-        public init(cp: Int? = nil, hp: Int? = nil, ivs: IVs? = nil, speciesName: String? = nil, dynamax: DynamaxEdit? = nil) {
+        /// nil leaves the mark alone; true marks Gigantamax (and Dynamax, which it implies), false clears it. Applied after `dynamax`, so on wins over an `off` in the same edit.
+        public var gigantamax: Bool?
+        /// nil leaves the mark alone; true marks Lucky, false clears it.
+        public var lucky: Bool?
+        /// nil leaves the mark alone.
+        public var shadow: ShadowEdit?
+        /// nil leaves the details alone; a value replaces them all (an empty one clears them). Hand-set, stored and shown only.
+        public var details: CopyDetails?
+        public init(cp: Int? = nil, hp: Int? = nil, ivs: IVs? = nil, speciesName: String? = nil, dynamax: DynamaxEdit? = nil, gigantamax: Bool? = nil,
+                    lucky: Bool? = nil, shadow: ShadowEdit? = nil, details: CopyDetails? = nil) {
             self.cp = cp; self.hp = hp; self.ivs = ivs; self.speciesName = speciesName; self.dynamax = dynamax
+            self.gigantamax = gigantamax; self.lucky = lucky; self.shadow = shadow; self.details = details
         }
+        /// The edit changes only hand-set marks, details, or the Dynamax setting: nothing the scan read.
+        public var marksOnly: Bool { cp == nil && hp == nil && ivs == nil && speciesName == nil }
     }
 
-    /// The Dynamax switch on the Pokémon page: Not set (unknown, nil), Yes (caught as a Dynamax), No.
+    /// The Dynamax switch on the Pokémon page: off (not marked, nil) or on (caught as a Dynamax).
     public enum DynamaxEdit: Equatable, Hashable {
-        case notSet, yes, no
-        public var value: Bool? { switch self { case .notSet: return nil; case .yes: return true; case .no: return false } }
-        public init(_ value: Bool?) { self = value == nil ? .notSet : (value! ? .yes : .no) }
+        case off, on
+        public var value: Bool? { self == .on ? true : nil }
+        public init(_ value: Bool?) { self = value == true ? .on : .off }
+    }
+
+    /// The Shadow / Purified marks set by hand. `neither` stores 0 ("marked neither by hand"), which a later Shadow scan pass can tell from unknown (nil).
+    public enum ShadowEdit: Equatable, Hashable {
+        case neither, shadow, purified
+        public var value: Int { switch self { case .neither: return 0; case .shadow: return 1; case .purified: return 2 } }
+        public init(_ value: Int?) { self = value == 1 ? .shadow : (value == 2 ? .purified : .neither) }
     }
 
     /// Apply a hand correction. A value equal to the current one is not a correction. The first correction of a value
@@ -1209,6 +1234,11 @@ public enum BoxMerge {
         }
         // Not a correction of a read value: nothing is remembered as "was", and a scan never contradicts it.
         if let d = edit.dynamax, d.value != row.dynamax { row.dynamax = d.value }
+        if edit.dynamax == .off { row.gigantamax = nil }                 // Gigantamax is a kind of Dynamax: without one there is no other
+        if let g = edit.gigantamax { row.gigantamax = g ? true : nil; if g { row.dynamax = true } }
+        if let l = edit.lucky { row.lucky = l ? true : nil }
+        if let sh = edit.shadow { row.shadow = sh.value }                // one field: Shadow on clears Purified and the reverse
+        if let d = edit.details { let n = d.normalised; row.details = n.isEmpty ? nil : n }
         row.flags = FlagInfo.remaining(row.flags, corrected: fix)
         out.row = row; out.corrections = fix
         return out

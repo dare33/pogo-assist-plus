@@ -175,6 +175,6 @@ final class ScanReportTests: XCTestCase {
         var cleared = a; cleared.row.dynamax = nil
         try lib.commit(account: "Zorblax", entries: [cleared], reason: .edit, note: "Dynamax set for Pidgey", now: d.addingTimeInterval(20))
         XCTAssertEqual(try lib.editsAfter(account: "Zorblax", scanId: s.id),
-                       ["Corrected or set by hand: Pidgey: Dynamax set to Yes.", "Corrected or set by hand: Pidgey: Dynamax cleared."])
+                       ["Corrected or set by hand: Pidgey: Dynamax turned on.", "Corrected or set by hand: Pidgey: Dynamax turned off."])
     }
 }
