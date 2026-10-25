@@ -94,6 +94,11 @@ export function markedMoves(texts) {
 }
 const normMove = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
+/** A Max table entry for a Gigantamax form: only a copy marked Gigantamax by hand can fill it. */
+const isGmaxEntry = (e) => e.area === 'max' && /gigantamax|g-max/i.test(e.name);
+/** A copy marked by hand as caught as a Dynamax (on = true, off = unset); a Gigantamax copy is one too. */
+const isDynamaxCopy = (p) => p.dynamax === true || p.gigantamax === true;
+
 /** A resolved copy is a Shadow when the resolver flagged it (the row's flag, or "Shadow" in the name) or its id is a `_shadow` id. */
 const isShadow = (r) => Boolean(r.flags?.shadow) || r.speciesId.endsWith('_shadow');
 
@@ -128,7 +133,6 @@ export function analyseBox(box, ctx) {
   const pokemon = [];
   const ownedBase = new Set();       // base species ids present in the box (any variant)
   const ownedIds = new Set();
-  const ownedMaxIds = new Set();     // the same, without copies marked "not caught as a Dynamax": they cannot cover a Max entry
   const megaCapable = new Set();     // resolved ids owned by at least one non-Shadow copy: only those can reach a Mega
   const needLeagues = [];            // entries whose leagues are worked out after the loop, grouped by species
 
@@ -136,7 +140,6 @@ export function analyseBox(box, ctx) {
     const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
     if (!r) { pokemon.push({ p, unresolved: true }); continue; }
     ownedIds.add(r.speciesId); if (!isShadow(r)) megaCapable.add(r.speciesId); ownedBase.add(baseSpeciesId(gm, r.speciesId));
-    if (p.dynamax !== false) ownedMaxIds.add(r.speciesId);
     const reach = [r.speciesId, ...evolutionsOf(gm, r.speciesId), ...formChangesOf(gm, r.speciesId)];
     const targets = new Set(reach);
     // A Shadow can never Mega evolve. isShadow reads the resolver's flag OR the resolved id, so a copy flagged Shadow, one named "Shadow X"
@@ -147,15 +150,13 @@ export function analyseBox(box, ctx) {
     const hits = [];
     for (const id of targets) {
       for (const e of tiers.bySpecies.get(id) || []) {
-        // A Gigantamax entry is only ever satisfied by a Gigantamax catch, which an export cannot show: never credit it to a box Pokémon.
-        if (e.area === 'max' && /gigantamax|g-max/i.test(e.name)) continue;
-        // A copy the player has marked "not caught as a Dynamax" cannot take part in Max battles: no Max hit at all. (Unset, `undefined`, is unknown: the hit stays.)
-        if (e.area === 'max' && p.dynamax === false) continue;
+        // A Gigantamax entry is only satisfied by a copy the player has marked Gigantamax (by hand: an export cannot show it); any other copy is not credited.
+        if (isGmaxEntry(e) && p.gigantamax !== true) continue;
         // A shadow-flagged entry is for Shadow copies only. Three of them (Shadow Pheromosa, Roserade, Giratina Origin) keep the plain species id, so the id alone cannot tell.
         if (e.flags?.shadow && !p.shadow) continue;
         // Mega targets are the same Pokémon plus Mega Energy: credit them to the base target.
         const targetId = /_(mega(_[xy])?|primal)$/.test(id) ? baseSpeciesId(gm, id) : id;
-        hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId, viaMega: targetId !== id ? id : null, needsDynamax: e.area === 'max' && p.dynamax !== true, moves: e.moves, obtain: e.obtain, notes: e.notes });
+        hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId, viaMega: targetId !== id ? id : null, needsDynamax: e.area === 'max' && !isDynamaxCopy(p), moves: e.moves, obtain: e.obtain, notes: e.notes });
       }
       // A Shadow copy also does the job of the plain species' raid and Rocket entries (a Shadow attacks as well as, and harder than, the plain
       // one). Not the plain gym entry (a Shadow defends worse, 0.83x; a manager call) and not max (a Shadow is never a Dynamax catch).
@@ -316,7 +317,7 @@ export function analyseBox(box, ctx) {
   for (const e of tiers.entries) {
     if (!/^[SA]$/.test(e.tier)) continue;
     const base = baseSpeciesId(gm, e.speciesId);
-    const reachable = [...(e.area === 'max' ? ownedMaxIds : ownedIds)].some((id) => {
+    const reachable = [...ownedIds].some((id) => {
       const reach = [id, ...evolutionsOf(gm, id), ...formChangesOf(gm, id)];
       if (reach.includes(e.speciesId)) return true;
       // Same rule as the Shadow credit above: a Shadow of the species covers its plain raid and Rocket entries.
@@ -343,8 +344,8 @@ export function analyseBox(box, ctx) {
     const keepCount = legendary ? Math.min(2, es.length) : 1;
     // A copy the player has marked as caught as a Dynamax is never one to transfer (it is the only kind that can join Max battles): it is kept as well.
     // `dynamaxExtras` (only when there are some) says how many of the trailing keeps are there for that reason, so the app can word them.
-    const kept = sorted.slice(0, keepCount), rest = sorted.slice(keepCount), extras = rest.filter((e) => e.p.dynamax === true);
-    hygiene.push({ speciesId: id, name: gm.byId.get(id).speciesName, count: es.length, keep: [...kept, ...extras].map((e) => e.p), transfer: rest.filter((e) => e.p.dynamax !== true).map((e) => e.p), ...(extras.length ? { dynamaxExtras: extras.length } : {}) });
+    const kept = sorted.slice(0, keepCount), rest = sorted.slice(keepCount), extras = rest.filter((e) => isDynamaxCopy(e.p));
+    hygiene.push({ speciesId: id, name: gm.byId.get(id).speciesName, count: es.length, keep: [...kept, ...extras].map((e) => e.p), transfer: rest.filter((e) => !isDynamaxCopy(e.p)).map((e) => e.p), ...(extras.length ? { dynamaxExtras: extras.length } : {}) });
   }
   hygiene.sort((a, b) => b.transfer.length - a.transfer.length);
 
@@ -354,7 +355,6 @@ export function analyseBox(box, ctx) {
   const entriesBy = Object.fromEntries(FIT_AREAS.map((a) => [a, new Map()])); // area -> speciesId -> S/A/B entries
   for (const e of tiers.entries) {
     if (!entriesBy[e.area] || !TIER_W[e.tier]) continue;
-    if (e.area === 'max' && /gigantamax|g-max/i.test(e.name)) continue; // same exclusion as the hits: an export cannot show a G-Max catch
     const m = entriesBy[e.area];
     if (!m.has(e.speciesId)) m.set(e.speciesId, []);
     m.get(e.speciesId).push(e);
@@ -378,14 +378,14 @@ export function analyseBox(box, ctx) {
     const myBuilds = buildsOf.get(entry) ?? [];
     entry.fit = {};
     for (const area of FIT_AREAS) {
-      const label = AREA_LABEL[area], dyn = area === 'max' ? ' (needs a Dynamax copy)' : '';
+      const label = AREA_LABEL[area], dyn = area === 'max' && !isDynamaxCopy(p) ? ' (needs a Dynamax copy)' : '';
       // The advisor's primary build for the area: the first listed (builds are in score order). It is a separate marker, not the tag: the
       // tag is worth alone, the build adds ease of completion (cost) to it, and the two are advice of different kinds.
       const mine = myBuilds.find((b) => b.areas.includes(area));
       const buildMark = mine ? { build: true, buildAs: mine.targetName, buildCost: { dust: mine.cost.dust, candy: mine.cost.candy, xl: mine.cost.xl } } : { build: false };
       // Three entries (Shadow Pheromosa, Roserade, Giratina Origin) are shadow-flagged yet keep the plain species id: not for a plain copy.
       let reachBest = null;
-      for (const id of members) for (const e of entriesBy[area].get(id) ?? []) if (!(e.flags?.shadow && !p.shadow) && (!reachBest || TIER_W[e.tier] > TIER_W[reachBest.tier])) reachBest = e;
+      for (const id of members) for (const e of entriesBy[area].get(id) ?? []) if (!(e.flags?.shadow && !p.shadow) && !(isGmaxEntry(e) && p.gigantamax !== true) && (!reachBest || TIER_W[e.tier] > TIER_W[reachBest.tier])) reachBest = e;
       // reason: a short code the bridge carries instead of the sentence (the app composes it): none, shadowNoMega, ivUnknown, iv.
       const weak = (reason, line, extra) => ({ tag: 'weak', as: null, tier: null, reason, line, ...extra, ...buildMark });
       // A Shadow copy whose only entries here are Mega ones: say so rather than that there is no entry.

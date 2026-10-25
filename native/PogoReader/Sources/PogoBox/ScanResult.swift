@@ -46,26 +46,65 @@ public struct ScanRow: Codable, Equatable {
     public var frames: [FrameLabel]
     /// How many runs `dedupeAdjacent` joined into this row (absent on a row that was not joined).
     public var merged: Int?
-    /// Set only by a clip merge: 1 shadow, 2 purified.
+    /// 1 shadow, 2 purified. Set by a clip merge or by hand on the Pokémon page. A hand edit that turns the mark off stores 0 ("marked
+    /// neither by hand"), so a later Shadow scan pass can tell a hand "off" from unknown (nil); 0 is "not shadow" to the engine and the CSV.
     public var shadow: Int?
     /// Set only by a clip merge: the clip the row came from.
     public var clip: String?
-    /// Set only by hand on the Pokémon page: true when the Pokémon was caught as a Dynamax, false when it was not, nil when
-    /// unknown (the app cannot read it from the game). The reader never sets it; a re-scan merge carries it over.
+    /// Set only by hand on the Pokémon page: true when the Pokémon was caught as a Dynamax, nil when not marked (the app cannot read it
+    /// from the game). There is no "No": a stored `false` (older box versions) decodes as nil. The reader never sets it; a re-scan merge carries it over.
     public var dynamax: Bool?
+    /// Set only by hand: true when the Pokémon was caught as a Gigantamax, nil when not marked. On implies `dynamax` on; `dynamax` off clears it
+    /// (`BoxMerge.correct` keeps the two in step). Only a copy marked Gigantamax is credited with a Gigantamax Max entry.
+    public var gigantamax: Bool?
+    /// Set only by hand: true for a lucky Pokémon, nil when not marked. Written to the CSV as Lucky 1, so the advisor halves the power-up dust.
+    public var lucky: Bool?
+    /// Set only by hand: moves, Max moves, Mega Level and so on, stored and shown only (not in the CSV, not read by the advisor).
+    public var details: CopyDetails?
 
     public init(index: Int, name: String, display: String, form: String, speciesId: String, dex: Int?, cp: Int, hp: Int?, ivs: IVs?, ivsRead: IVs?,
                 ivsGuess: IVs?, level: Double?, levelMax: Double?, dust: Int?, solveStatus: String, flags: [String], frames: [FrameLabel],
-                merged: Int? = nil, shadow: Int? = nil, clip: String? = nil, dynamax: Bool? = nil) {
+                merged: Int? = nil, shadow: Int? = nil, clip: String? = nil, dynamax: Bool? = nil, gigantamax: Bool? = nil, lucky: Bool? = nil,
+                details: CopyDetails? = nil) {
         self.index = index; self.name = name; self.display = display; self.form = form; self.speciesId = speciesId; self.dex = dex; self.cp = cp
         self.hp = hp; self.ivs = ivs; self.ivsRead = ivsRead; self.ivsGuess = ivsGuess; self.level = level; self.levelMax = levelMax; self.dust = dust
         self.solveStatus = solveStatus; self.flags = flags; self.frames = frames; self.merged = merged; self.shadow = shadow; self.clip = clip
-        self.dynamax = dynamax
+        self.dynamax = dynamax; self.gigantamax = gigantamax; self.lucky = lucky; self.details = details
     }
 
     private enum Key: String, CodingKey {
         case index, name, display, form, speciesId, dex, cp, hp, ivs, ivsRead, ivsGuess, level, levelMax, dust
-        case solveStatus, flags, frames, merged, shadow, clip, dynamax
+        case solveStatus, flags, frames, merged, shadow, clip, dynamax, gigantamax, lucky, details
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        index = try c.decode(Int.self, forKey: .index)
+        name = try c.decode(String.self, forKey: .name)
+        display = try c.decode(String.self, forKey: .display)
+        form = try c.decode(String.self, forKey: .form)
+        speciesId = try c.decode(String.self, forKey: .speciesId)
+        dex = try c.decodeIfPresent(Int.self, forKey: .dex)
+        cp = try c.decode(Int.self, forKey: .cp)
+        hp = try c.decodeIfPresent(Int.self, forKey: .hp)
+        ivs = try c.decodeIfPresent(IVs.self, forKey: .ivs)
+        ivsRead = try c.decodeIfPresent(IVs.self, forKey: .ivsRead)
+        ivsGuess = try c.decodeIfPresent(IVs.self, forKey: .ivsGuess)
+        level = try c.decodeIfPresent(Double.self, forKey: .level)
+        levelMax = try c.decodeIfPresent(Double.self, forKey: .levelMax)
+        dust = try c.decodeIfPresent(Int.self, forKey: .dust)
+        solveStatus = try c.decode(String.self, forKey: .solveStatus)
+        flags = try c.decode([String].self, forKey: .flags)
+        frames = try c.decode([FrameLabel].self, forKey: .frames)
+        merged = try c.decodeIfPresent(Int.self, forKey: .merged)
+        shadow = try c.decodeIfPresent(Int.self, forKey: .shadow)
+        clip = try c.decodeIfPresent(String.self, forKey: .clip)
+        // The old "No" (false) is gone: it decodes as not marked, in stored boxes, saved scans and pending scans alike.
+        dynamax = (try c.decodeIfPresent(Bool.self, forKey: .dynamax)) == true ? true : nil
+        gigantamax = (try c.decodeIfPresent(Bool.self, forKey: .gigantamax)) == true ? true : nil
+        if gigantamax == true { dynamax = true }   // Gigantamax is a kind of Dynamax: a hand-made or older row with only the one reads as both
+        lucky = (try c.decodeIfPresent(Bool.self, forKey: .lucky)) == true ? true : nil
+        details = try c.decodeIfPresent(CopyDetails.self, forKey: .details)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -91,6 +130,71 @@ public struct ScanRow: Codable, Equatable {
         try c.encodeIfPresent(shadow, forKey: .shadow)
         try c.encodeIfPresent(clip, forKey: .clip)
         try c.encodeIfPresent(dynamax, forKey: .dynamax)
+        try c.encodeIfPresent(gigantamax, forKey: .gigantamax)
+        try c.encodeIfPresent(lucky, forKey: .lucky)
+        try c.encodeIfPresent(details, forKey: .details)
+    }
+}
+
+/// The details of one Pokémon that are set by hand and only stored and shown (not in the CSV, not read by the advisor yet). Every field is
+/// optional and a nil one is absent from the JSON. Moves are game-master move ids.
+public struct CopyDetails: Codable, Equatable {
+    /// The game's Mega Level names, from the first Mega evolution to the last.
+    public enum MegaLevel: String, Codable, CaseIterable { case notYet, base, high, max }
+    public var fastMove: String?
+    public var chargedMove: String?
+    /// nil is "Not unlocked". Never equal to `chargedMove` (`normalised`).
+    public var chargedMove2: String?
+    /// Max move levels, 1-3; spirit nil is "–".
+    public var maxAttack: Int?
+    public var maxGuard: Int?
+    public var maxSpirit: Int?
+    public var megaLevel: MegaLevel?
+    public var bestBuddy: Bool?
+    public var weatherBoosted: Bool?
+
+    public init(fastMove: String? = nil, chargedMove: String? = nil, chargedMove2: String? = nil, maxAttack: Int? = nil, maxGuard: Int? = nil,
+                maxSpirit: Int? = nil, megaLevel: MegaLevel? = nil, bestBuddy: Bool? = nil, weatherBoosted: Bool? = nil) {
+        self.fastMove = fastMove; self.chargedMove = chargedMove; self.chargedMove2 = chargedMove2; self.maxAttack = maxAttack; self.maxGuard = maxGuard
+        self.maxSpirit = maxSpirit; self.megaLevel = megaLevel; self.bestBuddy = bestBuddy; self.weatherBoosted = weatherBoosted
+    }
+
+    private enum Key: String, CodingKey { case fastMove, chargedMove, chargedMove2, maxAttack, maxGuard, maxSpirit, megaLevel, bestBuddy, weatherBoosted }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        fastMove = try c.decodeIfPresent(String.self, forKey: .fastMove)
+        chargedMove = try c.decodeIfPresent(String.self, forKey: .chargedMove)
+        chargedMove2 = try c.decodeIfPresent(String.self, forKey: .chargedMove2)
+        maxAttack = try c.decodeIfPresent(Int.self, forKey: .maxAttack)
+        maxGuard = try c.decodeIfPresent(Int.self, forKey: .maxGuard)
+        maxSpirit = try c.decodeIfPresent(Int.self, forKey: .maxSpirit)
+        megaLevel = try c.decodeIfPresent(MegaLevel.self, forKey: .megaLevel)
+        bestBuddy = try c.decodeIfPresent(Bool.self, forKey: .bestBuddy)
+        weatherBoosted = try c.decodeIfPresent(Bool.self, forKey: .weatherBoosted)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        try c.encodeIfPresent(fastMove, forKey: .fastMove)
+        try c.encodeIfPresent(chargedMove, forKey: .chargedMove)
+        try c.encodeIfPresent(chargedMove2, forKey: .chargedMove2)
+        try c.encodeIfPresent(maxAttack, forKey: .maxAttack)
+        try c.encodeIfPresent(maxGuard, forKey: .maxGuard)
+        try c.encodeIfPresent(maxSpirit, forKey: .maxSpirit)
+        try c.encodeIfPresent(megaLevel, forKey: .megaLevel)
+        try c.encodeIfPresent(bestBuddy, forKey: .bestBuddy)
+        try c.encodeIfPresent(weatherBoosted, forKey: .weatherBoosted)
+    }
+
+    /// Nothing set at all (a row with such details stores none).
+    public var isEmpty: Bool { self == CopyDetails() }
+
+    /// The one rule the model keeps: the second charged move is never the first (setting it equal clears it back to "Not unlocked").
+    public var normalised: CopyDetails {
+        var d = self
+        if d.chargedMove2 != nil, d.chargedMove2 == d.chargedMove { d.chargedMove2 = nil }
+        return d
     }
 }
 

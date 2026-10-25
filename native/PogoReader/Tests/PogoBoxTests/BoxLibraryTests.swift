@@ -205,7 +205,7 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
         XCTAssertEqual(advice.version, BoxAdvice.currentVersion)
-        XCTAssertEqual(BoxAdvice.currentVersion, 14)
+        XCTAssertEqual(BoxAdvice.currentVersion, 15)
 
         // The options list decodes in order; the experimental member is a different index.
         let gl = try XCTUnwrap(l["gl"])
@@ -221,7 +221,7 @@ final class BoxLibraryTests: XCTestCase {
         try lib.saveAdvice(advice, account: "a", seq: 1)
         XCTAssertEqual(lib.loadAdvice(account: "a", seq: 1), advice)
         // Versions 2 (leagues only) and 3 (the first options shape, the old pick rule) are recomputed too.
-        for v in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] {
+        for v in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] {
             var old = advice; old.version = v
             try lib.saveAdvice(old, account: "a", seq: 1)
             XCTAssertNil(lib.loadAdvice(account: "a", seq: 1), "version \(v)")
