@@ -70,7 +70,7 @@ final class ListScreensTests: XCTestCase {
         XCTAssertTrue(reveal(app, "Moltres").label.hasPrefix("Moltres, 6 Pokémon"))
     }
 
-    /// A league chip keeps the species with a Strong or OK copy for that league under the shown pick; Great League is over the cap for this whole box.
+    /// A league chip keeps the species with a Top or Good copy for that league under the shown pick; Great League is over the cap for this whole box.
     func testALeagueChipFilters() throws {
         let app = launchPopulated()
         resetRanking(app)
@@ -317,7 +317,7 @@ final class ListScreensTests: XCTestCase {
             } else {
                 app = launchPopulated(["-appearance", "light", "-UIPreferredContentSizeCategoryName", category])
             }
-            sleep(1); app.swipeUp(velocity: .slow); sleep(1)   // the saved panel pushes the chips and the sort line down at the large sizes
+            sleep(1); app.swipeUp(velocity: .slow); sleep(1)   // the saved panel (the top of the scrolling list, under the fixed header) is scrolled off, so the rows fill the screen
             shot("size-\(name)-list")
             let sort = app.descendants(matching: .any)["sort-menu"], list = app.descendants(matching: .any)["list-scoring"]
             XCTAssertTrue(sort.waitForExistence(timeout: 10) && list.exists, "\(name): the sort line")
@@ -339,7 +339,7 @@ final class ListScreensTests: XCTestCase {
 
     /// The Pokémon list's header (count line, search, chips, sort line with the ranking switch) is fixed: after the list is scrolled well down it is where it was,
     /// still hittable, and the species rows have moved under it. At the default size, AX3 and AX5 (light), and default and AX5 in dark; the ranking explainer is
-    /// opened inside the fixed block too. Screenshots go to POGO_SCREENS.
+    /// opened inside the fixed block too, and the search is focused with the keyboard up. Screenshots go to POGO_SCREENS.
     func testHeaderStaysFixedAtTheDefaultSize() throws { try headerFixed("hdr-default-light", "UICTContentSizeCategoryL", "light") }
     func testHeaderStaysFixedInDark() throws { try headerFixed("hdr-default-dark", "UICTContentSizeCategoryL", "dark") }
     func testHeaderStaysFixedAtAX3() throws { try headerFixed("hdr-ax3-light", "UICTContentSizeCategoryAccessibilityXL", "light") }
@@ -358,23 +358,89 @@ final class ListScreensTests: XCTestCase {
         let before = (search.frame, sort.frame, chipAll.frame)
         shot("\(name)-top")
         let firstRow = rows(app).firstMatch.label
+        let first = rows(app).firstMatch.frame
+        XCTAssertGreaterThanOrEqual(first.minY, headerBottom(app), "\(name): the first row starts below the header")
+        XCTAssertLessThan(first.minY, app.frame.maxY, "\(name): and on the screen")
         for _ in 0..<4 { app.swipeUp(); }
         sleep(1)
         XCTAssertEqual(search.frame, before.0, "\(name): the search field did not move")
         XCTAssertEqual(sort.frame, before.1, "\(name): the sort line did not move")
         XCTAssertEqual(chipAll.frame, before.2, "\(name): the chips did not move")
-        XCTAssertTrue(search.isHittable && sort.isHittable, name)
+        XCTAssertTrue(search.isHittable && sort.isHittable && chipAll.isHittable, name)
         XCTAssertNotEqual(rows(app).firstMatch.label, firstRow, "\(name): the list did scroll")
+        XCTAssertGreaterThan(visibleRows(app).count, 0, "\(name): a row is on the screen under the header after the scroll")
         shot("\(name)-scrolled")
+        // The search focused with the keyboard up: the header is still there, hittable, and some of the list is left above the keyboard.
+        search.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "\(name): the keyboard is up")
+        sleep(1)
+        XCTAssertTrue(search.isHittable, "\(name): the search field is hittable with the keyboard up")
+        // At the accessibility sizes the header is capped and scrolls inside itself: with the keyboard up the search field has been scrolled into the capped block
+        // and the chips are out of its visible part (seen on the iPhone Air simulator at AX5, 25 Oct 2026). Greg's ruling: check on his phone before any change, so the
+        // chips are asserted only below the accessibility sizes.
+        if !category.contains("Accessibility") { XCTAssertTrue(chipAll.isHittable, "\(name): the chips are hittable with the keyboard up") }
+        XCTAssertGreaterThan(visibleRows(app).count, 0, "\(name): a row is visible with the keyboard up")
+        shot("\(name)-keyboard")
+        search.typeText("\n")   // Return closes the keyboard
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), name)
         // The explainer opens inside the fixed block.
         let info = app.buttons["list-scoring-info"]
         XCTAssertTrue(info.exists, name)
         info.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["list-scoring-explainer"].waitForExistence(timeout: 5), "\(name): the explainer opens in the header")
-        XCTAssertTrue(search.isHittable || search.exists, "\(name): the header is still there with the explainer open")
-        XCTAssertTrue(rows(app).firstMatch.exists, "\(name): some of the list is left under an open explainer")
+        let explainer = app.descendants(matching: .any)["list-scoring-explainer"]
+        XCTAssertTrue(explainer.waitForExistence(timeout: 5), "\(name): the explainer opens in the header")
+        sleep(1)   // the header scrolls the explainer into view after its first layout
+        XCTAssertTrue(explainer.isHittable, "\(name): the open explainer is on the screen")
+        XCTAssertTrue(search.exists && sort.exists, "\(name): the header is still there with the explainer open")
+        XCTAssertLessThanOrEqual(explainer.frame.maxY, app.frame.height, "\(name): the explainer is not cut off by the screen")
+        let open = visibleRows(app)
+        XCTAssertGreaterThan(open.count, 0, "\(name): some of the list is left under an open explainer")
+        // The list is still reachable: scrolling it under the open explainer moves its rows.
+        let labelBefore = open.first?.label
+        dragList(app, up: true)
+        sleep(1)
+        if visibleRows(app).first?.label == labelBefore { dragList(app, up: false); sleep(1) }   // the list was already at its end
+        XCTAssertNotEqual(visibleRows(app).first?.label, labelBefore, "\(name): the list scrolls under an open explainer")
         sleep(1); shot("\(name)-explainer")
         app.terminate()
+    }
+
+    /// The bottom edge of the fixed header: its last line is the sort menu and the ranking switch beside or under it, and under them the ranking explainer while it is open.
+    private func headerBottom(_ app: XCUIApplication) -> CGFloat {
+        let explainer = app.descendants(matching: .any)["list-scoring-explainer"]
+        return max(app.descendants(matching: .any)["sort-menu"].frame.maxY, app.descendants(matching: .any)["list-scoring"].frame.maxY, explainer.exists ? min(explainer.frame.maxY, app.frame.maxY) : 0)
+    }
+    /// Drags the list up (or down) from the middle of the screen below the header (a swipe on a row can start under the header, where the row has no visible frame).
+    private func dragList(_ app: XCUIApplication, up: Bool) {
+        let top = headerBottom(app), height = app.frame.height
+        let from = (top + height) / 2, span = (height - top) * 0.3
+        let (start, end) = up ? (from + span, from - span) : (from - span, from + span)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: start / height))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: end / height)))
+    }
+    /// The species rows with at least 20 pt of their height on the screen below the header, top to bottom.
+    private func visibleRows(_ app: XCUIApplication) -> [XCUIElement] {
+        let top = headerBottom(app), bottom = app.frame.maxY
+        return rows(app).allElementsBoundByIndex.filter { min($0.frame.maxY, bottom) - max($0.frame.minY, top) >= 20 }
+    }
+
+    /// The saved-scan panel is the top of the scrolling list, under the fixed header (Greg, 25 Oct 2026): present right after a save, below the sort line, hittable
+    /// controls above it, and scrolled away with the list while the header stays. The sample scan's save is the seed; the panel goes with the relaunch.
+    func testSavedScanPanelScrollsUnderTheFixedHeader() throws {
+        let app = launchPopulated()
+        sleep(1)
+        let panel = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Saved to'")).firstMatch
+        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the saved-scan panel is on the list right after the save")
+        let search = app.textFields["box-search"], sort = app.descendants(matching: .any)["sort-menu"], chipAll = app.buttons["chip-all"]
+        XCTAssertTrue(search.isHittable && sort.isHittable && chipAll.isHittable, "the header is hittable above the panel")
+        XCTAssertGreaterThanOrEqual(panel.frame.minY, headerBottom(app), "the panel sits below the fixed sort line")
+        let before = (search.frame, sort.frame)
+        for _ in 0..<3 { app.swipeUp() }
+        sleep(1)
+        XCTAssertEqual(search.frame, before.0, "the search field did not move")
+        XCTAssertEqual(sort.frame, before.1, "the sort line did not move")
+        XCTAssertFalse(panel.isHittable, "the panel scrolled away with the list")
+        shot("hdr-saved-panel")
     }
 
     /// A fresh account with the sample scan reviewed and saved; leaves the app on the list.
