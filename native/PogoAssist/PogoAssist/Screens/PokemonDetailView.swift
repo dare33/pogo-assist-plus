@@ -378,8 +378,8 @@ struct PokemonDetailView: View {
         }
     }
 
-    /// Whether this Pokémon was caught as a Dynamax. The game shows a Dynamax badge, but the app cannot read it, so the person sets it: Not set | Yes | No.
-    /// Max battles use only the ones set to Yes. The switch is one adjustable element; the label beside it is hidden from VoiceOver (the switch names itself).
+    /// Whether this Pokémon was caught as a Dynamax. The game shows a Dynamax badge, but the app cannot read it, so the person sets it: Off | On.
+    /// Max battles use only the ones set to On. The switch is one adjustable element; the label beside it is hidden from VoiceOver (the switch names itself).
     private func dynamaxRow(_ e: BoxEntry) -> some View {
         let selection = Binding<BoxMerge.DynamaxEdit>(
             get: { pendingDynamax ?? BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) },
@@ -395,7 +395,7 @@ struct PokemonDetailView: View {
             })
         let label = Text("Dynamax").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.muted).accessibilityHidden(true)
         let control = SegmentedSwitch(
-            segments: [.init(value: .notSet, title: "Not set"), .init(value: .yes, title: "Yes"), .init(value: .no, title: "No")],
+            segments: [.init(value: .off, title: "Off"), .init(value: .on, title: "On")],
             selection: selection, metrics: .compact, label: "Dynamax", identifier: "dynamax-switch", adjustable: true, singleLine: true)
         return VStack(alignment: .leading, spacing: 4) {
             // At large text sizes the switch drops under its label rather than squeezing it.

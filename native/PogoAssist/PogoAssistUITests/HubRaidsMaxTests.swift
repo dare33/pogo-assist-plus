@@ -124,8 +124,8 @@ final class HubRaidsMaxTests: XCTestCase {
         var swipes = 0
         while !(control.exists && control.isHittable) && swipes < 10 { app.swipeUp(); swipes += 1 }
         XCTAssertTrue(control.isHittable, "the Dynamax switch is on the page")
-        control.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).tap()   // Not set | Yes | No
-        expectation(for: NSPredicate(format: "value == 'Yes'"), evaluatedWith: control)
+        control.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)).tap()   // Off | On
+        expectation(for: NSPredicate(format: "value == 'On'"), evaluatedWith: control)
         waitForExpectations(timeout: 10)
         app.buttons["Back"].tap()
         XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5))

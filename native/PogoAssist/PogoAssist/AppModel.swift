@@ -719,12 +719,12 @@ final class AppModel: ObservableObject {
     func correct(_ id: String, _ edit: BoxMerge.Edit) async -> CorrectionResult {
         guard let a = account else { return CorrectionResult(error: "There is no account.", notice: nil) }
         let lib = library, label = entry(id)?.row.title ?? "a Pokémon"   // the history note only; the values come from the box inside the call
-        // A Dynamax-only edit is a setting, not a correction of a read value.
-        let dynamaxOnly = edit.dynamax != nil && edit.cp == nil && edit.hp == nil && edit.ivs == nil && edit.speciesName == nil
+        // An edit of the hand-set marks only (Dynamax, Gigantamax, Shadow/Purified, Lucky, details) is a setting, not a correction of a read value.
+        let marksOnly = edit.marksOnly && (edit.dynamax != nil || edit.gigantamax != nil || edit.lucky != nil || edit.shadow != nil || edit.details != nil)
         do {
             let (new, notice) = try await worker.run { engine -> (BoxSnapshot, String?) in
                 var notice: String?
-                let snap = try lib.mutate(account: a, reason: .edit, note: dynamaxOnly ? "Dynamax set for \(label)" : "Corrected \(label)") { entries in
+                let snap = try lib.mutate(account: a, reason: .edit, note: marksOnly ? "Marks set for \(label)" : "Corrected \(label)") { entries in
                     guard let i = entries.firstIndex(where: { $0.id == id }) else { throw BoxMerge.EditFailure.badValue("That Pokémon is no longer in the box.") }
                     var fixed = try BoxMerge.correct(entries[i], with: edit, gameMaster: try .bundled())
                     // The level and dust follow the corrected values: the JavaScript solver is run again for this Pokémon.

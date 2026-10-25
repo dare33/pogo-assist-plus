@@ -849,7 +849,7 @@ final class BoxScreensTests: XCTestCase {
         shot("league-about")
     }
 
-    /// The Dynamax switch in the facts panel: it starts at Not set, Yes sticks after leaving the page and coming back.
+    /// The Dynamax switch in the facts panel: it starts at Off, On sticks after leaving the page and coming back.
     func testDynamaxSwitchOnThePokemonPage() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
@@ -871,11 +871,11 @@ final class BoxScreensTests: XCTestCase {
         }
         openFirstPokemon()
         var control = dynamaxSwitch()
-        XCTAssertEqual(control.value as? String, "Not set")
+        XCTAssertEqual(control.value as? String, "Off")
         XCTAssertTrue(app.staticTexts["Only Pokémon caught as Dynamax can join Max battles. The app cannot read this from the game."].exists)
-        // The middle segment is Yes (Not set | Yes | No); the switch is one adjustable element, so it is tapped by position.
-        control.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).tap()
-        let yes = NSPredicate(format: "value == 'Yes'")
+        // The second segment is On (Off | On); the switch is one adjustable element, so it is tapped by position.
+        control.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)).tap()
+        let yes = NSPredicate(format: "value == 'On'")
         expectation(for: yes, evaluatedWith: control)
         waitForExpectations(timeout: 10)
         shot("dynamax-switch-light")
@@ -886,6 +886,6 @@ final class BoxScreensTests: XCTestCase {
         members.firstMatch.tap()
         XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
         control = dynamaxSwitch()
-        XCTAssertEqual(control.value as? String, "Yes")
+        XCTAssertEqual(control.value as? String, "On")
     }
 }
