@@ -29,8 +29,6 @@ struct PokemonDetailView: View {
     @State private var cache = PageCache()
     /// Bumped each time the advice changes, so the cache is rebuilt.
     @State private var adviceGen = 0
-    /// The earlier league view's state, until the PvP tab has its own (the next commit).
-    @State private var leaguesMode: String?
 
     /// `initialLeague` (a league key) opens the page on the PvP tab with that league's tile chosen (a tap on a TOP PVP copy, rule 6); otherwise it opens on Summary (rule 19).
     init(id: String, initialLeague: String? = nil) {
@@ -208,7 +206,18 @@ struct PokemonDetailView: View {
                 SummaryRowsPanel(rows: rows) { tab = $0 }
                 AdvicePanel(entry: e, advice: advice)
             case .pvp: leaguesPanel(e, advice: advice)
-            case .raids, .gym, .rocket, .max: Text(tab.title).foregroundStyle(Theme.muted)   // the next commit
+            case .raids:
+                let cards = cache.value("raids") { PokemonActivities.raidCards(copy: e, ctx: ctx) }
+                RaidsTab(copy: e, family: familyName(e, ctx), cards: cards)
+            case .gym:
+                let top = cache.value("top") { PokemonActivities.topDefender(ctx: ctx) }
+                let cards = cache.value("gym") { PokemonActivities.gymCards(copy: e, ctx: ctx, top: top) }
+                GymTab(copy: e, family: familyName(e, ctx), cards: cards, top: top)
+            case .rocket:
+                RocketTab(cards: cache.value("rocket") { PokemonActivities.rocketCards(copy: e, ctx: ctx) })
+            case .max:
+                let max = cache.value("max") { PokemonActivities.maxCards(copy: e, ctx: ctx) }
+                MaxTab(copy: e, family: familyName(e, ctx), cards: max.cards, battles: max.battles)
             }
         } else {
             switch model.advice {
@@ -225,14 +234,24 @@ struct PokemonDetailView: View {
         }
     }
 
+    private func familyName(_ e: BoxEntry, _ ctx: HubContext) -> String { PokemonActivities.members(of: e, ctx: ctx).first?.name ?? e.row.title }
+
     // MARK: leagues
 
     /// Great, Ultra and Master League for this Pokémon, all read from the cached advice: nothing is worked out here.
     @ViewBuilder private func leaguesPanel(_ e: BoxEntry, advice: BoxAdvice) -> some View {
         let ratings = advice.leagues(for: e.id)
-        if megaShown(e) == nil, !ratings.isEmpty {
+        if megaShown(e) != nil {
+            // Megas are not allowed in GO Battle League, so the tab says so while the page shows the Mega form.
+            Panel(padding: 16, spacing: 8) {
+                Text("PVP LEAGUES").font(.figtree(13, .heavy, relativeTo: .footnote)).tracking(0.5).foregroundStyle(ContentType.pvp.ink(accent))
+                Text("Mega Pokémon cannot battle in GO Battle League. Switch to Normal to see the leagues.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+            }
+        } else if !ratings.isEmpty {
             let a = advice.entries(for: e.id)
-            LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, builds: a.builds, transfers: a.transfersWithNoBuild, mode: $leaguesMode)
+            LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, builds: a.builds, transfers: a.transfersWithNoBuild, selected: $league)
+        } else {
+            Panel(padding: 16, spacing: 8) { Text("No league ratings for this Pokémon.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted) }
         }
     }
 

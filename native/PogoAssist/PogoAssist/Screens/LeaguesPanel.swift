@@ -1,160 +1,195 @@
 import SwiftUI
 import PogoBox
 
-/// The Pokémon page's LEAGUES panel (design handoff of 22 Oct 2026, section 3): one pick card per league, and the league view
-/// the card opens in the same panel (the league's card, the other family members as a list). All sentences and figures come from
-/// `LeaguePanel` (PogoBox), which `swift test` pins; this file lays them out. State is per page: the open league, which lists
-/// are shown, which option row is open, and whether the ranking explainer is open.
+/// The PvP tab of the Pokémon page (design pass 3, D3, D4, CONCEPTS rules 9 and 19): PVP LEAGUES with the "i" (the Classic | Pogo Assist switch and its
+/// explanation inside it), three league tiles, one muted worth line for the chosen league and, folded at first, its family and details (the other members,
+/// the cost, the moves). All sentences and figures come from `LeaguePanel` and `PokemonPage` (PogoBox); nothing is rated again here.
 struct LeaguesPanel: View {
     let ratings: [String: BoxAdvice.LeagueRating]
     /// The Pokémon's own level; nil when not known.
     let level: Double?
     /// "Pogo Assist is currently unable to detect Shadow Pokémon." while this copy's Shadow status is unknown.
     let showsShadowNote: Bool
-    /// This copy's own Advice builds: a league one of them covers gets the "Advice builds it" marker (the tag itself is worth alone).
+    /// This copy's own Advice builds: a tile's cost mark reads the ones that cover its league, and its spoken label says "Advice builds it".
     let builds: [BoxAdvice.Build]
-    /// No build of its own and hygiene would transfer it: the Weak tag may then say "better kept for trading or transferring".
+    /// No build of its own and hygiene would transfer it: the Weak sentence may then say "better kept for trading or transferring".
     let transfers: Bool
+    /// The chosen league tile (a league key). Owned by the page.
+    @Binding var selected: String
 
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accent) private var accent
-    /// nil is the base state (one card per league); otherwise the league the view shows. Owned by the Pokémon page, which drops its
-    /// Advice panel while a league view is open.
-    @Binding var mode: String?
-    /// Leagues whose worth tag was tapped open: the one line it explains.
-    @State private var worthOpen: Set<String> = []
-    @State private var expanded: [String: String] = [:]
     @State private var infoOpen = false
+    @State private var famOpen = false
+    @State private var expanded: [String: String] = [:]
 
     private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }
     private var oneColumn: Bool { typeSize.isAccessibilitySize }
+    private var keys: [String] { LeaguePanel.keys.filter { ratings[$0] != nil } }
+    private var chosen: String { keys.contains(selected) ? selected : (keys.first ?? selected) }
 
     var body: some View {
-        Panel(padding: 18, spacing: 14) {
+        Panel(padding: 16, spacing: 12) {
             header
-            if infoOpen { RankingExplainer(identifier: "leagues-scoring-explainer").transition(.opacity) }
-            if let key = mode, let r = ratings[key] {
-                leagueView(key, r).transition(.opacity)
-            } else {
-                VStack(alignment: .leading, spacing: 22) {
-                    ForEach(LeaguePanel.keys, id: \.self) { key in
-                        if let r = ratings[key] { block(key, r) }
-                    }
-                }
-                .transition(.opacity)
+            if infoOpen { explainer.transition(.opacity) }
+            tiles
+            if let r = ratings[chosen] { detail(chosen, r) }
+        }
+        .animation(.easeOut(duration: 0.2), value: infoOpen)
+        .animation(.easeOut(duration: 0.2), value: famOpen)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("pvp-tab")
+    }
+
+    // MARK: header and the "i"
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text("PVP LEAGUES").font(.figtree(13, .heavy, relativeTo: .footnote)).tracking(0.5).foregroundStyle(ContentType.pvp.ink(accent))
+                .accessibilityAddTraits(.isHeader).accessibilityIdentifier("leagues-panel")
+            Spacer(minLength: 8)
+            InfoButton(isOpen: $infoOpen, label: "Ranking and how the picks are made", identifier: "leagues-scoring-info")
+        }
+        .padding(.vertical, -6)
+    }
+
+    /// The Classic | Pogo Assist switch lives inside the "i" (D4), above its explanation.
+    private var explainer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { rankingLabel; Spacer(minLength: 8); rankingSwitch }
+                VStack(alignment: .leading, spacing: 4) { rankingLabel; rankingSwitch }
             }
+            RankingExplainer(identifier: "leagues-scoring-explainer")
             if showsShadowNote {
                 Text("Pogo Assist is currently unable to detect Shadow Pokémon.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("leagues-shadow-note")
             }
         }
-        .animation(.easeOut(duration: 0.2), value: mode)
-        .animation(.easeOut(duration: 0.2), value: infoOpen)
     }
 
-    // MARK: header
-
-    /// LEAGUES (with the back circle in the league view) and the ranking switch: one row, or from the sizes where the switch no longer
-    /// fits beside the label, the label above the switch.
-    private var header: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { title; Spacer(minLength: 8); rankingSwitch }
-            VStack(alignment: .leading, spacing: 4) { title; rankingSwitch }
-        }
-        .frame(minHeight: 30)
+    private var rankingLabel: some View {
+        Text("RANKING").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.6).foregroundStyle(Theme.faint).accessibilityHidden(true)
     }
 
-    private var rankingSwitch: some View { RankingSwitch(infoOpen: $infoOpen, identifier: "leagues-scoring", showsCaption: false) }
-
-    private var title: some View {
-        HStack(spacing: 8) {
-            if mode != nil {
-                Button { mode = nil } label: {
-                    Image(systemName: "chevron.left").font(.figtree(13, .heavy)).foregroundStyle(Theme.ink)
-                        .frame(width: 30, height: 30).background(Circle().fill(Theme.surface2))
-                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.leading, -8).padding(.trailing, -6)
-                .accessibilityLabel("All leagues")
-                .accessibilityIdentifier("leagues-back")
-            }
-            Text("LEAGUES").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("leagues-panel")
-        }
+    private var rankingSwitch: some View {
+        SegmentedSwitch(
+            segments: Ranking.allCases.map { .init(value: $0, title: $0.title) },
+            selection: Binding(get: { Ranking(rawValue: rankingRaw) ?? .default }, set: { rankingRaw = $0.rawValue }),
+            metrics: .compact, label: "Ranking", identifier: "leagues-scoring", adjustable: true, singleLine: !oneColumn)
     }
 
-    // MARK: base state
-
-    private func block(_ key: String, _ r: BoxAdvice.LeagueRating) -> some View {
-        let league = League(rawValue: key) ?? .gl
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Circle().fill(league.dot).frame(width: 10, height: 10).accessibilityHidden(true)
-                Text(LeaguePanel.name(key)).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(league.ink)
-                Spacer(minLength: 8)
-                Text(LeaguePanel.capText(key)).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(league.ink)
-            }
-            .accessibilityHidden(true)
-            let c = card(key, r)
-            Button { mode = key } label: { pickCard(key, c, tappable: true) }
-                .buttonStyle(PressStyle())
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spoken(key, c))
-                .accessibilityAddTraits(.isButton)
-                .accessibilityIdentifier("league-\(key)-pick")
-                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, c, $0) }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("league-\(key)")
-    }
+    // MARK: the tiles
 
     private func card(_ key: String, _ r: BoxAdvice.LeagueRating) -> LeaguePanel.Card {
         LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist), key: key, level: level, builds: builds)
     }
 
-    private func spoken(_ key: String, _ c: LeaguePanel.Card) -> String {
-        LeaguePanel.spoken(c, key: key, chip: LeaguePanel.chipText(pogoAssist: pogoAssist))
+    private var tiles: some View {
+        Group {
+            if oneColumn { VStack(spacing: 8) { ForEach(keys, id: \.self) { tile($0) } } }
+            else { HStack(alignment: .top, spacing: 8) { ForEach(keys, id: \.self) { tile($0) } } }
+        }
     }
 
-    // MARK: the pick card
-
-    private func pickCard(_ key: String, _ c: LeaguePanel.Card, tappable: Bool) -> some View {
-        return VStack(alignment: .leading, spacing: 8) {
-            FlowLayout(spacing: 8) {
-                Text(c.title).font(.figtree(19, .heavy, relativeTo: .title3)).tracking(-0.01 * 19).foregroundStyle(Theme.ink)
-                Text(LeaguePanel.chipText(pogoAssist: pogoAssist).uppercased()).font(.figtree(12, .bold, relativeTo: .caption)).tracking(0.07 * 12)
-                    .foregroundStyle(accent.ink).padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(accent.tint, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+    /// A league tile (surface2, radius 16, a 2 pt ring in the league's ink when chosen): the pick with its types, its score and rank, this copy's IV % and rank,
+    /// the worth tag and the cost mark.
+    private func tile(_ key: String) -> some View {
+        let r = ratings[key]!
+        let c = card(key, r), league = League(rawValue: key) ?? .gl, on = key == chosen
+        let species = try? GameMaster.bundled()
+        let mark = MyPokemon.copyMark(builds: builds.filter { $0.areas.contains(BoxAdvice.areaLabel[key] ?? key) })
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return Button { selected = key } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 5) {
+                    Circle().fill(league.dot).frame(width: 8, height: 8)
+                    Text(BoxAdvice.areaLabel[key] ?? key.uppercased()).font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.5)
+                }
+                .foregroundStyle(league.ink)
+                Text(c.title).font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(oneColumn ? nil : 2).multilineTextAlignment(.leading)
+                TypeIcons(types: species?.byId[c.option.speciesId]?.types ?? [], size: 16)
+                if c.status == .noViable {
+                    Text("Over the cap").font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.red).multilineTextAlignment(.leading)
+                } else {
+                    fig(c.scoreText, MyPokemon.scoreGrade(c.option.strength?.score), c.rankText)
+                    fig(c.ivText, MyPokemon.rankGrade(c.status == .fits ? c.option.iv?.rank : nil), c.ivRankText)
+                }
                 if let w = c.worth { worthTag(w) }
-                if c.buildsIt { buildsItTag(c) }
-                if c.overCapCount > 0 {
-                    Text("▲ \(c.overCapCount) over cap").font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.04 * 11)
-                        .foregroundStyle(Theme.red).padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(Theme.redTint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Spacer(minLength: 0)
+                PlanMark(mark: mark, label: nil).frame(minHeight: 18)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: oneColumn ? 0 : 150, alignment: .topLeading)
+            .background(Theme.surface2, in: shape)
+            .overlay { if on { shape.strokeBorder(league.ink, lineWidth: 2) } }
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(LeaguePanel.spoken(c, key: key, chip: LeaguePanel.chipText(pogoAssist: pogoAssist)))
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("league-\(key)-pick")
+    }
+
+    private func fig(_ value: String, _ grade: MyPokemon.Grade, _ sub: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            GradedNumber(value, grade, size: 15, plain: .heavy, relativeTo: .subheadline).foregroundStyle(value == "—" ? Theme.faint : Theme.ink)
+            if !sub.isEmpty { Text(sub).font(.figtree(11, .semibold, relativeTo: .caption2)).foregroundStyle(Theme.muted).monospacedDigit() }
+        }
+    }
+
+    /// TOP, GOOD or WEAK (the app's worth words) in the card's tag style.
+    private func worthTag(_ w: LeaguePanel.Worth) -> some View {
+        let style = WorthTag.style(for: w)
+        let (ink, tint): (Color, Color) = w == .strong ? (Theme.greenInk, Theme.greenTint) : w == .ok ? (Theme.greenInk, Theme.greenTint.opacity(style.tintOpacity)) : (Theme.muted, Theme.off)
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        return Text(w.label.uppercased()).font(.figtree(10, .bold, relativeTo: .caption2)).tracking(0.6).foregroundStyle(ink)
+            .padding(.horizontal, 6).padding(.vertical, 2).background(tint, in: shape)
+            .overlay { if let border = style.borderOpacity { shape.strokeBorder(ink.opacity(border), lineWidth: 1) } }
+    }
+
+    // MARK: the chosen league
+
+    private func detail(_ key: String, _ r: BoxAdvice.LeagueRating) -> some View {
+        let c = card(key, r)
+        let rows = LeaguePanel.listed(r, headline: LeaguePanel.headlineIndex(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)))
+        return VStack(alignment: .leading, spacing: 10) {
+            mutedLine(PokemonPage.worthLine(c, key: key, transfers: transfers)).accessibilityIdentifier("league-worth-line")
+            Button { withAnimation(.easeOut(duration: 0.2)) { famOpen.toggle() } } label: {
+                HStack {
+                    Text(PokemonPage.familyLabel(key: key, more: rows.count)).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink).multilineTextAlignment(.leading)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right").font(.figtree(13, .heavy)).foregroundStyle(accent.ink).rotationEffect(.degrees(famOpen ? 90 : 0)).accessibilityHidden(true)
                 }
+                .frame(minHeight: 44).contentShape(Rectangle())
+                .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
             }
-            .padding(.trailing, tappable ? 22 : 0)
-            if worthOpen.contains(key), let sentence = LeaguePanel.worthSentence(c, key: key, transfers: transfers) {
-                Text(sentence).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("league-\(key)-worth-text")
+            .buttonStyle(.plain)
+            .accessibilityValue(famOpen ? "Expanded" : "Collapsed")
+            .accessibilityIdentifier("league-family-toggle")
+            if famOpen { fold(key, c, rows) }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("league-\(key)")
+    }
+
+    private func mutedLine(_ text: String) -> some View {
+        Text(text).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// What the old league view showed under its card: the stronger-species note, the over-cap count, the cost, the moves and the other family members.
+    private func fold(_ key: String, _ c: LeaguePanel.Card, _ rows: [BoxAdvice.LeagueRating.Option]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let note = c.bestAvailableNote { mutedLine(note) }
+            if c.overCapCount > 0 {
+                Text("▲ \(c.overCapCount) over cap").font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.04 * 11)
+                    .foregroundStyle(Theme.red).padding(.horizontal, 7).padding(.vertical, 3).background(Theme.redTint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            if let note = c.bestAvailableNote {
-                Text(note).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-            }
-            if c.status == .noViable {
-                Text("No viable option").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
-                if let b = c.blockedText { Text(b).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true) }
-            } else {
-                figures(c)
-                if !c.costItems.isEmpty { costList(c.costItems) }
-                if let n = c.costNote {
-                    Text(n).font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            if !c.costItems.isEmpty { costList(c.costItems) }
+            if let n = c.costNote { mutedLine(n) }
             if !c.moves.isEmpty {
                 FlowLayout(spacing: 6) {
                     ForEach(Array(c.moves.enumerated()), id: \.offset) { _, m in
@@ -164,71 +199,10 @@ struct LeaguesPanel: View {
                     }
                 }
             }
+            if !rows.isEmpty { optionList(key, rows) }
         }
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.Radius.insetRow, style: .continuous))
-        .overlay(alignment: .topTrailing) {
-            if tappable { Image(systemName: "chevron.right").font(.figtree(13, .heavy)).foregroundStyle(Theme.faint).padding(.top, 20).padding(.trailing, 16).accessibilityHidden(true) }
-        }
-    }
-
-    /// The Top / Good / Weak chip, drawn like the PICK chip: green for Top, the same green lighter for Good (tint at half strength and a faded ink border, so it
-    /// reads as a step down in the same hue; it was orange), or the muted off tone for Weak. It is only drawn here: the card is one
-    /// accessibility element that hides its children, so the tap target is `worthButton`, laid over the chip's frame outside the card.
-    private func worthTag(_ w: LeaguePanel.Worth) -> some View {
-        let style = WorthTag.style(for: w)
-        let (ink, tint): (Color, Color) = w == .strong ? (Theme.greenInk, Theme.greenTint) : w == .ok ? (Theme.greenInk, Theme.greenTint.opacity(style.tintOpacity)) : (Theme.muted, Theme.off)
-        let shape = RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-        return Text(w.label.uppercased()).font(.figtree(12, .bold, relativeTo: .caption)).tracking(0.07 * 12)
-            .foregroundStyle(ink).padding(.horizontal, 8).padding(.vertical, 4)
-            .background(tint, in: shape)
-            .overlay { if let border = style.borderOpacity { shape.strokeBorder(ink.opacity(border), lineWidth: 1) } }
-            .anchorPreference(key: WorthBounds.self, value: .bounds) { $0 }
-    }
-
-    /// "Advice builds it" / "Advice builds Blastoise": the cost-aware marker beside the worth tag, drawn like the PICK chip in outline so it does not read
-    /// as a second tag. Visible text, named for the build's target when that is not the card's Pokémon; the card's spoken label says the same.
-    private func buildsItTag(_ c: LeaguePanel.Card) -> some View {
-        Text(LeaguePanel.buildsChipText(c)).font(.figtree(11, .bold, relativeTo: .caption2)).tracking(0.06 * 11)
-            .foregroundStyle(Theme.muted).padding(.horizontal, 7).padding(.vertical, 3)
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous).stroke(Theme.line, lineWidth: 1))
-    }
-
-    /// The tap target over the chip (at least 44 pt square): opens or closes the one line the tag explains. Its accessibility value carries that
-    /// line while it is open.
-    private func worthLayer(_ key: String, _ c: LeaguePanel.Card, _ anchor: Anchor<CGRect>?) -> some View {
-        let w = c.worth
-        return GeometryReader { geo in
-            if let anchor, let w {
-                let rect = geo[anchor], open = worthOpen.contains(key)
-                Button { withAnimation(.easeOut(duration: 0.15)) { if open { worthOpen.remove(key) } else { worthOpen.insert(key) } } } label: { Color.clear.contentShape(Rectangle()) }
-                    .buttonStyle(.plain)
-                    .frame(width: max(rect.width, 44), height: max(rect.height, 44))
-                    .position(x: rect.midX, y: rect.midY)
-                    .accessibilityLabel("\(w.label) for \(LeaguePanel.name(key))")
-                    .accessibilityValue(open ? (LeaguePanel.worthSentence(c, key: key, transfers: transfers) ?? "") : "Collapsed")
-                    .accessibilityIdentifier("league-\(key)-worth")
-            }
-        }
-    }
-
-    /// SPECIES and THIS COPY: two columns, one from the first accessibility text size.
-    private func figures(_ c: LeaguePanel.Card) -> some View {
-        let species = figure("Species", c.scoreText, c.rankText, strong: c.scoreStrong, dim: c.scoreText == "—")
-        let copy = figure("This copy", c.ivText, c.ivRankText, strong: c.ivStrong, dim: c.ivText == "—")
-        return Group {
-            if oneColumn { VStack(alignment: .leading, spacing: 8) { species; copy } }
-            else { HStack(alignment: .top, spacing: 8) { species.frame(maxWidth: .infinity, alignment: .leading); copy.frame(maxWidth: .infinity, alignment: .leading) } }
-        }
-    }
-
-    private func figure(_ label: String, _ value: String, _ sub: String, strong: Bool, dim: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label.uppercased()).font(.figtree(11, .bold, relativeTo: .caption2)).tracking(0.06 * 11).foregroundStyle(Theme.muted)
-            Text(value).font(.figtree(17, .heavy, relativeTo: .headline)).monospacedDigit().foregroundStyle(dim ? Theme.faint : (strong ? Theme.greenInk : Theme.ink))
-            if !sub.isEmpty { Text(sub).font(.figtree(12, .medium, relativeTo: .caption)).monospacedDigit().foregroundStyle(Theme.muted) }
-        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("league-family")
     }
 
     private func costList(_ items: [LeaguePanel.CostItem]) -> some View {
@@ -251,29 +225,7 @@ struct LeaguesPanel: View {
         .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
     }
 
-    // MARK: league view
-
-    private func leagueView(_ key: String, _ r: BoxAdvice.LeagueRating) -> some View {
-        let selection = Binding<String>(get: { mode ?? key }, set: { mode = $0 })
-        let rows = LeaguePanel.listed(r, headline: LeaguePanel.headlineIndex(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)))
-        return VStack(alignment: .leading, spacing: 14) {
-            SegmentedSwitch(
-                segments: LeaguePanel.keys.map { k in
-                    let league = League(rawValue: k) ?? .gl
-                    return .init(value: k, title: LeaguePanel.shortName(k), dot: league.dot, selectedInk: league.ink, identifier: "leagues-control-\(k)")
-                },
-                selection: selection, label: "League", identifier: "leagues-control", singleLine: !oneColumn)
-            let c = card(key, r)
-            pickCard(key, c, tappable: false)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spoken(key, c))
-                .accessibilityIdentifier("league-\(key)-pick")
-                .overlayPreferenceValue(WorthBounds.self) { worthLayer(key, c, $0) }
-            if !rows.isEmpty { optionList(key, rows) }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("league-\(key)")
-    }
+    // MARK: the other members
 
     private static let figureWidths: [CGFloat] = [64, 64, 78]
 
@@ -406,8 +358,3 @@ struct FlowLayout: Layout {
     }
 }
 
-/// The frame of the worth chip inside a pick card, so the tap target can sit over it outside the card's single accessibility element.
-private struct WorthBounds: PreferenceKey {
-    static var defaultValue: Anchor<CGRect>? = nil
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
-}

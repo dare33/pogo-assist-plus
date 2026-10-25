@@ -199,43 +199,32 @@ final class ListScreensTests: XCTestCase {
         }
     }
 
-    func testDetailActivitiesRow() throws {
+    /// The page's Summary tab lists the five activities (PvP leagues first), each a button that opens its tab.
+    func testDetailSummaryRows() throws {
         let app = launchPopulated()
         app.openSpeciesList(row(app, "Charizard"))
         app.buttons.matching(identifier: "pokemon-row").firstMatch.tap()
-        let raids = app.buttons["activity-raids"]
-        var n = 0
-        while !raids.isHittable && n < 8 { app.swipeUp(); n += 1 }
+        let raids = app.buttons["summary-row-raids"]
         XCTAssertTrue(raids.waitForExistence(timeout: 20))
-        XCTAssertEqual(raids.label, "Raids: Good")
-        for area in ["gym", "rocket", "max"] { XCTAssertTrue(app.buttons["activity-\(area)"].exists, area) }
-        XCTAssertTrue(app.staticTexts["activities-panel"].exists)
+        XCTAssertTrue(raids.label.hasPrefix("Raids. "), raids.label)
+        for area in ["pvp", "gym", "rocket", "max"] { XCTAssertTrue(app.buttons["summary-row-\(area)"].exists, area) }
+        XCTAssertLessThan(app.buttons["summary-row-pvp"].frame.minY, raids.frame.minY, "PvP leagues come first")
         raids.tap()
-        let line = app.staticTexts["activity-raids-line"]
-        XCTAssertTrue(line.waitForExistence(timeout: 3))
-        XCTAssertTrue(line.label.hasPrefix("Raids"), line.label)
-        // The rows' tap targets are 6 pt taller than the chip each way and do not overlap: a tap on the bottom edge of Raids' target opens Raids, not Gym's line.
-        raids.tap()
-        XCTAssertTrue(line.waitForNonExistence(timeout: 3))
-        raids.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.97)).tap()
-        XCTAssertTrue(line.waitForExistence(timeout: 3), "the bottom of the Raids target opens Raids")
-        XCTAssertFalse(app.staticTexts["activity-gym-line"].exists, "and not the Gym line under it")
-        sleep(1); shot("detail-activities")
+        XCTAssertTrue(app.descendants(matching: .any)["raids-tab"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["page-tab-raids"].isSelected)
+        sleep(1); shot("detail-summary-raids-tab")
     }
 
-    /// The Zamazenta (Hero) with CP 2661 carries the advisor's build for an area: its Activities row shows the "ADVICE BUILDS" chip, with the cost spoken in grouped figures.
-    func testDetailActivitiesRowShowsTheBuildChip() throws {
+    /// The Zamazenta (Hero) with CP 2661 carries the advisor's build for an area: a Summary row shows its upgrade mark with the cost spoken in grouped figures.
+    func testDetailSummaryRowShowsTheBuildCost() throws {
         let app = launchPopulated()
         openSpecies(app, "Zamazenta")
         let copy = app.buttons.matching(NSPredicate(format: "identifier == 'pokemon-row' AND label CONTAINS '2661'")).firstMatch
         XCTAssertTrue(copy.waitForExistence(timeout: 5)); copy.tap()
-        let chip = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'activity-' AND identifier ENDSWITH '-builds'")).firstMatch
-        var n = 0
-        while !chip.exists && n < 10 { app.swipeUp(); n += 1 }
-        XCTAssertTrue(chip.waitForExistence(timeout: 20), "the build chip on the Activities row")
-        XCTAssertTrue(chip.label.lowercased().hasPrefix("advice builds"), chip.label)
-        XCTAssertTrue(chip.label.contains("dust"), chip.label)
-        sleep(1); shot("detail-activities-builds")
+        let costly = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'summary-row-' AND label CONTAINS 'Upgrade available'")).firstMatch
+        XCTAssertTrue(costly.waitForExistence(timeout: 20), "a Summary row with an upgrade mark")
+        XCTAssertTrue(costly.label.contains("dust") || costly.label.contains("candy"), costly.label)
+        sleep(1); shot("detail-summary-builds")
     }
 
     /// A hand fix made on the Pokémon page, then back to the list under a chip: the Box screen's tasks fire while the child screens are pushed, so the list is
@@ -280,11 +269,8 @@ final class ListScreensTests: XCTestCase {
             sleep(1); shot("\(tag)-species")
             openFirstCopy(app)
             XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
-            let raids = app.buttons["activity-raids"]
-            var n = 0
-            while !raids.isHittable && n < 10 { app.swipeUp(); n += 1 }
-            XCTAssertTrue(raids.exists)
-            sleep(1); shot("\(tag)-detail-activities")
+            XCTAssertTrue(app.buttons["summary-row-raids"].waitForExistence(timeout: 30))
+            sleep(1); shot("\(tag)-detail-summary")
             app.buttons["Back"].tap(); app.buttons["Back"].tap()
             app.buttons["chip-all"].tap()
         }
