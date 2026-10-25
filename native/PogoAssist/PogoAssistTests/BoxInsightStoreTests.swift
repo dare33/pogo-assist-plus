@@ -127,8 +127,20 @@ final class BoxInsightStoreTests: XCTestCase {
         let none = BestCard.cards(title: "Eevee", insight: same, index: BoxIndex(entries: [es[0]]), pogoAssist: false)
         XCTAssertNotNil(gl(none), "the card is there")
         XCTAssertNil(gl(none)?.detail, "\"as Eevee\" on Eevee's page is left out")
-        let upper = BestCard.cards(title: "EEVEE", insight: same, index: BoxIndex(entries: [es[0]]), pogoAssist: false)
+        let upper = BestCard.cards(title: "Eevee", insight: BoxInsight.make(advice: advice(["a": ["gl": R(options: [option("eevee", score: 93, pct: 99, rankPct: 98)])]]), entries: [es[0]]),
+                                   index: BoxIndex(entries: [es[0]]), pogoAssist: false)
+        XCTAssertNotNil(gl(upper), "the card is there")
         XCTAssertNil(gl(upper)?.detail, "compared without regard to case")
+        // The same rule for an activity: the raids card reads "as <asName>" only when that is another Pokémon, whatever the case of the name.
+        func raids(_ asName: String) -> BestCard? {
+            var adv = advice([:])
+            adv.fit = ["a": ["raids": BoxAdvice.Fit(area: "raids", tag: .ok, asName: asName, tier: "A", reason: nil, species: nil, ivPercent: 98)]]; adv.bestOf = ["a": ["raids"]]
+            return BestCard.cards(title: "Eevee", insight: BoxInsight.make(advice: adv, entries: [es[0]]), index: BoxIndex(entries: [es[0]]), pogoAssist: false)
+                .first(where: { $0.activity == BoxInsight.Activity.raids })
+        }
+        XCTAssertEqual(raids("Flareon")?.detail, "as Flareon")
+        XCTAssertNotNil(raids("EEVEE"), "the raids card is there")
+        XCTAssertNil(raids("EEVEE")?.detail, "\"as EEVEE\" on Eevee's page is left out")
         XCTAssertEqual(BestCard(activity: .gl, copyId: "a", cp: 1400, pct: 100, worth: .strong, detail: nil).spoken, "Great League, best: CP 1400, 100 percent, Top")
     }
 
@@ -427,7 +439,6 @@ final class ListTagColourTests: XCTestCase {
           }
         }
         for dark in [false, true] {
-            let surface = resolve(Theme.surface, dark)
             let tint = resolve(Theme.greenTint, dark), base = resolve(Theme.surface2, dark)
             XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), over(tint, base)), 4.5, "league card Top, dark \(dark)")
             XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), over(tint, base, opacity: good.tintOpacity)), 4.5, "league card Good, dark \(dark)")

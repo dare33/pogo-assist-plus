@@ -75,7 +75,7 @@ final class SpeciesTopTests: XCTestCase {
         if let rowIVs {
             let parts = rowIVs.split(separator: "/").map(String.init)
             for (bar, value) in zip(["Attack", "Defence", "HP"], parts) {
-                let hit = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", bar, value)).firstMatch
+                let hit = app.descendants(matching: .any).matching(NSPredicate(format: "label MATCHES %@", "^\(bar)\\D+\(value)$")).firstMatch
                 XCTAssertTrue(hit.exists, "and its IVs \(rowIVs): \(bar) \(value)")
             }
         } else {
