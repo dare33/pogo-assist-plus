@@ -32,8 +32,6 @@ public enum PokemonActivities {
         ctx.advice.builds.first { $0.entryId == copy.id && $0.areas.contains(area) && $0.targetId == member }
     }
 
-    private static func isShadow(_ copy: BoxEntry) -> Bool { copy.row.shadow == 1 || copy.row.speciesId.hasSuffix("_shadow") }
-
     /// A plan on a card: this copy's build for the member, and whether it is at full strength.
     public struct Plan: Equatable {
         public var build: BoxAdvice.Build
@@ -77,14 +75,16 @@ public enum PokemonActivities {
         for b in ctx.advice.builds where b.areas.contains("Raids") {
             let shadow = HubRaidsModel.isShadow(b, entries: ctx.entries)
             let built = HubSquads.isFullStrength(b, screen: .raids, ctx: ctx)
-            for e in ctx.table.entries(for: b.targetId, area: "raids") where shadow || !e.flags.shadow {
-                let type = e.section.lowercased()
-                if let cur = best[type] {
-                    let curBuilt = HubSquads.isFullStrength(cur.build, screen: .raids, ctx: ctx)
-                    let better = PogoRules.tierRank(e.tier) < PogoRules.tierRank(cur.tier) || (PogoRules.tierRank(e.tier) == PogoRules.tierRank(cur.tier) && built && !curBuilt)
-                    if !better { continue }
+            let own = ctx.gm.byId[b.targetId]?.types ?? []
+            for e in HubRaidsModel.raidEntries(targetId: b.targetId, viaMega: false, table: ctx.table, shadow: shadow) {
+                for type in HubRaidsModel.entryTypes(e, speciesTypes: own) {
+                    if let cur = best[type] {
+                        let curBuilt = HubSquads.isFullStrength(cur.build, screen: .raids, ctx: ctx)
+                        let better = PogoRules.tierRank(e.tier) < PogoRules.tierRank(cur.tier) || (PogoRules.tierRank(e.tier) == PogoRules.tierRank(cur.tier) && built && !curBuilt)
+                        if !better { continue }
+                    }
+                    best[type] = (b, e.tier)
                 }
-                best[type] = (b, e.tier)
             }
         }
         return best
@@ -96,11 +96,11 @@ public enum PokemonActivities {
         let timeline = HubRaidsModel.timeline(rows: ctx.hub.rotation, screen: .raids, today: ctx.today)
         let rows = (timeline.now + timeline.comingUp).filter { !$0.row.bosses.isEmpty }
         let best = bestRaidBuilds(ctx: ctx)
-        let shadow = isShadow(copy)
+        let shadow = HubRaidsModel.isShadow(copy)
         var cards: [RaidCard] = []
         for m in members(of: copy, ctx: ctx) {
-            for e in ctx.table.entries(for: m.id, area: "raids") where (shadow || !e.flags.shadow) && HubData.typeOrder.contains(e.section.lowercased()) {
-                let type = e.section.lowercased()
+            for (e, type) in HubRaidsModel.raidEntries(targetId: m.id, viaMega: false, table: ctx.table, shadow: shadow)
+                .flatMap({ e in HubRaidsModel.entryTypes(e, speciesTypes: m.types).map { (e, $0) } }) {
                 let plan: RaidPlan
                 if let mine = ownBuild(copy, area: "Raids", member: m.id, ctx: ctx) {
                     plan = .mine(Plan(build: mine, built: HubSquads.isFullStrength(mine, screen: .raids, ctx: ctx)))
@@ -129,12 +129,18 @@ public enum PokemonActivities {
     /// read, the next with a figure stands in, because a share needs a number.
     public struct TopDefender: Equatable {
         public var build: BoxAdvice.Build
+        /// The copy's bulk as the build's target at the copy's CURRENT level (pass 3's Bulk term; pass 2's Gym screen works rule 14 at the target level).
         public var bulk: Double
+        public var entryId: String { build.entryId }
         public var name: String { build.targetName }
     }
 
     public static func topDefender(mode: SquadMode = .available, ctx: HubContext) -> TopDefender? {
-        HubSquads.gymRows(mode: mode, ctx: ctx).prefix(6).lazy.compactMap { r in r.bulk.value.map { TopDefender(build: r.build, bulk: $0) } }.first
+        HubSquads.gymRows(mode: mode, ctx: ctx).prefix(6).lazy.compactMap { r -> TopDefender? in
+            guard let copy = ctx.entry(r.build.entryId),
+                  let bulk = PogoRules.bulk(target: r.build.targetId, ivs: copy.row.ivs, level: copy.row.level, gm: ctx.gm).value else { return nil }
+            return TopDefender(build: r.build, bulk: bulk)
+        }.first
     }
 
     public struct GymCard: Equatable {
@@ -146,7 +152,7 @@ public enum PokemonActivities {
         public var share: Int?
         /// The bar's length, 0 to 1.
         public var barFraction: Double? { share.map { min(1, Double($0) / 100) } }
-        /// The member is the top defender's species and this copy reaches its bulk: the card reads "Your top defender".
+        /// This copy IS the top defender (its entry id, as the member the top defender's build targets): the card reads "Your top defender".
         public var isTop: Bool
         public var plan: Plan?
     }
@@ -159,7 +165,7 @@ public enum PokemonActivities {
                 let bulk = PogoRules.bulk(target: m.id, ivs: copy.row.ivs, level: copy.row.level, gm: ctx.gm)
                 let share: Int? = bulk.value.flatMap { v in top.map { Int((v / $0.bulk * 100).rounded()) } }
                 let mine = ownBuild(copy, area: "Gym", member: m.id, ctx: ctx).map { Plan(build: $0, built: HubSquads.isFullStrength($0, screen: .gym, ctx: ctx)) }
-                cards.append(GymCard(member: m, tier: e.tier, bulk: bulk, share: share, isTop: top?.build.targetId == m.id && (share ?? 0) >= 100, plan: mine))
+                cards.append(GymCard(member: m, tier: e.tier, bulk: bulk, share: share, isTop: top?.entryId == copy.id && top?.build.targetId == m.id, plan: mine))
             }
         }
         return cards.enumerated().sorted { l, r in
@@ -194,12 +200,12 @@ public enum PokemonActivities {
     }
 
     /// Rule 13: a member beats a grunt type or a leader option when one of its own types hits it for more than normal damage (moves are not checked: the
-    /// export has none). Members that beat no grunt type are not listed. Up to four, most grunt types first, ties in the order of reach.
+    /// export has none). A member that beats a leader option but no grunt type is still listed. Up to four: most grunt types first, then most leader
+    /// options beaten, then the later evolution.
     public static func rocketCards(copy: BoxEntry, ctx: HubContext) -> [RocketCard] {
         let cards = members(of: copy, ctx: ctx).compactMap { m -> RocketCard? in
             var seen = Set<String>()
             let grunts = ctx.hub.grunts.map(\.type).filter { !$0.isEmpty && ctx.hub.beats(m.types, [$0]) && seen.insert($0).inserted }
-            guard !grunts.isEmpty else { return nil }
             var slots: [LeaderSlotBeat] = []
             for l in ctx.hub.leaders {
                 for (i, options) in l.slots.enumerated() {
@@ -207,11 +213,16 @@ public enum PokemonActivities {
                     if !beaten.isEmpty { slots.append(LeaderSlotBeat(leader: l.name, slot: i + 1, beats: beaten, of: options.count)) }
                 }
             }
+            guard !grunts.isEmpty || !slots.isEmpty else { return nil }
             let mine = ownBuild(copy, area: "Rocket", member: m.id, ctx: ctx).map { Plan(build: $0, built: HubSquads.isFullStrength($0, screen: .rocket, ctx: ctx)) }
             return RocketCard(member: m, gruntTypes: grunts, leaderSlots: slots, plan: mine, tier: ctx.table.entries(for: m.id, area: "rocket").map(\.tier).min { PogoRules.tierRank($0) < PogoRules.tierRank($1) })
         }
+        func options(_ c: RocketCard) -> Int { c.leaderSlots.reduce(0) { $0 + $1.beats.count } }
         return Array(cards.enumerated().sorted { l, r in
-            l.element.gruntTypes.count != r.element.gruntTypes.count ? l.element.gruntTypes.count > r.element.gruntTypes.count : l.offset < r.offset
+            let (a, b) = (l.element, r.element)
+            if a.gruntTypes.count != b.gruntTypes.count { return a.gruntTypes.count > b.gruntTypes.count }
+            if options(a) != options(b) { return options(a) > options(b) }
+            return l.offset > r.offset
         }.map(\.element).prefix(4))
     }
 
@@ -242,9 +253,16 @@ public enum PokemonActivities {
         var cards: [MaxCard] = []
         var by = [[String]](repeating: [], count: rows.count)
         for m in members(of: copy, ctx: ctx) {
-            for e in HubRaidsModel.maxEntries(m.id, ctx.table) {
+            // One card per member: several usable table entries merge (best tier, the roles of all of them).
+            let entries = HubRaidsModel.maxEntries(m.id, ctx.table)
+            if let best = entries.map(\.tier).min(by: { PogoRules.tierRank($0) < PogoRules.tierRank($1) }) {
+                let roles = Set(entries.flatMap(PogoRules.maxRoles))
+                let ordered = PogoRules.MaxRole.allCases.filter(roles.contains)
+                let text: String
+                if entries.count == 1 || ordered.isEmpty { text = entries[0].role ?? entries[0].section }
+                else { let w = HubTeams.list(ordered.map { $0.rawValue.lowercased() }, capitalise: false); text = w.prefix(1).uppercased() + w.dropFirst() }
                 let mine = ownBuild(copy, area: "Max", member: m.id, ctx: ctx).map { Plan(build: $0, built: HubSquads.isFullStrength($0, screen: .max, ctx: ctx)) }
-                cards.append(MaxCard(member: m, tier: e.tier, roles: PogoRules.maxRoles(e), roleText: e.role ?? e.section, plan: mine, needsDynamax: copy.row.dynamax != true))
+                cards.append(MaxCard(member: m, tier: best, roles: ordered, roleText: text, plan: mine, needsDynamax: copy.row.dynamax != true))
             }
             for (i, r) in rows.enumerated() where PogoRules.hitsAnyBoss(m.types, row: r.row, hub: ctx.hub) { by[i].append(m.name) }
         }
@@ -293,7 +311,8 @@ public enum PokemonActivities {
     /// The Summary row's mark: Upgrade available (the first build still to do, with its cost), Full strength (every build done) or nothing (no build).
     public enum Mark: Equatable {
         case none, fullStrength
-        case upgrade(BoxAdvice.Build, cost: HubSquads.Cost, label: String)
+        /// `label` is nil when only the Dynamax requirement is left (not upgrade work).
+        case upgrade(BoxAdvice.Build, cost: HubSquads.Cost, label: String?)
     }
 
     static func mark(_ builds: [BoxAdvice.Build], built: (BoxAdvice.Build) -> Bool) -> Mark {
@@ -315,20 +334,35 @@ public enum PokemonActivities {
 
     private static func line(_ text: String, icons: [String] = []) -> Line { Line(lead: nil, text: text, score: nil, icons: icons) }
 
-    /// A boss row's name for a line: each boss's bracketed form is dropped ("Giratina (Origin)" is "Giratina") unless another row among `rows` shares a name.
+    /// A boss row's name for a line: each boss's bracketed form is dropped ("Giratina (Origin)" is "Giratina") unless another boss shares its base name, in
+    /// the same row (the four Deoxys formes) or in any other row of `rows`.
     public static func shortName(_ row: HubData.RotationRow, among rows: [HubData.RotationRow]) -> String {
         guard !row.bosses.isEmpty else { return HubRaidsModel.name(row) }
         func base(_ n: String) -> String { n.range(of: #" \(.*\)$"#, options: .regularExpression).map { String(n[..<$0.lowerBound]) } ?? n }
-        func unique(_ names: [String]) -> [String] { var out = [String](); for n in names where !out.contains(n) { out.append(n) }; return out }
-        let short = unique(row.bosses.map { base($0.name) })
-        let clash = rows.contains { $0 != row && $0.bosses.contains { short.contains(base($0.name)) } }
-        return (clash ? unique(row.bosses.map(\.name)) : short).joined(separator: " · ")
+        let others = rows.filter { $0 != row }.flatMap(\.bosses)
+        var names = [String]()
+        for (i, b) in row.bosses.enumerated() {
+            let shared = row.bosses.enumerated().contains { $0.offset != i && base($0.element.name) == base(b.name) } || others.contains { base($0.name) == base(b.name) }
+            let n = shared ? b.name : base(b.name)
+            if !names.contains(n) { names.append(n) }
+        }
+        return names.joined(separator: " · ")
     }
 
     /// "Palkia now", "Giratina in 3 d".
     static func bossText(_ b: BossRow, among rows: [HubData.RotationRow]) -> String {
         let name = shortName(b.entry.row, among: rows)
         return b.isNow ? "\(name) now" : "\(name) \(b.when)"
+    }
+
+    /// "bulk 48k", or why there is no figure: "level not read", "IVs not read" (each its own wording), "bulk not known" for a species without stats.
+    public static func bulkWording(_ bulk: PogoRules.Bulk) -> String {
+        switch bulk {
+        case .known(let v): return "bulk " + bulkText(v)
+        case .levelNotRead: return "level not read"
+        case .ivsNotRead: return "IVs not read"
+        case .unknownSpecies: return "bulk not known"
+        }
     }
 
     /// "48k" for a bulk figure (the Pogo Hub's short numbers).
@@ -393,7 +427,7 @@ public enum PokemonActivities {
         let gym = gymCards(copy: copy, ctx: ctx, top: top)
         var gymLines = [line("Not in our gym table")]
         if let g = gym.first {
-            gymLines = [line("As \(g.member.name), " + (g.bulk.value.map { "bulk " + bulkText($0) } ?? "level not read"))]
+            gymLines = [line("As \(g.member.name), " + bulkWording(g.bulk))]
             if g.isTop { gymLines.append(line("Your top defender")) }
             else if let share = g.share, let top { gymLines.append(line("\(share)% of your top defender, \(top.name)")) }
         }
@@ -407,7 +441,7 @@ public enum PokemonActivities {
             if (l.plan != nil) != (r.plan != nil) { return l.plan != nil }
             if l.gruntTypes.count != r.gruntTypes.count { return l.gruntTypes.count > r.gruntTypes.count }
             return (order.firstIndex(of: l.member.id) ?? 0) > (order.firstIndex(of: r.member.id) ?? 0)
-        }.first
+        }.first.flatMap { $0.gruntTypes.isEmpty ? nil : $0 }
         rows.append(SummaryRow(activity: .rocket, verdict: planVerdict(area("Rocket"), built: built(.rocket)) ?? shown.map { Verdict.beatsGrunts($0.gruntTypes.count) } ?? .notUsed,
                                lines: shown.map { [line("As \($0.member.name)", icons: $0.gruntTypes)] } ?? [line("No type advantage on any grunt")],
                                mark: mark(area("Rocket"), built: built(.rocket))))

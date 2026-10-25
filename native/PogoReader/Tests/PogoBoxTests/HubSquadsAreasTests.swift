@@ -182,9 +182,9 @@ final class HubSquadsAreasTests: XCTestCase {
         let builds = [P23.build("b1", "blissey", areas: ["Gym"], level: 30),
                       P23.build("s1", "snorlax", areas: ["Gym"], level: 30),
                       P23.build("s2", "snorlax", areas: ["Gym"], built: false, level: 25, targetLevel: 35),
-                      P23.build("r1", "registeel", areas: ["Gym"], level: nil),
+                      P23.build("r1", "registeel", areas: ["Gym"], level: 20, targetLevel: 30),
                       P23.build("l1", "lapras", areas: ["Gym"], level: 20),
-                      P23.build("s3", "snorlax", areas: ["Gym"], level: nil),
+                      P23.build("s3", "snorlax", areas: ["Gym"], level: 20, targetLevel: 30),
                       P23.build("b1", "blissey", areas: ["Gym"], score: 1, level: 30),                           // the same copy again
                       P23.build("x1", "snorlax", areas: ["Gym"], powerUp: false, level: 30),                      // not usable as it is
                       P23.build("o1", "pikachu", areas: ["Raids"], level: 30)]                                   // not a Gym build

@@ -50,7 +50,9 @@ public enum HubSquads {
     public static func isFullStrength(_ b: BoxAdvice.Build, screen: SquadScreen, ctx: HubContext) -> Bool {
         switch screen {
         case .raids: return HubRaidsModel.isBuilt(b, advice: ctx.advice, entries: ctx.entries, screen: .raids)
-        case .max: return HubRaidsModel.isBuilt(b, advice: ctx.advice, entries: ctx.entries, screen: .max)
+        case .max:
+            // THIS copy must be marked Dynamax: another copy of the species being marked does not make this one ready (the readiness bar's rule is looser).
+            return b.areas.contains("Max") && HubRaidsModel.isFinished(b) && ctx.entry(b.entryId)?.row.dynamax == true
         case .gym, .rocket, .pvp: return HubTeams.isBuilt(b)
         }
     }
@@ -73,9 +75,12 @@ public enum HubSquads {
         return Cost(value: nil, currency: .free)
     }
 
-    /// The upgrade icon's accessibility label: "Upgrade available: power up to level 30".
-    public static func upgradeLabel(_ b: BoxAdvice.Build) -> String {
-        let action = b.action.replacingOccurrences(of: #"\s*\([^)]*\)"#, with: "", options: .regularExpression)
+    /// The upgrade icon's accessibility label: "Upgrade available: power up to level 30". It names the work that remains (the build's steps), without the
+    /// Dynamax-copy clause, which the Dynamax state shows. nil when nothing but the Dynamax requirement is left: that build is not upgrade work.
+    public static func upgradeLabel(_ b: BoxAdvice.Build) -> String? {
+        guard HubModel.needsSomething(b) else { return nil }
+        var action = b.action.replacingOccurrences(of: " (Max needs a Dynamax copy)", with: "").replacingOccurrences(of: "; needs a Dynamax copy", with: "")
+        action = action.replacingOccurrences(of: #"(to level [0-9.]+) \([^)]*\)"#, with: "$1", options: .regularExpression)
         return "Upgrade available: " + action.prefix(1).lowercased() + action.dropFirst()
     }
 
@@ -89,6 +94,22 @@ public enum HubSquads {
     /// A PvP pick under Available is the copy itself.
     public static func isUsable(_ option: BoxAdvice.LeagueRating.Option, mode: SquadMode) -> Bool { mode == .best || option.isSelf }
 
+    /// The `placeable` test of a screen under a mode (see `fill`). Best places any pick. Available places a pick only when the copy has a build of the
+    /// screen's area that is usable as it is (a raid Mega slot never; a PvP pick whose shown option is the copy itself).
+    public static func placeable(screen: SquadScreen, mode: SquadMode, league: String? = nil, ctx: HubContext) -> (String, String) -> Bool {
+        guard mode == .available else { return { _, _ in true } }
+        func hasUsable(_ id: String, _ areas: [String]) -> Bool {
+            ctx.advice.builds.contains { $0.entryId == id && $0.areas.contains { areas.contains($0) } && isUsable($0, mode: .available) }
+        }
+        switch screen {
+        case .raids: return { id, role in role != PogoRules.RaidRole.mega.rawValue && hasUsable(id, ["Raids"]) }
+        case .max: return { id, _ in hasUsable(id, ["Max"]) }
+        case .gym: return { id, _ in hasUsable(id, ["Gym"]) }
+        case .rocket: return { id, _ in hasUsable(id, ["Rocket", "Raids"]) }
+        case .pvp: return { id, _ in league.flatMap { ctx.advice.leagues[id]?[$0] }?.shown.isSelf ?? false }
+        }
+    }
+
     // MARK: rules 4 and 5: slots, pickers, role changes
 
     /// The squad as shown. The player's picks are placed first (a copy sits in one slot at a time: the first slot holding it keeps it), then each empty
@@ -99,11 +120,13 @@ public enum HubSquads {
         public init(preferred: [String], fallback: [String] = []) { self.preferred = preferred; self.fallback = fallback }
     }
 
-    public static func fill(slots: [SquadSlot], pool: (Int, String) -> Pool) -> [FilledSlot] {
+    /// `placeable(entryId, role)` says whether a saved pick may be placed now. Under Available a pick that is not usable as it is (any Mega, an evolution)
+    /// is not placed and the slot shows the suggestion; the pick stays in the store and returns under Best (`placeable(screen:mode:league:ctx:)`).
+    public static func fill(slots: [SquadSlot], pool: (Int, String) -> Pool, placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
         var used = Set<String>()
         var out = slots.map { FilledSlot(role: $0.role, entryId: nil, chosen: false, fallback: false) }
         for (i, s) in slots.enumerated() {
-            if let p = s.pick, used.insert(p).inserted { out[i].entryId = p; out[i].chosen = true }
+            if let p = s.pick, placeable(p, s.role), used.insert(p).inserted { out[i].entryId = p; out[i].chosen = true }
         }
         for (i, s) in slots.enumerated() where out[i].entryId == nil {
             let p = pool(i, s.role)
@@ -193,11 +216,12 @@ public enum HubSquads {
     /// Research, Incense, Evolve, Trade, GO Pass; "Easy to get" when none matches.
     public static func whereTags(obtain: String?, bossOnNow: Bool) -> [String] {
         let o = (obtain ?? "").lowercased()
+        let cd = o.range(of: #"\bcd\b"#, options: .regularExpression) != nil   // "CD", "Cd", "(cd)": a word, not the letters inside another
         var tags = bossOnNow ? ["Raids now"] : []
         let rules: [(String, [String])] = [("Wild", ["wild"]), ("Team Rocket", ["rocket", "giovanni"]), ("Raids", ["raid"]), ("Eggs", ["egg"]),
-                                           ("Community Day", [" cd", "community day"]), ("Research", ["research"]), ("Incense", ["incense"]),
+                                           ("Community Day", ["community day"]), ("Research", ["research"]), ("Incense", ["incense"]),
                                            ("Evolve", ["evolve", "stone", " + "]), ("Trade", ["trade"]), ("GO Pass", ["go pass"])]
-        for (tag, keys) in rules where keys.contains(where: { o.contains($0) }) && !tags.contains(tag) && !(tag == "Raids" && bossOnNow) { tags.append(tag) }
+        for (tag, keys) in rules where (keys.contains(where: { o.contains($0) }) || (tag == "Community Day" && cd)) && !tags.contains(tag) && !(tag == "Raids" && bossOnNow) { tags.append(tag) }
         return tags.isEmpty ? ["Easy to get"] : tags
     }
 

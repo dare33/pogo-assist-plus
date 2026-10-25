@@ -27,15 +27,12 @@ extension HubSquads {
             let shadow = HubRaidsModel.isShadow(b, entries: ctx.entries)
             let counted = HubRaidsModel.typesCounted(by: b, screen: .raids, table: ctx.table, gm: ctx.gm, shadow: shadow).intersection(bring)
             guard !counted.isEmpty else { continue }
-            var entries = ctx.table.entries(for: b.targetId, area: "raids").filter { shadow || !$0.flags.shadow }
-            if b.viaMega {
-                entries += ctx.table.entries.filter { $0.area == "raids" && $0.flags.mega && ($0.speciesId.hasPrefix(b.targetId + "_mega") || $0.speciesId.hasPrefix(b.targetId + "_primal")) }
-            }
-            // An entry sectioned by a type counts when that type is counted; an entry with no type section (a high-tier table) always counts.
-            let best = entries.filter { counted.contains($0.section.lowercased()) || !HubData.typeOrder.contains($0.section.lowercased()) }
-                .map { PogoRules.tierRank($0.tier) }.min() ?? 3
+            // The same entries and the same reading of a section as `typesCounted`: a typed section stands for that type, one that is not a type for the
+            // species' own types. The tier is the best of the entries that stand for a counted type.
+            let entries = HubRaidsModel.raidEntries(targetId: b.targetId, viaMega: b.viaMega, table: ctx.table, shadow: shadow)
+            let own = ctx.gm.byId[b.targetId]?.types ?? []
+            let best = entries.filter { !Set(HubRaidsModel.entryTypes($0, speciesTypes: own)).isDisjoint(with: counted) }.map { PogoRules.tierRank($0.tier) }.min() ?? 3
             let role = PogoRules.raidRole(targetId: b.targetId, viaMega: b.viaMega, shadow: shadow, gm: ctx.gm)
-            if mode == .available && role == .mega { continue }
             out.append((RaidCandidate(build: b, role: role, tier: ["S", "A", "B"].indices.contains(best) ? ["S", "A", "B"][best] : "", covers: counted.count,
                                       built: isFullStrength(b, screen: .raids, ctx: ctx)), i))
         }
@@ -54,8 +51,8 @@ extension HubSquads {
     public static func defaultRaidSlots() -> [SquadSlot] { PogoRules.RaidRole.suggested.map { SquadSlot(role: $0.rawValue) } }
 
     /// Rule 10: each slot takes the first unused candidate of its role (role "All": any candidate).
-    public static func raidSquad(slots: [SquadSlot] = defaultRaidSlots(), candidates: [RaidCandidate]) -> [FilledSlot] {
-        fill(slots: slots) { _, role in Pool(preferred: pool(role: role, in: candidates)) }
+    public static func raidSquad(slots: [SquadSlot] = defaultRaidSlots(), candidates: [RaidCandidate], placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+        fill(slots: slots, pool: { _, role in Pool(preferred: pool(role: role, in: candidates)) }, placeable: placeable)
     }
 
     /// Rule 6 for a raid slot: S and A Raids gaps listed under one of the boss's bring types (or, for a section that is not a type, whose species has
@@ -112,12 +109,12 @@ extension HubSquads {
 
     /// Suggested Max squad: the first Tank, the first Healer, the first Attacker that hits the boss (else the first Attacker). Until a copy is marked
     /// Dynamax every Max pick reads Upgrade available (`isFullStrength` on .max), as the read-back's Q7 says.
-    public static func maxSquad(slots: [SquadSlot] = defaultMaxSlots(), candidates: [MaxCandidate]) -> [FilledSlot] {
-        fill(slots: slots) { _, role in
+    public static func maxSquad(slots: [SquadSlot] = defaultMaxSlots(), candidates: [MaxCandidate], placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+        fill(slots: slots, pool: { _, role in
             let listed = candidates.filter { role == squadRoleAll || $0.roleNames.contains(role) }
             let ordered = role == PogoRules.MaxRole.attacker.rawValue ? listed.filter(\.hitsBoss) + listed.filter { !$0.hitsBoss } : listed
             return Pool(preferred: ordered.map(\.entryId))
-        }
+        }, placeable: placeable)
     }
 
     /// Rule 6 for a Max slot: S and A Max gaps attainable now, by the slot's role (Tank, Healer, Attacker; nil or All: any).
@@ -140,8 +137,9 @@ extension HubSquads {
         /// The level the bulk was worked at; nil when it was not read.
         public var level: Double?
         public var built: Bool
-        /// Shown in place of the bulk figure.
+        /// Shown in place of the bulk figure ("level not read"); `ivsNotRead` has its own wording.
         public var levelNotRead: Bool { bulk == .levelNotRead }
+        public var ivsNotRead: Bool { bulk == .ivsNotRead }
     }
 
     /// Rule 13: Gym builds ordered by Gym table tier, then bulk (CP is not a key). Within a tier, a copy whose level is not read (or whose bulk cannot be
@@ -152,8 +150,10 @@ extension HubSquads {
             let tiers = ctx.table.entries(for: b.targetId, area: "gym").map(\.tier)
             let tier = tiers.min { PogoRules.tierRank($0) < PogoRules.tierRank($1) } ?? b.tier
             let built = isFullStrength(b, screen: .gym, ctx: ctx)
-            let level = built ? b.level : (b.targetLevel ?? b.level)
-            let bulk = PogoRules.bulk(target: b.targetId, ivs: ctx.entry(b.entryId)?.row.ivs, level: level, gm: ctx.gm)
+            // Read or not is the copy's own level: the engine fills a missing one with 20 in the build (`p.level ?? 20`), which must never stand in for it.
+            let copy = ctx.entry(b.entryId)
+            let level: Double? = copy?.row.level.map { current in built ? current : (b.targetLevel ?? current) }
+            let bulk = PogoRules.bulk(target: b.targetId, ivs: copy?.row.ivs, level: level, gm: ctx.gm)
             rows.append((GymRow(build: b, tier: tier, bulk: bulk, level: level, built: built), i))
         }
         rows.sort { l, r in
@@ -176,8 +176,8 @@ extension HubSquads {
     public static func defaultGymSlots() -> [SquadSlot] { Array(repeating: SquadSlot(role: gymSlotRole), count: 6) }
 
     /// The six suggested defenders: the first rows of the order not already chosen elsewhere in the squad.
-    public static func gymSquad(slots: [SquadSlot] = defaultGymSlots(), rows: [GymRow]) -> [FilledSlot] {
-        fill(slots: slots) { _, _ in Pool(preferred: rows.map { $0.build.entryId }) }
+    public static func gymSquad(slots: [SquadSlot] = defaultGymSlots(), rows: [GymRow], placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+        fill(slots: slots, pool: { _, _ in Pool(preferred: rows.map { $0.build.entryId }) }, placeable: placeable)
     }
 
     /// Rule 6 for the Gym: S and A Gym gaps attainable now.
@@ -279,7 +279,7 @@ extension HubSquads {
 
     public static func rocketSquad(leader: HubData.Leader, slots: [SquadSlot] = defaultRocketSlots(), mode: SquadMode, ctx: HubContext) -> [FilledSlot] {
         let pickers = leader.slots.map { rocketPicker(options: $0, mode: mode, ctx: ctx).map(\.entryId) }
-        return fill(slots: slots) { i, _ in Pool(preferred: pickers.indices.contains(i) ? pickers[i] : []) }
+        return fill(slots: slots, pool: { i, _ in Pool(preferred: pickers.indices.contains(i) ? pickers[i] : []) }, placeable: placeable(screen: .rocket, mode: mode, ctx: ctx))
     }
 
     /// Rule 6 for a Rocket slot: S and A Rocket or Raids gaps that beat one of the slot's options and are attainable now.
@@ -300,13 +300,11 @@ extension HubSquads {
 
     public static func gruntCounters(type: String, mode: SquadMode, ctx: HubContext) -> GruntCounters {
         guard !type.isEmpty else { return GruntCounters(anyAttacker: true, builds: []) }
-        var rows: [(b: BoxAdvice.Build, off: Int, built: Bool)] = []
-        for (i, b) in ctx.advice.builds.enumerated() where isRocketArea(b) && isUsable(b, mode: mode) && ctx.hub.beats(HubTeams.types(of: b, gm: ctx.gm), [type]) {
-            rows.append((b, i, HubTeams.isBuilt(b)))
-        }
-        rows.sort { rocketOrder($0, $1) ?? ($0.off < $1.off) }
+        // `HubTeams.gruntFit` is the order `gruntCounter` picks from (Rocket area, tier, score, advisor order); the list shows the built ones first.
+        let fit = HubTeams.gruntFit(type: type, builds: ctx.advice.builds.filter { isUsable($0, mode: mode) }, gm: ctx.gm, hub: ctx.hub)
+        let ordered = fit.filter(HubTeams.isBuilt) + fit.filter { !HubTeams.isBuilt($0) }
         var seen = Set<String>()
-        return GruntCounters(anyAttacker: false, builds: Array(rows.map(\.b).filter { seen.insert($0.targetId).inserted }.prefix(8)))
+        return GruntCounters(anyAttacker: false, builds: Array(ordered.filter { seen.insert($0.targetId).inserted }.prefix(8)))
     }
 
     /// Rule 20: the types that hit a grunt of this type for more than normal damage, strongest first (the "beaten by" icons).
@@ -346,11 +344,11 @@ extension HubSquads {
 
     /// Rule 23: slots Lead, Safe swap, Closer, each taking the best-scoring unused candidate listed for that role, else (`fallback`) the best-scoring unused
     /// one. Role "All": the best-scoring unused. Coverage is not used to pick.
-    public static func pvpSquad(slots: [SquadSlot] = defaultPvpSlots(), candidates: [PvpCandidate]) -> [FilledSlot] {
-        fill(slots: slots) { _, role in
+    public static func pvpSquad(slots: [SquadSlot] = defaultPvpSlots(), candidates: [PvpCandidate], placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+        fill(slots: slots, pool: { _, role in
             let listed = pool(role: role, in: candidates)
             return Pool(preferred: listed, fallback: candidates.map(\.entryId))
-        }
+        }, placeable: placeable)
     }
 
     /// The squad's coverage, for display only (D57): how many of the 18 types its members hit for more than normal damage, and which.

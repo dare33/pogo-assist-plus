@@ -48,7 +48,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   done), **PLANNED** (it has a build there with work left), **SPARE** (another copy is your best for that raid type),
   **OPTION** (listed in the activity's table, nobody planned), **NOT PICKED** (gym: listed, not the top defender),
   **BEATS N GRUNTS** (Rocket: its types beat N grunt types), **NEEDS DYNAMAX** (Max: listed, not marked as Dynamax),
-  **STRONG / OK / WEAK** (PvP: the best league's worth tag), **NOT USED** (nothing the copy can become is in the table).
+  **TOP / GOOD / WEAK** (PvP: the best league's worth tag), **NOT USED** (nothing the copy can become is in the table).
 - **Reach**: the copy's own species and what it can still evolve into; never back up the family (D5).
 - **League tile**: one of three tiles on the PvP tab (GL, UL, ML), each with the pick, its score and rank, this copy's IV %
   and rank, the worth tag and the cost mark (C7, D3).
@@ -60,7 +60,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **League names**: a league is named in full ("Great League") or as GL, UL, ML, never "Great" alone (D3).
 
 Pass 2's terms are used unchanged: **Upgrade available**, **Full strength**, **top / good** number grades, the **"i"**,
-**worth tags** (Strong, OK, Weak), and the app-wide **squad** for team and **Gym builds** (pass 2, D54, D55).
+**worth tags** (Top, Good, Weak; Greg's rename of 25 Oct 2026), and the app-wide **squad** for team and **Gym builds** (pass 2, D54, D55).
 
 ## Rules
 

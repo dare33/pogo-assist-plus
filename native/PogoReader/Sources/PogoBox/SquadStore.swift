@@ -101,11 +101,23 @@ public struct SquadStore: Codable, Equatable {
 
     // MARK: rules
 
-    /// Drops the raid and Max squads whose event ended before `today` (its last day still counts, as in `HubRaidsModel.timeline`).
-    public func pruned(today: String) -> SquadStore {
+    /// Drops the raid and Max squads whose event has ended (its last day still counts, as in `HubRaidsModel.timeline`). An event still in `rotation`
+    /// (matched by `eventKey`) is judged by the row's CURRENT last day, which may have moved since the squad was saved, and the stored day is updated;
+    /// an event no longer in the rotation falls back to the day stored with the squad.
+    public func pruned(today: String, rotation: [HubData.RotationRow] = []) -> SquadStore {
+        let current = Dictionary(rotation.map { (Self.eventKey($0), $0.to) }, uniquingKeysWith: { a, _ in a })
+        func keep(_ squads: [String: EventSquad]) -> [String: EventSquad] {
+            var out = [String: EventSquad]()
+            for (key, e) in squads {
+                var e = e
+                if let to = current[key] { e.endsOn = to }
+                if e.endsOn >= today { out[key] = e }
+            }
+            return out
+        }
         var s = self
-        s.raids = raids.filter { $0.value.endsOn >= today }
-        s.max = max.filter { $0.value.endsOn >= today }
+        s.raids = keep(raids)
+        s.max = keep(max)
         return s
     }
 
@@ -127,5 +139,7 @@ public struct SquadStore: Codable, Equatable {
     }
 
     /// Both rules, as the app applies them when it opens a screen or finishes a scan.
-    public func refreshed(today: String, boxIds: Set<String>) -> SquadStore { pruned(today: today).reconciled(boxIds: boxIds) }
+    public func refreshed(today: String, rotation: [HubData.RotationRow] = [], boxIds: Set<String>) -> SquadStore {
+        pruned(today: today, rotation: rotation).reconciled(boxIds: boxIds)
+    }
 }

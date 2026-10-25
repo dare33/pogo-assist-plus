@@ -13,14 +13,21 @@ public enum HubCollection {
         public var tags: [String]
     }
 
-    /// One per dex number, the plain species rather than a form when the file lists both (`pikachu` before `pikachu_libre`); in dex order.
-    public static func releasedSpecies(gm: GameMaster) -> [ReleasedSpecies] {
+    /// One per dex number, the plain species rather than a form when the file lists both (`pikachu` before `pikachu_libre`: a form has a bracket in
+    /// its game master name, so ids such as `mr_mime` and `ho_oh` are plain); in dex order. A dex number in `owned` always counts, even where PvPoke
+    /// flags it unreleased (Ditto, Shedinja, ...): a box that holds a species has it, so owned never exceeds the total.
+    public static func releasedSpecies(gm: GameMaster, owned: Set<Int> = []) -> [ReleasedSpecies] {
+        func isPlain(_ s: GameMaster.Species) -> Bool { GameMaster.nameAndForm(s.name).form.isEmpty }
+        func skipped(_ s: GameMaster.Species) -> Bool { s.tags.contains("shadow") || s.tags.contains("mega") || s.tags.contains("duplicate") }
         var byDex = [Int: ReleasedSpecies]()
-        for s in gm.ordered where s.released {
-            if s.tags.contains("shadow") || s.tags.contains("mega") || s.tags.contains("duplicate") { continue }
-            if byDex[s.dex] == nil || !s.id.contains("_") { byDex[s.dex] = ReleasedSpecies(dex: s.dex, id: s.id, name: s.name, tags: s.tags) }
+        for s in gm.ordered where s.released && !skipped(s) {
+            if byDex[s.dex] == nil || isPlain(s) { byDex[s.dex] = ReleasedSpecies(dex: s.dex, id: s.id, name: s.name, tags: s.tags) }
         }
-        return byDex.values.sorted { $0.dex < $1.dex }
+        var extra = [Int: ReleasedSpecies]()
+        for s in gm.ordered where owned.contains(s.dex) && byDex[s.dex] == nil && !skipped(s) {
+            if extra[s.dex] == nil || isPlain(s) { extra[s.dex] = ReleasedSpecies(dex: s.dex, id: s.id, name: s.name, tags: s.tags) }
+        }
+        return byDex.merging(extra) { a, _ in a }.values.sorted { $0.dex < $1.dex }
     }
 
     public static let regions: [(name: String, dex: ClosedRange<Int>)] = [
@@ -47,7 +54,7 @@ public enum HubCollection {
     }
 
     public static func overview(entries: [BoxEntry], gm: GameMaster) -> Overview {
-        let released = releasedSpecies(gm: gm), owned = ownedDex(entries: entries, gm: gm)
+        let owned = ownedDex(entries: entries, gm: gm), released = releasedSpecies(gm: gm, owned: owned)
         let rows = regions.map { r -> RegionRow in
             let all = released.filter { r.dex.contains($0.dex) }
             return RegionRow(name: r.name, owned: all.filter { owned.contains($0.dex) }.count, total: all.count)
@@ -79,7 +86,7 @@ public enum HubCollection {
             }
             return nil
         }
-        return releasedSpecies(gm: gm).filter { !owned.contains($0.dex) }.map { s in
+        return releasedSpecies(gm: gm, owned: owned).filter { !owned.contains($0.dex) }.map { s in
             let from = ancestorOwned(s.id)
             let how: String
             if let from { how = "Evolve from \(from) (you have one)" }
@@ -96,19 +103,21 @@ public enum HubCollection {
     /// A copy's IV % (the three IVs over 45); nil when its IVs are not read.
     static func ivPercent(_ e: BoxEntry) -> Double? { e.row.ivs.map { Double($0.atk + $0.def + $0.hp) / 45 * 100 } }
 
-    /// Each species' best copy by IV %, ties by CP, the first twelve. A copy whose IVs are not read cannot be ranked and is left out. "Species" is the
-    /// copy's species id, so a form is its own species (as on the My Pokémon rows). A remaining tie is broken by entry id so the order is stable.
-    public static func showcase(entries: [BoxEntry], limit: Int = 12) -> [BoxEntry] {
+    /// Each species' best copy by IV %, ties by CP, the first twelve. A species is one dex number (the Collection term: a Shadow, Mega or form copy
+    /// competes with the rest of its dex number). A copy whose IVs are not read cannot be ranked and is left out. A remaining tie is broken by entry id so the
+    /// order is stable.
+    public static func showcase(entries: [BoxEntry], gm: GameMaster, limit: Int = 12) -> [BoxEntry] {
         func better(_ a: BoxEntry, _ b: BoxEntry) -> Bool {
             let (x, y) = (ivPercent(a) ?? -1, ivPercent(b) ?? -1)
             if x != y { return x > y }
             if a.row.cp != b.row.cp { return a.row.cp > b.row.cp }
             return a.id < b.id
         }
+        func key(_ e: BoxEntry) -> String { gm.byId[e.row.speciesId].map { "dex \($0.dex)" } ?? "id \(e.row.speciesId)" }
         var best = [String: BoxEntry]()
         for e in entries where ivPercent(e) != nil {
-            if let cur = best[e.row.speciesId], !better(e, cur) { continue }
-            best[e.row.speciesId] = e
+            if let cur = best[key(e)], !better(e, cur) { continue }
+            best[key(e)] = e
         }
         return Array(best.values.sorted(by: better).prefix(limit))
     }
@@ -129,8 +138,8 @@ public enum HubCollection {
     /// Counts for the named groups. 100% IVs, Lucky and Shadow count copies; Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
     /// released). `isLucky` reads the copy's Lucky mark (the data model adds it); while no copy is marked the Lucky tile has no count.
     public static func specialSets(entries: [BoxEntry], gm: GameMaster, isLucky: (BoxEntry) -> Bool = { _ in false }) -> [SpecialSet] {
-        let released = releasedSpecies(gm: gm)
         let ownedDex = ownedDex(entries: entries, gm: gm)
+        let released = releasedSpecies(gm: gm, owned: ownedDex)
         func species(_ tag: String) -> SpecialSet {
             let ids = released.filter { $0.tags.contains(tag) }
             return SpecialSet(name: "", owned: ids.filter { ownedDex.contains($0.dex) }.count, total: ids.count, unit: "species", note: nil)

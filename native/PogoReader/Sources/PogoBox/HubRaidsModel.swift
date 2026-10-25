@@ -144,17 +144,33 @@ public enum HubRaidsModel {
     static func typesCounted(by b: BoxAdvice.Build, screen: Screen, table: TierTable, gm: GameMaster, shadow: Bool = false) -> Set<String> {
         switch screen {
         case .raids:
-            // A Shadow entry listed under a plain id ("Shadow Pheromosa") is only credited to a Shadow copy.
-            var entries = table.entries(for: b.targetId, area: "raids").filter { shadow || !$0.flags.shadow }
-            if b.viaMega {
-                entries += table.entries.filter { $0.area == "raids" && $0.flags.mega && (shadow || !$0.flags.shadow) && ($0.speciesId.hasPrefix(b.targetId + "_mega") || $0.speciesId.hasPrefix(b.targetId + "_primal")) }
-            }
-            let typed = Set(entries.map { $0.section.lowercased() }).intersection(HubData.typeOrder)
-            if !typed.isEmpty { return typed }
-            return entries.isEmpty ? [] : Set(gm.byId[b.targetId]?.types ?? [])
+            let entries = raidEntries(targetId: b.targetId, viaMega: b.viaMega, table: table, shadow: shadow)
+            return raidTypes(entries, speciesTypes: gm.byId[b.targetId]?.types ?? [])
         case .max:
             return maxTypes(of: b.targetId, table: table, gm: gm)
         }
+    }
+
+    /// The Raids table entries a target can fill: its own, without a Shadow entry (listed under a plain id, such as "Shadow Pheromosa") unless the copy is
+    /// Shadow, plus, for a build that mega evolves, the target's Mega and Primal entries (`lucario` counts under Fighting through `lucario_mega`).
+    static func raidEntries(targetId: String, viaMega: Bool, table: TierTable, shadow: Bool) -> [TierTable.Entry] {
+        var entries = table.entries(for: targetId, area: "raids").filter { shadow || !$0.flags.shadow }
+        if viaMega {
+            entries += table.entries.filter { $0.area == "raids" && $0.flags.mega && (shadow || !$0.flags.shadow) && ($0.speciesId.hasPrefix(targetId + "_mega") || $0.speciesId.hasPrefix(targetId + "_primal")) }
+        }
+        return entries
+    }
+
+    /// The attacking types one Raids entry stands for: its section when that is a type, else (a high-tier table with no type section) the species' own types.
+    static func entryTypes(_ e: TierTable.Entry, speciesTypes: [String]) -> [String] {
+        HubData.typeOrder.contains(e.section.lowercased()) ? [e.section.lowercased()] : speciesTypes
+    }
+
+    /// The types the entries count for: the typed sections; when none is typed, the species' own types; nothing without entries.
+    static func raidTypes(_ entries: [TierTable.Entry], speciesTypes: [String]) -> Set<String> {
+        let typed = Set(entries.map { $0.section.lowercased() }).intersection(HubData.typeOrder)
+        if !typed.isEmpty { return typed }
+        return entries.isEmpty ? [] : Set(speciesTypes)
     }
 
     private static func maxTypes(of speciesId: String, table: TierTable, gm: GameMaster) -> Set<String> {
@@ -174,6 +190,9 @@ public enum HubRaidsModel {
     static func isShadow(_ b: BoxAdvice.Build, entries: [BoxEntry]) -> Bool {
         b.targetId.hasSuffix("_shadow") || (entries.first { $0.id == b.entryId }?.row.shadow ?? 0) == 1
     }
+
+    /// True for a Shadow copy (the one definition the Pokémon page's tabs share).
+    static func isShadow(_ e: BoxEntry) -> Bool { e.row.speciesId.hasSuffix("_shadow") || (e.row.shadow ?? 0) == 1 }
 
     /// Nothing left to do but the Dynamax requirement.
     static func isFinished(_ b: BoxAdvice.Build) -> Bool { !HubModel.needsSomething(b) }

@@ -42,17 +42,18 @@ final class PokemonActivitiesTests: XCTestCase {
     func testRaidCardsAreOnePerMemberAndAttackingTypeBestTierFirst() {
         let ctx = raidCtx()
         let cards = A.raidCards(copy: ctx.entry("ev")!, ctx: ctx)
-        XCTAssertEqual(cards.map(\.member.name), ["Vaporeon", "Flareon", "Jolteon"], "Umbreon's entry is Shadow, and the Tiers section is not an attacking type")
-        XCTAssertEqual(cards.map(\.type), ["water", "fire", "electric"])
-        XCTAssertEqual(cards.map(\.tier), ["S", "A", "B"])
-        XCTAssertEqual(cards.map(\.role), [.bulky, .heavy, .bulky])
+        // Umbreon's entry is Shadow. Leafeon's section ("Tiers") is not a type, so it stands for the species' own type, as `typesCounted` reads it.
+        XCTAssertEqual(cards.map(\.member.name), ["Vaporeon", "Leafeon", "Flareon", "Jolteon"])
+        XCTAssertEqual(cards.map(\.type), ["water", "grass", "fire", "electric"])
+        XCTAssertEqual(cards.map(\.tier), ["S", "S", "A", "B"])
+        XCTAssertEqual(cards.map(\.role), [.bulky, .bulky, .heavy, .bulky])
         // Water: the fire and ground bosses (the first now, the second coming). Fire: the grass boss. Electric: the water boss.
         XCTAssertEqual(cards[0].counters.map { HubRaidsModel.name($0.entry.row) }, ["Charizard", "Golem"])
         XCTAssertEqual(cards[0].counters.map(\.isNow), [true, false])
         XCTAssertEqual(cards[0].counters.map(\.when), ["now", "in 11 d"])
-        XCTAssertEqual(cards.map(\.counterCount), [2, 1, 1])
-        XCTAssertEqual(cards[1].counters.map { HubRaidsModel.name($0.entry.row) }, ["Venusaur"])
-        XCTAssertEqual(cards[2].counters.map { HubRaidsModel.name($0.entry.row) }, ["Blastoise"])
+        XCTAssertEqual(cards.map(\.counterCount), [2, 2, 1, 1])
+        XCTAssertEqual(cards[2].counters.map { HubRaidsModel.name($0.entry.row) }, ["Venusaur"])
+        XCTAssertEqual(cards[3].counters.map { HubRaidsModel.name($0.entry.row) }, ["Blastoise"])
     }
 
     func testTheRaidPlanIsThisCopysBuildElseTheBoxsBestForTheType() {
@@ -60,9 +61,9 @@ final class PokemonActivitiesTests: XCTestCase {
         let cards = A.raidCards(copy: ctx.entry("ev")!, ctx: ctx)
         guard case .mine(let mine) = cards[0].plan else { return XCTFail("the copy's own Vaporeon build") }
         XCTAssertEqual(mine.build.entryId, "ev"); XCTAssertTrue(mine.built)
-        guard case .best(let best, let tier) = cards[1].plan else { return XCTFail("another copy's Flareon") }
+        guard case .best(let best, let tier) = cards[2].plan else { return XCTFail("another copy's Flareon") }
         XCTAssertEqual(best.build.entryId, "o1"); XCTAssertEqual(tier, "A"); XCTAssertTrue(best.built)
-        XCTAssertEqual(cards[2].plan, .none, "nobody is planned as an Electric attacker")
+        XCTAssertEqual(cards[3].plan, .none, "nobody is planned as an Electric attacker")
         // An unbuilt own build reads not built.
         let todo = raidCtx(extra: []).advice.builds.map { b -> BoxAdvice.Build in var v = b; if b.entryId == "ev" { v.steps = [.init(kind: "powerUp", toLevel: 40)] }; return v }
         let ctx2 = P23.ctx(builds: todo, entries: ctx.entries, table: raidTable, rotation: raidRows)
@@ -85,7 +86,7 @@ final class PokemonActivitiesTests: XCTestCase {
         let shadow = P23.entry("sh", "eevee", shadow: 1)
         let ctx = P23.ctx(entries: [shadow], table: raidTable, rotation: raidRows)
         let cards = A.raidCards(copy: shadow, ctx: ctx)
-        XCTAssertEqual(cards.map(\.member.name), ["Vaporeon", "Flareon", "Jolteon", "Umbreon"])
+        XCTAssertEqual(cards.map(\.member.name), ["Vaporeon", "Leafeon", "Flareon", "Jolteon", "Umbreon"])
         XCTAssertEqual(cards.last?.counterCount, 0, "nothing on or coming is weak to Dark attackers")
         XCTAssertEqual(cards.last?.role, .heavy, "a Shadow copy is Heavy")
     }
@@ -180,9 +181,9 @@ final class PokemonActivitiesTests: XCTestCase {
         let copy = P23.entry("cm", "charmander")
         let ctx = rocketCtx(copy: copy)
         let cards = A.rocketCards(copy: copy, ctx: ctx)
-        XCTAssertEqual(cards.map(\.member.name), ["Charizard", "Charmander", "Charmeleon"], "most grunt types first, then the order of reach")
+        XCTAssertEqual(cards.map(\.member.name), ["Charizard", "Charmeleon", "Charmander"], "most grunt types first, then most leader options, then the later evolution")
         XCTAssertEqual(cards[0].gruntTypes, ["grass", "fighting"], "Fire hits Grass and Flying hits Fighting; the Mixed grunt has no type")
-        XCTAssertEqual(cards[1].gruntTypes, ["grass"])
+        XCTAssertEqual(cards[2].gruntTypes, ["grass"])
         // Fire hits Grass and Steel in slot 1; nothing of the Fire and Flying pair hits Water or Rock/Ground.
         XCTAssertEqual(cards[0].leaderSlots, [A.LeaderSlotBeat(leader: "L", slot: 1, beats: ["Alpha", "Beta"], of: 2)], "\"Shadow \" is dropped from the name")
         XCTAssertNil(cards[0].plan)
@@ -396,7 +397,7 @@ final class PokemonActivitiesTests: XCTestCase {
         XCTAssertEqual(A.shortName(origin, among: [origin, altered]), "Giratina (Origin)", "two Giratinas: the form tells them apart")
         XCTAssertEqual(A.shortName(altered, among: [origin, altered]), "Giratina (Altered)")
         XCTAssertEqual(A.shortName(r(["Mega Charizard X", "Mega Charizard Y"]), among: []), "Mega Charizard X · Mega Charizard Y")
-        XCTAssertEqual(A.shortName(r(["Deoxys", "Deoxys (Speed)", "Deoxys (Attack)", "Deoxys (Defense)"]), among: []), "Deoxys")
+        XCTAssertEqual(A.shortName(r(["Deoxys", "Deoxys (Speed)", "Deoxys (Attack)", "Deoxys (Defense)"]), among: []), "Deoxys · Deoxys (Speed) · Deoxys (Attack) · Deoxys (Defense)", "four formes in one row tell each other apart")
         XCTAssertEqual(A.shortName(r(["Shadow Landorus (Incarnate)"]), among: []), "Shadow Landorus")
         XCTAssertEqual(A.shortName(P23.row("2026-10-28", "2026-10-28", .raidHour, title: "Raid Hour", bosses: []), among: []), "Raid Hour")
     }
