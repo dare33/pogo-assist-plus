@@ -204,7 +204,8 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ul"]?.strength); XCTAssertNil(l["ul"]?.iv); XCTAssertNil(l["ul"]?.cost)
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
-        XCTAssertEqual(advice.version, 8)
+        XCTAssertEqual(advice.version, BoxAdvice.currentVersion)
+        XCTAssertEqual(BoxAdvice.currentVersion, 9)
 
         // The options list decodes in order; the experimental member is a different index.
         let gl = try XCTUnwrap(l["gl"])
@@ -334,6 +335,11 @@ final class BoxLibraryTests: XCTestCase {
         // A build read without the engine's steps falls back to the plain wording (never "Already built").
         XCTAssertEqual(build(nil).action, "Power up")
         XCTAssertEqual(build(powerUp: false, nil).action, "Evolve to Y")
+        // The duplicate verdict is only for a copy with no build of its own, as on the Pokémon page.
+        let dupe = BoxAdvice.Duplicate(name: "Eevee", count: 2, keep: ["CP 1, 15/15/15"], transfer: ["CP 2, 1/1/1"], keepIds: ["a"], transferIds: ["b"])
+        XCTAssertEqual(BoxExport.adviceText(.init(builds: [], spareFor: [], duplicateOf: dupe, keep: false)), "duplicate of Eevee, transfer")
+        XCTAssertFalse(BoxExport.adviceText(.init(builds: [build([])], spareFor: [], duplicateOf: dupe, keep: false)).contains("transfer"), "no transfer verdict under the copy's own build")
+        XCTAssertFalse(BoxExport.adviceText(.init(builds: [build([])], spareFor: [], duplicateOf: dupe, keep: true)).contains("duplicate of"))
         // The export never words a spare as an action.
         let spare = BoxExport.adviceText(.init(builds: [], spareFor: [build([])], duplicateOf: nil, keep: false))
         XCTAssertFalse(spare.contains("Already built"))
@@ -384,56 +390,6 @@ final class BoxLibraryTests: XCTestCase {
         let stripped = BoxAdvice.make(from: .object(o), entries: box).builds
         XCTAssertNil(try XCTUnwrap(stripped.first { $0.targetId == firstTarget }).steps)
         XCTAssertNotNil(try XCTUnwrap(stripped.first { $0.targetId != firstTarget }).steps)
-    }
-
-    func testLeagueSentences() {
-        typealias R = BoxAdvice.LeagueRating
-        typealias O = R.Option
-        let option = O(speciesId: "toxapex", name: "Toxapex", strength: .init(score: 91.84, rank: 23, of: 1152),
-                       moves: .init(fast: "Poison Jab", charged: ["Brine", "Sludge Wave"]), needs: ["Brine", "Poison Jab"],
-                       iv: .init(rank: 1234, pct: 97.26, rankPct: 70, level: 24.5, cp: 1497), overCap: false,
-                       cost: .init(dust: 175000, candy: 1200, xl: 8, evolveCandy: 50, toLevel: 24.5))
-        func rating(_ o: O) -> R { R(options: [o], pick: 0, source: "emulated") }
-        let full = rating(option)
-        XCTAssertEqual(LeagueText.pick(full), "As Toxapex")
-        var lockedOption = option; lockedOption.speciesId = "gallade"; lockedOption.name = "Gallade"; lockedOption.genderLocked = "male"
-        let locked = rating(lockedOption)
-        XCTAssertEqual(LeagueText.pick(locked), "As Gallade, if it is male")
-        XCTAssertEqual(LeagueText.strength(full, key: "gl"), "PvPoke ranks Toxapex 23rd of 1,152 in Great League, score 91.8")
-        XCTAssertEqual(LeagueText.ivs(full, key: "gl"), "IVs rank #1,234 of 4,096 · 97.3% of best")
-        XCTAssertEqual(LeagueText.moves(full), "Moves: Poison Jab, Brine, Sludge Wave")
-        XCTAssertEqual(LeagueText.needs(full), "Needs Brine and Poison Jab")
-        var oneOption = option; oneOption.needs = ["Brine"]
-        XCTAssertEqual(LeagueText.needs(rating(oneOption)), "Needs Brine")
-        oneOption.needs = []; XCTAssertNil(LeagueText.needs(rating(oneOption)))
-        oneOption.needs = nil; XCTAssertNil(LeagueText.needs(rating(oneOption)))
-        XCTAssertEqual(LeagueText.cost(full, levelKnown: true), "To level 24.5: 175,000 dust, 1,200 candy, 8 XL candy (50 to evolve)")
-        var plainOption = option; plainOption.cost = .init(dust: 9000, candy: 40, xl: 0, evolveCandy: 0, toLevel: 40)
-        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true), "To level 40: 9,000 dust, 40 candy")
-        plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 24.5)
-        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true), "Already at level 24.5")
-        // A best level BELOW the current one (a level-51 Best Buddy copy): past its best level for that league, evolution candy only.
-        plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 0, toLevel: 50)
-        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 51, key: "ul"), "Past its best Ultra League level")
-        plainOption.cost = .init(dust: 0, candy: 0, xl: 0, evolveCandy: 50, toLevel: 50)
-        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 51, key: "ul"), "Past its best Ultra League level; 50 candy to evolve")
-        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: true, level: 50, key: "ul"), "To level 50: 0 dust, 0 candy (50 to evolve)", "at the best level it still reads as a cost")
-        plainOption.cost = nil
-        XCTAssertEqual(LeagueText.cost(rating(plainOption), levelKnown: false), "Level not known, so no cost")
-        XCTAssertNil(LeagueText.cost(rating(plainOption), levelKnown: true))
-        var selfOption = option; selfOption.isSelf = true; selfOption.strength = nil; selfOption.moves = nil; selfOption.iv = nil
-        let self1 = rating(selfOption)
-        XCTAssertNil(LeagueText.pick(self1)); XCTAssertNil(LeagueText.moves(self1))
-        XCTAssertEqual(LeagueText.strength(self1, key: "ul"), "Not ranked in Ultra League by PvPoke")
-        XCTAssertEqual(LeagueText.ivs(self1, key: "ul"), "IVs not read, so no rank")
-        var overOption = option; overOption.overCap = true
-        let over = rating(overOption)
-        XCTAssertEqual(LeagueText.ivs(over, key: "ul"), "Already above 2,500 CP, so it cannot be used in Ultra League")
-        XCTAssertEqual(LeagueText.ivs(over, key: "gl"), "Already above 1,500 CP, so it cannot be used in Great League")
-        // Unknown IVs and already over the cap: the cap is what the page says, not "IVs not read".
-        var blindOver = overOption; blindOver.iv = nil; blindOver.cost = nil
-        XCTAssertEqual(LeagueText.ivs(rating(blindOver), key: "gl"), "Already above 1,500 CP, so it cannot be used in Great League")
-        XCTAssertEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 101, 111, 1002].map(LeagueText.ordinal), ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st", "111th", "1,002nd"])
     }
 
     func testReplayLogIsKeptBesideTheScanAndAScanFileWithoutOneStillLoads() throws {

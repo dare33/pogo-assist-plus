@@ -32,7 +32,7 @@ final class RealLeagueOutputTests: XCTestCase {
         let all = try leagues()
         XCTAssertEqual(all.count, 4)
         for (index, l) in all {
-            for key in LeagueText.keys {
+            for key in LeaguePanel.keys {
                 let rating = try XCTUnwrap(l[key].flatMap(BoxAdvice.LeagueRating.decode), "entry \(index) \(key)")
                 XCTAssertFalse(rating.options.isEmpty)
                 XCTAssertTrue(["export", "emulated", "ranked", "fallback"].contains(rating.source))
@@ -55,8 +55,17 @@ final class RealLeagueOutputTests: XCTestCase {
         XCTAssertEqual(gl.pick.speciesId, gl.options[gl.pickIndex].speciesId)
         XCTAssertNotNil(gl.options[gl.pickIndex].iv)
         XCTAssertTrue(gl.options.indices.contains(gl.experimentalIndex))
-        let sentence = LeagueText.strength(gl, key: "gl")
-        XCTAssertFalse(sentence.isEmpty)
+        let card = LeaguePanel.card(gl, shown: gl.pickIndex, key: "gl", level: 17)
+        XCTAssertEqual(card.option.speciesId, gl.pick.speciesId)
+    }
+
+    func testEveryRankedOptionCarriesItsMoves() throws {
+        let eevee = try XCTUnwrap(try leagues()[1])
+        for key in LeaguePanel.keys {
+            let rating = try XCTUnwrap(BoxAdvice.LeagueRating.decode(try XCTUnwrap(eevee[key])))
+            for o in rating.options { XCTAssertEqual(o.moves != nil, o.strength != nil, "\(key) \(o.speciesId): moves exactly where PvPoke ranks it") }
+            XCTAssertGreaterThan(rating.options.filter { $0.moves != nil }.count, 2, "\(key): more than the shown and experimental option")
+        }
     }
 
     func testZygardeTenPercentReachesComplete() throws {
