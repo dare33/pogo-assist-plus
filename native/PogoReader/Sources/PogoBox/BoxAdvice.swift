@@ -28,6 +28,10 @@ public struct BoxAdvice: Codable, Equatable {
         public var xl: Int
         /// "GL rank 12" when the build is a league one.
         public var pvp: String?
+        /// The league build's league key ("gl", "ul", "ml") and this copy's IV rank percentile there (`pvpCost.rankPct`, 100 the best spread); nil on a
+        /// build with no league cost. A report cached before these fields existed decodes them as nil, which reads as an IV percentage.
+        public var pvpLeague: String? = nil
+        public var pvpRankPct: Double? = nil
         public var score: Double
         /// One thing still to do, as `steps` in `src/advise.js` lists them. `kind` is evolve (to, candy), formChange (to), megaEvolve,
         /// powerUp (toLevel, areas: the area keys that share that level), secondMove (certain: false when the copy's moves are unknown),
@@ -104,6 +108,26 @@ public struct BoxAdvice: Codable, Equatable {
             let base = parts.joined(separator: " + ")
             return dynamax && !inlined ? base + " (Max needs a Dynamax copy)" : base
         }
+        /// This copy's IV percentage from `ivs` ("17/9/13" is 86.7); nil when the IVs are not known.
+        public var ivPercent: Double? {
+            let p = (ivs ?? "").split(separator: "/").compactMap { Double($0) }
+            return p.count == 3 ? p.reduce(0, +) / 45 * 100 : nil
+        }
+        /// The roll in the Next list's words. A league build's roll is the copy's IV rank percentile for that league ("GL rank top 5%", N = 100 minus
+        /// the percentile rounded up, at least 1: the figure the league card's sentence uses); an activity build's roll is the IV percentage ("IVs 24.4%").
+        /// A build that covers both shows both, the league first.
+        public var rollText: String {
+            let ivText = ivPercent.map { "IVs " + String(format: "%.1f", $0) + "%" } ?? "IVs not read"
+            guard let league = pvpLeague, let rankPct = pvpRankPct else { return ivText }
+            let rank = "\(BoxAdvice.areaLabel[league] ?? league.uppercased()) rank top \(max(1, Int((100 - rankPct).rounded(.up))))%"
+            let leagueLabels = ["gl", "ul", "ml"].compactMap { BoxAdvice.areaLabel[$0] }
+            return areas.allSatisfy(leagueLabels.contains) ? rank : rank + " · " + ivText
+        }
+        /// The Next list's WORTH: the build target's tier and this copy's roll ("S-tier · IVs 17.8%", "S-tier · GL rank top 5%", "S-tier · IVs not read"), so species worth and the copy are both shown.
+        public var worthText: String { "\(tier)-tier · " + rollText }
+        /// The Next list's EFFORT: the cost figures only ("120k dust, 150 candy, 8 XL candy"); "No dust or candy" when all are zero. The steps themselves
+        /// (a form change, a Mega, an Elite TM, a second move, a Dynamax copy) are the action line above, so they are not repeated here.
+        public var effortText: String { dust != 0 || candy != 0 || xl != 0 ? costText : "No dust or candy" }
         /// "120k dust, 150 candy, 8 XL". Elite TMs and the Community Day move are steps of `action`, not repeated here.
         public var costText: String {
             var parts = [String]()
@@ -288,7 +312,8 @@ public struct BoxAdvice: Codable, Equatable {
     /// `moves` (before, only the shown and experimental ones did). Advice cached at 2 to 8 has the old shape or the old rules, so it is dropped and recomputed too.
     /// Versions 10 and 11 were written by dev builds of a branch that carried interim payload fields (since removed), so they are taken: the next real
     /// bump must be 12 or higher, or such a cache would pass for the new shape (`loadAdvice` keeps any version at or above this one).
-    public static let currentVersion = 9
+    /// 12 since each Pokémon carries `fit` (a Strong / OK / Weak tag per Raids, Gym, Rocket and Max, in the compact form the bridge sends) and `bestOf` (the areas it is its species' best copy for).
+    public static let currentVersion = 12
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -328,7 +353,98 @@ public struct BoxAdvice: Codable, Equatable {
 
     public func leagues(for id: String) -> [String: LeagueRating] { leagues[id] ?? [:] }
 
-    private enum CodingKeys: String, CodingKey { case version, builds, gaps, duplicates, unresolved, spareBuilds, leagues }
+    /// IV % (the average of the three IVs) at or above which a copy with a table entry in reach is OK or Strong rather than Weak. Mirror of `FIT_IV_PCT` in
+    /// `src/advise.js` (which decides the tag; this only words the Weak reason), so change the pair together.
+    public static let fitIVPercent = 80.0
+
+    /// How well one copy suits one non-league activity area, as `src/advise.js` `fit` says it. The bridge carries a compact array (see
+    /// `native/tools/pogo-core-facade.js`) and the app composes the sentence (`line`) from it as the engine words it.
+    public struct Fit: Codable, Equatable {
+        /// The tag is worth alone, free of cost: "strong" (a reachable S-tier use, IVs at `fitIVPercent` or more), "ok" (an A or B one, same IVs) or "weak".
+        public enum Tag: String, Codable { case strong, ok, weak }
+        /// Why a Weak copy is weak: no table entry in reach, IVs below the threshold, IVs unknown, or a Shadow copy whose only entries are Mega ones.
+        public enum Reason: String, Codable { case none, iv, ivUnknown, shadowNoMega }
+        /// What the advisor's build for the area costs, the figures the Advice panel shows.
+        public struct BuildCost: Codable, Equatable {
+            public var dust: Int
+            public var candy: Int
+            public var xl: Int
+            public init(dust: Int, candy: Int, xl: Int) { self.dust = dust; self.candy = candy; self.xl = xl }
+        }
+        public var area: String
+        public var tag: Tag
+        /// The table entry the copy is rated as ("Mega Delphox"); nil for weak.
+        public var asName: String?
+        public var tier: String?
+        public var reason: Reason?
+        /// The engine's display name for a Weak "none" line (it composes the form itself); nil for any other reason.
+        public var species: String?
+        public var ivPercent: Double?
+        /// True on the copy that carries the advisor's primary build for the area (a separate marker: it says nothing about the tag, which is worth alone).
+        public var build: Bool = false
+        /// That build's target name and cost; nil unless `build`.
+        public var buildAs: String?
+        public var buildCost: BuildCost?
+
+        public var line: String {
+            let label = BoxAdvice.areaLabel[area] ?? area
+            switch tag {
+            case .strong, .ok:
+                let tierPart = tier.map { " \($0)" } ?? ""
+                let asPart = asName.map { " as \($0)" } ?? ""
+                return "\(label)\(tierPart)\(asPart)\(area == "max" ? " (needs a Dynamax copy)" : "")"
+            case .weak:
+                // A reason code this build does not know must not read as "no table entry": say only that the copy is weak here.
+                guard let reason else { return "Weak for \(label)" }
+                switch reason {
+                case .none: return species.map { "No table entry for \($0) in \(label)" } ?? "No table entry in \(label)"
+                case .ivUnknown: return "IVs not known"
+                case .shadowNoMega: return "A Shadow copy cannot Mega evolve"
+                case .iv:
+                    // One decimal, a whole number without it ("80%", "66.7%"), as the engine's Number(toFixed(1)) prints it.
+                    let pct = ((ivPercent ?? 0) * 10).rounded() / 10
+                    let text = pct == pct.rounded() ? String(Int(pct)) : String(format: "%.1f", pct)
+                    return "IVs \(text)%, below \(Int(BoxAdvice.fitIVPercent))%"
+                }
+            }
+        }
+
+        /// Decodes one area's compact array; nil when the tag is not one the app knows. `ivPercent` is the fallback for a reason "iv" that carries no
+        /// figure of its own; the engine's one-decimal figure at index 4 wins when present (it prefers the row's imported %). A build tail
+        /// `[true, buildAs, dust, candy, xl]` follows index 2 for s / o and index 4 for w (index 4 is then the extra or null).
+        static func decode(area: String, _ v: JSONValue, ivPercent: Double?) -> Fit? {
+            guard let a = v.arrayValue, case .string(let t)? = a.first else { return nil }
+            func str(_ i: Int) -> String? { if i < a.count, case .string(let s) = a[i] { return s } else { return nil } }
+            // The same range-checked whole-number reading as the league decoder: `Int(_:)` traps on NaN, infinity and huge values.
+            func num(_ i: Int) -> Int? { if i < a.count, case .number(let n) = a[i] { return LeagueRating.whole(n) } else { return nil } }
+            let tag: Tag
+            switch t { case "s": tag = .strong; case "o": tag = .ok; case "w": tag = .weak; default: return nil }
+            // A strong or ok fit always names the build species and the tier; one without them is not a Strong the app can word, so it is skipped.
+            if tag != .weak, str(1) == nil || str(2) == nil { return nil }
+            var pct = ivPercent
+            var species: String?
+            let reason = str(3).flatMap(Reason.init(rawValue:))
+            if tag == .weak {
+                if 4 < a.count, case .number(let n) = a[4] { pct = n }
+                if reason == Reason.none { species = str(4) }  // not `.none`: that would be Optional.none
+            }
+            var f = Fit(area: area, tag: tag, asName: str(1), tier: str(2), reason: reason, species: species, ivPercent: pct)
+            let tail = tag == .weak ? 5 : 3
+            if tail < a.count, case .bool(true) = a[tail], let name = str(tail + 1), let d = num(tail + 2), let c = num(tail + 3), let x = num(tail + 4) {
+                f.build = true; f.buildAs = name; f.buildCost = BuildCost(dust: d, candy: c, xl: x)
+            }
+            return f
+        }
+    }
+    /// entry id -> "raids" | "gym" | "rocket" | "max" -> that area's fit. Empty for an advice the JavaScript wrote without `fit`.
+    public var fit: [String: [String: Fit]] = [:]
+    /// entry id -> the areas this copy is the best of its species for (at most one copy per species per area).
+    public var bestOf: [String: [String]] = [:]
+
+    public func fit(for id: String) -> [String: Fit] { fit[id] ?? [:] }
+    public func bestOf(for id: String) -> [String] { bestOf[id] ?? [] }
+
+    private enum CodingKeys: String, CodingKey { case version, builds, gaps, duplicates, unresolved, spareBuilds, leagues, fit, bestOf }
 
     // MARK: - from the JavaScript's JSON
 
@@ -360,7 +476,7 @@ public struct BoxAdvice: Codable, Equatable {
                               formChange: bool(b["formChange"]), viaMega: bool(b["viaMega"]), needsDynamax: bool(b["needsDynamax"]), spares: spares.count,
                               areas: (b["areas"]?.arrayValue ?? []).compactMap { str($0) }.map { areaLabel[$0] ?? $0 },
                               tier: str(b["bestTier"]) ?? "", targetLevel: num(b["targetLevel"]), dust: int(cost?["dust"]), candy: int(cost?["candy"]), xl: int(cost?["xl"]),
-                              pvp: pvp, score: num(b["score"]) ?? 0,
+                              pvp: pvp, pvpLeague: str(b["pvpCost"]?["league"]), pvpRankPct: num(b["pvpCost"]?["rankPct"]), score: num(b["score"]) ?? 0,
                               steps: b["steps"]?.arrayValue.map { $0.map(Build.Step.init(json:)) },
                               leavesLeague: (b["leavesLeague"]?.arrayValue ?? []).compactMap { v in
                                   guard case .string(let l)? = v["league"], case .number(let at)? = v["bestLevel"] else { return nil }
@@ -395,6 +511,21 @@ public struct BoxAdvice: Codable, Equatable {
                 byLeague[key] = rating
             }
             if !byLeague.isEmpty { out.leagues[eid] = byLeague }
+        }
+        // Optional: a report without `fit` / `bestOf` (older JavaScript) still decodes, with no tags.
+        for e in report["pokemon"]?.arrayValue ?? [] {
+            guard let eid = id(e["p"]), case .number(let n)? = e["p"]?["index"] else { continue }
+            let row = entries[Int(n) - 1].row
+            let ivPercent = row.ivs.map { Double($0.atk + $0.def + $0.hp) / 45 * 100 }
+            var fits = [String: Fit]()
+            if case .object(let areas)? = e["fit"] {
+                for (area, v) in areas {
+                    if let f = Fit.decode(area: area, v, ivPercent: ivPercent) { fits[area] = f }
+                }
+            }
+            if !fits.isEmpty { out.fit[eid] = fits }
+            let best = (e["bestOf"]?.arrayValue ?? []).compactMap { str($0) }
+            if !best.isEmpty { out.bestOf[eid] = best }
         }
         return out
     }

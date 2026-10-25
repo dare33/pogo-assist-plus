@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadGamemaster, loadTiers, loadRankings } from '../src/node/load.js';
-import { analyseBox } from '../src/advise.js';
+import { analyseBox, FIT_IV_PCT } from '../src/advise.js';
 
 const ctx = { gm: loadGamemaster(), tiers: loadTiers(), rankings: loadRankings() };
 const box = importPokeGenie(readFileSync(new URL('../fixtures/greg-2026-09-25.pokegenie.csv', import.meta.url), 'utf8'));
@@ -302,4 +302,189 @@ test('a league build for a target the copy is already over the cap for is droppe
 test('a Pokémon with no league-viable target carries only its other areas (Abra: Alakazam raids, not GL/UL/ML)', () => {
   const abra = analyseBox([copy('Abra', 17, { atk: 0, def: 14, hp: 15 })], ctx).builds;
   assert.deepEqual(abra.map((b) => [b.targetId, b.areas]), [['alakazam', ['raids']]]);
+});
+
+// ---- fit and bestOf: Strong / OK / Weak per copy and non-league area ----
+// The tag is cost-free worth (S-tier use = strong, A or B = ok, on a copy at FIT_IV_PCT or more); `build` marks the copy that carries the advisor's
+// primary build for the area, which says nothing about worth and is a separate field.
+const cp = (name, atk, def, hp, o = {}) => ({ ...copy(name, 20, { atk, def, hp }), pvp: undefined, ...o });
+const fitOf = (boxCopies) => analyseBox(boxCopies, ctx).pokemon.map((e) => e.fit);
+const HUNDO = [15, 15, 15], GOOD = [13, 13, 13], LOW = [10, 10, 10]; // 100%, 86.7%, 66.7%
+
+test('fit: the tag is the best reachable tier, not the build (Charmander rocket is A, so ok, though the copy carries the build)', () => {
+  const res = analyseBox([cp('Charmander', ...HUNDO)], ctx);
+  const f = res.pokemon[0].fit.rocket, b = res.builds.find((x) => x.areas.includes('rocket'));
+  assert.deepEqual(f, { tag: 'ok', as: 'Charizard', tier: 'A', line: 'Rocket A as Charizard', build: true, buildAs: b.targetName, buildCost: { dust: b.cost.dust, candy: b.cost.candy, xl: b.cost.xl } });
+  assert.equal(f.buildAs, 'Charizard');
+});
+
+test('fit: S tier is strong and A or B is ok, on the same copy (Fennekin raids is Mega Delphox S, rocket has no entry)', () => {
+  const [top, spare] = fitOf([cp('Fennekin', ...HUNDO), cp('Fennekin', ...GOOD)]);
+  assert.deepEqual([top.raids.tag, top.raids.tier], ['strong', 'S']);
+  assert.deepEqual([spare.raids.tag, spare.raids.tier], ['strong', 'S'], 'a spare is as strong as the build copy');
+  assert.equal(top.raids.as, 'Mega Delphox', 'the build targets Delphox; the entry is Mega Delphox');
+  assert.equal(top.raids.line, 'Raids S as Mega Delphox');
+  assert.equal(spare.raids.as, top.raids.as);
+});
+
+test('fit: a spare is ok through an evolution when decently rolled, weak when not, and the weak line says why', () => {
+  const [top, spare, poor] = fitOf([cp('Charmander', ...HUNDO), cp('Charmander', ...GOOD), cp('Charmander', ...LOW)]);
+  assert.equal(top.rocket.tag, 'ok');
+  assert.deepEqual(spare.rocket, { tag: 'ok', as: 'Charizard', tier: 'A', line: 'Rocket A as Charizard', build: false });
+  assert.deepEqual(poor.rocket, { tag: 'weak', as: null, tier: null, reason: 'iv', line: 'IVs 66.7%, below 80%', ivPct: 66.7, build: false });
+  assert.deepEqual(spare.gym, { tag: 'weak', as: null, tier: null, reason: 'none', line: 'No table entry for Charmander in Gym', species: 'Charmander', build: false });
+});
+
+test('fit: the IV threshold is FIT_IV_PCT (80 is in, 79.9 is out) for ok and strong alike, and unknown IVs never qualify', () => {
+  assert.equal(FIT_IV_PCT, 80);
+  // 36/45 = 80%: the export's own IV average is what is compared, so pin it directly too.
+  const at = (name, pct) => cp(name, 12, 12, 12, { ivPercent: pct });
+  const [eighty, seventyNine, unknown] = fitOf([at('Charmander', 80), at('Charmander', 79.9), cp('Charmander', 15, 15, 15, { ivs: null })]);
+  assert.equal(eighty.rocket.tag, 'ok');
+  assert.equal(seventyNine.rocket.tag, 'weak');
+  assert.equal(seventyNine.rocket.line, 'IVs 79.9%, below 80%');
+  assert.equal(seventyNine.rocket.reason, 'iv');
+  assert.deepEqual([unknown.rocket.tag, unknown.rocket.reason, unknown.rocket.line], ['weak', 'ivUnknown', 'IVs not known']);
+  const [sEighty, sSeventyNine] = fitOf([at('Chansey', 80), at('Chansey', 79.9)]);
+  assert.equal(sEighty.gym.tag, 'strong');
+  assert.deepEqual([sSeventyNine.gym.tag, sSeventyNine.gym.reason], ['weak', 'iv']);
+});
+
+test('fit: a Mega entry counts for a non-Shadow copy of its base species, not for a Shadow copy', () => {
+  const plain = fitOf([cp('Fennekin', ...HUNDO), cp('Fennekin', ...GOOD)])[1];
+  assert.deepEqual(plain.raids, { tag: 'strong', as: 'Mega Delphox', tier: 'S', line: 'Raids S as Mega Delphox', build: false });
+  const shadow = fitOf([cp('Fennekin', ...HUNDO, { shadow: true }), cp('Fennekin', ...GOOD, { shadow: true })]);
+  for (const f of shadow) assert.equal(f.raids.tag, 'weak', 'a Shadow copy cannot Mega evolve, however well rolled');
+  // Its only raid entry is the Mega one, so the reason is the Mega rule, not a missing entry.
+  assert.deepEqual(shadow[1].raids, { tag: 'weak', as: null, tier: null, reason: 'shadowNoMega', line: 'A Shadow copy cannot Mega evolve', build: false });
+});
+
+test('fit: a Shadow-only entry counts for a Shadow copy and not for a plain one; a plain entry counts for both', () => {
+  const sh = fitOf([cp('Reshiram', ...HUNDO, { shadow: true }), cp('Reshiram', ...GOOD, { shadow: true })]);
+  assert.deepEqual(sh.map((f) => f.raids.tag), ['strong', 'strong']);
+  assert.equal(sh[1].raids.as, 'Shadow Reshiram');
+  const plain = fitOf([cp('Reshiram', ...HUNDO), cp('Reshiram', ...GOOD)]);
+  for (const f of plain) assert.equal(f.raids.tag, 'weak', 'no plain Reshiram raid entry');
+  // Charmander's plain Rocket Charizard entry serves its Shadow copies too.
+  const shadowSpare = fitOf([cp('Charmander', ...HUNDO, { shadow: true }), cp('Charmander', ...GOOD, { shadow: true })])[1];
+  assert.equal(shadowSpare.rocket.tag, 'ok');
+});
+
+test('fit: Max says it needs a Dynamax copy, for ok and strong alike', () => {
+  const [top, spare] = fitOf([cp('Chansey', ...HUNDO), cp('Chansey', ...GOOD)]);
+  assert.deepEqual([top.max.tag, spare.max.tag], ['strong', 'strong']);
+  const [lapras] = fitOf([cp('Lapras', ...HUNDO)]);
+  assert.deepEqual([lapras.max.tag, lapras.max.tier], ['ok', 'A']);
+  for (const f of [top.max, spare.max, lapras.max]) assert.match(f.line, / \(needs a Dynamax copy\)$/);
+  assert.doesNotMatch(top.gym.line, /Dynamax/);
+});
+
+test('fit: build is true on the copy carrying the advisor\'s primary build for the area, with its target name and the cost the Advice panel shows', () => {
+  const res = analyseBox([cp('Chansey', ...GOOD), cp('Chansey', ...HUNDO), cp('Chansey', ...GOOD)], ctx);
+  const withBuild = res.pokemon.filter((e) => e.fit.gym.build);
+  assert.equal(withBuild.length, 1, 'only the copy the report lists the build for');
+  const e = withBuild[0], primary = res.builds.find((b) => b.pokemon === e.p && b.areas.includes('gym'));
+  assert.equal(e.fit.gym.buildAs, primary.targetName);
+  assert.deepEqual(e.fit.gym.buildCost, { dust: primary.cost.dust, candy: primary.cost.candy, xl: primary.cost.xl });
+  // With two builds listing the area on one copy the better-scored one (first in the report) is the primary.
+  const mine = res.builds.filter((b) => b.pokemon === e.p && b.areas.includes('gym'));
+  assert.equal(e.fit.gym.buildAs, mine[0].targetName);
+  // A spare, and an area the copy has no build for, carry build false and no buildAs / buildCost.
+  for (const x of res.pokemon) if (x !== e) { assert.equal(x.fit.gym.build, false); assert.ok(!('buildAs' in x.fit.gym) && !('buildCost' in x.fit.gym)); }
+  assert.equal(e.fit.rocket.build, false);
+});
+
+test('fit: the copy that IS the build copy but has IVs under 80 is build true and weak for iv; a hundo spare is strong with build false', () => {
+  // A higher level makes the low-IV copy the cheaper build, so it carries the build; the hundo spare does not.
+  const lowBuild = { ...copy('Chansey', 35, { atk: 10, def: 10, hp: 10 }), pvp: undefined };
+  const spare = cp('Chansey', ...HUNDO);
+  const res = analyseBox([lowBuild, spare], ctx);
+  const [a, b] = res.pokemon.map((e) => e.fit.gym);
+  assert.equal(a.build, true);
+  assert.deepEqual([a.tag, a.reason, a.ivPct], ['weak', 'iv', 66.7]);
+  assert.equal(a.buildAs, 'Blissey');
+  assert.deepEqual([b.tag, b.build], ['strong', false]);
+  assert.ok(!('buildAs' in b));
+});
+
+test('bestOf: among strong and ok copies, the higher-IV spare beats the build copy (the build does not enter it)', () => {
+  // Both copies are strong for Gym; the build goes to the cheaper, higher-level copy, but the hundo spare is the best Chansey for Gym.
+  const res = analyseBox([cp('Chansey', ...GOOD, { level: 35 }), cp('Chansey', ...HUNDO)], ctx);
+  const [a, b] = res.pokemon;
+  assert.equal(a.fit.gym.build, true);
+  assert.deepEqual([a.fit.gym.tag, b.fit.gym.tag, b.fit.gym.build], ['strong', 'strong', false]);
+  assert.deepEqual([a.bestOf.includes('gym'), b.bestOf.includes('gym')], [false, true]);
+});
+
+test('bestOf: one copy per species per area; IV %, then CP, then input order; weak copies are never best', () => {
+  const res = analyseBox([cp('Charmander', ...GOOD, { cp: 900 }), cp('Charmander', ...HUNDO, { cp: 100 }), cp('Charmander', ...LOW), cp('Charmander', ...HUNDO, { cp: 100 })], ctx);
+  const of = res.pokemon.map((e) => e.bestOf);
+  for (const area of ['raids', 'gym', 'rocket', 'max']) assert.ok(of.filter((a) => a.includes(area)).length <= 1, area);
+  assert.deepEqual(of.map((a) => a.includes('rocket')), [false, true, false, false], 'the first hundo: IV % before CP, then input order');
+  assert.deepEqual(of[2], [], 'a weak copy is never best');
+  const sh = (iv, c) => cp('Charmander', iv, iv, iv, { shadow: true, cp: c });
+  const best = (copies) => analyseBox(copies, ctx).pokemon.map((e) => e.bestOf.includes('rocket'));
+  assert.deepEqual(best([sh(13, 900), sh(14, 100), sh(12, 900)]), [false, true, false], 'IV % before CP');
+  assert.deepEqual(best([sh(13, 300), sh(13, 500), sh(13, 500)]), [false, true, false], 'CP, then the first in input order');
+});
+
+test('fit and bestOf: no species is best twice, and every resolved copy carries all four areas', () => {
+  const per = new Map();
+  for (const e of out.pokemon) {
+    if (e.unresolved) { assert.equal(e.fit, undefined); continue; }
+    assert.deepEqual(Object.keys(e.fit), ['raids', 'gym', 'rocket', 'max']);
+    for (const f of Object.values(e.fit)) assert.equal(typeof f.build, 'boolean');
+    for (const a of e.bestOf) { const k = `${e.resolved.speciesId}|${a}`; assert.ok(!per.has(k), `${k} best twice`); per.set(k, e); assert.notEqual(e.fit[a].tag, 'weak'); }
+  }
+  assert.ok(per.size > 0);
+  // tag and tier agree on every strong / ok copy (S is strong), and some copy on the fixture carries a build.
+  const fits = out.pokemon.flatMap((e) => Object.values(e.fit ?? {}));
+  for (const f of fits) if (f.tag !== 'weak') assert.equal(f.tag, f.tier === 'S' ? 'strong' : 'ok');
+  assert.ok(fits.some((f) => f.build && f.tag === 'weak') && fits.some((f) => f.build && f.tag === 'strong') && fits.some((f) => f.build && f.tag === 'ok'));
+});
+
+test('fit: a shadow-flagged entry that keeps a plain species id (Shadow Pheromosa) is for Shadow copies only', () => {
+  const plainBox = analyseBox([cp('Pheromosa', ...HUNDO), cp('Pheromosa', ...GOOD)], ctx);
+  const plain = plainBox.pokemon.map((e) => e.fit);
+  assert.ok(!plainBox.builds.some((b) => b.areas.includes('raids')), 'a plain Pheromosa has no raids build (the entry is Shadow Pheromosa)');
+  const none = { tag: 'weak', as: null, tier: null, reason: 'none', line: 'No table entry for Pheromosa in Raids', species: 'Pheromosa', build: false };
+  assert.deepEqual(plain[0].raids, none);
+  assert.deepEqual(plain[1].raids, none);
+  const shadowBox = analyseBox([cp('Pheromosa', ...HUNDO, { shadow: true }), cp('Pheromosa', ...GOOD, { shadow: true })], ctx);
+  const shadow = shadowBox.pokemon.map((e) => e.fit);
+  assert.ok(shadowBox.builds.some((b) => b.areas.includes('raids')), 'a Shadow Pheromosa has the raids build');
+  assert.deepEqual([shadow[0].raids.tag, shadow[0].raids.as, shadow[0].raids.build], ['ok', 'Shadow Pheromosa', true]);
+  assert.deepEqual([shadow[1].raids.tag, shadow[1].raids.as, shadow[1].raids.build], ['ok', 'Shadow Pheromosa', false]);
+});
+
+test('fit: a weak "none" names the species the engine uses in its line (the family: the base species with _shadow and _mega stripped)', () => {
+  const [stage2, shadow] = fitOf([cp('Charmeleon', ...HUNDO), cp('Charmander', ...HUNDO, { shadow: true })]);
+  assert.deepEqual([stage2.gym.reason, stage2.gym.species, stage2.gym.line], ['none', 'Charmeleon', 'No table entry for Charmeleon in Gym']);
+  assert.deepEqual([shadow.gym.reason, shadow.gym.species], ['none', 'Charmander']);
+  // Only the "none" reason carries it.
+  assert.ok(!('species' in fitOf([cp('Charmander', ...LOW)])[0].rocket));
+});
+
+test('fit: the same Pokémon object twice in a box is two copies: build for the first position only', () => {
+  const p = cp('Charmander', ...HUNDO);
+  const f = fitOf([p, p]);
+  assert.equal(f[0].rocket.build, true);
+  assert.equal(f[1].rocket.build, false);
+});
+
+test('fit: a Gigantamax entry is never credited (a plain Charmander spare is not Max ok as Gigantamax Charizard)', () => {
+  const [, spare] = fitOf([cp('Charmander', ...HUNDO), cp('Charmander', ...GOOD)]);
+  assert.equal(spare.max.tag, 'weak');
+  assert.equal(spare.max.reason, 'none');
+});
+
+test('fit: with equal-tier entries at two stages the nearest stage wins (a spare Chansey is as Chansey, not Blissey)', () => {
+  const [, spare] = fitOf([cp('Chansey', ...HUNDO), cp('Chansey', ...GOOD)]);
+  assert.equal(spare.gym.tag, 'strong');
+  assert.equal(spare.gym.as, 'Chansey');
+});
+
+test('bestOf: a Shadow and a plain copy of one species are separate groups (hygiene\'s resolved species, not the base species)', () => {
+  const res = analyseBox([cp('Charmander', ...GOOD), cp('Charmander', ...GOOD, { shadow: true })], ctx);
+  assert.deepEqual(res.pokemon.map((e) => e.bestOf.includes('rocket')), [true, true]);
 });

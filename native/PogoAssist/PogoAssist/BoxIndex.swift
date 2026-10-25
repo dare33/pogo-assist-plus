@@ -26,6 +26,8 @@ struct BoxIndex {
         var fixed: Bool
         /// The entry has a Mega form with a known CP. It is still one Pokémon, and every figure here (CP, best IV, top CP) is its normal form's.
         var hasMega = false
+        /// A Shadow copy (the game's flag on the row); the engine's best-of is per resolved species, so a plain and a Shadow copy are told apart by it.
+        var shadow = false
     }
 
     struct Group {
@@ -70,6 +72,7 @@ struct BoxIndex {
             var item = Item(id: e.id, title: title, name: r.name.lowercased(), key: key, cp: r.cp, hp: r.hp, noLevelFits: GameSearch.noLevelFits(r.flags), ivs: r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }, ivSum: sum,
                             needsCheck: e.needsCheck, fixed: e.isHandCorrected)
             item.hasMega = mega != nil
+            item.shadow = r.shadow == 1
             if item.needsCheck { toCheckCount += 1 }
             if item.fixed { fixedCount += 1 }
             species.insert(r.dex.map { "dex\($0)" } ?? r.name.lowercased())
@@ -115,7 +118,16 @@ struct BoxIndex {
 
     // MARK: filtering
 
-    enum Chip: Hashable { case all, toCheck, fixed }
+    /// One filter at a time: everything, the Pokémon to check, those fixed by hand, or an activity (Raids … Max) whose Strong or OK copies are kept.
+    enum Chip: Hashable { case all, toCheck, fixed, activity(BoxInsight.Activity) }
+
+    /// What the activity chips and the tiles read: the insight built from the advice (nil while the advice is still being worked out) and the ranking
+    /// the leagues are read under. The search and the other chips need neither.
+    struct Scoring {
+        var insight: BoxInsight?
+        var pogoAssist = false
+        static let none = Scoring()
+    }
 
     enum Query: Hashable {
         case none
@@ -138,11 +150,12 @@ struct BoxIndex {
         var isEmpty: Bool { self == .none }
     }
 
-    func matches(_ it: Item, _ query: Query, _ chip: Chip) -> Bool {
+    func matches(_ it: Item, _ query: Query, _ chip: Chip, _ scoring: Scoring = .none) -> Bool {
         switch chip {
         case .all: break
         case .toCheck: if !it.needsCheck { return false }
         case .fixed: if !it.fixed { return false }
+        case .activity(let a): if scoring.insight?.copies[it.id]?.suits(a, pogoAssist: scoring.pogoAssist) != true { return false }
         }
         switch query {
         case .none: return true
@@ -151,9 +164,12 @@ struct BoxIndex {
         }
     }
 
-    /// The members of a species that pass the chip and the search, still best IVs first.
+    /// The members of a species that pass the chip and the search, still best IVs first. An activity chip does not drop copies here: the species list
+    /// shows every copy with its tag for the activity and puts the Weak ones last (the row on the list page counts the Strong and OK ones).
     func members(of title: String, query: Query, chip: Chip) -> [Int] {
         guard let g = groups.first(where: { $0.title == title }) else { return [] }
+        var chip = chip
+        if case .activity = chip { chip = .all }
         if query.isEmpty, chip == .all { return g.members }
         return g.members.filter { matches(items[$0], query, chip) }
     }
@@ -166,6 +182,8 @@ struct BoxIndex {
         var id: String { title }
         var title: String
         var stats: Stats
+        /// With an activity chip: the best tag among the copies that pass it (Strong when any is, else OK).
+        var lead: LeaguePanel.Worth?
     }
     struct Section: Identifiable {
         var id: String
@@ -177,14 +195,19 @@ struct BoxIndex {
     }
 
     /// Species rows grouped under A to Z (or CP bands). With a search or a chip, a row shows the figures of the Pokémon that pass it.
-    func sections(query: Query, chip: Chip, sort: Sort) -> [Section] {
+    func sections(query: Query, chip: Chip, sort: Sort, scoring: Scoring = .none) -> [Section] {
         let filtered = !query.isEmpty || chip != .all
         var rows = [Row]()
         rows.reserveCapacity(groups.count)
         for g in groups {
             if !filtered { rows.append(Row(title: g.title, stats: g.stats)); continue }
-            let m = g.members.filter { matches(items[$0], query, chip) }
-            if !m.isEmpty { rows.append(Row(title: g.title, stats: stats(of: m))) }
+            let m = g.members.filter { matches(items[$0], query, chip, scoring) }
+            if m.isEmpty { continue }
+            var lead: LeaguePanel.Worth?
+            if case .activity(let a) = chip {
+                lead = m.contains { scoring.insight?.copies[items[$0].id]?.worth(a, pogoAssist: scoring.pogoAssist) == .strong } ? .strong : .ok
+            }
+            rows.append(Row(title: g.title, stats: stats(of: m), lead: lead))
         }
         switch sort {
         case .name:
@@ -247,29 +270,114 @@ struct BoxIndex {
     }
 }
 
+/// What the insight is built for: the account and box version, and where the advice for them stands. Three states, not two: a failed advice must not read as one that
+/// is still being worked out (the list would say "Working out advice…" for ever).
+struct InsightKey: Hashable {
+    enum State: Hashable {
+        case waiting, ready, failed
+        init(_ advice: AppModel.AdviceState) {
+            switch advice {
+            case .ready: self = .ready
+            case .failed: self = .failed
+            case .none, .computing: self = .waiting
+            }
+        }
+    }
+    var account: String
+    var seq: Int
+    var state: State
+
+    init(account: String?, seq: Int?, state: State) { self.account = account ?? ""; self.seq = seq ?? -1; self.state = state }
+
+    /// The tiles and chips say "…" and "Working out…" while the insight for this key is still to come: the advice is being worked out, or it is ready but the insight
+    /// has not been built for this key yet (cached advice at launch, or just after a switch of account). A failed advice never arrives, so it is not waiting.
+    func isWaiting(builtFor built: InsightKey?) -> Bool {
+        switch state {
+        case .failed: return false
+        case .waiting: return true
+        case .ready: return built != self
+        }
+    }
+}
+
 /// Owns the current `BoxIndex`: rebuilt when the box is loaded or saved (a new version), away from the main thread for a large box.
+///
+/// Every published result carries the key it was built for, and a result is published only when no later request has been made (a generation counter per path,
+/// taken before any early return). Task cancellation alone is not enough: a detached build for account A cannot be cancelled once it runs, and its result would otherwise land on account B's screen.
 @MainActor
 final class BoxIndexStore: ObservableObject {
     @Published private(set) var index = BoxIndex.empty
+    /// The key `index` was built for ("account|seq"); nil before the first build.
+    @Published private(set) var indexKey: String?
+    /// The insight read for the tags and tiles: built from the advice, nil until it is ready and while it has failed. Built once per box version, for both rankings.
+    /// Use `insight(forAccount:)` to read it for a screen: a result that is not this account's is never shown.
+    @Published private(set) var insight: BoxInsight?
+    /// The key `insight` was built for: the account, box version and a ready advice. Behind `insightVersion`, the same-account insight kept on show while a new
+    /// one is built still carries the older version's key.
+    @Published private(set) var insightBuiltFor: InsightKey?
+    @Published private(set) var insightVersion = 0
     /// Bumped on each rebuild, so a view can recompute what it derived from the index.
     @Published private(set) var version = 0
-    private var builtFor: String?
+    /// A counter per path, bumped at the top of every call before any early return. A build publishes only if no later call has been made since it started, so the
+    /// last request wins even when an older detached build (which cancellation cannot stop) finishes after it.
+    private var indexGeneration = 0
+    private var insightGeneration = 0
+    private var insightWanted: InsightKey?
 
     func refresh(key: String, entries: [BoxEntry]) async {
-        guard builtFor != key else { return }
+        indexGeneration += 1
+        let generation = indexGeneration
+        guard indexKey != key else { return }
         let built: BoxIndex
         if entries.count < 2000 {
             built = BoxIndex(entries: entries)
         } else {
+            #if DEBUG
+            onBuildStarted?()
+            #endif
             built = await Task.detached(priority: .userInitiated) { BoxIndex(entries: entries) }.value
         }
-        guard !Task.isCancelled else { return }
-        index = built; builtFor = key; version += 1
+        guard !Task.isCancelled, indexGeneration == generation else { return }
+        index = built; indexKey = key; version += 1
+    }
+
+    /// The insight, only if it was built for this account (a newer box version of the same account stays on show while its own is built).
+    func insight(forAccount account: String?) -> BoxInsight? {
+        insightBuiltFor?.account == (account ?? "") ? insight : nil
+    }
+
+    /// Keeps the insight in step with the advice. Another ACCOUNT's insight is dropped at once, so its tags and tiles never show on this account's Pokémon. A new box
+    /// version of the same account (a hand fix, a saved scan) keeps the previous insight on show while the advice is recalculated and the new one built (copy ids
+    /// are stable, so it stays close, and the list does not blank after every edit); a failed advice drops it, since nothing can then be said about the new version.
+    func refreshInsight(key: InsightKey, advice: BoxAdvice?, entries: [BoxEntry]) async {
+        insightGeneration += 1
+        let generation = insightGeneration
+        // Already published for exactly this key: nothing to do. (A key that only reached "seen" without a published result, such as one whose build was cancelled, is built again.)
+        guard !(insightBuiltFor == key && insight != nil) else { return }
+        insightWanted = key
+        if let was = insightBuiltFor, was.account != key.account, insight != nil { insight = nil; insightBuiltFor = nil; insightVersion += 1 }
+        guard key.state == .ready, let advice else {
+            if key.state != .waiting, insight != nil { insight = nil; insightBuiltFor = nil; insightVersion += 1 }
+            return
+        }
+        let built: BoxInsight
+        if entries.count < 2000 {
+            built = BoxInsight.make(advice: advice, entries: entries)
+        } else {
+            #if DEBUG
+            onBuildStarted?()
+            #endif
+            built = await Task.detached(priority: .userInitiated) { BoxInsight.make(advice: advice, entries: entries) }.value
+        }
+        guard !Task.isCancelled, insightGeneration == generation, insightWanted == key else { return }
+        insight = built; insightBuiltFor = key; insightVersion += 1
     }
 
     #if DEBUG
+    /// DEBUG only, for tests: called on the main actor just before a detached build is awaited, so a test can wait until an older build is under way.
+    var onBuildStarted: (() -> Void)?
     /// DEBUG only: put a ready-made index in place (the synthetic 15,000 box).
-    func install(_ built: BoxIndex, key: String) { index = built; builtFor = key; version += 1 }
+    func install(_ built: BoxIndex, key: String) { index = built; indexKey = key; indexGeneration += 1; version += 1 }
     #endif
 }
 

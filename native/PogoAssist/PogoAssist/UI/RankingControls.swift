@@ -165,6 +165,8 @@ struct RankingSwitch: View {
     var identifier = "ranking"
     /// False hides "RANKING" (the Leagues panel header names the switch already).
     var showsCaption = true
+    /// True lets the one-line layout drop "RANKING" before the switch wraps or the neighbouring label gives way.
+    var captionDroppable = false
     @AppStorage(PrefKey.ranking) private var raw = Ranking.default.rawValue
 
     private var selection: Binding<Ranking> {
@@ -179,6 +181,13 @@ struct RankingSwitch: View {
                 info
             }
             .fixedSize(horizontal: true, vertical: false)
+            if captionDroppable && showsCaption {
+                HStack(spacing: 8) {
+                    control(singleLine: true)
+                    info
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            }
             VStack(alignment: .leading, spacing: 0) {
                 caption
                 HStack(spacing: 8) { control(singleLine: false); info }

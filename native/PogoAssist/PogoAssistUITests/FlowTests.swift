@@ -99,7 +99,7 @@ final class FlowTests: XCTestCase {
         shot("11-next-gaps")
 
         // Round 2: a part-read CP is asked about, and "Fix a value".
-        app.buttons["Box"].tap()
+        app.buttons["Pokémon"].tap()
         app.buttons["More"].tap()
         let diagnostics2 = app.buttons["Diagnostics"]
         XCTAssertTrue(diagnostics2.waitForExistence(timeout: 5))
@@ -305,7 +305,7 @@ final class FlowTests: XCTestCase {
             app.launch()
             let scroll = app.scrollViews["gallery-scroll"]
             XCTAssertTrue(scroll.waitForExistence(timeout: 10), "the gallery did not open")
-            XCTAssertTrue(app.buttons["Scan"].exists && app.buttons["Box"].exists && app.buttons["Next"].exists, "the tab bar's buttons are labelled Box, Scan, Next")
+            XCTAssertTrue(app.buttons["Scan"].exists && app.buttons["Pokémon"].exists && app.buttons["Next"].exists, "the tab bar's buttons are labelled Pokémon, Scan, Next")
             let pages = name == "light" || name == "large-text" ? 14 : 9
             for i in 0..<pages {
                 shot("gallery-\(name)-\(String(format: "%02d", i))")

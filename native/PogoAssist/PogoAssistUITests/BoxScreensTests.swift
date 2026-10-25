@@ -352,6 +352,11 @@ final class BoxScreensTests: XCTestCase {
                 sawBuilt = true
                 XCTAssertFalse(app.staticTexts["advice-verdict"].exists, "a copy with its own build shows the build and no keep or transfer verdict")
                 scrollToVerdictArea(); shot("with-builds")
+                // The chip beside a league tag is the build's marker: "Advice builds it", or "... as <target>" in the card's spoken label when the target is another species.
+                for key in ["gl", "ul", "ml"] {
+                    let label = app.buttons["league-\(key)-pick"].label
+                    if label.contains("Advice builds") { XCTAssertTrue(label.contains("Advice builds it"), label) }
+                }
             } else if app.staticTexts["advice-spare"].exists {
                 sawSpare = true
                 XCTAssertEqual(app.staticTexts["advice-spare"].label, "No build for this copy: you already have another Moltres planned.")
@@ -375,6 +380,20 @@ final class BoxScreensTests: XCTestCase {
         }
         XCTAssertTrue(sawSpare, "one of the Moltres is a spare for a better copy")
         XCTAssertTrue(sawBuilt, "one of the Moltres carries the build")
+
+        // The chip must appear somewhere, or the wording check above could never fail: in the 51-Pokémon sample the Zamazenta (Hero) with CP 2661 and
+        // IVs 13/10/11 has an Advice build that covers Master League, so its Master League card carries "Advice builds it".
+        app.buttons["Back"].tap()
+        let search = app.textFields["box-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Zamazenta")
+        let zam = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Zamazenta'")).firstMatch
+        XCTAssertTrue(zam.waitForExistence(timeout: 5), "Zamazenta is in the sample box"); zam.tap()
+        let built = app.buttons.matching(NSPredicate(format: "identifier == 'pokemon-row' AND label CONTAINS '2661'")).firstMatch
+        XCTAssertTrue(built.waitForExistence(timeout: 5), "the Zamazenta with CP 2661"); built.tap()
+        _ = app.staticTexts["ADVICE"].waitForExistence(timeout: 20)
+        let ml = app.buttons["league-ml-pick"]
+        XCTAssertTrue(ml.waitForExistence(timeout: 10), "the Master League card")
+        XCTAssertTrue(ml.label.contains("Advice builds it"), ml.label)
     }
 
     /// A league view open on the Normal form closes with its panel when the page goes to the Mega form (no Leagues there), the Advice panel is
@@ -575,7 +594,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(ul.label.contains("This copy 96.2 percent, IV rank 1,766"), ul.label)
         XCTAssertTrue(ul.label.contains("Target level 40, target CP 2,500, 160,000 dust, 190 candy"), ul.label)
         XCTAssertTrue(ml.label.hasPrefix("Master League, no CP cap. Pick: "), ml.label)
-        // The tag: Scyther's Ultra pick (71.8; its own build, Scizor for Raids, does not cover Ultra) is Weak, and the spoken card says so; a No viable option card has none.
+        // The tag: Scyther's Ultra pick (71.8, below the B-tier line; its own build, Scizor for Raids, does not cover Ultra, so no "Advice builds it" marker either) is Weak, and the spoken card says so; a No viable option card has none.
         XCTAssertTrue(ul.label.contains("Pick: Scyther. Weak for Ultra League. Species 71.8"), ul.label)
         XCTAssertTrue(app.buttons["league-ul-worth"].exists, "the tag is a tap target of its own")
         XCTAssertFalse(app.buttons["league-gl-worth"].exists || gl.label.contains("for Great League. Species"), "no tag on a No viable option card")
@@ -678,7 +697,8 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertEqual(tag.value as? String, "Collapsed")
         tag.tap()
         // The line sits inside the card's one accessibility element, so the tag's value carries it.
-        XCTAssertEqual(tag.value as? String, "Not a strong pick for Ultra League.")
+        // Weak because the species (71.8) is below the B-tier line; the tag is worth alone now, so it says why rather than "not a strong pick".
+        XCTAssertEqual(tag.value as? String, "Species below the B-tier line for Ultra League")
         XCTAssertFalse(app.buttons["leagues-back"].exists, "tapping the tag does not open the league view")
         shot("worth-tag-open")
         tag.tap()
@@ -828,4 +848,5 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(credit.exists)
         shot("league-about")
     }
+
 }
