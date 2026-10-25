@@ -11,7 +11,7 @@ struct LeaguesPanel: View {
     let level: Double?
     /// "Pogo Assist is currently unable to detect Shadow Pokémon." while this copy's Shadow status is unknown.
     let showsShadowNote: Bool
-    /// This copy's own Advice builds: the worth tag is Strong for a league one of them covers.
+    /// This copy's own Advice builds: a league one of them covers gets the "Advice builds it" marker (the tag itself is worth alone).
     let builds: [BoxAdvice.Build]
     /// No build of its own and hygiene would transfer it: the Weak tag may then say "better kept for trading or transferring".
     let transfers: Bool
@@ -129,6 +129,7 @@ struct LeaguesPanel: View {
                     .foregroundStyle(accent.ink).padding(.horizontal, 8).padding(.vertical, 4)
                     .background(accent.tint, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
                 if let w = c.worth { worthTag(w) }
+                if c.buildsIt { buildsItTag(c) }
                 if c.overCapCount > 0 {
                     Text("▲ \(c.overCapCount) over cap").font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.04 * 11)
                         .foregroundStyle(Theme.red).padding(.horizontal, 7).padding(.vertical, 3)
@@ -136,8 +137,8 @@ struct LeaguesPanel: View {
                 }
             }
             .padding(.trailing, tappable ? 22 : 0)
-            if let w = c.worth, worthOpen.contains(key) {
-                Text(LeaguePanel.worthSentence(w, key: key, transfers: transfers, target: c.worthTarget)).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
+            if worthOpen.contains(key), let sentence = LeaguePanel.worthSentence(c, key: key, transfers: transfers) {
+                Text(sentence).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("league-\(key)-worth-text")
             }
@@ -172,14 +173,26 @@ struct LeaguesPanel: View {
         }
     }
 
-    /// The Strong / OK / Weak chip, drawn like the PICK chip (green, orange, or the muted off tone). It is only drawn here: the card is one
+    /// The Top / Good / Weak chip, drawn like the PICK chip: green for Top, the same green lighter for Good (tint at half strength and a faded ink border, so it
+    /// reads as a step down in the same hue; it was orange), or the muted off tone for Weak. It is only drawn here: the card is one
     /// accessibility element that hides its children, so the tap target is `worthButton`, laid over the chip's frame outside the card.
     private func worthTag(_ w: LeaguePanel.Worth) -> some View {
-        let (ink, tint): (Color, Color) = w == .strong ? (Theme.greenInk, Theme.greenTint) : w == .ok ? (Theme.orangeInk, Theme.orangeTint) : (Theme.muted, Theme.off)
+        let style = WorthTag.style(for: w)
+        let (ink, tint): (Color, Color) = w == .strong ? (Theme.greenInk, Theme.greenTint) : w == .ok ? (Theme.greenInk, Theme.greenTint.opacity(style.tintOpacity)) : (Theme.muted, Theme.off)
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
         return Text(w.label.uppercased()).font(.figtree(12, .bold, relativeTo: .caption)).tracking(0.07 * 12)
             .foregroundStyle(ink).padding(.horizontal, 8).padding(.vertical, 4)
-            .background(tint, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+            .background(tint, in: shape)
+            .overlay { if let border = style.borderOpacity { shape.strokeBorder(ink.opacity(border), lineWidth: 1) } }
             .anchorPreference(key: WorthBounds.self, value: .bounds) { $0 }
+    }
+
+    /// "Advice builds it" / "Advice builds Blastoise": the cost-aware marker beside the worth tag, drawn like the PICK chip in outline so it does not read
+    /// as a second tag. Visible text, named for the build's target when that is not the card's Pokémon; the card's spoken label says the same.
+    private func buildsItTag(_ c: LeaguePanel.Card) -> some View {
+        Text(LeaguePanel.buildsChipText(c)).font(.figtree(11, .bold, relativeTo: .caption2)).tracking(0.06 * 11)
+            .foregroundStyle(Theme.muted).padding(.horizontal, 7).padding(.vertical, 3)
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous).stroke(Theme.line, lineWidth: 1))
     }
 
     /// The tap target over the chip (at least 44 pt square): opens or closes the one line the tag explains. Its accessibility value carries that
@@ -194,7 +207,7 @@ struct LeaguesPanel: View {
                     .frame(width: max(rect.width, 44), height: max(rect.height, 44))
                     .position(x: rect.midX, y: rect.midY)
                     .accessibilityLabel("\(w.label) for \(LeaguePanel.name(key))")
-                    .accessibilityValue(open ? LeaguePanel.worthSentence(w, key: key, transfers: transfers, target: c.worthTarget) : "Collapsed")
+                    .accessibilityValue(open ? (LeaguePanel.worthSentence(c, key: key, transfers: transfers) ?? "") : "Collapsed")
                     .accessibilityIdentifier("league-\(key)-worth")
             }
         }

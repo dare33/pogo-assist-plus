@@ -26,10 +26,12 @@ person installs and says themselves. The app itself sends no input.
 
 ## Regenerate / build the Xcode project
 
-    cd native/PogoAssist
-    xcodegen generate            # brew install xcodegen
-    xcodebuild -project PogoAssist.xcodeproj -scheme PogoAssist -sdk iphonesimulator \
-      -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+    (cd native/PogoAssist && xcodegen generate)      # brew install xcodegen
+    native/tools/xcb.sh main -project native/PogoAssist/PogoAssist.xcodeproj -scheme PogoAssist \
+      -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+`xcb.sh` is plain `xcodebuild` with the project's fixed derived-data location and the slot lock added
+(see "Build hygiene" below); run it from the repo root.
 
 Bundle ids and the app group are in one place, `PogoAssist/Config/Identifiers.xcconfig`
 (`com.dare33.pogoassist`, `com.dare33.pogoassist.broadcast`, `group.com.dare33.pogoassist`); change
@@ -40,6 +42,128 @@ simulator cannot run a broadcast extension usefully; the extension is only compi
 ## Run the tests
 
     cd native/PogoReader && swift test
+
+That builds into the package's own `native/PogoReader/.build`, which `native/.gitignore` keeps out of
+git. A second session that must test the same checkout at the same time passes
+`--scratch-path ~/Library/Developer/Xcode/DerivedData/pogo-claude-build/swift-<slot>` (one of the
+slots below) rather than a fresh folder.
+
+## Build hygiene
+
+Why: on 25 Oct 2026 the MacBook was down to 26 GB free, and 143 GB of it was Xcode derived data
+that sessions had written into their scratchpads under `/private/tmp/claude-*`, one fresh 1 to 3 GB
+folder per build run (`dd`, `dd1`, `rv6-opus`, `dd-release-d2`...), plus reviewers' scratch copies of
+the package with their own builds and temporary simulators nobody deleted. Nothing cleans a
+scratchpad. So:
+
+1. **One fixed location, outside the repo and outside the scratchpad:**
+   `~/Library/Developer/Xcode/DerivedData/pogo-claude-build/`. `xcodebuild`'s derived data lives
+   under it and is reused run after run; a result bundle or archive goes under it too, or under the
+   repo's git-ignored `out/` (SwiftPM's own `native/PogoReader/.build`, git-ignored, is the one
+   other place a build may write; point 4). Nothing of the kind goes under
+   `/private/tmp/claude-*`, and the session scratchpad holds only small intermediate files: briefs,
+   logs, screenshots, JSON diffs.
+2. **Slots, not per-run folders.** `xcodebuild` output goes to `<location>/<slot>` where `<slot>` is
+   one of `main` (the session's own builds and tests), `main-2` (a second implementer building at
+   the same time; added by Greg's ruling of 26 Oct 2026, AEDT), `review-a` and `review-b` (the two
+   reviewers of the paired gate), `merge` (the manager's merge check). That is the whole set: two
+   implementers, two reviewers and a merge check can build at once. Never a fresh folder, never a
+   path of your own. If a run genuinely needs more than five builds at once, say so in the PR and
+   ask Greg for a further NAMED slot (the list is in `xcb.sh` and here); do not fall back to per-run
+   folders. An implementer builds in the slot it was given (`main` unless the manager assigns
+   `main-2`); implementers in one slot share it, so a build from another worktree makes the next
+   one in that slot cold (about 3.5 minutes); that is the trade.
+3. **One `xcodebuild` per slot at a time, through the helper.** Xcode's build database is not safe
+   to share between concurrent `xcodebuild` invocations, so each slot has a lock,
+   `<location>/<slot>.lock`: an empty file that the helper opens and locks in the kernel with
+   `/usr/bin/lockf` (`flock`), on a descriptor the xcodebuild it starts inherits. The kernel
+   releases the lock when the last process holding that descriptor exits, so it lasts as long as
+   the shell or the xcodebuild, whichever lives longer: a shell killed mid-build leaves the slot
+   held until the build ends, a build that dies frees it, and there is no pid file to go stale and
+   nothing to reclaim. A waiter blocks in `lockf` and says so every 30 seconds (the first message
+   after 30 seconds). The lock file is never removed, by the helper or by `build-clean.sh`: a
+   waiter that had opened it would otherwise lock a vanished file while a new build locks its
+   replacement, and both would run. What remains: the processes xcodebuild starts (its build
+   service, the compilers) do not inherit the descriptor (measured through a cold build on 25 Oct
+   2026: `lsof` showed only the helper's shell and xcodebuild holding the lock), so a `kill -9` of
+   xcodebuild frees the slot while a compiler it left behind may still write there, as the pid
+   scheme did; a helper from before this scheme, in a checkout that has not taken this change,
+   cannot `mkdir` over the lock file and waits forever without building (safe; update that
+   checkout), and the lock directory such a helper leaves is refused with a message rather than
+   judged (remove it by hand when nothing is building). `native/tools/xcb.sh` does all of this:
+
+       native/tools/xcb.sh <slot> <xcodebuild args...>
+       native/tools/xcb.sh main -project native/PogoAssist/PogoAssist.xcodeproj -scheme PogoAssist \
+         -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+   It adds `-derivedDataPath <location>/<slot>` itself and refuses one of yours, and likewise
+   refuses the build-setting overrides that move output (`SYMROOT=`, `OBJROOT=`, `DSTROOT=`,
+   `BUILD_DIR=`, `BUILD_ROOT=`, `CONFIGURATION_BUILD_DIR=`, `DERIVED_DATA_DIR=`,
+   `MODULE_CACHE_DIR=`, `SHARED_PRECOMPS_DIR=`), and takes an output path (`-resultBundlePath`,
+   `-archivePath`, `-resultStreamPath`, `-testProductsPath`, `-clonedSourcePackagesDirPath`) only
+   as a relative path from a checkout (not from a temp folder) or an absolute one inside the fixed
+   location. Not every way of redirecting output is caught; the rule is the rule, the helper is
+   the guard rail. Every command-line `xcodebuild` from a
+   session goes through it (a build Xcode.app runs from the IDE is Xcode's own and is not covered).
+   `-derivedDataPath` needs `-scheme`, so the helper is for scheme builds and tests;
+   `xcodebuild -list` writes nothing and needs no helper. A cold build takes minutes, longer than
+   a tool's default timeout, so run it in the background or with a long timeout: a shell killed
+   mid-build leaves xcodebuild running and the slot held until it ends.
+4. **`swift build` and `swift test`** use the package's own git-ignored `native/PogoReader/.build`,
+   or, when a second session needs its own at the same time,
+   `--scratch-path <location>/swift-<slot>`. SwiftPM locks its scratch folder and a second
+   invocation waits, so sharing is safe but slow and it throws away the other's incremental state;
+   the per-slot folder is for throughput, not safety.
+5. **Reviewers build a copy, one each.** A reviewer must not mutate the tree under review, so a
+   reviewer that needs to build copies `native/` (the app project and the package together, since
+   `project.yml` references `../PogoReader`) to the copy that matches its slot,
+   `<location>/review-copy-a` for `review-a` and `<location>/review-copy-b` for `review-b`, builds
+   there in that slot, and deletes the copy when its review is returned. Not a copy per review in
+   the scratchpad, and never the other reviewer's copy. Leave `.build` out of the copy (hundreds
+   of MB and not needed):
+
+       mkdir -p ~/Library/Developer/Xcode/DerivedData/pogo-claude-build/review-copy-a
+       rsync -a --delete --exclude .build native/ ~/Library/Developer/Xcode/DerivedData/pogo-claude-build/review-copy-a/native/
+
+6. **Temporary simulators are deleted by the run that made them.** The standing simulators are
+   iPhone 17 (single UI tests) and iPhone Air (full suites); `xcrun simctl list devices` gives
+   their ids on this Mac; they are never deleted. Two runs must not test on the same simulator at
+   once (the install and launch disrupt each other), so a reviewer that runs UI tests while another
+   run may be using the standing one clones its own. A run that needs its own clone makes it with
+   the helper, which records it in `<location>/sims.txt`, and deletes it at the end of that run, in
+   the same session, before the result is reported:
+
+       native/tools/sim-temp.sh create <base name or udid> <label>    # prints the clone's udid
+       native/tools/sim-temp.sh delete <label or udid>
+       native/tools/sim-temp.sh list                                  # recorded clones, exists / gone
+
+   A label must be new (no device of that name yet), so `delete <label>` names exactly one clone;
+   a record is dropped only once the clone is confirmed gone.
+7. **Cleaning up.** The fixed location is reused, so it only needs emptying when it is stale (a
+   toolchain change, a corrupt module cache, the disk) or when leftovers must go. One command, run
+   when nothing is building:
+
+       native/tools/build-clean.sh        # -n shows what would go
+
+   It deletes every simulator in `sims.txt` that is not booted, empties each xcodebuild slot while
+   holding its lock (a slot with a live build is skipped; the empty `<slot>.lock` files stay), and
+   removes the other folders these helpers make (`swift-<slot>`, `review-copy-*`), which have no
+   lock; anything else under the location is reported and left. The hand version, only when
+   nothing is building or waiting to build and after `sim-temp.sh list` shows no recorded clone left, is
+   `rm -rf ~/Library/Developer/Xcode/DerivedData/pogo-claude-build` (the whole folder, `sims.txt`
+   included; a brace-and-glob one-liner fails in zsh when a pattern matches nothing). The folder
+   is named outside Xcode's own `PogoAssist-<hash>` pattern on purpose (Greg's ruling, 25 Oct 2026),
+   so a hand cleanup of `DerivedData/PogoAssist-*` leaves it alone; the first test's folder, under an
+   earlier name inside that pattern, was deleted mid-build by exactly such a cleanup.
+
+The helpers read `POGO_BUILD_ROOT` to override the location, for a test of the helpers themselves
+under a scratch root, not for a build. `xcb.sh` and `sim-temp.sh create` mark the location with
+`.pogo-build-root`, adopting a folder that holds only the names above (a hand-made `review-copy-a` or
+`swift-main` is fine) and refusing one that holds anything else (`PogoAssist-abc`). `sim-temp.sh list`
+only reads. `build-clean.sh` and `sim-temp.sh delete` never mark a root: they refuse one without the
+marker and say how to get it, and the
+cleaner removes only the folders named above (slots, `swift-*`, `review-copy-*`), reporting anything
+else and leaving it, so pointing any of them one level up does not empty DerivedData.
 
 ## Run the reader on frames
 
@@ -472,8 +596,12 @@ Diagnostics is the old one-screen test rig, unchanged in behaviour, plus "Load s
 In the unsigned simulator build the app group does not exist; `SharedStore.containerURL` then uses the app's Documents folder
 (simulator only). `PogoAssistUITests/FlowTests` drives the whole flow in the simulator and saves screenshots:
 
-    TEST_RUNNER_POGO_SCREENS=<folder> xcodebuild -project PogoAssist.xcodeproj -scheme PogoAssist -sdk iphonesimulator \
-      -destination 'platform=iOS Simulator,id=<an iPhone simulator id>' CODE_SIGNING_ALLOWED=NO test
+    TEST_RUNNER_POGO_SCREENS=<folder> native/tools/xcb.sh main -project native/PogoAssist/PogoAssist.xcodeproj \
+      -scheme PogoAssist -sdk iphonesimulator -destination 'platform=iOS Simulator,id=<an iPhone simulator id>' \
+      CODE_SIGNING_ALLOWED=NO test
+
+(from the repo root; `xcb.sh` supplies the derived-data location, see "Build hygiene"; one test at a time
+runs on the standing iPhone 17, a full suite on the iPhone Air).
 
 ### Box merge rules (`PogoBox/BoxMerge.swift`)
 
@@ -509,7 +637,7 @@ none is deleted; Settings restores any of them (as a new version). The replay lo
   digits are a subsequence of a saved same-species CP (182 in 1982) with the same HP (or HP unread) is Unsure with those saved
   Pokemon as candidates. The answers are "It is this one" (only marks it seen; the part-read values are not copied over), "It is new"
   and "Leave it out of the box". Leave it out is available for every unsure row.
-- Delete one Pokemon (swipe, with a confirmation) and Settings > Scans (date, kind, Pokemon read, with a share button for the scan's
+- Delete one Pokemon (swipe, with a confirmation) and Settings > History and scans > Scans (date, kind, Pokemon read, with a share button for the scan's
   `replay.jsonl` and result JSON). "Fix a value" re-runs the JavaScript solver for the Pokemon (`LevelSolve`, the way `Refine` solves
   a hidden-CP row) so level and dust follow the corrected values; when no level fits it keeps the edit, adds `no-level-fits` and says so.
 - Diagnostics has "Load partial-read sample" (one Staraptor read as CP 182) to drive the unsure card in the simulator.
@@ -775,7 +903,7 @@ What this was tested on, and what it was not: the owner's two screenshots (19 / 
   checks otherwise; `form-ambiguous` and `level-ambiguous` are always notes; everything else, including a flag nobody has seen yet, is a check.
   Notes show on the Pokemon's detail under "How it was read". On the owner's 313-Pokemon scan (`run8-tap-300`) 72 rows were flagged and 9 remain
   in "To check". "These values are right" clears the check flags and leaves the notes.
-- Settings > Scans > "Read again with the latest rules" runs the pipeline on a scan's stored `replay.jsonl` with its stored kind and paging hint and
+- Settings > History and scans > Scans > "Read again with the latest rules" runs the pipeline on a scan's stored `replay.jsonl` with its stored kind and paging hint and
   opens the normal review screen against the box as it was before that scan was first saved (`BoxLibrary.prepareReread`: the version before the
   lowest version that names the scan). Save adds one box version (earlier box plus the new read) and records `lastReread` on the scan; the scan's
   stored result is not rewritten. Scans and corrections saved after it are not re-applied (the screen says so; their versions stay in the history).
@@ -952,7 +1080,7 @@ Two entry points, one importer. **In the app:** More > Import screenshots > Choo
 
 A local notification (below, "Scan stopped") is posted by the app's own broadcast extension on the phone and sends nothing anywhere.
 
-Screenshots chosen or shared for import are copied into the app group on the phone, read there, and deleted after the save; they are never uploaded. Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > Scans) and then Send. There is no analytics,
+Screenshots chosen or shared for import are copied into the app group on the phone, read there, and deleted after the save; they are never uploaded. Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > History and scans > Scans) and then Send. There is no analytics,
 no background upload and no retry. One tap sends one file, `yyyy-mm/yyyymmddThhmmssZ-<random id>.json.gz`, to a private storage bucket
 (`scan-reports`, write-only for the app: it can add a file, never read, list or overwrite one). The file is a gzip of one JSON document with these
 keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone17,2, system version, screen size in points, language);

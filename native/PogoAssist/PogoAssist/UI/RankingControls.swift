@@ -165,6 +165,8 @@ struct RankingSwitch: View {
     var identifier = "ranking"
     /// False hides "RANKING" (the Leagues panel header names the switch already).
     var showsCaption = true
+    /// True lets the one-line layout drop "RANKING" before the switch wraps or the neighbouring label gives way.
+    var captionDroppable = false
     @AppStorage(PrefKey.ranking) private var raw = Ranking.default.rawValue
 
     private var selection: Binding<Ranking> {
@@ -179,6 +181,13 @@ struct RankingSwitch: View {
                 info
             }
             .fixedSize(horizontal: true, vertical: false)
+            if captionDroppable && showsCaption {
+                HStack(spacing: 8) {
+                    control(singleLine: true)
+                    info
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            }
             VStack(alignment: .leading, spacing: 0) {
                 caption
                 HStack(spacing: 8) { control(singleLine: false); info }
@@ -204,6 +213,35 @@ struct RankingSwitch: View {
     private var info: some View { InfoButton(isOpen: $infoOpen, identifier: "\(identifier)-info") }
 }
 
+// MARK: ExplainerCard
+
+/// The card an "i" opens: accent tint, radius 16, 13 pt medium ink, one accessibility element. The ranking explainer
+/// passes styled runs, the Settings rows plain text.
+struct ExplainerCard<Content: View>: View {
+    let identifier: String
+    @ViewBuilder var content: Content
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        content
+            .font(.figtree(13, .medium, relativeTo: .footnote))
+            .foregroundStyle(Theme.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(accent.tint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
+extension ExplainerCard where Content == Text {
+    init(text: String, identifier: String) {
+        self.identifier = identifier
+        self.content = Text(text)
+    }
+}
+
 // MARK: RankingExplainer
 
 /// The card the "i" opens. Wording checked against src/leagues.js (pokeGeniePick, chooseMember).
@@ -214,19 +252,13 @@ struct RankingExplainer: View {
     var body: some View {
         // Classic is pokeGeniePick (iv.pct); Pogo Assist is chooseMember (rankPct), both in src/leagues.js.
         // "3 PvPoke points" is CLOSE_SCORE in src/leagues.js and must change with it.
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Classic").bold().foregroundStyle(accent.ink)
-                + Text(" takes the family member this copy's IVs suit best under the CP cap. In Master League, or when the IVs are not known, it takes the strongest species.")
-            Text("Pogo Assist").bold().foregroundStyle(accent.ink)
-                + Text(" starts from the strongest species and moves to a weaker one only when it is within 3 PvPoke points and this copy's IVs rank higher for it.")
+        ExplainerCard(identifier: identifier) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Classic").bold().foregroundStyle(accent.ink)
+                    + Text(" takes the family member this copy's IVs suit best under the CP cap. In Master League, or when the IVs are not known, it takes the strongest species.")
+                Text("Pogo Assist").bold().foregroundStyle(accent.ink)
+                    + Text(" starts from the strongest species and moves to a weaker one only when it is within 3 PvPoke points and this copy's IVs rank higher for it.")
+            }
         }
-        .font(.figtree(13, .medium, relativeTo: .footnote))
-        .foregroundStyle(Theme.ink)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(accent.tint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier(identifier)
     }
 }

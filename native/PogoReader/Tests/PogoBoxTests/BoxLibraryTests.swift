@@ -205,7 +205,7 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
         XCTAssertEqual(advice.version, BoxAdvice.currentVersion)
-        XCTAssertEqual(BoxAdvice.currentVersion, 9)
+        XCTAssertEqual(BoxAdvice.currentVersion, 12)
 
         // The options list decodes in order; the experimental member is a different index.
         let gl = try XCTUnwrap(l["gl"])

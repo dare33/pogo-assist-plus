@@ -22,6 +22,8 @@ struct PokemonDetailView: View {
     @State private var notesOpen = false
     /// The Dynamax choice just made, until its save has landed: the switch shows it at once, and further taps wait (two quick taps would save twice).
     @State private var pendingDynamax: BoxMerge.DynamaxEdit?
+    /// Activities whose tag was tapped open: the one line it explains.
+    @State private var activityOpen = Set<String>()
 
     /// The Mega form the page shows now: only for an entry whose Mega form has a CP, and only while the switch is on Mega.
     private func megaShown(_ e: BoxEntry) -> MegaForm? {
@@ -54,6 +56,7 @@ struct PokemonDetailView: View {
                         // Megas are not allowed in GO Battle League, so the section (and the IVs panel's PvP figures) wait while the page shows the Mega form.
                         if megaShown(e) == nil { leaguesPanel(e) }
                         // The league view is the page's focus: the Advice panel returns with the base cards.
+                        if !leagueViewShowing(e) { activitiesPanel(e) }
                         if !leagueViewShowing(e) { advicePanel(e) }
                         factsPanel(e, mega: megaShown(e))
                         notesPanel(e, mega: megaShown(e))
@@ -281,7 +284,7 @@ struct PokemonDetailView: View {
         if case .ready(let advice) = model.advice {
             let ratings = advice.leagues(for: e.id)
             if !ratings.isEmpty {
-                // The tag reads the copy's own builds only (never those it is a spare for), so it agrees with the Advice panel.
+                // The "Advice builds it" marker reads the copy's own builds only (never those it is a spare for), so it agrees with the Advice panel; the tag is worth alone.
                 let a = advice.entries(for: e.id)
                 LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, builds: a.builds, transfers: a.transfersWithNoBuild, mode: $leaguesMode)
             }
@@ -298,6 +301,59 @@ struct PokemonDetailView: View {
     private func leagueViewShowing(_ e: BoxEntry) -> Bool {
         guard leaguesPanelShown(e), case .ready(let advice) = model.advice, let key = leaguesMode else { return false }
         return advice.leagues(for: e.id)[key] != nil
+    }
+
+    // MARK: activities
+
+    /// Raids, Gym, Rocket and Max for this copy, read from the cached advice: the tag is worth alone (Top, Good or Weak in the area's colours; a tap opens its line),
+    /// and "Advice builds it" marks an area the copy's own primary build covers, as the league cards do. It stays under the Leagues panel and gives way with it
+    /// while a league view is open.
+    @ViewBuilder private func activitiesPanel(_ e: BoxEntry) -> some View {
+        if case .ready(let advice) = model.advice {
+            let fits = advice.fit(for: e.id)
+            if !fits.isEmpty {
+                Panel(padding: 18, spacing: 12) {
+                    Text("ACTIVITIES").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("activities-panel")
+                    ForEach(BoxInsight.areas, id: \.self) { area in
+                        if let f = fits[area], let a = BoxInsight.Activity(rawValue: area) { activityRow(e, f, a) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func activityRow(_ e: BoxEntry, _ f: BoxAdvice.Fit, _ a: BoxInsight.Activity) -> some View {
+        let worth: LeaguePanel.Worth = f.tag == .strong ? .strong : f.tag == .ok ? .ok : .weak
+        let open = activityOpen.contains(a.rawValue)
+        let chip = f.buildsChipText(ownNames: [e.row.name, e.row.title])
+        // LeaguePanel.grouped, not .formatted(): the figures read the same whatever the phone's region, as the league cards' do.
+        let cost = f.buildCost.map { ", \(LeaguePanel.grouped($0.dust)) dust, \(LeaguePanel.grouped($0.candy)) candy" + ($0.xl > 0 ? ", \(LeaguePanel.grouped($0.xl)) XL" : "") } ?? ""
+        return VStack(alignment: .leading, spacing: 6) {
+            FlowLayout(spacing: 8) {
+                Button { if open { activityOpen.remove(a.rawValue) } else { activityOpen.insert(a.rawValue) } } label: {
+                    // 6 pt above and below the chip (half the Panel's 12 pt row gap, so two rows' areas never overlap): about 32 pt to hit with the chip's ~20 pt, laid out as before.
+                    WorthTag(activity: a, worth: worth).padding(.vertical, 6).contentShape(Rectangle()).padding(.vertical, -6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(a.title): \(worth.label)")
+                .accessibilityValue(open ? f.line : "")
+                .accessibilityHint("Shows why")
+                .accessibilityAddTraits(open ? .isSelected : [])
+                .accessibilityIdentifier("activity-\(a.rawValue)")
+                if let chip {
+                    BuildsChip(text: chip)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(chip.capitalized + cost)
+                        .accessibilityIdentifier("activity-\(a.rawValue)-builds")
+                }
+            }
+            if open {
+                Text(f.line).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("activity-\(a.rawValue)-line")
+            }
+        }
     }
 
     // MARK: facts
@@ -416,16 +472,43 @@ struct BuildRow: View {
             if showName {
                 Text("CP \(build.cp)" + (build.ivs.map { ", IVs \($0)" } ?? "") + (build.level.map { ", level \(Fmt.number($0))" } ?? "")).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
             }
-            Text("\(build.areas.joined(separator: ", ")) · tier \(build.tier)").font(.footnote).foregroundStyle(.secondary)
-            Text(costLine).font(.footnote).foregroundStyle(.secondary)
+            if showName {
+                // The Next list: the advisor's order mixes worth with ease, so the two are shown apart. Worth is the build's best tier among its areas;
+                // effort is the dust, candy and XL it costs ("No dust or candy" when none; the steps are the action line above).
+                Text(build.areas.joined(separator: ", ")).font(.footnote).foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 24) {
+                    // The tag on the Box list is per copy (its roll included); this tier is the build target's, so the copy's roll (league rank or IV %) is shown beside it.
+                    labelled("Worth", build.worthText)
+                    labelled("Effort", build.effortText)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
+                Text("\(build.areas.joined(separator: ", ")) · tier \(build.tier)").font(.footnote).foregroundStyle(.secondary)
+            }
+            // The Next list already shows the cost as EFFORT, so its line keeps the level climb and what it leaves; the Advice panel's line carries the cost.
+            let line = showName ? climbLine : costLine
+            if !line.isEmpty { Text(line).font(.footnote).foregroundStyle(.secondary) }
             if build.spares > 0 { Text("\(build.spares) spare \(build.spares == 1 ? "copy" : "copies")").font(.footnote).foregroundStyle(.secondary) }
         }
     }
-    var costLine: String {
+    private func labelled(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+            Text(value).font(.footnote.weight(.semibold)).monospacedDigit()
+        }
+    }
+    private var climb: String {
         let from = build.level.map { "Level \(Fmt.number($0))" } ?? ""
         let to = build.climbLevel.map { $0 > (build.level ?? 0) ? " to \(Fmt.number($0))" : "" } ?? ""
+        return from.isEmpty ? "" : from + to
+    }
+    /// "Level 20 to 35; going past 27 leaves UL": the climb without its cost (the Next list shows the cost as EFFORT). Empty when there is neither.
+    var climbLine: String {
+        [climb, build.leavesLeagueText ?? ""].filter { !$0.isEmpty }.joined(separator: "; ")
+    }
+    var costLine: String {
         let cost = build.dust == 0 && build.candy == 0 && build.xl == 0 ? "no dust or candy to spend" : build.costText
-        let line = (from.isEmpty ? "" : from + to + ": ") + cost
+        let line = (climb.isEmpty ? "" : climb + ": ") + cost
         return build.leavesLeagueText.map { line + "; " + $0 } ?? line
     }
 }
