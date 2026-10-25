@@ -3,7 +3,7 @@
 #
 # Runs xcodebuild in the project's FIXED derived-data location for the slot, so build output never
 # lands in a fresh per-run folder (25 Oct 2026: 143 GB of them under /private/tmp/claude-*).
-# Slots: main, review-a, review-b, merge (ask Greg for another named one; never invent a path).
+# Slots: main, main-2, review-a, review-b, merge (ask Greg for another named one; never invent a path).
 # One xcodebuild per slot at a time: the slot is held by a kernel lock (/usr/bin/lockf) on the slot's
 # lock file, which the running xcodebuild inherits, so it is released once both this shell and that
 # xcodebuild have ended, however either ends. A -derivedDataPath of your own is refused: the path is not a
@@ -22,11 +22,11 @@ ROOT="${POGO_BUILD_ROOT:-$HOME/Library/Developer/Xcode/DerivedData/pogo-claude-b
 
 die() { echo "xcb: $*" >&2; exit 2; }
 
-[[ $# -ge 2 ]] || die "usage: xcb.sh <slot> <xcodebuild args...>   (slots: main review-a review-b merge)"
+[[ $# -ge 2 ]] || die "usage: xcb.sh <slot> <xcodebuild args...>   (slots: main main-2 review-a review-b merge)"
 slot=$1; shift
 case "$slot" in
-  main|review-a|review-b|merge) ;;
-  *) die "unknown slot '$slot' (slots: main review-a review-b merge; a further NAMED slot is Greg's call, see native/README.md)" ;;
+  main|main-2|review-a|review-b|merge) ;;
+  *) die "unknown slot '$slot' (slots: main main-2 review-a review-b merge; a further NAMED slot is Greg's call, see native/README.md)" ;;
 esac
 
 prev=""
@@ -65,7 +65,7 @@ adopt_root() {
     for e in "$ROOT"/* "$ROOT"/.[!.]*; do
       [[ -e "$e" ]] || continue
       case "$(basename "$e")" in
-        main|review-a|review-b|merge|*.lock|swift-*|review-copy-*|sims.txt|sims.txt.tmp.*|.pogo-build-root|.DS_Store) ;;
+        main|main-2|review-a|review-b|merge|*.lock|swift-*|review-copy-*|sims.txt|sims.txt.tmp.*|.pogo-build-root|.DS_Store) ;;
         *) die "$ROOT holds '$(basename "$e")', which these helpers did not make; refusing to use it as the build root" ;;
       esac
     done

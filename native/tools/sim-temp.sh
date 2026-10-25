@@ -28,7 +28,7 @@ adopt_root() {
     for e in "$ROOT"/* "$ROOT"/.[!.]*; do
       [[ -e "$e" ]] || continue
       case "$(basename "$e")" in
-        main|review-a|review-b|merge|*.lock|swift-*|review-copy-*|sims.txt|sims.txt.tmp.*|.pogo-build-root|.DS_Store) ;;
+        main|main-2|review-a|review-b|merge|*.lock|swift-*|review-copy-*|sims.txt|sims.txt.tmp.*|.pogo-build-root|.DS_Store) ;;
         *) die "$ROOT holds '$(basename "$e")', which these helpers did not make; refusing to use it as the build root" ;;
       esac
     done
