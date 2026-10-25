@@ -30,8 +30,8 @@ test('the build refuses an unprefixed later name in a Gigantamax or Dynamax row,
   }
 });
 
-test('the guard recognises G-Max and GMax prefixes, case-insensitively, and suggests the first name\'s own prefix', () => {
-  for (const cell of ['G-Max Charizard / Lapras', 'gmax Charizard, Lapras', 'GIGANTAMAX Charizard, Lapras']) {
+test('the guard recognises Gigantamax and Dynamax case-insensitively, and suggests the first name\'s own prefix', () => {
+  for (const cell of ['GIGANTAMAX Charizard, Lapras', 'dynamax Charizard / Lapras']) {
     const { r } = buildMax(cell);
     assert.notEqual(r.status, 0, cell);
     assert.match(r.stderr, /"Lapras"/, cell);
@@ -39,8 +39,17 @@ test('the guard recognises G-Max and GMax prefixes, case-insensitively, and sugg
   }
 });
 
-test('mixed prefix words in one Max row are accepted when every name has a prefix of its own', () => {
-  const { r, tiers } = buildMax('Gigantamax Charizard, G-Max Lapras, Dynamax Kingler');
+test('the build refuses a G-Max or GMax prefix, first name or later, asking for "Gigantamax <name>"', () => {
+  for (const [cell, bad] of [['G-Max Charizard / Lapras', 'G-Max Charizard'], ['gmax Charizard, Lapras', 'gmax Charizard'],
+                             ['Gigantamax Charizard, GMax Lapras', 'GMax Lapras'], ['G-Max Charizard', 'G-Max Charizard']]) {
+    const { r } = buildMax(cell);
+    assert.notEqual(r.status, 0, cell);
+    assert.ok(r.stderr.includes(`"${bad}" uses a G-Max/GMax prefix; write "Gigantamax ${bad.split(' ')[1]}"`), r.stderr);
+  }
+});
+
+test('mixed Gigantamax and Dynamax prefixes in one Max row are accepted when every name has a prefix of its own', () => {
+  const { r, tiers } = buildMax('Gigantamax Charizard, Gigantamax Lapras, Dynamax Kingler');
   assert.equal(r.status, 0, r.stderr);
   assert.equal(tiers.entries.length, 3);
 });

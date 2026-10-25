@@ -59,10 +59,16 @@ function splitNames(cell) {
 }
 
 // In the Max area a prefix names the kind of Pokémon (a Gigantamax catch is not a Dynamax one), so a row that opens with
-// "Gigantamax X", "G-Max X" or "Dynamax X" must prefix every later name too: a bare "Lapras" would be read as an ordinary Dynamax copy.
+// "Gigantamax X" or "Dynamax X" must prefix every later name too: a bare "Lapras" would be read as an ordinary Dynamax copy.
+// "G-Max"/"GMax" are refused outright: the advisor (src/advise.js, bundled into the app) excludes /gigantamax|g-max/i, which
+// would miss "GMax", so the one spelling is "Gigantamax".
 // Other areas mix prefixed and plain names on purpose ("Shadow Blaziken, Flareon"), so this guard is Max-only.
 function checkMaxPrefixes(names, where) {
-  const prefix = (n) => n.match(/^(Gigantamax|G-?Max|Dynamax)(?=\s|$)/i)?.[1];
+  for (const { name } of names) {
+    const g = name.match(/^G-?Max(?=\s|$)\s*(.*)$/i);
+    if (g) throw new Error(`${where}: "${name}" uses a G-Max/GMax prefix; write "Gigantamax ${g[1]}"`);
+  }
+  const prefix = (n) => n.match(/^(Gigantamax|Dynamax)(?=\s|$)/i)?.[1];
   const first = prefix(names[0]?.name ?? '');
   if (!first) return;
   for (const { name } of names.slice(1)) {

@@ -286,7 +286,9 @@ public struct BoxAdvice: Codable, Equatable {
     /// Elite TM, Community Day move, Dynamax copy), which the action is worded from; 8 since the power-up step is the climb the cost covers, builds carry
     /// `leavesLeague`, the second move follows the unlocked charged slot, and `eliteTMs` / `communityDayMove` are gone. Advice cached at 2 to 7 has the
     /// old shape or the old rules, so it is dropped and recomputed too.
-    public static let currentVersion = 8
+    /// 14 since the Gigantamax Max rows kept their prefix (a Dynamax copy is no longer credited with a Gigantamax entry); 9-13 are used or reserved by
+    /// the open design stack, so any later merge must go above 14.
+    public static let currentVersion = 14
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
