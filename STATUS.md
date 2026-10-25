@@ -1,5 +1,83 @@
 # Status — Pogo Assist+
 
+**26 Oct 2026 (AEDT): a fifth build slot, `main-2` (branch `chore/build-slot-main-2`, draft PR #22 stacked on #18, not merged).** Greg approved a second implementer slot after builders queued on `main` all of 25 Oct. `xcb.sh`, `sim-temp.sh` and `build-clean.sh` accept and clean `main-2` like `main`; `native/README.md` and `CLAUDE.md` name it. Verified: `bash -n` on the three scripts; `xcb.sh main-2 -version` built in the fixed location under `main-2.lock`; an unknown slot is refused; the Opus reviewer ran all five slots with a fake xcodebuild on a scratch root (main and main-2 concurrently, the cleaner skipping a held main-2). Paired review: both NEEDS-FIX on README wording only, folded.
+
+**25 Oct 2026: build lock on `/usr/bin/lockf` (branch `claude/jolly-hamilton-9e9dc8`, for a draft PR to `main`, not merged; the follow-up Greg
+agreed to the build-hygiene change, which merged as #17, d6f0c17).** The per-slot lock in `native/tools/xcb.sh` and
+`native/tools/build-clean.sh` is no longer a `mkdir` directory with a pid file and a stale-lock reclaim under a second mutex; it
+is a kernel lock (`flock`, through `/usr/bin/lockf`) on an empty, permanent `<location>/<slot>.lock` file that the helper opens
+on a descriptor the xcodebuild it starts inherits, so the lock lasts as long as the helper's shell or xcodebuild, whichever lives
+longer, and the kernel releases it: no pid file, no staleness judgement, no reclaim mutex (about forty lines gone from the two
+scripts). The helpers' interface is unchanged; the refusals are unchanged with one added (a lock directory left by the earlier
+scheme, which `xcb.sh` refuses and the cleaner skips, each saying to remove it by hand when nothing is building); the exit codes
+are unchanged except where they were wrong (below). The messages that named a pid no longer do (`xcb.sh`'s waiting message, now
+first printed after 30 s blocked rather than at once; the cleaner's "in use"); the cleaner has three new messages (a lock file it
+cannot open, a `lockf` failure other than "held", the old-scheme lock directory) and `xcb.sh` two (the lock file cannot be opened,
+a `lockf` failure other than "held"); the old scheme's "reclaiming stale lock", "another run is reclaiming" and "taken just now"
+are gone with it. Two pre-existing defects found by the race proof and the review,
+fixed: `adopt_root` in `xcb.sh` and `sim-temp.sh` could refuse a root because a racing caller had just written the
+`.pogo-build-root` marker, which was not in the list of names the helpers make (one of twelve racers died that way); and a signal
+arriving between starting xcodebuild and recording its pid, or after the build had ended, made the helper exit 1 instead of
+130/143/129 (the traps now also cover a signal while waiting for the slot). Verified by the session that made the change (not by
+Greg), on the MacBook (mb-16, Xcode 27.1 27A9275, macOS 26.6), against the scripts in the commit that carries this entry (`xcb.sh`:
+comment blocks reworded afterwards, the file as run reconstructed to its recorded hash; the race suite re-run on the final
+scripts by the confirmation reviewer): `build-clean.sh`
+emptied the real location's `main` slot (781 MB) with nothing building, then a cold PogoAssist simulator build through `xcb.sh
+main` succeeded (2 min 35 s) with its output only under that slot, `lsof` sampled every five seconds showing the lock held by the
+helper's shell and xcodebuild alone (never the build service or a compiler) and free with no holder the moment the helper
+returned, and nothing new in the repo or the scratchpad beyond the logs; with a fake `xcodebuild` under a scratch root (27 checks),
+twelve callers racing for one slot ran strictly one at a time with every exit 0, a `kill -9` of the helper's shell left the slot
+held until the build ended while a second caller waited for it, an INT to the foreground helper stopped the build and freed the
+lock with exit 130 (TERM: 143), an INT to a helper waiting for the slot ended the wait with exit 130 and built nothing, the
+cleaner skipped the slot while a build held it (the real run and `-n` alike), emptied it once free and left the lock file, went
+on to the other slots past a lock file it could not open, eight callers interleaved with three cleaner runs never overlapped, a
+hold longer than 30 s produced the waiting message, every refusal fired as before plus the two new ones for an old-scheme lock
+directory, the dry run created no lock file, and the build's exit status passed through. `npm test`: 244 tests, 240 pass, 4
+skipped, 0 fail, unchanged. Review gate: paired round (Opus reviewer; Sol through the Codex wrapper), both NEEDS-FIX, every
+finding folded (the mixed-version wait, the launch-window signal, the cleaner's open failure and dry-run misreport, the
+descriptor-inheritance claim reworded to what was measured, wording in this entry and the README), then a paired confirmation
+round: Opus CONFIRMED-OK on every file (three documentation nits), Sol CONFIRMED-OK on three files and NEEDS-FIX on two for
+wording (this entry's "refusals and exit codes unchanged", `xcb.sh`'s opening comment); those five wording edits, in comments,
+this entry and nothing executable, were made after that round and are the only unreviewed lines. The findings are in the pull
+request that carries this branch. Known limits (the scripts' comments and the README): a
+helper from before this change, in a checkout that has not taken it, cannot `mkdir` over the lock file and waits forever without
+building (safe; update that checkout; the lock directory it may leave is refused, not judged); a `kill -9` of xcodebuild frees
+the slot while a compiler it left behind may still write there, as the pid scheme did; the lock file is never removed by the
+helpers (removing one in use would let two builds run), so it goes only with `rm -rf` of the whole location when nothing is
+building or waiting to build; a signal sent to a waiting helper's shell alone takes effect within 30 s, when its `lockf` returns;
+two sessions editing `sims.txt` at the same instant; the output-path refusal is a guard rail, not a proof.
+
+**25 Oct 2026: build hygiene (branch `claude/build-hygiene-e6f0da`, for a draft PR to `main`, not merged).** A standing rule, in
+`CLAUDE.md` ("Build hygiene") and `native/README.md` ("Build hygiene"), after 143 GB of per-run Xcode derived-data folders
+were found in sessions' scratchpads under `/private/tmp/claude-*`: every command-line `xcodebuild` from a session uses the
+fixed, reused `~/Library/Developer/Xcode/DerivedData/pogo-claude-build/<slot>` (slots `main`, `review-a`, `review-b`,
+`merge`), one `xcodebuild` per slot at a time behind a `mkdir` lock that names the running xcodebuild; `swift test` in the
+package's own git-ignored `.build` or `swift-<slot>`; reviewers' read-only copies at `review-copy-a` / `review-copy-b`;
+temporary simulators deleted by the run that cloned them and never two test runs on one simulator; the scratchpad for
+small files only. Helpers: `native/tools/xcb.sh <slot> <xcodebuild args>` (slot path, lock, refuses `-derivedDataPath`
+and `SYMROOT`-style overrides), `native/tools/sim-temp.sh create|delete|list` (records clones in `sims.txt`, drops a
+record only once the clone is gone), `native/tools/build-clean.sh` (empties the location slot by slot under each lock,
+deletes recorded clones that are not booted, refuses a root the building helpers never marked). `native/tools/compare-all.sh` now builds
+through the helper. Verified by the session that made the change (not by Greg), on the MacBook (mb-16, Xcode 27.1
+27A9275), against the scripts in the commit that carries this entry: the PogoAssist simulator build through `xcb.sh main`
+succeeds with its output only under the fixed location (an earlier attempt, on an earlier version of the script, failed
+with "error closing ... for output" when a DerivedData clean-up of `PogoAssist-*` running in another session deleted the
+folder, then named `PogoAssist-claude`, mid-build; Greg ruled the location be renamed outside that pattern, and every rerun
+succeeded, the last under the final name); with a fake `xcodebuild` under a scratch root, twelve callers racing for a
+slot with a pre-seeded stale lock ran strictly one at a time, eight callers interleaved with three `build-clean.sh` runs
+never overlapped (the cleaner emptied the slot once while free and skipped it twice while held), a `kill -9` of the shell
+left the slot held by the build's own pid until it ended, a pid-less lock older than 60 s was reclaimed, an INT to the
+foreground helper stopped the build and released the lock, every refusal fired (`-derivedDataPath`, `SYMROOT=`, output
+paths outside the rule, an unknown slot, a mistyped cleaner option, a root holding a stranger's folder, the cleaner on an
+unmarked root) and a hand-made `review-copy-a` root was adopted by `xcb.sh`; a clone of the iPhone 17 was created, listed and deleted through `sim-temp.sh`. Review gate: paired round (Opus reviewer, Sol through the Codex wrapper), fold, paired
+confirmation round, fold, then narrow paired re-checks of the folds; the rounds' findings and what remains are in the
+pull request that carries this branch. Agreed follow-up after this PR merges (Greg, 25 Oct): replace the `mkdir` mutex with
+`/usr/bin/lockf`, which ties the lock to the build's own lifetime. Known limits (the scripts' comments and the README): a signal in the instant between launching xcodebuild and writing
+its pid; two parties racing to remove a reclaim mutex left by a crashed reclaimer; two sessions editing `sims.txt` at
+the same instant; the output-path refusal is a guard rail, not a proof.
+Nothing was deleted from
+`/private/tmp` or the old DerivedData folders by this change (the cleanup list is with Greg).
+
 **20 Oct 2026: screenshot import (branch `feat/screenshot-import-fold`, on `feat/screenshot-import`, not merged).** Quick import of Pokémon GO appraisal screenshots, from the app (system photo picker) and from
 Photos (Share > Pogo Assist+), each read once, merged as a partial Add and update and saved as source "screenshot import". Design, rules and limits: `native/README.md`, "Screenshot import". The latest reviews (of the ledger-cap fold) were Opus "ship after fixes" and Sol "do not ship" on small items, which this fold addresses; account-name hardening is deliberately on hold (see the known limits below). **The review gate is not passed.** Verified on the Mac (greg-mb-16, Xcode 27.1): `swift test` in `native/PogoReader`
 179 + 65 + 707, 0 failures (1 + 6 skipped); `npm test` 244 tests, 240 pass, 4 skipped (the recordings are not in that checkout), 0 fail; the app builds unsigned with the extension; the picker flow
