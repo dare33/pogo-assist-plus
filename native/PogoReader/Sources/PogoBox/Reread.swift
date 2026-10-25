@@ -57,7 +57,7 @@ extension BoxLibrary {
     /// Save the new read: a new box version (the earlier box plus the re-read scan) and the scan's `lastReread`.
     @discardableResult
     public func commitReread(_ plan: RereadPlan, entries: [BoxEntry], account: String, expectedCurrentSeq: Int?? = nil, now: Date = Date()) throws -> BoxSnapshot {
-        let snap = try commit(account: account, entries: entries, reason: .scan, note: "Read again: \(plan.scan.kind == .full ? "full scan" : "add and update"), \(entries.count) Pokémon",
+        let snap = try commit(account: account, entries: entries, reason: .scan, note: "Read again: \(ScanPass(stored: plan.scan.pass).map { $0.passName.lowercased() } ?? (plan.scan.kind == .full ? "full scan" : "add and update")), \(entries.count) Pokémon",
                               scanId: plan.scan.id, scanKind: plan.scan.kind, scanDate: plan.scan.scanDate, expectedCurrentSeq: expectedCurrentSeq, now: now)
         try store.markReread(account: account, id: plan.scan.id, at: now)
         return snap

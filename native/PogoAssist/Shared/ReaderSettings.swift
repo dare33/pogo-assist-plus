@@ -38,6 +38,11 @@ enum ReaderSettings {
         get { defaults?.string(forKey: "scanKind") }
         set { if let newValue { defaults?.set(newValue, forKey: "scanKind") } else { defaults?.removeObject(forKey: "scanKind") } }
     }
+    /// The filtered pass chosen ("shadow", "purified", "dynamax", "gigantamax"), captured with the kind into `BroadcastState.pass`; absent for an ordinary scan.
+    static var scanPass: String? {
+        get { defaults?.string(forKey: "scanPass") }
+        set { if let newValue { defaults?.set(newValue, forKey: "scanPass") } else { defaults?.removeObject(forKey: "scanPass") } }
+    }
     /// The command sizes ("Pogo scan N"), from the app's one table, for the pause notification's suggested command.
     static var commandSizes: [Int] {
         get { (defaults?.array(forKey: "commandSizes") as? [Int]) ?? [] }

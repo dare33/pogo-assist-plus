@@ -167,7 +167,7 @@ struct ScanView: View {
         }
         .fullScreenCover(isPresented: Binding(get: { walkSteps != nil }, set: { if !$0 { walkSteps = nil } })) {
             if let steps = walkSteps {
-                ScanWalkthrough(steps: steps, words: words, takesBack: !model.game.failed, hiddenRaw: $hiddenRaw) { walkSteps = nil }
+                ScanWalkthrough(steps: steps, words: words, pass: model.scanPass, takesBack: !model.game.failed, hiddenRaw: $hiddenRaw) { walkSteps = nil }
                     .environment(\.accent, accent)
             }
         }
@@ -300,9 +300,16 @@ struct ScanView: View {
     private var steps: some View {
         let byHand = words == .byHand
         return VStack(alignment: .leading, spacing: 10) {
-            step("1", step1Text)
-                .accessibilityAction(named: "Show the appraisal screen") { showAppraisal = true }
-                .accessibilityIdentifier("scan-step-1")
+            if let pass = model.scanPass {
+                // A filtered pass: the search first, then the first Pokémon it shows. The player pastes the word into the game's storage search themselves.
+                step("1", Text(PassWording.searchInstruction(pass) + " " + PassWording.openFirst))
+                    .accessibilityIdentifier("scan-step-1")
+                CopySearchRow(pass: pass)
+            } else {
+                step("1", step1Text)
+                    .accessibilityAction(named: "Show the appraisal screen") { showAppraisal = true }
+                    .accessibilityIdentifier("scan-step-1")
+            }
             if !byHand { step("2", Text("Make sure Voice Control is on. Not sure? Say \"Wake up\".")) }
             step("3", Text("Choose your scan options above."))
             // "We'll take you back to the game" only while opening the game has not failed (`GameOpener`); otherwise the person is told to switch. One text, in the step's own font (Greg, 7 Oct 2026).
@@ -312,7 +319,8 @@ struct ScanView: View {
             } else {
                 step("5", Text("Back in the game, say ") + Text("\"\(words.spoken)\"").bold().foregroundStyle(accent.ink) + Text("."))
             }
-            step("6", Text("When the scan ends, come back to Pogo Assist to meet your new Pokémon or export your collection."))
+            step("6", Text(model.scanPass.map(PassWording.lastStep) ?? "When the scan ends, come back to Pogo Assist to meet your new Pokémon or export your collection."))
+                .accessibilityIdentifier("scan-step-6")
         }
         // Nothing is opened outside the app: the only link is step 1's.
         .environment(\.openURL, OpenURLAction { url in
