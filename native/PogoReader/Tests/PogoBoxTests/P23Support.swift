@@ -43,11 +43,12 @@ enum P23 {
     }
 
     static func ctx(builds: [BoxAdvice.Build] = [], gaps: [BoxAdvice.Gap] = [], entries: [BoxEntry] = [], table t: TierTable = table([]), today: String = "2026-10-25",
-                    rotation: [HubData.RotationRow]? = nil, leagues: [String: [String: BoxAdvice.LeagueRating]] = [:]) -> HubContext {
+                    rotation: [HubData.RotationRow]? = nil, leagues: [String: [String: BoxAdvice.LeagueRating]] = [:], edit: ((inout HubData) -> Void)? = nil) -> HubContext {
         var a = BoxAdvice(builds: builds, gaps: gaps)
         a.leagues = leagues
         var h = hub
         if let rotation { h.rotation = rotation }
+        edit?(&h)
         return HubContext(advice: a, entries: entries, gm: gm, hub: h, table: t, today: today)
     }
 
