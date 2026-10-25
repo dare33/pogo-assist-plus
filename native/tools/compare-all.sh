@@ -14,7 +14,7 @@ if [ $# -eq 0 ]; then set -- $(cd "$F" && ls -d */ | tr -d / | grep -v '^_out$')
 
 git log --oneline -1
 (cd PogoReader && swift test 2>&1 | grep -E "Executed .* tests" | tail -1 && swift build -c release 2>&1 | tail -1)
-xcodebuild -project PogoAssist/PogoAssist.xcodeproj -scheme PogoAssist -sdk iphonesimulator \
+tools/xcb.sh main -project PogoAssist/PogoAssist.xcodeproj -scheme PogoAssist -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -E "BUILD (SUCCEEDED|FAILED)|error:" | head -5
 
 for c in "$@"; do
