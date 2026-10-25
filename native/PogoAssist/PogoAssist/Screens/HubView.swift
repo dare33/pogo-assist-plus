@@ -2,13 +2,15 @@ import SwiftUI
 import UIKit
 import PogoBox
 
-/// The Pogo Hub, the second tab (design handoff section 4): what is on in Pokémon GO, then six tiles that open the type screens
-/// (`HubTypeScreen`). It replaces the old Next list, whose builds now live on the Everything screen.
+/// The Pogo Hub, the second tab (design handoff section 4): what is on in Pokémon GO, then six tiles that open the Collection and the squad screens
+/// (`HubTypeScreen`). It replaces the old Next list, whose builds now live on the Collection lists screen.
 struct HubView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var rankingInfo = false
+    /// Owned and released species for the Collection tile's chip, worked out when the box changes (the rule is `HubCollection.overview`).
+    @State private var species: (owned: Int, released: Int)?
     /// False while another tab is showing. The two tabs stay alive under each other, and a menu (the account and More buttons) stays
     /// reachable by accessibility even from a hidden stack, so the header's menus are left out until this tab is the one shown.
     var active = true
@@ -20,7 +22,7 @@ struct HubView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     eventsHeader
                     eventsStrip
-                    whatNext
+                    squadsAndCollection
                     if rankingInfo { RankingExplainer(identifier: "hub-ranking-explainer") }
                     adviceLine
                     tiles
@@ -33,26 +35,26 @@ struct HubView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
         .navigationDestination(for: ContentType.self) { HubTypeDestination(type: $0) }
+        .task(id: "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)") {
+            guard !model.entries.isEmpty, let gm = try? GameMaster.bundled() else { species = nil; return }
+            let o = HubCollection.overview(entries: model.entries, gm: gm)
+            species = (o.owned, o.released)
+        }
     }
 
     // MARK: header
 
-    /// The account name, centred in the accent's ink (it opens the account menu), and the More circle at the trailing edge.
+    /// The shared tab header (Greg, 26 Oct 2026): the account name small on the left with its chevron (it opens the account menu), "Pogo Hub" centred, the More circle.
     private var header: some View {
-        ZStack {
-            if active {
-                AccountMenu(hub: true).padding(.horizontal, 56)
-                HStack { Spacer(); MoreButton() }
-            }
+        TabHeader(title: "Pogo Hub", showsAccount: active) {
+            if active { MoreButton() }
         }
-        .padding(.horizontal, Theme.Space.screen)
-        .frame(minHeight: 52)
     }
 
     // MARK: events
 
     private var eventsHeader: some View {
-        HubHeaderLine("HAPPENING IN POKÉMON GO") {
+        HubHeaderLine("HAPPENING NOW IN POKÉMON GO") {
             Link(destination: URL(string: "https://pokemongo.com/news")!) {
                 Text("All news ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).frame(minHeight: 44)
             }
@@ -101,17 +103,17 @@ struct HubView: View {
         }
     }
 
-    // MARK: what next
+    // MARK: squads and collection
 
-    private var whatNext: some View {
+    private var squadsAndCollection: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
-                Text("WHAT NEXT").modifier(HubHeaderStyle())
+                Text("SQUADS AND COLLECTION").modifier(HubHeaderStyle())
                 Spacer(minLength: 8)
                 RankingSwitch(infoOpen: $rankingInfo, identifier: "hub-ranking")
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("WHAT NEXT").modifier(HubHeaderStyle())
+                Text("SQUADS AND COLLECTION").modifier(HubHeaderStyle())
                 RankingSwitch(infoOpen: $rankingInfo, identifier: "hub-ranking")
             }
         }
@@ -133,6 +135,17 @@ struct HubView: View {
 
     // MARK: tiles
 
+    /// The Collection tile's chip is owned/released species ("347/951"); the others count their builds, once the advice is ready.
+    private func tile(_ type: ContentType, builds: [BoxAdvice.Build]?) -> HubTile {
+        if type == .everything {
+            guard let species else { return HubTile(type: type, chip: nil, spoken: nil) }
+            return HubTile(type: type, chip: "\(species.owned)/\(species.released)", spoken: "\(species.owned) of \(species.released) species")
+        }
+        guard let builds else { return HubTile(type: type, chip: nil, spoken: nil) }
+        let n = HubModel.count(builds, for: type.key)
+        return HubTile(type: type, chip: String(n), spoken: buildsText(n))
+    }
+
     private var tiles: some View {
         let per = typeSize >= .accessibility1 ? 1 : 2
         var builds: [BoxAdvice.Build]?
@@ -143,7 +156,7 @@ struct HubView: View {
             ForEach(Array(stride(from: 0, to: types.count, by: per)), id: \.self) { start in
                 GridRow {
                     ForEach(types[start..<min(start + per, types.count)]) { type in
-                        NavigationLink(value: type) { HubTile(type: type, count: builds.map { HubModel.count($0, for: type.key) }) }
+                        NavigationLink(value: type) { tile(type, builds: builds) }
                             .buttonStyle(PressStyle())
                             .accessibilityIdentifier("hub-tile-\(type.rawValue)")
                     }
@@ -159,21 +172,9 @@ extension ContentType {
     /// The advisor areas this screen is for (`HubModel` counts and filters by it).
     var key: ContentKey { ContentKey(rawValue: rawValue) ?? .everything }
 
-    /// SF Symbols that exist on iOS 17 (first shipped: line.3.horizontal 15, diamond 14, building.columns 14, sparkle 14, figure.fencing 16, sparkles 13).
-    var glyph: String {
-        switch self {
-        case .everything: return "line.3.horizontal"
-        case .raids: return "diamond"
-        case .gym: return "building.columns"
-        case .rocket: return "sparkle"
-        case .pvp: return "figure.fencing"
-        case .max: return "sparkles"
-        }
-    }
-
     var blurb: String {
         switch self {
-        case .everything: return "Every build, best first"
+        case .everything: return "Dex, showcase and builds"
         case .raids: return "Attackers for raid bosses"
         case .gym: return "Defenders and gym attackers"
         case .rocket: return "Counters for grunts and leaders"
@@ -188,18 +189,19 @@ func buildsText(_ n: Int) -> String { "\(n) \(n == 1 ? "build" : "builds")" }
 
 struct HubTile: View {
     let type: ContentType
-    /// nil while the advice is not ready: no chip.
-    let count: Int?
+    /// The chip's text; nil while what it counts is not ready: no chip.
+    let chip: String?
+    /// What the chip says aloud ("38 builds", "347 of 951 species").
+    let spoken: String?
     @Environment(\.accent) private var accent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
-                Image(systemName: type.glyph).font(.figtree(22, .semibold, relativeTo: .title2)).foregroundStyle(type.ink(accent))
-                    .accessibilityHidden(true)
+                HubTileGlyph(type: type)
                 Spacer(minLength: 8)
-                if let count {
-                    Text(verbatim: String(count)).font(.figtree(12, .heavy, relativeTo: .caption)).monospacedDigit().foregroundStyle(Theme.muted)
+                if let chip {
+                    Text(verbatim: chip).font(.figtree(12, .heavy, relativeTo: .caption)).monospacedDigit().foregroundStyle(Theme.muted)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Theme.surface2, in: Capsule())
                         .accessibilityHidden(true)
@@ -215,7 +217,7 @@ struct HubTile: View {
         .panelShadow()
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(count.map { "\(type.title), \(buildsText($0)). \(type.blurb)" } ?? "\(type.title). \(type.blurb)")
+        .accessibilityLabel(spoken.map { "\(type.title), \($0). \(type.blurb)" } ?? "\(type.title). \(type.blurb)")
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -237,10 +239,17 @@ struct HubHeaderLine<Trailing: View>: View {
     init(_ text: String, @ViewBuilder trailing: () -> Trailing) { self.text = text; self.trailing = trailing() }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(text).modifier(HubHeaderStyle())
-            Spacer(minLength: 8)
-            trailing
+        // The link drops under the heading when both do not fit on a line (accessibility text sizes), rather than the heading breaking mid-word.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                Text(text).modifier(HubHeaderStyle())
+                Spacer(minLength: 8)
+                trailing
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(text).modifier(HubHeaderStyle())
+                trailing
+            }
         }
     }
 }
@@ -249,7 +258,7 @@ extension HubHeaderLine where Trailing == EmptyView {
     init(_ text: String) { self.init(text) { EmptyView() } }
 }
 
-/// A card of the Hub's strips (the events, the Everything screen's headlines): 236 pt wide, radius 22, padding 14 by 16, at least 112 pt
+/// A card of the Hub's strips (the events, the Collection lists' headlines): 236 pt wide, radius 22, padding 14 by 16, at least 112 pt
 /// tall, white text on `base`, the type's fixed light-mode ink (`ContentType.solid`, 5.28:1 or better in white). In light mode a gradient
 /// that darkens towards the far corner, in dark mode the plain solid; the same colour in both, because the dark-mode ink values are pale
 /// and white on a 30% wash of them fell under 4.5:1. The pill is black at 22% (white text 7.6:1 or better; the design's white at 22%

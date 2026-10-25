@@ -1,10 +1,12 @@
 import XCTest
 
-/// The Pogo Hub tab and its Everything screen, driven with the sample scan: the six tiles, the stardust card and the lists under it,
-/// then the Hub in dark and at the first accessibility text size. Screenshots go to the folder in POGO_SCREENS. Not part of `swift test`.
+/// The Pogo Hub tab and the Collection screens, driven with the sample scan: the header and six tiles, the Collection, and the Collection lists with the stardust
+/// card, then each in dark and at the first accessibility text size. Screenshots go to the folder in POGO_SCREENS. Not part of `swift test`.
 final class HubScreensTests: XCTestCase {
-    private func shot(_ name: String) {
-        let dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
+    /// `folder` is a sub-folder of POGO_SCREENS (the design passes export one folder per screen: out/screens/hub-tab/).
+    private func shot(_ name: String, in folder: String? = nil) {
+        var dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
+        if let folder { dir = (dir as NSString).appendingPathComponent(folder) }
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
     }
@@ -47,20 +49,18 @@ final class HubScreensTests: XCTestCase {
         populate(app)
         openHub(app)
 
-        // The tiles; the counts arrive with the advice, so the Everything tile's label gains "N builds".
+        // The tiles; the build counts arrive with the advice, so the Raids tile's label gains "N builds".
         for t in tiles { XCTAssertTrue(app.buttons["hub-tile-\(t)"].exists, "tile \(t)") }
         let everything = app.buttons["hub-tile-everything"]
-        let counted = NSPredicate(format: "label CONTAINS 'builds' OR label CONTAINS '1 build'")
-        expectation(for: counted, evaluatedWith: everything)
+        let counted = NSPredicate(format: "label CONTAINS 'build'")
+        expectation(for: counted, evaluatedWith: app.buttons["hub-tile-raids"])
         waitForExpectations(timeout: 60)
-        XCTAssertTrue(everything.label.contains("build"), everything.label)
         // Every tile carries its count once the advice is in.
         for t in tiles {
             let label = app.buttons["hub-tile-\(t)"].label
             XCTAssertNotNil(label.rangeOfCharacter(from: .decimalDigits), "tile \(t) has no count: \(label)")
         }
-        let total = everything.label.components(separatedBy: CharacterSet.decimalDigits.inverted).first { !$0.isEmpty } ?? "?"
-        XCTAssertTrue(app.staticTexts["HAPPENING IN POKÉMON GO"].exists)
+        XCTAssertTrue(app.staticTexts["HAPPENING NOW IN POKÉMON GO"].exists)
         XCTAssertTrue(app.buttons["hub-ranking-info"].exists)
         sleep(1)
         shot("hub-01-light-hub")
@@ -89,6 +89,7 @@ final class HubScreensTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(rows.count, 1, "at least one build fits")
         let figures = (0..<rows.count).map { (rows.element(boundBy: $0).value as? String) ?? "" }
         XCTAssertTrue(figures.contains { $0.lowercased().contains("dust") }, "a fitting build costs dust, not only Free: \(figures)")
+        let total = app.buttons["hub-show-all"].label.components(separatedBy: CharacterSet.decimalDigits.inverted).first { !$0.isEmpty } ?? "?"
         XCTAssertEqual(app.buttons["hub-show-all"].label, "SHOW ALL \(total) ›")
         sleep(1)
         shot("hub-03-light-everything-fit")
@@ -129,5 +130,71 @@ final class HubScreensTests: XCTestCase {
         sleep(1)
         shot("hub-08-ax1-everything")
         large.terminate()
+    }
+
+    // MARK: Hub tab (design pass 2)
+
+    func testHubHeaderAndTiles() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        openHub(app)
+
+        // The shared tab header: the account name small on the left (it opens the account menu), "Pogo Hub" centred, the More circle.
+        let title = app.staticTexts.matching(identifier: "tab-title").matching(NSPredicate(format: "label == 'Pogo Hub'")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "the header's title")
+        let account = app.buttons["Account, Greg main"]
+        XCTAssertTrue(account.exists, "the account name opens the account menu")
+        XCTAssertTrue(app.buttons["More"].exists)
+        XCTAssertLessThan(account.frame.midX, title.frame.midX, "the account name is on the left of the title")
+        XCTAssertEqual(title.frame.midX, app.frame.midX, accuracy: 4, "the title is centred")
+
+        XCTAssertTrue(app.staticTexts["HAPPENING NOW IN POKÉMON GO"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["hub-all-news"].exists)
+        XCTAssertTrue(app.staticTexts["SQUADS AND COLLECTION"].exists)
+        XCTAssertFalse(app.staticTexts["WHAT NEXT"].exists)
+        XCTAssertTrue(app.buttons["hub-ranking-info"].exists)
+
+        // Six tiles with their titles; the Collection tile's chip reads owned of released species.
+        let titles = ["everything": "Collection", "raids": "Raids", "gym": "Gym battles", "rocket": "Team Rocket", "pvp": "PvP leagues", "max": "Max battles"]
+        for t in tiles {
+            let tile = app.buttons["hub-tile-\(t)"]
+            XCTAssertTrue(tile.exists, "tile \(t)")
+            XCTAssertTrue(tile.label.hasPrefix(titles[t] ?? "?"), tile.label)
+        }
+        let collection = app.buttons["hub-tile-everything"]
+        let species = NSPredicate(format: "label MATCHES %@", "^Collection, [0-9]+ of [0-9]+ species\\..*")
+        expectation(for: species, evaluatedWith: collection)
+        waitForExpectations(timeout: 30)
+        XCTAssertFalse(app.buttons["hub-tile-everything"].label.contains("Everything"))
+        // The others carry their build counts once the advice is in.
+        expectation(for: NSPredicate(format: "label CONTAINS 'build'"), evaluatedWith: app.buttons["hub-tile-max"])
+        waitForExpectations(timeout: 60)
+    }
+
+    func testHubTabScreenshots() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        openHub(app)
+        expectation(for: NSPredicate(format: "label CONTAINS 'build'"), evaluatedWith: app.buttons["hub-tile-max"])
+        waitForExpectations(timeout: 60)
+        sleep(1)
+        shot("light-default", in: "hub-tab")
+        app.terminate()
+        for (name, args) in [("dark-default", ["-appearance", "dark"]),
+                             ("light-ax5", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]),
+                             ("dark-ax5", ["-appearance", "dark", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            let again = XCUIApplication()
+            again.launchArguments = args
+            again.launch()
+            openHub(again)
+            sleep(2)
+            shot(name, in: "hub-tab")
+            if name.hasSuffix("ax5") { var n = 0; while !again.buttons["hub-tile-max"].isHittable && n < 25 { again.swipeUp(velocity: .fast); n += 1 }; sleep(1); shot(name + "-tiles", in: "hub-tab") }
+            again.terminate()
+        }
     }
 }

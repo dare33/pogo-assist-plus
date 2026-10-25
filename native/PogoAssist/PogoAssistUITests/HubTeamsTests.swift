@@ -54,7 +54,7 @@ final class HubTeamsTests: XCTestCase {
         openHub(app)
         // The tiles carry the counts once the advice is ready; the screens read the same advice.
         let counted = NSPredicate(format: "label CONTAINS 'build'")
-        expectation(for: counted, evaluatedWith: app.buttons["hub-tile-everything"])
+        expectation(for: counted, evaluatedWith: app.buttons["hub-tile-gym"])
         waitForExpectations(timeout: 60)
 
         // Gym: the slots panel, then TOP AVAILABLE.

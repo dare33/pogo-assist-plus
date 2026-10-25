@@ -109,6 +109,7 @@
 		CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
 		D1C92751EA85BD6C6A90E779 /* HubTypeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B79BED1C304CA088B36F393B /* HubTypeScreen.swift */; };
 		D4D21195EE5DE09BDCAE9BE0 /* ReviewNotSeen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61B527C762D4C808D507072 /* ReviewNotSeen.swift */; };
+		D8B937A2DA7C8B48D7857059 /* HubTileGlyph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409AC89354302BAAD6D9F6F6 /* HubTileGlyph.swift */; };
 		DA1ACC1319440999A12FF8BB /* PogoShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7799DA33C637F5569E469B10 /* PogoShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DB7F0F261F579F598E2F94B8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9A7F76950DF8ED2D50218072 /* PrivacyInfo.xcprivacy */; };
 		DF232EF5A04B4ADA4B79527B /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6261F1BB3C75D905222CC61 /* Typography.swift */; };
@@ -211,6 +212,7 @@
 		3D753F1DDCCB14FE57185CE0 /* DesignGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignGallery.swift; sourceTree = "<group>"; };
 		3EF2F19209145E4C035F933E /* ReviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSupport.swift; sourceTree = "<group>"; };
 		3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanOptionsPanel.swift; sourceTree = "<group>"; };
+		409AC89354302BAAD6D9F6F6 /* HubTileGlyph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubTileGlyph.swift; sourceTree = "<group>"; };
 		444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxScreensTests.swift; sourceTree = "<group>"; };
 		45CBC04B3E82BBE8BB3DC034 /* BoxExportFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxExportFile.swift; sourceTree = "<group>"; };
 		485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */ = {isa = PBXFileReference; path = "sample-partial-cp.replay.jsonl"; sourceTree = "<group>"; };
@@ -469,6 +471,7 @@
 				3D753F1DDCCB14FE57185CE0 /* DesignGallery.swift */,
 				675959CE1C1C65926303D638 /* DesignPieces.swift */,
 				943D02DD923AE19E5F63128C /* FloatingTabBar.swift */,
+				409AC89354302BAAD6D9F6F6 /* HubTileGlyph.swift */,
 				02BD2550786F0D85E97D0548 /* PokemonPageParts.swift */,
 				A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */,
 				1BB1A15D6F733EEE0586D675 /* RankingControls.swift */,
@@ -818,6 +821,7 @@
 				3BC4718FD1007EC5ED97FD71 /* HubPvPView.swift in Sources */,
 				15DF09FE6C1E2A69EDBF9B42 /* HubRaidsView.swift in Sources */,
 				A1DCA48DF505E8EABD8056BB /* HubRocketView.swift in Sources */,
+				D8B937A2DA7C8B48D7857059 /* HubTileGlyph.swift in Sources */,
 				D1C92751EA85BD6C6A90E779 /* HubTypeScreen.swift in Sources */,
 				357BCB74EA69C6D002BF0A25 /* HubView.swift in Sources */,
 				B240DFB4A51535986CADBF9D /* LeaguesPanel.swift in Sources */,

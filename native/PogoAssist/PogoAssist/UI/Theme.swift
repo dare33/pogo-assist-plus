@@ -121,13 +121,14 @@ enum League: String, CaseIterable, Identifiable {
     }
 }
 
-/// The kinds of content on the Pogo Hub. Each has an ink and a tint; `.everything` follows the accent, so both take it.
+/// The kinds of content on the Pogo Hub. Each has an ink and a tint; `.everything` (the Collection: the case and raw value stay because the events data ties to
+/// "everything" and the identifiers hang on it) follows the accent, so both take it.
 enum ContentType: String, CaseIterable, Identifiable {
     case everything, raids, gym, rocket, pvp, max
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .everything: return "Everything"
+        case .everything: return "Collection"
         case .raids: return "Raids"
         case .gym: return "Gym battles"
         case .rocket: return "Team Rocket"
