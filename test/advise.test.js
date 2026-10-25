@@ -189,25 +189,25 @@ test('a copy above the only area\'s target level has no target level and nothing
 });
 
 // A synthetic copy: the fields analyseBox reads from an import.
-const copy = (name, o = {}) => ({ source: 'pokegenie', index: 0, name, form: '', gender: '', cp: 1500, hp: 120, ivs: { atk: 15, def: 15, hp: 15 }, ivPercent: 100,
+const sCopy = (name, o = {}) => ({ source: 'pokegenie', index: 0, name, form: '', gender: '', cp: 1500, hp: 120, ivs: { atk: 15, def: 15, hp: 15 }, ivPercent: 100,
   levelMin: 20, levelMax: 20, level: 20, moves: [], shadow: false, purified: false, lucky: false, favorite: false, dust: 2500, scanDate: '2026-10-24 00:00', ...o });
 const hitsOf = (p) => analyseBox([p], ctx).pokemon[0].hits.filter((h) => h.kind === 'tier');
 
 test('a Shadow copy is credited with the plain species\' raid and Rocket entries, not its gym or max ones', () => {
-  const sh = hitsOf(copy('Swampert', { shadow: true }));
+  const sh = hitsOf(sCopy('Swampert', { shadow: true }));
   assert.ok(sh.some((h) => h.area === 'rocket' && h.tier === 'S' && h.targetId === 'swampert_shadow'), 'Shadow Swampert Rocket S');
-  const b = analyseBox([copy('Swampert', { shadow: true })], ctx).builds.find((x) => x.targetId === 'swampert_shadow');
+  const b = analyseBox([sCopy('Swampert', { shadow: true })], ctx).builds.find((x) => x.targetId === 'swampert_shadow');
   assert.ok(b && b.areas.includes('rocket'));
-  const snorlax = hitsOf(copy('Snorlax', { shadow: true }));
+  const snorlax = hitsOf(sCopy('Snorlax', { shadow: true }));
   assert.ok(!snorlax.some((h) => h.area === 'gym' || h.area === 'max'), 'no gym or max hit for a Shadow Snorlax');
   assert.ok(snorlax.some((h) => h.targetId === 'snorlax_shadow' && h.area === 'ul'), 'its own _shadow entry still counts');
 });
 
 test('a plain copy is not changed by the Shadow rule, and an area/section the _shadow id has is not doubled', () => {
-  const plain = hitsOf(copy('Swampert')).map((h) => `${h.area}/${h.tier}/${h.targetId}`).sort();
+  const plain = hitsOf(sCopy('Swampert')).map((h) => `${h.area}/${h.tier}/${h.targetId}`).sort();
   assert.deepEqual(plain, ['raids/B/swampert', 'rocket/S/swampert']);
   // Mewtwo has raids/Psychic/A on both ids: the Shadow copy carries it once, from the _shadow entry; the plain-only Rocket entry is added.
-  const mt = hitsOf(copy('Mewtwo', { shadow: true }));
+  const mt = hitsOf(sCopy('Mewtwo', { shadow: true }));
   assert.equal(mt.filter((h) => h.area === 'raids' && h.section === 'Psychic').length, 1);
   assert.ok(mt.every((h) => h.targetId === 'mewtwo_shadow'));
   assert.ok(mt.some((h) => h.area === 'rocket'));
@@ -218,65 +218,67 @@ test('a plain copy is not changed by the Shadow rule, and an area/section the _s
 test('the dedupe is on area and section, not tier: a plain entry of another tier is not added next to the _shadow one', () => {
   // Rhyperior: raids/Rock is S on rhyperior_shadow and B on rhyperior. The Shadow copy carries the S one only; the plain Ground raid and
   // Rocket entries (no _shadow counterpart) are still added. Mamoswine: raids/Ice is A on the _shadow id and B on the plain one.
-  const rh = hitsOf(copy('Rhyperior', { shadow: true }));
+  const rh = hitsOf(sCopy('Rhyperior', { shadow: true }));
   assert.deepEqual(rh.filter((h) => h.area === 'raids' && h.section === 'Rock').map((h) => h.tier), ['S']);
   assert.ok(rh.some((h) => h.area === 'raids' && h.section === 'Ground' && h.tier === 'B'));
   assert.ok(rh.some((h) => h.area === 'rocket'));
-  const mam = hitsOf(copy('Mamoswine', { shadow: true }));
+  const mam = hitsOf(sCopy('Mamoswine', { shadow: true }));
   assert.deepEqual(mam.filter((h) => h.area === 'raids' && h.section === 'Ice').map((h) => h.tier), ['A']);
 });
 
 test('a copy named Shadow without the flag gets the same credit', () => {
-  assert.ok(hitsOf(copy('Shadow Swampert')).some((h) => h.area === 'rocket' && h.tier === 'S' && h.targetId === 'swampert_shadow'));
+  assert.ok(hitsOf(sCopy('Shadow Swampert')).some((h) => h.area === 'rocket' && h.tier === 'S' && h.targetId === 'swampert_shadow'));
 });
 
 test('Mega targets are gated on the resolver\'s Shadow flag or the _shadow id: a Shadow by name or by flag gets no Mega credit, a plain copy still does', () => {
   // Charizard: Mega Charizard Y is a raids/Fire A entry; plain Charizard has a Rocket A entry; charizard_shadow has none of its own.
-  const plain = hitsOf(copy('Charizard'));
+  const plain = hitsOf(sCopy('Charizard'));
   assert.ok(plain.some((h) => h.viaMega === 'charizard_mega_y' && h.area === 'raids' && h.targetId === 'charizard'), 'plain Charizard reaches Mega Charizard Y');
-  const named = hitsOf(copy('Shadow Charizard'));
+  const named = hitsOf(sCopy('Shadow Charizard'));
   assert.ok(named.length, 'the named copy still has hits');
   assert.ok(!named.some((h) => h.viaMega), 'a copy named Shadow Charizard with the flag false gets no Mega hit (it used to)');
   assert.ok(named.every((h) => h.targetId === 'charizard_shadow'));
   assert.ok(named.some((h) => h.area === 'rocket' && h.tier === 'A'), 'and keeps the plain Rocket credit');
-  const flagged = hitsOf(copy('Charizard', { shadow: true }));
+  const flagged = hitsOf(sCopy('Charizard', { shadow: true }));
   assert.ok(!flagged.some((h) => h.viaMega), 'a flagged Shadow still gets no Mega hit');
   assert.deepEqual(flagged.map((h) => `${h.area}/${h.tier}/${h.targetId}`).sort(), named.map((h) => `${h.area}/${h.tier}/${h.targetId}`).sort(), 'flag and name give the same hits');
 });
 
 test('Mega hits and Mega gaps agree: a name-only Shadow Charizard leaves Mega Charizard Y a gap, a plain one covers it', () => {
-  const named = analyseBox([copy('Shadow Charizard')], ctx);
+  const named = analyseBox([sCopy('Shadow Charizard')], ctx);
   assert.ok(!named.builds.some((b) => b.viaMega), 'no Mega build for the named Shadow');
   assert.ok(named.gaps.some((g) => g.speciesId === 'charizard_mega_y'), 'Mega Charizard Y (raids/Fire A) is a gap');
-  const plain = analyseBox([copy('Charizard')], ctx);
+  const plain = analyseBox([sCopy('Charizard')], ctx);
   assert.ok(plain.builds.some((b) => b.viaMega), 'plain Charizard has a Mega build');
   assert.ok(!plain.gaps.some((g) => g.speciesId === 'charizard_mega_y'), 'and no Mega gap');
   // An id-style name resolves to charizard_shadow with the resolver's flag false (its word match stops at the underscore): still a Shadow here.
-  const idStyle = analyseBox([copy('charizard_shadow')], ctx);
+  const idStyle = analyseBox([sCopy('charizard_shadow')], ctx);
   assert.equal(idStyle.pokemon[0].resolved.speciesId, 'charizard_shadow');
   assert.ok(!idStyle.builds.some((b) => b.viaMega), 'no Mega build for an id-style Shadow name');
   assert.ok(idStyle.gaps.some((g) => g.speciesId === 'charizard_mega_y'), 'Mega Charizard Y is a gap for it');
 });
 
 test('a Shadow flag on a species with no _shadow id still blocks the Mega, in hits and gaps (Lucario: Mega Lucario is raids/Fighting S)', () => {
-  const flagged = analyseBox([copy('Lucario', { shadow: true })], ctx);
+  const flagged = analyseBox([sCopy('Lucario', { shadow: true })], ctx);
   assert.equal(flagged.pokemon[0].resolved.speciesId, 'lucario', 'no lucario_shadow in the game master');
   assert.ok(!flagged.pokemon[0].hits.some((h) => h.viaMega), 'a flagged Lucario gets no Mega hit');
   assert.ok(flagged.gaps.some((g) => g.speciesId === 'lucario_mega'), 'Mega Lucario is a gap');
-  const plain = analyseBox([copy('Lucario')], ctx);
+  const plain = analyseBox([sCopy('Lucario')], ctx);
   assert.ok(plain.pokemon[0].hits.some((h) => h.viaMega === 'lucario_mega'), 'a plain Lucario has the Mega hit');
   assert.ok(!plain.gaps.some((g) => g.speciesId === 'lucario_mega'), 'and no Mega gap');
-  const both = analyseBox([copy('Lucario', { shadow: true }), copy('Lucario')], ctx);
+  const both = analyseBox([sCopy('Lucario', { shadow: true }), sCopy('Lucario')], ctx);
   assert.ok(!both.gaps.some((g) => g.speciesId === 'lucario_mega'), 'a plain copy beside the flagged one covers the Mega');
 });
 
 test('gaps: a Shadow covers its plain raid and Rocket entries but not its gym entry', () => {
-  const swampert = analyseBox([copy('Swampert', { shadow: true })], ctx).gaps;
+  const swampert = analyseBox([sCopy('Swampert', { shadow: true })], ctx).gaps;
   assert.ok(!swampert.some((g) => g.speciesId === 'swampert' && g.area === 'rocket'), 'no Rocket S gap for Swampert');
-  const snorlax = analyseBox([copy('Snorlax', { shadow: true })], ctx).gaps;
+  const snorlax = analyseBox([sCopy('Snorlax', { shadow: true })], ctx).gaps;
   assert.ok(snorlax.some((g) => g.speciesId === 'snorlax' && g.area === 'gym' && g.tier === 'S'), 'the gym S gap for Snorlax stays');
-  const plain = analyseBox([copy('Swampert')], ctx).gaps;
+  const plain = analyseBox([sCopy('Swampert')], ctx).gaps;
   assert.ok(!plain.some((g) => g.speciesId === 'swampert' && g.area === 'rocket'));
+});
+
 // ---- one copy, several builds (the Pokémon page's Advice panel lists every build a copy carries, best first) ----
 const copy = (name, level, ivs) => {
   const proto = box[0];
