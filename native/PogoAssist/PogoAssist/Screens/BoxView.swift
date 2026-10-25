@@ -230,7 +230,7 @@ struct BoxView: View {
                 LazyVStack(alignment: .leading, spacing: Theme.Space.panelGap) {
                     if let s = savedSummary { savedPanel(s) }
                     if sections.isEmpty {
-                        // An activity chip waits for the advice: until then nothing can be Strong or OK, which is not the same as no match. A failed advice says so.
+                        // An activity chip waits for the advice: until then nothing can be Top or Good, which is not the same as no match. A failed advice says so.
                         let isActivity: Bool = { if case .activity = chip { return true } else { return false } }()
                         Text(isActivity && insight == nil ? (adviceState == .failed ? "Advice could not be worked out" : "Working out advice…") : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
                     }
@@ -317,7 +317,7 @@ struct BoxView: View {
 
     // MARK: chips and sort
 
-    /// The activity filter: All, then Raids, Gym, Rocket, Great, Ultra, Master and Max (each in its colours), and Fixed by hand after them while the box has any hand
+    /// The activity filter: All, then Great, Ultra, Master, Raids, Gym, Rocket and Max (each in its colours; the order of `BoxInsight.Activity`), and Fixed by hand after them while the box has any hand
     /// corrections. "To check" moved to the badge in the count line. There is no "Not seen" chip: the saved box does not record which entries a Full scan saw but could
     /// not read ("On screen but not read", "Stationed"), so an old last-seen date cannot say "not seen".
     private var chips: some View {

@@ -173,7 +173,7 @@ struct LeaguesPanel: View {
         }
     }
 
-    /// The Strong / OK / Weak chip, drawn like the PICK chip: green for Strong, the same green lighter for OK (tint at half strength and a faded ink border, so it
+    /// The Top / Good / Weak chip, drawn like the PICK chip: green for Top, the same green lighter for Good (tint at half strength and a faded ink border, so it
     /// reads as a step down in the same hue; it was orange), or the muted off tone for Weak. It is only drawn here: the card is one
     /// accessibility element that hides its children, so the tap target is `worthButton`, laid over the chip's frame outside the card.
     private func worthTag(_ w: LeaguePanel.Worth) -> some View {

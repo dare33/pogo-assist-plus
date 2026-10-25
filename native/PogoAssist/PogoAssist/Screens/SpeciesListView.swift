@@ -35,7 +35,7 @@ struct SpeciesListView: View {
         return a.league.flatMap { copy.slot($0, pogoAssist: pogoAssist) } != nil ? .weak : nil
     }
 
-    /// Every copy that passes the search, best IVs first. Under an activity chip all of them stay, Strong then OK then Weak (each group still best IVs first), so the list
+    /// Every copy that passes the search, best IVs first. Under an activity chip all of them stay, Top then Good then Weak (each group still best IVs first), so the list
     /// reads as a ranking and the Weak copies are last.
     private var members: [Int] {
         let ms = index.members(of: route.title, query: route.query, chip: route.chip)
@@ -44,7 +44,7 @@ struct SpeciesListView: View {
         return ms.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
     }
 
-    /// "Moltres · 6", or under an activity or league chip with its advice "Moltres · 3 of 6 for Raids": the copies that are Strong or OK for it, of those listed. Both
+    /// "Moltres · 6", or under an activity or league chip with its advice "Moltres · 3 of 6 for Raids": the copies that are Top or Good for it, of those listed. Both
     /// numbers count the listed copies, so with a search on, the 6 is what the search keeps, not what the box holds.
     private func headerTitle(_ ms: [Int]) -> String {
         guard let a = activity, insight != nil else { return "\(route.title) · \(ms.count.formatted())" }
@@ -182,7 +182,7 @@ struct SpeciesListView: View {
         insight?.copies[it.id]?.line(a, pogoAssist: pogoAssist)
     }
 
-    /// The Strong / OK / Weak tag for the chosen activity, a button that opens its line (plain while Select mode is on, when a tap picks the row). `best` is the
+    /// The Top / Good / Weak tag for the chosen activity, a button that opens its line (plain while Select mode is on, when a tap picks the row). `best` is the
     /// merged "best as Tyranitar (Shadow)" when the copy is also the species' best for the same area. "Not rated" has no line to open, so it is plain text, not a button.
     @ViewBuilder private func statusTag(_ it: BoxIndex.Item, _ a: BoxInsight.Activity, _ w: LeaguePanel.Worth?, best: String?) -> some View {
         let spokenBest = best.map { ", " + $0 } ?? ""
@@ -238,10 +238,10 @@ struct SpeciesListView: View {
         let on = selecting && picked.contains(it.id)
         let ivs = it.ivs.map { "\($0) · \(it.pct ?? 0)%" } ?? "IVs not read"
         let best = bestTags(it)
-        // Under a chip with its advice every copy has a status tag (Strong, OK, Weak or Not rated). A "best for" tag for the same area is merged into it.
+        // Under a chip with its advice every copy has a status tag (Top, Good, Weak or Not rated). A "best for" tag for the same area is merged into it.
         let status: (BoxInsight.Activity, LeaguePanel.Worth?)? = insight == nil ? nil : activity.map { ($0, chipWorth(it.id)) }
         let shown = best.filter { t in status.map { area(t) != $0.0 } ?? true }
-        // The status tag and a "best for" tag of the same area are one chip: "RAIDS · OK · best as Tyranitar (Shadow)", "GL · Strong · best: Flareon 97.2%".
+        // The status tag and a "best for" tag of the same area are one chip: "RAIDS · Good · best as Tyranitar (Shadow)", "GL · Top · best: Flareon 97.2%".
         let mergedBest: String? = status.flatMap { insight?.bestText(of: it.id, title: route.title, $0.0, pogoAssist: pogoAssist) }
         var spoken = "\(it.title), \(it.cp > 0 ? "CP \(it.cp)" : "CP not known"), \(ivs)\(it.hasMega ? ", has a Mega form" : "")\(it.needsCheck ? ", to check" : "")\(it.fixed ? ", fixed by hand" : "")"
         // Select mode hides the tags from VoiceOver as separate elements, so the status is read with the row.
