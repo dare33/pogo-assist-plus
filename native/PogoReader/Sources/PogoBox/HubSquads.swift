@@ -81,6 +81,11 @@ public enum HubSquads {
         guard HubModel.needsSomething(b) else { return nil }
         var action = b.action.replacingOccurrences(of: " (Max needs a Dynamax copy)", with: "").replacingOccurrences(of: "; needs a Dynamax copy", with: "")
         action = action.replacingOccurrences(of: #"(to level [0-9.]+) \([^)]*\)"#, with: "$1", options: .regularExpression)
+        // Mid-sentence the steps after the first start in lower case ("... + second move"); "Community Day move" keeps its capitals.
+        let steps = action.components(separatedBy: " + ").enumerated().map { i, part -> String in
+            i > 0 && !part.hasPrefix("Community") ? part.prefix(1).lowercased() + part.dropFirst() : part
+        }
+        action = steps.joined(separator: " + ")
         return "Upgrade available: " + action.prefix(1).lowercased() + action.dropFirst()
     }
 

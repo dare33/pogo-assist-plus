@@ -161,9 +161,11 @@ public enum HubRaidsModel {
         return entries
     }
 
-    /// The attacking types one Raids entry stands for: its section when that is a type, else (a high-tier table with no type section) the species' own types.
-    static func entryTypes(_ e: TierTable.Entry, speciesTypes: [String]) -> [String] {
-        HubData.typeOrder.contains(e.section.lowercased()) ? [e.section.lowercased()] : speciesTypes
+    /// The attacking types one Raids entry stands for, agreeing with `raidTypes`: its section when that is a type; an entry that is not sectioned by a type
+    /// stands for the species' own types only when NO entry of `entries` is typed, and for nothing when some are.
+    static func entryTypes(_ e: TierTable.Entry, in entries: [TierTable.Entry], speciesTypes: [String]) -> [String] {
+        if HubData.typeOrder.contains(e.section.lowercased()) { return [e.section.lowercased()] }
+        return entries.contains { HubData.typeOrder.contains($0.section.lowercased()) } ? [] : speciesTypes
     }
 
     /// The types the entries count for: the typed sections; when none is typed, the species' own types; nothing without entries.

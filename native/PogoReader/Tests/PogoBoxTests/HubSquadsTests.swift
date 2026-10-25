@@ -169,13 +169,13 @@ final class HubSquadsTests: XCTestCase {
             s.saveEventSquad(saved, row: r, screen: .raids)
             s.saveEventSquad(saved, row: r, screen: .max)
         }
-        let pruned = s.pruned(today: "2026-10-25")
+        let pruned = s.pruned(today: "2026-10-25", rotation: [])
         XCTAssertNil(pruned.raids[SquadStore.eventKey(ended)])
         XCTAssertNotNil(pruned.raids[SquadStore.eventKey(lastDay)], "the last day still counts")
         XCTAssertNotNil(pruned.raids[SquadStore.eventKey(later)])
         XCTAssertEqual(pruned.max.count, 2)
-        XCTAssertEqual(s.pruned(today: "2027-01-01").raids.count, 0)
-        XCTAssertEqual(SquadStore().pruned(today: "2026-10-25"), SquadStore(), "an empty store stays empty")
+        XCTAssertEqual(s.pruned(today: "2027-01-01", rotation: []).raids.count, 0)
+        XCTAssertEqual(SquadStore().pruned(today: "2026-10-25", rotation: []), SquadStore(), "an empty store stays empty")
         XCTAssertEqual(pruned.eventSquad(ended, screen: .raids), SquadStore.Saved(slots: HubSquads.defaultRaidSlots()), "a dropped squad reads as the default")
     }
 
@@ -193,7 +193,7 @@ final class HubSquadsTests: XCTestCase {
         XCTAssertEqual(kept.eventSquad(r, screen: .raids).slots[2].pick, nil)
         XCTAssertTrue(kept.eventSquad(r, screen: .raids).isSet, "the set mark is the player's own and stays")
         // An empty slot refills with the suggestion: the filler sees no pick.
-        let filled = HubSquads.gymSquad(slots: kept.gym.slots, rows: [])
+        let filled = HubSquads.gymSquad(slots: kept.gym.slots, rows: [], placeable: P23.anyone)
         XCTAssertEqual(filled.map(\.chosen), [false, true, false, false, false, false])
         XCTAssertEqual(SquadStore().reconciled(boxIds: []), SquadStore(), "an empty box and an empty store")
         XCTAssertEqual(s.reconciled(boxIds: []).gym.slots.compactMap(\.pick), [], "an empty box empties every pick")
@@ -246,6 +246,6 @@ final class HubSquadsTests: XCTestCase {
         XCTAssertEqual(after.map(\.id), ["keep-me"], "the merge keeps the entry's id")
         var s = SquadStore()
         s.gym.choose("keep-me", at: 0)
-        XCTAssertEqual(s.refreshed(today: "2026-10-25", boxIds: Set(after.map(\.id))).gym.slots[0].pick, "keep-me")
+        XCTAssertEqual(s.refreshed(today: "2026-10-25", rotation: [], boxIds: Set(after.map(\.id))).gym.slots[0].pick, "keep-me")
     }
 }

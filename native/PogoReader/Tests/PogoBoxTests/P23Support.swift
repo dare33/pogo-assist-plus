@@ -5,6 +5,7 @@ import PogoReader
 /// Hand-made boxes, builds, tier tables and rotation rows for the pass 2 and pass 3 rule tests. The game master and the type chart are the bundled ones;
 /// everything else is built per test, so a rule is pinned on exactly the data it reads.
 enum P23 {
+    static let anyone: (String, String) -> Bool = { _, _ in true }
     static let gm = try! GameMaster.bundled()
     static let hub = try! HubData.bundled()
 

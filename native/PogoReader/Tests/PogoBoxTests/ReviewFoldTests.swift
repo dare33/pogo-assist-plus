@@ -138,7 +138,7 @@ final class ReviewFoldTests: XCTestCase {
         let copy = P23.entry("b", "blissey")
         let cards = A.maxCards(copy: copy, ctx: P23.ctx(entries: [copy], table: table)).cards
         XCTAssertEqual(cards.count, 1)
-        XCTAssertEqual(cards[0].tier, "S"); XCTAssertEqual(cards[0].roles, [.tank, .healer]); XCTAssertEqual(cards[0].roleText, "Tank and healer")
+        XCTAssertEqual(cards[0].tier, "S"); XCTAssertEqual(cards[0].roles, [.tank, .healer]); XCTAssertEqual(cards[0].roleText, "Tank · Healer", "the tables' own words, once each")
     }
 
     // MARK: F10 and F11
@@ -149,7 +149,7 @@ final class ReviewFoldTests: XCTestCase {
         XCTAssertEqual(HubSquads.upgradeLabel(max), "Upgrade available: power up to level 40")
         var two = P23.build("a", "vaporeon", areas: ["Raids"], built: false)
         two.steps = [.init(kind: "powerUp", toLevel: 35, areas: ["raids"]), .init(kind: "secondMove", certain: false)]
-        XCTAssertEqual(HubSquads.upgradeLabel(two), "Upgrade available: power up to level 35 + Second move (if it doesn't have it)")
+        XCTAssertEqual(HubSquads.upgradeLabel(two), "Upgrade available: power up to level 35 + second move (if it doesn't have it)")
         var only = max; only.steps = [.init(kind: "needsDynamaxCopy")]
         XCTAssertNil(HubSquads.upgradeLabel(only), "nothing but the Dynamax requirement: no upgrade work")
         XCTAssertTrue(HubTeams.isBuilt(only))

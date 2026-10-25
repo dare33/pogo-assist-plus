@@ -62,14 +62,14 @@ final class HubSquadsAreasTests: XCTestCase {
 
     func testSuggestedRaidSquadIsOneMegaThreeHeavyTwoBulky() {
         let ctx = P23.ctx(builds: raidBuilds(), table: raidTable())
-        let best = HubSquads.raidSquad(candidates: HubSquads.raidCandidates(row: fireBoss, mode: .best, ctx: ctx))
+        let best = HubSquads.raidSquad(candidates: HubSquads.raidCandidates(row: fireBoss, mode: .best, ctx: ctx), placeable: P23.anyone)
         XCTAssertEqual(best.map(\.role), ["Mega", "Heavy hitter", "Heavy hitter", "Heavy hitter", "Bulky hitter", "Bulky hitter"])
         XCTAssertEqual(best.map(\.entryId), ["e6", "e4", "e3", nil, "e5", "e1"], "two Heavy exist; the third slot stays empty")
-        let available = HubSquads.raidSquad(candidates: HubSquads.raidCandidates(row: fireBoss, mode: .available, ctx: ctx))
+        let available = HubSquads.raidSquad(candidates: HubSquads.raidCandidates(row: fireBoss, mode: .available, ctx: ctx), placeable: P23.anyone)
         XCTAssertEqual(available.map(\.entryId), [nil, "e4", "e3", nil, "e5", "e1"], "under Available the Mega slot is empty")
         // A pick the player made stays, and the suggestion skips that copy.
         let picked = HubSquads.raidSquad(slots: [SquadSlot(role: "Mega"), SquadSlot(role: "Heavy hitter"), SquadSlot(role: "Bulky hitter", pick: "e4")],
-                                         candidates: HubSquads.raidCandidates(row: fireBoss, mode: .best, ctx: ctx))
+                                         candidates: HubSquads.raidCandidates(row: fireBoss, mode: .best, ctx: ctx), placeable: P23.anyone)
         XCTAssertEqual(picked.map(\.entryId), ["e6", "e3", "e4"])
         XCTAssertEqual(picked.map(\.chosen), [false, false, true])
     }
@@ -78,7 +78,7 @@ final class HubSquadsAreasTests: XCTestCase {
         let ctx = P23.ctx(builds: raidBuilds(), table: raidTable())
         let noBoss = P23.row("2026-10-28", "2026-10-28", .raidHour, bosses: [])
         XCTAssertEqual(HubSquads.raidCandidates(row: noBoss, mode: .best, ctx: ctx), [])
-        XCTAssertTrue(HubSquads.raidSquad(candidates: []).allSatisfy { $0.entryId == nil })
+        XCTAssertTrue(HubSquads.raidSquad(candidates: [], placeable: P23.anyone).allSatisfy { $0.entryId == nil })
         XCTAssertEqual(HubSquads.raidCandidates(row: fireBoss, mode: .best, ctx: P23.ctx()), [], "an empty box")
     }
 
@@ -137,18 +137,18 @@ final class HubSquadsAreasTests: XCTestCase {
 
     func testSuggestedMaxSquadIsTankHealerAttackerThatHitsTheBoss() {
         let ctx = P23.ctx(builds: maxBuilds(), table: maxTable())
-        let squad = HubSquads.maxSquad(candidates: HubSquads.maxCandidates(row: fireBoss, mode: .best, ctx: ctx))
+        let squad = HubSquads.maxSquad(candidates: HubSquads.maxCandidates(row: fireBoss, mode: .best, ctx: ctx), placeable: P23.anyone)
         XCTAssertEqual(squad.map(\.role), ["Tank", "Healer", "Attacker"])
         XCTAssertEqual(squad.map(\.entryId), ["m0", "m6", "m2"], "Blissey tanks, so Chansey heals; Vaporeon attacks")
         // A boss no attacker hits: the first Attacker in the order.
         let steel = P23.row("2026-10-20", "2026-10-30", .maxMonday, bosses: [P23.boss("registeel", types: ["steel"])])
-        let none = HubSquads.maxSquad(candidates: HubSquads.maxCandidates(row: steel, mode: .best, ctx: ctx))
+        let none = HubSquads.maxSquad(candidates: HubSquads.maxCandidates(row: steel, mode: .best, ctx: ctx), placeable: P23.anyone)
         XCTAssertEqual(none.last?.entryId, "m2")
         // Order matters: a lower attacker that hits is preferred to a higher one that does not.
         let ghost = P23.row("2026-10-20", "2026-10-30", .maxMonday, bosses: [P23.boss("gengar", types: ["ghost", "poison"])])   // weak to ghost, dark, ground, psychic
         let g = HubSquads.maxCandidates(row: ghost, mode: .best, ctx: ctx)
-        XCTAssertEqual(HubSquads.maxSquad(candidates: g).last?.entryId, "m3", "Gengar (ghost) is the only attacker that hits")
-        XCTAssertEqual(HubSquads.maxSquad(candidates: []).map(\.entryId), [nil, nil, nil])
+        XCTAssertEqual(HubSquads.maxSquad(candidates: g, placeable: P23.anyone).last?.entryId, "m3", "Gengar (ghost) is the only attacker that hits")
+        XCTAssertEqual(HubSquads.maxSquad(candidates: [], placeable: P23.anyone).map(\.entryId), [nil, nil, nil])
     }
 
     func testMaxBuiltNeedsTheDynamaxMarkAndAvailableKeepsTheSpecies() {
@@ -247,12 +247,12 @@ final class HubSquadsAreasTests: XCTestCase {
 
     func testTheGymSquadIsSixSlotsFilledInOrder() {
         let rows = HubSquads.gymRows(mode: .available, ctx: gymFixture())
-        let squad = HubSquads.gymSquad(rows: rows)
+        let squad = HubSquads.gymSquad(rows: rows, placeable: P23.anyone)
         XCTAssertEqual(squad.map(\.entryId), ["b1", "s1", "s2", "s3", "l1", "r1"])
         var slots = HubSquads.defaultGymSlots()
         slots[0].pick = "r1"
-        XCTAssertEqual(HubSquads.gymSquad(slots: slots, rows: rows).map(\.entryId), ["r1", "b1", "s1", "s2", "s3", "l1"])
-        XCTAssertEqual(HubSquads.gymSquad(rows: Array(rows.prefix(2))).map(\.entryId), ["b1", "s1", nil, nil, nil, nil])
+        XCTAssertEqual(HubSquads.gymSquad(slots: slots, rows: rows, placeable: P23.anyone).map(\.entryId), ["r1", "b1", "s1", "s2", "s3", "l1"])
+        XCTAssertEqual(HubSquads.gymSquad(rows: Array(rows.prefix(2)), placeable: P23.anyone).map(\.entryId), ["b1", "s1", nil, nil, nil, nil])
         XCTAssertEqual(HubSquads.defaultGymSlots().count, 6)
     }
 
@@ -434,30 +434,30 @@ final class HubSquadsAreasTests: XCTestCase {
     func testSuggestedPvpSquadPicksByRoleThenBestUnused() {
         let ctx = P23.ctx(table: leagueTable(), leagues: leagueRatings())
         let c = HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: ctx)
-        let squad = HubSquads.pvpSquad(candidates: c)
+        let squad = HubSquads.pvpSquad(candidates: c, placeable: P23.anyone)
         XCTAssertEqual(squad.map(\.role), ["Lead", "Safe swap", "Closer"])
         XCTAssertEqual(squad.map(\.entryId), ["c0", "c1", "c4"], "Lead: Medicham; Safe swap: the best listed (Azumarill); Closer: Medicham is used, so Lapras, not the higher-scoring Registeel")
         XCTAssertEqual(squad.map(\.fallback), [false, false, false])
         // Nothing listed for Closer once Lapras is not a closer: the best unused candidate overall, marked as a fallback.
-        let noCloser = HubSquads.pvpSquad(candidates: HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: P23.ctx(table: leagueTable(closers: false), leagues: leagueRatings())))
+        let noCloser = HubSquads.pvpSquad(candidates: HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: P23.ctx(table: leagueTable(closers: false), leagues: leagueRatings())), placeable: P23.anyone)
         XCTAssertEqual(noCloser.map(\.entryId), ["c0", "c1", "c2"])
         XCTAssertEqual(noCloser.map(\.fallback), [false, false, true])
     }
 
     func testPvpWithNoRoleTextFallsBackToTheBestScoring() {
         let ctx = P23.ctx(table: P23.table([]), leagues: leagueRatings())
-        let squad = HubSquads.pvpSquad(candidates: HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: ctx))
+        let squad = HubSquads.pvpSquad(candidates: HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: ctx), placeable: P23.anyone)
         XCTAssertEqual(squad.map(\.entryId), ["c0", "c1", "c2"])
         XCTAssertEqual(squad.map(\.fallback), [true, true, true])
-        XCTAssertEqual(HubSquads.pvpSquad(candidates: []).map(\.entryId), [nil, nil, nil], "no candidate")
-        XCTAssertEqual(HubSquads.pvpSquad(candidates: Array(HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: ctx).prefix(2))).map(\.entryId), ["c0", "c1", nil], "fewer than three")
+        XCTAssertEqual(HubSquads.pvpSquad(candidates: [], placeable: P23.anyone).map(\.entryId), [nil, nil, nil], "no candidate")
+        XCTAssertEqual(HubSquads.pvpSquad(candidates: Array(HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: ctx).prefix(2)), placeable: P23.anyone).map(\.entryId), ["c0", "c1", nil], "fewer than three")
     }
 
     func testAPvpPickThatFitsTheRoleStaysAndTheOthersRefill() {
         let ctx = P23.ctx(table: leagueTable(), leagues: leagueRatings())
         let c = HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: ctx)
         var slots = HubSquads.defaultPvpSlots(); slots[1].pick = "c0"      // Medicham as the Safe swap: the player's choice
-        let squad = HubSquads.pvpSquad(slots: slots, candidates: c)
+        let squad = HubSquads.pvpSquad(slots: slots, candidates: c, placeable: P23.anyone)
         XCTAssertEqual(squad.map(\.entryId), ["c1", "c0", "c4"], "no other Lead is listed, so the Lead slot takes the best unused one")
         XCTAssertEqual(squad.map(\.chosen), [false, true, false])
         XCTAssertEqual(squad.map(\.fallback), [true, false, false])
@@ -484,7 +484,7 @@ final class HubSquadsAreasTests: XCTestCase {
     func testCoverageIsReturnedAndNeverUsedToPick() {
         let ctx = P23.ctx(table: leagueTable(), leagues: leagueRatings())
         let c = HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: ctx)
-        let squad = HubSquads.pvpSquad(candidates: c)
+        let squad = HubSquads.pvpSquad(candidates: c, placeable: P23.anyone)
         let cov = HubSquads.pvpCoverage(of: squad, candidates: c, ctx: ctx)
         XCTAssertEqual(cov.count, cov.types.count)
         // Medicham (Fighting, Psychic), Azumarill (Water, Fairy), Lapras (Water, Ice) hit these types for more than normal damage.

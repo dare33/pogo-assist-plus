@@ -31,7 +31,7 @@ extension HubSquads {
             // species' own types. The tier is the best of the entries that stand for a counted type.
             let entries = HubRaidsModel.raidEntries(targetId: b.targetId, viaMega: b.viaMega, table: ctx.table, shadow: shadow)
             let own = ctx.gm.byId[b.targetId]?.types ?? []
-            let best = entries.filter { !Set(HubRaidsModel.entryTypes($0, speciesTypes: own)).isDisjoint(with: counted) }.map { PogoRules.tierRank($0.tier) }.min() ?? 3
+            let best = entries.filter { !Set(HubRaidsModel.entryTypes($0, in: entries, speciesTypes: own)).isDisjoint(with: counted) }.map { PogoRules.tierRank($0.tier) }.min() ?? 3
             let role = PogoRules.raidRole(targetId: b.targetId, viaMega: b.viaMega, shadow: shadow, gm: ctx.gm)
             out.append((RaidCandidate(build: b, role: role, tier: ["S", "A", "B"].indices.contains(best) ? ["S", "A", "B"][best] : "", covers: counted.count,
                                       built: isFullStrength(b, screen: .raids, ctx: ctx)), i))
@@ -51,7 +51,7 @@ extension HubSquads {
     public static func defaultRaidSlots() -> [SquadSlot] { PogoRules.RaidRole.suggested.map { SquadSlot(role: $0.rawValue) } }
 
     /// Rule 10: each slot takes the first unused candidate of its role (role "All": any candidate).
-    public static func raidSquad(slots: [SquadSlot] = defaultRaidSlots(), candidates: [RaidCandidate], placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+    public static func raidSquad(slots: [SquadSlot] = defaultRaidSlots(), candidates: [RaidCandidate], placeable: (String, String) -> Bool) -> [FilledSlot] {
         fill(slots: slots, pool: { _, role in Pool(preferred: pool(role: role, in: candidates)) }, placeable: placeable)
     }
 
@@ -109,7 +109,7 @@ extension HubSquads {
 
     /// Suggested Max squad: the first Tank, the first Healer, the first Attacker that hits the boss (else the first Attacker). Until a copy is marked
     /// Dynamax every Max pick reads Upgrade available (`isFullStrength` on .max), as the read-back's Q7 says.
-    public static func maxSquad(slots: [SquadSlot] = defaultMaxSlots(), candidates: [MaxCandidate], placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+    public static func maxSquad(slots: [SquadSlot] = defaultMaxSlots(), candidates: [MaxCandidate], placeable: (String, String) -> Bool) -> [FilledSlot] {
         fill(slots: slots, pool: { _, role in
             let listed = candidates.filter { role == squadRoleAll || $0.roleNames.contains(role) }
             let ordered = role == PogoRules.MaxRole.attacker.rawValue ? listed.filter(\.hitsBoss) + listed.filter { !$0.hitsBoss } : listed
@@ -176,7 +176,7 @@ extension HubSquads {
     public static func defaultGymSlots() -> [SquadSlot] { Array(repeating: SquadSlot(role: gymSlotRole), count: 6) }
 
     /// The six suggested defenders: the first rows of the order not already chosen elsewhere in the squad.
-    public static func gymSquad(slots: [SquadSlot] = defaultGymSlots(), rows: [GymRow], placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+    public static func gymSquad(slots: [SquadSlot] = defaultGymSlots(), rows: [GymRow], placeable: (String, String) -> Bool) -> [FilledSlot] {
         fill(slots: slots, pool: { _, _ in Pool(preferred: rows.map { $0.build.entryId }) }, placeable: placeable)
     }
 
@@ -344,7 +344,7 @@ extension HubSquads {
 
     /// Rule 23: slots Lead, Safe swap, Closer, each taking the best-scoring unused candidate listed for that role, else (`fallback`) the best-scoring unused
     /// one. Role "All": the best-scoring unused. Coverage is not used to pick.
-    public static func pvpSquad(slots: [SquadSlot] = defaultPvpSlots(), candidates: [PvpCandidate], placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+    public static func pvpSquad(slots: [SquadSlot] = defaultPvpSlots(), candidates: [PvpCandidate], placeable: (String, String) -> Bool) -> [FilledSlot] {
         fill(slots: slots, pool: { _, role in
             let listed = pool(role: role, in: candidates)
             return Pool(preferred: listed, fallback: candidates.map(\.entryId))
