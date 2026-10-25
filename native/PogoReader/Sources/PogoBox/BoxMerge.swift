@@ -148,6 +148,8 @@ public enum BoxMerge {
         public var rankedCounts: [Int: Int] = [:]
         /// Saved Mega pairs (base entry id, Mega entry id): one Pokémon saved twice. `goneReport` lists neither as not seen once the scan identified the Pokémon through either.
         public var savedPairs: [[String]] = []
+        /// The filtered pass this scan was, or nil. A pass is always partial (it removes nothing) and marks every Pokémon it reads (`apply`, `passTargets`).
+        public var pass: ScanPass?
 
         public var isUnresolvedFree: Bool { unsure.isEmpty }
     }
@@ -217,7 +219,8 @@ public enum BoxMerge {
         return !r.flags.contains { $0.hasPrefix("ivs-corrected") || $0.hasPrefix("ambiguous-ivs") || ($0.hasPrefix("bars-unsettled") && r.solveStatus != "exact") }
     }
 
-    public static func plan(scanned originals: [ScanRow], unmatched: [Unmatched] = [], into saved: [BoxEntry], kind: BoxStore.Kind, scanDate: Date, gameMaster gm: GameMaster, shareIVs: Bool = true) -> Plan {
+    public static func plan(scanned originals: [ScanRow], unmatched: [Unmatched] = [], into saved: [BoxEntry], kind: BoxStore.Kind, scanDate: Date, gameMaster gm: GameMaster, shareIVs: Bool = true, pass: ScanPass? = nil) -> Plan {
+        let kind = pass == nil ? kind : BoxStore.Kind.partial   // a pass removes nothing
         // Matching sees a row whose IVs are not a clean read as one with no IVs read; the plan keeps the rows as scanned.
         let rows: [ScanRow] = originals.map { r in
             guard r.ivs != nil, !cleanIVs(r) else { return r }
@@ -226,6 +229,7 @@ public enum BoxMerge {
         var sPool = Array(rows.indices)
         var vPool = Array(saved.indices)
         var plan = Plan(kind: kind, scanDate: scanDate, scanned: originals, new: [], updated: [], same: [], unsure: [], gone: [])
+        plan.pass = pass
         plan.unmatchedItems = unmatched
         var unsureSaved = Set<Int>()   // saved entries that are candidates of an unsure row and were not paired with anything
 
@@ -984,6 +988,80 @@ public enum BoxMerge {
         return v.corrections.ivs == nil && shaky(v.row) && !shaky(s)
     }
 
+    // MARK: - filtered passes
+
+    /// Where each row of a pass ended up, from the plan and the answers so far: the saved entries it is tied to (Same pairs, updated rows, an unsure row answered "It is this one"
+    /// whatever that does to the values) and the rows that become new entries. A row left out, and an unsure row not yet answered, is in neither. Part reads matched by the merge itself
+    /// (`partMatches`) and stationed cards are not listed: they are weaker identifications and a wrong mark is worse than a missing one.
+    public struct PassTargets: Equatable {
+        public var existing: [String] = []
+        public var new: [Int] = []
+        public var unanswered = 0
+    }
+
+    public static func passTargets(_ plan: Plan, resolutions: [Int: Resolution]) -> PassTargets {
+        var t = PassTargets()
+        var seen = Set<String>()
+        func add(_ id: String) { if seen.insert(id).inserted { t.existing.append(id) } }
+        for p in plan.same { add(p.savedId) }
+        for u in plan.updated { add(u.savedId) }
+        t.new = plan.new
+        for u in plan.unsure {
+            switch resolutions[u.scanned] {
+            case nil: t.unanswered += 1
+            case .new?: if u.kind != .megaPair { t.new.append(u.scanned) }
+            case .leaveOut?: break
+            case .existing(let id)?: add(id)
+            }
+        }
+        t.new.sort()
+        return t
+    }
+
+    /// Whether a pass's mark meets a value that outranks it. Shadow/Purified share one field: a saved value other than the pass's own is kept (it may be set by hand, and a pass never
+    /// overrides the hand), unless it is a Shadow mark a Shadow pass set earlier and a Purified pass now meets: the player purified it.
+    static func passConflicts(_ pass: ScanPass, savedShadow: Int?, savedByPass: Bool?) -> Bool {
+        guard let want = pass.shadowValue, let cur = savedShadow, cur != want else { return false }
+        return !(pass == .purified && cur == 1 && savedByPass == true)
+    }
+
+    static func markByPass(_ e: inout BoxEntry, _ pass: ScanPass, savedShadow: Int?, savedByPass: Bool?) {
+        switch pass {
+        case .dynamax: e.row.dynamax = true
+        case .gigantamax: e.row.gigantamax = true; e.row.dynamax = true
+        case .shadow, .purified:
+            guard let want = pass.shadowValue else { return }
+            e.row.shadow = savedShadow; e.shadowByPass = savedByPass
+            if passConflicts(pass, savedShadow: savedShadow, savedByPass: savedByPass) {
+                let flag = "pass-conflict:\(pass.rawValue)"
+                if !e.row.flags.contains(flag) { e.row.flags.append(flag) }
+            } else {
+                if savedShadow != want || savedByPass == true { e.shadowByPass = true }
+                e.row.shadow = want
+            }
+        }
+    }
+
+    /// What a pass will do, for the Done and Review lines: Pokémon in the box it marks, new ones it adds (marked), hand values it keeps (each a check item) and questions not answered yet.
+    public struct PassTally: Equatable {
+        public var marked = 0, new = 0, conflicts = 0, unanswered = 0
+    }
+
+    public static func passTally(_ plan: Plan, resolutions: [Int: Resolution], base: [BoxEntry]) -> PassTally {
+        guard let pass = plan.pass else { return PassTally() }
+        let t = passTargets(plan, resolutions: resolutions)
+        let byId = Dictionary(base.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let conflicts = t.existing.filter { id in byId[id].map { passConflicts(pass, savedShadow: $0.row.shadow, savedByPass: $0.shadowByPass) } ?? false }.count
+        return PassTally(marked: t.existing.count - conflicts, new: t.new.count, conflicts: conflicts, unanswered: t.unanswered)
+    }
+
+    /// Rows of a pass that match no box entry (the rows the merge calls new before any answer), and whether they are too many for the search to have been the one named.
+    public static func passUnmatched(_ plan: Plan) -> Int { plan.new.count }
+    public static func passSearchLooksWrong(_ plan: Plan) -> Bool {
+        plan.pass != nil && PassGuard.fires(unmatched: passUnmatched(plan), total: plan.scanned.count)
+    }
+
+
     /// Nothing is removed unless the person chooses it: of the entries a full scan did not see, only those marked for removal go. This is the `keepGone`
     /// to hand to `apply` (and `ScanReportBuilder.reviewLines`) when the review starts with every not-seen entry kept and the person marks some.
     public static func keepSet(plan: Plan, resolutions: [Int: Resolution], markedForRemoval: Set<String>) -> Set<String> {
@@ -1102,7 +1180,19 @@ public enum BoxMerge {
             var row = plan.scanned[i]
             var mega = false
             if let base = plan.megaBases[i] { row = Self.asBase(row, base: base, gm0); mega = true }
-            added.append(BoxEntry(id: makeID(), row: row, firstSeen: date, lastSeen: date, megaWhenScanned: mega ? true : nil))
+            var entry = BoxEntry(id: makeID(), row: row, firstSeen: date, lastSeen: date, megaWhenScanned: mega ? true : nil)
+            if let pass = plan.pass { markByPass(&entry, pass, savedShadow: nil, savedByPass: nil) }
+            added.append(entry)
+        }
+        // A row read in a pass marks whatever entry it ended up tied to. The Shadow/Purified decision is made against the SAVED entry's value, not the merge's: `updated` carries a
+        // scanned shadow value over a saved one, which must not turn a hand-set value into a pass-set one.
+        if let pass = plan.pass {
+            let before = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            for id in passTargets(plan, resolutions: resolutions).existing {
+                guard var e = byId[id], let was = before[id] else { continue }
+                markByPass(&e, pass, savedShadow: was.row.shadow, savedByPass: was.shadowByPass)
+                byId[id] = e
+            }
         }
         if let engine { for id in resolve { if let e = byId[id] { byId[id] = LevelSolve.apply(to: e, engine: engine).entry } } }
         let gone = Set(goneReport(plan, resolutions: resolutions).gone).subtracting(keepGone).union(removedByJoin)
@@ -1237,7 +1327,7 @@ public enum BoxMerge {
         if edit.dynamax == .off { row.gigantamax = nil }                 // Gigantamax is a kind of Dynamax: without one there is no other
         if let g = edit.gigantamax { row.gigantamax = g ? true : nil; if g { row.dynamax = true } }
         if let l = edit.lucky { row.lucky = l ? true : nil }
-        if let sh = edit.shadow { row.shadow = sh.value }                // one field: Shadow on clears Purified and the reverse
+        if let sh = edit.shadow { row.shadow = sh.value; out.shadowByPass = nil }                // one field: Shadow on clears Purified and the reverse
         if let d = edit.details { let n = d.normalised; row.details = n.isEmpty ? nil : n }
         row.flags = FlagInfo.remaining(row.flags, corrected: fix)
         out.row = row; out.corrections = fix

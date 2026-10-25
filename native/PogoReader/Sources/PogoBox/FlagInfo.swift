@@ -20,7 +20,7 @@ public enum FlagInfo {
         "form-ambiguous": .note, "level-ambiguous": .note, "form-from-stats": .note, "ivs-chosen-by-fit": .noteWhenExact,
         "no-level-fits": .check, "ivs-unread": .check, "ambiguous-ivs": .check, "cp-computed": .check, "hp-unread": .check, "name-low-confidence": .check,
         "same-as-previous": .check, "split-by-timing": .check, "split-by-bars": .check, "absorbed-unread": .check, "mega-when-scanned": .check,
-        "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check, "absorbed-same-cp": .check, "folded-first-reading": .check, "folded-digit-misread": .check, "misread-of-neighbour": .check,
+        "sex-not-read": .check, "single-read": .check, "ivs-rescan-differs": .check, "read-once-beside": .check, "absorbed-other-cp": .check, "absorbed-same-cp": .check, "folded-first-reading": .check, "folded-digit-misread": .check, "misread-of-neighbour": .check, "pass-conflict": .check,
     ]
 
     public static func severity(of flag: String, solveStatus: String) -> Severity {
@@ -82,6 +82,10 @@ public enum FlagInfo {
         Entry(prefix: "mega-when-scanned", field: .cp) { _ in "This Pokémon was Mega evolved when it was scanned, so its CP, HP and level were not saved (the Mega values are temporary). Scan it again when it is not Mega evolved." },
         // Not tied to the IVs field: the person may have corrected the IVs, and the later scan still read others.
         Entry(prefix: "ivs-rescan-differs", field: nil) { _ in "The latest scan read other IVs for this Pokémon at the same CP and HP. The saved IVs were kept. Check the IVs in the game." },
+        Entry(prefix: "pass-conflict", field: nil) { detail in
+            let word = detail.isEmpty ? "that mark" : detail
+            return "A \(word) pass read this Pokémon, but you had set it the other way by hand, so your setting was kept. Check it in the game."
+        },
         Entry(prefix: "ivs-disagree", field: .ivs) { _ in "The appraisal bars read differently on different frames. Check the IVs in the game." },
     ]
 

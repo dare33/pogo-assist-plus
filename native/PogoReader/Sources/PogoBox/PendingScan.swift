@@ -15,12 +15,14 @@ public struct PendingScanMeta: Codable, Equatable {
     /// Times a reading of this scan was started and did not finish (the app was ended during it). A scan whose last reading never finished is not read again on its own.
     public var attempts: Int
     public var state: Data?
+    /// The filtered pass the scan was started as (`ScanPass` raw value), or nil for an ordinary scan. Absent in a file from before passes.
+    public var pass: String?
 
-    public init(signature: String, account: String, kind: BoxStore.Kind = .full, scanDate: Date? = nil, doneFirst: Bool = false, attempts: Int = 0, state: Data? = nil) {
-        self.signature = signature; self.account = account; self.kind = kind; self.scanDate = scanDate; self.doneFirst = doneFirst; self.attempts = attempts; self.state = state
+    public init(signature: String, account: String, kind: BoxStore.Kind = .full, scanDate: Date? = nil, doneFirst: Bool = false, attempts: Int = 0, state: Data? = nil, pass: String? = nil) {
+        self.signature = signature; self.account = account; self.kind = kind; self.scanDate = scanDate; self.doneFirst = doneFirst; self.attempts = attempts; self.state = state; self.pass = pass
     }
 
-    private enum CodingKeys: String, CodingKey { case signature, account, kind, scanDate, doneFirst, attempts, state }
+    private enum CodingKeys: String, CodingKey { case signature, account, kind, scanDate, doneFirst, attempts, state, pass }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         signature = try c.decode(String.self, forKey: .signature)
@@ -30,6 +32,7 @@ public struct PendingScanMeta: Codable, Equatable {
         doneFirst = (try? c.decodeIfPresent(Bool.self, forKey: .doneFirst)) ?? false
         attempts = (try? c.decodeIfPresent(Int.self, forKey: .attempts)) ?? 0
         state = try? c.decodeIfPresent(Data.self, forKey: .state)
+        pass = try? c.decodeIfPresent(String.self, forKey: .pass)
     }
 }
 

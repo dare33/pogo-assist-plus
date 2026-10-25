@@ -75,6 +75,8 @@ public final class BoxStore {
         /// The signature of the replay log this scan was read from (the app's marker for "this log has been through review"), so a save that was interrupted before the app
         /// noted it is not made twice. Nil for scans saved before it existed.
         public var sourceSignature: String?
+        /// The filtered pass this scan was (`ScanPass` raw value: "shadow", "purified", "dynamax", "gigantamax"); nil for an ordinary scan and for scans saved before passes. A pass is always `.partial`.
+        public var pass: String?
     }
 
     public struct Summary: Equatable {
@@ -89,6 +91,7 @@ public final class BoxStore {
         public var lastReread: Date?
         public var reportSentAt: Date?
         public var sourceSignature: String?
+        public var pass: String?
     }
 
     /// `scans` newest first by scan date (read from each file's header fields and array lengths only, not the rows); `unreadable` the file names that could not be read.
@@ -108,12 +111,12 @@ public final class BoxStore {
     @discardableResult
     public func save(_ result: ScanResult, account: String, scanDate: Date = Date(), source: String, kind: Kind = .full,
                      storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil,
-                     refineChanges: [String]? = nil, reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil, sourceSignature: String? = nil) throws -> Summary {
+                     refineChanges: [String]? = nil, reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil, sourceSignature: String? = nil, pass: String? = nil) throws -> Summary {
         let dir = try accountDirectory(account, create: true)
         let id = Self.makeID(scanDate)
         let scan = StoredScan(schema: Self.schemaVersion, id: id, account: account, scanDate: scanDate, savedAt: Date(), source: source, kind: kind,
                               rows: result.rows, review: result.review, unmatched: result.unmatched, storageCount: storageCount, paging: paging, lastReread: nil, refineChanges: refineChanges, reviewActions: reviewActions,
-                              reportSentAt: reportSentAt, reportHash: reportHash, sourceSignature: sourceSignature)
+                              reportSentAt: reportSentAt, reportHash: reportHash, sourceSignature: sourceSignature, pass: pass)
         // The replay log goes first: if the scan file is then written, the log it rebuilds from is already there.
         if let log = replayLog { try log.write(to: dir.appendingPathComponent("\(id).replay.jsonl"), options: .atomic) }
         try Self.encoder.encode(scan).write(to: dir.appendingPathComponent("\(id).json"), options: .atomic)
@@ -687,20 +690,20 @@ public final class BoxStore {
         struct Skipped: Decodable { init(from decoder: Decoder) throws {} }
         var schema: Int, id: String, scanDate: Date, savedAt: Date, source: String, kind: Kind
         var rows: [Skipped], review: [Skipped], unmatched: [Skipped]
-        var lastReread: Date?, reportSentAt: Date?, sourceSignature: String?
+        var lastReread: Date?, reportSentAt: Date?, sourceSignature: String?, pass: String?
     }
 
     private func readSummary(_ file: URL) throws -> Summary {
         do {
             let s = try Self.decoder.decode(SummaryOnly.self, from: Data(contentsOf: file))
             guard s.schema <= Self.schemaVersion else { throw Failure.corrupt(file: file.lastPathComponent, reason: "written by a newer version (schema \(s.schema))") }
-            return Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count, lastReread: s.lastReread, reportSentAt: s.reportSentAt, sourceSignature: s.sourceSignature)
+            return Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count, lastReread: s.lastReread, reportSentAt: s.reportSentAt, sourceSignature: s.sourceSignature, pass: s.pass)
         } catch let f as Failure { throw f }
         catch { throw Failure.corrupt(file: file.lastPathComponent, reason: "\(error)") }
     }
 
     private static func summary(_ s: StoredScan) -> Summary {
-        Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count, lastReread: s.lastReread, reportSentAt: s.reportSentAt, sourceSignature: s.sourceSignature)
+        Summary(id: s.id, scanDate: s.scanDate, savedAt: s.savedAt, source: s.source, kind: s.kind, rows: s.rows.count, flagged: s.review.count, unmatched: s.unmatched.count, lastReread: s.lastReread, reportSentAt: s.reportSentAt, sourceSignature: s.sourceSignature, pass: s.pass)
     }
 
     private static func makeID(_ date: Date) -> String {
