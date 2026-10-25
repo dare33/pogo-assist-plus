@@ -8,7 +8,7 @@
 # swift-<slot> and review-copy-* have no lock and are removed outright. A booted simulator is skipped.
 set -euo pipefail
 
-ROOT="${POGO_BUILD_ROOT:-$HOME/Library/Developer/Xcode/DerivedData/PogoAssist-claude}"
+ROOT="${POGO_BUILD_ROOT:-$HOME/Library/Developer/Xcode/DerivedData/pogo-claude-build}"
 SIMS="$ROOT/sims.txt"
 STALE_AFTER=60
 dry=0

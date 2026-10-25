@@ -3,7 +3,7 @@
 **25 Oct 2026: build hygiene (branch `claude/build-hygiene-e6f0da`, for a draft PR to `main`, not merged).** A standing rule, in
 `CLAUDE.md` ("Build hygiene") and `native/README.md` ("Build hygiene"), after 143 GB of per-run Xcode derived-data folders
 were found in sessions' scratchpads under `/private/tmp/claude-*`: every command-line `xcodebuild` from a session uses the
-fixed, reused `~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/<slot>` (slots `main`, `review-a`, `review-b`,
+fixed, reused `~/Library/Developer/Xcode/DerivedData/pogo-claude-build/<slot>` (slots `main`, `review-a`, `review-b`,
 `merge`), one `xcodebuild` per slot at a time behind a `mkdir` lock that names the running xcodebuild; `swift test` in the
 package's own git-ignored `.build` or `swift-<slot>`; reviewers' read-only copies at `review-copy-a` / `review-copy-b`;
 temporary simulators deleted by the run that cloned them and never two test runs on one simulator; the scratchpad for
@@ -15,7 +15,8 @@ through the helper. Verified by the session that made the change (not by Greg), 
 27A9275), against the scripts in the commit that carries this entry: the PogoAssist simulator build through `xcb.sh main`
 succeeds with its output only under the fixed location (an earlier attempt, on an earlier version of the script, failed
 with "error closing ... for output" when a DerivedData clean-up of `PogoAssist-*` running in another session deleted the
-folder mid-build; every rerun succeeded); with a fake `xcodebuild` under a scratch root, twelve callers racing for a
+folder, then named `PogoAssist-claude`, mid-build; Greg ruled the location be renamed outside that pattern, and every rerun
+succeeded, the last under the final name); with a fake `xcodebuild` under a scratch root, twelve callers racing for a
 slot with a pre-seeded stale lock ran strictly one at a time, eight callers interleaved with three `build-clean.sh` runs
 never overlapped (the cleaner emptied the slot once while free and skipped it twice while held), a `kill -9` of the shell
 left the slot held by the build's own pid until it ended, a pid-less lock older than 60 s was reclaimed, an INT to the
@@ -23,7 +24,8 @@ foreground helper stopped the build and released the lock, every refusal fired (
 paths outside the rule, an unknown slot, a mistyped cleaner option, a root holding a stranger's folder, the cleaner on an
 unmarked root) and a hand-made `review-copy-a` root was adopted by `xcb.sh`; a clone of the iPhone 17 was created, listed and deleted through `sim-temp.sh`. Review gate: paired round (Opus reviewer, Sol through the Codex wrapper), fold, paired
 confirmation round, fold, then narrow paired re-checks of the folds; the rounds' findings and what remains are in the
-pull request that carries this branch. Known limits (the scripts' comments and the README): a signal in the instant between launching xcodebuild and writing
+pull request that carries this branch. Agreed follow-up after this PR merges (Greg, 25 Oct): replace the `mkdir` mutex with
+`/usr/bin/lockf`, which ties the lock to the build's own lifetime. Known limits (the scripts' comments and the README): a signal in the instant between launching xcodebuild and writing
 its pid; two parties racing to remove a reclaim mutex left by a crashed reclaimer; two sessions editing `sims.txt` at
 the same instant; the output-path refusal is a guard rail, not a proof.
 Nothing was deleted from

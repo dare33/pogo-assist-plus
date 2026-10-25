@@ -18,7 +18,7 @@
 #     -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 set -euo pipefail
 
-ROOT="${POGO_BUILD_ROOT:-$HOME/Library/Developer/Xcode/DerivedData/PogoAssist-claude}"
+ROOT="${POGO_BUILD_ROOT:-$HOME/Library/Developer/Xcode/DerivedData/pogo-claude-build}"
 STALE_AFTER=60   # seconds: a lock with no pid file older than this was left by a run killed mid-claim
 
 die() { echo "xcb: $*" >&2; exit 2; }

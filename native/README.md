@@ -45,7 +45,7 @@ simulator cannot run a broadcast extension usefully; the extension is only compi
 
 That builds into the package's own `native/PogoReader/.build`, which `native/.gitignore` keeps out of
 git. A second session that must test the same checkout at the same time passes
-`--scratch-path ~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/swift-<slot>` (one of the
+`--scratch-path ~/Library/Developer/Xcode/DerivedData/pogo-claude-build/swift-<slot>` (one of the
 slots below) rather than a fresh folder.
 
 ## Build hygiene
@@ -57,7 +57,7 @@ the package with their own builds and temporary simulators nobody deleted. Nothi
 scratchpad. So:
 
 1. **One fixed location, outside the repo and outside the scratchpad:**
-   `~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/`. `xcodebuild`'s derived data lives
+   `~/Library/Developer/Xcode/DerivedData/pogo-claude-build/`. `xcodebuild`'s derived data lives
    under it and is reused run after run; a result bundle or archive goes under it too, or under the
    repo's git-ignored `out/` (SwiftPM's own `native/PogoReader/.build`, git-ignored, is the one
    other place a build may write; point 4). Nothing of the kind goes under
@@ -113,8 +113,8 @@ scratchpad. So:
    the scratchpad, and never the other reviewer's copy. Leave `.build` out of the copy (hundreds
    of MB and not needed):
 
-       mkdir -p ~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/review-copy-a
-       rsync -a --delete --exclude .build native/ ~/Library/Developer/Xcode/DerivedData/PogoAssist-claude/review-copy-a/native/
+       mkdir -p ~/Library/Developer/Xcode/DerivedData/pogo-claude-build/review-copy-a
+       rsync -a --delete --exclude .build native/ ~/Library/Developer/Xcode/DerivedData/pogo-claude-build/review-copy-a/native/
 
 6. **Temporary simulators are deleted by the run that made them.** The standing simulators are
    iPhone 17 (single UI tests) and iPhone Air (full suites); `xcrun simctl list devices` gives
@@ -141,11 +141,11 @@ scratchpad. So:
    helpers make (`swift-<slot>`, `review-copy-*`), which have no lock; anything else under the
    location is reported and left. The hand version, only when
    nothing is building and after `sim-temp.sh list` shows no recorded clone left, is
-   `rm -rf ~/Library/Developer/Xcode/DerivedData/PogoAssist-claude` (the whole folder, `sims.txt`
-   included; a brace-and-glob one-liner fails in zsh when a pattern matches nothing). A hand
-   cleanup of `~/Library/Developer/Xcode/DerivedData/PogoAssist-*` takes this folder too; that is
-   harmless except during a build, which then fails with "error closing ... for output" and is
-   simply rerun (the first test of the helper hit exactly that).
+   `rm -rf ~/Library/Developer/Xcode/DerivedData/pogo-claude-build` (the whole folder, `sims.txt`
+   included; a brace-and-glob one-liner fails in zsh when a pattern matches nothing). The folder
+   is named outside Xcode's own `PogoAssist-<hash>` pattern on purpose (Greg's ruling, 25 Oct 2026),
+   so a hand cleanup of `DerivedData/PogoAssist-*` leaves it alone; the first test's folder, under an
+   earlier name inside that pattern, was deleted mid-build by exactly such a cleanup.
 
 The helpers read `POGO_BUILD_ROOT` to override the location, for a test of the helpers themselves
 under a scratch root, not for a build. `xcb.sh` and `sim-temp.sh create` mark the location with

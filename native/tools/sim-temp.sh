@@ -13,7 +13,7 @@
 # editing at the same instant is not locked against; a lost line means a clone to find by hand.
 set -euo pipefail
 
-ROOT="${POGO_BUILD_ROOT:-$HOME/Library/Developer/Xcode/DerivedData/PogoAssist-claude}"
+ROOT="${POGO_BUILD_ROOT:-$HOME/Library/Developer/Xcode/DerivedData/pogo-claude-build}"
 SIMS="$ROOT/sims.txt"
 
 die() { echo "sim-temp: $*" >&2; exit 2; }
