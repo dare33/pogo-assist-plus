@@ -60,6 +60,9 @@ final class AppModel: ObservableObject {
         var boxSeq: Int?
         /// A filtered pass (`plan.pass`) whose rows mostly matched nothing in the box asks "Was this a <kind> search?" before it is saved. `searchConfirmed`: the person said yes.
         var searchConfirmed = false
+        /// The person answered "No, save as Add and update": the scan was started as a pass (so saving or discarding it clears the pass choice) though its plan no longer is one.
+        var droppedPass = false
+        var wasPass: Bool { plan.pass != nil || droppedPass }
         var askingSearch = false
         /// The extension ended this scan itself because the end of the list was reached.
         var endedAtListEnd = false
@@ -1191,6 +1194,7 @@ final class AppModel: ObservableObject {
     /// Throw the waiting scan away without needing its box to be readable, so a scan that cannot be opened can never stop scanning for good.
     func discardWaitingScan() {
         guard let w = waitingScan else { return }
+        if !w.damaged, case .ready(let meta, _) = pendingStore.load(), meta.signature == w.signature, meta.pass != nil { scanPass = nil }
         if w.damaged { pendingStore.clear() } else { ReplayMarker.markProcessed(w.signature); pendingStore.clear(ifSignature: w.signature) }
         waitingScan = nil
     }
@@ -1351,7 +1355,7 @@ final class AppModel: ObservableObject {
         r.askingSearch = false
         guard let yes else { flow = .review(r); return }
         r.searchConfirmed = true
-        if !yes { r.plan.pass = nil; r.planToken = UUID() }
+        if !yes { r.plan.pass = nil; r.droppedPass = true; r.planToken = UUID() }
         flow = .review(r)
         await saveReview()
     }
@@ -1412,7 +1416,7 @@ final class AppModel: ObservableObject {
             if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
             // A scan paged by the voice command is saved: setup counts as done (`SetupProgress.pagedScanSaved`).
             if r.reread == nil, r.paging?.pagedByCommand == true { setup.notePagedScanSaved() }
-            if r.reread == nil { scanPass = nil }   // the scan screen goes back to Add and update; the next scan is an ordinary one
+            if r.reread == nil, r.wasPass { scanPass = nil }   // the scan screen goes back to Add and update; a Special scan chosen for the next scan is not touched by an ordinary one's save
             flow = .idle
             // A scan read again was merged into the box as it was BEFORE that scan, so the box it started from is not the box the person had: no counts for it.
             lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: r.reread == nil)
@@ -1445,10 +1449,13 @@ final class AppModel: ObservableObject {
     func discardReview() {
         switch flow {
         case .review(let r) where r.importPrepared != nil: screenshots.reviewClosedWithoutSaving()   // the screenshots stay queued; discarding them is a choice in Import screenshots
-        case .review(let r): if r.reread == nil { ReplayMarker.markProcessed(r.signature); scanPass = nil }
+        case .review(let r): if r.reread == nil { ReplayMarker.markProcessed(r.signature); if r.wasPass { scanPass = nil } }
         case .failed(_, let sig):
             if sig == Self.damagedPrefix { pendingStore.clear(); waitingScan = nil }   // the person's choice: what was kept goes
-            else if !sig.hasPrefix(Self.rereadPrefix) { ReplayMarker.markProcessed(sig) }
+            else if !sig.hasPrefix(Self.rereadPrefix) {
+                ReplayMarker.markProcessed(sig)
+                if scanCopy?.signature == sig, scanCopy?.pass != nil { scanPass = nil }   // a pass whose reading failed
+            }
         default: break
         }
         flow = .idle

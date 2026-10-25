@@ -1076,8 +1076,35 @@ public enum BoxMerge {
         return passTargets(plan, resolutions: resolutions).existing.compactMap { id in
             let v = passSavedValue(plan, resolutions, byId, id)
             guard let e = byId[id], passConflicts(pass, savedShadow: v.shadow, savedByPass: v.byPass) else { return nil }
-            let said = v.shadow == 1 ? "Shadow" : (v.shadow == 2 ? "Purified" : "neither Shadow nor Purified")
-            return "Kept your \(said) mark on \(e.row.title) CP \(e.row.cp): the \(pass.title) search found it"
+            let said = v.shadow == 1 ? "Shadow" : (v.shadow == 2 ? "Purified" : "not Shadow or Purified")
+            return "Your box says \(said) for \(e.row.title) CP \(e.row.cp); the \(pass.title) search found it."
+        }
+    }
+
+    /// How many Pokémon a pass leaves to check, each once: the scan's check rows (by position in `plan.scanned`) and the kept hand values. A check row that is tied to a box entry
+    /// which also has a kept value is one Pokémon, not two.
+    public static func passCheckCount(_ plan: Plan, resolutions: [Int: Resolution], base: [BoxEntry], checkRows: [Int]) -> Int {
+        guard plan.pass != nil else { return checkRows.count }
+        let byId = Dictionary(base.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var tied = [Int: String]()
+        for p in plan.same { tied[p.scanned] = p.savedId }
+        for u in plan.updated { tied[u.scanned] = u.savedId }
+        for u in plan.unsure { if case .existing(let id)? = resolutions[u.scanned] { tied[u.scanned] = id } }
+        var items = Set(checkRows.map { tied[$0] ?? "row \($0)" })
+        guard let pass = plan.pass else { return items.count }
+        for id in passTargets(plan, resolutions: resolutions).existing {
+            let v = passSavedValue(plan, resolutions, byId, id)
+            if passConflicts(pass, savedShadow: v.shadow, savedByPass: v.byPass) { items.insert(id) }
+        }
+        return items.count
+    }
+
+    /// The `pass-conflict:` flags that outlive an update or a join: those whose pass found a different mark than the entry has now.
+    static func keptConflictFlags(_ flags: [String], shadow: Int?) -> [String] {
+        flags.filter { f in
+            guard f.hasPrefix("pass-conflict:") else { return false }
+            let kind = f.split(separator: ":").dropFirst().first.flatMap { ScanPass(rawValue: String($0)) }
+            return kind?.shadowValue != shadow
         }
     }
 
@@ -1176,6 +1203,8 @@ public enum BoxMerge {
                     if byId[id]?.row.shadow == nil, let sh = m.row.shadow { byId[id]?.row.shadow = sh; byId[id]?.shadowByPass = m.shadowByPass }
                     if byId[id]?.row.details == nil, let d = m.row.details { byId[id]?.row.details = d }
                     if byId[id]?.row.gigantamax == true { byId[id]?.row.dynamax = true }
+                    // An unresolved pass-conflict on the removed entry belongs to the Pokémon too.
+                    for f in keptConflictFlags(m.row.flags, shadow: byId[id]?.row.shadow) where byId[id]?.row.flags.contains(f) == false { byId[id]?.row.flags.append(f) }
                     touch(id)
                     // The other entry's values keep their OWN last-seen date (a base scan did not see the Mega form), so an existing, more recently seen Mega form wins over them; then a Mega row
                     // the scan read (CP fitting a level) is stored on top like an automatic Same pair, so what ends up held is what was read now.
@@ -1272,10 +1301,7 @@ public enum BoxMerge {
         // A rescan that read other IVs and was answered "keep the saved ones" stays flagged until the IVs are corrected by hand, checked, or replaced.
         if e.row.flags.contains(BoxMerge.ivsRescanFlag), row.ivs == e.row.ivs, !row.flags.contains(BoxMerge.ivsRescanFlag) { row.flags.append(BoxMerge.ivsRescanFlag) }
         // An unresolved pass-conflict outlives an ordinary update, unless the entry's mark now is what that pass found.
-        for f in e.row.flags where f.hasPrefix("pass-conflict:") && !row.flags.contains(f) {
-            let kind = f.split(separator: ":").dropFirst().first.flatMap { ScanPass(rawValue: String($0)) }
-            if kind?.shadowValue != row.shadow { row.flags.append(f) }
-        }
+        for f in keptConflictFlags(e.row.flags, shadow: row.shadow) where !row.flags.contains(f) { row.flags.append(f) }
         out.row = BoxEntry.stripped(row)
         out.corrections = fix
         return out

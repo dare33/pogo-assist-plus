@@ -160,11 +160,11 @@ private struct ReviewHeader: View {
 
     var body: some View {
         let read = ctx.review.outcome.scan.rows.count
-        let toCheck = ctx.toCheck.count + ctx.passConflictLines.count
+        let toCheck = ctx.checkTotal()
         Panel(tint: .accent, padding: 20, spacing: 16) {
             VStack(alignment: .leading, spacing: 0) {
                 if let pass = ctx.review.plan.pass {
-                    Text(PassWording.line(pass, BoxMerge.passTally(ctx.review.plan, resolutions: ctx.review.resolutions, base: ctx.review.base), toCheck: ctx.toCheck.count))
+                    Text(PassWording.line(pass, BoxMerge.passTally(ctx.review.plan, resolutions: ctx.review.resolutions, base: ctx.review.base), toCheck: toCheck))
                         .font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(accent.ink).accessibilityIdentifier("review-pass-line")
                 } else {
                     Text(ctx.ending.headline).font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(accent.ink)

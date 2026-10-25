@@ -35,7 +35,7 @@ struct ToCheckScreen: View {
                 LazyVStack(spacing: Theme.Space.panelGap) {
                     Panel(padding: 20, spacing: 14) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text((rows.count + kept.count).formatted()).paText(.heroFigure).foregroundStyle(Theme.ink)
+                            Text(ctx.checkTotal(rows: rows).formatted()).paText(.heroFigure).foregroundStyle(Theme.ink)
                             Text("to look at in the game").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
                             if notCovered > 0 { Text("\(notCovered) not in the search: no CP or HP to look for.").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
                         }

@@ -8,7 +8,7 @@ enum PassWording {
     static func line(_ pass: ScanPass, _ tally: BoxMerge.PassTally, toCheck: Int) -> String {
         var parts = ["\(tally.marked.formatted()) marked"]
         if tally.new > 0 { parts.append("\(tally.new.formatted()) new") }
-        let check = toCheck + tally.conflicts
+        let check = toCheck   // already one count per Pokémon (`ReviewContext.passCheckTotal`)
         if check > 0 { parts.append("\(check.formatted()) to check") }
         return "\(pass.passName): " + parts.joined(separator: ", ")
     }
@@ -25,4 +25,6 @@ enum PassWording {
 extension ReviewContext {
     /// One line per Pokémon whose Shadow/Purified value a pass kept (check items that are not scanned rows).
     var passConflictLines: [String] { BoxMerge.passConflictLines(review.plan, resolutions: review.resolutions, base: review.base) }
+    /// Pokémon to check, each once: the scan's check rows given (default: all of them) with the kept hand values of a pass.
+    func checkTotal(rows: [Int]? = nil) -> Int { BoxMerge.passCheckCount(review.plan, resolutions: review.resolutions, base: review.base, checkRows: rows ?? toCheck) }
 }

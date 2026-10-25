@@ -242,10 +242,48 @@ final class ScanPassTests: XCTestCase {
         let saved = [moltres, try handShadow(entry(row("pidgey", cp: 100), id: "x"), .neither)]
         let p = plan([row("moltres", cp: 1966), row("pidgey", cp: 100)], saved, .shadow)
         let lines = BoxMerge.passConflictLines(p, resolutions: [:], base: saved)
-        XCTAssertEqual(lines, ["Kept your Purified mark on Moltres CP 1966: the Shadow search found it", "Kept your neither Shadow nor Purified mark on Pidgey CP 100: the Shadow search found it"])
+        XCTAssertEqual(lines, ["Your box says Purified for Moltres CP 1966; the Shadow search found it.", "Your box says not Shadow or Purified for Pidgey CP 100; the Shadow search found it."])
         XCTAssertTrue(BoxMerge.passConflictLines(plan([row("moltres", cp: 1966)], saved, .dynamax), resolutions: [:], base: saved).isEmpty)
         XCTAssertEqual(FlagInfo.explain("pass-conflict:shadow:purified"), "Your box already said it was Purified; the Shadow search found it. Check it in the game.")
         XCTAssertEqual(FlagInfo.explain("pass-conflict:purified:neither"), "Your box already said it was neither Shadow nor Purified; the Purified search found it. Check it in the game.")
+    }
+
+    // MARK: - confirmation fold
+
+    func testAPokemonWithACheckFlagAndAKeptMarkIsOneItemToCheck() throws {
+        let saved = [try handShadow(entry(row("moltres", cp: 1966), id: "m"), .purified), try handShadow(entry(row("pidgey", cp: 100), id: "x"), .neither), entry(row("zubat", cp: 50), id: "z")]
+        let scanned = [row("moltres", cp: 1966), row("pidgey", cp: 100), row("zubat", cp: 50), row("kakuna", cp: 77)]
+        let p = plan(scanned, saved, .shadow)
+        // Rows 0 (Moltres, also a kept mark), 2 (Zubat) and 3 (a new Kakuna) carry scan check flags: Moltres counts once; Pidgey's kept mark adds one.
+        XCTAssertEqual(BoxMerge.passCheckCount(p, resolutions: [:], base: saved, checkRows: [0, 2, 3]), 4)
+        XCTAssertEqual(BoxMerge.passCheckCount(p, resolutions: [:], base: saved, checkRows: []), 2, "kept marks alone")
+        XCTAssertEqual(BoxMerge.passCheckCount(plan(scanned, saved, nil), resolutions: [:], base: saved, checkRows: [0, 2, 3]), 3, "an ordinary scan counts its rows")
+    }
+
+    func testAMegaJoinCarriesAnUnresolvedConflictFlagToTheBase() throws {
+        var base = entry(row("staraptor", cp: 2819), id: "base")
+        var mega = entry(row("staraptor_mega", cp: 3970), id: "mega")
+        mega.row.shadow = 2; mega.row.flags = ["pass-conflict:shadow:purified"]
+        base.lastSeen = date(2)
+        let saved = [base, mega]
+        let p = plan([row("staraptor", cp: 2819)], saved, nil)
+        XCTAssertEqual(p.unsure.first?.kind, .megaPair)
+        let out = try BoxMerge.apply(p, resolutions: [0: .existing("base")], to: saved, engine: nil)
+        XCTAssertEqual(out[0].row.shadow, 2); XCTAssertTrue(out[0].row.flags.contains("pass-conflict:shadow:purified"))
+        // Not when the base's mark already is what that pass found.
+        var shadowBase = base; shadowBase.row.shadow = 1
+        let other = try BoxMerge.apply(plan([row("staraptor", cp: 2819)], [shadowBase, mega], nil), resolutions: [0: .existing("base")], to: [shadowBase, mega], engine: nil)
+        XCTAssertFalse(other[0].row.flags.contains("pass-conflict:shadow:purified"))
+    }
+
+    func testAShadowAPassSetSurvivesAnOrdinaryMegaJoinAndAPurifiedPassThenMovesIt() throws {
+        var base = entry(row("staraptor", cp: 2819), id: "base"); base.lastSeen = date(2)
+        var mega = entry(row("staraptor_mega", cp: 3970), id: "mega"); mega.row.shadow = 1; mega.shadowByPass = true
+        let saved = [base, mega]
+        let joined = try BoxMerge.apply(plan([row("staraptor", cp: 2819)], saved, nil), resolutions: [0: .existing("base")], to: saved, engine: nil)
+        XCTAssertEqual(joined.map(\.id), ["base"]); XCTAssertEqual(joined[0].row.shadow, 1); XCTAssertEqual(joined[0].shadowByPass, true, "the join carries whether a pass set it")
+        let purified = try BoxMerge.apply(plan([row("staraptor", cp: 2819)], joined, .purified), to: joined, engine: nil)[0]
+        XCTAssertEqual(purified.row.shadow, 2); XCTAssertFalse(purified.row.flags.contains { $0.hasPrefix("pass-conflict") })
     }
 
     // MARK: - support
