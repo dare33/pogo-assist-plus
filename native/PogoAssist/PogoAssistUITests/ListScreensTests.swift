@@ -331,6 +331,46 @@ final class ListScreensTests: XCTestCase {
         }
     }
 
+    /// The Pokémon list's header (count line, search, chips, sort line with the ranking switch) is fixed: after the list is scrolled well down it is where it was,
+    /// still hittable, and the species rows have moved under it. At the default size, AX3 and AX5 (light), and default and AX5 in dark; the ranking explainer is
+    /// opened inside the fixed block too. Screenshots go to POGO_SCREENS.
+    func testHeaderStaysFixedAtTheDefaultSize() throws { try headerFixed("hdr-default-light", "UICTContentSizeCategoryL", "light") }
+    func testHeaderStaysFixedInDark() throws { try headerFixed("hdr-default-dark", "UICTContentSizeCategoryL", "dark") }
+    func testHeaderStaysFixedAtAX3() throws { try headerFixed("hdr-ax3-light", "UICTContentSizeCategoryAccessibilityXL", "light") }
+    func testHeaderStaysFixedAtAX5() throws { try headerFixed("hdr-ax5-light", "UICTContentSizeCategoryAccessibilityXXXL", "light") }
+    func testHeaderStaysFixedAtAX5InDark() throws { try headerFixed("hdr-ax5-dark", "UICTContentSizeCategoryAccessibilityXXXL", "dark") }
+
+    private func headerFixed(_ name: String, _ category: String, _ appearance: String) throws {
+        launchPopulated().terminate()
+        let app = XCUIApplication()
+        app.launchArguments = ["-appearance", appearance, "-UIPreferredContentSizeCategoryName", category]
+        app.launch()
+        XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
+        sleep(2)
+        let search = app.textFields["box-search"], sort = app.descendants(matching: .any)["sort-menu"], chipAll = app.buttons["chip-all"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10) && sort.exists && chipAll.exists, name)
+        let before = (search.frame, sort.frame, chipAll.frame)
+        shot("\(name)-top")
+        let firstRow = rows(app).firstMatch.label
+        for _ in 0..<4 { app.swipeUp(); }
+        sleep(1)
+        XCTAssertEqual(search.frame, before.0, "\(name): the search field did not move")
+        XCTAssertEqual(sort.frame, before.1, "\(name): the sort line did not move")
+        XCTAssertEqual(chipAll.frame, before.2, "\(name): the chips did not move")
+        XCTAssertTrue(search.isHittable && sort.isHittable, name)
+        XCTAssertNotEqual(rows(app).firstMatch.label, firstRow, "\(name): the list did scroll")
+        shot("\(name)-scrolled")
+        // The explainer opens inside the fixed block.
+        let info = app.buttons["list-scoring-info"]
+        XCTAssertTrue(info.exists, name)
+        info.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["list-scoring-explainer"].waitForExistence(timeout: 5), "\(name): the explainer opens in the header")
+        XCTAssertTrue(search.isHittable || search.exists, "\(name): the header is still there with the explainer open")
+        XCTAssertTrue(rows(app).firstMatch.exists, "\(name): some of the list is left under an open explainer")
+        sleep(1); shot("\(name)-explainer")
+        app.terminate()
+    }
+
     /// A fresh account with the sample scan reviewed and saved; leaves the app on the list.
     private func populate(_ app: XCUIApplication) {
         let field = app.textFields["Trainer name"]
