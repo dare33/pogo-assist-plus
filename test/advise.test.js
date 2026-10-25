@@ -195,6 +195,6 @@ test('a Gigantamax-only Max row is not credited to an ordinary Dynamax copy of t
     assert.deepEqual(maxHits(from, to), [], `${from}->${to}`);
   // Lapras and Snorlax are also Dynamax healers/tanks: only those rows are credited.
   assert.deepEqual(maxHits('lapras', 'lapras').map((h) => h.name), ['Lapras']);
-  assert.ok(maxHits('snorlax', 'snorlax').every((h) => h.name === 'Snorlax'));
+  assert.deepEqual(maxHits('snorlax', 'snorlax').map((h) => [h.name, h.tier]), [['Snorlax', 'A'], ['Snorlax', 'A']]);
   assert.deepEqual(maxHits('regice', 'regice').map((h) => h.name), ['Dynamax Regice']);
 });

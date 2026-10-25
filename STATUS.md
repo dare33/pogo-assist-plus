@@ -10,8 +10,13 @@ that opens with Gigantamax or Dynamax has a later name without either prefix (Ma
 `data/tiers.json` differs in 11 entries (name and `flags.max`) plus the timestamp. Advice on the fixture: Squirtle/Ivysaur/Bulbasaur/
 Pikachu/Caterpie builds lose their false Max hit (Blastoise, Venusaur, Pikachu, Butterfree rows are Gigantamax-only), Snorlax and Lapras
 lose the Gigantamax duplicate (the Dynamax tank/healer rows remain), Regice's hit is now named "Dynamax Regice"; `present.test.js`
-expectations for Squirtle -> Blastoise followed. Advice cache version NOT bumped (the open design stack bumps it when it merges, which
-recomputes caches). Verified by the session that made the change, locally on the MacBook: `npm test` 248 tests, 244 pass, 0 fail, 4 skipped.
+expectations for Squirtle -> Blastoise followed. Also: a Max gap shows up because "Toxtricity" is now "Gigantamax Toxtricity" (the
+advisor skips it, so no ordinary copy is credited); the fixture's build list reorders and shrinks (123 to 115 builds, 57 to 55 primary).
+The guard also recognises `G-Max`/`GMax` prefixes (case-insensitive). `scripts/dump-box.mjs` now skips Gigantamax Max entries as the
+advisor does (fixture: 41 Gigantamax lines before, 0 after). The app's own copy `native/PogoReader/Sources/PogoBox/Resources/tiers.json`
+was still the old data; it and `pogo-core.js` (header: commit and tiers.json hash) were regenerated with `native/tools/build-js-bundle.mjs`
+and `tiers.json` now matches `data/tiers.json`. Cache version: pending Greg's call (the app's cached advice keeps the old Max credit until
+the version is raised; the open design stack holds 9, 12 and reserves 13). Verified by the session that made the change, locally on the MacBook: `npm test` 248 tests, 244 pass, 0 fail, 4 skipped.
 
 **25 Oct 2026: build hygiene (branch `claude/build-hygiene-e6f0da`, for a draft PR to `main`, not merged).** A standing rule, in
 `CLAUDE.md` ("Build hygiene") and `native/README.md` ("Build hygiene"), after 143 GB of per-run Xcode derived-data folders

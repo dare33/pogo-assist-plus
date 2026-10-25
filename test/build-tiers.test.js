@@ -30,6 +30,21 @@ test('the build refuses an unprefixed later name in a Gigantamax or Dynamax row,
   }
 });
 
+test('the guard recognises G-Max and GMax prefixes, case-insensitively, and suggests the first name\'s own prefix', () => {
+  for (const cell of ['G-Max Charizard / Lapras', 'gmax Charizard, Lapras', 'GIGANTAMAX Charizard, Lapras']) {
+    const { r } = buildMax(cell);
+    assert.notEqual(r.status, 0, cell);
+    assert.match(r.stderr, /"Lapras"/, cell);
+    assert.ok(r.stderr.includes(`write "${cell.split(' ')[0]} Lapras"`), r.stderr);
+  }
+});
+
+test('mixed prefix words in one Max row are accepted when every name has a prefix of its own', () => {
+  const { r, tiers } = buildMax('Gigantamax Charizard, G-Max Lapras, Dynamax Kingler');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(tiers.entries.length, 3);
+});
+
 test('the build accepts a fully prefixed Max row and marks every name as a Max entry', () => {
   const { r, tiers } = buildMax('Gigantamax Charizard, Gigantamax Toxtricity, Gigantamax Lapras');
   assert.equal(r.status, 0, r.stderr);
@@ -44,4 +59,6 @@ test('the committed tiers have no plain-named Max entry from a Gigantamax/Dynama
   for (const e of attackers) if (!/^Crowned /.test(e.name)) assert.match(e.name, /^(Gigantamax|Dynamax) /, e.name);
   for (const n of ['Toxtricity', 'Lapras', 'Grimmsnarl', 'Venusaur', 'Blastoise', 'Butterfree', 'Snorlax', 'Pikachu', 'Meowth', 'Kingler'])
     assert.ok(tiers.entries.some((e) => e.name === `Gigantamax ${n}` && e.flags.max), n);
+  for (const n of ['Dynamax Kingler', 'Dynamax Regice'])
+    assert.ok(tiers.entries.some((e) => e.name === n && e.area === 'max' && e.flags.max), n);
 });

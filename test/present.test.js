@@ -129,9 +129,11 @@ test('actionText: what is left, from the steps', () => {
   const dragon = build('Dragonair', 51, 'dragonite');
   assert.deepEqual(kinds(dragon), ['evolve', 'megaEvolve']);
   assert.equal(actionText(dragon), 'Evolve to Dragonite + Mega evolve');
-  // The Dynamax requirement is Max's alone: it does not make the other areas unfinished, but it is not hidden either.
-  const sq50 = build('Squirtle', 50, 'blastoise');
-  assert.equal(actionText(sq50), 'Evolve to Blastoise + Mega evolve');
+  // The Dynamax requirement is Max's alone: it does not make the other areas unfinished, but it is not hidden either (shown below
+  // for a species that is in a Dynamax row).
+  // Blastoise's Max row is Gigantamax-only, so it gets no note; Rhyperior is in a Dynamax row, so its note is shown.
+  assert.equal(actionText(build('Squirtle', 50, 'blastoise')), 'Evolve to Blastoise + Mega evolve');
+  assert.equal(actionText(build('Rhyhorn', 50, 'rhyperior')), "Evolve to Rhyperior + Second move (if it doesn't have it) + Community Day move (Max needs a Dynamax copy)");
   const xurkMax = { ...build('Xurkitree', 40), steps: [{ kind: 'needsDynamaxCopy' }] };
   assert.equal(actionText(xurkMax), 'Already built (Max needs a Dynamax copy)');
   // A scan records no moves, so the second move may already be there.
