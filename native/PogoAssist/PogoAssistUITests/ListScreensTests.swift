@@ -12,6 +12,12 @@ final class ListScreensTests: XCTestCase {
     private func row(_ app: XCUIApplication, _ species: String) -> XCUIElement {
         rows(app).matching(NSPredicate(format: "label BEGINSWITH %@", "\(species),")).firstMatch
     }
+    /// The row of a species further down the list than the first screen: the fixed header leaves the list less room and the list is lazy, so scroll until it is built.
+    private func reveal(_ app: XCUIApplication, _ species: String) -> XCUIElement {
+        var n = 0
+        while !row(app, species).exists && n < 8 { app.swipeUp(); n += 1 }
+        return row(app, species)
+    }
     /// Opens the first copy in a species list. Taps near the row's title: under a chip the row's own tag button (44 pt tall) sits across its middle.
     private func openFirstCopy(_ app: XCUIApplication) {
         let copy = app.buttons.matching(identifier: "pokemon-row").firstMatch
@@ -48,20 +54,20 @@ final class ListScreensTests: XCTestCase {
     /// Activity chips filter the species and change the count capsules to the matching copies; the chosen species carries its best copy's tag.
     func testActivityChipsFilterTheListAndChangeTheCounts() throws {
         let app = launchPopulated()
-        let all = row(app, "Moltres").label
+        let all = reveal(app, "Moltres").label
         XCTAssertTrue(all.hasPrefix("Moltres, 6 Pokémon"), all)
         XCTAssertTrue(row(app, "Blissey").exists)
         app.buttons["chip-raids"].tap()
         XCTAssertTrue(app.buttons["chip-raids"].isSelected)
-        let moltres = row(app, "Moltres")
+        let moltres = reveal(app, "Moltres")
         XCTAssertTrue(moltres.waitForExistence(timeout: 5))
         XCTAssertTrue(moltres.label.hasPrefix("Moltres, 3 Pokémon, OK for Raids"), "the capsule counts the matching copies: " + moltres.label)
         XCTAssertFalse(row(app, "Blissey").exists, "a species with no Strong or OK copy for Raids is gone")
-        XCTAssertTrue(row(app, "Lucario").label.contains("Strong for Raids"), row(app, "Lucario").label)
+        XCTAssertTrue(reveal(app, "Lucario").label.contains("Strong for Raids"), reveal(app, "Lucario").label)
         sleep(1); shot("list-raids-chip")
         app.buttons["chip-all"].tap()
         XCTAssertTrue(row(app, "Blissey").waitForExistence(timeout: 5))
-        XCTAssertTrue(row(app, "Moltres").label.hasPrefix("Moltres, 6 Pokémon"))
+        XCTAssertTrue(reveal(app, "Moltres").label.hasPrefix("Moltres, 6 Pokémon"))
     }
 
     /// A league chip keeps the species with a Strong or OK copy for that league under the shown pick; Great League is over the cap for this whole box.
@@ -69,7 +75,7 @@ final class ListScreensTests: XCTestCase {
         let app = launchPopulated()
         resetRanking(app)
         app.buttons["chip-ml"].tap()
-        let xerneas = row(app, "Xerneas")
+        let xerneas = reveal(app, "Xerneas")
         XCTAssertTrue(xerneas.waitForExistence(timeout: 5))
         XCTAssertTrue(xerneas.label.hasPrefix("Xerneas, 2 Pokémon, Strong for Master"), xerneas.label)
         XCTAssertFalse(row(app, "Blissey").exists, "a species with no Strong or OK copy for Master League is gone")
@@ -116,7 +122,7 @@ final class ListScreensTests: XCTestCase {
         XCTAssertTrue(row(app, "Scyther").label.contains("Ultra League: Scyther, 96.2 percent"), row(app, "Scyther").label)
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
         app.buttons["Clear search"].tap()
-        XCTAssertTrue(row(app, "Moltres").waitForExistence(timeout: 5))
+        XCTAssertTrue(reveal(app, "Moltres").waitForExistence(timeout: 5))
         row(app, "Moltres").tap()
         let species = app.descendants(matching: .any)["species-scoring"]
         XCTAssertTrue(species.waitForExistence(timeout: 5))
