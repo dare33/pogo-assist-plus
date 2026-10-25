@@ -19,6 +19,7 @@
 		0C187F71378A2C77EC2C19E2 /* SpeciesBest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD137EFAD6E7F01FB0C0E81 /* SpeciesBest.swift */; };
 		0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4B281BB0B64267189CDB87 /* SetupProgress.swift */; };
 		0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052B76A429D7B08291119B9 /* ReviewResult.swift */; };
+		1246EFE08422FB55F2C73B59 /* PokemonPageParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02BD2550786F0D85E97D0548 /* PokemonPageParts.swift */; };
 		15DF09FE6C1E2A69EDBF9B42 /* HubRaidsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F07C1AF615AD4789157D020 /* HubRaidsView.swift */; };
 		1B479AC34849A09547106964 /* SVGGlyph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F13DDABFB49A0CC93164BF0 /* SVGGlyph.swift */; };
 		1C2C46054ED0A51D68CB570B /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 00436FF3692616EF8377125B /* PogoReader */; };
@@ -60,6 +61,7 @@
 		6BD03137A6BC55ED478E73D8 /* RankingSwitchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92443CC47565AC21CD82E3EC /* RankingSwitchTests.swift */; };
 		6C36CD15ECE70F69B86AD66A /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
 		6DB5DFC73A34D88596B2949B /* SampleScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2174CAD06ADF7ECC068B88FD /* SampleScan.swift */; };
+		74BF30A02B0889A549F4B28B /* PokemonDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5DCADB6094BE4B97E76F13 /* PokemonDetailsCard.swift */; };
 		767B78A46C867ABB726341EE /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */; };
 		7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */; };
 		7F3047FDFA95DF9EFE86B474 /* PogoImport in Frameworks */ = {isa = PBXBuildFile; productRef = B41070E51767E3888426C3F8 /* PogoImport */; };
@@ -114,6 +116,7 @@
 		EDABA9EEAC727744599A9E39 /* ReportSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F5275BA12DBF318D759175 /* ReportSupport.swift */; };
 		EE6FB27E5E43AD40C06AFE40 /* HubGymView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1F19255D086D56FE73A735 /* HubGymView.swift */; };
 		F2025255259D74D0143F1857 /* BoxInsightStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D04F07048F190593A9DCBE6 /* BoxInsightStoreTests.swift */; };
+		F468030C5CC8AC3D921A8D2B /* PokemonSummaryTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20D8DCC5FFAD794083C4F13 /* PokemonSummaryTab.swift */; };
 		F4D8E15D8584A2197BCA2E13 /* ScanPassFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C1E7034448E87AED8B9A364 /* ScanPassFlowTests.swift */; };
 		F4EC58D5E187857BA98309EC /* BarsAndAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */; };
 		F8C6E92B9CF663047CCCC108 /* SetupChecklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F723B7B2F32D040376093D /* SetupChecklistView.swift */; };
@@ -173,6 +176,7 @@
 		00027E9C738C8485EF328388 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		00B7030AC596BFDD03757B5C /* SetupStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepView.swift; sourceTree = "<group>"; };
 		01F723B7B2F32D040376093D /* SetupChecklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistView.swift; sourceTree = "<group>"; };
+		02BD2550786F0D85E97D0548 /* PokemonPageParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonPageParts.swift; sourceTree = "<group>"; };
 		084FB265AF36DD53B7DD982A /* HubMaxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubMaxView.swift; sourceTree = "<group>"; };
 		09D08E55E9B50EC09258EFF1 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		0F57A24972BBD21055BBC8A5 /* ListTags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListTags.swift; sourceTree = "<group>"; };
@@ -235,6 +239,7 @@
 		7658A29BC83D760022D1FB3A /* ReviewSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSeed.swift; sourceTree = "<group>"; };
 		769F24027EB56D5A4BB8154F /* ScanMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanMark.swift; sourceTree = "<group>"; };
 		7799DA33C637F5569E469B10 /* PogoShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PogoShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A5DCADB6094BE4B97E76F13 /* PokemonDetailsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonDetailsCard.swift; sourceTree = "<group>"; };
 		84957A517D0BAC062A93BF66 /* HubScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubScreensTests.swift; sourceTree = "<group>"; };
 		84C17CC8B55034461A1BDC58 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		853199DAE4157490F71A25E8 /* BoxChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxChrome.swift; sourceTree = "<group>"; };
@@ -268,6 +273,7 @@
 		C317D4A35524B2870E2635E8 /* GameOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameOpener.swift; sourceTree = "<group>"; };
 		C6F031A6C112AFF16F56C17A /* PogoReader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PogoReader; path = ../PogoReader; sourceTree = SOURCE_ROOT; };
 		CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoBroadcast.entitlements; sourceTree = "<group>"; };
+		D20D8DCC5FFAD794083C4F13 /* PokemonSummaryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonSummaryTab.swift; sourceTree = "<group>"; };
 		D7DA4A70966612345F4AA4B7 /* ReviewSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSections.swift; sourceTree = "<group>"; };
 		D7EAA375CD0561890BDC48B2 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
 		DB43F62023962536F8B969FA /* PogoShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoShare.entitlements; sourceTree = "<group>"; };
@@ -455,6 +461,7 @@
 				3D753F1DDCCB14FE57185CE0 /* DesignGallery.swift */,
 				675959CE1C1C65926303D638 /* DesignPieces.swift */,
 				943D02DD923AE19E5F63128C /* FloatingTabBar.swift */,
+				02BD2550786F0D85E97D0548 /* PokemonPageParts.swift */,
 				A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */,
 				1BB1A15D6F733EEE0586D675 /* RankingControls.swift */,
 				769F24027EB56D5A4BB8154F /* ScanMark.swift */,
@@ -490,7 +497,9 @@
 				5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */,
 				1BF5D1287FA6845313B02116 /* OpenSpeciesView.swift */,
 				62E01BD962ADB0C9DDD6C7FF /* PassWording.swift */,
+				7A5DCADB6094BE4B97E76F13 /* PokemonDetailsCard.swift */,
 				33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */,
+				D20D8DCC5FFAD794083C4F13 /* PokemonSummaryTab.swift */,
 				B61B527C762D4C808D507072 /* ReviewNotSeen.swift */,
 				936229D5CE5AD592DA498B16 /* ReviewQuestionViews.swift */,
 				A052B76A429D7B08291119B9 /* ReviewResult.swift */,
@@ -807,6 +816,9 @@
 				CEBF8B2F5697885A4ED387F8 /* PassWording.swift in Sources */,
 				83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */,
 				953581AE09525FD904E92745 /* PokemonDetailView.swift in Sources */,
+				74BF30A02B0889A549F4B28B /* PokemonDetailsCard.swift in Sources */,
+				1246EFE08422FB55F2C73B59 /* PokemonPageParts.swift in Sources */,
+				F468030C5CC8AC3D921A8D2B /* PokemonSummaryTab.swift in Sources */,
 				88B726BE30F7E106A63BC75E /* QuestionCard.swift in Sources */,
 				414C36A2C46797E952332411 /* RankingControls.swift in Sources */,
 				5A7CFEDBCAD05B096C12CA05 /* ReaderSettings.swift in Sources */,

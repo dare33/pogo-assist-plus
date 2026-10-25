@@ -2,32 +2,51 @@ import SwiftUI
 import PogoBox
 import PogoReader
 
-/// One Pokémon: name and CP as the heading, what to check, IV bars, the advice, a few facts and its own game search
-/// (design handoff v2 section 1h and the prototype's detail). The tab bar is hidden here, as in the prototype.
+/// One Pokémon (design pass 3, Option A): the details card with its marks and advanced details, the activity tabs (Summary, PvP, Raids, Gym, Rocket, Max), the
+/// facts and Delete under every tab. The tab bar is hidden here, as in the prototype. All rules come from PogoBox (`PokemonActivities`, `PokemonPage`,
+/// `AdvancedDetails`, `LeaguePanel`); this file and its neighbours only lay them out.
 struct PokemonDetailView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accent) private var accent
     let id: String
+    @State private var tab: PokemonActivities.Tab
+    /// The league tile chosen on the PvP tab (a league key). Per screen, not stored.
+    @State private var league: String
     @State private var fixing = false
     @State private var deleting: DeleteTarget?
+    @State private var advancedOpen = false
+    /// An edit is being saved: the marks and chips wait for it (two quick taps would save twice).
+    @State private var saving = false
     @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @Environment(\.showToast) private var showToast
     /// The switch's position once the person has moved it; until then the Settings choice.
     @State private var chosenMega: Bool?
-    /// The league the Leagues panel has open (nil on its base cards); the Advice panel waits while one is. A TOP PVP copy on My Pokémon opens the page with its league chosen.
-    @State private var leaguesMode: String?
     /// "How it was read" is one line that opens its notes beneath it.
     @State private var notesOpen = false
-    /// The Dynamax choice just made, until its save has landed: the switch shows it at once, and further taps wait (two quick taps would save twice).
-    @State private var pendingDynamax: BoxMerge.DynamaxEdit?
-    /// Activities whose tag was tapped open: the one line it explains.
-    @State private var activityOpen = Set<String>()
+    /// What the page works out from the advice, kept until the advice or the box changes.
+    @State private var cache = PageCache()
+    /// Bumped each time the advice changes, so the cache is rebuilt.
+    @State private var adviceGen = 0
+    /// The earlier league view's state, until the PvP tab has its own (the next commit).
+    @State private var leaguesMode: String?
 
-    init(id: String, league: String? = nil) {
+    /// `initialLeague` (a league key) opens the page on the PvP tab with that league's tile chosen (a tap on a TOP PVP copy, rule 6); otherwise it opens on Summary (rule 19).
+    init(id: String, initialLeague: String? = nil) {
         self.id = id
-        _leaguesMode = State(initialValue: league)
+        let league = initialLeague ?? Self.testLeague
+        _tab = State(initialValue: league == nil ? .summary : .pvp)
+        _league = State(initialValue: league ?? "gl")
+    }
+
+    /// A DEBUG build honours `-uitest-initial-league gl|ul|ml`, so a UI test can open the page as a TOP PVP copy does without the list's route.
+    private static var testLeague: String? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-uitest-initial-league"), i + 1 < args.count, LeaguePanel.keys.contains(args[i + 1]) { return args[i + 1] }
+        #endif
+        return nil
     }
 
     /// The Mega form the page shows now: only for an entry whose Mega form has a CP, and only while the switch is on Mega.
@@ -36,52 +55,28 @@ struct PokemonDetailView: View {
         return mf
     }
 
+    private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }
+
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
-                Spacer()
-                IconButton(systemImage: "gearshape", kind: .floating, label: "Settings") { model.sheet = .settings }
-                if let e = model.entry(id) {
-                    // "Fix a value" changes the normal values only, so it waits while the page shows the Mega form.
-                    let onMega = megaShown(e) != nil
-                    IconButton(systemImage: "pencil", kind: .floating, label: "Fix a value") { fixing = true }
-                        .disabled(onMega).opacity(onMega ? 0.4 : 1)
-                        .accessibilityHint(onMega ? "Fixing changes the normal values. Switch to Normal first." : "")
-                }
-            }
-            .padding(.horizontal, Theme.Space.screen)
-            .frame(minHeight: 52)
+            header
             if let e = model.entry(id) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
-                        heading(e, mega: megaShown(e))
                         if !e.row.checkFlags.isEmpty { checkPanel(e) }
-                        ivPanel(e, pvpFigures: megaShown(e) == nil)
-                        // Megas are not allowed in GO Battle League, so the section (and the IVs panel's PvP figures) wait while the page shows the Mega form.
-                        if megaShown(e) == nil { leaguesPanel(e) }
-                        // The league view is the page's focus: the Advice panel returns with the base cards.
-                        if !leagueViewShowing(e) { activitiesPanel(e) }
-                        if !leagueViewShowing(e) { advicePanel(e) }
+                        PokemonDetailsCard(entry: e, mega: megaShown(e), advancedOpen: $advancedOpen, apply: apply)
+                        if e.shownMegaForm != nil { formSwitch(on: megaShown(e) != nil).frame(maxWidth: .infinity, alignment: .leading) }
+                        if megaShown(e) != nil { megaSearchNote }
+                        ActivityTabBar(selection: $tab)
+                        tabContent(e)
                         factsPanel(e, mega: megaShown(e))
                         notesPanel(e, mega: megaShown(e))
-                        VStack(spacing: 2) {
-                            Button { deleting = DeleteTarget(id: e.id, title: e.row.title, cp: e.row.cp) } label: {
-                                Text("Delete from box").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                            }
-                            .accessibilityHint("Removes it from the box only, not from the game")
-                            Text("Removes this copy from the app's box only, not from the game.").font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.faint)
-                                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity)
+                        deleteButton(e)
                     }
                     .padding(.horizontal, Theme.Space.screen)
                     .padding(.top, 6)
                     .padding(.bottom, 24)
                 }
-                // The league view closes with its panel (no ratings while the advice recalculates, or the Mega form shown), so it never comes back stale.
-                .onChange(of: leaguesPanelShown(e)) { _, shown in if !shown { leaguesMode = nil } }
                 .sheet(isPresented: $fixing) { FixValueView(entry: e).environmentObject(model) }
             } else {
                 Text("This Pokémon is no longer in the box.").paText(.secondary).foregroundStyle(Theme.muted)
@@ -92,40 +87,52 @@ struct PokemonDetailView: View {
         .toolbar(.hidden, for: .navigationBar)
         .hidesTabBar()
         .confirmDelete($deleting) { dismiss() }
+        .onChange(of: model.advice) { _, _ in adviceGen += 1 }
     }
 
-    // MARK: heading
+    // MARK: header
 
-    /// The entry's own values, or its Mega form's while the switch is on Mega.
-    private func heading(_ e: BoxEntry, mega: MegaForm?) -> some View {
-        let r = e.row
-        let title = mega?.title ?? r.title, cp = mega?.cp ?? r.cp
-        let level = mega != nil ? Fmt.level(mega?.level, mega?.levelMax) : Fmt.level(r), hp = mega != nil ? mega?.hp : r.hp
-        let meta = [level.map { "Level \($0)" } ?? "Level not known", hp.map { "HP \($0)" } ?? "HP not read"]
-        return VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(.figtree(34, .heavy, relativeTo: .largeTitle)).tracking(-0.025 * 34).foregroundStyle(Theme.ink)
-                .accessibilityAddTraits(.isHeader)
-            let cpLine = HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(verbatim: Fmt.cp(cp)).font(.figtree(cp > 0 ? 22 : 17, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(Theme.ink)
-                Text(meta.joined(separator: " · ")).font(.figtree(15, .semibold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.muted)
+    /// Back, the orange search circle (copies the game search) and the pencil (Fix a value, unchanged).
+    private var header: some View {
+        HStack {
+            IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
+            Spacer()
+            if let e = model.entry(id) {
+                // The search is always the normal form's: the game shows a Mega CP only while the Pokémon is Mega evolved, so a search on it would find nothing the rest of the time.
+                if let search = GameSearch.text([GameSearch.part(row: e.row)]) {
+                    Button {
+                        UIPasteboard.general.string = search
+                        showToast("Copied")
+                    } label: {
+                        IconButton(systemImage: "magnifyingglass", kind: .floating, label: "Copy search", inkOverride: Theme.orangeInk) {}.face
+                    }
+                    .buttonStyle(PressStyle())
+                    .accessibilityLabel("Copy search")
+                    .accessibilityValue(search)
+                    .accessibilityIdentifier("search-chip")
+                }
+                // "Fix a value" changes the normal values only, so it waits while the page shows the Mega form.
+                let onMega = megaShown(e) != nil
+                IconButton(systemImage: "pencil", kind: .floating, label: "Fix a value") { fixing = true }
+                    .disabled(onMega).opacity(onMega ? 0.4 : 1)
+                    .accessibilityHint(onMega ? "Fixing changes the normal values. Switch to Normal first." : "")
             }
-            // The search is always the normal form's: the game shows a Mega CP only while the Pokémon is Mega evolved, so a search on it would find nothing the rest of the time.
-            if let search = GameSearch.text([GameSearch.part(row: e.row)]) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) { cpLine; Spacer(minLength: 8); searchChip(search) }
-                    VStack(alignment: .leading, spacing: 4) { cpLine; searchChip(search) }
-                }
-                if mega != nil {
-                    Text("The game shows the Mega CP only while it is Mega evolved, so this search uses the normal CP.")
-                        .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 4)
-                        .accessibilityIdentifier("mega-search-note")
-                }
-            } else { cpLine }
-            if e.shownMegaForm != nil { formSwitch(on: mega != nil).padding(.top, 12) }
         }
-        .padding(.horizontal, 8).padding(.top, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.Space.screen)
+        .frame(minHeight: 52)
+        // The circles hold a glyph that would outgrow them at the accessibility sizes.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    /// Every mark and chip saves through the data model's edit as a box version; the advice is worked out again (AppModel.correct).
+    private func apply(_ edit: BoxMerge.Edit) {
+        guard !saving else { return }
+        saving = true
+        Task {
+            let result = await model.correct(id, edit)
+            saving = false
+            if let error = result.error { model.message = error }
+        }
     }
 
     // MARK: Normal / Mega
@@ -156,6 +163,13 @@ struct PokemonDetailView: View {
         .accessibilityIdentifier("form-\(title.lowercased())")
     }
 
+    private var megaSearchNote: some View {
+        Text("The game shows the Mega CP only while it is Mega evolved, so this search uses the normal CP.")
+            .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8)
+            .accessibilityIdentifier("mega-search-note")
+    }
+
     // MARK: a check
 
     private func checkPanel(_ e: BoxEntry) -> some View {
@@ -171,250 +185,79 @@ struct PokemonDetailView: View {
         }
     }
 
-    // MARK: search chip
+    // MARK: the tabs
 
-    /// The game search as a small chip beside the CP line: tapping copies it and toasts "Copied".
-    private func searchChip(_ text: String) -> some View {
-        Button {
-            UIPasteboard.general.string = text
-            showToast("Copied")
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").font(.figtree(12, .heavy)).accessibilityHidden(true)
-                Text(text).font(.figtree(13, .heavy, relativeTo: .footnote))
-                Text("· Copy").font(.figtree(13, .bold, relativeTo: .footnote)).opacity(0.8)
-            }
-            .foregroundStyle(Theme.orangeInk)
-            .padding(.horizontal, 10).frame(minHeight: 30)
-            .background(Theme.orangeTint, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .padding(.vertical, 7).contentShape(Rectangle()).padding(.vertical, -7)
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityLabel("Copy search")
-        .accessibilityValue(text)
-        .accessibilityIdentifier("search-chip")
+    /// What the advice gives the page: the last ready advice stays on show while a new one is worked out (an edit recomputes it), so the page does not jump.
+    private var readyAdvice: BoxAdvice? {
+        if case .ready(let a) = model.advice { cache.lastReady = a; return a }
+        return cache.lastReady
     }
 
-    // MARK: IVs
+    private func context(_ advice: BoxAdvice) -> HubContext? {
+        cache.context(key: "\(adviceGen)|\(model.snapshot?.seq ?? -1)") {
+            guard let gm = try? GameMaster.bundled(), let hub = try? HubData.bundled(), let table = try? TierTable.bundled() else { return nil }
+            return HubContext(advice: advice, entries: model.entries, gm: gm, hub: hub, table: table, today: HubModel.today())
+        }
+    }
 
-    /// The IV bars; at the trailing edge this copy's IV % as the shown member in Great, Ultra and Master League (nothing when the IVs are not read).
-    private func ivPanel(_ e: BoxEntry, pvpFigures: Bool) -> some View {
-        let r = e.row
-        return Panel {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("IVs").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-                Spacer(minLength: 0)
-                if pvpFigures, r.ivs != nil, case .ready(let advice) = model.advice {
-                    let ratings = advice.leagues(for: e.id)
-                    if !ratings.isEmpty {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            ForEach(LeaguePanel.ivFigures(ratings, pogoAssist: rankingRaw == Ranking.pogoAssist.rawValue, level: r.level), id: \.key) { f in
-                                let league = League(rawValue: f.key) ?? .gl
-                                VStack(alignment: .trailing, spacing: 0) {
-                                    Text(f.pct.map(LeaguePanel.percent) ?? "—").font(.figtree(17, .heavy, relativeTo: .headline)).monospacedDigit()
-                                    Text(LeaguePanel.shortName(f.key).uppercased()).font(.figtree(11, .bold, relativeTo: .caption2)).tracking(0.06 * 11)
-                                }
-                                .foregroundStyle(league.ink)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityIdentifier("iv-figure-\(f.key)")
-                                .accessibilityLabel("\(LeaguePanel.name(f.key)) IVs")
-                                .accessibilityValue(f.pct.map { "\(LeaguePanel.oneDecimal($0)) percent" } ?? "none")
-                            }
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
+    @ViewBuilder private func tabContent(_ e: BoxEntry) -> some View {
+        if let advice = readyAdvice, let ctx = context(advice) {
+            switch tab {
+            case .summary:
+                let rows = cache.value("summary|\(pogoAssist)") { PokemonActivities.summary(copy: e, ctx: ctx, pogoAssist: pogoAssist) }
+                SummaryRowsPanel(rows: rows) { tab = $0 }
+                AdvicePanel(entry: e, advice: advice)
+            case .pvp: leaguesPanel(e, advice: advice)
+            case .raids, .gym, .rocket, .max: Text(tab.title).foregroundStyle(Theme.muted)   // the next commit
+            }
+        } else {
+            switch model.advice {
+            case .computing:
+                Panel(tint: .accent, padding: 18, spacing: 8) {
+                    HStack(spacing: 10) { ProgressView(); Text("Working out advice").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
                 }
-            }
-            if let i = r.ivs { BarsView(i.atk, i.def, i.hp) } else { Text("IVs not read").paText(.secondary).foregroundStyle(Theme.muted) }
-        }
-    }
-
-    // MARK: advice
-
-    private func tag(_ text: String) -> some View {
-        Text(text).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink)
-            .padding(.horizontal, 10).padding(.vertical, 4)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
-    }
-
-    @ViewBuilder private func advicePanel(_ e: BoxEntry) -> some View {
-        switch model.advice {
-        case .none: EmptyView()
-        case .computing:
-            Panel(tint: .accent, padding: 18, spacing: 8) {
-                adviceLabel
-                HStack(spacing: 10) { ProgressView(); Text("Working out advice").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
-            }
-        case .failed(let m):
-            Panel(tint: .accent, padding: 18, spacing: 8) {
-                adviceLabel
-                Text("Advice could not be worked out: \(m)").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
-            }
-        case .ready(let advice):
-            let a = advice.entries(for: e.id)
-            Panel(tint: .accent, padding: 18, spacing: 8) {
-                adviceLabel
-                if a.isEmpty { Text("The advisor has nothing for this Pokémon.").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
-                ForEach(Array(a.builds.enumerated()), id: \.element.id) { n, b in
-                    if n > 0 { Rectangle().fill(accent.ink.opacity(0.18)).frame(height: 1).padding(.vertical, 4) }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(b.action + (b.pvp.map { " (\($0))" } ?? "")).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
-                        HStack(spacing: 6) {
-                            ForEach(b.areas, id: \.self) { tag($0) }
-                            if !b.tier.isEmpty { tag("Tier \(b.tier)") }
-                        }
-                        Text(BuildRow(build: b, showName: false).costLine).font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineSpacing(3)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("advice-build-\(n)")
+            case .failed(let m):
+                Panel(tint: .accent, padding: 18, spacing: 8) {
+                    Text("Advice could not be worked out: \(m)").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
                 }
-                let notes = BoxAdvice.adviceNotes(a, name: a.duplicateOf?.name ?? e.row.title)
-                if let t = notes.spare { Text(t).font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineSpacing(3).accessibilityIdentifier("advice-spare") }
-                if let t = notes.verdict { Text(LocalizedStringKey(t)).font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineSpacing(3).accessibilityIdentifier("advice-verdict") }
+            default: EmptyView()
             }
         }
-    }
-
-    private var adviceLabel: some View {
-        Text("ADVICE").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).accessibilityAddTraits(.isHeader)
     }
 
     // MARK: leagues
 
     /// Great, Ultra and Master League for this Pokémon, all read from the cached advice: nothing is worked out here.
-    /// The Shadow footnote shows while this copy's Shadow status is unknown: only a clip merge records one (`ScanRow.shadow`), so a scan or a
-    /// screenshot import says nothing about it.
-    @ViewBuilder private func leaguesPanel(_ e: BoxEntry) -> some View {
-        if case .ready(let advice) = model.advice {
-            let ratings = advice.leagues(for: e.id)
-            if !ratings.isEmpty {
-                // The "Advice builds it" marker reads the copy's own builds only (never those it is a spare for), so it agrees with the Advice panel; the tag is worth alone.
-                let a = advice.entries(for: e.id)
-                LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, builds: a.builds, transfers: a.transfersWithNoBuild, mode: $leaguesMode)
-            }
+    @ViewBuilder private func leaguesPanel(_ e: BoxEntry, advice: BoxAdvice) -> some View {
+        let ratings = advice.leagues(for: e.id)
+        if megaShown(e) == nil, !ratings.isEmpty {
+            let a = advice.entries(for: e.id)
+            LeaguesPanel(ratings: ratings, level: e.row.level, showsShadowNote: e.row.shadow == nil, builds: a.builds, transfers: a.transfersWithNoBuild, mode: $leaguesMode)
         }
     }
 
-    /// The Leagues panel is on the page: the advice is ready, this copy has ratings, and the page is not on the Mega form.
-    private func leaguesPanelShown(_ e: BoxEntry) -> Bool {
-        guard megaShown(e) == nil, case .ready(let advice) = model.advice else { return false }
-        return !advice.leagues(for: e.id).isEmpty
-    }
-
-    /// The panel is showing a league view (not its base cards): the Advice panel gives way to it.
-    private func leagueViewShowing(_ e: BoxEntry) -> Bool {
-        guard leaguesPanelShown(e), case .ready(let advice) = model.advice, let key = leaguesMode else { return false }
-        return advice.leagues(for: e.id)[key] != nil
-    }
-
-    // MARK: activities
-
-    /// Raids, Gym, Rocket and Max for this copy, read from the cached advice: the tag is worth alone (Top, Good or Weak in the area's colours; a tap opens its line),
-    /// and "Advice builds it" marks an area the copy's own primary build covers, as the league cards do. It stays under the Leagues panel and gives way with it
-    /// while a league view is open.
-    @ViewBuilder private func activitiesPanel(_ e: BoxEntry) -> some View {
-        if case .ready(let advice) = model.advice {
-            let fits = advice.fit(for: e.id)
-            if !fits.isEmpty {
-                Panel(padding: 18, spacing: 12) {
-                    Text("ACTIVITIES").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted).accessibilityAddTraits(.isHeader)
-                        .accessibilityIdentifier("activities-panel")
-                    ForEach(BoxInsight.areas, id: \.self) { area in
-                        if let f = fits[area], let a = BoxInsight.Activity(rawValue: area) { activityRow(e, f, a) }
-                    }
-                }
-            }
-        }
-    }
-
-    private func activityRow(_ e: BoxEntry, _ f: BoxAdvice.Fit, _ a: BoxInsight.Activity) -> some View {
-        let worth: LeaguePanel.Worth = f.tag == .strong ? .strong : f.tag == .ok ? .ok : .weak
-        let open = activityOpen.contains(a.rawValue)
-        let chip = f.buildsChipText(ownNames: [e.row.name, e.row.title])
-        // LeaguePanel.grouped, not .formatted(): the figures read the same whatever the phone's region, as the league cards' do.
-        let cost = f.buildCost.map { ", \(LeaguePanel.grouped($0.dust)) dust, \(LeaguePanel.grouped($0.candy)) candy" + ($0.xl > 0 ? ", \(LeaguePanel.grouped($0.xl)) XL" : "") } ?? ""
-        return VStack(alignment: .leading, spacing: 6) {
-            FlowLayout(spacing: 8) {
-                Button { if open { activityOpen.remove(a.rawValue) } else { activityOpen.insert(a.rawValue) } } label: {
-                    // 6 pt above and below the chip (half the Panel's 12 pt row gap, so two rows' areas never overlap): about 32 pt to hit with the chip's ~20 pt, laid out as before.
-                    WorthTag(activity: a, worth: worth).padding(.vertical, 6).contentShape(Rectangle()).padding(.vertical, -6)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(a.title): \(worth.label)")
-                .accessibilityValue(open ? f.line : "")
-                .accessibilityHint("Shows why")
-                .accessibilityAddTraits(open ? .isSelected : [])
-                .accessibilityIdentifier("activity-\(a.rawValue)")
-                if let chip {
-                    BuildsChip(text: chip)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(chip.capitalized + cost)
-                        .accessibilityIdentifier("activity-\(a.rawValue)-builds")
-                }
-            }
-            if open {
-                Text(f.line).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted).lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("activity-\(a.rawValue)-line")
-            }
-        }
-    }
-
-    // MARK: facts
+    // MARK: under every tab
 
     private func factsPanel(_ e: BoxEntry, mega: MegaForm?) -> some View {
-        var facts = [(String, String)]()
-        facts.append(("Power-up dust", (mega != nil ? mega?.dust : e.row.dust).map { $0.formatted() } ?? "not known"))
-        if case .ready(let advice) = model.advice, let spares = advice.entries(for: e.id).builds.map(\.spares).max(), spares > 0 { facts.append(("Spare copies", spares.formatted())) }
-        facts.append(("First seen · last seen", "\(Self.short(mega?.firstSeen ?? e.firstSeen)) · \(Self.short(mega?.lastSeen ?? e.lastSeen))"))
-        return Panel(padding: 0, spacing: 0) {
-            ForEach(Array(facts.enumerated()), id: \.offset) { n, f in
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(f.0).font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading)
-                    Text(f.1).font(.figtree(15, .bold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink).multilineTextAlignment(.trailing)
-                }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .overlay(alignment: .bottom) { if n < facts.count - 1 || mega == nil { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 16) } }
-                .accessibilityElement(children: .combine)
-            }
-            // The Dynamax flag belongs to the Pokémon, not to its Mega form.
-            if mega == nil { dynamaxRow(e) }
-        }
+        var spares = 0
+        if case .ready(let advice) = model.advice { spares = advice.entries(for: e.id).builds.map(\.spares).max() ?? 0 }
+        else if let advice = cache.lastReady { spares = advice.entries(for: e.id).builds.map(\.spares).max() ?? 0 }
+        let first = Self.short(mega?.firstSeen ?? e.firstSeen), last = Self.short(mega?.lastSeen ?? e.lastSeen)
+        return PageFacts(dust: mega != nil ? mega?.dust : e.row.dust, spares: spares, seen: first == last ? first : "\(first) · \(last)")
     }
 
-    /// Whether this Pokémon was caught as a Dynamax. The game shows a Dynamax badge, but the app cannot read it, so the person sets it: Off | On.
-    /// Max battles use only the ones set to On. The switch is one adjustable element; the label beside it is hidden from VoiceOver (the switch names itself).
-    private func dynamaxRow(_ e: BoxEntry) -> some View {
-        let selection = Binding<BoxMerge.DynamaxEdit>(
-            get: { pendingDynamax ?? BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) },
-            set: { new in
-                // A tap on the segment already selected (or any tap while a save is under way) would otherwise save a box version and re-run the advice for nothing.
-                guard pendingDynamax == nil, new != BoxMerge.DynamaxEdit(model.entry(e.id)?.row.dynamax) else { return }
-                pendingDynamax = new
-                Task {
-                    let result = await model.correct(e.id, BoxMerge.Edit(dynamax: new))
-                    pendingDynamax = nil
-                    if let error = result.error { model.message = error }
-                }
-            })
-        let label = Text("Dynamax").font(.figtree(15, .regular, relativeTo: .subheadline)).foregroundStyle(Theme.muted).accessibilityHidden(true)
-        let control = SegmentedSwitch(
-            segments: [.init(value: .off, title: "Off"), .init(value: .on, title: "On")],
-            selection: selection, metrics: .compact, label: "Dynamax", identifier: "dynamax-switch", adjustable: true, singleLine: true)
-        return VStack(alignment: .leading, spacing: 4) {
-            // At large text sizes the switch drops under its label rather than squeezing it.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { label.frame(maxWidth: .infinity, alignment: .leading); control }.fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 6) { label; control }
+    private func deleteButton(_ e: BoxEntry) -> some View {
+        VStack(spacing: 2) {
+            Button { deleting = DeleteTarget(id: e.id, title: e.row.title, cp: e.row.cp) } label: {
+                Text("Delete from box").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.red)
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
-            Text("Only Pokémon caught as Dynamax can join Max battles. The app cannot read this from the game.")
-                .font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.faint)
-                .fixedSize(horizontal: false, vertical: true)
+            .accessibilityHint("Removes it from the box only, not from the game")
+            Text("Removes this copy from the app's box only, not from the game.").font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.faint)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
     }
-
 
     // MARK: how it was read
 
@@ -604,5 +447,26 @@ struct FixValueView: View {
             if let notice = result.notice { model.message = notice }
             dismiss()
         }
+    }
+}
+
+/// What the Pokémon page keeps between renders: the last ready advice and the rules' results for the current advice and box. A reference type held in `@State`,
+/// so a render can read it without a change to it asking for another render.
+final class PageCache {
+    var lastReady: BoxAdvice?
+    private var key = ""
+    private var ctx: HubContext?
+    private var memo = [String: Any]()
+
+    func context(key: String, make: () -> HubContext?) -> HubContext? {
+        if key != self.key || ctx == nil { self.key = key; ctx = make(); memo = [:] }
+        return ctx
+    }
+
+    func value<T>(_ name: String, _ make: () -> T) -> T {
+        if let v = memo[name] as? T { return v }
+        let v = make()
+        memo[name] = v
+        return v
     }
 }
