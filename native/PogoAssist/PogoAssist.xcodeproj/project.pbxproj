@@ -10,6 +10,7 @@
 		001212376B49D46CEFA31541 /* ListTags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F57A24972BBD21055BBC8A5 /* ListTags.swift */; };
 		010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2851EAE92D472650A78CD032 /* SampleHandler.swift */; };
 		011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */; };
+		028D99810BA092BE68E6909B /* SpeciesTopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF9900FD297825B9A0090D7 /* SpeciesTopTests.swift */; };
 		0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */; };
 		07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */; };
 		097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -166,6 +167,7 @@
 		2174CAD06ADF7ECC068B88FD /* SampleScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleScan.swift; sourceTree = "<group>"; };
 		2851EAE92D472650A78CD032 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		2E3538488989AE3C1ABAA66B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		2FF9900FD297825B9A0090D7 /* SpeciesTopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesTopTests.swift; sourceTree = "<group>"; };
 		33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonDetailView.swift; sourceTree = "<group>"; };
 		36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBroadcastButton.swift; sourceTree = "<group>"; };
 		384EC74CAE6F7A853DC89045 /* ScreenshotImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImport.swift; sourceTree = "<group>"; };
@@ -351,6 +353,7 @@
 				FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */,
 				7576F57445609D7B4888792D /* ScreenshotImportTests.swift */,
 				4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */,
+				2FF9900FD297825B9A0090D7 /* SpeciesTopTests.swift */,
 			);
 			path = PogoAssistUITests;
 			sourceTree = "<group>";
@@ -695,6 +698,7 @@
 				998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */,
 				391A1C3B445B6E751C85CA27 /* ScreenshotImportTests.swift in Sources */,
 				C0A0118C2725F58B90F1E11A /* SetupTests.swift in Sources */,
+				028D99810BA092BE68E6909B /* SpeciesTopTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
