@@ -58,6 +58,24 @@ function splitNames(cell) {
   return out;
 }
 
+// In the Max area a prefix names the kind of Pokémon (a Gigantamax catch is not a Dynamax one), so a row that opens with
+// "Gigantamax X" or "Dynamax X" must prefix every later name too: a bare "Lapras" would be read as an ordinary Dynamax copy.
+// "G-Max"/"GMax" are refused outright: the advisor (src/advise.js, bundled into the app) excludes /gigantamax|g-max/i, which
+// would miss "GMax", so the one spelling is "Gigantamax".
+// Other areas mix prefixed and plain names on purpose ("Shadow Blaziken, Flareon"), so this guard is Max-only.
+function checkMaxPrefixes(names, where) {
+  for (const { name } of names) {
+    const g = name.match(/^G-?Max(?=\s|$)\s*(.*)$/i);
+    if (g) throw new Error(`${where}: "${name}" uses a G-Max/GMax prefix; write "Gigantamax ${g[1]}"`);
+  }
+  const prefix = (n) => n.match(/^(Gigantamax|Dynamax)(?=\s|$)/i)?.[1];
+  const first = prefix(names[0]?.name ?? '');
+  if (!first) return;
+  for (const { name } of names.slice(1)) {
+    if (!prefix(name)) throw new Error(`${where}: "${name}" follows "${names[0].name}" without a Gigantamax/Dynamax prefix; write "${first} ${name}"`);
+  }
+}
+
 const entries = [];
 const unresolved = new Map();
 for (const file of readdirSync(srcDir).filter((f) => f.endsWith('.md')).sort()) {
@@ -76,7 +94,9 @@ for (const file of readdirSync(srcDir).filter((f) => f.endsWith('.md')).sort()) 
     for (const row of t.rows) {
       const tier = row[ti];
       if (!/^[SAB]$/.test(tier)) continue;
-      for (const { name, hint } of splitNames(row[ni])) {
+      const names = splitNames(row[ni]);
+      if (meta.area === 'max') checkMaxPrefixes(names, `${basename(file)} row "${row[ni]}"`);
+      for (const { name, hint } of names) {
         const r = resolveSpecies(gm, name);
         if (!r) { unresolved.set(name, (unresolved.get(name) || 0) + 1); continue; }
         entries.push({

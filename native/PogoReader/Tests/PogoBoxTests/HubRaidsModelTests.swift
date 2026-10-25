@@ -411,7 +411,7 @@ final class HubRaidsModelTests: XCTestCase {
         es = adding(es, "blissey", name: "Blissey", copyId: "bliss", cp: 1000)
         XCTAssertEqual(table.entries(for: "lapras", area: "max").map(\.tier), ["A", "A"])
         let roster = HubRaidsModel.maxRoster(entries: es, advice: try advice(es))
-        XCTAssertEqual(roster.tiles.map(\.name), ["Blissey", "Lapras"]); XCTAssertEqual(roster.tiles.map(\.line), ["S · Tank and healer", "A · Attackers"], "of equal tiers the first entry in the table")
+        XCTAssertEqual(roster.tiles.map(\.name), ["Blissey", "Lapras"]); XCTAssertEqual(roster.tiles.map(\.line), ["S · Tank and healer", "A · Healer"], "of equal tiers the first entry in the table that is not Gigantamax")
         // Species with only a Gigantamax Max entry are not "not set" and do not count.
         for id in ["gengar", "rillaboom", "cinderace", "machamp", "charizard", "garbodor"] {
             XCTAssertTrue(HubRaidsModel.maxEntries(id, table).isEmpty, id)

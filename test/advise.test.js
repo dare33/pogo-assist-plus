@@ -553,3 +553,14 @@ test('bestOf: a Shadow and a plain copy of one species are separate groups (hygi
   const res = analyseBox([cp('Charmander', ...GOOD), cp('Charmander', ...GOOD, { shadow: true })], ctx);
   assert.deepEqual(res.pokemon.map((e) => e.bestOf.includes('rocket')), [true, true]);
 });
+
+test('a Gigantamax-only Max row is not credited to an ordinary Dynamax copy of the species', () => {
+  const maxHits = (from, to) => out.builds.find((b) => b.speciesId === from && b.targetId === to)?.hits.filter((h) => h.area === 'max') ?? [];
+  // These species are only in the Max tables as Gigantamax (the G-Max Blastoise, Venusaur and Pikachu rows were once split into plain names).
+  for (const [from, to] of [['squirtle', 'blastoise'], ['bulbasaur', 'venusaur'], ['pikachu', 'pikachu'], ['caterpie', 'butterfree']])
+    assert.deepEqual(maxHits(from, to), [], `${from}->${to}`);
+  // Lapras and Snorlax are also Dynamax healers/tanks: only those rows are credited.
+  assert.deepEqual(maxHits('lapras', 'lapras').map((h) => h.name), ['Lapras']);
+  assert.deepEqual(maxHits('snorlax', 'snorlax').map((h) => [h.name, h.tier]), [['Snorlax', 'A'], ['Snorlax', 'A']]);
+  assert.deepEqual(maxHits('regice', 'regice').map((h) => h.name), ['Dynamax Regice']);
+});
