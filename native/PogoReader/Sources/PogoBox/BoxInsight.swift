@@ -5,9 +5,9 @@ import Foundation
 /// best copy and the member it is rated as). The tag rules are the ones the Pokémon page uses: a league's is `LeaguePanel.slot` (the pick card's
 /// headline member, tier and roll), an activity's is the advice's `fit` tag. Both rankings are built together so that switching is instant.
 public struct BoxInsight {
-    /// The seven things a list chip can filter by, in the order the chips run.
+    /// The seven things a list chip can filter by, in the order the chips run: the three PvP leagues, then Raids, Gym, Rocket, Max (Greg, 25 Oct 2026). Nothing keys on this order: the cases are String-backed, and the insight indexes by `areas` and `LeaguePanel.keys`.
     public enum Activity: String, CaseIterable, Hashable {
-        case raids, gym, rocket, gl, ul, ml, max
+        case gl, ul, ml, raids, gym, rocket, max
 
         public var title: String {
             switch self {
