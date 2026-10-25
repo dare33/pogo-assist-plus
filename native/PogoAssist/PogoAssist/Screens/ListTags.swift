@@ -91,6 +91,23 @@ struct WorthTag: View {
     }
 }
 
+/// A place on the species page: "GL 1", "RAIDS 2", the activity's ink on its tint. A place is not a rating, so it is always the full tint (the rating tag stays the
+/// two-shade one); the label is the same caps label as the activity's tags.
+struct RankMarker: View {
+    let activity: BoxInsight.Activity
+    let place: Int
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        Text("\(activity.tagLabel) \(place)")
+            .font(.figtree(11, .heavy, relativeTo: .caption2)).tracking(0.06 * 11).monospacedDigit()
+            .foregroundStyle(activity.ink(accent))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(activity.tint(accent), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
 /// "ADVICE BUILDS IT" as the league cards draw it: an outline chip, so it does not read as a second tag.
 struct BuildsChip: View {
     let text: String
