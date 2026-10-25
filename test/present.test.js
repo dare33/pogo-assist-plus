@@ -50,15 +50,15 @@ test('levelText names the level the cost covers with its areas, or says the copy
 });
 
 test('no uncosted power-up step: Squirtle #181 at L45 and Lapras #30 at L36 are at their costed targets', () => {
-  // Squirtle #181 -> Blastoise (Max, UL, Raids): the cost is Raids' (125 evolution candy); Ultra League's best level (49.5) is not paid for, so not a step.
+  // Squirtle #181 -> Blastoise (UL, Raids; the Max row is Gigantamax-only): the cost is Raids' (125 evolution candy); Ultra League's best level (49.5) is not paid for, so not a step.
   const sq = fixtureBuild(181, 45, 'blastoise');
-  assert.deepEqual(sq.areas.slice().sort(), ['max', 'raids', 'ul']);
+  assert.deepEqual(sq.areas.slice().sort(), ['raids', 'ul']);
   assert.deepEqual(sq.costAreas, ['raids']);
   assert.equal(sq.pvpCost.league, 'ul'); assert.equal(sq.pvpCost.toLevel, 49.5);
   assert.equal(sq.cost.dust, 0); assert.equal(sq.cost.candy, 125);
   assert.ok(!kinds(sq).includes('powerUp'));
   assert.equal(levelText(sq), 'L45 · already at (or past) its Raids target level');
-  assert.equal(actionText(sq), 'Evolve to Blastoise + Mega evolve (Max needs a Dynamax copy)');
+  assert.equal(actionText(sq), 'Evolve to Blastoise + Mega evolve');
   // At UL's best level itself the wording is the same, and the league is not named as a cost area.
   const sq495 = fixtureBuild(181, 49.5, 'blastoise');
   assert.deepEqual(sq495.costAreas, ['raids']);
@@ -131,7 +131,7 @@ test('actionText: what is left, from the steps', () => {
   assert.equal(actionText(dragon), 'Evolve to Dragonite + Mega evolve');
   // The Dynamax requirement is Max's alone: it does not make the other areas unfinished, but it is not hidden either.
   const sq50 = build('Squirtle', 50, 'blastoise');
-  assert.equal(actionText(sq50), 'Evolve to Blastoise + Mega evolve (Max needs a Dynamax copy)');
+  assert.equal(actionText(sq50), 'Evolve to Blastoise + Mega evolve');
   const xurkMax = { ...build('Xurkitree', 40), steps: [{ kind: 'needsDynamaxCopy' }] };
   assert.equal(actionText(xurkMax), 'Already built (Max needs a Dynamax copy)');
   // A scan records no moves, so the second move may already be there.

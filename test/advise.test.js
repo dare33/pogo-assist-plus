@@ -187,3 +187,14 @@ test('a copy above the only area\'s target level has no target level and nothing
   assert.equal(b.cost.dust - b.cost.secondMove.dust, 0);
   assert.ok(!b.steps.some((x) => x.kind === 'powerUp'));
 });
+
+test('a Gigantamax-only Max row is not credited to an ordinary Dynamax copy of the species', () => {
+  const maxHits = (from, to) => out.builds.find((b) => b.speciesId === from && b.targetId === to)?.hits.filter((h) => h.area === 'max') ?? [];
+  // These species are only in the Max tables as Gigantamax (the G-Max Blastoise, Venusaur and Pikachu rows were once split into plain names).
+  for (const [from, to] of [['squirtle', 'blastoise'], ['bulbasaur', 'venusaur'], ['pikachu', 'pikachu'], ['caterpie', 'butterfree']])
+    assert.deepEqual(maxHits(from, to), [], `${from}->${to}`);
+  // Lapras and Snorlax are also Dynamax healers/tanks: only those rows are credited.
+  assert.deepEqual(maxHits('lapras', 'lapras').map((h) => h.name), ['Lapras']);
+  assert.ok(maxHits('snorlax', 'snorlax').every((h) => h.name === 'Snorlax'));
+  assert.deepEqual(maxHits('regice', 'regice').map((h) => h.name), ['Dynamax Regice']);
+});

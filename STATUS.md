@@ -1,5 +1,18 @@
 # Status — Pogo Assist+
 
+**25 Oct 2026: split Gigantamax / Dynamax rows keep their prefix (branch `fix/tiers-gmax-split`, not pushed).** Wrong: in
+`data/source/08-max-battles.md` a row such as `Gigantamax Charizard, Toxtricity, Lapras` was split by the build but only the first name
+kept its prefix, so `data/tiers.json` held Max entries named plain "Toxtricity", "Lapras", "Grimmsnarl", "Venusaur", "Blastoise",
+"Butterfree", "Snorlax", "Pikachu", "Meowth" (and "Kingler", "Regice" from the Dynamax rows) with `flags.max` false. The advisor skips
+Gigantamax entries by name, so it credited an ordinary Dynamax copy of those species with a Gigantamax Max entry. Changed: every name in
+those four rows now carries its own prefix, and `scripts/build-tiers.mjs` stops with a message naming file, row and name if a Max row
+that opens with Gigantamax or Dynamax has a later name without either prefix (Max area only; Shadow/Mega rows mix plain names on purpose).
+`data/tiers.json` differs in 11 entries (name and `flags.max`) plus the timestamp. Advice on the fixture: Squirtle/Ivysaur/Bulbasaur/
+Pikachu/Caterpie builds lose their false Max hit (Blastoise, Venusaur, Pikachu, Butterfree rows are Gigantamax-only), Snorlax and Lapras
+lose the Gigantamax duplicate (the Dynamax tank/healer rows remain), Regice's hit is now named "Dynamax Regice"; `present.test.js`
+expectations for Squirtle -> Blastoise followed. Advice cache version NOT bumped (the open design stack bumps it when it merges, which
+recomputes caches). Verified by the session that made the change, locally on the MacBook: `npm test` 248 tests, 244 pass, 0 fail, 4 skipped.
+
 **25 Oct 2026: build hygiene (branch `claude/build-hygiene-e6f0da`, for a draft PR to `main`, not merged).** A standing rule, in
 `CLAUDE.md` ("Build hygiene") and `native/README.md` ("Build hygiene"), after 143 GB of per-run Xcode derived-data folders
 were found in sessions' scratchpads under `/private/tmp/claude-*`: every command-line `xcodebuild` from a session uses the
