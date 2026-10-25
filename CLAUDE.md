@@ -46,3 +46,30 @@ Build output from a session never goes in the session scratchpad or in a fresh p
   at once.
 - The scratchpad holds small intermediate files only (briefs, logs, screenshots, JSON diffs).
   `native/tools/build-clean.sh` empties the fixed location when it is stale and nothing is building.
+
+## Design passes
+
+A design pass (a design session's handoff built into the app) follows `docs/design-process.md`, agreed by Greg on
+25 Oct 2026, except the item that section 5 leaves open; points marked there as the manager's additions are not his
+rulings. The whole of that document is binding; this list is its summary:
+
+- The brief tells the design session to log Greg's changes as he makes them (`DECISIONS.md`) and to write the terms
+  and rules from them at the end (`CONCEPTS.md`), confirmed by Greg (the manager's addition). The prototype runs on
+  Greg's own box data, from a git-ignored `box-data.json` made by a script from the app's own Swift code.
+- Before any of the handoff is built, the manager writes `READBACK.md` (each screen's behaviour as checkable
+  statements, the rules checked against the engine, every gap as a question) and Greg answers it.
+- One branch `design/<pass>` off `main`, one draft pull request; each screen lands as ONE commit (work-in-progress
+  commits squashed before review, review fixes as later commits naming the screen; engine or data changes first, as
+  their own commits); the local preview build is kept current; screenshots per screen (light, dark, default text and
+  AX5, on the iPhone 17 simulator or a `sim-temp.sh` clone) go on a private page for Greg's comments between phone runs.
+- Review is sized to the change. Cosmetic: only how existing information looks or reads (colour, spacing, type, layout
+  of elements already shown, the order of fixed elements such as chips or panels within the same row or screen,
+  wording), with meaning, accessibility behaviour and the first action unchanged; the gate is the PogoAssist build
+  through `native/tools/xcb.sh`, `swift test` in `native/PogoReader`, `npm test`, the affected UI tests, before and
+  after screenshots and one `reviewer` pass. Full paired review: anything that changes what is computed, stored,
+  matched, sorted or filtered, or which items appear, the order of data rows, a condition to show or hide an element,
+  a new state or screen, adding, removing or moving a button or tap target or changing what a tap does, accessibility
+  identifiers, a word's meaning, a change to a term's meaning or to a rule in `CONCEPTS.md` (a rename with the same
+  meaning is cosmetic and updates `CONCEPTS.md`), and logic, data, scripts and tooling. Anything mixed or unsure gets
+  the full review. A reviewer cannot route work: it returns NEEDS-FULL-REVIEW and the manager runs the paired review.
+  The size is named in the commit and the pull request.
