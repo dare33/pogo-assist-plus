@@ -56,7 +56,9 @@ export function resolveSpecies(index, name, { form = '', shadow = false } = {}) 
 
   const tryKeys = [];
   const base = tokenKey(text);
-  tryKeys.push(flags.shadow && !/\bshadow\b/.test(lower) ? `${base} shadow` : base);
+  // The index keys are sorted token strings, so "shadow" must go through tokenKey too: appended to `base` it would only match
+  // names whose tokens all sort before it (Alakazam) and a Tyranitar or Victreebel copy would resolve to the plain species.
+  tryKeys.push(flags.shadow && !/\bshadow\b/.test(lower) ? tokenKey(`${text} shadow`) : base);
   // Poke Genie writes the Mega form as the Pokémon's form; a scan of a Mega is really the base Pokémon.
   tryKeys.push(tokenKey(text.replace(/\bmega( [xy])?\b/gi, '').replace(/\bprimal\b/gi, '')));
   tryKeys.push(tokenKey(name));

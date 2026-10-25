@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-/// "Make scans better": what is sent, an optional note, Send or Cancel. Presented from the scan result and from Settings > Scans.
+/// "Make scans better": what is sent, an optional note, Send or Cancel. Presented from the scan result and from Settings > History and scans > Scans.
 struct MakeScansBetterSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
