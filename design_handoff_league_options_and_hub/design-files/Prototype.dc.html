@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <script src="league-data.js"></script>
+  <style>
+    @font-face { font-family: 'Figtree'; src: url('fonts/Figtree-Variable.ttf') format('truetype'); font-weight: 300 900; }
+    body { margin: 0; font-family: 'Figtree', sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+    a { color: #B0235A; } a:hover { color: #D6336C; }
+  </style>
+</helmet>
+<div style="min-height:100vh; background:{{ bg }}; display:flex; flex-direction:column; align-items:center; gap:16px; padding:24px 16px 40px; box-sizing:border-box">
+  <div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:560px" role="tablist" aria-label="Example Pokémon">
+    <sc-for list="{{ picker }}" as="k" hint-placeholder-count="8">
+    <div onClick="{{ k.select }}" role="tab" aria-selected="{{ k.on }}" style="padding:0 12px; min-height:32px; display:grid; place-items:center; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; background:{{ k.bg }}; color:{{ k.ink }}">{{ k.label }}</div>
+    </sc-for>
+  </div>
+  <div style="width:393px; max-width:100%">
+      <div style="--bg:{{ s.c.bg }}; --surface:{{ s.c.surface }}; --surface2:{{ s.c.surface2 }}; --ink:{{ s.c.ink }}; --muted:{{ s.c.muted }}; --faint:{{ s.c.faint }}; --line:{{ s.c.line }}; --off:{{ s.c.off }}; --orange:{{ s.c.orange }}; --orangeInk:{{ s.c.orangeInk }}; --orangeTint:{{ s.c.orangeTint }}; --green:{{ s.c.green }}; --greenInk:{{ s.c.greenInk }}; --greenTint:{{ s.c.greenTint }}; --red:{{ s.c.red }}; --accent:{{ s.c.accent }}; --accentInk:{{ s.c.accentInk }}; --accentTint:{{ s.c.accentTint }}; --onAccent:{{ s.c.onAccent }}; --shadow:{{ s.c.shadow }}; width:100%; background:var(--bg); border-radius:44px; overflow:hidden; color:var(--ink); font-size:15px; box-sizing:border-box; zoom:{{ s.textScale }}" data-screen-label="Pokémon page">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 30px 0; height:44px; font-weight:700; font-size:15px"><span>9:41</span><span style="font-size:12px; letter-spacing:.04em">●●● ◠ ▮</span></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0 14px; min-height:52px">
+          <div style="width:40px; height:40px; border-radius:20px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800; font-size:18px">‹</div>
+          <div style="display:flex; gap:10px">
+            <sc-if value="{{ s.hasScoring }}" hint-placeholder-val="{{ false }}">
+            <div aria-label="Settings" style="width:40px; height:40px; border-radius:20px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800; font-size:17px">⚙</div>
+            </sc-if>
+            <div aria-label="Fix a value" style="width:40px; height:40px; border-radius:20px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800; font-size:16px">✎</div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:12px; padding:6px 14px 24px; max-width:{{ s.colMax }}px; margin:0 auto; box-sizing:border-box">
+          <div style="padding:4px 8px 0">
+            <div style="font-size:34px; font-weight:800; letter-spacing:-0.85px; line-height:1.15">{{ s.p.name }}</div>
+            <div style="display:flex; align-items:baseline; gap:10px"><span style="font-size:22px; font-weight:800">CP {{ s.p.cp }}</span><span style="font-size:15px; font-weight:600; color:var(--muted)">{{ s.p.meta }}</span></div>
+          </div>
+          <sc-if value="{{ s.showIVs }}" hint-placeholder-val="{{ true }}">
+          <div style="background:var(--surface); border-radius:28px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:12px">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px"><span style="font-size:13px; font-weight:700; color:var(--muted)">IVs</span>
+              <sc-if value="{{ s.pvpHeader }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:10px; align-items:baseline">
+                <sc-for list="{{ s.p.pvp }}" as="v" hint-placeholder-count="3">
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0"><span style="font-size:17px; font-weight:800; color:{{ v.color }}">{{ v.pct }}</span><span style="font-size:11px; font-weight:700; letter-spacing:.06em; color:{{ v.color }}">{{ v.short }}</span></div>
+                </sc-for>
+              </div>
+              </sc-if>
+              <sc-if value="{{ s.pveHeader }}" hint-placeholder-val="{{ true }}"><span style="font-size:26px; font-weight:800; color:var(--greenInk)">{{ s.p.ivPctText }}</span></sc-if>
+            </div>
+            <sc-if value="{{ s.p.hasIVs }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; flex-direction:column; gap:12px; font-size:14px; font-weight:600">
+              <sc-for list="{{ s.p.bars }}" as="b" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:10px"><span style="width:62px">{{ b.label }}</span><span style="flex:1; height:10px; border-radius:5px; background:var(--off); overflow:hidden"><span style="display:block; height:100%; width:{{ b.pct }}%; border-radius:5px; background:var(--orange)"></span></span><span style="width:22px; text-align:right">{{ b.v }}</span></div>
+              </sc-for>
+            </div>
+            </sc-if>
+            <sc-if value="{{ s.p.noIVs }}" hint-placeholder-val="{{ false }}"><div style="font-size:14px; font-weight:500; color:var(--muted)">IVs not read</div></sc-if>
+          </div>
+          </sc-if>
+
+          <!-- LEAGUES panel -->
+          <div style="background:var(--surface); border-radius:28px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px" data-accessibility-id="leagues-panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:30px">
+              <div style="display:flex; align-items:center; gap:8px">
+                <sc-if value="{{ s.inDetail }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ s.backToBase }}" role="button" aria-label="All leagues" data-accessibility-id="leagues-back" style="width:30px; height:30px; border-radius:15px; background:var(--surface2); display:grid; place-items:center; font-weight:800; font-size:15px; cursor:pointer; margin-left:-4px">‹</div>
+                </sc-if>
+                <span style="font-size:13px; font-weight:700; color:var(--muted)">LEAGUES</span>
+              </div>
+              <sc-if value="{{ s.hasScoring }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:6px">
+                <div style="display:flex; padding:3px; background:var(--off); border-radius:999px" role="radiogroup" aria-label="Scoring" data-accessibility-id="leagues-scoring">
+                  <sc-for list="{{ s.scoringTabs }}" as="t" hint-placeholder-count="2">
+                  <div onClick="{{ t.select }}" role="radio" aria-checked="{{ t.on }}" style="min-height:26px; padding:0 10px; display:grid; place-items:center; border-radius:999px; font-size:12px; font-weight:700; cursor:pointer; background:{{ t.bg }}; color:var(--ink)">{{ t.label }}</div>
+                  </sc-for>
+                </div>
+                <div onClick="{{ s.toggleInfo }}" role="button" data-accessibility-id="leagues-scoring-info" aria-label="How the two scorings work" aria-expanded="{{ s.infoOpen }}" style="width:26px; height:26px; border-radius:13px; display:grid; place-items:center; font-size:13px; font-weight:800; cursor:pointer; background:{{ s.infoBg }}; color:{{ s.infoInk }}; font-family:Georgia, serif; font-style:italic">i</div>
+              </div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ s.infoOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="background:var(--accentTint); border-radius:16px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; font-size:13px; line-height:1.45; color:var(--ink)">
+              <div><b style="color:var(--accentInk)">Default</b> follows Poke Genie. For each league it takes the family member where this copy's IVs rank highest under the CP cap (stat product rank out of 4,096), whatever that species' standing.</div>
+              <div><b style="color:var(--accentInk)">Pogo Assist</b> weighs the species first. It ranks each member by PvPoke score and only moves to a weaker one when this copy's IVs fit it clearly better. A stronger species with slightly worse IVs beats a weak one with perfect IVs.</div>
+              <div style="color:var(--muted)">Both use the same IV rank and the same PvPoke rankings; they differ only in which comes first.</div>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ s.segmented }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; padding:4px; background:var(--off); border-radius:999px" role="tablist" aria-label="League" data-accessibility-id="leagues-control">
+              <sc-for list="{{ s.tabs }}" as="t" hint-placeholder-count="3">
+              <div onClick="{{ t.select }}" role="tab" style="flex:1; min-height:38px; display:flex; gap:6px; align-items:center; justify-content:center; border-radius:999px; font-size:15px; font-weight:700; cursor:pointer; background:{{ t.bg }}; color:{{ t.ink }}"><span style="width:8px; height:8px; border-radius:4px; background:{{ t.dot }}"></span>{{ t.short }}</div>
+              </sc-for>
+            </div>
+            </sc-if>
+
+            <div style="display:{{ s.leagueLayout }}; grid-template-columns:repeat(3, minmax(0,1fr)); flex-direction:column; gap:{{ s.leagueGap }}px">
+            <sc-for list="{{ s.leagues }}" as="l" hint-placeholder-count="3">
+            <sc-if value="{{ l.visible }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; flex-direction:column; gap:10px; min-width:0" data-accessibility-id="league-{{ l.key }}">
+              <sc-if value="{{ l.showTitle }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px">
+                <span style="display:flex; align-items:center; gap:8px"><span style="width:10px; height:10px; border-radius:5px; background:{{ l.dot }}; flex-shrink:0"></span><span style="font-size:17px; font-weight:800; color:{{ l.titleColor }}">{{ l.name }}</span></span>
+                <span style="font-size:13px; font-weight:600; color:var(--muted)">{{ l.capText }}</span>
+              </div>
+              </sc-if>
+
+              <!-- the shown pick -->
+              <sc-if value="{{ l.showPickCard }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ l.openDetail }}" role="{{ l.cardRole }}" data-accessibility-id="league-{{ l.key }}-pick" style="background:var(--surface2); border-radius:16px; padding:14px 16px; display:flex; flex-direction:column; gap:8px; cursor:{{ l.cardCursor }}">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                  <span style="font-size:19px; font-weight:800; letter-spacing:-0.01em">{{ l.pick.title }}</span>
+                  <span style="font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; padding:4px 8px; border-radius:10px; background:var(--accentTint); color:var(--accentInk)">{{ l.pick.chip }}</span>
+                  <sc-if value="{{ l.cardChevron }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto; color:var(--faint); font-weight:800; font-size:16px">›</span></sc-if>
+                </div>
+                <sc-if value="{{ l.pick.betterOverCap }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:13px; font-weight:600; color:var(--muted); line-height:1.4">{{ l.pick.betterOverCap }}</div>
+                </sc-if>
+                <sc-if value="{{ l.pick.blocked }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:15px; font-weight:600; color:var(--red); line-height:1.4">{{ l.pick.blockedText }}</div>
+                </sc-if>
+                <sc-if value="{{ l.pick.notBlocked }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid; grid-template-columns:{{ s.figCols }}; gap:8px">
+                  <div style="display:flex; flex-direction:column; gap:1px"><span style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">Species</span><span style="font-size:17px; font-weight:800; color:{{ l.pick.scoreColor }}">{{ l.pick.score }}</span><span style="font-size:12px; font-weight:500; color:var(--muted)">{{ l.pick.rank }}</span></div>
+                  <div style="display:flex; flex-direction:column; gap:1px"><span style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">This copy</span><span style="font-size:17px; font-weight:800; color:{{ l.pick.ivColor }}">{{ l.pick.ivPct }}</span><span style="font-size:12px; font-weight:500; color:var(--muted)">{{ l.pick.ivRank }}</span></div>
+                </div>
+                <sc-if value="{{ l.pick.hasCostItems }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid; grid-template-columns:{{ s.figCols }}; gap:4px 8px; font-size:14px; line-height:1.4; border-top:1px solid var(--line); padding-top:8px">
+                  <sc-for list="{{ l.pick.costItems }}" as="ci" hint-placeholder-count="4">
+                  <div style="min-width:0"><span style="color:var(--muted); font-weight:500">{{ ci.label }}</span><span style="font-weight:700">{{ ci.value }}</span></div>
+                  </sc-for>
+                </div>
+                </sc-if>
+                <sc-if value="{{ l.pick.costNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:14px; font-weight:500; color:var(--muted); line-height:1.4">{{ l.pick.costNote }}</div></sc-if>
+                </sc-if>
+                <sc-if value="{{ l.pick.hasMoves }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center">
+                  <sc-for list="{{ l.pick.moveChips }}" as="m" hint-placeholder-count="3">
+                  <span style="font-size:12px; font-weight:700; padding:4px 8px; border-radius:10px; background:{{ m.bg }}; color:{{ m.ink }}">{{ m.text }}</span>
+                  </sc-for>
+                </div>
+                </sc-if>
+              </div>
+              </sc-if>
+              <sc-if value="{{ l.why }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:13px; font-weight:500; color:var(--muted); line-height:1.45; padding:0 2px; text-wrap:pretty">{{ l.why }}</div>
+              </sc-if>
+
+              <!-- the options -->
+              <sc-if value="{{ l.hasOthers }}" hint-placeholder-val="{{ true }}">
+              <sc-if value="{{ l.collapsible }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ l.toggle }}" role="button" aria-expanded="{{ l.listOpen }}" data-accessibility-id="league-{{ l.key }}-more" style="display:flex; justify-content:space-between; align-items:center; min-height:44px; padding:0 2px; cursor:pointer; color:var(--accentInk); font-size:15px; font-weight:700">
+                <span>{{ l.toggleText }}</span><span style="font-size:13px; display:inline-block; transform:rotate({{ l.chevron }}deg); transition:transform .2s">⌄</span>
+              </div>
+              </sc-if>
+              <sc-if value="{{ l.listOpen }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid; grid-template-columns:{{ s.rowCols }}; gap:8px; padding:0 2px 6px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); text-align:right"><span style="text-align:left; white-space:nowrap">Option</span><span>Species</span><span>This copy</span><span>Dust</span></div>
+              <div style="display:flex; flex-direction:column; border-top:1px solid var(--line)">
+                <sc-for list="{{ l.rows }}" as="r" hint-placeholder-count="2">
+                <div style="border-bottom:1px solid var(--line)">
+                  <div onClick="{{ r.toggle }}" role="button" aria-expanded="{{ r.open }}" data-accessibility-id="league-{{ l.key }}-option-{{ r.name }}" style="display:grid; grid-template-columns:{{ s.rowCols }}; gap:8px; align-items:center; min-height:48px; padding:8px 2px; cursor:pointer; background:{{ r.bg }}; border-radius:12px; margin:2px -2px; padding-left:{{ r.padL }}px; padding-right:{{ r.padR }}px">
+                    <div style="display:flex; flex-direction:column; gap:1px; min-width:0">
+                      <span style="font-size:15px; font-weight:700; color:{{ r.nameColor }}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ r.name }}</span>
+                      <span style="font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ r.sub }}</span>
+                    </div>
+                    <sc-if value="{{ r.blocked }}" hint-placeholder-val="{{ false }}">
+                      <div style="grid-column:span 3; font-size:13px; font-weight:600; color:var(--red); text-align:right">{{ r.blockedText }}</div>
+                    </sc-if>
+                    <sc-if value="{{ r.notBlocked }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex; flex-direction:column; gap:1px; text-align:right"><span style="font-size:15px; font-weight:700; color:{{ r.scoreColor }}">{{ r.score }}</span><span style="font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap">{{ r.rank }}</span></div>
+                    <div style="display:flex; flex-direction:column; gap:1px; text-align:right"><span style="font-size:15px; font-weight:700; color:{{ r.ivColor }}">{{ r.ivPct }}</span><span style="font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap">{{ r.ivRank }}</span></div>
+                    <div style="display:flex; flex-direction:column; gap:1px; text-align:right"><span style="font-size:15px; font-weight:700; color:{{ r.costColor }}">{{ r.dust }}</span><span style="font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap">{{ r.candy }}</span></div>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; flex-direction:column; gap:6px; padding:4px 2px 12px; font-size:14px; line-height:1.45; color:var(--ink)">
+                    <div>{{ r.detailLevel }}</div>
+                    <div>{{ r.detailCost }}</div>
+                    <div style="font-family:ui-monospace, Menlo, monospace; font-size:12px; color:var(--muted); border:1px dashed var(--faint); border-radius:8px; padding:6px 8px">{{ r.detailMoves }}</div>
+                  </div>
+                  </sc-if>
+                </div>
+                </sc-for>
+              </div>
+              </sc-if>
+              </sc-if>
+            </div>
+            </sc-if>
+            </sc-for>
+            </div>
+            <div style="font-size:13px; font-weight:500; color:var(--muted); line-height:1.4">Pogo Assist is currently unable to detect Shadow Pokémon.</div>
+          </div>
+          <div style="background:var(--surface); border-radius:28px; box-shadow:var(--shadow); overflow:hidden">
+            <div style="display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--line)"><span style="color:var(--muted)">Power-up dust</span><b>{{ s.p.dust }}</b></div>
+            <div style="display:flex; justify-content:space-between; padding:12px 16px"><span style="color:var(--muted)">First seen · last seen</span><b>3 Oct · 17 Oct</b></div>
+          </div>
+          <div style="background:var(--orangeTint); border-radius:20px; padding:10px 10px 10px 16px; min-height:44px; display:flex; align-items:center; gap:10px; box-sizing:border-box">
+            <span style="color:var(--orangeInk); font-weight:700; font-size:16px">⌕</span>
+            <span style="flex:1; color:var(--orangeInk); font-weight:800">{{ s.p.search }}</span>
+            <span style="background:var(--orangeInk); color:var(--surface); font-size:14px; font-weight:800; padding:0 14px; min-height:36px; display:grid; place-items:center; border-radius:18px">Copy</span>
+          </div>
+          <div style="color:var(--red); font-weight:600; min-height:44px; display:grid; place-items:center">Delete from box</div>
+        </div>
+      </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":480,"height":1100},"pokemon":{"editor":"enum","default":"eevee","tsType":"string","options":["eevee","magnemite","charmander","rookidee","eeveeNoIV","lugia","kirlia","pupitar"],"section":"Content"},"theme":{"editor":"enum","default":"light","tsType":"&#39;light&#39; | &#39;dark&#39;","options":["light","dark"],"section":"Appearance"},"accent":{"editor":"enum","default":"berry","tsType":"string","options":["blue","indigo","sky","teal","forest","berry","plum","graphite"],"section":"Appearance"},"scoring":{"editor":"enum","default":"default","tsType":"&#39;default&#39; | &#39;pa&#39;","options":["default","pa"],"section":"Content"}}'>
+class Component extends DCLogic {
+  state = { open: {}, rows: {}, tab: {}, mode: {}, scoring: {}, info: {}, pokemon: null };
+  // The eight accents from Theme.swift: light solid / ink / tint, dark solid / ink / tint, on-solid in dark.
+  accents = {
+    blue: { ls: '#2F6BFF', li: '#1F4FD1', lt: '#EAF0FF', ds: '#5B8CFF', di: '#8FB0FF', dt: 'rgba(91,140,255,.18)', on: '#0E1118' },
+    indigo: { ls: '#3B3FB6', li: '#2D3091', lt: '#E8E9F8', ds: '#5B60E0', di: '#A9ACF5', dt: 'rgba(91,96,224,.22)', on: '#FFFFFF' },
+    sky: { ls: '#0A84C6', li: '#06689D', lt: '#E3F3FB', ds: '#4CB8F0', di: '#8FD3F7', dt: 'rgba(76,184,240,.18)', on: '#0E1118' },
+    teal: { ls: '#0F9488', li: '#0B746A', lt: '#DFF4F1', ds: '#2DC4B4', di: '#7FE0D5', dt: 'rgba(45,196,180,.18)', on: '#0E1118' },
+    forest: { ls: '#1F6B45', li: '#17543A', lt: '#E1EFE7', ds: '#278A58', di: '#7FD1A6', dt: 'rgba(39,138,88,.22)', on: '#FFFFFF' },
+    berry: { ls: '#D6336C', li: '#B0235A', lt: '#FCE7EF', ds: '#F06595', di: '#F7A1C1', dt: 'rgba(240,101,149,.18)', on: '#0E1118' },
+    plum: { ls: '#8E3B7A', li: '#6E2A5E', lt: '#F5E6F0', ds: '#9E4A8A', di: '#E0A3CF', dt: 'rgba(158,74,138,.24)', on: '#FFFFFF' },
+    graphite: { ls: '#3D4459', li: '#2A3042', lt: '#E9EBF0', ds: '#5A6276', di: '#B5BBCB', dt: 'rgba(90,98,118,.3)', on: '#FFFFFF' },
+  };
+  // League colours after GO Battle League's own: Great blue, Ultra gold, Master purple. Ink values pass 4.5:1 on each surface.
+  leagueColor = { gl: { light: '#1F5FD1', dark: '#8FB0FF', dot: '#3B82F6', dotDark: '#6FA3FF' }, ul: { light: '#8A5A00', dark: '#F0C33C', dot: '#E0A82A', dotDark: '#F0C33C' }, ml: { light: '#7A2FB5', dark: '#D1A3FF', dot: '#A855F7', dotDark: '#C58CFF' } };
+
+  light = { bg: '#F3F5F9', surface: '#FFFFFF', surface2: '#F3F5F9', ink: '#15192B', muted: '#6A7085', faint: '#8A90A3', line: '#E6E9F0', off: '#E3E7EF', orange: '#FF8A1F', orangeInk: '#B34D00', orangeTint: '#FFF1E3', green: '#22A55A', greenInk: '#1C7A3E', greenTint: '#E6F6EC', red: '#D92D3A', accent: '#D6336C', accentInk: '#B0235A', accentTint: '#FCE7EF', onAccent: '#FFFFFF', shadow: '0 1px 2px rgba(20,30,60,.06)' };
+  dark = { bg: '#0E1118', surface: '#181C26', surface2: '#20242F', ink: '#EEF1F8', muted: '#9097AB', faint: '#6D7489', line: '#262B38', off: '#232836', orange: '#FF9A3C', orangeInk: '#FFB273', orangeTint: 'rgba(255,150,60,.16)', green: '#3DCB7A', greenInk: '#6FD796', greenTint: 'rgba(80,200,120,.16)', red: '#FF6B76', accent: '#F06595', accentInk: '#F7A1C1', accentTint: 'rgba(240,101,149,.18)', onAccent: '#0E1118', shadow: 'none' };
+
+  g = n => n.toLocaleString('en-US');
+  lvl = d => d === Math.round(d) ? String(d) : String(d);
+  dustShort = d => d >= 100000 ? Math.round(d / 1000) + 'k' : d >= 10000 ? (d / 1000).toFixed(1).replace('.0', '') + 'k' : this.g(d);
+  ordinal = n => { const t = n % 100, s = t >= 11 && t <= 13 ? 'th' : ['th','st','nd','rd','th','th','th','th','th','th'][n % 10]; return this.g(n) + s; };
+  names = { gl: 'Great League', ul: 'Ultra League', ml: 'Master League' };
+  caps = { gl: 1500, ul: 2500, ml: null };
+
+  candyText(c) {
+    const p = [];
+    if (c.candy > 0) p.push(this.g(c.candy) + ' candy');
+    if (c.xl > 0) p.push(this.g(c.xl) + ' XL');
+    if (c.evolveCandy > 0) p.push('+' + c.evolveCandy + ' to evolve');
+    return p.join(', ') || 'no candy';
+  }
+  costLine(o, key, level) {
+    const c = o.cost;
+    if (!c) return level == null ? 'Level not known, so no cost' : '';
+    if (level != null && c.toLevel < level) return 'Past its best ' + this.names[key] + ' level' + (c.evolveCandy > 0 ? '; ' + c.evolveCandy + ' candy' : '');
+    if (!c.dust && !c.candy && !c.xl && !c.evolveCandy) return 'Already at level ' + this.lvl(c.toLevel);
+    let s = 'To level ' + this.lvl(c.toLevel) + ': ' + this.g(c.dust) + ' dust';
+    if (c.candy + c.evolveCandy) s += ', ' + this.g(c.candy + c.evolveCandy) + ' candy';
+    if (c.xl) s += ', ' + this.g(c.xl) + ' XL';
+    if (o.iv) s += ' · CP ' + this.g(o.iv.cp);
+    return s;
+  }
+  scoreColor(s, c) { return !s ? c.faint : s.score >= 80 ? c.greenInk : c.ink; }
+  ivColor(iv, c) { return !iv ? c.faint : iv.rank <= 500 ? c.greenInk : c.ink; }
+
+  figures(o, key, c, level, full = false) {
+    const cap = this.caps[key];
+    const cc = x => x.evolveCandy + ' candy';
+    const blocked = o.overCap;
+    const dust = o.cost ? (o.cost.dust || o.cost.candy || o.cost.xl ? this.dustShort(o.cost.dust) : '0') : '—';
+    const short = cc => cc.xl > 0 ? this.g(cc.xl) + ' XL' : (cc.candy + cc.evolveCandy) > 0 ? this.g(cc.candy + cc.evolveCandy) + ' candy' : 'no candy';
+    const candy = o.cost ? (o.cost.dust || o.cost.candy || o.cost.xl ? (full ? this.candyText(o.cost) : short(o.cost)) : (o.cost.evolveCandy ? cc(o.cost) : 'at its level')) : (level == null ? 'level not known' : 'no cost');
+    return {
+      blocked, notBlocked: !blocked,
+      blockedText: cap ? 'Over ' + this.g(cap) + ' CP as ' + o.name : '',
+      score: o.strength ? o.strength.score.toFixed(1) : '—',
+      rank: o.strength ? '#' + this.g(o.strength.rank) + (full ? ' of ' + this.g(o.strength.of) : '') : '',
+      scoreColor: this.scoreColor(o.strength, c),
+      ivPct: o.iv ? o.iv.pct.toFixed(1) + '%' : '—',
+      ivRank: o.iv ? 'IV #' + this.g(o.iv.rank) : 'not read',
+      ivColor: this.ivColor(o.iv, c),
+      dust, candy,
+      costColor: o.cost && o.cost.xl > 0 ? c.muted : c.ink,
+    };
+  }
+
+  why(L, key, p) {
+    const o = L.options, pick = o[L.pick], top = o[0];
+    const name = pick.name;
+    if (L.source === 'fallback') return pick.overCap ? '' : 'Nothing in the family is ranked in ' + this.names[key] + ', so the final evolution is shown.';
+    if (!p.ivs) return 'IVs not read, so the strongest species is shown. Scan the appraisal to rate this copy.';
+    if (L.source === 'ranked') return L.pick === 0 && o.length > 1 ? 'Why ' + name + '? The strongest of the family here by PvPoke score.' : '';
+    if (L.pick !== 0 && top.strength && pick.strength) {
+      return 'Why ' + name + '? Poke Genie picks it: these IVs suit ' + name + ' best of the family (IV #' + this.g(pick.iv.rank) + '), though ' + top.name + ' is the stronger species (#' + this.g(top.strength.rank) + ' against #' + this.g(pick.strength.rank) + ').';
+    }
+    if (L.pick === 0 && o.length > 1) return 'Why ' + name + '? Poke Genie picks it, and it is also the strongest species of the family here.';
+    return '';
+  }
+
+  costItems(o, key, level) {
+    const c = o.cost;
+    if (!c) return { items: [], note: level == null ? 'Level not known, so no cost' : '' };
+    if (level != null && c.toLevel < level) return { items: [], note: 'Past its best ' + this.names[key] + ' level' + (c.evolveCandy > 0 ? '; ' + c.evolveCandy + ' candy' : '') };
+    if (!c.dust && !c.candy && !c.xl) return { items: [], note: 'Already at level ' + this.lvl(c.toLevel) + (c.evolveCandy > 0 ? '; ' + c.evolveCandy + ' candy' : '') };
+    const items = [];
+    items.push({ label: 'Target level: ', value: this.lvl(c.toLevel) });
+    if (o.iv) items.push({ label: 'Target CP: ', value: this.g(o.iv.cp) });
+    items.push({ label: '', value: this.g(c.dust) + ' dust' });
+    const candy = c.candy + c.evolveCandy;
+    items.push({ label: '', value: this.g(candy) + ' candy' + (c.xl > 0 ? ', ' + this.g(c.xl) + ' XL' : '') });
+    return { items, note: '' };
+  }
+
+  league(sid, key, p, variant, c, opts) {
+    const L = p[key], level = p.level;
+    const k = sid + '-' + key;
+    const scoring = this.state.scoring[sid] || opts.scoring || 'default';
+    let pickIdx = scoring === 'pa' ? L.experimental : L.pick;
+    // Best available: when the pick is over the cap, headline the first option that fits and keep the stronger one for the details.
+    let betterOverCap = '';
+    if (opts.bestAvailable && L.options[pickIdx].overCap) {
+      const fit = L.options.findIndex(x => !x.overCap);
+      if (fit >= 0) { betterOverCap = L.options[pickIdx].name + ' is the stronger species, but this copy is already over ' + this.g(this.caps[key]) + ' CP as ' + L.options[pickIdx].name + '.'; pickIdx = fit; }
+    }
+    const pick = L.options[pickIdx];
+    const openKey = this.state.open[k];
+    const alwaysOpen = variant === 'open';
+    const isOpen = alwaysOpen || (openKey == null ? !!opts.defaultOpen : openKey);
+    const others = L.options.filter((_, i) => i !== pickIdx);
+    const f = this.figures(pick, key, c, level, true);
+    const ci = this.costItems(pick, key, level);
+    const title = pick.genderLocked ? pick.name + ', if it is ' + pick.genderLocked : pick.name;
+    const chips = [];
+    if (pick.moves) {
+      const needs = pick.self && pick.needs ? pick.needs : [];
+      [pick.moves.fast, ...pick.moves.charged].forEach(m => {
+        const miss = needs.includes(m);
+        chips.push({ text: miss ? 'Needs ' + m : m, bg: miss ? c.orangeTint : c.off, ink: miss ? c.orangeInk : c.muted });
+      });
+    }
+    const rows = others.map(o => {
+      const rk = k + '-' + o.name;
+      const open = !!this.state.rows[rk];
+      const rf = this.figures(o, key, c, level);
+      return {
+        ...rf, name: o.name, open,
+        sub: o.self ? 'itself, no evolving' : o.genderLocked ? 'if it is ' + o.genderLocked : o.iv && !o.overCap ? 'L' + this.lvl(o.iv.level) + ' · CP ' + this.g(o.iv.cp) : (o.overCap ? 'too high already' : ''),
+        nameColor: o.overCap ? c.muted : c.ink,
+        bg: open ? c.surface2 : 'transparent', padL: open ? 10 : 2, padR: open ? 10 : 2,
+        toggle: () => this.setState(s => ({ rows: { ...s.rows, [rk]: !s.rows[rk] } })),
+        detailLevel: o.iv ? 'Best level ' + this.lvl(o.iv.level) + ' under the cap, CP ' + this.g(o.iv.cp) + '. IVs rank #' + this.g(o.iv.rank) + ' of 4,096, ' + o.iv.pct.toFixed(2) + '% of best.' : (o.overCap ? 'Already above the cap as ' + o.name + '.' : 'IVs not read, so no rank.'),
+        detailCost: this.costLine(o, key, level) || (o.overCap ? '' : 'No cost'),
+        detailMoves: 'moves: not in the data for non-pick options (see Data needs)',
+      };
+    });
+    return {
+      key, name: this.names[key], visible: opts.visible !== false, showTitle: opts.showTitle !== false,
+      titleColor: opts.leagueColors ? (c === this.dark ? this.leagueColor[key].dark : this.leagueColor[key].light) : c.ink,
+      dot: opts.leagueColors ? (c === this.dark ? this.leagueColor[key].dotDark : this.leagueColor[key].dot) : 'transparent',
+      capText: this.caps[key] ? 'Under ' + this.g(this.caps[key]) + ' CP' : 'No CP cap',
+      showPickCard: true,
+      pick: { ...f, title, chip: scoring === 'pa' ? 'Pogo Assist pick' : 'Pick', betterOverCap, hasMoves: chips.length > 0, moveChips: chips, hasCostItems: !f.blocked && ci.items.length > 0, costItems: ci.items, costNote: f.blocked ? '' : (ci.note || (betterOverCap && !pick.cost ? '' : '')), blockedText: this.caps[key] ? 'Already above ' + this.g(this.caps[key]) + ' CP, so it cannot be used in ' + this.names[key] + (others.length ? ' as any of the family' : '') + '.' : '' },
+      why: opts.why ? this.why(L, key, p) : '',
+      hasOthers: others.length > 0 && variant !== 'base',
+      collapsible: !alwaysOpen,
+      listOpen: isOpen, columnHeader: isOpen,
+      openDetail: variant === 'base' ? () => this.setState(s => ({ mode: { ...s.mode, [sid]: key }, tab: { ...s.tab, [sid]: key } })) : null,
+      cardRole: variant === 'base' ? 'button' : null, cardCursor: variant === 'base' ? 'pointer' : 'default', cardChevron: variant === 'base',
+      toggleText: isOpen ? 'Show less' : 'Show more',
+      chevron: isOpen ? 180 : 0,
+      toggle: () => this.setState(s => ({ open: { ...s.open, [k]: !(s.open[k] == null ? !!opts.defaultOpen : s.open[k]) } })),
+      rows,
+    };
+  }
+
+  screen(id, label, p, { theme = 'light', variant = 'collapse', width = 393, open = [], note = '', ipad = null, showIVs = true, scoring = 'default', detail = null, scoringToggle = false, bestAvailable = false, why = false, infoOpen: infoDefault = false, textScale = 1, rowOpen = [] } = {}) {
+    const c = theme === 'dark' ? this.dark : this.light;
+    rowOpen.forEach(rk => { if (!(id + '-' + rk in this.state.rows)) this.state.rows[id + '-' + rk] = true; });
+    // 'base' screens: three pick cards; tapping one goes to the league view (the 1b layout) for that league.
+    const mode = id in this.state.mode ? this.state.mode[id] : detail;
+    const wasBase = variant === 'base';
+    if (wasBase && mode) variant = 'segmented';
+    const tab = this.state.tab[id] || mode || 'gl';
+    const keys = ['gl', 'ul', 'ml'];
+    const leagues = keys.map(key => this.league(id, key, p, variant, c, {
+      defaultOpen: open.includes(key),
+      visible: variant === 'segmented' ? key === tab : true,
+      showTitle: variant !== 'segmented',
+      scoring, bestAvailable, why, leagueColors: scoringToggle,
+    }));
+    const scoringNow = this.state.scoring[id] || scoring;
+    const infoOpen = id in this.state.info ? !!this.state.info[id] : infoDefault;
+    const dotOf = k => c === this.dark ? this.leagueColor[k].dotDark : this.leagueColor[k].dot;
+    const inkOf = k => c === this.dark ? this.leagueColor[k].dark : this.leagueColor[k].light;
+    const pvp = keys.map(k => { const o = p[k].options[scoringNow === 'pa' ? p[k].experimental : p[k].pick]; const fit = p[k].options.find(x => x.iv && !x.overCap); const pick = o.iv && !o.overCap ? o : fit; return { short: this.names[k].replace(' League', '').toUpperCase(), pct: pick && pick.iv ? pick.iv.pct.toFixed(1) + '%' : '—', color: inkOf(k) }; });
+    const src = p.gl.source;
+    const ivs = p.ivs;
+    return {
+      id, label, width, c, note, showIVs, colMax: ipad === 'columns' ? 1130 : 640, textScale, rowCols: textScale > 1.3 ? '1fr' : 'minmax(0,1fr) 64px 64px 78px', figCols: textScale > 1.3 ? '1fr' : 'repeat(2, minmax(0,1fr))',
+      p: { name: p.name, cp: this.g(p.cp), meta: 'Level ' + this.lvl(p.level) + ' · HP ' + p.hp, hasIVs: !!ivs, noIVs: !ivs, ivPctText: p.ivPct != null ? p.ivPct + '%' : '', pvp, bars: ivs ? ['Attack', 'Defence', 'HP'].map((l, i) => ({ label: l, v: ivs[i], pct: ivs[i] / 15 * 100 })) : [] },
+      sourceNote: !ivs ? 'Strongest species shown' : src === 'export' ? 'Picks follow Poke Genie' : src === 'emulated' ? "Picks match Poke Genie's rule" : 'Strongest species shown',
+      segmented: variant === 'segmented',
+      inDetail: wasBase && !!mode, backToBase: () => this.setState(s => ({ mode: { ...s.mode, [id]: null } })),
+      hasScoring: scoringToggle, pvpHeader: scoringToggle && !!p.ivs, pveHeader: !scoringToggle,
+      infoOpen, toggleInfo: () => this.setState(s => ({ info: { ...s.info, [id]: !(id in s.info ? s.info[id] : infoDefault) } })), infoBg: infoOpen ? c.accent : c.off, infoInk: infoOpen ? c.onAccent : c.muted,
+      scoringTabs: [['default', 'Default'], ['pa', 'Pogo Assist']].map(([v, label]) => ({ label, on: scoringNow === v, bg: scoringNow === v ? c.surface : 'transparent', select: () => this.setState(s => ({ scoring: { ...s.scoring, [id]: v } })) })),
+      tabs: keys.map(k => ({ short: this.names[k].replace(' League', ''), bg: k === tab ? c.surface : 'transparent', ink: scoringToggle && k === tab ? inkOf(k) : c.ink, dot: scoringToggle ? dotOf(k) : 'transparent', select: () => this.setState(s => ({ tab: { ...s.tab, [id]: k } })) })),
+      leagueLayout: ipad === 'columns' ? 'grid' : 'flex',
+      leagueGap: ipad === 'columns' ? 24 : (variant === 'segmented' ? 0 : 22),
+      leagues,
+    };
+  }
+
+  renderVals() {
+    const D = window.LEAGUE_DATA;
+    if (!D) return {};
+    const list = [['eevee', 'Eevee'], ['magnemite', 'Magnemite'], ['charmander', 'Charmander'], ['rookidee', 'Rookidee'], ['eeveeNoIV', 'Eevee (IVs not read)'], ['lugia', 'Lugia'], ['kirlia', 'Kirlia'], ['pupitar', 'Pupitar']];
+    const chosen = this.state.pokemon || this.props.pokemon || 'eevee';
+    const theme = this.props.theme || 'light';
+    const accent = this.props.accent || 'berry';
+    const A = this.accents[accent] || this.accents.berry;
+    const base = theme === 'dark' ? this.dark : this.light;
+    const c = { ...base, accent: theme === 'dark' ? A.ds : A.ls, accentInk: theme === 'dark' ? A.di : A.li, accentTint: theme === 'dark' ? A.dt : A.lt, onAccent: theme === 'dark' ? A.on : '#FFFFFF' };
+    this.light = theme === 'dark' ? this.light : c; this.dark = theme === 'dark' ? c : this.dark;
+    const p = D[chosen];
+    const s = this.screen('proto', p.name, p, { variant: 'base', theme, scoringToggle: true, bestAvailable: true, width: 393, scoring: this.props.scoring || 'default' });
+    s.c = c;
+    s.p.dust = this.g(p.level >= 40 ? 10000 : p.level >= 30 ? 6000 : p.level >= 20 ? 3000 : 800);
+    s.p.search = p.name.toLowerCase() + '&cp' + p.cp;
+    return {
+      s,
+      bg: theme === 'dark' ? '#0E1118' : '#DADEE6',
+      picker: list.map(([id, label]) => ({ label, on: id === chosen, bg: id === chosen ? c.accent : (theme === 'dark' ? '#20242F' : '#FFFFFF'), ink: id === chosen ? c.onAccent : (theme === 'dark' ? '#EEF1F8' : '#15192B'), select: () => this.setState({ pokemon: id, mode: {}, tab: {}, open: {}, rows: {}, info: {} }) })),
+    };
+  }
+}
+</script>
+</body>
+</html>
