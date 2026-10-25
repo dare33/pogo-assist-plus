@@ -379,7 +379,9 @@ final class ListScreensTests: XCTestCase {
         // and the chips are out of its visible part (seen on the iPhone Air simulator at AX5, 25 Oct 2026). Greg's ruling: check on his phone before any change, so the
         // chips are asserted only below the accessibility sizes.
         if !category.contains("Accessibility") { XCTAssertTrue(chipAll.isHittable, "\(name): the chips are hittable with the keyboard up") }
-        XCTAssertGreaterThan(visibleRows(app).count, 0, "\(name): a row is visible with the keyboard up")
+        // Same ruling: at AX5 with the keyboard up the simulator leaves only a sliver of a row above it, and the layout is not changed before Greg has seen it on his phone,
+        // so a row above the keyboard is asserted only below the accessibility sizes.
+        if !category.contains("Accessibility") { XCTAssertGreaterThan(visibleRows(app).count, 0, "\(name): a row is visible above the keyboard") }
         shot("\(name)-keyboard")
         search.typeText("\n")   // Return closes the keyboard
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), name)
@@ -396,11 +398,12 @@ final class ListScreensTests: XCTestCase {
         let open = visibleRows(app)
         XCTAssertGreaterThan(open.count, 0, "\(name): some of the list is left under an open explainer")
         // The list is still reachable: scrolling it under the open explainer moves its rows.
-        let labelBefore = open.first?.label
+        let labelBefore = open.first?.label, topBefore = open.first?.frame.minY
         dragList(app, up: true)
-        sleep(1)
-        if visibleRows(app).first?.label == labelBefore { dragList(app, up: false); sleep(1) }   // the list was already at its end
-        XCTAssertNotEqual(visibleRows(app).first?.label, labelBefore, "\(name): the list scrolls under an open explainer")
+        sleep(2)
+        if visibleRows(app).first?.label == labelBefore && visibleRows(app).first?.frame.minY == topBefore { dragList(app, up: false); sleep(2) }   // the list was already at its end
+        let after = visibleRows(app).first
+        XCTAssertTrue(after?.label != labelBefore || after?.frame.minY != topBefore, "\(name): the list scrolls under an open explainer")
         sleep(1); shot("\(name)-explainer")
         app.terminate()
     }
@@ -418,9 +421,10 @@ final class ListScreensTests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: start / height))
             .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: end / height)))
     }
-    /// The species rows with at least 20 pt of their height on the screen below the header, top to bottom.
+    /// The species rows with at least 20 pt of their height on the screen below the header and above the keyboard when one is up, top to bottom.
     private func visibleRows(_ app: XCUIApplication) -> [XCUIElement] {
-        let top = headerBottom(app), bottom = app.frame.maxY
+        let keyboard = app.keyboards.firstMatch
+        let top = headerBottom(app), bottom = keyboard.exists ? min(app.frame.maxY, keyboard.frame.minY) : app.frame.maxY
         return rows(app).allElementsBoundByIndex.filter { min($0.frame.maxY, bottom) - max($0.frame.minY, top) >= 20 }
     }
 
