@@ -230,7 +230,7 @@ test('a copy named Shadow without the flag gets the same credit', () => {
   assert.ok(hitsOf(copy('Shadow Swampert')).some((h) => h.area === 'rocket' && h.tier === 'S' && h.targetId === 'swampert_shadow'));
 });
 
-test('Mega targets are gated on the resolver\'s Shadow flag: a Shadow by name or by flag gets no Mega credit, a plain copy still does', () => {
+test('Mega targets are gated on the resolver\'s Shadow flag or the _shadow id: a Shadow by name or by flag gets no Mega credit, a plain copy still does', () => {
   // Charizard: Mega Charizard Y is a raids/Fire A entry; plain Charizard has a Rocket A entry; charizard_shadow has none of its own.
   const plain = hitsOf(copy('Charizard'));
   assert.ok(plain.some((h) => h.viaMega === 'charizard_mega_y' && h.area === 'raids' && h.targetId === 'charizard'), 'plain Charizard reaches Mega Charizard Y');
