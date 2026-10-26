@@ -18,7 +18,6 @@ struct HubGymView: View {
             }
         }
         .keepsSquads(keeper)
-        .accessibilityIdentifier("hub-screen-gym")
     }
 }
 
@@ -60,7 +59,7 @@ private struct GymSquadView: View {
         }
         guard let r = byId[entryId] else {
             let name = ctx.entry(entryId)?.row.title ?? "Pokémon"
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, spoken: "Slot \(i + 1) of 6, \(name)", identifier: id)
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, types: ctx.entryTypes(entryId), spoken: "Slot \(i + 1) of 6, \(name)", identifier: id)
         }
         let types = ctx.gm.byId[r.build.targetId]?.types ?? []
         let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)

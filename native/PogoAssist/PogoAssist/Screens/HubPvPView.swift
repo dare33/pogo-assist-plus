@@ -36,7 +36,6 @@ struct HubPvPView: View {
             }
         }
         .keepsSquads(keeper)
-        .accessibilityIdentifier("hub-screen-pvp")
     }
 
     // MARK: season
@@ -73,7 +72,7 @@ private struct PvPSquadView: View {
         let candidates = HubSquads.pvpCandidates(league: league, mode: mode, pogoAssist: rankingRaw == Ranking.pogoAssist.rawValue, ctx: ctx)
         let saved = keeper.store.pvpSquad(league: league)
         let pogoAssist = rankingRaw == Ranking.pogoAssist.rawValue
-        let filled = HubSquads.pvpSquad(slots: saved.slots, candidates: candidates, placeable: PvPPlacement.placeable(league: league, mode: mode, pogoAssist: pogoAssist, ctx: ctx))
+        let filled = PvPPlacement.squad(slots: saved.slots, candidates: candidates, placeable: PvPPlacement.placeable(league: league, mode: mode, pogoAssist: pogoAssist, ctx: ctx), species: { speciesId($0, pogoAssist: pogoAssist) })
         let byId = Dictionary(candidates.map { ($0.entryId, $0) }, uniquingKeysWith: { a, _ in a })
         SuggestionsRow(mode: Binding(get: { mode }, set: { m in keeper.update { $0.setMode(m, for: .pvp) } }), noun: "squads")
         if candidates.isEmpty {
@@ -102,6 +101,11 @@ private struct PvPSquadView: View {
 
     private func types(_ speciesId: String) -> [String] { ctx.gm.byId[speciesId]?.types ?? [] }
 
+    /// The species a copy is shown as in this league under the ranking in use.
+    private func speciesId(_ id: String, pogoAssist: Bool) -> String? {
+        ctx.advice.leagues[id]?[league].map { $0.options[LeaguePanel.shownIndex($0, pogoAssist: pogoAssist)].speciesId }
+    }
+
     private func member(_ id: String, byId: [String: HubSquads.PvpCandidate], pogoAssist: Bool) -> Member? {
         if let c = byId[id]?.candidate { return Member(name: c.displayName, types: types(c.speciesId), mark: SquadMark.of(c), candidate: c, option: c.option, copyTitle: c.copyTitle) }
         if let r = ctx.advice.leagues[id]?[league] {
@@ -121,7 +125,7 @@ private struct PvPSquadView: View {
         // The types the squad hits for more than normal damage, over every member named in a slot (shown, not used to pick: D57).
         let mine = Array(Set(members.compactMap { $0 }.flatMap(\.types)))
         let covered = HubData.typeOrder.filter { ctx.hub.beats(mine, [$0]) }.count
-        let team = members.compactMap { $0?.candidate }
+        let named = members.compactMap { $0 }
         let rest = candidates.filter { c in !filled.contains { $0.entryId == c.entryId } }.map(\.candidate)
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
@@ -146,11 +150,19 @@ private struct PvPSquadView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .panelShadow()
-            let note = HubTeams.weaknessNote(team: team, candidates: rest, gm: ctx.gm, hub: ctx.hub)
+            let note = weakness(named, rest: rest)
             if !note.isEmpty {
                 Text(note).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).padding(.horizontal, 4).accessibilityIdentifier("hub-pvp-weakness")
             }
         }
+    }
+
+    /// The weakness line over the members the squad shows (the set the coverage uses). When every member is a candidate the engine's note, with its swap suggestion,
+    /// is used; a kept pick that is not a candidate cannot be swapped by it, so the line is then the shared weaknesses alone.
+    private func weakness(_ named: [Member], rest: [HubTeams.Candidate]) -> String {
+        guard named.count > 1 else { return "" }
+        if named.allSatisfy({ $0.candidate != nil }) { return HubTeams.weaknessNote(team: named.compactMap(\.candidate), candidates: rest, gm: ctx.gm, hub: ctx.hub) }
+        return PvPPlacement.sharedWeakness(memberTypes: named.map(\.types), hub: ctx.hub)
     }
 
     private func card(_ i: Int, _ f: FilledSlot, member m: Member?) -> SlotCardModel {
@@ -171,7 +183,7 @@ private struct PvPSquadView: View {
         var ids = HubSquads.pool(role: role, in: candidates)
         // The slot's own Pokémon is always listed, ticked, even when it came from outside the role's pool (the fallback) or is no longer a candidate.
         if let own = filled[i].entryId, !ids.contains(own) { ids.insert(own, at: 0) }
-        let listed = HubSquads.picker(candidates: ids, excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false), own: filled[i].entryId)
+        let listed = HubSquads.picker(candidates: ids, excluded: PvPPlacement.excluded(by: filled, editing: i, candidates: candidates, species: { speciesId($0, pogoAssist: pogoAssist) }), own: filled[i].entryId)
         let rows: [PickerRowModel] = listed.compactMap { l in
             if let pc = byId[l.entryId] { return row(pc, ticked: l.ticked) }
             guard let m = member(l.entryId, byId: byId, pogoAssist: pogoAssist) else { return nil }

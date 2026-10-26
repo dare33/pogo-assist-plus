@@ -29,4 +29,35 @@ final class PvPPlacementTests: XCTestCase {
         let c = try ctx()
         XCTAssertTrue(PvPPlacement.placeable(league: "ul", mode: .best, pogoAssist: true, ctx: c)("a", "Lead"))
     }
+
+    private func candidate(_ id: String, _ species: String, score: Double, roles: [HubSquads.PvpRole]) -> HubSquads.PvpCandidate {
+        let o = R.Option(speciesId: species, name: species.capitalized, isSelf: true, strength: .init(score: score, rank: 1, of: 1152), overCap: false)
+        return HubSquads.PvpCandidate(candidate: HubTeams.Candidate(entryId: id, option: o, copyTitle: species, score: score, ivRank: 10, ivPct: 95, built: true), roles: roles)
+    }
+
+    /// GO Battle League allows one copy of a species in a squad.
+    func testASquadNeverHoldsTwoCopiesOfOneSpecies() {
+        let a = candidate("a", "azumarill", score: 95, roles: [.lead]), b = candidate("b", "azumarill", score: 94, roles: [.safeSwap, .closer])
+        let c = candidate("c", "umbreon", score: 90, roles: [.safeSwap])
+        let species = ["a": "azumarill", "b": "azumarill", "c": "umbreon"]
+        let filled = PvPPlacement.squad(slots: HubSquads.defaultPvpSlots(), candidates: [a, b, c], placeable: { _, _ in true }, species: { species[$0] })
+        XCTAssertEqual(filled.map(\.entryId), ["a", "c", nil], "the second Azumarill is neither a Closer nor a fallback")
+        // A kept pick wins over a new suggestion of its species.
+        var slots = HubSquads.defaultPvpSlots(); slots[2].pick = "b"
+        let kept = PvPPlacement.squad(slots: slots, candidates: [a, b, c], placeable: { _, _ in true }, species: { species[$0] })
+        XCTAssertEqual(kept.map(\.entryId), ["c", nil, "b"], "the kept Closer stays; the Lead falls back to another species and no second Azumarill is suggested")
+        // The picker of another slot does not offer a species the squad holds.
+        let ex = PvPPlacement.excluded(by: filled, editing: 2, candidates: [a, b, c], species: { species[$0] })
+        XCTAssertTrue(ex.contains("b") && ex.contains("a") && ex.contains("c"))
+        let ex1 = PvPPlacement.excluded(by: filled, editing: 0, candidates: [a, b, c], species: { species[$0] })
+        XCTAssertFalse(ex1.contains("a"), "the slot's own Pokémon stays listed")
+        XCTAssertTrue(ex1.contains("c"))
+    }
+
+    func testTheWeaknessLineReadsTheMembersShown() throws {
+        let hub = try HubData.bundled()
+        // Two members hit by Rock (Fire and Flying), one that is not: a kept pick outside the candidates counts like the others.
+        XCTAssertEqual(PvPPlacement.sharedWeakness(memberTypes: [["fire"], ["flying"], ["water"]], hub: hub).hasPrefix("Weak to"), true)
+        XCTAssertEqual(PvPPlacement.sharedWeakness(memberTypes: [["fire"]], hub: hub), "No shared weakness.")
+    }
 }

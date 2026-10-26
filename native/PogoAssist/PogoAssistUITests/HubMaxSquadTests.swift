@@ -68,24 +68,25 @@ final class HubMaxSquadTests: SquadUITestCase {
         rows.firstMatch.tap()
         XCTAssertTrue(slot(app, "max", 1).label.contains(name), slot(app, "max", 1).label)
         closePicker(app)
-        // A pick that is NOT the suggestion: Lapras is the suggested Healer; make slot 2 an Attacker slot (Lapras does not fit) and choose Lapras for slot 3, whose suggestion
-        // is empty.
+        // A pick that is NOT the current Pokémon: slot 1 holds Blissey, and Lapras (slot 2's Healer) is made free by turning slot 2 into an Attacker slot, which Lapras does
+        // not fit. Then, with slot 1 open to any role, Lapras is chosen for it.
         openPicker(app, "max", slot: 2)
         app.buttons["squad-role-Attacker"].tap()
         XCTAssertFalse(slot(app, "max", 2).label.contains("Lapras"), slot(app, "max", 2).label)
         closePicker(app)
-        openPicker(app, "max", slot: 3)
+        openPicker(app, "max", slot: 1)
         app.buttons["squad-role-All"].tap()
         let lapras = pickerRows(app).matching(NSPredicate(format: "label BEGINSWITH 'Lapras'")).firstMatch
-        XCTAssertTrue(lapras.waitForExistence(timeout: 5), "the freed copy is listed for slot 3")
+        XCTAssertTrue(lapras.waitForExistence(timeout: 5), "the freed copy is listed for slot 1")
+        XCTAssertTrue(slot(app, "max", 1).label.contains("Blissey") && !slot(app, "max", 1).label.contains("Lapras"), "slot 1 holds a different Pokémon before the pick: \(slot(app, "max", 1).label)")
         lapras.tap()
-        XCTAssertTrue(slot(app, "max", 3).label.contains("Lapras"), slot(app, "max", 3).label)
+        XCTAssertTrue(slot(app, "max", 1).label.contains("Lapras"), slot(app, "max", 1).label)
         closePicker(app)
         back(app, toTile: "max")
         app.buttons["hub-tile-max"].tap()
         el(app, "hub-max-row-0").tap()
-        XCTAssertTrue(slot(app, "max", 3).waitForExistence(timeout: 30))
-        XCTAssertTrue(slot(app, "max", 3).label.contains("Lapras"), "the exact copy chosen survives leaving the screen: \(slot(app, "max", 3).label)")
+        XCTAssertTrue(slot(app, "max", 1).waitForExistence(timeout: 30))
+        XCTAssertTrue(slot(app, "max", 1).label.contains("Lapras") && slot(app, "max", 1).label.hasPrefix("Slot 1 of 3, All"), "the exact copy chosen survives leaving the screen: \(slot(app, "max", 1).label)")
         XCTAssertTrue(slot(app, "max", 2).label.hasPrefix("Slot 2 of 3, Attacker"), slot(app, "max", 2).label)
         back(app, toTile: "max")
         app.buttons["hub-tile-max"].tap()

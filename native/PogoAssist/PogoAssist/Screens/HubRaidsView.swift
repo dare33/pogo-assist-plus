@@ -16,7 +16,6 @@ struct HubRaidsView: View {
             HubAdviceGate { _ in EmptyView() }
             HubScheduleLink()
         }
-        .accessibilityIdentifier("hub-screen-raids")
     }
 }
 

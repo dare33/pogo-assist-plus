@@ -15,6 +15,5 @@ struct HubMaxView: View {
             HubAdviceGate { _ in EmptyView() }
             HubScheduleLink()
         }
-        .accessibilityIdentifier("hub-screen-max")
     }
 }

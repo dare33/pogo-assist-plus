@@ -541,3 +541,8 @@ enum SquadWords {
         return names.count > 1 ? names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1] : names.joined()
     }
 }
+
+extension HubContext {
+    /// The types of a copy's own species, for a slot that names a kept pick the current lists no longer offer.
+    func entryTypes(_ id: String) -> [String] { entry(id).flatMap { gm.byId[$0.row.speciesId]?.types } ?? [] }
+}

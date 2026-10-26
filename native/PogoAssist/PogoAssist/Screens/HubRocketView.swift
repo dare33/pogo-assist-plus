@@ -37,7 +37,6 @@ struct HubRocketView: View {
             }
         }
         .keepsSquads(keeper)
-        .accessibilityIdentifier("hub-screen-rocket")
     }
 
     // MARK: leaders
@@ -187,7 +186,7 @@ private struct RocketSquadView: View {
         }
         guard let e else {
             let name = ctx.entry(entryId)?.row.title ?? "Pokémon"
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [vs], spoken: "\(head), \(name), against \(options(i))", identifier: id)
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [vs], types: ctx.entryTypes(entryId), spoken: "\(head), \(name), against \(options(i))", identifier: id)
         }
         let mark = SquadMark.of(e.build, screen: .rocket, ctx: ctx)
         let lines = (e.line.map { [$0] } ?? []) + [vs]

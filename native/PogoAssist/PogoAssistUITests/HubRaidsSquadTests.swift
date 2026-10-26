@@ -87,18 +87,18 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, All"), "and the role it was given: \(slot(app, "raids", 2).label)")
         closePicker(app)
 
-        // A pick that is NOT the suggestion: Rayquaza is the suggested Mega, so make room (slot 1 becomes a Bulky hitter slot, which Rayquaza does not fit) and choose
-        // it for slot 3, whose suggestion is empty.
+        // A pick that is NOT the current Pokémon: slot 2 holds Xerneas, and Rayquaza (the suggested Mega) is made free by turning slot 1 into a Bulky hitter slot, which
+        // Rayquaza does not fit. Then Rayquaza is chosen for slot 2.
         openPicker(app, "raids", slot: 1)
         app.buttons["squad-role-Bulky hitter"].tap()
         XCTAssertFalse(slot(app, "raids", 1).label.contains("Rayquaza"), "a Pokémon that does not fit the new role leaves the slot: \(slot(app, "raids", 1).label)")
         closePicker(app)
-        openPicker(app, "raids", slot: 3)
-        app.buttons["squad-role-All"].tap()
+        openPicker(app, "raids", slot: 2)
         let rayquaza = pickerRows(app).matching(NSPredicate(format: "label BEGINSWITH 'Rayquaza'")).firstMatch
-        XCTAssertTrue(rayquaza.waitForExistence(timeout: 5), "the freed copy is listed for slot 3")
+        XCTAssertTrue(rayquaza.waitForExistence(timeout: 5), "the freed copy is listed for slot 2")
+        XCTAssertTrue(slot(app, "raids", 2).label.contains("Xerneas") && !slot(app, "raids", 2).label.contains("Rayquaza"), "slot 2 holds a different Pokémon before the pick: \(slot(app, "raids", 2).label)")
         rayquaza.tap()
-        XCTAssertTrue(slot(app, "raids", 3).label.contains("Rayquaza"), "the slot shows the choice: \(slot(app, "raids", 3).label)")
+        XCTAssertTrue(slot(app, "raids", 2).label.contains("Rayquaza"), "the slot shows the choice: \(slot(app, "raids", 2).label)")
         closePicker(app)
 
         // The pick and the setting are remembered for the screen.
@@ -108,9 +108,8 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true, "Best is remembered")
         el(app, "hub-raid-row-1").tap()
         XCTAssertTrue(slot(app, "raids", 2).waitForExistence(timeout: 10))
-        XCTAssertTrue(slot(app, "raids", 2).label.contains(chosen) && slot(app, "raids", 2).label.contains("All"), "the pick and its role survive leaving the screen: \(slot(app, "raids", 2).label)")
-        XCTAssertTrue(slot(app, "raids", 3).label.contains("Rayquaza"), "the distinct pick for slot 3 survives too: \(slot(app, "raids", 3).label)")
-        XCTAssertFalse(slot(app, "raids", 1).label.contains("Rayquaza"))
+        XCTAssertTrue(slot(app, "raids", 2).label.contains("Rayquaza") && slot(app, "raids", 2).label.contains("All"), "the exact pick and its role survive leaving the screen: \(slot(app, "raids", 2).label)")
+        XCTAssertTrue(slot(app, "raids", 1).label.hasPrefix("Slot 1 of 6, Bulky hitter"), slot(app, "raids", 1).label)
     }
 
     func testRaidsScreenshots() throws {

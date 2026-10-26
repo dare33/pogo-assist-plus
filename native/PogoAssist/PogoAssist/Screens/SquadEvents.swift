@@ -320,7 +320,7 @@ struct EventSquadView: View {
         guard let o = byId[id] else {
             // A pick the list no longer offers (its build is gone from the advice): the slot still names the copy.
             let name = ctx.entry(id)?.row.title ?? "Pokémon"
-            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, spoken: head + ", " + name, identifier: "\(prefix)-slot-\(i + 1)")
+            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, types: ctx.entryTypes(id), spoken: head + ", " + name, identifier: "\(prefix)-slot-\(i + 1)")
         }
         let types = ctx.gm.byId[o.build.targetId]?.types ?? []
         let mark = SquadMark.of(o.build, screen: screen, ctx: ctx)
