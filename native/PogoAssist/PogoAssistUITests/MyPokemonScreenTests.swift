@@ -144,18 +144,18 @@ final class MyPokemonScreenTests: XCTestCase {
         openMoltres(app)
         app.buttons["top-pvp-row"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 10), "the Pokémon page opened")
-        XCTAssertTrue(app.buttons["leagues-back"].waitForExistence(timeout: 10), "a league view is the one chosen")
-        XCTAssertTrue(app.descendants(matching: .any)["league-ul"].exists, "it is the row's league, Ultra League")
-        XCTAssertFalse(app.descendants(matching: .any)["league-gl"].exists || app.descendants(matching: .any)["league-ml"].exists, "and no other league's view")
+        XCTAssertTrue(app.buttons["page-tab-pvp"].waitForExistence(timeout: 10) && app.buttons["page-tab-pvp"].isSelected, "the page opens on PvP")
+        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["league-ul-pick"].isSelected, "with the row's league, Ultra League, chosen")
+        XCTAssertFalse(app.buttons["league-gl-pick"].isSelected || app.buttons["league-ml-pick"].isSelected, "and no other league")
     }
 
-    func testATopIVsTapOpensThePageAsToday() throws {
+    func testATopIVsTapOpensThePageOnSummary() throws {
         let app = launchOnMoltres()
         openMoltres(app)
         app.buttons["top-ivs-row"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 10), "the Pokémon page opened")
-        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 10) || app.buttons["league-gl-pick"].exists, "its leagues show their base cards")
-        XCTAssertFalse(app.buttons["leagues-back"].exists, "no league was chosen")
+        XCTAssertTrue(app.buttons["page-tab-summary"].waitForExistence(timeout: 10) && app.buttons["page-tab-summary"].isSelected, "the page opens on Summary (rule 19)")
     }
 
     func testSeeAllOpensTheSpeciesList() throws {

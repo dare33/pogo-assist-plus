@@ -90,7 +90,7 @@ struct BoxView: View {
         // Leaving for a species list or a Pokémon ends the typing, so coming back does not bring the keyboard up over the list (iOS 27 gives the field its focus back).
         .onDisappear { searching = false }
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
-        .navigationDestination(for: CopyRoute.self) { PokemonDetailView(id: $0.id, league: $0.league) }
+        .navigationDestination(for: CopyRoute.self) { PokemonDetailView(id: $0.id, initialLeague: $0.league) }
         .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
         .confirmationDialog("Discard the waiting scan?", isPresented: $confirmDiscardWaiting, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardWaitingScan() }
