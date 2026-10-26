@@ -106,7 +106,9 @@ final class HubRaidsMaxTests: XCTestCase {
         large.terminate()
     }
 
-    func testMaxRosterFollowsTheSwitch() throws {
+    /// The Dynamax switch on a Pokémon's page still decides the Max readiness: with Blissey marked, its Max pick reads Full strength in the squad (the roster of
+    /// Dynamax copies the screen once showed is gone, design pass 2).
+    func testMaxPickFollowsTheDynamaxSwitch() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light", "-uitest-today", "2026-10-25"]
         app.launch()
@@ -131,27 +133,15 @@ final class HubRaidsMaxTests: XCTestCase {
         XCTAssertTrue(app.buttons["Pogo Hub"].waitForExistence(timeout: 10))
 
         openTile(app, "max")
-        // Nothing is under way on 25 Oct, so the screen opens on Coming up: the first Max Monday is tomorrow.
-        let maxRows = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'hub-max-row-'"))
-        XCTAssertTrue(maxRows.firstMatch.waitForExistence(timeout: 30), "a Max timeline row")
-        XCTAssertTrue(maxRows.firstMatch.label.contains("26 October, in 1 day"), maxRows.firstMatch.label)
-        XCTAssertTrue(maxRows.firstMatch.label.contains("Sableye"), maxRows.firstMatch.label)
-        app.buttons["Now"].tap()
-        XCTAssertTrue(app.staticTexts["Nothing listed."].waitForExistence(timeout: 5), "Now is empty on 25 Oct")
-        app.buttons["Coming up"].tap()
-        XCTAssertTrue(maxRows.firstMatch.waitForExistence(timeout: 5))
-        let tiles = app.descendants(matching: .any).matching(identifier: "hub-max-tile")
-        var scrolls = 0
-        while !tiles.firstMatch.exists && scrolls < 6 { app.swipeUp(); scrolls += 1 }
-        _ = tiles.firstMatch.waitForExistence(timeout: 30)
-        shot("max-01-light-roster")
-        XCTAssertTrue(tiles.firstMatch.exists, "the roster holds the Pokémon marked Dynamax")
-        XCTAssertEqual(tiles.count, 1)
-        // The tile reads the Max table's tier and role, then the build state, then the CP: the sample box's first Pokémon is a Blissey.
-        XCTAssertTrue(tiles.firstMatch.label.contains("S · Tank and healer, Built, CP"), tiles.firstMatch.label)
-        // The member row reads like "Name, CP ..." and the tile like "Name, line, CP n": the first words agree.
+        let row = app.descendants(matching: .any)["hub-max-row-0"]
+        XCTAssertTrue(row.waitForExistence(timeout: 30), "a Max timeline row")
+        row.tap()
+        // The sample box's first Pokémon is a Blissey, the Tank of the squad: marked Dynamax and with nothing left to do, it is at full strength.
+        let tank = app.descendants(matching: .any)["hub-max-slot-1"]
+        XCTAssertTrue(tank.waitForExistence(timeout: 10))
         let name = memberLabel.components(separatedBy: CharacterSet(charactersIn: ",\n")).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
         XCTAssertFalse(name.isEmpty, memberLabel)
-        XCTAssertTrue(tiles.firstMatch.label.hasPrefix(name), "roster tile '\(tiles.firstMatch.label)' names '\(name)' (row '\(memberLabel)')")
+        XCTAssertTrue(tank.label.contains(name) && tank.label.hasSuffix("Full strength"), "the marked copy reads Full strength: \(tank.label) (row '\(memberLabel)')")
+        shot("max-01-light-squad")
     }
 }
