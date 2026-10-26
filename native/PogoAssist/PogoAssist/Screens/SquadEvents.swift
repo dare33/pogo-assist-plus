@@ -27,7 +27,7 @@ struct EventSummary {
         bring = HubRaidsModel.bring(row: row, hub: hub)
         dates = HubRaidsModel.dateColumn(entry)
         ready = advice.map { HubRaidsModel.readiness(row: row, advice: $0, entries: entries, gm: gm, hub: hub, screen: screen) }
-        todo = advice.map { HubRaidsModel.toDo(row: row, advice: $0, entries: entries, gm: gm, hub: hub, screen: screen) } ?? (row.bosses.isEmpty ? row.note : "")
+        todo = advice.map { HubRaidsModel.toDo(row: row, advice: $0, entries: entries, gm: gm, hub: hub, screen: screen) } ?? (row.bosses.isEmpty ? (row.tba == true ? "Boss not announced yet." : row.note) : "")
     }
 
     var key: String { SquadStore.eventKey(entry.row) }

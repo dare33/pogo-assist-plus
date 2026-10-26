@@ -87,6 +87,20 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, All"), "and the role it was given: \(slot(app, "raids", 2).label)")
         closePicker(app)
 
+        // A pick that is NOT the suggestion: Rayquaza is the suggested Mega, so make room (slot 1 becomes a Bulky hitter slot, which Rayquaza does not fit) and choose
+        // it for slot 3, whose suggestion is empty.
+        openPicker(app, "raids", slot: 1)
+        app.buttons["squad-role-Bulky hitter"].tap()
+        XCTAssertFalse(slot(app, "raids", 1).label.contains("Rayquaza"), "a Pokémon that does not fit the new role leaves the slot: \(slot(app, "raids", 1).label)")
+        closePicker(app)
+        openPicker(app, "raids", slot: 3)
+        app.buttons["squad-role-All"].tap()
+        let rayquaza = pickerRows(app).matching(NSPredicate(format: "label BEGINSWITH 'Rayquaza'")).firstMatch
+        XCTAssertTrue(rayquaza.waitForExistence(timeout: 5), "the freed copy is listed for slot 3")
+        rayquaza.tap()
+        XCTAssertTrue(slot(app, "raids", 3).label.contains("Rayquaza"), "the slot shows the choice: \(slot(app, "raids", 3).label)")
+        closePicker(app)
+
         // The pick and the setting are remembered for the screen.
         back(app, toTile: "raids")
         app.buttons["hub-tile-raids"].tap()
@@ -95,6 +109,8 @@ final class HubRaidsSquadTests: SquadUITestCase {
         el(app, "hub-raid-row-1").tap()
         XCTAssertTrue(slot(app, "raids", 2).waitForExistence(timeout: 10))
         XCTAssertTrue(slot(app, "raids", 2).label.contains(chosen) && slot(app, "raids", 2).label.contains("All"), "the pick and its role survive leaving the screen: \(slot(app, "raids", 2).label)")
+        XCTAssertTrue(slot(app, "raids", 3).label.contains("Rayquaza"), "the distinct pick for slot 3 survives too: \(slot(app, "raids", 3).label)")
+        XCTAssertFalse(slot(app, "raids", 1).label.contains("Rayquaza"))
     }
 
     func testRaidsScreenshots() throws {

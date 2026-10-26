@@ -10,6 +10,16 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertTrue(el(app, "hub-pvp-league").waitForExistence(timeout: 30))
         // Great League has no candidate in this box.
         XCTAssertTrue(el(app, "hub-pvp-none").waitForExistence(timeout: 60), "Great League has no candidate")
+        // The squad still shows with its three empty slots and their roles, and a slot opens its picker with what could be got now (READBACK 1.15).
+        XCTAssertTrue(app.staticTexts["Suggested squad"].exists)
+        for (n, role) in [(1, "Lead"), (2, "Safe swap"), (3, "Closer")] {
+            XCTAssertTrue(slot(app, "pvp", n).label.hasPrefix("Slot \(n) of 3, \(role)") && slot(app, "pvp", n).label.hasSuffix("empty"), slot(app, "pvp", n).label)
+        }
+        openPicker(app, "pvp", slot: 1)
+        XCTAssertEqual(pickerRows(app).count, 0)
+        XCTAssertTrue(el(app, "squad-picker-empty").exists)
+        XCTAssertFalse(el(app, "squad-couldget-toggle").exists, "with no option Could get now is not folded away")
+        closePicker(app)
         app.buttons["hub-pvp-league-ul"].tap()
         XCTAssertTrue(app.staticTexts["Suggested squad"].waitForExistence(timeout: 30), "Ultra League shows a squad")
         XCTAssertFalse(app.staticTexts["Suggested team"].exists)
@@ -17,6 +27,14 @@ final class HubPvPSquadTests: SquadUITestCase {
         for (n, role) in [(1, "Lead"), (2, "Safe swap"), (3, "Closer")] {
             XCTAssertTrue(slot(app, "pvp", n).label.hasPrefix("Slot \(n) of 3, \(role)"), slot(app, "pvp", n).label)
         }
+        // Slot 2's Pokémon came from outside its role's list (nothing is listed for Safe swap): its picker still lists it, ticked, and never says there is no candidate.
+        XCTAssertFalse(slot(app, "pvp", 2).label.contains("empty"), slot(app, "pvp", 2).label)
+        openPicker(app, "pvp", slot: 2)
+        let own = pickerRows(app).firstMatch
+        XCTAssertTrue(own.waitForExistence(timeout: 5), "the slot's own Pokémon is listed")
+        XCTAssertTrue(own.isSelected, "ticked")
+        XCTAssertFalse(el(app, "squad-picker-empty").exists)
+        closePicker(app)
         // Available suggests copies as they are; Best may suggest an evolution.
         XCTAssertEqual(app.buttons["squad-mode-available"].isSelected, true)
         shot("pvp-ultra-available")

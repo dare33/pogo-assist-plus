@@ -17,18 +17,16 @@ final class SquadKeeper: ObservableObject {
 
     nonisolated static func key(_ account: String) -> String { keyPrefix + account }
 
-    /// Reads the account's store and applies the two rules for `ctx` (today's date, the rotation and the box's ids). A box that is not loaded (no entries) leaves
-    /// the picks alone: an empty id set would read as "every copy left" and wipe them.
-    func attach(account: String?, ctx: HubContext?) {
+    /// Reads the account's store and applies the keeping rules (`SquadStore.refreshed`) for today's date, the rotation and the box's ids. `boxIds` is nil while the
+    /// box is not loaded yet: the picks are then left alone. A loaded box with no copies is an empty set, and every pick is dropped (the last copy was deleted).
+    func attach(account: String?, today: String, rotation: [HubData.RotationRow], boxIds: Set<String>?) {
         let changedAccount = account != self.account
         self.account = account
         guard let account else { store = SquadStore(); return }
         var s = changedAccount || store == SquadStore() ? Self.load(account) : store
-        if let ctx, !ctx.entries.isEmpty {
-            s = s.refreshed(today: ctx.today, rotation: ctx.hub.rotation, boxIds: Set(ctx.entries.map(\.id)))
-        }
+        if let boxIds { s = s.refreshed(today: today, rotation: rotation, boxIds: boxIds) }
         if s != store { store = s }
-        if let ctx, !ctx.entries.isEmpty { Self.save(s, for: account) }
+        if boxIds != nil { Self.save(s, for: account) }
     }
 
     /// Changes the store and writes it.
@@ -60,7 +58,7 @@ extension AppModel {
 }
 
 /// Loads the keeper's squads when a squad screen appears and applies the keeping rules again when the account, the box or the advice changes (a re-scan saved, a
-/// switch of account). The advice is waited for: until then the box ids the rules need are not known.
+/// switch of account). The box is waited for: until it is loaded the box ids the rules need are not known.
 struct SquadAttach: ViewModifier {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var keeper: SquadKeeper
@@ -70,10 +68,14 @@ struct SquadAttach: ViewModifier {
             .onAppear(perform: attach)
             .onChange(of: model.account) { _, _ in attach() }
             .onChange(of: model.snapshot?.seq) { _, _ in attach() }
+            .onChange(of: model.boxLoaded) { _, _ in attach() }
             .onChange(of: model.hubAdvice != nil) { _, _ in attach() }
     }
 
-    private func attach() { keeper.attach(account: model.account, ctx: model.squadContext()) }
+    private func attach() {
+        let loaded = model.boxLoaded && model.boxProblem == nil
+        keeper.attach(account: model.account, today: HubModel.today(), rotation: (try? HubData.bundled())?.rotation ?? [], boxIds: loaded ? Set(model.entries.map(\.id)) : nil)
+    }
 }
 
 extension View {

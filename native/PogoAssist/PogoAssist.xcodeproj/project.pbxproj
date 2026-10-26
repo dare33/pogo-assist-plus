@@ -42,6 +42,7 @@
 		39805C51C92B02B0586C5877 /* PogoImport in Frameworks */ = {isa = PBXBuildFile; productRef = E40CDE8E142D7DAD4E45B792 /* PogoImport */; };
 		3A0CEB8C4C1831E05411C6FB /* BoxExportFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CBC04B3E82BBE8BB3DC034 /* BoxExportFile.swift */; };
 		3BC4718FD1007EC5ED97FD71 /* HubPvPView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBD3829289BD9641C9F7C9C /* HubPvPView.swift */; };
+		407469E8DD128DD568177761 /* PvPPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92C1CAF14271C5019066D125 /* PvPPlacementTests.swift */; };
 		408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFAC0B18897FB5A85E55764 /* Theme.swift */; };
 		414C36A2C46797E952332411 /* RankingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB1A15D6F733EEE0586D675 /* RankingControls.swift */; };
 		4366EAAD252170736E53F6D5 /* HubTeamsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637BDE6B4B08C13F8920523F /* HubTeamsTests.swift */; };
@@ -107,6 +108,7 @@
 		B71EB8981CA7EF438CDCB67F /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF23F6FB7C812B78963625C3 /* RootView.swift */; };
 		BB1D364E08592285660F93A8 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C17CC8B55034461A1BDC58 /* ShareViewController.swift */; };
 		BB5FFC989BC424882CE9E129 /* AppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F588B630BAB0C78B337D8139 /* AppearanceView.swift */; };
+		BE496D3E3AE9EE5DD098A601 /* PvPPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21BF9B0F9EB523245B2518DC /* PvPPlacement.swift */; };
 		C08B608A460725E2E5529AFB /* ScanSetupPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E142247214BEF767388106 /* ScanSetupPrompts.swift */; };
 		C0A0118C2725F58B90F1E11A /* SetupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */; };
 		C46DCAB7C3935BB722DFEBF9 /* ScanMoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D59DA0D8FD3A81C5286A75 /* ScanMoreView.swift */; };
@@ -212,6 +214,7 @@
 		1FFAC0B18897FB5A85E55764 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarsAndAccounts.swift; sourceTree = "<group>"; };
 		2174CAD06ADF7ECC068B88FD /* SampleScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleScan.swift; sourceTree = "<group>"; };
+		21BF9B0F9EB523245B2518DC /* PvPPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PvPPlacement.swift; sourceTree = "<group>"; };
 		2525D042EF40B722A34E06D5 /* PokemonActivityTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonActivityTabs.swift; sourceTree = "<group>"; };
 		25480D5F634F1F2F763FAB7D /* HubMaxSquadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubMaxSquadTests.swift; sourceTree = "<group>"; };
 		272C46D0764D4B5A0E23F600 /* HubPvPSquadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubPvPSquadTests.swift; sourceTree = "<group>"; };
@@ -271,6 +274,7 @@
 		853199DAE4157490F71A25E8 /* BoxChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxChrome.swift; sourceTree = "<group>"; };
 		90E75A4882C8FD051F884B45 /* ScanPassViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanPassViews.swift; sourceTree = "<group>"; };
 		92443CC47565AC21CD82E3EC /* RankingSwitchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingSwitchTests.swift; sourceTree = "<group>"; };
+		92C1CAF14271C5019066D125 /* PvPPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PvPPlacementTests.swift; sourceTree = "<group>"; };
 		936229D5CE5AD592DA498B16 /* ReviewQuestionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewQuestionViews.swift; sourceTree = "<group>"; };
 		943D02DD923AE19E5F63128C /* FloatingTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingTabBar.swift; sourceTree = "<group>"; };
 		972B5D573E425B7C4A866181 /* BoxIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoxIntents.swift; sourceTree = "<group>"; };
@@ -460,6 +464,7 @@
 			children = (
 				3D04F07048F190593A9DCBE6 /* BoxInsightStoreTests.swift */,
 				FFC7060894571F96C95B0C0A /* BuildMarkWordsTests.swift */,
+				92C1CAF14271C5019066D125 /* PvPPlacementTests.swift */,
 				D76F4EFCC26E0B2FC6ADEC25 /* SquadKeeperTests.swift */,
 			);
 			path = PogoAssistTests;
@@ -543,6 +548,7 @@
 				7A5DCADB6094BE4B97E76F13 /* PokemonDetailsCard.swift */,
 				33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */,
 				D20D8DCC5FFAD794083C4F13 /* PokemonSummaryTab.swift */,
+				21BF9B0F9EB523245B2518DC /* PvPPlacement.swift */,
 				B61B527C762D4C808D507072 /* ReviewNotSeen.swift */,
 				936229D5CE5AD592DA498B16 /* ReviewQuestionViews.swift */,
 				A052B76A429D7B08291119B9 /* ReviewResult.swift */,
@@ -796,6 +802,7 @@
 			files = (
 				F2025255259D74D0143F1857 /* BoxInsightStoreTests.swift in Sources */,
 				CF7E25FC86D3606DE6D103B6 /* BuildMarkWordsTests.swift in Sources */,
+				407469E8DD128DD568177761 /* PvPPlacementTests.swift in Sources */,
 				6C038EA5EB1AC98EBA13BB21 /* SquadKeeperTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -876,6 +883,7 @@
 				74BF30A02B0889A549F4B28B /* PokemonDetailsCard.swift in Sources */,
 				1246EFE08422FB55F2C73B59 /* PokemonPageParts.swift in Sources */,
 				F468030C5CC8AC3D921A8D2B /* PokemonSummaryTab.swift in Sources */,
+				BE496D3E3AE9EE5DD098A601 /* PvPPlacement.swift in Sources */,
 				88B726BE30F7E106A63BC75E /* QuestionCard.swift in Sources */,
 				414C36A2C46797E952332411 /* RankingControls.swift in Sources */,
 				5A7CFEDBCAD05B096C12CA05 /* ReaderSettings.swift in Sources */,

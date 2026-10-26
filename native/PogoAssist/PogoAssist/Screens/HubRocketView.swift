@@ -191,8 +191,8 @@ private struct RocketSquadView: View {
         }
         let mark = SquadMark.of(e.build, screen: .rocket, ctx: ctx)
         let lines = (e.line.map { [$0] } ?? []) + [vs]
-        let spoken = [head, e.build.targetName, e.line, "against \(options(i))", mark.spoken].compactMap { $0 }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: e.build.targetName, lines: lines, mark: mark, spoken: spoken, identifier: id)
+        let spoken = [head, e.build.targetName, SquadWords.typeList(HubTeams.types(of: e.build, gm: ctx.gm)), e.line, "against \(options(i))", mark.spoken].compactMap { $0 }.joined(separator: ", ")
+        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: e.build.targetName, lines: lines, types: HubTeams.types(of: e.build, gm: ctx.gm), mark: mark, spoken: spoken, identifier: id)
     }
 
     // MARK: picker

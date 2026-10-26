@@ -66,7 +66,7 @@ private struct GymSquadView: View {
         let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
         let line = GymFigures.bulkLine(r)
         let spoken = ["Slot \(i + 1) of 6", r.build.targetName, SquadWords.typeList(types), line, mark.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: r.build.targetName, lines: line.isEmpty ? [] : [line], mark: mark, spoken: spoken, identifier: id)
+        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: r.build.targetName, lines: line.isEmpty ? [] : [line], types: types, mark: mark, spoken: spoken, identifier: id)
     }
 
     // MARK: picker

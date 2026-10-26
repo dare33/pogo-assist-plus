@@ -48,13 +48,15 @@ enum SquadMark: Equatable {
     }
 
     /// The same for a league candidate: Built reads Full strength; else the work is the evolution and power-up the league option needs.
-    static func of(_ c: HubTeams.Candidate) -> SquadMark {
-        if c.built { return .fullStrength }
-        let cost = c.option.cost.flatMap { k -> MyPokemon.Cost? in
+    static func of(_ c: HubTeams.Candidate) -> SquadMark { of(option: c.option, built: c.built, copyTitle: c.copyTitle) }
+
+    static func of(option: BoxAdvice.LeagueRating.Option, built: Bool, copyTitle: String) -> SquadMark {
+        if built { return .fullStrength }
+        let cost = option.cost.flatMap { k -> MyPokemon.Cost? in
             let v = HubSquads.cost(dust: k.dust, candy: k.candy + k.evolveCandy)
             return v.value.map { MyPokemon.Cost(value: $0, currency: v.currency == .dust ? .dust : .candy) }
         }
-        return .upgrade(cost: cost, label: c.option.isSelf ? "Upgrade available: power up" : "Upgrade available: evolve from \(c.copyTitle)")
+        return .upgrade(cost: cost, label: option.isSelf ? "Upgrade available: power up" : "Upgrade available: evolve from \(copyTitle)")
     }
 
     /// For a VoiceOver label: "full strength", "Upgrade available: power up to level 30, 12k dust".
@@ -169,6 +171,8 @@ struct SlotCardView: View {
     let selected: Bool
     let action: () -> Void
     @Environment(\.accent) private var accent
+    /// The disc grows with the text, so an initial or a number never spills out of it at the accessibility sizes.
+    @ScaledMetric(relativeTo: .subheadline) private var discSize: CGFloat = 30
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -189,7 +193,7 @@ struct SlotCardView: View {
                 Text(filled ? String(model.name!.prefix(1)) : model.disc)
                     .font(.figtree(filled ? 14 : 18, .heavy, relativeTo: .subheadline))
                     .foregroundStyle(filled ? Theme.surface : model.palette.ink)
-                    .frame(width: 30, height: 30)
+                    .frame(width: min(discSize, 80), height: min(discSize, 80))
                     .background(Circle().fill(filled ? model.palette.ink : Theme.off))
                     .accessibilityHidden(true)
                 Text(model.name ?? "Empty").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(filled ? Theme.ink : Theme.muted)

@@ -17,6 +17,7 @@ final class HubRocketSquadTests: SquadUITestCase {
         XCTAssertTrue(one.label.contains("Lucario") && one.label.contains("against Persian"), one.label)
         // A slot of one option has no "beats" line; a slot of three says how many it beats.
         XCTAssertFalse(one.label.contains("beats"), one.label)
+        XCTAssertTrue(one.label.contains("Fighting"), "a slot card names the Pokémon's types: \(one.label)")
         XCTAssertTrue(two.label.contains("Zamazenta") && two.label.contains("beats 2 of 3") && two.label.contains("against Kangaskhan / Rhyperior / Machamp"), two.label)
 
         // Slot 3's picker: choose another row than the suggestion; the slot shows it and it is kept.
@@ -64,18 +65,19 @@ final class HubRocketSquadTests: SquadUITestCase {
         openTile(app, "rocket")
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR GIOVANNI"].waitForExistence(timeout: 60))
         XCTAssertEqual(app.buttons["squad-mode-available"].isSelected, true, "Available is the default")
-        var seenNext = false
+        var nextBestRows = [Int]()
         for n in 1...3 {
             openPicker(app, "rocket", slot: n)
-            if pickerRows(app).count == 0 || app.staticTexts["Next best"].exists {
-                XCTAssertTrue(app.staticTexts["Next best"].exists || el(app, "squad-picker-empty").exists, "a slot nothing beats shows Next best or says so")
-                XCTAssertFalse(el(app, "squad-couldget-toggle").exists, "and Could get now is not folded away: with no option in the box it is open (or has nothing to list)")
-                if app.staticTexts["Next best"].exists { seenNext = true; XCTAssertLessThanOrEqual(pickerRows(app).count, 3); shot("rocket-next-best") }
+            if app.staticTexts["Next best"].exists {
+                nextBestRows.append(pickerRows(app).count)
+                XCTAssertFalse(el(app, "squad-couldget-toggle").exists, "Could get now stays open under Next best")
+                if nextBestRows.count == 1 { shot("rocket-next-best") }
             }
             closePicker(app)
         }
-        // Not every box has an unbeatable slot, so seeing Next best is not required; a slot that has no option must have shown it or said so, above.
-        print("rocket next best seen under Available: \(seenNext)")
+        // The sample box has no usable counter for at least one of Giovanni's slots, so Next best must be offered, with one to three rows.
+        XCTAssertFalse(nextBestRows.isEmpty, "a slot nothing usable beats lists Next best under Available")
+        XCTAssertTrue(nextBestRows.allSatisfy { (1...3).contains($0) }, "up to three rows: \(nextBestRows)")
     }
 
     func testRocketScreenshots() throws {
