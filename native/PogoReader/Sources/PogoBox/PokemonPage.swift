@@ -50,6 +50,31 @@ public enum PokemonPage {
     /// The Shadow mark: on or off; on clears Purified in the model. Off stores "marked neither by hand" (0).
     public static func toggleShadow(_ row: ScanRow) -> BoxMerge.Edit { BoxMerge.Edit(shadow: row.shadow == 1 ? .neither : .shadow) }
 
+    /// Whether an edit would leave the row as it is: a mark already in that state, the chip already stored, "Not unlocked" or a level "–" with nothing stored. Such
+    /// an edit saves no box version and re-runs no advice. A default that is shown but not stored is not stored, so tapping it is a change (it saves).
+    public static func isNoOp(_ edit: BoxMerge.Edit, _ row: ScanRow) -> Bool {
+        if let d = edit.dynamax, d.value != row.dynamax { return false }
+        if let g = edit.gigantamax, (g ? true : nil) != row.gigantamax { return false }
+        if let l = edit.lucky, (l ? true : nil) != row.lucky { return false }
+        if let sh = edit.shadow, sh.value != row.shadow { return false }
+        if let d = edit.details {
+            let n = d.normalised
+            if (n.isEmpty ? nil : n) != row.details { return false }
+        }
+        return edit.marksOnly
+    }
+
+    /// The types of a species; the fallback species' when the game master does not know it (the Mega form the page shows has its own types).
+    public static func types(of speciesId: String, fallback: String, gm: GameMaster?) -> [String] {
+        gm?.byId[speciesId]?.types ?? gm?.byId[fallback]?.types ?? []
+    }
+
+    /// The grades of a family-list row's two figures, by the tiles' bands (rule 9: top 92+ or IV rank 1 to 100, good 90+ or 101 to 500), not the cards' older
+    /// 88 and 80th-percentile cut-offs.
+    public static func grades(_ row: LeaguePanel.Row) -> (score: MyPokemon.Grade, iv: MyPokemon.Grade) {
+        (MyPokemon.scoreGrade(row.option.strength?.score), MyPokemon.rankGrade(row.option.iv?.rank))
+    }
+
     // MARK: moves (rules 17 and 18)
 
     public enum MoveSlot { case fast, charged, charged2 }
@@ -215,6 +240,12 @@ public enum PokemonPage {
 
     /// "Marked as Dynamax." or "Dynamax: not marked."
     public static func dynamaxLine(_ row: ScanRow) -> String { row.dynamax == true ? "Marked as Dynamax." : "Dynamax: not marked." }
+
+    /// What follows the Dynamax state on the Max tab: the rule, and, while the mark is off, where to set it.
+    public static func dynamaxNote(_ row: ScanRow) -> String {
+        row.dynamax == true ? "Only a copy caught as Dynamax can join Max battles."
+            : "Only a copy caught as Dynamax can join Max battles; mark it with the Dynamax icon at the top once you have checked in the game."
+    }
 
     // MARK: the PvP tab
 

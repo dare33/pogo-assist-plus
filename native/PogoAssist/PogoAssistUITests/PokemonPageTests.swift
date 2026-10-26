@@ -85,15 +85,15 @@ final class PokemonPageTests: XCTestCase {
         openCopy(app, "Scyther")
         XCTAssertTrue(app.buttons["page-tab-summary"].isSelected, "the page opens on Summary")
         XCTAssertTrue(el(app, "summary-rows").waitForExistence(timeout: 30))
-        XCTAssertEqual(["pvp", "raids", "gym", "rocket", "max", "summary"].count, 6)
         let content = ["pvp": "pvp-tab", "raids": "raids-tab", "gym": "gym-tab", "rocket": "rocket-tab", "max": "max-tab", "summary": "summary-rows"]
         for name in ["pvp", "raids", "gym", "rocket", "max", "summary"] {
             selectTab(app, name)
             XCTAssertTrue(el(app, content[name]!).waitForExistence(timeout: 10), "\(name) shows its content")
             XCTAssertTrue(app.buttons["page-tab-\(name)"].isSelected, "\(name) is the chosen tab")
+            // Every tab keeps the facts and Delete under it, while that tab is shown.
+            XCTAssertTrue(el(app, "page-facts").exists, "\(name): the facts row")
+            XCTAssertTrue(app.buttons["Delete from box"].exists, "\(name): Delete from box")
         }
-        // Every tab keeps the facts and Delete under it.
-        XCTAssertTrue(el(app, "page-facts").exists)
         // A Summary row opens its tab.
         app.buttons["summary-row-raids"].tap()
         XCTAssertTrue(el(app, "raids-tab").waitForExistence(timeout: 10))
@@ -136,6 +136,8 @@ final class PokemonPageTests: XCTestCase {
         XCTAssertTrue(app.buttons["max-attack-1"].isSelected, "Max Attack shows level 1 until a level is chosen")
         app.buttons["max-attack-3"].tap()
         XCTAssertTrue(app.buttons["max-attack-3"].waitForExistence(timeout: 5))
+        let picked = NSPredicate(format: "isSelected == true")
+        expectation(for: picked, evaluatedWith: app.buttons["max-attack-3"]); waitForExpectations(timeout: 10)
 
         // Shadow and Purified clear each other.
         shadow.tap(); waitValue(shadow, "On", "the Shadow mark turns on")
@@ -204,5 +206,51 @@ final class PokemonPageTests: XCTestCase {
         XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 30))
         XCTAssertTrue(app.buttons["league-ul-pick"].isSelected, "with that league's tile chosen")
         XCTAssertFalse(app.buttons["league-gl-pick"].isSelected)
+    }
+
+    /// Two quick edits both persist: the second waits for the first and is made from the row as it is then (each details edit replaces them all).
+    func testTwoQuickEditsBothPersist() throws {
+        let app = launchPopulated()
+        openCopy(app, "Scyther")
+        app.buttons["mark-advanced"].tap()
+        XCTAssertTrue(el(app, "flag-lucky").waitForExistence(timeout: 10))
+        el(app, "flag-best-buddy").tap()
+        el(app, "flag-weather-boosted").tap()   // at once: no wait for the first save
+        el(app, "flag-lucky").tap()
+        closeCopy(app)
+        openCopy(app, "Scyther")
+        app.buttons["mark-advanced"].tap()
+        XCTAssertTrue(el(app, "flag-lucky").waitForExistence(timeout: 10))
+        for id in ["flag-best-buddy", "flag-weather-boosted", "flag-lucky"] {
+            let e = app.buttons[id]
+            expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: e)
+        }
+        waitForExpectations(timeout: 15)
+    }
+
+    /// A default move that was only shown is not saved by leaving the page; tapping a move saves it. And a Lucky edit makes a new box version with new advice: the
+    /// cost shown on a Summary row changes (Lucky halves the power-up dust).
+    func testDefaultsStayUnsavedAndLuckyReRunsTheAdvice() throws {
+        let app = launchPopulated()
+        openCopy(app, "Scyther")
+        let row = el(app, "summary-row-raids")
+        XCTAssertTrue(row.waitForExistence(timeout: 30))
+        let before = row.label
+        XCTAssertTrue(before.contains("dust"), before)
+        app.buttons["mark-advanced"].tap()
+        let fast = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'move-fast-' AND isSelected == true")).firstMatch
+        XCTAssertTrue(fast.waitForExistence(timeout: 10), "the default fast move is shown as chosen")
+        let id = fast.identifier
+        closeCopy(app)
+        openCopy(app, "Scyther")
+        app.buttons["mark-advanced"].tap()
+        XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons[id].isSelected, "still the default after leaving without a tap")
+        XCTAssertEqual(el(app, "summary-row-raids").label, before, "leaving saved nothing that changed the advice")
+        el(app, "flag-lucky").tap()
+        let changed = NSPredicate(format: "label != %@", before)
+        expectation(for: changed, evaluatedWith: el(app, "summary-row-raids"))
+        waitForExpectations(timeout: 30)
+        XCTAssertTrue(app.buttons["flag-lucky"].isSelected)
     }
 }

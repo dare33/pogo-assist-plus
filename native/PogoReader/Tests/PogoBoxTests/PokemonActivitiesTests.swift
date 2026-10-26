@@ -71,6 +71,26 @@ final class PokemonActivitiesTests: XCTestCase {
         XCTAssertFalse(p.built)
     }
 
+    /// A copy whose Raids build is a Mega route (Scyther to Mega Scizor) shows that card on the Raids tab, and the Summary agrees; a Shadow copy cannot Mega evolve.
+    func testTheRaidsTabListsTheMegaEntriesOfAMemberForANonShadowCopy() {
+        var mega = P23.build("sc", "scizor", areas: ["Raids"], tier: "B", built: false, viaMega: true)
+        mega.steps = [.init(kind: "evolve", to: "Scizor"), .init(kind: "megaEvolve")]
+        let table = P23.table([P23.tierEntry("raids", "Bug", "B", "scizor_mega", mega: true)])
+        func ctx(_ shadow: Int?) -> HubContext { P23.ctx(builds: [mega], entries: [P23.entry("sc", "scyther", shadow: shadow)], table: table, rotation: []) }
+        let c = ctx(nil)
+        let cards = A.raidCards(copy: c.entry("sc")!, ctx: c)
+        XCTAssertEqual(cards.map(\.member.id), ["scizor_mega"])
+        XCTAssertEqual(cards.map(\.type), ["bug"])
+        XCTAssertEqual(cards[0].role, .mega)
+        guard case .mine(let plan) = cards[0].plan else { return XCTFail("the copy's own Mega-route build is its plan") }
+        XCTAssertEqual(plan.build.targetId, "scizor")
+        let raids = A.summary(copy: c.entry("sc")!, ctx: c).first { $0.activity == .raids }!
+        XCTAssertEqual(raids.verdict, .planned)
+        XCTAssertEqual(raids.lines.first?.plain, "\(cards[0].member.name), B Bug attacker", "the Summary's line is the tab's card")
+        let s = ctx(1)
+        XCTAssertEqual(A.raidCards(copy: s.entry("sc")!, ctx: s), [], "a Shadow copy cannot Mega evolve")
+    }
+
     func testRaidBestPrefersTierThenBuiltThenTheAdvisorsOrder() {
         let table = P23.table([P23.tierEntry("raids", "Fire", "A", "flareon"), P23.tierEntry("raids", "Fire", "S", "charizard"), P23.tierEntry("raids", "Fire", "A", "arcanine")])
         let builds = [P23.build("a", "flareon", areas: ["Raids"], built: false), P23.build("b", "arcanine", areas: ["Raids"]), P23.build("c", "charizard", areas: ["Raids"], built: false),

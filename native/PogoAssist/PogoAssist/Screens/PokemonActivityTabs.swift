@@ -14,12 +14,19 @@ private struct ActivityPanel<Content: View>: View {
     let identifier: String
     @ViewBuilder var content: Content
 
+    private var heading: some View {
+        Text(title).font(.figtree(13, .heavy, relativeTo: .footnote)).tracking(0.5).foregroundStyle(ink).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+    }
+    @ViewBuilder private var noteText: some View {
+        if let note { Text(note).font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+    }
+
     var body: some View {
         Panel(padding: 16, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title).font(.figtree(13, .heavy, relativeTo: .footnote)).tracking(0.5).foregroundStyle(ink).accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
-                if let note { Text(note).font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.muted) }
+            // At the accessibility sizes the note goes under the heading: neither word breaks mid-word.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) { heading; Spacer(minLength: 8); noteText }
+                VStack(alignment: .leading, spacing: 2) { heading; noteText }
             }
             content
         }
@@ -276,7 +283,7 @@ struct MaxTab: View {
         ActivityPanel(title: "MAX BATTLES", note: "\(family) family", ink: ContentType.max.ink(accent), identifier: "max-tab") {
             // The Dynamax state comes first: the verdicts below read NEEDS DYNAMAX until the mark is on.
             (Text(PokemonPage.dynamaxLine(copy.row) + " ").bold().foregroundStyle(Theme.ink)
-                + Text("Only a copy caught as Dynamax can join Max battles; mark it with the Dynamax icon at the top once you have checked in the game.").foregroundStyle(Theme.muted))
+                + Text(PokemonPage.dynamaxNote(copy.row)).foregroundStyle(Theme.muted))
                 .font(.figtree(13, .medium, relativeTo: .footnote)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("max-dynamax-line")
             if cards.isEmpty { mutedLine(PokemonPage.emptyLine(.max), size: 14).accessibilityIdentifier("tab-empty") }

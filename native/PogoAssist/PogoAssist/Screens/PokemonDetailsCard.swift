@@ -9,7 +9,8 @@ struct PokemonDetailsCard: View {
     /// The Mega form the page shows now, if any: its name, CP, level and HP replace the entry's, the IVs and marks stay the entry's.
     let mega: MegaForm?
     @Binding var advancedOpen: Bool
-    let apply: (BoxMerge.Edit) -> Void
+    /// Takes the edit as a function of the row as it is when the edit is applied, so two quick edits (each replacing the whole details) both persist.
+    let apply: (@escaping (ScanRow) -> BoxMerge.Edit) -> Void
     @Environment(\.accent) private var accent
 
     private var row: ScanRow { entry.row }
@@ -36,7 +37,8 @@ struct PokemonDetailsCard: View {
 
     private var title: String { mega?.title ?? row.title }
     private var cp: Int { mega?.cp ?? row.cp }
-    private var types: [String] { (try? GameMaster.bundled())?.byId[row.speciesId]?.types ?? [] }
+    /// The Mega form's own types while the page shows it, else the entry's.
+    private var types: [String] { PokemonPage.types(of: mega?.speciesId ?? row.speciesId, fallback: row.speciesId, gm: try? GameMaster.bundled()) }
 
     private var nameLine: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -84,9 +86,9 @@ struct PokemonDetailsCard: View {
     private var marks: some View {
         HStack(spacing: 0) {
             MarkButton(kind: .dynamax, on: row.dynamax == true, name: "Dynamax", identifier: "mark-dynamax",
-                       hint: row.dynamax == true ? "Clears the mark" : "Marks it as caught as Dynamax") { apply(PokemonPage.toggleDynamax(row)) }
+                       hint: row.dynamax == true ? "Clears the mark" : "Marks it as caught as Dynamax") { apply { PokemonPage.toggleDynamax($0) } }
             MarkButton(kind: .shadow, on: row.shadow == 1, name: "Shadow", identifier: "mark-shadow",
-                       hint: row.shadow == 1 ? "Clears the mark" : "Marks it as a Shadow Pokémon") { apply(PokemonPage.toggleShadow(row)) }
+                       hint: row.shadow == 1 ? "Clears the mark" : "Marks it as a Shadow Pokémon") { apply { PokemonPage.toggleShadow($0) } }
             MarkButton(kind: .advanced, on: advancedOpen, name: "Advanced details", identifier: "mark-advanced", isToggle: false,
                        hint: advancedOpen ? "Closes the section" : "Opens moves, Max move levels, the Mega level and more") {
                 withAnimation(.easeOut(duration: 0.2)) { advancedOpen.toggle() }
@@ -173,7 +175,8 @@ struct MarkButton: View {
         case .advanced: return accent.tint
         }
     }
-    private var stroke: Color { on ? ink : Theme.faint }
+    /// `muted`, not `faint`: the off glyph keeps 3:1 against the off circle in dark mode.
+    private var stroke: Color { on ? ink : Theme.muted }
 
     @ViewBuilder private var glyph: some View {
         switch kind {
@@ -195,7 +198,8 @@ struct MarkButton: View {
 /// flag chips. A move or level the player has not chosen shows its default and is not saved until a tap (rule 18).
 struct AdvancedDetailsView: View {
     let entry: BoxEntry
-    let apply: (BoxMerge.Edit) -> Void
+    /// Takes the edit as a function of the row as it is when the edit is applied, so two quick edits (each replacing the whole details) both persist.
+    let apply: (@escaping (ScanRow) -> BoxMerge.Edit) -> Void
     @Environment(\.accent) private var accent
 
     private var row: ScanRow { entry.row }
@@ -209,24 +213,24 @@ struct AdvancedDetailsView: View {
                 section("FAST MOVE", id: "adv-fast") {
                     ForEach(AdvancedDetails.fastMoves(of: id, gm: gm), id: \.id) { m in
                         moveChip(m, selected: moves.fast == m.id, identifier: "move-fast-\(m.id)") {
-                            apply(BoxMerge.Edit(details: PokemonPage.choosing(m.id, for: .fast, details: row.details, speciesId: id, gm: gm)))
+                            apply { r in BoxMerge.Edit(details: PokemonPage.choosing(m.id, for: .fast, details: r.details, speciesId: r.speciesId, gm: gm)) }
                         }
                     }
                 }
                 section("CHARGED MOVE", id: "adv-charged") {
                     ForEach(AdvancedDetails.firstChargedOptions(of: id, second: moves.charged2, gm: gm), id: \.id) { m in
                         moveChip(m, selected: moves.charged1 == m.id, identifier: "move-charged-\(m.id)") {
-                            apply(BoxMerge.Edit(details: PokemonPage.choosing(m.id, for: .charged, details: row.details, speciesId: id, gm: gm)))
+                            apply { r in BoxMerge.Edit(details: PokemonPage.choosing(m.id, for: .charged, details: r.details, speciesId: r.speciesId, gm: gm)) }
                         }
                     }
                 }
                 section("SECOND CHARGED MOVE", id: "adv-charged2") {
                     chip("Not unlocked", selected: moves.charged2 == nil, identifier: "move-charged2-none") {
-                        apply(BoxMerge.Edit(details: PokemonPage.choosing(nil, for: .charged2, details: row.details, speciesId: id, gm: gm)))
+                        apply { r in BoxMerge.Edit(details: PokemonPage.choosing(nil, for: .charged2, details: r.details, speciesId: r.speciesId, gm: gm)) }
                     }
                     ForEach(AdvancedDetails.secondChargedOptions(of: id, first: moves.charged1, gm: gm), id: \.id) { m in
                         moveChip(m, selected: moves.charged2 == m.id, identifier: "move-charged2-\(m.id)") {
-                            apply(BoxMerge.Edit(details: PokemonPage.choosing(m.id, for: .charged2, details: row.details, speciesId: id, gm: gm)))
+                            apply { r in BoxMerge.Edit(details: PokemonPage.choosing(m.id, for: .charged2, details: r.details, speciesId: r.speciesId, gm: gm)) }
                         }
                     }
                 }
@@ -235,7 +239,7 @@ struct AdvancedDetailsView: View {
                 section("MORE", id: "adv-more") {
                     ForEach(PokemonPage.flags(for: row), id: \.self) { f in
                         chip(f.rawValue, selected: PokemonPage.isOn(f, row), identifier: "flag-\(f.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))") {
-                            apply(PokemonPage.toggle(f, row))
+                            apply { PokemonPage.toggle(f, $0) }
                         }
                     }
                 }
@@ -312,10 +316,10 @@ struct AdvancedDetailsView: View {
         let now = PokemonPage.level(of: move, row.details)
         return ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) { levelName(name, sub).frame(maxWidth: .infinity, alignment: .leading); levels(PokemonPage.levels(of: move), now: now, name: name, id: id) { n in
-                apply(BoxMerge.Edit(details: PokemonPage.setting(n, of: move, row.details)))
+                apply { r in BoxMerge.Edit(details: PokemonPage.setting(n, of: move, r.details)) }
             } }
             VStack(alignment: .leading, spacing: 4) { levelName(name, sub); levels(PokemonPage.levels(of: move), now: now, name: name, id: id) { n in
-                apply(BoxMerge.Edit(details: PokemonPage.setting(n, of: move, row.details)))
+                apply { r in BoxMerge.Edit(details: PokemonPage.setting(n, of: move, r.details)) }
             } }
         }
         .frame(minHeight: 40)
@@ -360,7 +364,7 @@ struct AdvancedDetailsView: View {
             HStack(spacing: 0) {
                 ForEach(CopyDetails.MegaLevel.allCases, id: \.self) { l in
                     levelButton(l.title, selected: l == now, minWidth: 56, label: "Mega level \(l.title)", identifier: "mega-level-\(l.rawValue)") {
-                        apply(BoxMerge.Edit(details: PokemonPage.setting(megaLevel: l, row.details)))
+                        apply { r in BoxMerge.Edit(details: PokemonPage.setting(megaLevel: l, r.details)) }
                     }
                 }
             }

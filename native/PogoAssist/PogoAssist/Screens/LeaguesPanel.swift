@@ -297,16 +297,18 @@ struct LeaguesPanel: View {
                 Text(b).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.red).multilineTextAlignment(.trailing)
                     .frame(width: Self.figureWidths.reduce(16, +), alignment: .trailing)
             } else {
-                cell(row.score, row.rank, ink: row.score == "—" ? Theme.faint : (row.scoreStrong ? Theme.greenInk : Theme.ink), width: Self.figureWidths[0])
-                cell(row.ivPct, row.ivRank, ink: row.ivPct == "—" ? Theme.faint : (row.ivStrong ? Theme.greenInk : Theme.ink), width: Self.figureWidths[1])
-                cell(row.dust, row.candy, ink: row.dustMuted ? Theme.muted : Theme.ink, width: Self.figureWidths[2])
+                // The tiles' bands (rule 9): top 92+ or IV rank 1 to 100, good 90+ or 101 to 500; never the cards' older 88 / 80th-percentile cut.
+                let g = PokemonPage.grades(row)
+                cell(row.score, row.rank, grade: g.score, dim: row.score == "—", width: Self.figureWidths[0])
+                cell(row.ivPct, row.ivRank, grade: g.iv, dim: row.ivPct == "—", width: Self.figureWidths[1])
+                cell(row.dust, row.candy, grade: .plain, ink: row.dustMuted ? Theme.muted : Theme.ink, width: Self.figureWidths[2])
             }
         }
     }
 
-    private func cell(_ value: String, _ sub: String, ink: Color, width: CGFloat) -> some View {
+    private func cell(_ value: String, _ sub: String, grade: MyPokemon.Grade, dim: Bool = false, ink: Color = Theme.ink, width: CGFloat) -> some View {
         VStack(alignment: .trailing, spacing: 1) {
-            Text(value).font(.figtree(15, .bold, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(ink)
+            GradedNumber(value, grade, size: 15, plain: .bold, relativeTo: .subheadline).foregroundStyle(dim ? Theme.faint : ink)
             Text(sub).font(.figtree(11, .medium, relativeTo: .caption2)).foregroundStyle(Theme.muted).multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
         }
         .frame(width: width, alignment: .trailing)
@@ -319,9 +321,13 @@ struct LeaguesPanel: View {
             if let b = row.blockedText {
                 Text(b).font(.figtree(14, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.red).fixedSize(horizontal: false, vertical: true)
             } else {
-                ForEach([("Species", row.score, row.rank), ("This copy", row.ivPct, row.ivRank), ("Dust", row.dust, row.candy)], id: \.0) { label, value, sub in
-                    Text("\(label): ").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
-                        + Text(value + (sub.isEmpty ? "" : " · " + sub)).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+                let g = PokemonPage.grades(row)
+                ForEach([("Species", row.score, row.rank, g.score), ("This copy", row.ivPct, row.ivRank, g.iv), ("Dust", row.dust, row.candy, MyPokemon.Grade.plain)], id: \.0) { label, value, sub, grade in
+                    FlowLayout(spacing: 4) {
+                        Text("\(label): ").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+                        GradedNumber(value, grade, size: 14, plain: .bold, relativeTo: .subheadline).foregroundStyle(Theme.ink)
+                        if !sub.isEmpty { Text("· " + sub).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink) }
+                    }
                 }
             }
         }
@@ -357,4 +363,3 @@ struct FlowLayout: Layout {
         }
     }
 }
-

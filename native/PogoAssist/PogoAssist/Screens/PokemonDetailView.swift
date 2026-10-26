@@ -18,6 +18,7 @@ struct PokemonDetailView: View {
     @State private var advancedOpen = false
     /// An edit is being saved: the marks and chips wait for it (two quick taps would save twice).
     @State private var saving = false
+    @State private var queue: [(ScanRow) -> BoxMerge.Edit] = []
     @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @Environment(\.showToast) private var showToast
@@ -36,6 +37,8 @@ struct PokemonDetailView: View {
         let league = initialLeague ?? Self.testLeague
         _tab = State(initialValue: league == nil ? .summary : .pvp)
         _league = State(initialValue: league ?? "gl")
+        // A tile to show means the normal form: a Mega has no leagues (rule 6 opens the copy with that league's tile).
+        _chosenMega = State(initialValue: league == nil ? nil : false)
     }
 
     /// A DEBUG build honours `-uitest-initial-league gl|ul|ml`, so a UI test can open the page as a TOP PVP copy does without the list's route.
@@ -122,14 +125,24 @@ struct PokemonDetailView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// Every mark and chip saves through the data model's edit as a box version; the advice is worked out again (AppModel.correct).
-    private func apply(_ edit: BoxMerge.Edit) {
+    /// Every mark and chip saves through the data model's edit as a box version; the advice is worked out again (AppModel.correct). An edit made while a save is
+    /// under way waits its turn (none is dropped) and is made from the row as it is then, so two quick edits both persist. An edit that would not change the row
+    /// (the chip already chosen, a mark already in that state) saves nothing and does not re-run the advice.
+    private func apply(_ make: @escaping (ScanRow) -> BoxMerge.Edit) {
+        queue.append(make)
         guard !saving else { return }
         saving = true
         Task {
-            let result = await model.correct(id, edit)
+            while !queue.isEmpty {
+                let make = queue.removeFirst()
+                guard let row = model.entry(id)?.row else { break }
+                let edit = make(row)
+                if PokemonPage.isNoOp(edit, row) { continue }
+                let result = await model.correct(id, edit)
+                if let error = result.error { model.message = error }
+            }
+            queue = []
             saving = false
-            if let error = result.error { model.message = error }
         }
     }
 
@@ -393,6 +406,7 @@ struct FixValueView: View {
     @State private var sta = ""
     @State private var error: String?
     @State private var saving = false
+    @State private var queue: [(ScanRow) -> BoxMerge.Edit] = []
 
     private var suggestions: [String] {
         let all = (try? GameMaster.bundled().names(matching: name)) ?? []

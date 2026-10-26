@@ -28,6 +28,7 @@ struct SummaryRowView: View {
     let row: PokemonActivities.SummaryRow
     let action: () -> Void
     @Environment(\.accent) private var accent
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var content: ContentType { row.activity.content }
     private var tab: PokemonActivities.Tab { PokemonPage.tab(row.activity) }
@@ -37,18 +38,23 @@ struct SummaryRowView: View {
             HStack(alignment: .top, spacing: 10) {
                 ActivityGlyph(tab: tab, size: 17, ink: content.ink(accent)).padding(.top, 2).frame(width: 22)
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(PokemonPage.name(row.activity)).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(content.ink(accent))
-                        Spacer(minLength: 8)
-                        VerdictText(verdict: row.verdict)
+                    // At the accessibility sizes the verdict goes under the name rather than squeezing it into a broken word.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) { nameText; Spacer(minLength: 8); VerdictText(verdict: row.verdict) }
+                        VStack(alignment: .leading, spacing: 2) { nameText; VerdictText(verdict: row.verdict) }
                     }
-                    HStack(alignment: .bottom, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            ForEach(Array(row.lines.enumerated()), id: \.offset) { _, l in lineView(l) }
-                        }
-                        Spacer(minLength: 0)
+                    // At the accessibility sizes the cost and chevron take their own line, so the facts keep the row's width and wrap at word boundaries.
+                    let lines = VStack(alignment: .leading, spacing: 1) {
+                        ForEach(Array(row.lines.enumerated()), id: \.offset) { _, l in lineView(l) }
+                    }
+                    let trailing = HStack(spacing: 8) {
                         PlanMark(mark: PokemonPage.buildMark(row.mark), label: PokemonPage.upgradeLabel(row.mark))
                         Image(systemName: "chevron.right").font(.figtree(13, .heavy)).foregroundStyle(Theme.faint).accessibilityHidden(true)
+                    }
+                    if typeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 4) { lines; HStack { Spacer(minLength: 0); trailing } }
+                    } else {
+                        HStack(alignment: .bottom, spacing: 8) { lines; Spacer(minLength: 0); trailing }
                     }
                 }
             }
@@ -62,6 +68,10 @@ struct SummaryRowView: View {
         .accessibilityHint("Opens the \(tab.title) tab")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("summary-row-\(row.activity.rawValue)")
+    }
+
+    private var nameText: some View {
+        Text(PokemonPage.name(row.activity)).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(content.ink(accent)).fixedSize(horizontal: false, vertical: true)
     }
 
     private var spoken: String {
@@ -131,7 +141,7 @@ struct AdvicePanel: View {
                 buildView(b, n: n, gm: gm)
             }
             if let notes = PokemonPage.shortNotes(a, name: a.duplicateOf?.name ?? entry.row.title) {
-                if !a.builds.isEmpty || !a.isEmpty { Rectangle().fill(accent.ink.opacity(0.18)).frame(height: 1).padding(.vertical, 2) }
+                Rectangle().fill(accent.ink.opacity(0.18)).frame(height: 1).padding(.vertical, 2)
                 Text(notes).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("advice-notes")
             }

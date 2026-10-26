@@ -91,7 +91,8 @@ public enum PokemonActivities {
         return best
     }
 
-    /// Rule 11: one card per reachable member and attacking type the Raids table lists (a Shadow entry only for a Shadow copy), best tier first, then the
+    /// Rule 11: one card per reachable member and attacking type the Raids table lists (a Shadow entry only for a Shadow copy; the Mega and Primal entries of a
+    /// member only for a copy that is not Shadow), best tier first, then the
     /// type with more raids to counter, then the order of reach and the table.
     public static func raidCards(copy: BoxEntry, ctx: HubContext) -> [RaidCard] {
         let timeline = HubRaidsModel.timeline(rows: ctx.hub.rotation, screen: .raids, today: ctx.today)
@@ -100,9 +101,12 @@ public enum PokemonActivities {
         let shadow = HubRaidsModel.isShadow(copy)
         var cards: [RaidCard] = []
         for m in members(of: copy, ctx: ctx) {
-            // A member is a species, not a build: no Mega route here (a Mega-route build is credited in `bestRaidBuilds`).
-            let entries = HubRaidsModel.raidEntries(targetId: m.id, viaMega: false, table: ctx.table, shadow: shadow)
+            // A non-Shadow copy also reaches the Mega and Primal entries of a member (the route the advisor's Mega builds take, as `HubRaidsModel.raidEntries`
+            // and `typesCounted` credit with `viaMega`); a Shadow copy cannot Mega evolve. Such a card is that Mega form's, with the member's own plan.
+            let entries = HubRaidsModel.raidEntries(targetId: m.id, viaMega: !shadow, table: ctx.table, shadow: shadow)
             for (e, type) in entries.flatMap({ e in HubRaidsModel.entryTypes(e, in: entries, speciesTypes: m.types).map { (e, $0) } }) {
+                let isMega = e.speciesId != m.id && (e.speciesId.hasPrefix(m.id + "_mega") || e.speciesId.hasPrefix(m.id + "_primal"))
+                let shown = isMega ? Member(id: e.speciesId, name: e.name, types: ctx.gm.byId[e.speciesId]?.types ?? m.types) : m
                 let plan: RaidPlan
                 if let mine = ownBuild(copy, area: "Raids", member: m.id, ctx: ctx) {
                     plan = .mine(Plan(build: mine, built: HubSquads.isFullStrength(mine, screen: .raids, ctx: ctx)))
@@ -112,8 +116,8 @@ public enum PokemonActivities {
                     plan = .none
                 }
                 let all = rows.filter { HubRaidsModel.bring(row: $0.row, hub: ctx.hub).contains(type) }
-                cards.append(RaidCard(member: m, type: type, tier: e.tier,
-                                      role: PogoRules.raidRole(targetId: m.id, viaMega: false, shadow: shadow, gm: ctx.gm), plan: plan,
+                cards.append(RaidCard(member: shown, type: type, tier: e.tier,
+                                      role: PogoRules.raidRole(targetId: shown.id, viaMega: false, shadow: shadow, gm: ctx.gm), plan: plan,
                                       counters: all.prefix(6).map(BossRow.init), counterCount: all.count))
             }
         }

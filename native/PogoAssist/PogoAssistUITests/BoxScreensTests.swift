@@ -399,6 +399,17 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(ml.label.contains("Advice builds it"), ml.label)
     }
 
+    /// A copy with a Mega form that is opened with a league's tile (a TOP PVP copy) opens its normal form on that tile, not the Mega form's "no leagues" note.
+    func testAnInitialLeagueOnAMegaCopyOpensTheNormalFormOnThePvPTab() throws {
+        let app = saveMegaPair(["-appearance", "light", "-uitest-initial-league", "ul"])
+        openBlaziken(app)
+        XCTAssertTrue(app.buttons["form-normal"].isSelected, "the normal form")
+        XCTAssertTrue(app.buttons["page-tab-pvp"].isSelected)
+        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["league-ul-pick"].isSelected)
+        XCTAssertFalse(app.staticTexts["Mega Pokémon cannot battle in GO Battle League. Switch to Normal to see the leagues."].exists)
+    }
+
     /// The PvP tab on the Normal form closes with its tiles when the page goes to the Mega form (no Leagues there), the Summary keeps its Advice on the Mega
     /// page, and Normal comes back to the tiles.
     func testMegaFormWithThePvPTabOpen() throws {

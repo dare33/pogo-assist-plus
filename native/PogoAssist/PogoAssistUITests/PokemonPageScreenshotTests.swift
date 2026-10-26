@@ -109,6 +109,7 @@ final class PokemonPageScreenshotTests: XCTestCase {
     }
 
     func testPageScreensLightAndDarkAtDefaultAndAX5() throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["POGO_SCREENS"] == nil, "screenshots only with POGO_SCREENS")
         let ax5 = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         let runs: [(String, [String])] = [
             ("light-default", ["-appearance", "light"]), ("dark-default", ["-appearance", "dark"]),

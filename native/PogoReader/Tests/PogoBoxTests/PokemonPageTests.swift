@@ -209,4 +209,52 @@ final class PokemonPageTests: XCTestCase {
         XCTAssertEqual(Page.emptyLine(.raids), "Nothing this copy can become is in our raid tables.")
         XCTAssertEqual(Page.emptyLine(.summary), "")
     }
+
+    // MARK: the review fold
+
+    func testAnEditThatWouldChangeNothingIsANoOp() {
+        let r = row()
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(), r))
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(dynamax: .off), r), "already off")
+        XCTAssertFalse(Page.isNoOp(BoxMerge.Edit(dynamax: .on), r))
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(dynamax: .on), row(dynamax: true)))
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(lucky: false), r))
+        XCTAssertFalse(Page.isNoOp(BoxMerge.Edit(lucky: true), r))
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(shadow: .shadow), row(shadow: 1)))
+        XCTAssertFalse(Page.isNoOp(BoxMerge.Edit(shadow: .purified), row(shadow: 1)))
+        // Details: "Not unlocked" with none stored, Mega "Not yet" and Guard "–" with none stored, the chip already stored.
+        let none = Page.choosing(nil, for: .charged2, details: nil, speciesId: "eevee", gm: gm)
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(details: none), r))
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(details: Page.setting(megaLevel: .notYet, nil)), r))
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(details: Page.setting(0, of: .guardMove, nil)), r))
+        let stored = row(details: CopyDetails(fastMove: "TACKLE"))
+        XCTAssertTrue(Page.isNoOp(BoxMerge.Edit(details: Page.choosing("TACKLE", for: .fast, details: stored.details, speciesId: "eevee", gm: gm)), stored))
+        // A default that is shown but not stored is not stored: tapping it saves it (the ruling).
+        let dflt = Page.choosing("QUICK_ATTACK", for: .fast, details: nil, speciesId: "eevee", gm: gm)
+        XCTAssertFalse(Page.isNoOp(BoxMerge.Edit(details: dflt), r))
+        // An edit of a read value is never a no-op here.
+        XCTAssertFalse(Page.isNoOp(BoxMerge.Edit(cp: 5), r))
+    }
+
+    func testTheMegaFormShowsItsOwnTypes() {
+        XCTAssertEqual(Page.types(of: "scizor_mega", fallback: "scizor", gm: gm), gm.byId["scizor_mega"]?.types)
+        XCTAssertEqual(Page.types(of: "not_a_species", fallback: "scizor", gm: gm), gm.byId["scizor"]?.types)
+        XCTAssertEqual(Page.types(of: "charizard_mega_x", fallback: "charizard", gm: gm), ["fire", "dragon"])
+    }
+
+    func testTheFamilyListGradesByTheTilesBands() {
+        func grade(score: Double, ivRank: Int) -> (MyPokemon.Grade, MyPokemon.Grade) {
+            let o = P23.option("eevee", score: score, ivRank: ivRank)
+            let g = Page.grades(LeaguePanel.row(o, key: "gl", level: 20))
+            return (g.score, g.iv)
+        }
+        XCTAssertTrue(grade(score: 92, ivRank: 100) == (.top, .top))
+        XCTAssertTrue(grade(score: 90, ivRank: 101) == (.good, .good))
+        XCTAssertTrue(grade(score: 89.9, ivRank: 501) == (.plain, .plain), "88 and the 80th percentile are not bands here")
+    }
+
+    func testTheMaxNoteDropsTheDynamaxIconAdviceOnceMarked() {
+        XCTAssertTrue(Page.dynamaxNote(row()).contains("Dynamax icon"))
+        XCTAssertFalse(Page.dynamaxNote(row(dynamax: true)).contains("icon"))
+    }
 }
