@@ -235,7 +235,7 @@ extension HubSquads {
         for (i, b) in ctx.advice.builds.enumerated() where isRocketArea(b) && isUsable(b, mode: mode) {
             let hits = HubTeams.hits(b, options: options, gm: ctx.gm, hub: ctx.hub)
             guard hits > 0 else { continue }
-            rows.append((RocketRow(build: b, hits: hits, built: HubTeams.isBuilt(b), typeFlags: typeFlags(b, options: options, ctx: ctx), slotLine: slotLine(hits: hits, of: options.count)), i))
+            rows.append((RocketRow(build: b, hits: hits, built: HubSquads.isBuilt(b), typeFlags: typeFlags(b, options: options, ctx: ctx), slotLine: slotLine(hits: hits, of: options.count)), i))
         }
         rows.sort { l, r in
             if l.row.hits != r.row.hits { return l.row.hits > r.row.hits }
@@ -263,7 +263,7 @@ extension HubSquads {
         for (i, b) in ctx.advice.builds.enumerated() where isRocketArea(b) && isUsable(b, mode: mode) {
             let mine = HubTeams.types(of: b, gm: ctx.gm)
             let takes = options.filter { ctx.hub.beats($0.types, mine) }.count
-            rows.append((NextBest(build: b, built: HubTeams.isBuilt(b), weakTo: takes), i))
+            rows.append((NextBest(build: b, built: HubSquads.isBuilt(b), weakTo: takes), i))
         }
         rows.sort { l, r in
             if l.nb.weakTo != r.nb.weakTo { return l.nb.weakTo < r.nb.weakTo }
@@ -302,7 +302,7 @@ extension HubSquads {
         guard !type.isEmpty else { return GruntCounters(anyAttacker: true, builds: []) }
         // `HubTeams.gruntFit` is the order `gruntCounter` picks from (Rocket area, tier, score, advisor order); the list shows the built ones first.
         let fit = HubTeams.gruntFit(type: type, builds: ctx.advice.builds.filter { isUsable($0, mode: mode) }, gm: ctx.gm, hub: ctx.hub)
-        let ordered = fit.filter(HubTeams.isBuilt) + fit.filter { !HubTeams.isBuilt($0) }
+        let ordered = fit.filter(HubSquads.isBuilt) + fit.filter { !HubSquads.isBuilt($0) }
         var seen = Set<String>()
         return GruntCounters(anyAttacker: false, builds: Array(ordered.filter { seen.insert($0.targetId).inserted }.prefix(8)))
     }

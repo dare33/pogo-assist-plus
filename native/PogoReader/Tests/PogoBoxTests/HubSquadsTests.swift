@@ -11,7 +11,7 @@ final class HubSquadsTests: XCTestCase {
     func testFullStrengthIsStricterOnRaidsAndMax() {
         var raid = P23.build("a", "vaporeon", areas: ["Raids", "Gym"]); raid.steps = nil
         let ctx = P23.ctx(builds: [raid])
-        XCTAssertTrue(HubSquads.isFullStrength(raid, screen: .gym, ctx: ctx), "HubTeams.isBuilt: a report without steps counts as built")
+        XCTAssertFalse(HubSquads.isFullStrength(raid, screen: .gym, ctx: ctx), "a report without steps is not known to be finished (HubTeams.isBuilt alone would say built)")
         XCTAssertFalse(HubSquads.isFullStrength(raid, screen: .raids, ctx: ctx), "HubRaidsModel.isBuilt: without steps there is no proof it is finished")
         var done = raid; done.steps = []
         XCTAssertTrue(HubSquads.isFullStrength(done, screen: .raids, ctx: P23.ctx(builds: [done])))
@@ -131,6 +131,10 @@ final class HubSquadsTests: XCTestCase {
         XCTAssertEqual(row.cost, .init(value: "10k", currency: .dust))
         XCTAssertEqual(row.subLine, "Gym · 10k dust")
         XCTAssertTrue(HubTeams.isBuilt(b), "HubTeams.isBuilt itself is unchanged")
+        let ctx = P23.ctx()
+        for screen in SquadScreen.allCases { XCTAssertFalse(HubSquads.isFullStrength(b, screen: screen, ctx: ctx), "unknown steps are never Full strength on \(screen)") }
+        var known = b; known.steps = []
+        XCTAssertTrue(HubSquads.isFullStrength(known, screen: .gym, ctx: ctx), "known steps with nothing left are")
     }
 
     // MARK: rule 6

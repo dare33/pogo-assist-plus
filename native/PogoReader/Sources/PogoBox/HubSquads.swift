@@ -48,14 +48,19 @@ public enum HubSquads {
     /// Raids and Max use `HubRaidsModel.isBuilt` (the covering Max build is finished and the copy marked Dynamax), so the badge and the readiness bar agree
     /// (read-back note on rule 1); Gym, Rocket and PvP use `HubTeams.isBuilt`.
     public static func isFullStrength(_ b: BoxAdvice.Build, screen: SquadScreen, ctx: HubContext) -> Bool {
+        guard b.steps != nil else { return false }   // one reading of an unknown build everywhere: never Full strength (see `isBuilt`)
         switch screen {
         case .raids: return HubRaidsModel.isBuilt(b, advice: ctx.advice, entries: ctx.entries, screen: .raids)
         case .max:
             // THIS copy must be marked Dynamax: another copy of the species being marked does not make this one ready (the readiness bar's rule is looser).
             return b.areas.contains("Max") && HubRaidsModel.isFinished(b) && ctx.entry(b.entryId)?.row.dynamax == true
-        case .gym, .rocket, .pvp: return HubTeams.isBuilt(b)
+        case .gym, .rocket, .pvp: return isBuilt(b)
         }
     }
+
+    /// `HubTeams.isBuilt` for a build whose steps are known: a build read without `steps` is not known to be finished, so no list or slot badges it
+    /// (`HubTeams.isBuilt` itself reads nil as built, for its other callers).
+    public static func isBuilt(_ b: BoxAdvice.Build) -> Bool { b.steps != nil && HubTeams.isBuilt(b) }
 
     // MARK: rule 2: cost, value and currency
 
@@ -189,7 +194,7 @@ public enum HubSquads {
 
     public static func buildRow(_ b: BoxAdvice.Build) -> BuildRow {
         // A build read without `steps` is not known to be finished (HubTeams.isBuilt reads it as built; a list must not badge it), so it keeps its cost.
-        let built = b.steps != nil && HubTeams.isBuilt(b)
+        let built = isBuilt(b)
         return BuildRow(build: b, built: built, cost: built ? Cost(value: nil, currency: .free) : cost(of: b),
                         subLine: built ? HubModel.areaWords(b) : HubModel.areaLabel(for: b))
     }

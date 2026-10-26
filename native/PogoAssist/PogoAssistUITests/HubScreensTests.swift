@@ -269,6 +269,9 @@ final class HubScreensTests: XCTestCase {
         app.launch()
         populate(app)
         openHub(app)
+        // The tile's chip arrives after the box is read; wait for the number before comparing.
+        expectation(for: NSPredicate(format: "label MATCHES %@", "^Collection, [0-9]+ of [0-9]+ species.*"), evaluatedWith: app.buttons["hub-tile-everything"])
+        waitForExpectations(timeout: 30)
         let tileLabel = app.buttons["hub-tile-everything"].label
         let tileCount = tileLabel.components(separatedBy: ", ").dropFirst().first?.components(separatedBy: " species").first ?? "?"
         app.buttons["hub-tile-everything"].tap()
@@ -300,7 +303,8 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue((1...6).contains(missingRows), "the first six missing (\(missingRows))")
         let cards = any(app, "collection-showcase-card").count
         XCTAssertTrue((1...12).contains(cards), "up to twelve best copies (\(cards))")
-        XCTAssertFalse(app.staticTexts["Not in your box"].exists, "a missing species with no how-to-get text shows nothing there")
+        let missingLabels = (0..<missingRows).map { any(app, "collection-missing-row").element(boundBy: $0).label }
+        XCTAssertFalse(missingLabels.contains { $0.contains("Not in your box") }, "a missing species with no how-to-get text shows nothing there: \(missingLabels)")
         XCTAssertTrue(any(app, "collection-missing-all").firstMatch.exists)
         sleep(1)
         shot("collection-01-top")
@@ -387,5 +391,7 @@ final class HubScreensTests: XCTestCase {
         XCTAssertEqual(any(app, "collection-region-row").count, 9)
         XCTAssertTrue(app.staticTexts["MISSING"].exists)
         XCTAssertTrue(any(app, "collection-empty").firstMatch.exists, "the scan prompt is an extra line, not instead")
+        let prompts = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'the Collection will fill in'"))
+        XCTAssertEqual(prompts.count, 1, "one scan prompt, not two")
     }
 }

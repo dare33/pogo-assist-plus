@@ -61,7 +61,8 @@ struct HubCollectionView: View {
                 showcase(data)
                 specialSets(data)
                 missing(data)
-                cleanUp
+                // With an empty box the one scan prompt is the line at the top, so the summary cards (which would repeat it) wait for a box.
+                if !model.entries.isEmpty { cleanUp }
             } else if !model.entries.isEmpty {
                 ProgressView().frame(maxWidth: .infinity)
             }
@@ -316,6 +317,19 @@ struct MissingPanel: View {
     var shown: Int? = nil
 
     var body: some View {
+        if missing.isEmpty {
+            Text("You have every species released in Pokémon GO.").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .panelShadow()
+                .accessibilityIdentifier("collection-missing-head")
+        } else {
+            list
+        }
+    }
+
+    @ViewBuilder private var list: some View {
         let rows = shown.map { Array(missing.prefix($0)) } ?? missing
         // The preview is a few rows, all in the accessibility tree; the full list (hundreds) is lazy.
         let content = VStack(spacing: 0) {
