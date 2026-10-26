@@ -69,6 +69,7 @@
 		74BF30A02B0889A549F4B28B /* PokemonDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5DCADB6094BE4B97E76F13 /* PokemonDetailsCard.swift */; };
 		767B78A46C867ABB726341EE /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */; };
 		76F25EFCEF98BDD626FAB8B1 /* HubRocketSquadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44739F157261B7A55B07D01D /* HubRocketSquadTests.swift */; };
+		7A140B20E9B69E826D7A837B /* HubPvPSquadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 272C46D0764D4B5A0E23F600 /* HubPvPSquadTests.swift */; };
 		7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */; };
 		7F3047FDFA95DF9EFE86B474 /* PogoImport in Frameworks */ = {isa = PBXBuildFile; productRef = B41070E51767E3888426C3F8 /* PogoImport */; };
 		7F9A044F236E3B98AABF974A /* OpenSpeciesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF5D1287FA6845313B02116 /* OpenSpeciesView.swift */; };
@@ -213,6 +214,7 @@
 		2174CAD06ADF7ECC068B88FD /* SampleScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleScan.swift; sourceTree = "<group>"; };
 		2525D042EF40B722A34E06D5 /* PokemonActivityTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonActivityTabs.swift; sourceTree = "<group>"; };
 		25480D5F634F1F2F763FAB7D /* HubMaxSquadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubMaxSquadTests.swift; sourceTree = "<group>"; };
+		272C46D0764D4B5A0E23F600 /* HubPvPSquadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubPvPSquadTests.swift; sourceTree = "<group>"; };
 		2851EAE92D472650A78CD032 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		2C084C665F346AEE28A59833 /* HubRaidsSquadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubRaidsSquadTests.swift; sourceTree = "<group>"; };
 		2E3538488989AE3C1ABAA66B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -422,6 +424,7 @@
 				B4553543BAEE1146FEB5BC7F /* GuideScreensTests.swift */,
 				1CF1F5A65AFFA7A4AC0F5B3A /* HubGymSquadTests.swift */,
 				25480D5F634F1F2F763FAB7D /* HubMaxSquadTests.swift */,
+				272C46D0764D4B5A0E23F600 /* HubPvPSquadTests.swift */,
 				C3125EA9837C6BDA1514128F /* HubRaidsMaxTests.swift */,
 				2C084C665F346AEE28A59833 /* HubRaidsSquadTests.swift */,
 				44739F157261B7A55B07D01D /* HubRocketSquadTests.swift */,
@@ -806,6 +809,7 @@
 				93DC471F59BEADA19D7B80B8 /* GuideScreensTests.swift in Sources */,
 				44B234700B6F52FF45E96702 /* HubGymSquadTests.swift in Sources */,
 				E66F2D5CA0E2E391A6AEAFB9 /* HubMaxSquadTests.swift in Sources */,
+				7A140B20E9B69E826D7A837B /* HubPvPSquadTests.swift in Sources */,
 				298BB1E338CBDCF134829537 /* HubRaidsMaxTests.swift in Sources */,
 				911063D9F7196372C797B1CE /* HubRaidsSquadTests.swift in Sources */,
 				76F25EFCEF98BDD626FAB8B1 /* HubRocketSquadTests.swift in Sources */,
