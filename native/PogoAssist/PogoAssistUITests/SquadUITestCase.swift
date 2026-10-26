@@ -43,10 +43,19 @@ class SquadUITestCase: XCTestCase {
 
     /// The Hub's tile for a screen; the screen's Back button shows once it is open.
     func openTile(_ app: XCUIApplication, _ id: String) {
-        XCTAssertTrue(app.buttons["Pogo Hub"].waitForExistence(timeout: 15))
-        app.buttons["Pogo Hub"].tap()
+        let hubTab = app.buttons["Pogo Hub"]
+        XCTAssertTrue(hubTab.waitForExistence(timeout: 15))
+        // A tab tap made while the app is still settling after launch can be lost. Both tabs stay in the tree, so the tile "exists" either way and a tap
+        // on it would land on My Pokémon underneath: tap until the Hub tab is the selected one.
+        var tries = 0
+        repeat {
+            hubTab.tap(); tries += 1
+        } while XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: hubTab)], timeout: 3) != .completed && tries < 4
+        XCTAssertTrue(hubTab.isSelected, "the Hub tab is selected")
         let tile = app.buttons["hub-tile-\(id)"]
         XCTAssertTrue(tile.waitForExistence(timeout: 10), "the Hub shows its tiles")
+        // Then wait for the tile counts, as the Hub's own tests do: the tab lays out again when the advice arrives.
+        _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'build'"), object: app.buttons["hub-tile-max"])], timeout: 60)
         tile.tap()
         XCTAssertTrue(app.buttons["Back"].waitForExistence(timeout: 10), "the \(id) screen opens")
     }
