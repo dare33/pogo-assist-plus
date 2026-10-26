@@ -11,7 +11,7 @@ struct HubMaxView: View {
         if case .ready(let a) = model.advice { count = buildsText(HubModel.count(a.builds, for: .max)) }
         let sub = (try? HubData.bundled()).flatMap { HubRaidsModel.lastDay(rows: $0.rotation, screen: .max) }.map { "Max Mondays and events to \($0)" }
         return HubTypeScreen(type: .max, sub: sub, count: count) {
-            HubTimeline(screen: .max, advice: model.hubAdvice, entries: model.entries, closers: false)
+            HubTimeline(screen: .max, closers: false, squads: false)
             HubAdviceGate { advice in roster(advice) }
             HubScheduleLink()
         }
