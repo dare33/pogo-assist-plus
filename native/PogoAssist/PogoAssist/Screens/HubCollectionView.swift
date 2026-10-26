@@ -63,7 +63,6 @@ struct HubCollectionView: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
-        .accessibilityIdentifier("hub-screen-collection")
         .task(id: key) {
             guard !model.entries.isEmpty, let gm = try? GameMaster.bundled() else { data = nil; return }
             data = CollectionData.make(entries: model.entries, advice: adviceReady, gm: gm)
@@ -352,7 +351,6 @@ struct HubMissingView: View {
         HubTypeScreen(type: .everything, title: "Missing", sub: "Species with no copy in your box", count: data.map { "\($0.missing.count) species" }) {
             if let data { MissingPanel(missing: data.missing, evolvable: data.overview.canEvolve) }
         }
-        .accessibilityIdentifier("hub-screen-missing")
         .task(id: "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)|\(model.hubAdvice != nil)") {
             guard !model.entries.isEmpty, let gm = try? GameMaster.bundled() else { data = nil; return }
             data = CollectionData.make(entries: model.entries, advice: model.hubAdvice, gm: gm)

@@ -39,7 +39,9 @@ struct HubTypeScreen<Content: View>: View {
 
     private var titles: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(title ?? type.title).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink).lineLimit(2)
+            // Two lines at most beside the back circle; on its own line at accessibility sizes it wraps at word boundaries and is never cut.
+            Text(title ?? type.title).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 2).fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             if let sub { Text(sub).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
         }
@@ -121,6 +123,7 @@ struct HubBuildList: View {
     let type: ContentType
     var highlightFirst = false
     @Environment(\.accent) private var accent
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         LazyVStack(spacing: 0) {
@@ -139,33 +142,55 @@ struct HubBuildList: View {
     private func row(_ i: Int, _ b: BoxAdvice.Build) -> some View {
         let lit = highlightFirst && i == 0
         let figure = Self.figure(b)
-        return HStack(spacing: 12) {
-            Text(verbatim: String(i + 1)).font(.figtree(13, .heavy, relativeTo: .footnote)).monospacedDigit()
-                .foregroundStyle(lit ? Color.white : Theme.muted)
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(lit ? type.solid(accent) : Theme.surface2))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(b.title).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(2)
-                    TierChip(tier: b.tier, type: type)
+        // Rule 15: a built row shows the Full strength badge where the cost was, and its sub line has no " · Free".
+        let built = HubSquads.buildRow(b)
+        let big = typeSize.isAccessibilitySize
+        let rank = Text(verbatim: String(i + 1)).font(.figtree(13, .heavy, relativeTo: .footnote)).monospacedDigit()
+            .foregroundStyle(lit ? Color.white : Theme.muted)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)   // the disc is a fixed 28 pt
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(lit ? type.solid(accent) : Theme.surface2))
+            .accessibilityHidden(true)
+        let title = Text(b.title).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(big ? nil : 2)
+        let texts = VStack(alignment: .leading, spacing: 2) {
+            if big {
+                title.fixedSize(horizontal: false, vertical: true)
+                TierChip(tier: b.tier, type: type)
+            } else {
+                HStack(spacing: 8) { title; TierChip(tier: b.tier, type: type) }
+            }
+            Text(b.action).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+            Text(built.subLine).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        let cost = Group {
+            if built.showsFullStrength {
+                FullStrengthBadge(size: 26).accessibilityHidden(true)
+            } else {
+                VStack(alignment: big ? .leading : .trailing, spacing: 0) {
+                    Text(figure.value).font(.figtree(14, .heavy, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink)
+                    if !figure.label.isEmpty { Text(figure.label).font(.figtree(10, .bold, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.muted) }
                 }
-                Text(b.action).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-                Text(HubModel.areaLabel(for: b)).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(figure.value).font(.figtree(14, .heavy, relativeTo: .subheadline)).monospacedDigit().foregroundStyle(Theme.ink)
-                if !figure.label.isEmpty { Text(figure.label).font(.figtree(10, .bold, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.muted) }
+        }
+        let chevron = Image(systemName: "chevron.right").font(.figtree(13, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
+        // At accessibility text sizes the cost drops under the words (a column beside them would leave the title a few letters wide).
+        return Group {
+            if big {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 12) { rank; texts; chevron }
+                    cost.padding(.leading, 40)
+                }
+            } else {
+                HStack(spacing: 12) { rank; texts; cost; chevron }
             }
-            Image(systemName: "chevron.right").font(.figtree(13, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(minHeight: 56)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(i + 1). \(b.title), tier \(b.tier). \(b.action). \(HubModel.areaLabel(for: b))")
-        .accessibilityValue(figure.label.isEmpty ? figure.value : "\(figure.value) \(figure.label.lowercased())")
+        .accessibilityLabel("\(i + 1). \(b.title), tier \(b.tier). \(b.action). \(built.subLine)")
+        .accessibilityValue(built.showsFullStrength ? "Full strength" : figure.label.isEmpty ? figure.value : "\(figure.value) \(figure.label.lowercased())")
     }
 
     /// Dust (short) over DUST; candy over CANDY when there is no dust; Free over nothing when both are 0.
@@ -196,7 +221,7 @@ struct TierChip: View {
 struct HubGapList: View {
     let gaps: [BoxAdvice.Gap]
     let type: ContentType
-    /// The Everything screen shows the header and its count even with no gaps, as the old Next list did.
+    /// The Collection lists screen shows the header and its count even with no gaps, as the old Next list did.
     var alwaysShowsHeader = false
 
     var body: some View {

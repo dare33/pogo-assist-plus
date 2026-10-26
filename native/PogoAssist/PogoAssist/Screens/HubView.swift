@@ -37,7 +37,7 @@ struct HubView: View {
         .navigationDestination(for: ContentType.self) { HubTypeDestination(type: $0) }
         .navigationDestination(for: CollectionRoute.self) { route in
             switch route {
-            case .lists: HubEverythingView()
+            case .lists(let tab): HubCollectionListsView(tab: tab)
             case .missing: HubMissingView()
             }
         }

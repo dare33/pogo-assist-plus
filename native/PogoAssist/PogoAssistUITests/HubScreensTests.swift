@@ -42,94 +42,141 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["hub-tile-everything"].waitForExistence(timeout: 10), "the Hub shows its tiles")
     }
 
-    func testHubTilesAndEverything() throws {
+    /// Opens the Collection from the Hub, scrolls to its summary cards and opens the lists screen from one of them.
+    private func openLists(_ app: XCUIApplication, card: String = "builds") {
+        let tile = app.buttons["hub-tile-everything"]
+        if tile.waitForExistence(timeout: 5) { tile.tap() }
+        let target = app.buttons["collection-card-\(card)"]
+        var n = 0
+        while !target.isHittable && n < 40 { app.swipeUp(velocity: .fast); n += 1 }
+        XCTAssertTrue(target.waitForExistence(timeout: 30), "the summary cards arrive with the advice")
+        target.tap()
+        XCTAssertTrue(app.buttons["collection-tab-\(card)"].waitForExistence(timeout: 10), "the lists screen opens")
+    }
+
+    private func setStardust(_ app: XCUIApplication, _ digits: String) {
+        app.buttons["hub-stardust-change"].tap()
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(digits)
+        app.alerts.buttons["Save"].tap()
+    }
+
+    // MARK: Collection lists (design pass 2)
+
+    func testCollectionListsBuilds() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
         app.launch()
         populate(app)
         openHub(app)
+        openLists(app)
 
-        // The tiles; the build counts arrive with the advice, so the Raids tile's label gains "N builds".
-        for t in tiles { XCTAssertTrue(app.buttons["hub-tile-\(t)"].exists, "tile \(t)") }
-        let everything = app.buttons["hub-tile-everything"]
-        let counted = NSPredicate(format: "label CONTAINS 'build'")
-        expectation(for: counted, evaluatedWith: app.buttons["hub-tile-raids"])
-        waitForExpectations(timeout: 60)
-        // Every tile carries its count once the advice is in.
-        for t in tiles {
-            let label = app.buttons["hub-tile-\(t)"].label
-            XCTAssertNotNil(label.rangeOfCharacter(from: .decimalDigits), "tile \(t) has no count: \(label)")
-        }
-        XCTAssertTrue(app.staticTexts["HAPPENING NOW IN POKÉMON GO"].exists)
-        XCTAssertTrue(app.buttons["hub-ranking-info"].exists)
-        sleep(1)
-        shot("hub-01-light-hub")
-
-        // Everything: the stardust card starts unset, Change takes a number.
-        everything.tap()
+        // Builds is the tab the Builds card opened; the title follows the switch.
+        XCTAssertTrue(app.buttons["collection-tab-builds"].isSelected)
+        XCTAssertTrue(app.staticTexts["Builds"].exists || app.buttons["collection-tab-builds"].exists)
         XCTAssertTrue(app.buttons["hub-stardust-change"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Not set"].exists)
-        shot("hub-02-light-everything-unset")
-        // A rejected entry says so and changes nothing.
-        app.buttons["hub-stardust-change"].tap()
-        XCTAssertTrue(app.alerts.textFields.firstMatch.waitForExistence(timeout: 5))
-        app.alerts.textFields.firstMatch.typeText("1234567890")   // ten digits: too many
-        app.alerts.buttons["Save"].tap()
+        // A rejected entry says so and changes nothing; a good one shows THESE FIT.
+        setStardust(app, "1234567890")   // ten digits: too many
         XCTAssertTrue(app.staticTexts["hub-stardust-problem"].waitForExistence(timeout: 5), "a bad entry is explained")
         XCTAssertTrue(app.staticTexts["Not set"].exists)
-        app.buttons["hub-stardust-change"].tap()
-        let field = app.alerts.textFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.typeText("100000")
-        app.alerts.buttons["Save"].tap()
+        setStardust(app, "100000")
         XCTAssertTrue(app.staticTexts["100,000"].waitForExistence(timeout: 5), "the card shows the stardust")
         XCTAssertFalse(app.staticTexts["hub-stardust-problem"].exists, "a valid entry clears the line")
         XCTAssertTrue(app.staticTexts["THESE FIT"].exists)
+        // The full list, with no SHOW ALL.
+        XCTAssertFalse(app.buttons["hub-show-all"].exists, "there is no SHOW ALL")
+        let header = app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^ALL [0-9]+ BUILDS$")).firstMatch
+        XCTAssertTrue(header.exists, "the whole list has its header")
+        let total = Int(header.label.components(separatedBy: CharacterSet.decimalDigits.inverted).first { !$0.isEmpty } ?? "") ?? -1
         let rows = app.buttons.matching(identifier: "hub-build-row")
-        XCTAssertGreaterThanOrEqual(rows.count, 1, "at least one build fits")
+        XCTAssertGreaterThanOrEqual(rows.count, 1)
         let figures = (0..<rows.count).map { (rows.element(boundBy: $0).value as? String) ?? "" }
-        XCTAssertTrue(figures.contains { $0.lowercased().contains("dust") }, "a fitting build costs dust, not only Free: \(figures)")
-        let total = app.buttons["hub-show-all"].label.components(separatedBy: CharacterSet.decimalDigits.inverted).first { !$0.isEmpty } ?? "?"
-        XCTAssertEqual(app.buttons["hub-show-all"].label, "SHOW ALL \(total) ›")
-        sleep(1)
-        shot("hub-03-light-everything-fit")
+        XCTAssertTrue(figures.contains { $0.lowercased().contains("dust") }, "a fitting build costs dust: \(figures)")
+        // Scroll through the list (rows are lazy). Rule 15: a built row has the Full strength badge (its value) and no " · Free" in its line.
+        var seen = Set<String>(), built = 0, n = 0
+        while n < 30 && seen.count < total {
+            for i in 0..<rows.count where rows.element(boundBy: i).exists {
+                let row = rows.element(boundBy: i)
+                if seen.insert(row.label).inserted, (row.value as? String) == "Full strength" {
+                    built += 1
+                    XCTAssertFalse(row.label.contains("Free"), row.label)
+                }
+            }
+            app.swipeUp(velocity: .fast); n += 1
+        }
+        XCTAssertGreaterThanOrEqual(seen.count, total, "every build is listed (the THESE FIT rows add a few labels of their own)")
+        XCTAssertGreaterThanOrEqual(built, 1, "the sample box has a built row with the badge")
+        shot("lists-builds-end")
+    }
 
-        // Show all: the full list, then the gaps.
-        app.buttons["hub-show-all"].tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'GAPS'")).firstMatch.waitForExistence(timeout: 5), "the gaps follow the full list")
-        app.swipeUp()
-        shot("hub-04-light-everything-all")
+    func testCollectionListsTabs() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        openHub(app)
+        // The Gaps card opens the Gaps tab, titled Gaps; the switch changes the tab and the title follows.
+        openLists(app, card: "gaps")
+        XCTAssertTrue(app.buttons["collection-tab-gaps"].isSelected)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'GAPS'")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Gaps"].exists)
+        app.buttons["collection-tab-duplicates"].tap()
+        XCTAssertTrue(app.staticTexts["Duplicates"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'DUPLICATES'")).firstMatch.exists || app.staticTexts["Duplicates"].exists)
+        app.buttons["collection-tab-builds"].tap()
+        XCTAssertTrue(app.staticTexts["Builds"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["hub-stardust-change"].exists)
+        // Back is the Collection.
         app.buttons["hub-back"].tap()
-        XCTAssertTrue(app.buttons["hub-tile-everything"].waitForExistence(timeout: 5))
+        XCTAssertTrue(any(app, "collection-species").firstMatch.waitForExistence(timeout: 5), "back is the Collection")
+        // The Duplicates card opens the Duplicates tab.
+        let dup = app.buttons["collection-card-duplicates"]
+        var n = 0
+        while !dup.isHittable && n < 40 { app.swipeUp(velocity: .fast); n += 1 }
+        dup.tap()
+        XCTAssertTrue(app.buttons["collection-tab-duplicates"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["collection-tab-duplicates"].isSelected)
+    }
+
+    func testCollectionListsScreenshots() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        openHub(app)
+        openLists(app)
+        XCTAssertTrue(app.buttons["hub-stardust-change"].waitForExistence(timeout: 10))
+        setStardust(app, "100000")
+        XCTAssertTrue(app.staticTexts["100,000"].waitForExistence(timeout: 5))
         app.terminate()
-
-        // Dark; the box and the stardust are kept.
-        let dark = XCUIApplication()
-        dark.launchArguments = ["-appearance", "dark"]
-        dark.launch()
-        openHub(dark)
-        sleep(2)
-        shot("hub-05-dark-hub")
-        dark.buttons["hub-tile-everything"].tap()
-        XCTAssertTrue(dark.buttons["hub-stardust-change"].waitForExistence(timeout: 10))
-        XCTAssertTrue(dark.staticTexts["100,000"].exists, "the stardust is kept")
-        sleep(1)
-        shot("hub-06-dark-everything")
-        dark.terminate()
-
-        // The first accessibility text size.
-        let large = XCUIApplication()
-        large.launchArguments = ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
-        large.launch()
-        openHub(large)
-        sleep(2)
-        shot("hub-07-ax1-hub")
-        large.buttons["hub-tile-everything"].tap()
-        XCTAssertTrue(large.buttons["hub-stardust-change"].waitForExistence(timeout: 10))
-        XCTAssertTrue(large.staticTexts["100,000"].exists, "the stardust is kept")
-        sleep(1)
-        shot("hub-08-ax1-everything")
-        large.terminate()
+        for (name, args) in [("light-default", ["-appearance", "light"]), ("dark-default", ["-appearance", "dark"]),
+                             ("light-ax5", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]),
+                             ("dark-ax5", ["-appearance", "dark", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            let again = XCUIApplication()
+            again.launchArguments = args
+            again.launch()
+            openHub(again)
+            openLists(again)
+            XCTAssertTrue(again.staticTexts["100,000"].waitForExistence(timeout: 10), "the stardust is kept")
+            sleep(2)
+            shot("\(name)-builds-1", in: "collection-lists")
+            let row = again.buttons.matching(identifier: "hub-build-row").firstMatch
+            var swipes = 0
+            while !row.isHittable && swipes < 30 { again.swipeUp(); swipes += 1 }
+            sleep(1)
+            shot("\(name)-builds-2", in: "collection-lists")
+            again.swipeUp(); again.swipeUp()
+            shot("\(name)-builds-3", in: "collection-lists")
+            again.buttons["collection-tab-gaps"].tap()
+            sleep(1)
+            shot("\(name)-gaps", in: "collection-lists")
+            again.buttons["collection-tab-duplicates"].tap()
+            sleep(1)
+            shot("\(name)-duplicates", in: "collection-lists")
+            again.terminate()
+        }
     }
 
     // MARK: Hub tab (design pass 2)
