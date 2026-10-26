@@ -54,6 +54,12 @@ final class MyPokemonScreenTests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 10), "the box shows no species")
     }
 
+    /// Empties the search field (its clear button, when there is text in it).
+    private func clearSearch(_ app: XCUIApplication) {
+        if app.buttons["Clear search"].exists { app.buttons["Clear search"].tap() }
+        app.textFields["box-search"].tap()
+    }
+
     private func row(_ app: XCUIApplication, _ species: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", "\(species),")).firstMatch
     }
@@ -155,10 +161,10 @@ final class MyPokemonScreenTests: XCTestCase {
         XCTAssertTrue(jump.waitForExistence(timeout: 5), "the element is there with a search on and one letter showing")
         XCTAssertEqual(jump.label, "Jump to letter")
         let search = app.textFields["box-search"]
-        search.tap(); search.clearText(); search.typeText("Zap\n")   // Zapdos: one letter
+        search.tap(); clearSearch(app); search.typeText("Zap\n")   // Zapdos: one letter
         XCTAssertTrue(row(app, "Zapdos").waitForExistence(timeout: 10))
         XCTAssertTrue(jump.exists, "and with another search")
-        search.tap(); search.clearText(); search.typeText("qqqq\n")   // nothing matches: no letters
+        search.tap(); clearSearch(app); search.typeText("qqqq\n")   // nothing matches: no letters
         XCTAssertTrue(app.staticTexts["No Pokémon match."].waitForExistence(timeout: 10))
         XCTAssertTrue(jump.exists, "and with no Pokémon shown")
         XCTAssertEqual(jump.value as? String, "No letters")
@@ -180,7 +186,7 @@ final class MyPokemonScreenTests: XCTestCase {
         XCTAssertTrue(built.label.contains("Upgrade available: power up Moltres, 137k dust"), built.label)
         XCTAssertTrue(built.label.contains("Keep") || built.label.contains("Transfer"), "a TOP IVS copy with a build keeps its tag: " + built.label)
         let search = app.textFields["box-search"]
-        search.tap(); search.clearText(); search.typeText("Staraptor\n")
+        search.tap(); clearSearch(app); search.typeText("Staraptor\n")
         XCTAssertTrue(row(app, "Staraptor").waitForExistence(timeout: 10))
         XCTAssertTrue(row(app, "Staraptor").label.contains("Full strength"), row(app, "Staraptor").label)
     }
