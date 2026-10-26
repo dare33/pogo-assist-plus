@@ -136,7 +136,8 @@ final class HubTeamsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Suggested squad"].waitForExistence(timeout: 10))
         app.buttons["hub-pvp-league-gl"].tap()
         XCTAssertTrue(app.staticTexts["hub-pvp-none"].waitForExistence(timeout: 5) || app.descendants(matching: .any)["hub-pvp-none"].waitForExistence(timeout: 5), "Great League has no candidate")
-        XCTAssertFalse(app.staticTexts["Suggested squad"].exists)
+        // With no candidate the squad still shows, every slot empty (READBACK 1.15; squads round-1 fold e288c89).
+        for i in 1...3 { XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-\(i)"].label.contains("empty"), app.descendants(matching: .any)["hub-pvp-slot-\(i)"].label) }
         app.buttons["hub-pvp-league-ml"].tap()
         XCTAssertTrue(app.staticTexts["Suggested squad"].waitForExistence(timeout: 5), "Master League shows a squad")
         app.buttons["squad-mode-best"].tap()
