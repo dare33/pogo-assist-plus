@@ -91,6 +91,36 @@ final class PokemonActivitiesTests: XCTestCase {
         XCTAssertEqual(A.raidCards(copy: s.entry("sc")!, ctx: s), [], "a Shadow copy cannot Mega evolve")
     }
 
+    /// One card per member and attacking type: Lucario lists Fighting as a plain and as a Mega entry. The card is the entry whose route the copy's build takes, and
+    /// the plan is the build whose route matches the card; with no build, the better tier (plain on a tie).
+    func testAMemberWithAPlainAndAMegaEntryForOneTypeGetsOneCardOnTheBuildsRoute() {
+        func cards(_ build: BoxAdvice.Build?, megaTier: String = "S") -> [PokemonActivities.RaidCard] {
+            let table = P23.table([P23.tierEntry("raids", "Fighting", "B", "lucario"), P23.tierEntry("raids", "Fighting", megaTier, "lucario_mega", mega: true)])
+            let ctx = P23.ctx(builds: build.map { [$0] } ?? [], entries: [P23.entry("lu", "lucario")], table: table, rotation: [])
+            return A.raidCards(copy: ctx.entry("lu")!, ctx: ctx)
+        }
+        var viaMega = P23.build("lu", "lucario", areas: ["Raids"], built: false, viaMega: true); viaMega.steps = [.init(kind: "megaEvolve")]
+        let plain = P23.build("lu", "lucario", areas: ["Raids"], built: false)
+        let none = cards(nil)
+        XCTAssertEqual(none.map(\.member.id), ["lucario_mega"], "no build: the better tier")
+        XCTAssertEqual(none[0].plan, .none)
+        XCTAssertEqual(cards(nil, megaTier: "B").map(\.member.id), ["lucario"], "a tie goes to the plain entry")
+        let p = cards(plain)
+        XCTAssertEqual(p.map(\.member.id), ["lucario"], "a plain build takes the plain card even though the Mega entry has the better tier")
+        guard case .mine(let pp) = p[0].plan else { return XCTFail("the plain build plans the plain card") }
+        XCTAssertFalse(pp.build.viaMega)
+        let m = cards(viaMega)
+        XCTAssertEqual(m.map(\.member.id), ["lucario_mega"])
+        guard case .mine(let mp) = m[0].plan else { return XCTFail("the Mega-route build plans the Mega card") }
+        XCTAssertTrue(mp.build.viaMega)
+        // A build whose route has no entry for the type: the card stays, and the plan is the box's best for the type (the same build, as another route's card).
+        let onlyPlain = P23.table([P23.tierEntry("raids", "Fighting", "B", "lucario")])
+        let ctx = P23.ctx(builds: [viaMega], entries: [P23.entry("lu", "lucario")], table: onlyPlain, rotation: [])
+        let c = A.raidCards(copy: ctx.entry("lu")!, ctx: ctx)
+        XCTAssertEqual(c.map(\.member.id), ["lucario"])
+        if case .mine = c[0].plan { XCTFail("a Mega-route build does not plan a plain card") }
+    }
+
     func testRaidBestPrefersTierThenBuiltThenTheAdvisorsOrder() {
         let table = P23.table([P23.tierEntry("raids", "Fire", "A", "flareon"), P23.tierEntry("raids", "Fire", "S", "charizard"), P23.tierEntry("raids", "Fire", "A", "arcanine")])
         let builds = [P23.build("a", "flareon", areas: ["Raids"], built: false), P23.build("b", "arcanine", areas: ["Raids"]), P23.build("c", "charizard", areas: ["Raids"], built: false),

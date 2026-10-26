@@ -401,7 +401,8 @@ final class BoxScreensTests: XCTestCase {
 
     /// A copy with a Mega form that is opened with a league's tile (a TOP PVP copy) opens its normal form on that tile, not the Mega form's "no leagues" note.
     func testAnInitialLeagueOnAMegaCopyOpensTheNormalFormOnThePvPTab() throws {
-        let app = saveMegaPair(["-appearance", "light", "-uitest-initial-league", "ul"])
+        // The Settings choice starts the page on Mega, so the test fails without the fix that opens the normal form for a league.
+        let app = saveMegaPair(["-appearance", "light", "-uitest-initial-league", "ul", "-megaDefault", "mega"])
         openBlaziken(app)
         XCTAssertTrue(app.buttons["form-normal"].isSelected, "the normal form")
         XCTAssertTrue(app.buttons["page-tab-pvp"].isSelected)

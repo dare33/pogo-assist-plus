@@ -131,7 +131,7 @@ struct PokemonDetailsCard: View {
 
 // MARK: marks
 
-/// A round mark on the details card (README "Marks"): 32 pt, 44 pt tap area. Off is the `off` circle with a `faint` glyph; Dynamax on takes the Max tint and
+/// A round mark on the details card (README "Marks"): 32 pt, 44 pt tap area. Off is the `off` circle with a `muted` glyph; Dynamax on takes the Max tint and
 /// ink, Shadow on a purple, Advanced details open the accent's tint and ink; on has a 2 pt inset ring. A button for VoiceOver with its state as the value (On, Off; Expanded, Collapsed): the `.isToggle` trait would make UI tests see a switch whose value is 0 or 1.
 struct MarkButton: View {
     enum Kind { case dynamax, shadow, advanced }

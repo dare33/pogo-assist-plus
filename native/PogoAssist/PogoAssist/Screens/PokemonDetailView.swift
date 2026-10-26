@@ -406,7 +406,6 @@ struct FixValueView: View {
     @State private var sta = ""
     @State private var error: String?
     @State private var saving = false
-    @State private var queue: [(ScanRow) -> BoxMerge.Edit] = []
 
     private var suggestions: [String] {
         let all = (try? GameMaster.bundled().names(matching: name)) ?? []

@@ -70,6 +70,26 @@ final class PokemonPageTests: XCTestCase {
         t.tap()
     }
 
+    /// The newest box version's number, read from Settings > History and scans (every save, an edit of a mark included, is a version); leaves Settings again.
+    private func latestVersion(_ app: XCUIApplication) -> Int {
+        app.buttons["More"].tap()
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5)); settings.tap()
+        if !app.navigationBars["Settings"].waitForExistence(timeout: 6), settings.exists { settings.tap() }
+        let history = app.buttons["settings-history-row"]
+        var n = 0
+        while !history.isHittable && n < 8 { app.swipeUp(); n += 1 }
+        history.tap()
+        let first = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Version '")).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "the history lists its versions")
+        let number = Int(first.label.dropFirst("Version ".count).prefix { $0.isNumber }) ?? -1
+        app.navigationBars.buttons.element(boundBy: 0).tap()   // back to Settings
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 10))
+        return number
+    }
+
     private func top(_ app: XCUIApplication) { for _ in 0..<4 { app.swipeDown(velocity: .fast) } }
 
     private func el(_ app: XCUIApplication, _ id: String) -> XCUIElement { app.descendants(matching: .any).matching(identifier: id).firstMatch }
@@ -232,6 +252,8 @@ final class PokemonPageTests: XCTestCase {
     /// cost shown on a Summary row changes (Lucky halves the power-up dust).
     func testDefaultsStayUnsavedAndLuckyReRunsTheAdvice() throws {
         let app = launchPopulated()
+        let versionBefore = latestVersion(app)
+        XCTAssertGreaterThan(versionBefore, 0)
         openCopy(app, "Scyther")
         let row = el(app, "summary-row-raids")
         XCTAssertTrue(row.waitForExistence(timeout: 30))
@@ -247,10 +269,16 @@ final class PokemonPageTests: XCTestCase {
         XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons[id].isSelected, "still the default after leaving without a tap")
         XCTAssertEqual(el(app, "summary-row-raids").label, before, "leaving saved nothing that changed the advice")
+        closeCopy(app)
+        XCTAssertEqual(latestVersion(app), versionBefore, "opening the page and leaving without a tap saved no box version")
+        openCopy(app, "Scyther")
+        app.buttons["mark-advanced"].tap()
         el(app, "flag-lucky").tap()
         let changed = NSPredicate(format: "label != %@", before)
         expectation(for: changed, evaluatedWith: el(app, "summary-row-raids"))
         waitForExpectations(timeout: 30)
         XCTAssertTrue(app.buttons["flag-lucky"].isSelected)
+        closeCopy(app)
+        XCTAssertGreaterThan(latestVersion(app), versionBefore, "the Lucky edit is a new box version")
     }
 }

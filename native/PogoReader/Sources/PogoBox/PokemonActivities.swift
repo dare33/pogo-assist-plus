@@ -104,12 +104,29 @@ public enum PokemonActivities {
             // A non-Shadow copy also reaches the Mega and Primal entries of a member (the route the advisor's Mega builds take, as `HubRaidsModel.raidEntries`
             // and `typesCounted` credit with `viaMega`); a Shadow copy cannot Mega evolve. Such a card is that Mega form's, with the member's own plan.
             let entries = HubRaidsModel.raidEntries(targetId: m.id, viaMega: !shadow, table: ctx.table, shadow: shadow)
-            for (e, type) in entries.flatMap({ e in HubRaidsModel.entryTypes(e, in: entries, speciesTypes: m.types).map { (e, $0) } }) {
-                let isMega = e.speciesId != m.id && (e.speciesId.hasPrefix(m.id + "_mega") || e.speciesId.hasPrefix(m.id + "_primal"))
-                let shown = isMega ? Member(id: e.speciesId, name: e.name, types: ctx.gm.byId[e.speciesId]?.types ?? m.types) : m
+            func isMega(_ e: TierTable.Entry) -> Bool { e.speciesId != m.id && (e.speciesId.hasPrefix(m.id + "_mega") || e.speciesId.hasPrefix(m.id + "_primal")) }
+            let own = ownBuild(copy, area: "Raids", member: m.id, ctx: ctx)
+            // One card per member and attacking type: when the plain and the Mega or Primal entry both list the type, the one whose route this copy's build for the
+            // member takes; with no such build, the better tier (the plain entry on a tie).
+            var byType: [(type: String, options: [TierTable.Entry])] = []
+            for e in entries {
+                for type in HubRaidsModel.entryTypes(e, in: entries, speciesTypes: m.types) {
+                    if let i = byType.firstIndex(where: { $0.type == type }) { byType[i].options.append(e) } else { byType.append((type, [e])) }
+                }
+            }
+            for (type, options) in byType {
+                let e: TierTable.Entry
+                if let own, let onRoute = options.first(where: { isMega($0) == own.viaMega }) { e = onRoute }
+                else { e = options.enumerated().min { l, r in
+                    let (a, b) = (PogoRules.tierRank(l.element.tier), PogoRules.tierRank(r.element.tier))
+                    return a != b ? a < b : (isMega(l.element) ? 1 : 0, l.offset) < (isMega(r.element) ? 1 : 0, r.offset)
+                }!.element }
+                let mega = isMega(e)
+                let shown = mega ? Member(id: e.speciesId, name: e.name, types: ctx.gm.byId[e.speciesId]?.types ?? m.types) : m
+                // The plan is the build whose route matches the card.
                 let plan: RaidPlan
-                if let mine = ownBuild(copy, area: "Raids", member: m.id, ctx: ctx) {
-                    plan = .mine(Plan(build: mine, built: HubSquads.isFullStrength(mine, screen: .raids, ctx: ctx)))
+                if let own, own.viaMega == mega {
+                    plan = .mine(Plan(build: own, built: HubSquads.isFullStrength(own, screen: .raids, ctx: ctx)))
                 } else if let b = best[type] {
                     plan = .best(Plan(build: b.build, built: HubSquads.isFullStrength(b.build, screen: .raids, ctx: ctx)), tier: b.tier)
                 } else {
