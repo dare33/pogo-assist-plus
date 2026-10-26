@@ -99,10 +99,13 @@ final class MyPokemonScreenTests: XCTestCase {
     func testTheTabAndTheScreenAreCalledMyPokemon() throws {
         let app = launchOnMoltres()
         XCTAssertTrue(app.buttons["My Pokémon"].exists, "the tab bar's label")
-        XCTAssertEqual(app.staticTexts["tab-title"].label, "My Pokémon")
-        XCTAssertTrue(app.buttons["Account, Greg main"].exists, "the account name is in the header")
-        XCTAssertTrue(app.buttons["Export"].exists && app.buttons["More"].exists)
-        let title = app.staticTexts["tab-title"].frame, account = app.buttons["Account, Greg main"].frame
+        // Both tabs keep their shared header in the tree (the Hub tab's says "Pogo Hub"): take this tab's, the one on screen.
+        let titleEl = app.staticTexts.matching(identifier: "tab-title").matching(NSPredicate(format: "label == %@", "My Pokémon")).firstMatch
+        XCTAssertTrue(titleEl.exists, "the screen's title is My Pokémon")
+        let accountEl = app.buttons.matching(NSPredicate(format: "label == %@", "Account, Greg main")).allElementsBoundByIndex.first { $0.isHittable }
+        XCTAssertNotNil(accountEl, "the account name is in the header")
+        XCTAssertTrue(app.buttons["Export"].exists && app.buttons["More"].firstMatch.exists)
+        let title = titleEl.frame, account = accountEl?.frame ?? .zero
         XCTAssertLessThan(account.maxX, title.minX, "the account name is on the left of the title")
         XCTAssertEqual(title.midX, app.frame.midX, accuracy: 3, "the title is centred")
     }
