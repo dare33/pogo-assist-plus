@@ -108,6 +108,12 @@ final class HubCollectionTests: XCTestCase {
         XCTAssertEqual(by["Lucky"]?.note, "Not in your scans yet", "no copy carries a Lucky mark"); XCTAssertNil(by["Lucky"]?.owned)
     }
 
+    func testAShadowSpeciesCopyCountsAsShadowToo() {
+        let box = [P23.entry("a", "charizard", shadow: 1), P23.entry("b", "charizard_shadow"), P23.entry("c", "pikachu")]
+        let by = Dictionary(uniqueKeysWithValues: HubCollection.specialSets(entries: box, gm: gm).map { ($0.name, $0) })
+        XCTAssertEqual(by["Shadow"]?.owned, 2, "a copy marked Shadow and a copy of a _shadow species")
+    }
+
     func testLuckyHasACountOnceACopyCarriesTheMark() {
         let box = [P23.entry("a", "pikachu"), P23.entry("b", "eevee")]
         let sets = HubCollection.specialSets(entries: box, gm: gm, isLucky: { $0.id == "b" })

@@ -123,6 +123,16 @@ final class HubSquadsTests: XCTestCase {
         XCTAssertEqual(HubSquads.buildRow(P23.build("a", "vaporeon", areas: ["Gym"], built: false)).subLine, "Gym · Free", "an unbuilt free build keeps Free")
     }
 
+    func testABuildReadWithoutStepsIsNotShownAsFullStrength() {
+        var b = P23.build("a", "vaporeon", areas: ["Gym"], dust: 10_000)
+        b.steps = nil
+        let row = HubSquads.buildRow(b)
+        XCTAssertFalse(row.showsFullStrength, "unknown steps are not known to be finished")
+        XCTAssertEqual(row.cost, .init(value: "10k", currency: .dust))
+        XCTAssertEqual(row.subLine, "Gym · 10k dust")
+        XCTAssertTrue(HubTeams.isBuilt(b), "HubTeams.isBuilt itself is unchanged")
+    }
+
     // MARK: rule 6
 
     func testAttainableNowIsABossOnNowOrAnEasyResearchLine() {

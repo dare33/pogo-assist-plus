@@ -135,7 +135,7 @@ public enum HubCollection {
         public var note: String?
     }
 
-    /// Counts for the named groups. 100% IVs, Lucky and Shadow count copies; Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
+    /// Counts for the named groups. 100% IVs, Lucky and Shadow count copies (a Shadow is a copy marked Shadow or of a `_shadow` species, as `HubRaidsModel.isShadow` reads it); Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
     /// released). `isLucky` reads the copy's Lucky mark (the data model adds it); while no copy is marked the Lucky tile has no count.
     public static func specialSets(entries: [BoxEntry], gm: GameMaster, isLucky: (BoxEntry) -> Bool = { _ in false }) -> [SpecialSet] {
         let ownedDex = ownedDex(entries: entries, gm: gm)
@@ -154,7 +154,7 @@ public enum HubCollection {
             named("Legendary", species("legendary")), named("Mythical", species("mythical")), named("Ultra Beasts", species("ultrabeast")),
             SpecialSet(name: "Mega-capable", owned: ownedDex.intersection(megaDex).count, total: megaDex.count, unit: "species", note: nil),
             lucky == 0 ? SpecialSet(name: "Lucky", owned: nil, total: nil, unit: "copies", note: "Not in your scans yet") : SpecialSet(name: "Lucky", owned: lucky, total: nil, unit: "copies", note: nil),
-            SpecialSet(name: "Shadow", owned: entries.filter { $0.row.shadow == 1 }.count, total: nil, unit: "copies", note: nil),
+            SpecialSet(name: "Shadow", owned: entries.filter { $0.row.shadow == 1 || $0.row.speciesId.hasSuffix("_shadow") }.count, total: nil, unit: "copies", note: nil),
         ]
     }
 }

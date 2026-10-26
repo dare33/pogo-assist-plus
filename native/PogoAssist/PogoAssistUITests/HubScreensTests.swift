@@ -62,6 +62,13 @@ final class HubScreensTests: XCTestCase {
         app.alerts.buttons["Save"].tap()
     }
 
+    /// The screen's title is a text of its own, above the switch: not the switch's segment label (a button).
+    private func assertTitle(_ app: XCUIApplication, _ title: String, above segment: String, file: StaticString = #filePath, line: UInt = #line) {
+        let text = app.staticTexts[title]
+        XCTAssertTrue(text.waitForExistence(timeout: 5), "title \(title)", file: file, line: line)
+        XCTAssertLessThan(text.frame.maxY, app.buttons[segment].frame.minY, "the title \(title) sits above the switch", file: file, line: line)
+    }
+
     // MARK: Collection lists (design pass 2)
 
     func testCollectionListsBuilds() throws {
@@ -74,7 +81,7 @@ final class HubScreensTests: XCTestCase {
 
         // Builds is the tab the Builds card opened; the title follows the switch.
         XCTAssertTrue(app.buttons["collection-tab-builds"].isSelected)
-        XCTAssertTrue(app.staticTexts["Builds"].exists || app.buttons["collection-tab-builds"].exists)
+        assertTitle(app, "Builds", above: "collection-tab-builds")
         XCTAssertTrue(app.buttons["hub-stardust-change"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Not set"].exists)
         // A rejected entry says so and changes nothing; a good one shows THESE FIT.
@@ -121,12 +128,13 @@ final class HubScreensTests: XCTestCase {
         openLists(app, card: "gaps")
         XCTAssertTrue(app.buttons["collection-tab-gaps"].isSelected)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'GAPS'")).firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Gaps"].exists)
+        assertTitle(app, "Gaps", above: "collection-tab-gaps")
         app.buttons["collection-tab-duplicates"].tap()
-        XCTAssertTrue(app.staticTexts["Duplicates"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'DUPLICATES'")).firstMatch.exists || app.staticTexts["Duplicates"].exists)
+        assertTitle(app, "Duplicates", above: "collection-tab-duplicates")
+        XCTAssertFalse(app.staticTexts["Gaps"].exists, "the title no longer reads Gaps")
         app.buttons["collection-tab-builds"].tap()
-        XCTAssertTrue(app.staticTexts["Builds"].waitForExistence(timeout: 5))
+        assertTitle(app, "Builds", above: "collection-tab-builds")
+        XCTAssertFalse(app.staticTexts["Duplicates"].exists, "the title no longer reads Duplicates")
         XCTAssertTrue(app.buttons["hub-stardust-change"].exists)
         // Back is the Collection.
         app.buttons["hub-back"].tap()
@@ -261,14 +269,18 @@ final class HubScreensTests: XCTestCase {
         app.launch()
         populate(app)
         openHub(app)
+        let tileLabel = app.buttons["hub-tile-everything"].label
+        let tileCount = tileLabel.components(separatedBy: ", ").dropFirst().first?.components(separatedBy: " species").first ?? "?"
         app.buttons["hub-tile-everything"].tap()
 
         // Header: the title, "N Pokémon in your box" and the chip "owned of released".
         XCTAssertTrue(app.staticTexts["Collection"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9,]+ Pokémon in your box$")).firstMatch.exists, "the sub line")
-        let chip = app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9]+ of [0-9]+$")).firstMatch
+        let chip = app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9]+ of [0-9]+ species$")).firstMatch
         XCTAssertTrue(chip.waitForExistence(timeout: 10))
-        XCTAssertNotNil(chip.label.range(of: "^[0-9]+ of [0-9]+$", options: .regularExpression), chip.label)
+        XCTAssertNotNil(chip.label.range(of: "^[0-9]+ of [0-9]+ species$", options: .regularExpression), chip.label)
+        // The Hub tile's chip and the Collection's chip are the same count.
+        XCTAssertEqual(tileCount, chip.label.replacingOccurrences(of: " species", with: ""), "the tile and the Collection agree on owned of released")
         // The species panel.
         let panel = any(app, "collection-species").firstMatch
         XCTAssertTrue(panel.waitForExistence(timeout: 10))
@@ -284,7 +296,11 @@ final class HubScreensTests: XCTestCase {
         XCTAssertEqual(any(app, "collection-set").count, 7, "seven special sets")
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Lucky. Not in your scans yet'")).firstMatch.exists, "Lucky reads Not in your scans yet")
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '100% IVs'")).firstMatch.exists)
-        XCTAssertLessThanOrEqual(any(app, "collection-missing-row").count, 6, "the first six missing")
+        let missingRows = any(app, "collection-missing-row").count
+        XCTAssertTrue((1...6).contains(missingRows), "the first six missing (\(missingRows))")
+        let cards = any(app, "collection-showcase-card").count
+        XCTAssertTrue((1...12).contains(cards), "up to twelve best copies (\(cards))")
+        XCTAssertFalse(app.staticTexts["Not in your box"].exists, "a missing species with no how-to-get text shows nothing there")
         XCTAssertTrue(any(app, "collection-missing-all").firstMatch.exists)
         sleep(1)
         shot("collection-01-top")
@@ -331,5 +347,45 @@ final class HubScreensTests: XCTestCase {
             }
             again.terminate()
         }
+    }
+
+    // MARK: tiles and an empty box (review round 1)
+
+    func testEveryHubTileOpensItsScreen() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        openHub(app)
+        for (tile, title) in [("everything", "Collection"), ("raids", "Raids"), ("max", "Max battles"), ("gym", "Gym battles"), ("rocket", "Team Rocket"), ("pvp", "PvP leagues")] {
+            let button = app.buttons["hub-tile-\(tile)"]
+            XCTAssertTrue(button.waitForExistence(timeout: 10), "tile \(tile)")
+            button.tap()
+            // The back circle by its label: a screen's own container identifier can hide the circle's "hub-back".
+            XCTAssertTrue(app.buttons["Back"].waitForExistence(timeout: 15), "\(title) opens")
+            XCTAssertTrue(app.staticTexts[title].exists, "the \(title) screen is titled \(title)")
+            app.buttons["Back"].tap()
+            XCTAssertTrue(app.buttons["hub-tile-\(tile)"].waitForExistence(timeout: 10), "back to the Hub from \(title)")
+        }
+    }
+
+    func testAnEmptyBoxStillShowsTheCollectionAtZero() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        let field = app.textFields["Trainer name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap(); field.typeText("Greg main")
+        app.buttons["Create account"].tap()
+        XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 5))
+        openHub(app)
+        let tile = app.buttons["hub-tile-everything"]
+        XCTAssertNotNil(tile.label.range(of: "^Collection, 0 of [0-9]+ species", options: .regularExpression), "the tile reads 0 of the released species: \(tile.label)")
+        tile.tap()
+        XCTAssertTrue(any(app, "collection-species").firstMatch.waitForExistence(timeout: 10), "the species panel is there")
+        XCTAssertTrue(any(app, "collection-species").firstMatch.label.hasPrefix("0 of "), any(app, "collection-species").firstMatch.label)
+        XCTAssertEqual(any(app, "collection-region-row").count, 9)
+        XCTAssertTrue(app.staticTexts["MISSING"].exists)
+        XCTAssertTrue(any(app, "collection-empty").firstMatch.exists, "the scan prompt is an extra line, not instead")
     }
 }

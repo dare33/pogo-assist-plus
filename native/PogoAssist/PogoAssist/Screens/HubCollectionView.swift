@@ -48,7 +48,13 @@ struct HubCollectionView: View {
         let o = data?.overview
         return HubTypeScreen(type: .everything,
                              sub: model.entries.isEmpty ? nil : "\(HubModel.grouped(model.entries.count)) Pokémon in your box",
-                             count: o.map { "\($0.owned) of \($0.released)" }) {
+                             count: o.map { "\($0.owned) of \($0.released)" },
+                             countSpoken: o.map { "\($0.owned) of \($0.released) species" }) {
+            // An empty box still shows the species panel, the regions and Missing (all at zero); the prompt is an extra line on top.
+            if model.entries.isEmpty {
+                Text("Scan your Pokémon and the Collection will fill in").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+                    .accessibilityIdentifier("collection-empty")
+            }
             if let data {
                 species(data.overview)
                 regions(data.overview)
@@ -56,15 +62,12 @@ struct HubCollectionView: View {
                 specialSets(data)
                 missing(data)
                 cleanUp
-            } else if model.entries.isEmpty {
-                Text("Scan your Pokémon and the Collection will fill in").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
-                    .accessibilityIdentifier("collection-empty")
-            } else {
+            } else if !model.entries.isEmpty {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
         .task(id: key) {
-            guard !model.entries.isEmpty, let gm = try? GameMaster.bundled() else { data = nil; return }
+            guard let gm = try? GameMaster.bundled() else { data = nil; return }
             data = CollectionData.make(entries: model.entries, advice: adviceReady, gm: gm)
         }
     }
@@ -152,12 +155,14 @@ struct HubCollectionView: View {
 
     @ViewBuilder private func missing(_ d: CollectionData) -> some View {
         HubHeaderLine("MISSING") {
-            NavigationLink(value: CollectionRoute.missing) {
-                Text("All \(HubModel.grouped(d.missing.count)) ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).frame(minHeight: 44)
+            if !d.missing.isEmpty {
+                NavigationLink(value: CollectionRoute.missing) {
+                    Text("All \(HubModel.grouped(d.missing.count)) ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).frame(minHeight: 44)
+                }
+                .buttonStyle(PressStyle())
+                .accessibilityLabel("All \(d.missing.count) missing species")
+                .accessibilityIdentifier("collection-missing-all")
             }
-            .buttonStyle(PressStyle())
-            .accessibilityLabel("All \(d.missing.count) missing species")
-            .accessibilityIdentifier("collection-missing-all")
         }
         MissingPanel(missing: d.missing, evolvable: d.overview.canEvolve, shown: 6)
     }
@@ -255,6 +260,7 @@ private struct ShowcaseCard: View {
         let sum = ivs.map { $0.atk + $0.def + $0.hp } ?? 0
         let percent = Int((Double(sum) / 45 * 100).rounded())
         let perfect = sum == 45
+        let spokenIVs = ivs.map { "\($0.atk), \($0.def), \($0.hp) IVs," } ?? ""
         let line = "\(ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "") · CP \(HubModel.grouped(entry.row.cp))"
         NavigationLink(value: entry.id) {
             VStack(alignment: .leading, spacing: 4) {
@@ -272,7 +278,7 @@ private struct ShowcaseCard: View {
         }
         .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(entry.row.display), \(percent)% IVs, \(line.replacingOccurrences(of: "·", with: "")). \(types.map { $0.capitalized }.joined(separator: " and "))")
+        .accessibilityLabel("\(entry.row.display), \(percent)% IVs, \(spokenIVs) CP \(HubModel.grouped(entry.row.cp)). \(types.map { $0.capitalized }.joined(separator: " and "))")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("collection-showcase-card")
     }
@@ -311,34 +317,44 @@ struct MissingPanel: View {
 
     var body: some View {
         let rows = shown.map { Array(missing.prefix($0)) } ?? missing
-        LazyVStack(spacing: 0) {
+        // The preview is a few rows, all in the accessibility tree; the full list (hundreds) is lazy.
+        let content = VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(HubModel.grouped(missing.count)) species missing").font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink)
-                Text("\(evolvable) you can evolve from one you have. The rest come from raids, eggs, research or trades.")
+                Text("\(evolvable) you can evolve from one you have. A species lists how to get it where our research says.")
                     .font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 14)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("collection-missing-head")
-            ForEach(rows, id: \.dex) { m in
-                Rectangle().fill(Theme.line).frame(height: 1)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(m.name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
-                        Text("#\(m.dex) · \(m.region)").font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.faint)
-                    }
-                    Text(m.how.isEmpty ? "Not in your box" : m.how).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("collection-missing-row")
+            if shown == nil {
+                LazyVStack(spacing: 0) { ForEach(rows, id: \.dex) { row($0) } }
+            } else {
+                ForEach(rows, id: \.dex) { row($0) }
             }
         }
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .panelShadow()
+        content
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .panelShadow()
+    }
+
+    private func row(_ m: HubCollection.MissingSpecies) -> some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Theme.line).frame(height: 1)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(m.name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+                    Text("#\(m.dex) · \(m.region)").font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.faint)
+                }
+                if !m.how.isEmpty { Text(m.how).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("collection-missing-row")
+        }
     }
 }
 
@@ -352,7 +368,7 @@ struct HubMissingView: View {
             if let data { MissingPanel(missing: data.missing, evolvable: data.overview.canEvolve) }
         }
         .task(id: "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)|\(model.hubAdvice != nil)") {
-            guard !model.entries.isEmpty, let gm = try? GameMaster.bundled() else { data = nil; return }
+            guard let gm = try? GameMaster.bundled() else { data = nil; return }
             data = CollectionData.make(entries: model.entries, advice: model.hubAdvice, gm: gm)
         }
     }

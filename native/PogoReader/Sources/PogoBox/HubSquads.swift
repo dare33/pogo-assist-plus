@@ -188,7 +188,8 @@ public enum HubSquads {
     }
 
     public static func buildRow(_ b: BoxAdvice.Build) -> BuildRow {
-        let built = HubTeams.isBuilt(b)
+        // A build read without `steps` is not known to be finished (HubTeams.isBuilt reads it as built; a list must not badge it), so it keeps its cost.
+        let built = b.steps != nil && HubTeams.isBuilt(b)
         return BuildRow(build: b, built: built, cost: built ? Cost(value: nil, currency: .free) : cost(of: b),
                         subLine: built ? HubModel.areaWords(b) : HubModel.areaLabel(for: b))
     }

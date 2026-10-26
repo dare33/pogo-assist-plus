@@ -193,7 +193,7 @@ final class AppModel: ObservableObject {
     /// The eggs shown in the game's storage, typed for a Full scan (0 to `StorageCountRules.maxEggSlots`), remembered per account; empty means the flat allowance.
     @Published var eggText: String { didSet { if let a = account { UserDefaults.standard.set(eggText, forKey: Keys.eggs + "." + a) }; refreshReaderSettings(); if eggText != oldValue { rescanCount = nil } } }
 
-    /// The stardust the person has, typed on the Hub's Everything screen and remembered per account; nil until entered. It is not read from the game.
+    /// The stardust the person has, typed on the Collection lists screen and remembered per account; nil until entered. It is not read from the game.
     var stardust: Int? {
         get { account.flatMap { UserDefaults.standard.object(forKey: Keys.stardust + "." + $0) as? Int } }
         set {

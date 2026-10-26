@@ -42,7 +42,8 @@ struct HubView: View {
             }
         }
         .task(id: "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)") {
-            guard !model.entries.isEmpty, let gm = try? GameMaster.bundled() else { species = nil; return }
+            // An empty box still counts: "0/951" (the screen then asks for a scan on top).
+            guard let gm = try? GameMaster.bundled() else { species = nil; return }
             let o = HubCollection.overview(entries: model.entries, gm: gm)
             species = (o.owned, o.released)
         }

@@ -10,6 +10,8 @@ struct HubTypeScreen<Content: View>: View {
     var sub: String? = nil
     /// The chip's text, "38 builds"; nil hides it.
     var count: String? = nil
+    /// What VoiceOver reads for the chip when it differs from its text ("18 of 951 species").
+    var countSpoken: String? = nil
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accent) private var accent
@@ -53,6 +55,7 @@ struct HubTypeScreen<Content: View>: View {
                 Text(count).font(.figtree(12, .heavy, relativeTo: .caption)).monospacedDigit().foregroundStyle(type.ink(accent))
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(type.tint(accent), in: Capsule())
+                    .accessibilityLabel(countSpoken ?? count)
                     .accessibilityIdentifier("hub-type-count")
             }
         }
