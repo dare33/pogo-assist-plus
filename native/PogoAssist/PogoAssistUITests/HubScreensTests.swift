@@ -197,4 +197,92 @@ final class HubScreensTests: XCTestCase {
             again.terminate()
         }
     }
+
+    // MARK: Collection (design pass 2)
+
+    /// Scrolls the page up (at most `swipes` times) until `element` can be tapped.
+    private func scrollTo(_ element: XCUIElement, in app: XCUIApplication, swipes: Int = 20) {
+        var n = 0
+        while !element.isHittable && n < swipes { app.swipeUp(velocity: .fast); n += 1 }
+    }
+
+    private func any(_ app: XCUIApplication, _ id: String) -> XCUIElementQuery { app.descendants(matching: .any).matching(identifier: id) }
+
+    func testCollectionSections() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        openHub(app)
+        app.buttons["hub-tile-everything"].tap()
+
+        // Header: the title, "N Pokémon in your box" and the chip "owned of released".
+        XCTAssertTrue(app.staticTexts["Collection"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9,]+ Pokémon in your box$")).firstMatch.exists, "the sub line")
+        let chip = app.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "^[0-9]+ of [0-9]+$")).firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 10))
+        XCTAssertNotNil(chip.label.range(of: "^[0-9]+ of [0-9]+$", options: .regularExpression), chip.label)
+        // The species panel.
+        let panel = any(app, "collection-species").firstMatch
+        XCTAssertTrue(panel.waitForExistence(timeout: 10))
+        XCTAssertTrue(panel.label.contains("of the species in Pokémon GO"), panel.label)
+        XCTAssertTrue(panel.label.contains("you can evolve now"), panel.label)
+        // The sections, in order.
+        for header in ["DEX BY REGION", "SHOWCASE · YOUR BEST COPIES", "SPECIAL SETS", "MISSING", "BUILDS AND CLEAN-UP"] {
+            XCTAssertTrue(app.staticTexts[header].exists, header)
+        }
+        XCTAssertEqual(any(app, "collection-region-row").count, 9, "nine regions")
+        XCTAssertTrue(any(app, "collection-region-row").firstMatch.label.hasSuffix("Kanto species"), any(app, "collection-region-row").firstMatch.label)
+        XCTAssertGreaterThanOrEqual(any(app, "collection-showcase-card").count, 1, "a best copy")
+        XCTAssertEqual(any(app, "collection-set").count, 7, "seven special sets")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Lucky. Not in your scans yet'")).firstMatch.exists, "Lucky reads Not in your scans yet")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '100% IVs'")).firstMatch.exists)
+        XCTAssertLessThanOrEqual(any(app, "collection-missing-row").count, 6, "the first six missing")
+        XCTAssertTrue(any(app, "collection-missing-all").firstMatch.exists)
+        sleep(1)
+        shot("collection-01-top")
+
+        // A summary card opens the lists screen, back returns to the Collection.
+        let builds = app.buttons["collection-card-builds"]
+        scrollTo(builds, in: app)
+        XCTAssertTrue(builds.waitForExistence(timeout: 30), "the summary cards arrive with the advice")
+        XCTAssertTrue(builds.label.hasPrefix("Builds, "), builds.label)
+        XCTAssertTrue(app.buttons["collection-card-gaps"].exists && app.buttons["collection-card-duplicates"].exists)
+        builds.tap()
+        XCTAssertTrue(app.buttons["hub-stardust-change"].waitForExistence(timeout: 10), "the lists screen opens")
+        app.buttons["hub-back"].tap()
+        XCTAssertTrue(any(app, "collection-species").firstMatch.waitForExistence(timeout: 5), "back is the Collection")
+    }
+
+    func testCollectionScreenshots() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        openHub(app)
+        expectation(for: NSPredicate(format: "label CONTAINS 'build'"), evaluatedWith: app.buttons["hub-tile-max"])
+        waitForExpectations(timeout: 60)
+        app.terminate()
+        for (name, args) in [("light-default", ["-appearance", "light"]), ("dark-default", ["-appearance", "dark"]),
+                             ("light-ax5", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]),
+                             ("dark-ax5", ["-appearance", "dark", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            let again = XCUIApplication()
+            again.launchArguments = args
+            again.launch()
+            openHub(again)
+            again.buttons["hub-tile-everything"].tap()
+            XCTAssertTrue(any(again, "collection-species").firstMatch.waitForExistence(timeout: 15))
+            sleep(2)
+            shot("\(name)-1", in: "collection")
+            let stops: [(String, String)] = [("collection-region-row", "2"), ("collection-showcase-card", "3"), ("collection-set", "4"), ("collection-missing-row", "5"), ("collection-card-duplicates", "6")]
+            for (id, n) in stops {
+                let target = any(again, id).firstMatch
+                var swipes = 0
+                while !target.isHittable && swipes < 60 { again.swipeUp(); swipes += 1 }
+                sleep(1)
+                shot("\(name)-\(n)", in: "collection")
+            }
+            again.terminate()
+        }
+    }
 }

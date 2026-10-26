@@ -26,6 +26,7 @@
 		1DF267CCE4D1096881873210 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
 		205415EE687703C0379569F7 /* GuideFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C5D5C5A5E06415BB056093 /* GuideFlow.swift */; };
 		262F06295009225A5291CD5A /* BoxChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853199DAE4157490F71A25E8 /* BoxChrome.swift */; };
+		28179D562EA3AA49B53E4868 /* HubCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0687277C8D79CBA76800046C /* HubCollectionView.swift */; };
 		298BB1E338CBDCF134829537 /* HubRaidsMaxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3125EA9837C6BDA1514128F /* HubRaidsMaxTests.swift */; };
 		29D9364DF6997E6C296892EC /* GameOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = C317D4A35524B2870E2635E8 /* GameOpener.swift */; };
 		3141426D1BEF397FDB06B649 /* DesignGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D753F1DDCCB14FE57185CE0 /* DesignGallery.swift */; };
@@ -181,6 +182,7 @@
 		00B7030AC596BFDD03757B5C /* SetupStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStepView.swift; sourceTree = "<group>"; };
 		01F723B7B2F32D040376093D /* SetupChecklistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupChecklistView.swift; sourceTree = "<group>"; };
 		02BD2550786F0D85E97D0548 /* PokemonPageParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonPageParts.swift; sourceTree = "<group>"; };
+		0687277C8D79CBA76800046C /* HubCollectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubCollectionView.swift; sourceTree = "<group>"; };
 		084FB265AF36DD53B7DD982A /* HubMaxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubMaxView.swift; sourceTree = "<group>"; };
 		09D08E55E9B50EC09258EFF1 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		0C25EFD2C077EA499C5525A7 /* PokemonPageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonPageTests.swift; sourceTree = "<group>"; };
@@ -495,6 +497,7 @@
 				1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */,
 				51C5D5C5A5E06415BB056093 /* GuideFlow.swift */,
 				10EFC08EEA5AD7BB42454DD8 /* HistoryScansView.swift */,
+				0687277C8D79CBA76800046C /* HubCollectionView.swift */,
 				4A52B34F2A7384C8792F6CDE /* HubEverythingView.swift */,
 				1D1F19255D086D56FE73A735 /* HubGymView.swift */,
 				084FB265AF36DD53B7DD982A /* HubMaxView.swift */,
@@ -815,6 +818,7 @@
 				68A28061D9146D4EA5A538CC /* GameSearch.swift in Sources */,
 				205415EE687703C0379569F7 /* GuideFlow.swift in Sources */,
 				376C2D00223CEED89FEF3D42 /* HistoryScansView.swift in Sources */,
+				28179D562EA3AA49B53E4868 /* HubCollectionView.swift in Sources */,
 				001F90DC60A4D0CBD81D6EDE /* HubEverythingView.swift in Sources */,
 				EE6FB27E5E43AD40C06AFE40 /* HubGymView.swift in Sources */,
 				8A85717ADE3ADD7C76920987 /* HubMaxView.swift in Sources */,

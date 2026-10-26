@@ -35,6 +35,12 @@ struct HubView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
         .navigationDestination(for: ContentType.self) { HubTypeDestination(type: $0) }
+        .navigationDestination(for: CollectionRoute.self) { route in
+            switch route {
+            case .lists: HubEverythingView()
+            case .missing: HubMissingView()
+            }
+        }
         .task(id: "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)") {
             guard !model.entries.isEmpty, let gm = try? GameMaster.bundled() else { species = nil; return }
             let o = HubCollection.overview(entries: model.entries, gm: gm)

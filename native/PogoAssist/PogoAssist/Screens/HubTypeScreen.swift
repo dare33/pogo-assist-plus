@@ -2,9 +2,11 @@ import SwiftUI
 import PogoBox
 
 /// The chrome every Hub type screen shares (design handoff section 5): the tab bar hidden, a back circle, the title with an optional
-/// sub line, a count chip, and a content column the caller fills. The Everything screen uses it, and so do the screens still to come.
+/// sub line, a count chip, and a content column the caller fills. The Collection screens use it, and so do the squad screens.
 struct HubTypeScreen<Content: View>: View {
     let type: ContentType
+    /// Replaces the type's name as the title (the Collection lists follow their switch).
+    var title: String? = nil
     var sub: String? = nil
     /// The chip's text, "38 builds"; nil hides it.
     var count: String? = nil
@@ -12,14 +14,22 @@ struct HubTypeScreen<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accent) private var accent
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
+        // At accessibility text sizes the header is tall (the title and sub line wrap under the back circle), so it scrolls with the page rather than
+        // taking half the screen for good.
+        let big = typeSize.isAccessibilitySize
         VStack(spacing: 0) {
-            header
+            if !big { header }
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) { content }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Theme.Space.screen)
-                    .padding(.bottom, 16)
+                VStack(alignment: .leading, spacing: 12) {
+                    if big { header.padding(.horizontal, -Theme.Space.screen) }
+                    content
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Theme.Space.screen)
+                .padding(.bottom, 16)
             }
         }
         .background(Theme.bg.ignoresSafeArea())
@@ -27,15 +37,16 @@ struct HubTypeScreen<Content: View>: View {
         .hidesTabBar()
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            IconButton(systemImage: "chevron.left", kind: .floating, label: "Back", identifier: "hub-back") { dismiss() }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(type.title).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink).lineLimit(2)
-                    .accessibilityAddTraits(.isHeader)
-                if let sub { Text(sub).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
-            }
-            Spacer(minLength: 8)
+    private var titles: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title ?? type.title).font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink).lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
+            if let sub { Text(sub).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
+        }
+    }
+
+    private var chip: some View {
+        Group {
             if let count {
                 Text(count).font(.figtree(12, .heavy, relativeTo: .caption)).monospacedDigit().foregroundStyle(type.ink(accent))
                     .padding(.horizontal, 12).padding(.vertical, 6)
@@ -43,8 +54,30 @@ struct HubTypeScreen<Content: View>: View {
                     .accessibilityIdentifier("hub-type-count")
             }
         }
-        .padding(.horizontal, Theme.Space.screen)
-        .frame(minHeight: 52)
+    }
+
+    private var back: some View {
+        IconButton(systemImage: "chevron.left", kind: .floating, label: "Back", identifier: "hub-back") { dismiss() }
+    }
+
+    @ViewBuilder private var header: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack { back; Spacer(minLength: 8); chip }
+                titles
+            }
+            .padding(.horizontal, Theme.Space.screen)
+            .frame(minHeight: 52)
+        } else {
+            HStack(spacing: 8) {
+                back
+                titles
+                Spacer(minLength: 8)
+                chip
+            }
+            .padding(.horizontal, Theme.Space.screen)
+            .frame(minHeight: 52)
+        }
     }
 }
 
@@ -53,7 +86,7 @@ struct HubTypeDestination: View {
     let type: ContentType
     var body: some View {
         switch type {
-        case .everything: HubEverythingView()
+        case .everything: HubCollectionView()
         case .raids: HubRaidsView()
         case .max: HubMaxView()
         case .gym: HubGymView()
