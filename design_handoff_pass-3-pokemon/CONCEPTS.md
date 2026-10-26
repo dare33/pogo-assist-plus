@@ -92,7 +92,9 @@ Stated so each can be checked against the code. "Proposal" marks the session's o
 11. **Raids tab** (proposal): one card per reachable member and attacking type the Raids table lists, best tier first;
     the plan is this copy's Raids build for that member, else the box's best Raids build for that type (tier, then built);
     counters are the raids on now and coming (`HubRaidsModel.timeline`) whose `bring` types include the attacking type,
-    up to six.
+    up to six. For a copy that is not Shadow, a member's Mega and Primal entries count as that member's (the route the
+    advisor's Mega builds take), so the tab and the Summary verdict agree (manager's call, 26 Oct 2026, from the build's
+    review: a Scyther planned for Mega Scizor read PLANNED with an empty Raids tab).
 12. **Gym tab** (proposal): one card per reachable member the Gym table lists, best tier then bulk; the bar is this copy's
     bulk over the top defender's.
 13. **Rocket tab** (proposal): a member "beats" a grunt type or a leader option when one of its own types hits it for more
