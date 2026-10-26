@@ -194,7 +194,7 @@ struct SlotCardView: View {
                     .accessibilityHidden(true)
                 Text(model.name ?? "Empty").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(filled ? Theme.ink : Theme.muted)
                     .lineLimit(2).multilineTextAlignment(.leading)
-                ForEach(model.lines, id: \.self) { Text($0).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.muted).lineLimit(2).multilineTextAlignment(.leading) }
+                ForEach(model.lines, id: \.self) { Text($0).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.muted).lineLimit(4).multilineTextAlignment(.leading) }
                 Spacer(minLength: 0)
                 if !model.types.isEmpty { TypeIcons(types: model.types, size: 18) }
             }
@@ -359,6 +359,7 @@ struct SquadPicker<Info: View>: View {
                         Text(r).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(on ? p.ink : Theme.ink)
                             .padding(.horizontal, 11).padding(.vertical, 7)
                             .background(on ? p.tint : Theme.off, in: Capsule())
+                            .overlay { if on { Capsule().strokeBorder(p.ink.opacity(0.45), lineWidth: 1.5) } }
                             .frame(minHeight: 44).contentShape(Rectangle())
                     }
                     .buttonStyle(PressStyle())
@@ -429,7 +430,8 @@ struct SquadPicker<Info: View>: View {
     // MARK: Could get now
 
     private var couldGetView: some View {
-        let open = couldGetOpen ?? rows.isEmpty
+        // Open when the box has no option for the slot; Next best rows are the closest options, not ones that fit, so it stays open under them too (D48).
+        let open = couldGetOpen ?? (rows.isEmpty || heading != nil)
         return Group {
             if !open {
                 Button { withAnimation(.easeOut(duration: 0.15)) { couldGetOpen = true } } label: {
@@ -444,7 +446,7 @@ struct SquadPicker<Info: View>: View {
                         Text("YOU COULD GET NOW").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityAddTraits(.isHeader)
                         Spacer(minLength: 8)
                         // With no option in the box the list stays open: there is nothing to hide it behind.
-                        if !rows.isEmpty {
+                        if !rows.isEmpty && heading == nil {
                             Button { withAnimation(.easeOut(duration: 0.15)) { couldGetOpen = false } } label: {
                                 Text("Hide").font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(accent.ink).frame(minHeight: 44).contentShape(Rectangle())
                             }

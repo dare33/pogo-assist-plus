@@ -78,7 +78,9 @@ final class HubTeamsTests: XCTestCase {
         // Rocket: leader cards, Change leader, then the grunts.
         app.buttons["hub-tile-rocket"].tap()
         XCTAssertTrue(app.buttons["hub-leader-Giovanni"].waitForExistence(timeout: 10), "a leader card")
-        XCTAssertTrue(app.staticTexts["YOUR TEAM FOR GIOVANNI"].exists)
+        XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR GIOVANNI"].exists)
+        // Best suggests what the box can make (Available only what is usable as it is).
+        app.buttons["squad-mode-best"].tap()
         sleep(1)
         shot("rocket-01-light")
         // Slot 2 of Giovanni's team and slot 1 are read now, so the change of leader can be seen in them.
@@ -89,13 +91,13 @@ final class HubTeamsTests: XCTestCase {
         // Lucario is the Fighting counter for Persian (slot 1); a copy serves one slot, so slot 2 (Kangaskhan, Rhyperior, Machamp) takes the next
         // copy that beats the most of them, Zamazenta (Crowned Shield), which beats two.
         XCTAssertTrue(giovanniSlot1.contains("Lucario"), giovanniSlot1)
-        XCTAssertTrue(giovanniSlot2.contains("Zamazenta") && giovanniSlot2.contains("beats Kangaskhan and Rhyperior"), giovanniSlot2)
+        XCTAssertTrue(giovanniSlot2.contains("Zamazenta") && giovanniSlot2.contains("beats 2 of 3"), giovanniSlot2)
         app.buttons["hub-change-leader"].tap()
         let sierra = app.buttons["Sierra"]
         XCTAssertTrue(sierra.waitForExistence(timeout: 5), "the menu lists Sierra")
         for name in ["Giovanni", "Cliff", "Arlo"] { XCTAssertTrue(app.buttons[name].exists, "the menu lists \(name)") }
         sierra.tap()
-        XCTAssertTrue(app.staticTexts["YOUR TEAM FOR SIERRA"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR SIERRA"].waitForExistence(timeout: 5))
         XCTAssertNotEqual(slot1.label, giovanniSlot1, "slot 1 changed with the leader")
         let normal = find(app, label: "Normal does not mean weak")
         XCTAssertTrue(normal.exists, "the Normal grunt's tile")
