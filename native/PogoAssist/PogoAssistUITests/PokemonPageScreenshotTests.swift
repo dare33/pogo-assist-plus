@@ -36,10 +36,10 @@ final class PokemonPageScreenshotTests: XCTestCase {
     private func openCopy(_ app: XCUIApplication, _ species: String) {
         let search = app.textFields["box-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
-        search.tap(); search.typeText(species)
+        search.tap(); search.typeText(species + "\n")   // Return puts the keyboard away, so the opened species is not under it
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", species)).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "\(species) is in the sample box")
-        row.tap()
+        app.openSpeciesList(row)   // My Pokémon opens the species in place; "See all" opens its list (as PokemonPageTests, 2a3e868)
         let copy = app.buttons.matching(identifier: "pokemon-row").firstMatch
         XCTAssertTrue(copy.waitForExistence(timeout: 10))
         copy.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
