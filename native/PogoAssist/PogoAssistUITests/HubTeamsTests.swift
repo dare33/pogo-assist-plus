@@ -46,6 +46,12 @@ final class HubTeamsTests: XCTestCase {
         return match
     }
 
+    private func reveal(_ app: XCUIApplication, _ e: XCUIElement, swipes: Int = 8) -> XCUIElement {
+        var n = 0
+        while !(e.exists && e.isHittable) && n < swipes { app.swipeUp(); n += 1 }
+        return e
+    }
+
     func testGymRocketPvPScreens() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
@@ -57,10 +63,12 @@ final class HubTeamsTests: XCTestCase {
         expectation(for: counted, evaluatedWith: app.buttons["hub-tile-gym"])
         waitForExpectations(timeout: 60)
 
-        // Gym: the slots panel, then TOP AVAILABLE.
+        // Gym: the slots panel, then GYM BUILDS.
         app.buttons["hub-tile-gym"].tap()
         XCTAssertTrue(app.staticTexts["Top defenders"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["TOP AVAILABLE"].exists)
+        XCTAssertFalse(app.staticTexts["TOP AVAILABLE"].exists, "renamed")
+        XCTAssertTrue(reveal(app, app.staticTexts["GYM BUILDS"]).exists)
+        app.swipeDown(); app.swipeDown()
         XCTAssertTrue(app.descendants(matching: .any)["hub-gym-slot-1"].exists, "the first slot")
         sleep(1)
         shot("gym-01-light")

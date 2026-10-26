@@ -45,6 +45,7 @@
 		408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FFAC0B18897FB5A85E55764 /* Theme.swift */; };
 		414C36A2C46797E952332411 /* RankingControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB1A15D6F733EEE0586D675 /* RankingControls.swift */; };
 		4366EAAD252170736E53F6D5 /* HubTeamsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637BDE6B4B08C13F8920523F /* HubTeamsTests.swift */; };
+		44B234700B6F52FF45E96702 /* HubGymSquadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CF1F5A65AFFA7A4AC0F5B3A /* HubGymSquadTests.swift */; };
 		44F329C2D2DFB40D26776BC7 /* ScanOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FFF48662D38668776B5CAA1 /* ScanOptionsPanel.swift */; };
 		4802DD98D7286E310F86378A /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D08E55E9B50EC09258EFF1 /* AppModel.swift */; };
 		4B140840C0B01BB6DA9674AA /* HubScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84957A517D0BAC062A93BF66 /* HubScreensTests.swift */; };
@@ -202,6 +203,7 @@
 		1BB1A15D6F733EEE0586D675 /* RankingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingControls.swift; sourceTree = "<group>"; };
 		1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSearch.swift; sourceTree = "<group>"; };
 		1BF5D1287FA6845313B02116 /* OpenSpeciesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSpeciesView.swift; sourceTree = "<group>"; };
+		1CF1F5A65AFFA7A4AC0F5B3A /* HubGymSquadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubGymSquadTests.swift; sourceTree = "<group>"; };
 		1D1F19255D086D56FE73A735 /* HubGymView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubGymView.swift; sourceTree = "<group>"; };
 		1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesListView.swift; sourceTree = "<group>"; };
 		1FD137EFAD6E7F01FB0C0E81 /* SpeciesBest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesBest.swift; sourceTree = "<group>"; };
@@ -416,6 +418,7 @@
 				444171C2D2BEA329CF4C73FD /* BoxScreensTests.swift */,
 				D7EAA375CD0561890BDC48B2 /* FlowTests.swift */,
 				B4553543BAEE1146FEB5BC7F /* GuideScreensTests.swift */,
+				1CF1F5A65AFFA7A4AC0F5B3A /* HubGymSquadTests.swift */,
 				25480D5F634F1F2F763FAB7D /* HubMaxSquadTests.swift */,
 				C3125EA9837C6BDA1514128F /* HubRaidsMaxTests.swift */,
 				2C084C665F346AEE28A59833 /* HubRaidsSquadTests.swift */,
@@ -798,6 +801,7 @@
 				F9C0DA47B6D99ED2A742185D /* BoxScreensTests.swift in Sources */,
 				3612921432E15343B1E195EA /* FlowTests.swift in Sources */,
 				93DC471F59BEADA19D7B80B8 /* GuideScreensTests.swift in Sources */,
+				44B234700B6F52FF45E96702 /* HubGymSquadTests.swift in Sources */,
 				E66F2D5CA0E2E391A6AEAFB9 /* HubMaxSquadTests.swift in Sources */,
 				298BB1E338CBDCF134829537 /* HubRaidsMaxTests.swift in Sources */,
 				911063D9F7196372C797B1CE /* HubRaidsSquadTests.swift in Sources */,
