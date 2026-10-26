@@ -30,9 +30,7 @@ final class SpeciesTopTests: XCTestCase {
         app.launch()
         populate(app)
         XCTAssertTrue(rows(app).matching(NSPredicate(format: "label BEGINSWITH %@", "Blissey,")).firstMatch.waitForExistence(timeout: 10))
-        let ready = NSPredicate(format: "label CONTAINS 'Great League: Over cap'")
-        expectation(for: ready, evaluatedWith: rows(app).matching(NSPredicate(format: "label BEGINSWITH %@", "Blissey,")).firstMatch)
-        waitForExpectations(timeout: 60)
+        app.awaitInsight()
         // Classic scoring, the order the sample expectations were written under.
         let control = app.descendants(matching: .any)["list-scoring"]
         if control.waitForExistence(timeout: 5), control.value as? String != "Classic" { control.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap() }

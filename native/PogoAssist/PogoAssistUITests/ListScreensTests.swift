@@ -40,13 +40,7 @@ final class ListScreensTests: XCTestCase {
         populate(app)
         // The tiles and the chips read the advice; wait for it (a tile that has it never says "…").
         XCTAssertTrue(row(app, "Blissey").waitForExistence(timeout: 10))
-        // The advice is ready once an opened species stops saying it is working out the PvP picks.
-        row(app, "Blissey").tap()
-        let waiting = NSPredicate(format: "exists == false")
-        expectation(for: waiting, evaluatedWith: app.staticTexts["top-pvp-waiting"])
-        XCTAssertTrue(app.buttons["see-all"].waitForExistence(timeout: 10))
-        waitForExpectations(timeout: 60)
-        row(app, "Blissey").tap()
+        app.awaitInsight()
         return app
     }
     private func resetRanking(_ app: XCUIApplication) {
@@ -328,7 +322,7 @@ final class ListScreensTests: XCTestCase {
                 app.launchArguments = ["-appearance", "light", "-UIPreferredContentSizeCategoryName", category]
                 app.launch()
                 XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
-                awaitInsight(app)   // the advice is read from the box saved by the default-size launch above
+                app.awaitInsight()   // the advice is read from the box saved by the default-size launch above
             } else {
                 app = launchPopulated(["-appearance", "light", "-UIPreferredContentSizeCategoryName", category])
             }
@@ -358,18 +352,8 @@ final class ListScreensTests: XCTestCase {
     func testSearchStaysFixedAtTheDefaultSize() throws { try searchFixed("hdr-default-light", "UICTContentSizeCategoryL", "light") }
     func testSearchStaysFixedInDark() throws { try searchFixed("hdr-default-dark", "UICTContentSizeCategoryL", "dark") }
     func testSearchStaysFixedAtAX3() throws { try searchFixed("hdr-ax3-light", "UICTContentSizeCategoryAccessibilityXL", "light") }
+    func testSearchStaysFixedAtAX3InDark() throws { try searchFixed("hdr-ax3-dark", "UICTContentSizeCategoryAccessibilityXL", "dark") }
     func testSearchStaysFixedAtAX5InDark() throws { try searchFixed("hdr-ax5-dark", "UICTContentSizeCategoryAccessibilityXXXL", "dark") }
-
-    /// Waits until the insight under the chips is built (the Raids chip lists species only then), then puts the chip back on All.
-    private func awaitInsight(_ app: XCUIApplication) {
-        XCTAssertTrue(app.buttons["chip-raids"].waitForExistence(timeout: 20))
-        app.buttons["chip-raids"].tap()
-        let waiting = NSPredicate(format: "exists == false")
-        expectation(for: waiting, evaluatedWith: app.staticTexts["Working out advice…"])
-        waitForExpectations(timeout: 90)
-        XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20), "the Raids chip lists species once the insight is built")
-        app.buttons["chip-all"].tap()
-    }
 
     /// The saved-scan panel is the top of the scrolling list: right after the save it is there, under the fixed search field, and it scrolls away with the list while
     /// the search stays (no relaunch: the panel goes with one).

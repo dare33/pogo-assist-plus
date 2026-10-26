@@ -100,6 +100,7 @@
 		C65013B44F62BBA96FF5B144 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE84346ABF38B9C9DFB8259 /* Toast.swift */; };
 		C875980798B1206FF0A644E8 /* BoxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17BAAA30DB1A885E5BC14BF /* BoxView.swift */; };
 		CEBF8B2F5697885A4ED387F8 /* PassWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E01BD962ADB0C9DDD6C7FF /* PassWording.swift */; };
+		CF7E25FC86D3606DE6D103B6 /* BuildMarkWordsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFC7060894571F96C95B0C0A /* BuildMarkWordsTests.swift */; };
 		CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
 		D1C92751EA85BD6C6A90E779 /* HubTypeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B79BED1C304CA088B36F393B /* HubTypeScreen.swift */; };
 		D4D21195EE5DE09BDCAE9BE0 /* ReviewNotSeen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B61B527C762D4C808D507072 /* ReviewNotSeen.swift */; };
@@ -285,6 +286,7 @@
 		F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDoneTests.swift; sourceTree = "<group>"; };
 		FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanScreensTests.swift; sourceTree = "<group>"; };
 		FF799334CCB9D208123457E5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		FFC7060894571F96C95B0C0A /* BuildMarkWordsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildMarkWordsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -413,6 +415,7 @@
 			isa = PBXGroup;
 			children = (
 				3D04F07048F190593A9DCBE6 /* BoxInsightStoreTests.swift */,
+				FFC7060894571F96C95B0C0A /* BuildMarkWordsTests.swift */,
 			);
 			path = PogoAssistTests;
 			sourceTree = "<group>";
@@ -738,6 +741,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F2025255259D74D0143F1857 /* BoxInsightStoreTests.swift in Sources */,
+				CF7E25FC86D3606DE6D103B6 /* BuildMarkWordsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -5,6 +5,19 @@ extension XCUIApplication {
     func nudgeUp() {
         coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)).press(forDuration: 0.05, thenDragTo: coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
     }
+    /// A small drag (a tenth of the screen) up or down, to place a caption just under the search field.
+    func smallDrag(up: Bool) {
+        let (a, b): (CGFloat, CGFloat) = up ? (0.65, 0.55) : (0.55, 0.65)
+        coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: a)).press(forDuration: 0.05, thenDragTo: coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: b)))
+    }
+    /// Waits until the insight is built, which only it can show: under the Raids chip a species row carries its best copy's tag ("Top for Raids"). Puts the chip back on All.
+    func awaitInsight() {
+        XCTAssertTrue(buttons["chip-raids"].waitForExistence(timeout: 20))
+        buttons["chip-raids"].tap()
+        let tagged = buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label CONTAINS ' for Raids'")).firstMatch
+        XCTAssertTrue(tagged.waitForExistence(timeout: 90), "the insight was not built: no species row carries its Raids tag")
+        buttons["chip-all"].tap()
+    }
     /// A species row opens in place on My Pokémon (design pass 3); "See all N copies" under it opens the species list.
     func openSpeciesList(_ row: XCUIElement) {
         // The floating tab bar covers the bottom of the screen: a row there is scrolled up first, or the tap lands on the bar.
@@ -153,6 +166,8 @@ final class MyPokemonScreenTests: XCTestCase {
         all.tap()
         XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 10), "the species list shows its copies")
         XCTAssertEqual(app.buttons.matching(identifier: "pokemon-row").count, 6)
+        XCTAssertTrue(app.descendants(matching: .any)["species-best"].waitForExistence(timeout: 10), "lane B's YOUR BEST section is on the list")
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'species-best-'")).allElementsBoundByIndex.isEmpty, "with at least one card")
     }
 
     func testTheJumpToLetterElementIsAlwaysThereForVoiceOver() throws {
@@ -212,10 +227,17 @@ final class MyPokemonScreenTests: XCTestCase {
             while !(row(app, "Moltres").exists && row(app, "Moltres").isHittable) && n < 25 { app.swipeUp(); n += 1 }
             row(app, "Moltres").tap()
             XCTAssertTrue(app.buttons["top-pvp-row"].firstMatch.waitForExistence(timeout: 60))
-            // Scrolled until the TOP PVP rows are on the screen (at AX5 the open species is taller than the screen).
+            // Scrolled until the TOP PVP caption and its first row are on the screen, just under the search field (at AX5 the open species is taller than the screen).
+            let caption = app.staticTexts["top-pvp-caption"], pvp = app.buttons["top-pvp-row"].firstMatch
             n = 0
-            let pvp = app.buttons["top-pvp-row"].firstMatch
-            while (!pvp.isHittable || pvp.frame.midY > app.frame.height * 0.55) && n < 10 { app.nudgeUp(); n += 1 }
+            while !(caption.exists && caption.isHittable) && n < 10 { app.nudgeUp(); n += 1 }
+            n = 0
+            while caption.exists && n < 8 {
+                let y = caption.frame.minY / app.frame.height
+                if y > 0.36 { app.smallDrag(up: true) } else if y < 0.28 { app.smallDrag(up: false) } else { break }
+                n += 1
+            }
+            XCTAssertTrue(caption.isHittable && pvp.exists, "the TOP PVP caption and its first row are on the screen")
             sleep(1)
             attach("my-pokemon-open-\(mode)-\(size)")
             app.terminate()
