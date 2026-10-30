@@ -171,7 +171,7 @@ struct MarkButton: View {
     @ViewBuilder private var face: some View {
         if labelled {
             // A pill that names the mark: 32 pt tall, 44 pt tap area, the same colours and 2 pt ring as the round marks.
-            Text(name).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(stroke)
+            Text(name).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(on ? ink : offLabel)
                 .lineLimit(1).fixedSize()
                 .padding(.horizontal, 12)
                 .frame(minHeight: 32)
@@ -205,6 +205,8 @@ struct MarkButton: View {
     }
     /// `muted`, not `faint`: the off glyph and label keep 3:1 against the off fill in dark mode.
     private var stroke: Color { on ? ink : Theme.muted }
+    /// The off label is text, so it needs 4.5:1 on the `off` fill (`muted` gives 3.97:1 in light mode): 4.68:1 light, 5.04:1 dark.
+    private let offLabel = Theme.pair(0x5F6579, 0x9097AB)
 
     @ViewBuilder private var glyph: some View {
         switch kind {
