@@ -29,3 +29,9 @@ Each eyeball item with Greg's words, the decision and its review size (`docs/des
     confirm on the phone): under Available the picker lists the player's own Pokémon, full strength first, then those
     still needing work under "Available upgrades:"; the could-get list no longer shows under Available. Size: full
     (goes with item 8).
+11. Greg (30 Oct, later): "collections tab - the cards in special sets clicking them should open up a popup with a list of
+    that pokemon (keep formatting matching)". Decision: each Special sets card opens a sheet listing the player's
+    Pokémon in that set, drawn with the same species rows as My Pokémon. Size: full (a new tap target and screen).
+12. Greg (30 Oct, later): "should be able to search for the special types (shadow/max/etc) in the pokemon main box".
+    Decision: My Pokémon's search understands the game's own words for the special types (shadow, purified, lucky,
+    dynamax, gigantamax, legendary, mythical, ultra beasts, mega, 100%), alone or combined. Size: full (search matching).
