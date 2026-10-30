@@ -82,17 +82,27 @@ struct PokemonDetailsCard: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// Three 32 pt round marks with 44 pt tap areas: Dynamax, Shadow, Advanced details (D22, D26).
+    /// Dynamax and Shadow are labelled pills (32 pt, 44 pt tap area), Advanced details a round mark (D22, D26). The row falls back to the two pills with the round
+    /// mark under them, then to all three stacked, when the text size leaves no room.
+    private var dynamaxMark: some View {
+        MarkButton(kind: .dynamax, on: row.dynamax == true, name: "Dynamax", identifier: "mark-dynamax",
+                   hint: row.dynamax == true ? "Clears the mark" : "Marks it as caught as Dynamax") { apply { PokemonPage.toggleDynamax($0) } }
+    }
+    private var shadowMark: some View {
+        MarkButton(kind: .shadow, on: row.shadow == 1, name: "Shadow", identifier: "mark-shadow",
+                   hint: row.shadow == 1 ? "Clears the mark" : "Marks it as a Shadow Pokémon") { apply { PokemonPage.toggleShadow($0) } }
+    }
+    private var advancedMark: some View {
+        MarkButton(kind: .advanced, on: advancedOpen, name: "Advanced details", identifier: "mark-advanced", isToggle: false,
+                   hint: advancedOpen ? "Closes the section" : "Opens moves, Max move levels, the Mega level and more") {
+            withAnimation(.easeOut(duration: 0.2)) { advancedOpen.toggle() }
+        }
+    }
     private var marks: some View {
-        HStack(spacing: 0) {
-            MarkButton(kind: .dynamax, on: row.dynamax == true, name: "Dynamax", identifier: "mark-dynamax",
-                       hint: row.dynamax == true ? "Clears the mark" : "Marks it as caught as Dynamax") { apply { PokemonPage.toggleDynamax($0) } }
-            MarkButton(kind: .shadow, on: row.shadow == 1, name: "Shadow", identifier: "mark-shadow",
-                       hint: row.shadow == 1 ? "Clears the mark" : "Marks it as a Shadow Pokémon") { apply { PokemonPage.toggleShadow($0) } }
-            MarkButton(kind: .advanced, on: advancedOpen, name: "Advanced details", identifier: "mark-advanced", isToggle: false,
-                       hint: advancedOpen ? "Closes the section" : "Opens moves, Max move levels, the Mega level and more") {
-                withAnimation(.easeOut(duration: 0.2)) { advancedOpen.toggle() }
-            }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 2) { dynamaxMark; shadowMark; advancedMark }
+            VStack(alignment: .trailing, spacing: 0) { HStack(spacing: 2) { dynamaxMark; shadowMark }; advancedMark }
+            VStack(alignment: .leading, spacing: 0) { dynamaxMark; shadowMark; advancedMark }
         }
     }
 
@@ -131,7 +141,7 @@ struct PokemonDetailsCard: View {
 
 // MARK: marks
 
-/// A round mark on the details card (README "Marks"): 32 pt, 44 pt tap area. Off is the `off` circle with a `muted` glyph; Dynamax on takes the Max tint and
+/// A mark on the details card (README "Marks"): Dynamax and Shadow are pills that carry their name, Advanced details a round 32 pt mark; 44 pt tap area. Off is the `off` fill with a `muted` glyph or label; Dynamax on takes the Max tint and
 /// ink, Shadow on a purple, Advanced details open the accent's tint and ink; on has a 2 pt inset ring. A button for VoiceOver with its state as the value (On, Off; Expanded, Collapsed): the `.isToggle` trait would make UI tests see a switch whose value is 0 or 1.
 struct MarkButton: View {
     enum Kind { case dynamax, shadow, advanced }
@@ -144,14 +154,11 @@ struct MarkButton: View {
     let action: () -> Void
     @Environment(\.accent) private var accent
 
+    private var labelled: Bool { kind != .advanced }
+
     var body: some View {
         Button(action: action) {
-            glyph
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(on ? tint : Theme.off))
-                .overlay { if on { Circle().strokeBorder(ink, lineWidth: 2) } }
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+            face
         }
         .buttonStyle(.plain)
         .accessibilityLabel(name)
@@ -159,6 +166,27 @@ struct MarkButton: View {
         .accessibilityHint(hint)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier(identifier)
+    }
+
+    @ViewBuilder private var face: some View {
+        if labelled {
+            // A pill that names the mark: 32 pt tall, 44 pt tap area, the same colours and 2 pt ring as the round marks.
+            Text(name).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(stroke)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 12)
+                .frame(minHeight: 32)
+                .background(Capsule().fill(on ? tint : Theme.off))
+                .overlay { if on { Capsule().strokeBorder(ink, lineWidth: 2) } }
+                .padding(.vertical, 6).padding(.horizontal, 2)
+                .contentShape(Rectangle())
+        } else {
+            glyph
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(on ? tint : Theme.off))
+                .overlay { if on { Circle().strokeBorder(ink, lineWidth: 2) } }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
     }
 
     private var ink: Color {
@@ -175,16 +203,12 @@ struct MarkButton: View {
         case .advanced: return accent.tint
         }
     }
-    /// `muted`, not `faint`: the off glyph keeps 3:1 against the off circle in dark mode.
+    /// `muted`, not `faint`: the off glyph and label keep 3:1 against the off fill in dark mode.
     private var stroke: Color { on ? ink : Theme.muted }
 
     @ViewBuilder private var glyph: some View {
         switch kind {
-        case .dynamax:
-            SVGGlyph(data: "M7 15a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 6.5a4.25 4.25 0 0 1 .5 8.5zM12 22v-8M8.5 17.5L12 14l3.5 3.5")
-                .stroke(stroke, style: StrokeStyle(lineWidth: 2.2 * 17 / 24, lineCap: .round, lineJoin: .round)).frame(width: 17, height: 17)
-        case .shadow:
-            SVGGlyph(data: Glyph.types["fire"] ?? "").fill(stroke).frame(width: 16, height: 16)
+        case .dynamax, .shadow: EmptyView()
         case .advanced:
             SVGGlyph(data: "M4 7h10M18 7h2M4 17h4M12 17h8M13.8 7a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0M7.8 17a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0")
                 .stroke(stroke, style: StrokeStyle(lineWidth: 2.4 * 16 / 24, lineCap: .round)).frame(width: 16, height: 16)

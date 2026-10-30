@@ -124,4 +124,34 @@ final class PokemonPageScreenshotTests: XCTestCase {
             app.terminate()
         }
     }
+
+    /// The top of the page (name, CP, level and HP, the marks), with the marks off and then Dynamax and Shadow on, in light and dark at the default size and AX5.
+    /// The phone-feedback item on the Dynamax and Shadow marks (`out/screens/fb-item2/before` and `after`).
+    func testPageTopWithTheMarks() throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["POGO_SCREENS"] == nil, "screenshots only with POGO_SCREENS")
+        let ax5 = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        let runs: [(String, [String])] = [
+            ("light-default", ["-appearance", "light"]), ("dark-default", ["-appearance", "dark"]),
+            ("light-ax5", ["-appearance", "light"] + ax5), ("dark-ax5", ["-appearance", "dark"] + ax5),
+        ]
+        for (n, run) in runs.enumerated() {
+            let app = XCUIApplication()
+            app.launchArguments = (n == 0 ? ["-uitest-reset"] : []) + ["-uitest-today", "2026-10-25"] + run.1
+            app.launch()
+            if n == 0 { populate(app) } else { XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20)) }
+            openCopy(app, "Scyther")
+            XCTAssertTrue(app.buttons["page-tab-summary"].waitForExistence(timeout: 30))
+            top(app); sleep(1)
+            // Off, whichever state an earlier run left: turn a mark that is on off first.
+            for id in ["mark-dynamax", "mark-shadow"] where app.buttons[id].value as? String == "On" { app.buttons[id].tap() }
+            sleep(1)
+            shot("top-off-\(run.0)")
+            app.buttons["mark-dynamax"].tap(); app.buttons["mark-shadow"].tap(); sleep(1)
+            shot("top-on-\(run.0)")
+            for id in ["mark-dynamax", "mark-shadow"] { app.buttons[id].tap() }   // leave them off for the next run
+            sleep(2)
+            back(app)
+            app.terminate()
+        }
+    }
 }
