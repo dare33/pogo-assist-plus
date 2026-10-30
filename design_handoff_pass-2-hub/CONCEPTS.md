@@ -24,7 +24,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   the box.
 - **Build**: one thing the advisor wants done to a copy for an area (power up, evolve, mega evolve, form change, moves).
 - **Gap**: an S or A tier Pokémon in a table that nothing in the box can become.
-- **Duplicate**: a species with more copies than the advisor keeps; the rest are "copies you can transfer".
+- **Duplicate**: a species with more copies than the advisor keeps; the rest are "copies you can transfer or trade" (Greg, phone run 30 Oct 2026).
 
 **Shared by the squad screens (Raids, Max, Gym, Rocket, PvP)**
 
@@ -185,7 +185,7 @@ Greg's read-back answers (D54, D55); item 6 he kept (D56).
    so "available" means only "usable as it is".
 2. **"Best" (the switch) vs "Next best" (Rocket) vs "Best defenders first" (Gym "i") vs "best copies" (Showcase)**: four
    meanings of "best". "Next best" was chosen over "Best available" and "Top options" for this reason (D50, D53); the
-   others remain.
+   Showcase now reads "highest IV copies" (Greg, phone run 30 Oct 2026); the others remain.
 3. **"Top"**: "Top defenders" (a squad), "Top 3" (Raids list toggle), "top pick" (PvP grade). A top pick is a grade,
    the rest are lists; acceptable. ("TOP AVAILABLE" is gone, D54.)
 4. **"Team" vs "Squad"**: settled. "Squad" everywhere (D55): Set this squad / Squad set, Suggested squad, YOUR SQUAD

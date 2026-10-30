@@ -32,7 +32,7 @@ struct CollectionData {
     }
 }
 
-/// The Collection screen (pass 2 README "Collection", boards `Collection.dc.html`): the species count, the dex by region, the Showcase of the best copies, the special
+/// The Collection screen (pass 2 README "Collection", boards `Collection.dc.html`): the species count, the dex by region, the Showcase of the highest IV copies, the special
 /// sets, the missing species and three summary cards that open the lists screen. Replaces the Everything screen.
 struct HubCollectionView: View {
     @EnvironmentObject var model: AppModel
@@ -122,7 +122,7 @@ struct HubCollectionView: View {
     // MARK: showcase
 
     @ViewBuilder private func showcase(_ d: CollectionData) -> some View {
-        HubHeaderLine("SHOWCASE · YOUR BEST COPIES")
+        HubHeaderLine("SHOWCASE · YOUR HIGHEST IV COPIES")
         if d.showcase.isEmpty {
             Text("No copy has its IVs read yet.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
         } else {
@@ -226,7 +226,7 @@ struct HubCollectionView: View {
 
     private func duplicatesLine(_ a: BoxAdvice) -> String {
         let n = a.duplicates.reduce(0) { $0 + $1.transfer.count }
-        return "\(HubModel.grouped(n)) \(n == 1 ? "copy" : "copies") you can transfer."
+        return "\(HubModel.grouped(n)) \(n == 1 ? "copy" : "copies") you can transfer or trade."
     }
 }
 

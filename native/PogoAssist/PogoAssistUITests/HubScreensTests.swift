@@ -290,7 +290,7 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(panel.label.contains("of the species in Pokémon GO"), panel.label)
         XCTAssertTrue(panel.label.contains("you can evolve now"), panel.label)
         // The sections, in order.
-        for header in ["DEX BY REGION", "SHOWCASE · YOUR BEST COPIES", "SPECIAL SETS", "MISSING", "BUILDS AND CLEAN-UP"] {
+        for header in ["DEX BY REGION", "SHOWCASE · YOUR HIGHEST IV COPIES", "SPECIAL SETS", "MISSING", "BUILDS AND CLEAN-UP"] {
             XCTAssertTrue(app.staticTexts[header].exists, header)
         }
         XCTAssertEqual(any(app, "collection-region-row").count, 9, "nine regions")
@@ -302,7 +302,7 @@ final class HubScreensTests: XCTestCase {
         let missingRows = any(app, "collection-missing-row").count
         XCTAssertTrue((1...6).contains(missingRows), "the first six missing (\(missingRows))")
         let cards = any(app, "collection-showcase-card").count
-        XCTAssertTrue((1...12).contains(cards), "up to twelve best copies (\(cards))")
+        XCTAssertTrue((1...12).contains(cards), "up to twelve highest IV copies (\(cards))")
         let missingLabels = (0..<missingRows).map { any(app, "collection-missing-row").element(boundBy: $0).label }
         XCTAssertFalse(missingLabels.contains { $0.contains("Not in your box") }, "a missing species with no how-to-get text shows nothing there: \(missingLabels)")
         XCTAssertTrue(any(app, "collection-missing-all").firstMatch.exists)
