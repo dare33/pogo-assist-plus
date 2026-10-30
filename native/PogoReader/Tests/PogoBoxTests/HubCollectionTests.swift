@@ -121,6 +121,30 @@ final class HubCollectionTests: XCTestCase {
         XCTAssertNil(sets.first { $0.name == "Lucky" }?.note)
     }
 
+    /// A card's count and the list that opens from it are one definition: copies for the copy sets, the owned species (with all their copies) for the species sets.
+    func testEachSetsCountIsItsListSize() {
+        let hundo = IVs(atk: 15, def: 15, hp: 15)
+        let box = [P23.entry("a", "pikachu", ivs: hundo), P23.entry("b", "registeel"), P23.entry("c", "charizard", shadow: 1), P23.entry("d", "mew"),
+                   P23.entry("e", "nihilego"), P23.entry("f", "charizard", ivs: hundo), P23.entry("g", "charizard_shadow"), P23.entry("h", "registeel"),
+                   P23.entry("i", "eevee")]
+        let lucky: (BoxEntry) -> Bool = { ["b", "i"].contains($0.id) }
+        let by = Dictionary(uniqueKeysWithValues: HubCollection.specialSets(entries: box, gm: gm, isLucky: lucky).map { ($0.name, $0) })
+        for kind in HubCollection.SetKind.allCases {
+            let list = HubCollection.members(of: kind, entries: box, gm: gm, isLucky: lucky)
+            let size = kind.isSpeciesSet ? Set(list.compactMap { gm.byId[$0.row.speciesId]?.dex }).count : list.count
+            XCTAssertEqual(by[kind.name]?.owned, size, "\(kind.name): the card counts what the list shows")
+        }
+        func ids(_ k: HubCollection.SetKind) -> [String] { HubCollection.members(of: k, entries: box, gm: gm, isLucky: lucky).map(\.id) }
+        XCTAssertEqual(ids(.hundo), ["a", "f"])
+        XCTAssertEqual(ids(.legendary), ["b", "h"], "every copy of an owned species")
+        XCTAssertEqual(ids(.megaCapable), ["c", "f", "g"], "Charizard in every form")
+        XCTAssertEqual(ids(.shadow), ["c", "g"])
+        XCTAssertEqual(ids(.lucky), ["b", "i"])
+        XCTAssertEqual(ids(.mythical), ["d"])
+        XCTAssertEqual(ids(.ultraBeasts), ["e"])
+        XCTAssertEqual(HubCollection.members(of: .lucky, entries: box, gm: gm), [], "no row carries the Lucky mark")
+    }
+
     func testAnEmptyBoxHasEmptySets() {
         let sets = HubCollection.specialSets(entries: [], gm: gm)
         XCTAssertEqual(sets.map { $0.owned ?? -1 }, [0, 0, 0, 0, 0, -1, 0])

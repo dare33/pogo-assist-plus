@@ -135,26 +135,79 @@ public enum HubCollection {
         public var note: String?
     }
 
-    /// Counts for the named groups. 100% IVs, Lucky and Shadow count copies (a Shadow is a copy marked Shadow or of a `_shadow` species, as `HubRaidsModel.isShadow` reads it); Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
-    /// released). `isLucky` reads the copy's Lucky mark (the data model adds it); while no copy is marked the Lucky tile has no count.
-    public static func specialSets(entries: [BoxEntry], gm: GameMaster, isLucky: (BoxEntry) -> Bool = { _ in false }) -> [SpecialSet] {
-        let ownedDex = ownedDex(entries: entries, gm: gm)
-        let released = releasedSpecies(gm: gm, owned: ownedDex)
-        func species(_ tag: String) -> SpecialSet {
-            let ids = released.filter { $0.tags.contains(tag) }
-            return SpecialSet(name: "", owned: ids.filter { ownedDex.contains($0.dex) }.count, total: ids.count, unit: "species", note: nil)
+    /// The seven groups, in the order the Collection shows them.
+    public enum SetKind: String, CaseIterable, Hashable, Identifiable {
+        case hundo = "100% IVs", legendary = "Legendary", mythical = "Mythical", ultraBeasts = "Ultra Beasts", megaCapable = "Mega-capable", lucky = "Lucky", shadow = "Shadow"
+        public var name: String { rawValue }
+        public var id: String { rawValue }
+        /// Legendary, Mythical, Ultra Beasts and Mega-capable are species sets (owned of released, and the list shows each owned species with all its copies);
+        /// the others count copies.
+        public var isSpeciesSet: Bool {
+            switch self {
+            case .legendary, .mythical, .ultraBeasts, .megaCapable: return true
+            case .hundo, .lucky, .shadow: return false
+            }
         }
-        var megaDex = Set<Int>()
-        for s in gm.ordered where s.released && s.tags.contains("mega") { megaDex.insert(s.dex) }
-        func named(_ n: String, _ s: SpecialSet) -> SpecialSet { var s = s; s.name = n; return s }
-        let hundos = entries.filter { $0.row.ivs.map { $0.atk == 15 && $0.def == 15 && $0.hp == 15 } ?? false }.count
-        let lucky = entries.filter(isLucky).count
-        return [
-            SpecialSet(name: "100% IVs", owned: hundos, total: nil, unit: "copies", note: nil),
-            named("Legendary", species("legendary")), named("Mythical", species("mythical")), named("Ultra Beasts", species("ultrabeast")),
-            SpecialSet(name: "Mega-capable", owned: ownedDex.intersection(megaDex).count, total: megaDex.count, unit: "species", note: nil),
-            lucky == 0 ? SpecialSet(name: "Lucky", owned: nil, total: nil, unit: "copies", note: "Not in your scans yet") : SpecialSet(name: "Lucky", owned: lucky, total: nil, unit: "copies", note: nil),
-            SpecialSet(name: "Shadow", owned: entries.filter { $0.row.shadow == 1 || $0.row.speciesId.hasSuffix("_shadow") }.count, total: nil, unit: "copies", note: nil),
-        ]
+    }
+
+    /// A copy's Lucky mark: the one definition the set, its list and the My Pokémon search read.
+    public static func isLuckyMarked(_ e: BoxEntry) -> Bool { e.row.lucky == true }
+
+    /// Which sets a copy belongs to: the single definition behind a card's count, the list that opens from it and the My Pokémon search words. A species set holds
+    /// a copy of any form of the species (the dex number is the species, as everywhere on the Collection); `released` includes an owned species PvPoke flags
+    /// unreleased, so the sets and the species totals agree.
+    public struct Membership {
+        let tagDex: [SetKind: Set<Int>]
+        let gm: GameMaster
+        let isLucky: (BoxEntry) -> Bool
+
+        public init(entries: [BoxEntry], gm: GameMaster, isLucky: @escaping (BoxEntry) -> Bool = HubCollection.isLuckyMarked) {
+            self.gm = gm; self.isLucky = isLucky
+            let released = HubCollection.releasedSpecies(gm: gm, owned: HubCollection.ownedDex(entries: entries, gm: gm))
+            func dex(_ tag: String) -> Set<Int> { Set(released.filter { $0.tags.contains(tag) }.map(\.dex)) }
+            var mega = Set<Int>()
+            for s in gm.ordered where s.released && s.tags.contains("mega") { mega.insert(s.dex) }
+            tagDex = [.legendary: dex("legendary"), .mythical: dex("mythical"), .ultraBeasts: dex("ultrabeast"), .megaCapable: mega]
+        }
+
+        /// The species total of a species set (nil for a set of copies).
+        public func total(_ kind: SetKind) -> Int? { kind.isSpeciesSet ? tagDex[kind]?.count ?? 0 : nil }
+
+        public func kinds(of e: BoxEntry) -> Set<SetKind> {
+            var out = Set<SetKind>()
+            if let v = e.row.ivs, v.atk == 15, v.def == 15, v.hp == 15 { out.insert(.hundo) }
+            if let dex = gm.byId[e.row.speciesId]?.dex {
+                for (k, set) in tagDex where set.contains(dex) { out.insert(k) }
+            }
+            if isLucky(e) { out.insert(.lucky) }
+            if e.row.shadow == 1 || e.row.speciesId.hasSuffix("_shadow") { out.insert(.shadow) }
+            return out
+        }
+    }
+
+    /// The copies in a set, in box order: what the Collection's card counts and what its list shows.
+    public static func members(of kind: SetKind, entries: [BoxEntry], gm: GameMaster, isLucky: @escaping (BoxEntry) -> Bool = isLuckyMarked) -> [BoxEntry] {
+        let m = Membership(entries: entries, gm: gm, isLucky: isLucky)
+        return entries.filter { m.kinds(of: $0).contains(kind) }
+    }
+
+    /// Counts for the named groups, read from `Membership`. 100% IVs, Lucky and Shadow count copies (a Shadow is a copy marked Shadow or of a `_shadow` species, as `HubRaidsModel.isShadow` reads it); Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
+    /// released). `isLucky` reads the copy's Lucky mark (the data model adds it); while no copy is marked the Lucky tile has no count.
+    public static func specialSets(entries: [BoxEntry], gm: GameMaster, isLucky: @escaping (BoxEntry) -> Bool = isLuckyMarked) -> [SpecialSet] {
+        let m = Membership(entries: entries, gm: gm, isLucky: isLucky)
+        var copies = [SetKind: Int](), dexes = [SetKind: Set<Int>]()
+        for e in entries {
+            let dex = gm.byId[e.row.speciesId]?.dex
+            for k in m.kinds(of: e) {
+                copies[k, default: 0] += 1
+                if let dex { dexes[k, default: []].insert(dex) }
+            }
+        }
+        return SetKind.allCases.map { k in
+            if k.isSpeciesSet { return SpecialSet(name: k.name, owned: dexes[k]?.count ?? 0, total: m.total(k), unit: "species", note: nil) }
+            let n = copies[k] ?? 0
+            if k == .lucky && n == 0 { return SpecialSet(name: k.name, owned: nil, total: nil, unit: "copies", note: "Not in your scans yet") }
+            return SpecialSet(name: k.name, owned: n, total: nil, unit: "copies", note: nil)
+        }
     }
 }
