@@ -167,7 +167,11 @@ extension HubSquads {
         let byTarget = Dictionary(grouping: ctx.advice.builds.filter { $0.areas.contains("Max") }, by: \.targetId)
         return ranked(items, secondary: { PogoRules.hitsAnyBoss(speciesTypes($0.speciesId, ctx: ctx), row: row, hub: ctx.hub) ? 0 : 1 }).compactMap { r in
             let c = claim(byTarget[r.e.speciesId] ?? [], screen: .max, claimed: &claimed, ctx: ctx)
-            return c.skip ? nil : bestRow(r.e, roles: r.roles, build: c.build, ctx: ctx)
+            guard !c.skip else { return nil }
+            var out = bestRow(r.e, roles: r.roles, build: c.build, ctx: ctx)
+            // The Max table names its entries "Dynamax Blissey"; the squad names the Pokémon.
+            if r.e.name.hasPrefix("Dynamax ") { out.name = String(r.e.name.dropFirst("Dynamax ".count)) }
+            return out
         }
     }
 
