@@ -45,7 +45,7 @@ private struct GymSquadView: View {
             return (options, rows, HubSquads.bestSquad(slots: saved.slots, rows: rows))
         }
         let rows = HubSquads.gymRows(mode: mode, ctx: ctx)
-        let options = rows.map { GymOption(id: $0.build.entryId, name: $0.build.targetName, tier: $0.tier, types: ctx.gm.byId[$0.build.targetId]?.types ?? [], row: $0, best: nil) }
+        let options = rows.map { GymOption(id: $0.build.entryId, name: $0.build.targetName, tier: HubSquads.gymTableTier($0.build, ctx: ctx), types: ctx.gm.byId[$0.build.targetId]?.types ?? [], row: $0, best: nil) }
         return (options, [], HubSquads.gymSquad(slots: saved.slots, rows: rows, placeable: HubSquads.placeable(screen: .gym, mode: mode, ctx: ctx)))
     }
 
@@ -108,8 +108,11 @@ private struct GymSquadView: View {
     private func picker(_ i: Int, filled: [FilledSlot], options: [GymOption], byId: [String: GymOption], mode: SquadMode) -> some View {
         var ids = options.map(\.id)
         let boxHasOptions = !ids.isEmpty
-        if let own = filled[i].pickId, filled[i].ids.isDisjoint(with: ids) { ids.insert(own, at: 0) }
-        let listed = HubSquads.picker(candidates: ids, excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false), ownIds: filled[i].ids)
+        let bestRows = options.compactMap(\.best)
+        let copyOf = HubSquads.copyResolver(rows: bestRows)
+        let ticks = HubSquads.tickIds(filled[i], rows: bestRows)
+        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
+        let listed = HubSquads.picker(candidates: ids, excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false, copyOf: copyOf), ownIds: ticks, copyOf: copyOf)
         var models: [PickerRowModel] = listed.compactMap { l in
             guard let o = byId[l.entryId] else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .gym, ctx: ctx) }
             guard let r = o.row, o.best?.hasBuild != false else { return PickerRowModel(best: o.best!, ticked: l.ticked) }
@@ -133,7 +136,7 @@ private struct GymSquadView: View {
         return SquadPicker(
             title: "Slot \(i + 1) · \(HubSquads.gymSlotRole)", type: .gym, rows: models,
             emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, none: mode == .available ? "No Gym build in your box." : "No Gym defender listed."),
-            onChoose: { id in keeper.update { $0.gym.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: options.compactMap(\.best))) } },
+            onChoose: { id in keeper.update { $0.gym.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: HubSquads.bestGymRows(ctx: ctx))) } },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
             info: {
                 if mode == .best {

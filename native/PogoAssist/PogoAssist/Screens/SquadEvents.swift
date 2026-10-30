@@ -365,12 +365,16 @@ struct EventSquadView: View {
 
     private func picker(_ i: Int, filled: [FilledSlot], options: [EventOption], byId: [String: EventOption], saved: SquadStore.Saved, mode: SquadMode) -> some View {
         let role = filled[i].role
-        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: false)
+        let bestRows = options.compactMap(\.best)
+        // A copy sits in one slot however many rows show it (Primal Kyogre and Kyogre): rows are hidden by the copy they stand for.
+        let copyOf = HubSquads.copyResolver(rows: bestRows)
+        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: false, copyOf: copyOf)
         var ids = HubSquads.pool(role: role, in: options)
         let boxHasOptions = !ids.isEmpty
+        let ticks = HubSquads.tickIds(filled[i], rows: bestRows)
         // The slot's own Pokémon is always listed, ticked, even when this mode's list does not hold it (a copy chosen under the other mode).
-        if let own = filled[i].pickId, filled[i].ids.isDisjoint(with: ids) { ids.insert(own, at: 0) }
-        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: filled[i].ids)
+        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
+        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf)
         var rows: [PickerRowModel] = listed.compactMap { r in
             guard let o = byId[r.entryId] else { return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: screen, ctx: ctx) }
             let roleWord = o.roles.joined(separator: " · ")
@@ -382,12 +386,15 @@ struct EventSquadView: View {
             return PickerRowModel(id: r.entryId, name: o.name, ticked: r.ticked, mark: mark, role: roleWord, tier: o.tier, types: o.types.map { PickerType(type: $0) }, note: shared, spoken: spoken)
         }
         if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
-        let bestRows = options.compactMap(\.best)
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: screen == .raids ? .raids : .max, roles: chips, role: role,
             onRole: { new in edit { $0.changeRole(at: i, to: new) { HubSquads.fits($0, role: new, in: options) } } },
             rows: rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, none: mode == .available ? "Nothing in your box for this role." : "Nothing listed for this role."),
-            onChoose: { id in edit { $0.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: bestRows)) } },
+            onChoose: { id in
+                // Under Available there are no Best rows on screen, but a species pick stored under Best may resolve to this copy: read the Best rows to clear it.
+                let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
+                edit { $0.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: rows)) }
+            },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
             info: { pickerInfo(mode) })
     }

@@ -210,9 +210,14 @@ private struct PvPSquadView: View {
         var ids = mode == .best ? HubSquads.pool(role: role, in: best) : HubSquads.pool(role: role, in: candidates)
         let boxHasOptions = !ids.isEmpty
         // The slot's own Pokémon is always listed, ticked, even when it came from outside the role's pool (the fallback) or is no longer a candidate.
-        if let own = filled[i].pickId, !ids.contains(own) { ids.insert(own, at: 0) }
+        let ticks = HubSquads.tickIds(filled[i], rows: best)
+        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
         let allIds = mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)
-        let listed = HubSquads.picker(candidates: ids, excluded: PvPPlacement.excluded(by: filled, editing: i, ids: allIds, species: { speciesId($0, pogoAssist: pogoAssist) }), ownIds: filled[i].ids)
+        let excluded = PvPPlacement.excluded(by: filled, editing: i, ids: allIds, species: { speciesId($0, pogoAssist: pogoAssist) })
+        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks)
+        // Options hidden by the one-species rule alone (none is in another slot) are told apart from options that are all in the squad.
+        let inSquad = HubSquads.excluded(by: filled, editing: i, onlyChosen: false)
+        let speciesRuleOnly = boxHasOptions && listed.isEmpty && ids.allSatisfy { !inSquad.contains($0) }
         var rows: [PickerRowModel] = listed.compactMap { l in
             if let r = best.first(where: { $0.entryId == l.entryId }), !r.hasBuild {
                 return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · "))
@@ -230,10 +235,10 @@ private struct PvPSquadView: View {
                 saved.changeRole(at: i, to: new) { mode == .best ? HubSquads.fits($0, role: new, in: best) : HubSquads.fits($0, role: new, in: candidates) }
                 s.pvp[league] = saved
             } },
-            rows: rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, none: mode == .available ? "No candidate in your box for this role." : "No Pokémon listed for this role."),
+            rows: rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, speciesRuleOnly: speciesRuleOnly, none: mode == .available ? "No candidate in your box for this role." : "No Pokémon listed for this role."),
             onChoose: { id in keeper.update { s in
                 var saved = s.pvpSquad(league: league)
-                saved.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: best))
+                saved.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: HubSquads.bestPvpRows(league: league, pogoAssist: pogoAssist, ctx: ctx)))
                 s.pvp[league] = saved
             } },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },

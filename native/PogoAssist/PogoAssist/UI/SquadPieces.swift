@@ -277,7 +277,9 @@ struct SlotCardView: View {
             .frame(maxWidth: .infinity, minHeight: 76, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 10).padding(.vertical, 8)
             .background(model.status.tint, in: shape)
-            .overlay { if !filled { shape.strokeBorder(model.emptyOutline, lineWidth: 2) } }
+            .overlay { if !filled && model.status != .notCounted { shape.strokeBorder(model.emptyOutline, lineWidth: 2) } }
+            // A card that is not counted has no fill to show against the page: a dashed edge (muted ink, 3:1 or more against the page in light and dark) does.
+            .overlay { if model.status == .notCounted { shape.strokeBorder(Theme.muted, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
             .overlay { if selected { shape.strokeBorder(accent.solid, lineWidth: 2) } }
             .contentShape(shape)
         }
@@ -394,7 +396,7 @@ extension SlotCardModel {
         let status: HubSquads.SlotStatus = r.inBox ? .needsWork : .toGet
         let own: [String] = r.inBox ? ["In your box · no build for this"] + (r.sharedWith.map { ["same copy as \($0)"] } ?? []) : ["Not in your box"] + (r.rotationLine.map { [$0] } ?? [])
         let said = r.inBox ? ["in your box, no build for this"] + (r.sharedWith.map { ["same copy as \($0)"] } ?? []) : [r.availability]
-        let spoken = ([head, r.name, SquadWords.typeList(r.types)] + spokenExtra + said + [status.spoken]).joined(separator: ", ")
+        let spoken = ([head, r.name, SquadWords.typeList(r.types)] + spokenExtra + said + [status.spoken]).filter { !$0.isEmpty }.joined(separator: ", ")
         self.init(id: id, role: role, palette: palette, emptyOutline: emptyOutline, disc: disc, name: r.name, lines: own + extra, types: r.types, status: status, spoken: spoken, identifier: identifier)
     }
 }
@@ -584,8 +586,9 @@ struct SetSquadFooter: View {
 enum SquadWords {
     /// An empty picker's text, true to what the box has: when the box has options for the slot but they are all in other slots, it says so; "none" only when the box
     /// truly has none (and under Best, where the list is the table's).
-    static func emptyPicker(mode: SquadMode, boxHasOptions: Bool, none: String) -> String {
-        mode == .available && boxHasOptions ? "Everything in your box for this slot is already in your squad." : none
+    static func emptyPicker(mode: SquadMode, boxHasOptions: Bool, speciesRuleOnly: Bool = false, none: String) -> String {
+        if speciesRuleOnly { return "Your other options are the same species as a Pokémon already in this squad." }
+        return mode == .available && boxHasOptions ? "Everything in your box for this slot is already in your squad." : none
     }
 
     /// "Rock and Dark" for a VoiceOver label.

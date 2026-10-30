@@ -171,11 +171,11 @@ private struct RocketSquadView: View {
             }
         } else {
             rows = HubSquads.rocketPicker(options: slot, mode: mode, ctx: ctx).map {
-                Entry(id: $0.entryId, name: $0.build.targetName, tier: $0.build.tier, build: $0.build, best: nil, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
+                Entry(id: $0.entryId, name: $0.build.targetName, tier: HubSquads.rocketTableTier($0.build, ctx: ctx), build: $0.build, best: nil, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
             }
         }
         let next = rows.isEmpty ? HubSquads.rocketNextBest(options: slot, mode: mode, ctx: ctx).map {
-            Entry(id: $0.build.entryId, name: $0.build.targetName, tier: $0.build.tier, build: $0.build, best: nil, hits: 0, flags: flags($0.build), line: $0.notWeak ? "Not weak to this slot" : nil, notWeak: $0.notWeak)
+            Entry(id: $0.build.entryId, name: $0.build.targetName, tier: HubSquads.rocketTableTier($0.build, ctx: ctx), build: $0.build, best: nil, hits: 0, flags: flags($0.build), line: $0.notWeak ? "Not weak to this slot" : nil, notWeak: $0.notWeak)
         } : []
         return (rows, next)
     }
@@ -200,7 +200,7 @@ private struct RocketSquadView: View {
         let e = find(f, in: lists[i]) ?? f.entryId.flatMap { entryId in ctx.advice.builds.first { $0.entryId == entryId } }.map {
             // A pick the lists no longer offer (it stopped beating the slot): the slot still names it.
             let hits = HubTeams.beaten(by: $0, options: leader.slots[i], gm: ctx.gm, hub: ctx.hub).count
-            return Entry(id: $0.entryId, name: $0.targetName, tier: $0.tier, build: $0, best: nil, hits: hits, flags: [], line: HubSquads.slotLine(hits: hits, of: leader.slots[i].count))
+            return Entry(id: $0.entryId, name: $0.targetName, tier: HubSquads.rocketTableTier($0, ctx: ctx), build: $0, best: nil, hits: hits, flags: [], line: HubSquads.slotLine(hits: hits, of: leader.slots[i].count))
         }
         guard let e else {
             if let key = f.species {
@@ -232,11 +232,14 @@ private struct RocketSquadView: View {
         let showsNext = l.rows.isEmpty && !l.next.isEmpty
         let source = showsNext ? l.next : l.rows
         // Only a Pokémon the player chose in another slot leaves this list (D28): the app's own suggestions stay.
-        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: true)
+        let allRows = lists.flatMap { $0.rows + $0.next }.compactMap(\.best)
+        let copyOf = HubSquads.copyResolver(rows: allRows)
+        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: true, copyOf: copyOf)
         var ids = source.map(\.id)
         let boxHasOptions = !ids.isEmpty
-        if let own = filled[i].pickId, filled[i].ids.isDisjoint(with: ids) { ids.insert(own, at: 0) }
-        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: filled[i].ids)
+        let ticks = HubSquads.tickIds(filled[i], rows: allRows)
+        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
+        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf)
         let byId = Dictionary(source.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var rows: [PickerRowModel] = listed.compactMap { r in
             guard let e = byId[r.entryId] else { return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: .rocket, ctx: ctx) }
@@ -261,7 +264,7 @@ private struct RocketSquadView: View {
             onChoose: { id in
                 keeper.update { s in
                     var saved = s.rocketSquad(leader: leader.name)
-                    saved.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: source.compactMap(\.best)))
+                    saved.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: leader.slots.flatMap { HubSquads.bestRocketRows(options: $0, ctx: ctx) }))
                     s.rocket[leader.name] = saved
                 }
             },
