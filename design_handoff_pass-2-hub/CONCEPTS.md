@@ -138,7 +138,9 @@ Stated so each can be checked against the code.
    row of the table for the slot is listed (S, A and B). **Owned** means the box has a copy of that species (a Shadow row needs a
    Shadow copy, a plain row a plain one, as the table distinguishes them; area by area, a Shadow copy also serves the plain row in
    Raids (as the advisor credits it: a Shadow Garchomp keeps Garchomp's own Dragon row) and in Rocket, but not on the Gym or in
-   Max (a Shadow cannot defend a gym or go Dynamax), and PvP reads the league's own rows) or a copy
+   Max (a Shadow cannot defend a gym or go Dynamax), and PvP reads the league's own rows). Whether a copy is a Shadow follows its hand
+   mark before its species id: mark 1 is Shadow, mark 2 is Purified (not Shadow, even when the species id ends `_shadow`), mark 0 is
+   neither; the `_shadow` suffix decides only when the copy has no mark or a copy
    that one of the advisor's builds for this area can make into it (raid builds as `raidEntries` reads them, Rocket and Raids
    builds for Rocket, league candidates for PvP). A row with a build or candidate shows the player's best of them (the build at
    Full strength first, then the least dust, then the least candy) with its mark; a row with only a copy shows the best copy

@@ -74,7 +74,8 @@ extension HubSquads {
     /// does; on the Gym and in Max a Shadow copy fills nothing (a Shadow cannot defend a gym or go Dynamax).
     static func buildKeys(_ b: BoxAdvice.Build, shadowServesPlain: Bool, ctx: HubContext) -> [String] {
         let plain = b.targetId.hasSuffix("_shadow") ? String(b.targetId.dropLast("_shadow".count)) : b.targetId
-        guard HubRaidsModel.isShadow(b, entries: ctx.entries) else { return [b.targetId] }
+        // A Purified copy (mark 2) is not a Shadow even when its target ends `_shadow`: it fills the plain row only.
+        guard HubRaidsModel.isShadow(b, entries: ctx.entries) else { return [plain] }
         return shadowServesPlain ? [plain + "_shadow", plain] : []
     }
 

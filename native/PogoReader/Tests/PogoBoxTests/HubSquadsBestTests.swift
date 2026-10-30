@@ -293,6 +293,32 @@ final class HubSquadsBestTests: XCTestCase {
         XCTAssertEqual(HubSquads.bestGymRows(ctx: P23.ctx(builds: [P23.build("p1", "garchomp", areas: ["Gym"])], entries: [plain], table: gymTable, rotation: [])).map(\.ownedEntryId), ["p1"])
     }
 
+    func testAHandMarkWinsOverTheShadowSpeciesId() {
+        func copy(_ id: String, mark: Int?, species: String = "garchomp_shadow") -> BoxEntry {
+            var e = P23.entry(id, "garchomp", shadow: mark)
+            e.row.speciesId = species
+            return e
+        }
+        XCTAssertTrue(HubRaidsModel.isShadow(copy("a", mark: nil)), "no mark: the species id decides")
+        XCTAssertTrue(HubRaidsModel.isShadow(copy("a", mark: 1)))
+        XCTAssertFalse(HubRaidsModel.isShadow(copy("a", mark: 2)), "Purified is not Shadow, whatever the species id says")
+        XCTAssertFalse(HubRaidsModel.isShadow(copy("a", mark: 0)), "marked neither")
+        XCTAssertTrue(HubRaidsModel.isShadow(copy("a", mark: 1, species: "garchomp")), "the mark makes a plain id Shadow")
+        let build = P23.build("a", "garchomp_shadow", areas: ["Raids"])
+        XCTAssertTrue(HubRaidsModel.isShadow(build, entries: [copy("a", mark: nil)]))
+        XCTAssertFalse(HubRaidsModel.isShadow(build, entries: [copy("a", mark: 2)]), "a Purified copy whose target ends _shadow")
+        XCTAssertTrue(HubRaidsModel.isShadow(build, entries: []), "no copy, no mark: the target decides")
+        // A Purified `_shadow` copy fills the plain row only: a Shadow row of the table is not its row.
+        let table = P23.table([P23.tierEntry("raids", "Ground", "S", "garchomp_shadow", shadow: true, name: "Shadow Garchomp"), P23.tierEntry("raids", "Ground", "A", "garchomp")])
+        func rows(_ mark: Int?) -> [HubSquads.BestRow] {
+            HubSquads.bestRaidRows(row: fireBoss, ctx: P23.ctx(builds: [build], entries: [copy("a", mark: mark)], table: table, rotation: []))
+        }
+        XCTAssertEqual(rows(2).map(\.key), ["garchomp_shadow", "garchomp"])
+        XCTAssertEqual(rows(2).map(\.inBox), [false, true], "Purified: not the Shadow row")
+        XCTAssertEqual(rows(1).map(\.inBox), [true, true], "Shadow: both")
+        XCTAssertEqual(rows(1).map(\.sharedWith), [nil, "Shadow Garchomp"])
+    }
+
     func testAMaxRowsRotationReadsMaxBattlesOnly() {
         let table = P23.table([P23.tierEntry("max", "Attackers", "S", "kingler")])
         let boss = P23.row("2026-10-26", "2026-10-26", .maxMonday, bosses: [P23.boss("charizard", types: ["fire"])])

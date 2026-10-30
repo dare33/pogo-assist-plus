@@ -193,13 +193,18 @@ public enum HubRaidsModel {
     /// True when the build's carrier is marked Gigantamax: its Max hits may include Gigantamax entries.
     static func isGigantamax(_ b: BoxAdvice.Build, entries: [BoxEntry]) -> Bool { entries.first { $0.id == b.entryId }?.row.gigantamax == true }
 
-    /// True for a Shadow copy: the box marks it, or the build targets a `_shadow` species.
+    /// True for a Shadow copy. The copy's hand mark wins over its species id: 1 is Shadow, 2 is Purified (not Shadow, even when the species id ends `_shadow`) and 0 is neither;
+    /// the `_shadow` suffix of the build's target decides only when the copy has no mark.
     static func isShadow(_ b: BoxAdvice.Build, entries: [BoxEntry]) -> Bool {
-        b.targetId.hasSuffix("_shadow") || (entries.first { $0.id == b.entryId }?.row.shadow ?? 0) == 1
+        if let mark = entries.first(where: { $0.id == b.entryId })?.row.shadow { return mark == 1 }
+        return b.targetId.hasSuffix("_shadow")
     }
 
-    /// True for a Shadow copy (the one definition the Pokémon page's tabs share).
-    static func isShadow(_ e: BoxEntry) -> Bool { e.row.speciesId.hasSuffix("_shadow") || (e.row.shadow ?? 0) == 1 }
+    /// True for a Shadow copy (the one definition the Pokémon page's tabs share): the hand mark wins over the species id, as above.
+    static func isShadow(_ e: BoxEntry) -> Bool {
+        if let mark = e.row.shadow { return mark == 1 }
+        return e.row.speciesId.hasSuffix("_shadow")
+    }
 
     /// Nothing left to do but the Dynamax requirement.
     static func isFinished(_ b: BoxAdvice.Build) -> Bool { !HubModel.needsSomething(b) }
