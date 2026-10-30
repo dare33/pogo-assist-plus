@@ -52,7 +52,7 @@ private struct GymSquadView: View {
     var body: some View {
         let mode = keeper.store.mode(for: .gym)
         let (options, _, filled) = resolve(mode: mode, saved: keeper.store.gym)
-        let byId = Dictionary(options.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let byId = Dictionary(options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId) }
         SuggestionsRow(mode: Binding(get: { mode }, set: { m in keeper.update { $0.setMode(m, for: .gym) } }), noun: "defenders")
         VStack(alignment: .leading, spacing: 10) {
@@ -80,7 +80,7 @@ private struct GymSquadView: View {
         guard let pick = f.pickId else {
             return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: nil, status: .empty, spoken: head + ", " + HubSquads.SlotStatus.empty.spoken, identifier: id)
         }
-        guard let o = byId[pick] else {
+        guard let o = (f.species.flatMap { byId[squadSpeciesPrefix + $0] } ?? byId[pick]) else {
             if let key = f.species {
                 let name = ctx.gm.byId[key]?.name ?? "Pokémon"
                 return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: ["Not in your box"], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
@@ -90,23 +90,30 @@ private struct GymSquadView: View {
             return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, types: ctx.entryTypes(pick), status: .needsWork,
                                  spoken: [head, name, HubSquads.SlotStatus.needsWork.spoken].joined(separator: ", "), identifier: id)
         }
-        guard let r = o.row else {
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), notOwned: o.best!, head: head, identifier: id)
+        guard let r = o.row, o.best?.hasBuild != false else {
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), best: o.best!, head: head, identifier: id)
         }
         let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
-        let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: o.tier)
+        // Rule 29: the Gym table's tier, not the build's own (a Pokémon the table does not list needs work).
+        let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: HubSquads.gymTableTier(r.build, ctx: ctx))
         let line = GymFigures.bulkLine(r)
-        let spoken = [head, o.name, SquadWords.typeList(o.types), line, mark.spoken, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: o.name, lines: line.isEmpty ? [] : [line], types: o.types, mark: mark, status: status, spoken: spoken, identifier: id)
+        let shared = o.best?.sharedWith.map { "same copy as \($0)" }
+        let lines = (line.isEmpty ? [] : [line]) + (shared.map { [$0] } ?? [])
+        let spoken = [head, o.name, SquadWords.typeList(o.types), line, mark.spoken, shared, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: o.name, lines: lines, types: o.types, mark: mark, status: status, spoken: spoken, identifier: id)
     }
 
     // MARK: picker
 
     private func picker(_ i: Int, filled: [FilledSlot], options: [GymOption], byId: [String: GymOption], mode: SquadMode) -> some View {
-        let listed = HubSquads.picker(candidates: options.map(\.id), excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false), own: filled[i].pickId)
+        var ids = options.map(\.id)
+        let boxHasOptions = !ids.isEmpty
+        if let own = filled[i].pickId, filled[i].ids.isDisjoint(with: ids) { ids.insert(own, at: 0) }
+        let listed = HubSquads.picker(candidates: ids, excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false), ownIds: filled[i].ids)
         var models: [PickerRowModel] = listed.compactMap { l in
-            guard let o = byId[l.entryId] else { return nil }
-            guard let r = o.row else { return PickerRowModel(notOwned: o.best!, ticked: l.ticked) }
+            guard let o = byId[l.entryId] else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .gym, ctx: ctx) }
+            guard let r = o.row, o.best?.hasBuild != false else { return PickerRowModel(best: o.best!, ticked: l.ticked) }
+            let shared = o.best?.sharedWith.map { "same copy as \($0)" }
             let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
             let stats = GymFigures.stats(r, ctx: ctx)
             let level = r.level.map { "at level \(GymFigures.levelText($0))" }
@@ -117,15 +124,16 @@ private struct GymSquadView: View {
             if l.ticked { spoken.append("in this slot") }
             return PickerRowModel(
                 id: l.entryId, name: o.name, ticked: l.ticked, mark: mark, tier: o.tier, types: o.types.map { PickerType(type: $0) },
-                note: stats == nil ? GymFigures.bulkLine(r) : nil,
+                note: [stats == nil ? GymFigures.bulkLine(r) : nil, shared].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ").nilIfEmpty,
                 stats: stats.map { AnyView(GymStatsColumn(def: $0.def, hp: $0.hp)) },
                 figure: stats == nil ? nil : AnyView(GymBulkFigure(text: GymFigures.bulkShort(r.bulk))),
                 spoken: spoken.joined(separator: ", "))
         }
         if mode == .available { models = PickerRowModel.availableUpgradesLast(models) }
         return SquadPicker(
-            title: "Slot \(i + 1) · \(HubSquads.gymSlotRole)", type: .gym, rows: models, emptyText: mode == .available ? "No Gym build in your box." : "No Gym defender listed.",
-            onChoose: { id in keeper.update { $0.gym.choose(id, at: i) } },
+            title: "Slot \(i + 1) · \(HubSquads.gymSlotRole)", type: .gym, rows: models,
+            emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, none: mode == .available ? "No Gym build in your box." : "No Gym defender listed."),
+            onChoose: { id in keeper.update { $0.gym.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: options.compactMap(\.best))) } },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
             info: {
                 if mode == .best {
@@ -274,3 +282,5 @@ private struct GymBuildList: View {
         .accessibilityValue(r.showsFullStrength ? "Full strength" : (r.cost.value.map { "\($0) \(r.cost.currency == .dust ? "dust" : "candy")" } ?? "Free"))
     }
 }
+
+private extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }

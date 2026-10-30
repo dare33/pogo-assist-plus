@@ -13,6 +13,12 @@ enum PvPPlacement {
 }
 
 extension PvPPlacement {
+    /// A species id (`squadSpeciesPrefix` + key, a Best pick of a Pokémon the box lacks) names its own species; any other id is a copy and `copy` says which species it is.
+    /// One species to a squad holds for both.
+    static func speciesOf(_ id: String, copy: (String) -> String?) -> String? {
+        id.hasPrefix(squadSpeciesPrefix) ? String(id.dropFirst(squadSpeciesPrefix.count)) : copy(id)
+    }
+
     /// The squad's slots (`HubSquads.pvpSquad`'s rule 23) with GO Battle League's rule that a squad never holds two copies of one species: a kept pick wins over a new
     /// suggestion of the same species, and a suggestion skips a candidate whose species an earlier slot already holds. `species` names a copy's species in the league.
     static func squad(slots: [SquadSlot], candidates: [HubSquads.PvpCandidate], placeable: (String, String) -> Bool, species: (String) -> String?) -> [FilledSlot] {
@@ -21,7 +27,8 @@ extension PvPPlacement {
 
     /// The same with the ids a role lists (`pool`) and every id in rank order (`all`, for a slot whose role lists none). An id may be a copy's entry id or, under Best, a
     /// `squadSpeciesPrefix` species id for a Pokémon the box lacks; `species` names the species of either.
-    static func squad(slots: [SquadSlot], pool: (String) -> [String], all: [String], placeable: (String, String) -> Bool, species: (String) -> String?) -> [FilledSlot] {
+    static func squad(slots: [SquadSlot], pool: (String) -> [String], all: [String], placeable: (String, String) -> Bool, species rawSpecies: (String) -> String?) -> [FilledSlot] {
+        func species(_ id: String) -> String? { speciesOf(id, copy: rawSpecies) }
         var used = Set<String>(), usedSpecies = Set<String>()
         func take(_ id: String) -> Bool {
             let sp = species(id)
@@ -50,7 +57,8 @@ extension PvPPlacement {
     }
 
     /// The same over any ids the picker may list (copies, and under Best species ids).
-    static func excluded(by filled: [FilledSlot], editing: Int, ids: [String], species: (String) -> String?) -> Set<String> {
+    static func excluded(by filled: [FilledSlot], editing: Int, ids: [String], species rawSpecies: (String) -> String?) -> Set<String> {
+        func species(_ id: String) -> String? { speciesOf(id, copy: rawSpecies) }
         var out = HubSquads.excluded(by: filled, editing: editing, onlyChosen: false)
         let held = Set(filled.enumerated().compactMap { $0.offset != editing ? $0.element.pickId.flatMap(species) : nil })
         for id in ids where species(id).map(held.contains) ?? false { out.insert(id) }

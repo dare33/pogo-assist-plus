@@ -43,6 +43,14 @@ enum Theme {
     /// Behind the "over cap" indicator.
     static let redTint = pair(0xFBE4E6, rgba: (255, 107, 118, 0.16))
 
+    /// Slot status (CONCEPTS rule 29): the card backgrounds and the text colour that stays readable on them. Measured, text on each tint (light / dark, over the white
+    /// or dark surface and over the page): ink 14.9+ / 9.9+; `mutedOnTint` 5.8+ / 5.8+; the role inks 4.5+ (light) and 5.7+ (dark); the amber ink 4.5+ / 6.3+. The dark tints
+    /// differ in luminance by 1.12 to 1.26 between each pair, and a card also says its status in a word and an icon, so colour is never the only sign.
+    static let statusGreenTint = pair(0xE3F5EA, rgba: (80, 200, 120, 0.16))
+    static let statusAmberTint = pair(0xFFF1DC, rgba: (255, 170, 60, 0.20))
+    static let statusRedTint = pair(0xFDE9EB, rgba: (255, 107, 118, 0.13))
+    static let mutedOnTint = pair(0x555B70, 0xB4BACB)
+
     /// Question kind: match to one you have.
     static let match = pair(0x0E9AA7, 0x2EC4CF)
     static let matchInk = pair(0x087680, 0x6FDDE4)

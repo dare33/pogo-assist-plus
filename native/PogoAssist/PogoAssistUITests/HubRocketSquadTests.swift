@@ -92,5 +92,6 @@ final class HubRocketSquadTests: SquadUITestCase {
             let s = self.slot(app, "rocket", 2)
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
+        bestSet("rocket", slot: 2)
     }
 }

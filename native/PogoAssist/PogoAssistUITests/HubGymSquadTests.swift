@@ -34,7 +34,7 @@ final class HubGymSquadTests: SquadUITestCase {
         // Slot 2: the one build is in slot 1, so nothing is listed. Available lists only the box: the empty text stands alone, with no "could get" list.
         openPicker(app, "gym", slot: 2)
         XCTAssertEqual(rows.count, 0, "a Pokémon in another slot is not listed")
-        XCTAssertEqual(el(app, "squad-picker-empty").label, "No Gym build in your box.")
+        XCTAssertEqual(el(app, "squad-picker-empty").label, "Everything in your box for this slot is already in your squad.", "the box has a Gym build, in slot 1: the text says so")
         XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
         shot("gym-picker-empty")
         closePicker(app)
@@ -73,5 +73,6 @@ final class HubGymSquadTests: SquadUITestCase {
             let s = self.slot(app, "gym", 2)
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
+        bestSet("gym", slot: 2)
     }
 }

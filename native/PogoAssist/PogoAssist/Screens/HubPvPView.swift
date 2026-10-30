@@ -102,11 +102,11 @@ private struct PvPSquadView: View {
         var candidate: HubTeams.Candidate?
         var option: BoxAdvice.LeagueRating.Option?
         var copyTitle = ""
-        /// The tier the screen shows for it: the table's under Best, the score's under Available.
+        /// The league tier the screen shows for it (`HubSquads.pvpTier`).
         var tier = ""
         /// Best: a Pokémon the box lacks (`candidate` and `option` are nil).
+        /// Best: the row of a Pokémon the box lacks, or of a copy no league candidate serves.
         var notOwned: HubSquads.BestRow?
-        var inBox: Bool { notOwned == nil }
     }
 
     private func types(_ speciesId: String) -> [String] { ctx.gm.byId[speciesId]?.types ?? [] }
@@ -125,15 +125,17 @@ private struct PvPSquadView: View {
             let r = HubSquads.BestRow(key: key, name: name, speciesId: key, tier: "", roles: [], types: types(key), availability: "")
             return Member(name: name, types: r.types, mark: .none, candidate: nil, option: nil, notOwned: r)
         }
-        let tableTier = best.first { $0.ownedEntryId == id }?.tier
-        if let c = byId[id]?.candidate { return Member(name: c.displayName, types: types(c.speciesId), mark: SquadMark.of(c), candidate: c, option: c.option, copyTitle: c.copyTitle, tier: tableTier ?? c.tier) }
+        // A copy of a table Pokémon that no league candidate serves (it scores under the floor, or is past the cap): "In your box · no build for this".
+        if byId[id] == nil, let r = best.first(where: { $0.ownedEntryId == id && !$0.hasBuild }) { return Member(name: r.name, types: r.types, mark: .none, candidate: nil, option: nil, tier: "", notOwned: r) }
+        if let c = byId[id]?.candidate { return Member(name: c.displayName, types: types(c.speciesId), mark: SquadMark.of(c), candidate: c, option: c.option, copyTitle: c.copyTitle,
+                                                       tier: HubSquads.pvpTier(speciesId: c.speciesId, league: league, score: c.score)) }
         if let r = ctx.advice.leagues[id]?[league] {
             let o = r.options[LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)]
             let c = o.cost
             let built = o.isSelf && c != nil && c!.dust == 0 && c!.candy == 0 && c!.xl == 0 && (o.needs ?? []).isEmpty
             let copy = r.options.first(where: \.isSelf)?.name ?? ""
             return Member(name: o.genderLocked.map { "\(o.name), if it is \($0)" } ?? o.name, types: types(o.speciesId), mark: SquadMark.of(option: o, built: built, copyTitle: copy), candidate: nil, option: o, copyTitle: copy,
-                          tier: tableTier ?? o.strength.map { HubTeams.tier(score: $0.score) } ?? "")
+                          tier: HubSquads.pvpTier(speciesId: o.speciesId, league: league, score: o.strength?.score))
         }
         return ctx.entry(id).map { Member(name: $0.row.title, types: [], mark: .none, candidate: nil, option: nil) }
     }
@@ -194,7 +196,8 @@ private struct PvPSquadView: View {
         guard let m else {
             return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: nil, lines: ["No candidate"], status: .empty, spoken: head + ", " + HubSquads.SlotStatus.empty.spoken, identifier: id)
         }
-        if let r = m.notOwned { return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", notOwned: r, head: head, identifier: id) }
+        if let r = m.notOwned { return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", best: r, head: head, identifier: id) }
+        // Rule 29: the league tier shown everywhere (the table's, else the 88-score band), the same under Available and Best.
         let status = HubSquads.slotStatus(inBox: true, fullStrength: m.mark == .fullStrength, tier: m.tier)
         let spoken = [head, m.name, SquadWords.typeList(m.types), m.mark.spoken, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: m.name, types: m.types, mark: m.mark, status: status, spoken: spoken, identifier: id)
@@ -205,18 +208,18 @@ private struct PvPSquadView: View {
     private func picker(_ i: Int, filled: [FilledSlot], candidates: [HubSquads.PvpCandidate], byId: [String: HubSquads.PvpCandidate], best: [HubSquads.BestRow], mode: SquadMode, pogoAssist: Bool) -> some View {
         let role = filled[i].role
         var ids = mode == .best ? HubSquads.pool(role: role, in: best) : HubSquads.pool(role: role, in: candidates)
+        let boxHasOptions = !ids.isEmpty
         // The slot's own Pokémon is always listed, ticked, even when it came from outside the role's pool (the fallback) or is no longer a candidate.
         if let own = filled[i].pickId, !ids.contains(own) { ids.insert(own, at: 0) }
         let allIds = mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)
-        let listed = HubSquads.picker(candidates: ids, excluded: PvPPlacement.excluded(by: filled, editing: i, ids: allIds, species: { speciesId($0, pogoAssist: pogoAssist) }), own: filled[i].pickId)
-        let tiers = Dictionary(best.compactMap { r in r.ownedEntryId.map { ($0, r.tier) } }, uniquingKeysWith: { a, _ in a })
+        let listed = HubSquads.picker(candidates: ids, excluded: PvPPlacement.excluded(by: filled, editing: i, ids: allIds, species: { speciesId($0, pogoAssist: pogoAssist) }), ownIds: filled[i].ids)
         var rows: [PickerRowModel] = listed.compactMap { l in
-            if l.entryId.hasPrefix(squadSpeciesPrefix) {
-                guard let r = best.first(where: { $0.entryId == l.entryId }) ?? member(l.entryId, byId: byId, best: best, pogoAssist: pogoAssist)?.notOwned else { return nil }
-                return PickerRowModel(notOwned: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · "))
+            if let r = best.first(where: { $0.entryId == l.entryId }), !r.hasBuild {
+                return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · "))
             }
-            if let pc = byId[l.entryId] { return row(pc, ticked: l.ticked, tier: tiers[l.entryId]) }
-            guard let m = member(l.entryId, byId: byId, best: best, pogoAssist: pogoAssist) else { return nil }
+            if let pc = byId[l.entryId] { return row(pc, ticked: l.ticked) }
+            guard let m = member(l.entryId, byId: byId, best: best, pogoAssist: pogoAssist) else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .pvp, ctx: ctx) }
+            if let r = m.notOwned { return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · ")) }
             return fallbackRow(l.entryId, m, ticked: l.ticked)
         }
         if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
@@ -227,10 +230,10 @@ private struct PvPSquadView: View {
                 saved.changeRole(at: i, to: new) { mode == .best ? HubSquads.fits($0, role: new, in: best) : HubSquads.fits($0, role: new, in: candidates) }
                 s.pvp[league] = saved
             } },
-            rows: rows, emptyText: mode == .available ? "No candidate in your box for this role." : "No Pokémon listed for this role.",
+            rows: rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, none: mode == .available ? "No candidate in your box for this role." : "No Pokémon listed for this role."),
             onChoose: { id in keeper.update { s in
                 var saved = s.pvpSquad(league: league)
-                saved.choose(id, at: i)
+                saved.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: best))
                 s.pvp[league] = saved
             } },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
@@ -259,7 +262,7 @@ private struct PvPSquadView: View {
         let grade = MyPokemon.rankGrade(m.option?.iv?.rank)
         let scoreText = score.map(LeaguePanel.oneDecimal) ?? "—"
         let sGrade = MyPokemon.scoreGrade(score)
-        let tier = score.map { HubTeams.tier(score: $0) } ?? ""
+        let tier = m.tier
         let spoken = [m.name, roles, tier.isEmpty ? nil : "tier \(tier)", m.mark.spoken, "IV " + iv.replacingOccurrences(of: "#", with: "rank "), "score \(scoreText)", ticked ? "in this slot" : nil]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         return PickerRowModel(
@@ -275,9 +278,9 @@ private struct PvPSquadView: View {
             spoken: spoken)
     }
 
-    private func row(_ pc: HubSquads.PvpCandidate, ticked: Bool, tier tableTier: String? = nil) -> PickerRowModel {
+    private func row(_ pc: HubSquads.PvpCandidate, ticked: Bool) -> PickerRowModel {
         let c = pc.candidate
-        let tier = tableTier ?? c.tier
+        let tier = HubSquads.pvpTier(speciesId: c.speciesId, league: league, score: c.score)
         let types = ctx.gm.byId[c.speciesId]?.types ?? []
         let mark = SquadMark.of(c)
         let score = LeaguePanel.oneDecimal(c.score), scoreGrade = MyPokemon.scoreGrade(c.score), rankGrade = MyPokemon.rankGrade(c.ivRank)

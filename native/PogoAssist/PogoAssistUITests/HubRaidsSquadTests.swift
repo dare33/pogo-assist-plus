@@ -12,11 +12,11 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(title.label.contains("Shadow Landorus"), title.label)
 
         // Available is the default, and a Mega is work: its slot is empty.
-        XCTAssertTrue(slot(app, "raids", 1).label.contains("Mega, empty"), slot(app, "raids", 1).label)
+        XCTAssertTrue(slot(app, "raids", 1).label.contains("Mega slot, not counted under Available"), slot(app, "raids", 1).label)
         XCTAssertEqual(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Heavy hitter"), true)
         XCTAssertEqual(app.buttons["squad-mode-available"].isSelected, true)
-        // The box has no counter for Shadow Landorus, so every slot is empty and the squad line says so (CONCEPTS rule 30).
-        XCTAssertEqual(el(app, "squad-status").label, "Not ready: 6 empty")
+        // The box has no counter for Shadow Landorus, so every slot is empty; the Mega slot is empty by rule 3, so it is not counted (CONCEPTS rules 29 and 30).
+        XCTAssertEqual(el(app, "squad-status").label, "Not ready: 5 empty")
 
         // The picker of a slot: role chips, and an empty list says so (Available lists only the box: no Could get now list).
         openPicker(app, "raids", slot: 2)
@@ -69,7 +69,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Your squad – Palkia'")).firstMatch.waitForExistence(timeout: 5))
         // The Mega slot is the one Available leaves empty (rule 3); Best may fill it.
         let available = (1...6).map { slot(app, "raids", $0).label }
-        XCTAssertTrue(available[0].contains("empty"), available[0])
+        XCTAssertTrue(available[0].contains("not counted under Available"), available[0])
         XCTAssertFalse(available.contains { $0.contains("not in your box") }, "Available never puts a Pokémon the box lacks in a slot: \(available)")
         app.buttons["squad-mode-best"].tap()
         XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true)
@@ -91,7 +91,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         let rows = pickerRows(app)
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5), "Best lists the table's rows for Palkia")
         XCTAssertFalse(rows.allElementsBoundByIndex.contains { $0.label.hasPrefix(megaName) }, "a Pokémon in another slot is not listed")
-        XCTAssertTrue(rows.matching(NSPredicate(format: "label CONTAINS 'Not in your box ·'")).firstMatch.exists, "a Pokémon the box lacks says when it might be available: \(rows.allElementsBoundByIndex.map(\.label))")
+        XCTAssertTrue(rows.matching(NSPredicate(format: "label CONTAINS 'Not in your box,'")).firstMatch.exists, "a Pokémon the box lacks says when it might be available: \(rows.allElementsBoundByIndex.map(\.label))")
         XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "there is no Could get now list")
         let ticked = rows.matching(NSPredicate(format: "selected == true")).firstMatch
         XCTAssertTrue(ticked.exists, "the slot's own Pokémon is listed, ticked")
@@ -134,5 +134,6 @@ final class HubRaidsSquadTests: SquadUITestCase {
             let s = self.slot(app, "raids", 2)
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
+        bestSet("raids", slot: 2)
     }
 }

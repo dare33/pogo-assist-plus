@@ -74,7 +74,7 @@ final class HubMaxSquadTests: SquadUITestCase {
         let rows = pickerRows(app)
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(rows.firstMatch.isSelected, "the slot's own Pokémon is ticked")
-        XCTAssertTrue(rows.matching(NSPredicate(format: "label CONTAINS 'Not in your box ·'")).firstMatch.exists, "Best lists a Pokémon the box lacks with its availability line: \(rows.allElementsBoundByIndex.map(\.label))")
+        XCTAssertTrue(rows.matching(NSPredicate(format: "label CONTAINS 'Not in your box,'")).firstMatch.exists, "Best lists a Pokémon the box lacks with its availability line: \(rows.allElementsBoundByIndex.map(\.label))")
         XCTAssertFalse(el(app, "squad-picker-upgrades").exists, "the Available upgrades heading belongs to Available")
         let name = rows.firstMatch.label.components(separatedBy: ",").first ?? ""
         rows.firstMatch.tap()
@@ -115,6 +115,10 @@ final class HubMaxSquadTests: SquadUITestCase {
             if r.waitForExistence(timeout: 30) { r.tap() }
             let s = self.slot(app, "max", 2)
             if s.waitForExistence(timeout: 10) { self.reveal(app, s).tap() }
+        }
+        bestSet("max", slot: 2) { app in
+            let r = self.el(app, "hub-max-row-0")
+            if r.waitForExistence(timeout: 30) { r.tap() }
         }
     }
 }

@@ -83,5 +83,6 @@ final class HubPvPSquadTests: SquadUITestCase {
             let s = self.slot(app, "pvp", 2)
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
+        bestSet("pvp", slot: 2) { app in if app.buttons["hub-pvp-league-ul"].waitForExistence(timeout: 30) { app.buttons["hub-pvp-league-ul"].tap() } }
     }
 }
