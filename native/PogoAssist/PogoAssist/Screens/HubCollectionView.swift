@@ -26,7 +26,7 @@ struct CollectionData {
         let missing = HubCollection.missingSpecies(entries: entries, advice: advice ?? BoxAdvice(), gm: gm)
         return CollectionData(overview: HubCollection.overview(entries: entries, gm: gm),
                               showcase: HubCollection.showcase(entries: entries, gm: gm),
-                              sets: HubCollection.specialSets(entries: entries, gm: gm, isLucky: { $0.row.lucky == true }),
+                              sets: HubCollection.specialSets(entries: entries, gm: gm, isLucky: HubCollection.isLuckyMarked),
                               missing: missing.filter { $0.evolvesFrom != nil } + missing.filter { $0.evolvesFrom == nil },
                               gm: gm)
     }
@@ -40,7 +40,9 @@ struct HubCollectionView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: CollectionData?
     /// The Special sets card whose list is open.
-    @State private var openSet: HubCollection.SetKind?
+    /// Kept whole (not looked up in `data` while the sheet is up): an edit made from the sheet rebuilds `data`, and the sheet must stay on screen meanwhile.
+    @State private var openSet: OpenSet?
+    private struct OpenSet: Identifiable { var kind: HubCollection.SetKind; var set: HubCollection.SpecialSet; var id: String { kind.id } }
 
     private var adviceReady: BoxAdvice? { model.hubAdvice }
     /// The box, the account and whether the advice is in (the Missing "how to get" reads the advice's gaps).
@@ -69,10 +71,8 @@ struct HubCollectionView: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
-        .sheet(item: $openSet) { kind in
-            if let set = data?.sets.first(where: { $0.name == kind.name }) {
-                CollectionSetSheet(kind: kind, set: set).environmentObject(model).environment(\.accent, accent)
-            }
+        .sheet(item: $openSet) { open in
+            CollectionSetSheet(kind: open.kind, set: open.set).environmentObject(model).environment(\.accent, accent)
         }
         .task(id: key) {
             guard let gm = try? GameMaster.bundled() else { data = nil; return }
@@ -154,7 +154,7 @@ struct HubCollectionView: View {
             ForEach(Array(stride(from: 0, to: d.sets.count, by: per)), id: \.self) { start in
                 GridRow {
                     ForEach(d.sets[start..<min(start + per, d.sets.count)], id: \.name) { s in
-                        if let kind = HubCollection.SetKind(rawValue: s.name) { SpecialSetTile(set: s, kind: kind) { openSet = kind } }
+                        if let kind = HubCollection.SetKind(rawValue: s.name) { SpecialSetTile(set: s, kind: kind) { openSet = OpenSet(kind: kind, set: s) } }
                     }
                 }
             }
@@ -308,7 +308,7 @@ private struct SpecialSetTile: View {
         Button(action: open) { tile }
             .buttonStyle(PressStyle())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(set.note.map { "\(set.name). \($0)" } ?? "\(set.name), \(figure) \(set.unit)")
+            .accessibilityLabel(set.note.map { "\(set.name). \($0)" } ?? "\(set.name), \(figure) \(set.unitWord)")
             .accessibilityHint("Opens the list")
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("collection-set-\(slug)")

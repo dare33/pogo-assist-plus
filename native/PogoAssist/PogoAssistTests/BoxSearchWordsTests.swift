@@ -191,4 +191,12 @@ final class BoxSearchWordsTests: XCTestCase {
         XCTAssertEqual(idx.sections(query: .keyword(.lucky), chip: .all, sort: .name).count, 0)
         XCTAssertEqual(HubCollection.specialSets(entries: none, gm: gm).first { $0.name == "Lucky" }?.note, "Not in your scans yet")
     }
+
+    /// The sheet shows its sections only with the index they were built for (a row is a position in that index).
+    func testTheSheetShowsSectionsOnlyForTheIndexTheyWereBuiltFor() {
+        XCTAssertTrue(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: "Greg|3"))
+        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: "Greg|4"), "a newer index: the old rows would point at the wrong copies")
+        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: nil))
+        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: nil, storeKey: nil))
+    }
 }

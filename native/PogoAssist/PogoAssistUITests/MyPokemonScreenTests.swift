@@ -230,7 +230,7 @@ final class MyPokemonScreenTests: XCTestCase {
 
     private func shot(_ name: String) {
         var dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
-        dir = (dir as NSString).appendingPathComponent("fb-collection")
+        dir = (dir as NSString).appendingPathComponent("fb-collection-r2")
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
     }
