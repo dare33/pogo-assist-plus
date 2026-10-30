@@ -127,7 +127,9 @@ final class AppModel: ObservableObject {
     @Published var advice: AdviceState = .none
     /// The Pokémon page's advice while the whole box's is being worked out after an edit of a mark: the last advice with the edited copy's family worked out again
     /// (`BoxAdvice.afterEdit`). Only that page reads it; it is never saved as the box version's advice and no other screen sees it. Cleared when the whole box's is ready.
-    @Published private(set) var familyAdvice: BoxAdvice?
+    @Published private(set) var familyHold = FamilyAdviceHold()
+    /// The family advice, only while it is for the account and box version showing now (`FamilyAdviceHold`).
+    var familyAdvice: BoxAdvice? { familyHold.advice(account: account, seq: snapshot?.seq) }
     /// Counts the family results shown, so a page can tell a new one without comparing two whole advices.
     @Published private(set) var familyStamp = 0
     private let adviceGate = AdviceGate()
@@ -643,9 +645,9 @@ final class AppModel: ObservableObject {
     /// wrote it, and the newest in full. Interrupted renames are repaired first. A newer call, or another account, makes an older read's answer unwanted.
     func loadBox() {
         boxToken += 1
-        if storageMissing { snapshot = nil; advice = .none; clearHistory(); scans = []; scansLoaded = true; boxNeedsNewerApp = false; boxProblem = BoxExportFile.storageUnavailableText; boxAccount = nil; boxLoaded = true; return }
-        guard let a = account else { snapshot = nil; advice = .none; clearHistory(); scans = []; scansLoaded = true; boxProblem = nil; boxNeedsNewerApp = false; boxAccount = nil; boxLoaded = true; return }
-        if boxAccount != a { snapshot = nil; advice = .none; boxProblem = nil; boxNeedsNewerApp = false; boxAccount = a }
+        if storageMissing { snapshot = nil; advice = .none; familyHold.clear(); clearHistory(); scans = []; scansLoaded = true; boxNeedsNewerApp = false; boxProblem = BoxExportFile.storageUnavailableText; boxAccount = nil; boxLoaded = true; return }
+        guard let a = account else { snapshot = nil; advice = .none; familyHold.clear(); clearHistory(); scans = []; scansLoaded = true; boxProblem = nil; boxNeedsNewerApp = false; boxAccount = nil; boxLoaded = true; return }
+        if boxAccount != a { snapshot = nil; advice = .none; familyHold.clear(); boxProblem = nil; boxNeedsNewerApp = false; boxAccount = a }
         boxLoaded = false
         let token = boxToken, lib = library
         let ps = pendingStore
@@ -736,14 +738,17 @@ final class AppModel: ObservableObject {
     func loadAdvice(afterEditOf editedId: String? = nil) {
         wholeAdviceTask?.cancel()
         let token = adviceGate.supersede()
-        guard let a = account, let snap = snapshot else { advice = .none; familyAdvice = nil; adviceGate.setKnown(nil, account: ""); return }
-        if let cached = library.loadAdvice(account: a, seq: snap.seq) { advice = .ready(cached); familyAdvice = nil; adviceGate.setKnown(cached, account: a); return }
+        guard let a = account, let snap = snapshot else { advice = .none; familyHold.clear(); adviceGate.setKnown(nil, account: ""); return }
+        if let cached = library.loadAdvice(account: a, seq: snap.seq) { advice = .ready(cached); familyHold.clear(); adviceGate.setKnown(cached, account: a); return }
         advice = .computing
+        if editedId == nil { familyHold.clear() }   // a box that was not made by one mark edit (a scan, a restore, a rename) has no family result to show
         let lib = library, entries = snap.entries, seq = snap.seq, gate = adviceGate
         let scanDate = snap.scanDate ?? snap.createdAt
         if let editedId {
             Task {
+                #if DEBUG
                 let asked = Date()
+                #endif
                 let found = try? await worker.run { engine -> BoxAdvice? in
                     // Every edit's family is chained on the last known advice, even when a newer edit has come since (skipping one would leave that family out of the next
                     // one's base); only an account that is not the known advice's, or a Pokémon no longer in the box, ends it.
@@ -751,10 +756,12 @@ final class AppModel: ObservableObject {
                     let t = Date()
                     guard let merged = try BoxAdvice.afterEdit(of: editedId, base: base, entries: entries, scanDate: scanDate, engine: engine, gm: gm) else { return nil }
                     gate.setKnown(merged, account: a)
+                    #if DEBUG
                     NSLog("pogo timings: advise (family) %.3f s, %.3f s after the ask", Date().timeIntervalSince(t), Date().timeIntervalSince(asked))
+                    #endif
                     return merged
                 }
-                if let merged = found ?? nil, self.snapshot?.seq == seq, self.account == a, case .computing = self.advice { self.familyAdvice = merged; self.familyStamp += 1; PageTimings.advice("family") }
+                if let merged = found ?? nil, self.snapshot?.seq == seq, self.account == a, case .computing = self.advice { self.familyHold.set(merged, account: a, seq: seq); self.familyStamp += 1; PageTimings.advice("family") }
             }
         }
         let wait: Duration = editedId == nil ? .zero : Self.adviceSettle
@@ -773,10 +780,10 @@ final class AppModel: ObservableObject {
                     if gate.isCurrent(token) { gate.setKnown(adv, account: a) }
                     return adv
                 }
-                if self.snapshot?.seq == seq && self.account == a { self.advice = .ready(result); self.familyAdvice = nil }
+                if self.snapshot?.seq == seq && self.account == a { self.advice = .ready(result); self.familyHold.clear() }
             } catch is Superseded {
             } catch {
-                if self.snapshot?.seq == seq && self.account == a { self.advice = .failed(Self.plain(error)) }
+                if self.snapshot?.seq == seq && self.account == a { self.advice = .failed(Self.plain(error)); self.familyHold.clear() }
             }
         }
     }
@@ -800,11 +807,15 @@ final class AppModel: ObservableObject {
         // An edit of the hand-set marks only (Dynamax, Gigantamax, Shadow/Purified, Lucky, details) is a setting, not a correction of a read value.
         let marksOnly = edit.marksOnly && (edit.dynamax != nil || edit.gigantamax != nil || edit.lucky != nil || edit.shadow != nil || edit.details != nil)
         do {
+            #if DEBUG
             let asked = Date()
+            #endif
             let (new, notice) = try await worker.run { engine -> (BoxSnapshot, String?) in
                 var notice: String?
+                #if DEBUG
                 let started = Date()
                 defer { NSLog("pogo timings: edit saved (waited %.2f s, mutate %.2f s)", started.timeIntervalSince(asked), Date().timeIntervalSince(started)) }
+                #endif
                 let snap = try lib.mutate(account: a, reason: .edit, note: marksOnly ? "Marks set for \(label)" : "Corrected \(label)") { entries in
                     guard let i = entries.firstIndex(where: { $0.id == id }) else { throw BoxMerge.EditFailure.badValue("That Pokémon is no longer in the box.") }
                     var fixed = try BoxMerge.correct(entries[i], with: edit, gameMaster: try .bundled())

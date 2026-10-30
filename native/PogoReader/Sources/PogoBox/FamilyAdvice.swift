@@ -19,9 +19,11 @@ public extension BoxAdvice {
     /// The entries of the edited copy's family: every copy whose species shares its evolution root, and every copy of the same Pokédex number (its other forms), in the
     /// box's order. Includes the copy itself.
     static func family(of copy: BoxEntry, in entries: [BoxEntry], gm: GameMaster) -> [BoxEntry] {
-        let top = root(of: copy.row.speciesId, gm: gm), dex = copy.row.dex
+        // A row can carry no dex number (it is optional): the game master's for its species stands in.
+        func dex(_ e: BoxEntry) -> Int? { e.row.dex ?? gm.byId[e.row.speciesId]?.dex }
+        let top = root(of: copy.row.speciesId, gm: gm), copyDex = dex(copy)
         return entries.filter { e in
-            e.id == copy.id || (dex != nil && e.row.dex == dex) || root(of: e.row.speciesId, gm: gm) == top
+            e.id == copy.id || (copyDex != nil && dex(e) == copyDex) || root(of: e.row.speciesId, gm: gm) == top
         }
     }
 
@@ -71,5 +73,26 @@ public extension BoxAdvice {
         let report = try engine.advise(rows: rows, scanDate: scanDate)
         let part = BoxAdvice.make(from: report, entries: members)
         return base.replacingFamily(ids: Set(members.map(\.id)), with: part, entries: entries)
+    }
+}
+
+/// The family advice the Pokémon page may show while the whole box's is worked out. It belongs to one account and one box version: it is returned only to a caller
+/// asking for that account and version, so a later box (a scan saved, a restore, another account) can never show it, and every path that makes the page's advice
+/// something else (a switch of account, a box with no account, a whole-box advise that failed or finished) clears it.
+public struct FamilyAdviceHold: Equatable {
+    private var held: (account: String, seq: Int, advice: BoxAdvice)?
+    public init() {}
+
+    public mutating func set(_ advice: BoxAdvice, account: String, seq: Int) { held = (account, seq, advice) }
+    public mutating func clear() { held = nil }
+
+    /// The held advice when it is for exactly this account and box version.
+    public func advice(account: String?, seq: Int?) -> BoxAdvice? {
+        guard let held, held.account == account, held.seq == seq else { return nil }
+        return held.advice
+    }
+
+    public static func == (a: FamilyAdviceHold, b: FamilyAdviceHold) -> Bool {
+        a.held?.account == b.held?.account && a.held?.seq == b.held?.seq && a.held?.advice == b.held?.advice
     }
 }

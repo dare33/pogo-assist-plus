@@ -12,6 +12,11 @@ import PogoReader
         var inFlight = 0, mostInFlight = 0
         var delay: Duration = .milliseconds(150)
         var fail = false
+        var account: String? = "a"
+        var gone = false
+        var messages = [String]()
+        /// Runs after the saved edit is applied (a stand-in for a change that comes from elsewhere, or a save that does not take).
+        var afterSave: ((Store) -> Void)?
         init(_ e: BoxEntry) { entry = e }
         func save(_ edit: BoxMerge.Edit) async -> Bool {
             inFlight += 1; mostInFlight = max(mostInFlight, inFlight)
@@ -20,6 +25,7 @@ import PogoReader
             if fail { return false }
             edits.append(edit)
             entry = try! BoxMerge.correct(entry, with: edit, gameMaster: try! GameMaster.bundled())
+            afterSave?(self)
             return true
         }
     }
@@ -34,7 +40,7 @@ import PogoReader
     }
 
     private func tap(_ editor: MarkEditor, _ store: Store, _ make: @escaping (ScanRow) -> BoxMerge.Edit) {
-        editor.apply(make, entry: { store.entry }, save: { await store.save($0) })
+        editor.apply(make, MarkEditor.Backing(entry: { store.gone ? nil : store.entry }, account: { store.account }, save: { await store.save($0) }, tell: { store.messages.append($0) }))
     }
 
     private func settled(_ editor: MarkEditor) async {
@@ -119,5 +125,63 @@ import PogoReader
         tap(editor, s) { PokemonPage.toggleDynamax($0) }
         await settled(editor)
         XCTAssertEqual(s.entry.row.dynamax, true)
+    }
+
+    func testAFieldThePlayerDidNotTouchIsNeverWritten() async {
+        let s = store(), editor = MarkEditor(settle: 0.05)
+        s.delay = .milliseconds(300)
+        tap(editor, s) { PokemonPage.toggleDynamax($0) }
+        // While the save is waiting its turn, the saved row changes elsewhere: Lucky is marked, which the player never touched.
+        s.entry.row.lucky = true
+        await settled(editor)
+        XCTAssertEqual(s.edits, [BoxMerge.Edit(dynamax: .on)], "only Dynamax is written")
+        XCTAssertEqual(s.entry.row.lucky, true, "and the other change stays")
+    }
+
+    func testOnlyTheTouchedPartOfTheDetailsIsWritten() async {
+        let s = store(), editor = MarkEditor(settle: 0.05)
+        s.entry.row.details = CopyDetails(maxGuard: 2)
+        tap(editor, s) { PokemonPage.toggle(.bestBuddy, $0) }
+        s.entry.row.details?.maxGuard = 3   // changed elsewhere before the save runs
+        await settled(editor)
+        XCTAssertEqual(s.entry.row.details?.maxGuard, 3, "Max Guard was not touched, so the other change is kept")
+        XCTAssertEqual(s.entry.row.details?.bestBuddy, true)
+    }
+
+    func testACopyThatLeftTheBoxBeforeTheSaveDropsTheChangeAndSaysSo() async {
+        let s = store(), editor = MarkEditor(settle: 0.1)
+        tap(editor, s) { PokemonPage.toggleDynamax($0) }
+        s.gone = true
+        await settled(editor)
+        XCTAssertTrue(s.edits.isEmpty)
+        XCTAssertNil(editor.wanted, "the shown state is the saved row again")
+        XCTAssertEqual(s.messages, ["Your mark change was not saved: that Pokémon is no longer in this box."])
+    }
+
+    func testAnAccountSwitchBeforeTheSaveDropsTheChange() async {
+        let s = store(), editor = MarkEditor(settle: 0.1)
+        tap(editor, s) { PokemonPage.toggleShadow($0) }
+        s.account = "b"
+        await settled(editor)
+        XCTAssertTrue(s.edits.isEmpty); XCTAssertNil(editor.wanted); XCTAssertEqual(s.messages.count, 1)
+    }
+
+    func testASaveThatDoesNotTakeIsTriedOnceMoreThenReportedNotLooped() async {
+        let s = store(), editor = MarkEditor(settle: 0.05)
+        s.afterSave = { $0.entry.row.dynamax = nil }   // whatever is written, the row reads as before
+        tap(editor, s) { PokemonPage.toggleDynamax($0) }
+        await settled(editor)
+        XCTAssertEqual(s.edits.count, 2, "one more try, then it stops")
+        XCTAssertNil(editor.wanted)
+        XCTAssertEqual(s.messages, ["Your mark change could not be saved. Try tapping it again."])
+    }
+
+    func testShadowOnThenOffFromNeverMarkedStoresZero() async {
+        let s = store(), editor = MarkEditor(settle: 0.05)
+        tap(editor, s) { PokemonPage.toggleShadow($0) }
+        tap(editor, s) { PokemonPage.toggleShadow($0) }
+        await settled(editor)
+        XCTAssertEqual(s.edits, [BoxMerge.Edit(shadow: .neither)], "off from never marked is stored as marked neither, as before")
+        XCTAssertEqual(s.entry.row.shadow, 0)
     }
 }

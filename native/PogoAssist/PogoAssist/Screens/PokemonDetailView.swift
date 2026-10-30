@@ -137,11 +137,15 @@ struct PokemonDetailView: View {
     /// made while a save is under way, or in quick succession, settle on the state the player left the mark in and go as one edit; an edit that would not change the
     /// row (the chip already chosen, a mark tapped twice) saves nothing and does not re-run the advice.
     private func apply(_ make: @escaping (ScanRow) -> BoxMerge.Edit) {
-        editor.apply(make, entry: { [model, id] in model.entry(id) }, save: { [model, id] edit in
-            let result = await model.correct(id, edit)
-            if let error = result.error { model.message = error; return false }
-            return true
-        })
+        editor.apply(make, MarkEditor.Backing(
+            entry: { [model, id] in model.entry(id) },
+            account: { [model] in model.account },
+            save: { [model, id] edit in
+                let result = await model.correct(id, edit)
+                if let error = result.error { model.message = error; return false }
+                return true
+            },
+            tell: { [model] in model.message = $0 }))
     }
 
     /// The entry with the marks and chips the player has left them in, which may not be saved yet.
@@ -226,7 +230,7 @@ struct PokemonDetailView: View {
                 let rows = cache.value("summary|\(pogoAssist)") { PokemonActivities.summary(copy: e, ctx: ctx, pogoAssist: pogoAssist) }
                 SummaryRowsPanel(rows: rows) { tab = $0 }
                 AdvicePanel(entry: e, advice: advice)
-            case .pvp: leaguesPanel(e, advice: advice)
+            case .pvp: leaguesPanel(shown(e), advice: advice)   // the shown row: the Shadow note follows a tap at once
             case .raids:
                 let cards = cache.value("raids") { PokemonActivities.raidCards(copy: e, ctx: ctx) }
                 RaidsTab(copy: e, family: familyName(e, ctx), cards: cards)

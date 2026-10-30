@@ -38,6 +38,7 @@ final class PokemonPageSpeedTests: XCTestCase {
 
     /// Timing run: one tap on Dynamax, then on Shadow, each left to finish; then five quick taps on Dynamax. Read the log afterwards.
     func testTimingsOnABigBox() throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["POGO_TIMINGS"] == nil, "a timing run only with POGO_TIMINGS (TEST_RUNNER_POGO_TIMINGS on the command line)")
         let app = launchBig()
         openCopy(app, "Lucario")
         app.buttons["mark-dynamax"].tap()

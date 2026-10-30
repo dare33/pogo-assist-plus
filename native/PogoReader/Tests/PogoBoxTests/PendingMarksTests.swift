@@ -38,13 +38,37 @@ final class PendingMarksTests: XCTestCase {
         for i in taps.indices {
             e.row.dynamax = taps[i].0 == "Gigantamax" ? true : nil   // the Gigantamax chip is only there while Dynamax is on
             let w = try wanted(after: [i, i], from: e)
-            XCTAssertTrue(PokemonPage.sameMarks(w, e.row), taps[i].0)
-            XCTAssertEqual(PokemonPage.edit(from: e.row, to: w), BoxMerge.Edit(), "\(taps[i].0) twice saves nothing")
+            if taps[i].0 == "Shadow" || taps[i].0 == "Purified" {
+                // Off is "marked neither by hand" (0), not never marked (nil): the end state is stored, as the old code stored it.
+                XCTAssertEqual(w.shadow, 0, taps[i].0)
+                XCTAssertEqual(PokemonPage.edit(from: e.row, to: w), BoxMerge.Edit(shadow: .neither), "\(taps[i].0) on and off stores 0")
+            } else {
+                XCTAssertTrue(PokemonPage.sameMarks(w, e.row), taps[i].0)
+                XCTAssertEqual(PokemonPage.edit(from: e.row, to: w), BoxMerge.Edit(), "\(taps[i].0) twice saves nothing")
+            }
         }
         e.row.dynamax = nil
         let odd = try wanted(after: [0, 0, 0], from: e)
         XCTAssertEqual(odd.dynamax, true)
         XCTAssertEqual(PokemonPage.edit(from: e.row, to: odd), BoxMerge.Edit(dynamax: .on))
+        // Shadow tapped twice from a row that already stores 0 (neither) is back where it was.
+        e.row.shadow = 0
+        XCTAssertEqual(PokemonPage.edit(from: e.row, to: try wanted(after: [1, 1], from: e)), BoxMerge.Edit())
+    }
+
+    func testOnlyTheTouchedFieldsAreInTheEdit() throws {
+        var e = entry()
+        e.row.details = CopyDetails(maxGuard: 2)
+        let w = try wanted(after: [0, 5], from: e)   // Dynamax on, Best Buddy on
+        let touched = PokemonPage.touched(from: e.row, to: w)
+        XCTAssertEqual(touched, [.dynamax, .bestBuddy])
+        // The saved row has meanwhile gained Lucky, a Max Guard level and a Shadow mark the player never touched.
+        var saved = e.row; saved.lucky = true; saved.shadow = 1; saved.details?.maxGuard = 3
+        let edit = PokemonPage.edit(from: saved, to: w, touching: touched)
+        XCTAssertNil(edit.lucky); XCTAssertNil(edit.shadow)
+        XCTAssertEqual(edit.dynamax, .on)
+        XCTAssertEqual(edit.details?.maxGuard, 3, "the details keep what is saved for the parts not touched")
+        XCTAssertEqual(edit.details?.bestBuddy, true)
     }
 
     func testShadowOnClearsPurifiedAndTheReverse() throws {
@@ -53,7 +77,6 @@ final class PendingMarksTests: XCTestCase {
         XCTAssertEqual(try wanted(after: [3, 1], from: e).shadow, 1, "Shadow on clears Purified")
         XCTAssertEqual(try wanted(after: [1, 3], from: e).shadow, 2, "Purified on clears Shadow")
         XCTAssertEqual(try wanted(after: [1, 1], from: e).shadow, 0, "Shadow off is marked neither by hand")
-        XCTAssertEqual(PokemonPage.edit(from: e.row, to: try wanted(after: [1, 1], from: e)), BoxMerge.Edit(), "but from never marked it is no change to save")
         var shadowed = e; shadowed.row.shadow = 1
         XCTAssertEqual(PokemonPage.edit(from: shadowed.row, to: try wanted(after: [1], from: shadowed)), BoxMerge.Edit(shadow: .neither), "a saved Shadow turned off is saved")
     }

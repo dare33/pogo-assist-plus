@@ -112,4 +112,66 @@ final class FamilyAdviceTests: XCTestCase {
         XCTAssertEqual(ids(448), [448], "Lucario, with no Riolu in the box")
         XCTAssertLessThan(ids(4).count, 5, "Charmander's line only")
     }
+
+    /// A row with no dex number falls back to the game master's for its species, so its family still holds the other copies of that number.
+    func testARowWithNoDexNumberStillFindsItsFamily() throws {
+        var copy = try XCTUnwrap(Self.box.first { $0.row.dex == 133 })   // Eevee
+        copy.row.dex = nil
+        var box = Self.box
+        box[box.firstIndex { $0.id == copy.id }!] = copy
+        let family = BoxAdvice.family(of: copy, in: box, gm: Self.gm)
+        XCTAssertGreaterThan(family.count, 30, "the 65 Eevee in the fixture box")
+        // And the other way round: a copy whose own dex is missing is found by the others' number.
+        let other = try XCTUnwrap(Self.box.first { $0.row.dex == 133 && $0.id != copy.id })
+        XCTAssertTrue(BoxAdvice.family(of: other, in: box, gm: Self.gm).contains { $0.id == copy.id })
+    }
+
+    /// Marks already on several families (Shadow, Purified, Lucky, Dynamax), then edits that turn them off and swap them, each family result chained on the one
+    /// before (as the app chains its jobs), the whole box's advice compared after every step.
+    func testMarkedFamiliesTurnedOffAndSwappedInAChain() throws {
+        let pick = [448, 25, 147, 384].compactMap { d in Self.box.first { $0.row.dex == d } }   // Lucario, Pikachu, Dratini, Rayquaza
+        XCTAssertEqual(pick.count, 4)
+        var box = Self.box
+        func set(_ id: String, _ edit: BoxMerge.Edit) throws { box = try edited(box, id, edit) }
+        try set(pick[0].id, BoxMerge.Edit(shadow: .shadow))
+        try set(pick[1].id, BoxMerge.Edit(shadow: .purified))
+        try set(pick[2].id, BoxMerge.Edit(lucky: true))
+        try set(pick[3].id, BoxMerge.Edit(dynamax: .on))
+        var base = try whole(box)     // the box as it stands with the marks on
+        let steps: [(Int, BoxMerge.Edit, String)] = [
+            (0, BoxMerge.Edit(shadow: .neither), "Shadow turned off"),
+            (1, BoxMerge.Edit(shadow: .shadow), "Purified swapped for Shadow"),
+            (2, BoxMerge.Edit(lucky: false), "Lucky turned off"),
+            (3, BoxMerge.Edit(dynamax: .off), "Dynamax turned off"),
+        ]
+        for (n, edit, name) in steps {
+            let id = pick[n].id
+            box = try edited(box, id, edit)
+            let copy = try XCTUnwrap(box.first { $0.id == id })
+            let merged = try XCTUnwrap(try BoxAdvice.afterEdit(of: id, base: base, entries: box, scanDate: Self.when, engine: sharedEngine, gm: Self.gm))
+            let truth = try whole(box)
+            let label = "\(copy.row.title): \(name) (step \(n + 1) of the chain)"
+            XCTAssertEqual(merged.builds, truth.builds, "builds: \(label)")
+            XCTAssertEqual(merged.duplicates, truth.duplicates, "duplicates: \(label)")
+            XCTAssertEqual(merged.leagues, truth.leagues, "leagues: \(label)")
+            XCTAssertEqual(merged.fit, truth.fit, "fit: \(label)")
+            XCTAssertEqual(merged.bestOf, truth.bestOf, "bestOf: \(label)")
+            XCTAssertEqual(merged.spareBuilds, truth.spareBuilds, "spares: \(label)")
+            XCTAssertEqual(merged.unresolved, truth.unresolved, "unresolved: \(label)")
+            base = merged   // the next family job is chained on this one, not on the whole box's advice
+        }
+    }
+
+    /// The policy that keeps a family result from showing on a box it was not made for.
+    func testTheHeldFamilyAdviceShowsOnlyForItsAccountAndBoxVersion() {
+        var hold = FamilyAdviceHold()
+        let advice = BoxAdvice(builds: [], gaps: [], duplicates: [], unresolved: ["x"])
+        hold.set(advice, account: "a", seq: 5)
+        XCTAssertEqual(hold.advice(account: "a", seq: 5), advice)
+        XCTAssertNil(hold.advice(account: "a", seq: 6), "the box was replaced by a later version (a scan, a restore)")
+        XCTAssertNil(hold.advice(account: "b", seq: 5), "another account")
+        XCTAssertNil(hold.advice(account: nil, seq: nil), "no account")
+        hold.clear()   // a failed whole-box advise, a switch of account, a box with no account
+        XCTAssertNil(hold.advice(account: "a", seq: 5))
+    }
 }
