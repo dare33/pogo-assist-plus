@@ -154,9 +154,11 @@ public enum HubRaidsModel {
     /// The Raids table entries a target can fill: its own, without a Shadow entry (listed under a plain id, such as "Shadow Pheromosa") unless the copy is
     /// Shadow, plus, for a build that mega evolves, the target's Mega and Primal entries (`lucario` counts under Fighting through `lucario_mega`).
     static func raidEntries(targetId: String, viaMega: Bool, table: TierTable, shadow: Bool) -> [TierTable.Entry] {
-        var entries = table.entries(for: targetId, area: "raids").filter { shadow || !$0.flags.shadow }
+        // A Shadow target (`x_shadow`) also fills the plain species' entries, as the advisor credits it (`src/advise.js`): a Shadow Garchomp keeps Garchomp's own row.
+        let plain = targetId.hasSuffix("_shadow") ? String(targetId.dropLast("_shadow".count)) : targetId
+        var entries = (table.entries(for: targetId, area: "raids") + (plain == targetId ? [] : table.entries(for: plain, area: "raids"))).filter { shadow || !$0.flags.shadow }
         if viaMega {
-            entries += table.entries.filter { $0.area == "raids" && $0.flags.mega && (shadow || !$0.flags.shadow) && ($0.speciesId.hasPrefix(targetId + "_mega") || $0.speciesId.hasPrefix(targetId + "_primal")) }
+            entries += table.entries.filter { $0.area == "raids" && $0.flags.mega && (shadow || !$0.flags.shadow) && ($0.speciesId.hasPrefix(plain + "_mega") || $0.speciesId.hasPrefix(plain + "_primal")) }
         }
         return entries
     }

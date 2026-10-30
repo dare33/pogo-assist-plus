@@ -148,19 +148,24 @@ public enum HubSquads {
 
     /// `placeable(entryId, role)` says whether a saved pick may be placed now. Under Available a pick that is not usable as it is (any Mega, an evolution)
     /// is not placed and the slot shows the suggestion; the pick stays in the store and returns under Best (`placeable(screen:mode:league:ctx:)`).
-    public static func fill(slots: [SquadSlot], pool: (Int, String) -> Pool, placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
+    /// `copyOf` names the copy an id stands for (a species id the box has a copy of resolves to it): a copy sits in one slot at a time however many ids it goes by
+    /// (Primal Kyogre and Kyogre are two rows of one copy), so taking an id takes its copy too.
+    public static func fill(slots: [SquadSlot], pool: (Int, String) -> Pool, placeable: (String, String) -> Bool = { _, _ in true },
+                            copyOf: (String) -> String? = { _ in nil }) -> [FilledSlot] {
         var used = Set<String>()
         var out = slots.map { FilledSlot(role: $0.role, entryId: nil, chosen: false, fallback: false) }
         func put(_ id: String, at i: Int) {
             if id.hasPrefix(squadSpeciesPrefix) { out[i].species = String(id.dropFirst(squadSpeciesPrefix.count)) } else { out[i].entryId = id }
         }
+        func free(_ id: String) -> Bool { !used.contains(id) && !(copyOf(id).map(used.contains) ?? false) }
+        func take(_ id: String) { used.insert(id); if let c = copyOf(id) { used.insert(c) } }
         for (i, s) in slots.enumerated() {
-            if let p = s.pickId, placeable(p, s.role), used.insert(p).inserted { put(p, at: i); out[i].chosen = true }
+            if let p = s.pickId, placeable(p, s.role), free(p) { take(p); put(p, at: i); out[i].chosen = true }
         }
         for (i, s) in slots.enumerated() where out[i].pickId == nil {
             let p = pool(i, s.role)
-            if let id = p.preferred.first(where: { !used.contains($0) }) { used.insert(id); put(id, at: i) }
-            else if let id = p.fallback.first(where: { !used.contains($0) }) { used.insert(id); put(id, at: i); out[i].fallback = true }
+            if let id = p.preferred.first(where: free) { take(id); put(id, at: i) }
+            else if let id = p.fallback.first(where: free) { take(id); put(id, at: i); out[i].fallback = true }
         }
         return out
     }
@@ -177,8 +182,13 @@ public enum HubSquads {
 
     /// The Pokémon the picker of `editing` must not offer: those in the squad's other slots (rule 4). On Rocket only Pokémon the player chose leave
     /// the list (D28), so `onlyChosen` is true there.
-    public static func excluded(by filled: [FilledSlot], editing: Int, onlyChosen: Bool) -> Set<String> {
-        Set(filled.enumerated().compactMap { i, s in i != editing && (!onlyChosen || s.chosen) ? s.pickId : nil })
+    /// `copyOf` adds the copy each of them stands for, so `picker` can hide a row that shows the same copy under another id.
+    public static func excluded(by filled: [FilledSlot], editing: Int, onlyChosen: Bool, copyOf: (String) -> String? = { _ in nil }) -> Set<String> {
+        var out = Set<String>()
+        for (i, s) in filled.enumerated() where i != editing && (!onlyChosen || s.chosen) {
+            for id in s.ids { out.insert(id); if let c = copyOf(id) { out.insert(c) } }
+        }
+        return out
     }
 
     public struct PickerRow: Equatable {
@@ -189,8 +199,9 @@ public enum HubSquads {
 
     /// The picker's rows: `candidates` (best first) without the excluded ones; the edited slot's own Pokémon stays and is ticked.
     /// The same with every id the edited slot's Pokémon goes by (`FilledSlot.ids`): the row of its copy, or of its species, is ticked.
-    public static func picker(candidates: [String], excluded: Set<String>, ownIds: Set<String>) -> [PickerRow] {
-        candidates.filter { !excluded.contains($0) || ownIds.contains($0) }.map { PickerRow(entryId: $0, ticked: ownIds.contains($0)) }
+    /// A row is hidden when its id, or the copy it stands for (`copyOf`), is in `excluded`.
+    public static func picker(candidates: [String], excluded: Set<String>, ownIds: Set<String>, copyOf: (String) -> String? = { _ in nil }) -> [PickerRow] {
+        candidates.filter { ownIds.contains($0) || !(excluded.contains($0) || (copyOf($0).map(excluded.contains) ?? false)) }.map { PickerRow(entryId: $0, ticked: ownIds.contains($0)) }
     }
 
     public static func picker(candidates: [String], excluded: Set<String>, own: String?) -> [PickerRow] {

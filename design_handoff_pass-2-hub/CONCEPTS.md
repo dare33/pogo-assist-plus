@@ -124,7 +124,8 @@ Stated so each can be checked against the code.
    "could get" list is shown under it (a pick of a Pokémon the box lacks is not placed here; it stays stored and returns
    under Best).
 4. **A Pokémon is in one slot at a time**: a copy in another slot of the same squad is not listed in that squad's
-   picker; the slot being edited lists its own Pokémon, ticked. On Rocket only Pokémon the player chose leave the list
+   picker, and neither is any row that shows the same copy (Primal Kyogre and Kyogre are two rows of one copy: a suggested
+   squad never uses it twice, and a species pick that resolves to it counts as the copy); the slot being edited lists its own Pokémon, ticked. On Rocket only Pokémon the player chose leave the list
    (D28). One copy may sit in squads on different screens (manager's call, read-back Q6).
 5. **Changing a slot's role** relabels the slot, refills it with the best unused Pokémon for the new role, and keeps a
    Pokémon the player chose (a copy, or under Best a species) unless it does not fit the new role (D16).
@@ -135,7 +136,9 @@ Stated so each can be checked against the code.
    hits the boss first within a tier; Gym, the Gym table; Rocket, per leader slot, the Rocket table's entries that hit at
    least one of the slot's options for more than normal damage; PvP, the league's table with the roles of rule 22. Every
    row of the table for the slot is listed (S, A and B). **Owned** means the box has a copy of that species (a Shadow row needs a
-   Shadow copy, a plain row a plain one, as the table distinguishes them; a Shadow copy also serves the plain row) or a copy
+   Shadow copy, a plain row a plain one, as the table distinguishes them; area by area, a Shadow copy also serves the plain row in
+   Raids (as the advisor credits it: a Shadow Garchomp keeps Garchomp's own Dragon row) and in Rocket, but not on the Gym or in
+   Max (a Shadow cannot defend a gym or go Dynamax), and PvP reads the league's own rows) or a copy
    that one of the advisor's builds for this area can make into it (raid builds as `raidEntries` reads them, Rocket and Raids
    builds for Rocket, league candidates for PvP). A row with a build or candidate shows the player's best of them (the build at
    Full strength first, then the least dust, then the least candy) with its mark; a row with only a copy shows the best copy
@@ -143,8 +146,7 @@ Stated so each can be checked against the code.
    A copy shows against one row at a time: when a row's only copy is the one a higher row shows, the row still lists it with
    "same copy as <that row>", and a pick of that row is a species pick. An availability line matches a boss only when its
    Shadow state agrees with the table entry's; Raid Hours and other kinds with no boss are never read; a one-day event on today
-   reads "<title> today", and the last day of a run counts. The suggested squad fills each slot with the first unused row
-   for its role, owned or not; a not-owned Pokémon in a slot reads "Not in your box". A pick of a Pokémon the box lacks is
+   reads "<title> today", and the last day of a run counts. The suggested squad fills each slot with the first row for its role whose copy is not already in the squad, owned or not; a not-owned Pokémon in a slot reads "Not in your box". A pick of a Pokémon the box lacks is
    stored as its species (rule 27) and reads as the player's copy once the box has one.
 7. **Type icons**: every type chip is a round icon in the game's type colour, glyph white or ink by
    `Theme.pokemonTypeText`; the type name is its accessibility label.
@@ -214,7 +216,9 @@ Stated so each can be checked against the code.
    dropped when its event ends. A pick whose copy leaves the box empties the slot, and the slot refills with the
    suggestion. Available | Best is remembered per screen. A slot holds either a copy (its entry id) or, for a Best pick of a
    Pokémon the box lacks, a species key; a species pick is not touched when copies leave the box. Choosing a Pokémon takes it out of
-   every other slot whose pick is the same copy or the same species (a copy chosen later wins over an earlier species pick of it).
+   every other slot whose pick is the same copy or the same species, through every Best row that shows the copy (a copy chosen later
+   wins over an earlier species pick of it, under Available too, where the stored pick is read through the Best rows). A species
+   pick that reads as a copy ticks only the row the player picked. A Max row's rotation line reads the Max battles only.
    A copy picked under one mode that the other mode's list does not hold still shows in that mode's picker, ticked, with its
    own status. A pick that does not fit
    the mode is kept and comes back under its mode. A file saved before species picks existed reads as it did.
@@ -232,9 +236,10 @@ Stated so each can be checked against the code.
    is rated B or lower, is not in the table, or (Best) is a copy with no build for the slot; **to get** (red) when, under Best, it holds a Pokémon the box lacks;
    **empty** (red) when it holds nothing. The tier is the one for this area and slot: Raids and Max, the candidate's table tier (Raids: under the boss's bring types);
    Gym, the Gym table only (a Pokémon the table does not list needs work); Rocket, the Rocket table only (not a tier from another
-   area); PvP, the league tier shown everywhere (`LeaguePanel.tier(speciesId:key:score:)`: the table's, else the 88-score band),
+   area); the picker's tier chip on both is that same table tier; PvP, the league tier shown everywhere (`LeaguePanel.tier(speciesId:key:score:)`: the table's, else the 88-score band),
    the same under Available and Best. **Not counted**: a raid Mega slot under Available that is empty; a Mega slot the player
-   changed to another role, and every other empty slot, still count as empty. The card's background is a soft tint of the status
+   changed to another role, and every other empty slot, still count as empty. When a squad's options are hidden only by PvP's
+   one-species rule, the empty picker says "Your other options are the same species as a Pokémon already in this squad."; the neutral card has a dashed muted edge. The card's background is a soft tint of the status
    colour (`Theme.statusGreenTint`, `statusAmberTint`, `statusRedTint`; neutral for not counted); the disc and the role text keep
    the role colour; a word and icon (Ready, Needs work, To get, Empty, Not counted) sit at the card's foot. A card's VoiceOver
    label ends with the status ("Mega slot, not counted under Available" for the neutral slot).

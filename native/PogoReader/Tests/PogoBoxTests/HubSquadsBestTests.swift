@@ -173,7 +173,7 @@ final class HubSquadsBestTests: XCTestCase {
         let swampert = rows.first { $0.key == "swampert" }!
         XCTAssertEqual(swampert.entryId, "species:swampert")
         XCTAssertEqual(swampert.ownedEntryId, "e2")
-        XCTAssertEqual(HubSquads.equivalents(of: "species:swampert", rows: rows).sorted(), ["e2", "species:swampert"])
+        XCTAssertEqual(HubSquads.equivalents(of: "species:swampert", rows: rows).sorted(), ["e2", "species:swampert", "species:swampert_mega"], "every row that shows the copy")
         let slots = [SquadSlot(role: "Bulky hitter", species: "swampert")]
         let squad = HubSquads.bestSquad(slots: slots, rows: rows)
         XCTAssertEqual(squad[0].entryId, "e2")
@@ -181,15 +181,125 @@ final class HubSquadsBestTests: XCTestCase {
         XCTAssertTrue(squad[0].ids.contains("species:swampert") && squad[0].ids.contains("e2"))
     }
 
+    // MARK: one copy per squad (confirmation round B1, B2)
+
+    /// Primal Kyogre and Kyogre are two table rows of one copy.
+    private func kyogreCtx(rotation: [HubData.RotationRow] = []) -> HubContext {
+        let table = P23.table([P23.tierEntry("raids", "Water", "S", "kyogre_primal", mega: true), P23.tierEntry("raids", "Water", "S", "kyogre")])
+        return P23.ctx(builds: [P23.build("k1", "kyogre", areas: ["Raids"], powerUp: false, viaMega: true)], entries: [P23.entry("k1", "kyogre")], table: table, rotation: rotation)
+    }
+
+    private func slotsUsing(_ squad: [FilledSlot], rows: [HubSquads.BestRow]) -> [String] {
+        let copyOf = HubSquads.copyResolver(rows: rows)
+        return squad.compactMap { $0.pickId.flatMap(copyOf) }
+    }
+
+    func testASuggestedRaidSquadNeverUsesOneCopyTwice() {
+        let ctx = kyogreCtx()
+        let rows = HubSquads.bestRaidRows(row: fireBoss, ctx: ctx)
+        XCTAssertEqual(rows.map(\.key), ["kyogre_primal", "kyogre"])
+        XCTAssertEqual(rows.map(\.entryId), ["k1", "species:kyogre"], "the second row shows the same copy under a species id")
+        let squad = HubSquads.bestSquad(slots: HubSquads.defaultRaidSlots(), rows: rows)
+        XCTAssertEqual(slotsUsing(squad, rows: rows), ["k1"], "one copy, one slot")
+        XCTAssertEqual(squad.map(\.pickId), ["k1", nil, nil, nil, nil, nil])
+        // A pick of the shared row first: the copy is then the picked row's, and the other row's suggestion is skipped.
+        var slots = HubSquads.defaultRaidSlots(); slots[4] = SquadSlot(role: "Bulky hitter", species: "kyogre")
+        let picked = HubSquads.bestSquad(slots: slots, rows: rows)
+        XCTAssertEqual(slotsUsing(picked, rows: rows), ["k1"])
+        XCTAssertEqual(picked[4].entryId, "k1")
+        XCTAssertNil(picked[0].pickId, "the Mega slot cannot take the copy the Bulky slot holds")
+    }
+
+    func testThePickerDoesNotOfferARowWhoseCopyIsInAnotherSlot() {
+        let ctx = kyogreCtx()
+        let rows = HubSquads.bestRaidRows(row: fireBoss, ctx: ctx)
+        let squad = HubSquads.bestSquad(slots: HubSquads.defaultRaidSlots(), rows: rows)
+        let copyOf = HubSquads.copyResolver(rows: rows)
+        let excluded = HubSquads.excluded(by: squad, editing: 4, onlyChosen: false, copyOf: copyOf)
+        let listed = HubSquads.picker(candidates: rows.map(\.entryId), excluded: excluded, ownIds: [], copyOf: copyOf)
+        XCTAssertEqual(listed.map(\.entryId), [], "neither row of the copy the Mega slot holds")
+        // The slot holding it still lists its own row, ticked, and only that row.
+        let own = HubSquads.tickIds(squad[0], rows: rows)
+        XCTAssertEqual(own, ["k1"])
+        XCTAssertEqual(HubSquads.picker(candidates: rows.map(\.entryId), excluded: HubSquads.excluded(by: squad, editing: 0, onlyChosen: false, copyOf: copyOf), ownIds: own, copyOf: copyOf).map(\.entryId), ["k1", "species:kyogre"])
+        // A species pick that reads as the copy ticks the row the player picked, not the higher row.
+        let viaSpecies = HubSquads.bestSquad(slots: [SquadSlot(role: "Bulky hitter", species: "kyogre")], rows: rows)
+        XCTAssertEqual(HubSquads.tickIds(viaSpecies[0], rows: rows), ["species:kyogre"])
+    }
+
+    func testARocketLeadersSquadNeverUsesOneShadowCopyTwice() {
+        let normal = P23.boss("kangaskhan", types: ["normal"])
+        let leader = HubData.Leader(name: "Test", since: "2026-10", slots: [[normal], [normal], [normal]], source: "")
+        let table = P23.table([P23.tierEntry("rocket", "Attacker tiers", "S", "machamp_shadow", shadow: true, name: "Shadow Machamp"), P23.tierEntry("rocket", "Attacker tiers", "A", "machamp")])
+        let ctx = P23.ctx(builds: [P23.build("s1", "machamp", areas: ["Rocket"])], entries: [P23.entry("s1", "machamp", shadow: 1)], table: table, rotation: [])
+        let squad = HubSquads.bestRocketSquad(leader: leader, ctx: ctx)
+        XCTAssertEqual(squad.map(\.pickId), ["s1", nil, nil], "the Shadow row and the plain row show one copy: it fills one slot")
+        // The plain row picked in slot 2 first (a species pick), then slot 1 cannot take the Shadow row's copy as well.
+        let slots = [SquadSlot(role: "Counter"), SquadSlot(role: "Counter", species: "machamp"), SquadSlot(role: "Counter")]
+        let picked = HubSquads.bestRocketSquad(leader: leader, slots: slots, ctx: ctx)
+        XCTAssertEqual(picked.map(\.pickId), [nil, "s1", nil])
+    }
+
     func testChoosingAClearsTheSameCopyOrSpeciesFromOtherSlots() {
-        var s = SquadStore.Saved(slots: [SquadSlot(role: "Heavy hitter", species: "garchomp"), SquadSlot(role: "Heavy hitter")])
-        s.choose("e9", at: 1, alsoClearing: ["species:garchomp", "e9"])
-        XCTAssertEqual(s.slots[0], SquadSlot(role: "Heavy hitter"), "the copy chosen later wins over the species pick")
-        XCTAssertEqual(s.slots[1].pick, "e9")
-        var t = SquadStore.Saved(slots: [SquadSlot(role: "Heavy hitter", pick: "e9"), SquadSlot(role: "Heavy hitter")])
-        t.choose("species:garchomp", at: 1, alsoClearing: ["e9"])
-        XCTAssertNil(t.slots[0].pick)
-        XCTAssertEqual(t.slots[1].species, "garchomp")
+        let rows = HubSquads.bestRaidRows(row: fireBoss, ctx: kyogreCtx())
+        // A copy shown on two rows: every id of both rows stands for it.
+        XCTAssertEqual(Set(HubSquads.equivalents(of: "k1", rows: rows)), ["k1", "species:kyogre", "species:kyogre_primal"])
+        XCTAssertEqual(Set(HubSquads.equivalents(of: "species:kyogre", rows: rows)), ["k1", "species:kyogre", "species:kyogre_primal"])
+        var s = SquadStore.Saved(slots: [SquadSlot(role: "Heavy hitter", species: "kyogre_primal"), SquadSlot(role: "Heavy hitter", species: "kyogre"), SquadSlot(role: "Heavy hitter")])
+        s.choose("k1", at: 2, alsoClearing: HubSquads.equivalents(of: "k1", rows: rows))
+        XCTAssertEqual(s.slots[0], SquadSlot(role: "Heavy hitter"), "a species pick of the other row that shows the copy")
+        XCTAssertEqual(s.slots[1], SquadSlot(role: "Heavy hitter"))
+        XCTAssertEqual(s.slots[2].pick, "k1")
+        // Under Available there are no Best rows on screen: the stored species pick is still cleared, through the Best rows the caller reads.
+        var t = SquadStore.Saved(slots: [SquadSlot(role: "Heavy hitter", species: "kyogre"), SquadSlot(role: "Heavy hitter")])
+        t.choose("k1", at: 1, alsoClearing: HubSquads.equivalents(of: "k1", rows: HubSquads.bestRaidRows(row: fireBoss, ctx: kyogreCtx())))
+        XCTAssertNil(t.slots[0].species)
+        // The reverse: a species pick wins over an earlier copy pick.
+        var u = SquadStore.Saved(slots: [SquadSlot(role: "Heavy hitter", pick: "k1"), SquadSlot(role: "Heavy hitter")])
+        u.choose("species:kyogre", at: 1, alsoClearing: HubSquads.equivalents(of: "species:kyogre", rows: rows))
+        XCTAssertNil(u.slots[0].pick)
+        XCTAssertEqual(u.slots[1].species, "kyogre")
+        // Across Rocket slots: a copy chosen in one slot clears the species pick of any slot's row for it.
+        let machamp = P23.boss("kangaskhan", types: ["normal"])
+        let table = P23.table([P23.tierEntry("rocket", "Attacker tiers", "S", "machamp_shadow", shadow: true), P23.tierEntry("rocket", "Attacker tiers", "A", "machamp")])
+        let ctx = P23.ctx(builds: [P23.build("s1", "machamp", areas: ["Rocket"])], entries: [P23.entry("s1", "machamp", shadow: 1)], table: table, rotation: [])
+        let all = HubSquads.bestRocketRows(options: [machamp], ctx: ctx) + HubSquads.bestRocketRows(options: [machamp, machamp], ctx: ctx)
+        var r = SquadStore.Saved(slots: [SquadSlot(role: "Counter", species: "machamp"), SquadSlot(role: "Counter")])
+        r.choose("s1", at: 1, alsoClearing: HubSquads.equivalents(of: "s1", rows: all))
+        XCTAssertNil(r.slots[0].species)
+    }
+
+    // MARK: Shadow copies by area (S1), Max rotation (S3)
+
+    func testAShadowCopyServesRaidsAndRocketPlainRowsButNotGymOrMax() {
+        let shadowCopy = P23.entry("s1", "garchomp", shadow: 1)
+        // Raids: a Shadow target (garchomp_shadow) also fills the plain Garchomp row.
+        let raids = P23.ctx(builds: [P23.build("s1", "garchomp_shadow", areas: ["Raids"])], entries: [shadowCopy], table: P23.table([P23.tierEntry("raids", "Ground", "A", "garchomp")]), rotation: [])
+        XCTAssertEqual(HubSquads.bestRaidRows(row: fireBoss, ctx: raids).map(\.ownedEntryId), ["s1"])
+        XCTAssertEqual(HubRaidsModel.raidEntries(targetId: "garchomp_shadow", viaMega: false, table: raids.table, shadow: true).map(\.speciesId), ["garchomp"])
+        // A copy with no build still serves the plain row in Raids.
+        let bare = P23.ctx(entries: [shadowCopy], table: P23.table([P23.tierEntry("raids", "Ground", "A", "garchomp")]), rotation: [])
+        XCTAssertEqual(HubSquads.bestRaidRows(row: fireBoss, ctx: bare).map(\.ownedEntryId), ["s1"])
+        // Gym and Max: no.
+        let gymTable = P23.table([P23.tierEntry("gym", "Tiers", "S", "garchomp")])
+        let gym = P23.ctx(builds: [P23.build("s1", "garchomp", areas: ["Gym"])], entries: [shadowCopy], table: gymTable, rotation: [])
+        XCTAssertEqual(HubSquads.bestGymRows(ctx: gym).map(\.inBox), [false], "a Shadow cannot defend a gym")
+        let maxTable = P23.table([P23.tierEntry("max", "Attackers", "S", "garchomp")])
+        let boss = P23.row("2026-10-26", "2026-10-26", .maxMonday, bosses: [P23.boss("charizard", types: ["fire"])])
+        let max = P23.ctx(builds: [P23.build("s1", "garchomp", areas: ["Max"])], entries: [shadowCopy], table: maxTable, rotation: [])
+        XCTAssertEqual(HubSquads.bestMaxRows(row: boss, ctx: max).map(\.inBox), [false], "a Shadow cannot go Dynamax")
+        // A plain copy serves them.
+        let plain = P23.entry("p1", "garchomp")
+        XCTAssertEqual(HubSquads.bestGymRows(ctx: P23.ctx(builds: [P23.build("p1", "garchomp", areas: ["Gym"])], entries: [plain], table: gymTable, rotation: [])).map(\.ownedEntryId), ["p1"])
+    }
+
+    func testAMaxRowsRotationReadsMaxBattlesOnly() {
+        let table = P23.table([P23.tierEntry("max", "Attackers", "S", "kingler")])
+        let boss = P23.row("2026-10-26", "2026-10-26", .maxMonday, bosses: [P23.boss("charizard", types: ["fire"])])
+        let raidBoss = [P23.row("2026-10-20", "2026-10-30", bosses: [P23.boss("kingler", types: ["water"])])]
+        XCTAssertEqual(HubSquads.bestMaxRows(row: boss, ctx: P23.ctx(table: table, rotation: raidBoss)).map(\.availability), ["Last available not known"], "a raid boss is no Max battle")
+        let maxBoss = [P23.row("2026-11-02", "2026-11-02", .maxMonday, title: "Max Monday", bosses: [P23.boss("kingler", types: ["water"])])]
+        XCTAssertEqual(HubSquads.bestMaxRows(row: boss, ctx: P23.ctx(table: table, rotation: maxBoss)).map(\.availability), ["Max Monday 2 Nov"])
     }
 
     func testMaxAttackerTakesTheFirstThatHitsTheBossEvenOverAHigherTier() {
