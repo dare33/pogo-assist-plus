@@ -52,6 +52,7 @@
 		4802DD98D7286E310F86378A /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D08E55E9B50EC09258EFF1 /* AppModel.swift */; };
 		4B140840C0B01BB6DA9674AA /* HubScreensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84957A517D0BAC062A93BF66 /* HubScreensTests.swift */; };
 		4BE32EC2DFE72F4876196E9F /* MyPokemonScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1DB9FF783040B246467AE4 /* MyPokemonScreenTests.swift */; };
+		4FD39FFDFE728BA07015D0A7 /* JumpThrottleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15FB3B6EA5DBF0AED88D53BD /* JumpThrottleTests.swift */; };
 		5143F741547AF0FBD8D7A675 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */; };
 		53E565D8D2134740F880785D /* StateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9E2F476A7C0759293BCB1F /* StateModel.swift */; };
 		5553437CDA3A018C951B71A1 /* ScreenshotImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384EC74CAE6F7A853DC89045 /* ScreenshotImport.swift */; };
@@ -208,6 +209,7 @@
 		10EFC08EEA5AD7BB42454DD8 /* HistoryScansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryScansView.swift; sourceTree = "<group>"; };
 		1222BDC1C6F45E94BECD7F63 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
 		12671B8F5C741B95055AAC34 /* ListScreensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListScreensTests.swift; sourceTree = "<group>"; };
+		15FB3B6EA5DBF0AED88D53BD /* JumpThrottleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JumpThrottleTests.swift; sourceTree = "<group>"; };
 		167560673B06A1C7DF3C9ACE /* ScreenshotImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImportSheet.swift; sourceTree = "<group>"; };
 		1BB1A15D6F733EEE0586D675 /* RankingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingControls.swift; sourceTree = "<group>"; };
 		1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSearch.swift; sourceTree = "<group>"; };
@@ -473,6 +475,7 @@
 			children = (
 				3D04F07048F190593A9DCBE6 /* BoxInsightStoreTests.swift */,
 				FFC7060894571F96C95B0C0A /* BuildMarkWordsTests.swift */,
+				15FB3B6EA5DBF0AED88D53BD /* JumpThrottleTests.swift */,
 				2B63A4AC73C349DBA01D3BAF /* MarkEditorTests.swift */,
 				92C1CAF14271C5019066D125 /* PvPPlacementTests.swift */,
 				D76F4EFCC26E0B2FC6ADEC25 /* SquadKeeperTests.swift */,
@@ -814,6 +817,7 @@
 			files = (
 				F2025255259D74D0143F1857 /* BoxInsightStoreTests.swift in Sources */,
 				CF7E25FC86D3606DE6D103B6 /* BuildMarkWordsTests.swift in Sources */,
+				4FD39FFDFE728BA07015D0A7 /* JumpThrottleTests.swift in Sources */,
 				DC26D695B43A1397836CD3F1 /* MarkEditorTests.swift in Sources */,
 				407469E8DD128DD568177761 /* PvPPlacementTests.swift in Sources */,
 				6C038EA5EB1AC98EBA13BB21 /* SquadKeeperTests.swift in Sources */,
