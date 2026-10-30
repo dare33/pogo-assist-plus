@@ -88,6 +88,7 @@ struct PokemonDetailView: View {
         .hidesTabBar()
         .confirmDelete($deleting) { dismiss() }
         .onChange(of: model.advice) { _, new in adviceGen += 1; if case .ready = new { PageTimings.advice("whole box") } }
+        .onChange(of: model.familyStamp) { _, _ in adviceGen += 1 }
         .onChange(of: markKey) { _, _ in PageTimings.drawn() }
     }
 
@@ -203,9 +204,11 @@ struct PokemonDetailView: View {
 
     // MARK: the tabs
 
-    /// What the advice gives the page: the last ready advice stays on show while a new one is worked out (an edit recomputes it), so the page does not jump.
+    /// What the advice gives the page: after an edit, the edited family's advice (worked out at once, `AppModel.familyAdvice`) stands in until the whole box's is ready;
+    /// otherwise the last ready advice stays on show while a new one is worked out, so the page does not jump.
     private var readyAdvice: BoxAdvice? {
         if case .ready(let a) = model.advice { cache.lastReady = a; return a }
+        if let f = model.familyAdvice { cache.lastReady = f; return f }
         return cache.lastReady
     }
 
