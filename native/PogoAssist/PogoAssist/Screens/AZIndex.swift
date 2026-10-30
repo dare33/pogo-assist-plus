@@ -100,7 +100,17 @@ struct AZIndex: View {
     /// The finger lifted: the list goes to the last letter it was asked for.
     private func finishDrag() { throttle.finish(scrollTo); dragLetter = nil }
 
-    private var shown: Bool { lettersShown && (activity.moving || dragging) }
+    /// A DEBUG build honours `-uitest-az-always`: the letters stay drawn and touchable, so a UI test (which cannot tap within the second the letters fade after the list
+    /// stops) can use them.
+    private static var alwaysShown: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-uitest-az-always")
+        #else
+        return false
+        #endif
+    }
+
+    private var shown: Bool { lettersShown && (activity.moving || dragging || Self.alwaysShown) }
 
     var body: some View {
         letters
