@@ -63,7 +63,7 @@ final class JumpThrottle {
     }
 
     /// The finger lifted: the last letter is scrolled to, and the next touch starts afresh (the list may have been scrolled elsewhere meanwhile).
-    func finish(_ scroll: (String) -> Void) { flush(scroll); scrolled = nil }
+    func finish(_ scroll: (String) -> Void) { flush(scroll); scrolled = nil; last = .distantPast }
 }
 
 /// The A-Z index in the right gutter (22 pt wide). The letters are drawn only while the list moves (or the index is being dragged); VoiceOver always has it, as
@@ -81,7 +81,8 @@ struct AZIndex: View {
     let scrollTo: (String) -> Void
     @Environment(\.accent) private var accent
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dragging = false
+    /// True while a finger is on the letters. A gesture state, so a drag the system cancels (a call, a gesture that takes over) puts it back too.
+    @GestureState private var dragging = false
     /// The letter the finger is on now: a drag that comes back to a letter after the list was scrolled elsewhere jumps again.
     @State private var dragLetter: String?
     /// The section the list was last sent to, lit in the index. Held here, not in the list's screen: a change to it must rebuild only the letters, not every row on the list.
@@ -111,6 +112,7 @@ struct AZIndex: View {
             .overlay { voiceOverElement }
             .padding(.trailing, 1)
             .accessibilityElement(children: .contain)
+            .onChange(of: dragging) { _, now in if !now { finishDrag() } }   // also when the system cancelled the drag, so the next touch starts afresh
     }
 
     private var letters: some View {
@@ -126,8 +128,9 @@ struct AZIndex: View {
         .frame(width: 22)
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 0)
-            .onChanged { v in dragging = true; jump(to: labels[min(max(Int(v.location.y / rowHeight), 0), labels.count - 1)]) }
-            .onEnded { _ in dragging = false; finishDrag() })
+            .updating($dragging) { _, state, _ in state = true }
+            .onChanged { v in jump(to: labels[min(max(Int(v.location.y / rowHeight), 0), labels.count - 1)]) }
+            .onEnded { _ in finishDrag() })
     }
 
     /// Always present, not drawn: the one element VoiceOver finds, whether or not the letters show.

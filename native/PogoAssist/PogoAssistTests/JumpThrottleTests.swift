@@ -29,6 +29,16 @@ import XCTest
         XCTAssertEqual(went, ["A", "C"], "B was skipped; C is where the finger lifted")
     }
 
+    func testAFreshTapRightAfterADragJumpsAtOnce() {
+        let t = JumpThrottle(); var went = [String]()
+        let scroll: (String) -> Void = { went.append($0) }
+        t.request("A", scroll: scroll); t.request("B", scroll: scroll)
+        t.finish(scroll)
+        XCTAssertEqual(went, ["A", "B"])
+        t.request("Q", scroll: scroll)   // no wait: the throttle belongs to one touch
+        XCTAssertEqual(went, ["A", "B", "Q"])
+    }
+
     func testTheSameLetterAgainAfterTheTouchEndedJumpsAgain() async {
         let t = JumpThrottle(); var went = [String]()
         let scroll: (String) -> Void = { went.append($0) }

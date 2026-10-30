@@ -173,6 +173,34 @@ final class MyPokemonScreenTests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'species-best-'")).allElementsBoundByIndex.isEmpty, "with at least one card")
     }
 
+    /// A tap on a letter of the A-Z index takes the list to that letter, on Greg's big box (seeded from the fixture by the DEBUG launch argument).
+    func testATapOnALetterTakesTheListThere() throws {
+        let csv = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("fixtures/greg-2026-10-22.box.csv").path
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light", "-uitest-today", "2026-10-25", "-uitest-seed-box", csv]
+        app.launch()
+        let first = app.buttons.matching(identifier: "species-row").firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 90), "the big box shows its species")
+        XCTAssertTrue(first.label.hasPrefix("A") || first.label.hasPrefix("B"), "the list starts near the top")
+        let jump = app.descendants(matching: .any)["az-jump"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 10))
+        func visible(startingWith letter: String) -> Bool {
+            app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", letter)).allElementsBoundByIndex.contains { $0.exists && $0.isHittable }
+        }
+        // The letters show while the list moves: nudge it, then tap the letter in the gutter. Letters are 14 pt each, A first, over the index element's frame.
+        for (letter, at) in [("M", 12), ("T", 19), ("C", 2)] {
+            app.swipeDown(velocity: .fast); app.swipeUp(velocity: .slow)
+            let frame = jump.frame
+            XCTAssertGreaterThan(frame.height, 300, "the index is the height of its letters")
+            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.minY + (CGFloat(at) + 0.5) * 14)).tap()
+            expectation(for: NSPredicate(format: "count > 0"), evaluatedWith: app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", letter)))
+            waitForExpectations(timeout: 15)
+            XCTAssertTrue(visible(startingWith: letter), "a row starting with \(letter) is on the screen after the tap on \(letter)")
+            XCTAssertFalse(visible(startingWith: letter == "M" ? "A" : "Z"), "and the list is not where it was")
+        }
+    }
+
     func testTheJumpToLetterElementIsAlwaysThereForVoiceOver() throws {
         let app = launchOnMoltres()   // a search is active: one section (M)
         let jump = app.descendants(matching: .any)["az-jump"]
