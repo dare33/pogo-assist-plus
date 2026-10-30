@@ -5,9 +5,10 @@ import PogoReader
 /// `design_handoff_pass-2-hub/CONCEPTS.md`. The per-screen rules are in `HubSquads+Areas.swift`; where squads are kept is `SquadStore.swift`.
 /// Everything is pure: the box, the advice, the rotation and "today" come in as arguments.
 public enum SquadMode: String, Codable, CaseIterable {
-    /// Pokémon as they are now (the default, D29).
+    /// The player's own Pokémon as they are now, best first for the slot (the default, D29).
     case available
-    /// The strongest the box can make, with the work each needs.
+    /// The best Pokémon in the game for the slot from the research tables, owned or not (`HubSquads.BestRow`); the box's candidate lists with `.best` remain for the
+    /// lists that still read the box alone (the Rocket grunt counters, Next best).
     case best
 }
 
@@ -18,21 +19,34 @@ public enum SquadScreen: String, Codable, CaseIterable {
 /// The role that allows any Pokémon (D16).
 public let squadRoleAll = "All"
 
-/// One slot of a squad as the player left it: its role and the Pokémon they chose (an entry id), nil when the slot shows the suggestion.
+/// The prefix of a pick id that names a species rather than a copy: a Best squad may hold a Pokémon the box does not have (`SquadSlot.species`).
+public let squadSpeciesPrefix = "species:"
+
+/// One slot of a squad as the player left it: its role and the Pokémon they chose (an entry id), nil when the slot shows the suggestion. Under Best the player may
+/// instead choose a species they do not own: `species` is its key (`HubSquads.BestRow.key`). A slot holds one or the other. A file written before species picks
+/// existed has no `species` and reads as it did.
 public struct SquadSlot: Codable, Equatable {
     public var role: String
     public var pick: String?
-    public init(role: String, pick: String? = nil) { self.role = role; self.pick = pick }
+    public var species: String?
+    public init(role: String, pick: String? = nil, species: String? = nil) { self.role = role; self.pick = pick; self.species = species }
+
+    /// The pick as one id: the copy's entry id, else `squadSpeciesPrefix` + the species key.
+    public var pickId: String? { pick ?? species.map { squadSpeciesPrefix + $0 } }
 }
 
 /// A slot with its Pokémon worked out: the player's pick, else the suggestion, else nothing.
 public struct FilledSlot: Equatable {
     public var role: String
     public var entryId: String?
+    /// The species key of a Pokémon the box does not have (Best only); `entryId` is nil then.
+    public var species: String? = nil
     /// True when the player chose it; false for a suggestion.
     public var chosen: Bool
     /// True when no Pokémon is listed for the role and the slot took the best unused one of another role (PvP, rule 23).
     public var fallback: Bool
+    /// The slot's Pokémon as one id (the copy's entry id, else `squadSpeciesPrefix` + the species key); nil when the slot is empty.
+    public var pickId: String? { entryId ?? species.map { squadSpeciesPrefix + $0 } }
 }
 
 /// A Pokémon a slot may take, with the roles it is listed for. Each screen's candidate type conforms.
@@ -135,13 +149,16 @@ public enum HubSquads {
     public static func fill(slots: [SquadSlot], pool: (Int, String) -> Pool, placeable: (String, String) -> Bool = { _, _ in true }) -> [FilledSlot] {
         var used = Set<String>()
         var out = slots.map { FilledSlot(role: $0.role, entryId: nil, chosen: false, fallback: false) }
-        for (i, s) in slots.enumerated() {
-            if let p = s.pick, placeable(p, s.role), used.insert(p).inserted { out[i].entryId = p; out[i].chosen = true }
+        func put(_ id: String, at i: Int) {
+            if id.hasPrefix(squadSpeciesPrefix) { out[i].species = String(id.dropFirst(squadSpeciesPrefix.count)) } else { out[i].entryId = id }
         }
-        for (i, s) in slots.enumerated() where out[i].entryId == nil {
+        for (i, s) in slots.enumerated() {
+            if let p = s.pickId, placeable(p, s.role), used.insert(p).inserted { put(p, at: i); out[i].chosen = true }
+        }
+        for (i, s) in slots.enumerated() where out[i].pickId == nil {
             let p = pool(i, s.role)
-            if let id = p.preferred.first(where: { !used.contains($0) }) { used.insert(id); out[i].entryId = id }
-            else if let id = p.fallback.first(where: { !used.contains($0) }) { used.insert(id); out[i].entryId = id; out[i].fallback = true }
+            if let id = p.preferred.first(where: { !used.contains($0) }) { used.insert(id); put(id, at: i) }
+            else if let id = p.fallback.first(where: { !used.contains($0) }) { used.insert(id); put(id, at: i); out[i].fallback = true }
         }
         return out
     }
@@ -159,7 +176,7 @@ public enum HubSquads {
     /// The Pokémon the picker of `editing` must not offer: those in the squad's other slots (rule 4). On Rocket only Pokémon the player chose leave
     /// the list (D28), so `onlyChosen` is true there.
     public static func excluded(by filled: [FilledSlot], editing: Int, onlyChosen: Bool) -> Set<String> {
-        Set(filled.enumerated().compactMap { i, s in i != editing && (!onlyChosen || s.chosen) ? s.entryId : nil })
+        Set(filled.enumerated().compactMap { i, s in i != editing && (!onlyChosen || s.chosen) ? s.pickId : nil })
     }
 
     public struct PickerRow: Equatable {
@@ -177,7 +194,7 @@ public enum HubSquads {
     public static func changeRole(_ slots: inout [SquadSlot], at index: Int, to role: String, fits: (String) -> Bool) {
         guard slots.indices.contains(index) else { return }
         slots[index].role = role
-        if let p = slots[index].pick, !fits(p) { slots[index].pick = nil }
+        if let p = slots[index].pickId, !fits(p) { slots[index].pick = nil; slots[index].species = nil }
     }
 
     // MARK: rule 15: built rows on build lists
@@ -197,49 +214,5 @@ public enum HubSquads {
         let built = isBuilt(b)
         return BuildRow(build: b, built: built, cost: built ? Cost(value: nil, currency: .free) : cost(of: b),
                         subLine: built ? HubModel.areaWords(b) : HubModel.areaLabel(for: b))
-    }
-
-    // MARK: rule 6: could get now (placeholder, one function so it can be redefined)
-
-    /// An S or A gap the player could get now, why, and where.
-    public struct CouldGet: Equatable {
-        public var gap: BoxAdvice.Gap
-        /// "Boss on right now", "Easy to get" or "Easy to get: <the rest of the research text>".
-        public var why: String
-        public var whereTags: [String]
-        public var roles: [String]
-    }
-
-    /// THE placeholder (D19): a gap is attainable now when its species is a raid or Max boss on today, or its research obtain text starts with "Easy".
-    /// Redefine only this function. nil = not attainable now.
-    public static func attainable(_ g: BoxAdvice.Gap, ctx: HubContext) -> String? {
-        let now = HubRaidsModel.timeline(rows: ctx.hub.rotation, screen: .raids, today: ctx.today).now + HubRaidsModel.timeline(rows: ctx.hub.rotation, screen: .max, today: ctx.today).now
-        let onNow = Set(now.flatMap { $0.row.bosses.map(\.speciesId) })
-        if let id = g.speciesId, onNow.contains(id) || onNow.contains(id.replacingOccurrences(of: "_shadow", with: "")) { return "Boss on right now" }
-        let o = g.obtain ?? ""
-        guard o.hasPrefix("Easy") else { return nil }
-        let parts = o.split(separator: ".", maxSplits: 1)
-        let rest = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
-        return rest.isEmpty ? "Easy to get" : "Easy to get: " + rest
-    }
-
-    /// Where-tags from keywords in the research's obtain text (D27): Wild, Team Rocket, Raids (Raids now when the boss is on), Eggs, Community Day,
-    /// Research, Incense, Evolve, Trade, GO Pass; "Easy to get" when none matches.
-    public static func whereTags(obtain: String?, bossOnNow: Bool) -> [String] {
-        let o = (obtain ?? "").lowercased()
-        let cd = o.range(of: #"\bcd\b"#, options: .regularExpression) != nil   // "CD", "Cd", "(cd)": a word, not the letters inside another
-        var tags = bossOnNow ? ["Raids now"] : []
-        let rules: [(String, [String])] = [("Wild", ["wild"]), ("Team Rocket", ["rocket", "giovanni"]), ("Raids", ["raid"]), ("Eggs", ["egg"]),
-                                           ("Community Day", ["community day"]), ("Research", ["research"]), ("Incense", ["incense"]),
-                                           ("Evolve", ["evolve", "stone", " + "]), ("Trade", ["trade"]), ("GO Pass", ["go pass"])]
-        for (tag, keys) in rules where (keys.contains(where: { o.contains($0) }) || (tag == "Community Day" && cd)) && !tags.contains(tag) && !(tag == "Raids" && bossOnNow) { tags.append(tag) }
-        return tags.isEmpty ? ["Easy to get"] : tags
-    }
-
-    /// The gaps (S and A only) among `gaps` that are attainable now, with their roles from `roles`.
-    static func couldGet(_ gaps: [BoxAdvice.Gap], ctx: HubContext, roles: (BoxAdvice.Gap) -> [String]) -> [CouldGet] {
-        gaps.filter { $0.tier == "S" || $0.tier == "A" }.compactMap { g in
-            attainable(g, ctx: ctx).map { CouldGet(gap: g, why: $0, whereTags: whereTags(obtain: g.obtain, bossOnNow: $0 == "Boss on right now"), roles: roles(g)) }
-        }
     }
 }

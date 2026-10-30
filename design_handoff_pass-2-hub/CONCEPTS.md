@@ -34,17 +34,31 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Full strength**: a Pokémon with nothing left to do in its build; shown by a green tick badge (D33).
 - **Upgrade available**: a Pokémon whose build still has something to do; shown by an orange up-arrow, with the cost
   (dust or candy) beside it in pickers (D24, D30).
-- **Suggestions: Available | Best**: the switch that decides which Pokémon the suggested squads and pickers may use.
-  **Available** (the default, D29) uses Pokémon as they are now; **Best** uses the strongest the box can make, with the
-  work each needs (D18).
+- **Suggestions: Available | Best**: the switch that decides which Pokémon the suggested squads and pickers list. Redefined
+  after Greg's phone run of 30 Oct 2026 ("setting a team is confusing right now. available toggle should show available
+  pokemon the user has. and best should show a list of pokemon they should aim for including unavailable + available
+  ranked"). He ruled: "Available = the users best available pokemon for that position." "Best = the best pokemon
+  obtainable in the game even if not current obtainable (with ideally an indicator of when they might be available next
+  if thats known, and if not known then when it was last available)".
+  **Available** (the default, D29) lists only Pokémon in the player's box, best first for the slot, usable as they are
+  (rule 3). **Best** lists the best Pokémon in the game for the slot from our research tier tables, in the tables' order,
+  whether or not the player has it and whether or not it can be got now (rule 6).
 - **Slot**: one place in a squad; it has a **role** (Raids, Max, PvP) or a leader slot (Rocket) or a defender place (Gym).
 - **Role**: the job a slot's Pokémon does; each screen has its own set (below) plus **All**, which allows any Pokémon
   (D16).
 - **Picker**: the list under a squad that opens when a slot is tapped; choosing a row puts that Pokémon in the slot.
-- **Could get now**: top-tier Pokémon for the slot that the box cannot make and that are attainable now (D19); shown
-  open when the box has no option, folded behind "Could get now (N) ›" otherwise.
-- **Where tags**: short sources for a "could get now" Pokémon: WILD, TEAM ROCKET, RAIDS, RAIDS NOW, EGGS, COMMUNITY DAY,
-  RESEARCH, INCENSE, EVOLVE, TRADE, GO PASS; EASY TO GET when the research names none (D27).
+- **Not in your box** (Best only): a row, or a slot, whose Pokémon the player does not have. It carries an **availability
+  line** saying when it might be had: the rotation when the species is a raid or Max boss now or coming ("Raid boss
+  now", "Max battle now", "Raids from 9 Nov", "Max Monday 2 Nov", "Max battles from 16 Nov"), else the research table's
+  obtain text ("Medium. T5 raids"), which is the only "last available" information the app has (there is no history of
+  past dates); "Last available not known" only when the table has no obtain text either. This replaces **Could get now**
+  and the **Where tags** (retired 30 Oct 2026; D19 and D27 are superseded).
+- **Available upgrades:** the heading in an Available picker over the player's own Pokémon whose build still needs work;
+  the ones at Full strength come first, above it (rule 28; phone feedback item 10).
+- **Slot status**: the colour of a slot card's background: **ready** (green), **needs work** (amber), **to get** (red:
+  under Best, not in the box) or **empty** (red). The disc and the role text keep the role colour (rule 29).
+- **Squad status line**: one line over the slots, "Ready", "Nearly ready: 2 need work" or "Not ready: 2 to get, 1 empty",
+  with a dot in the same colour (rule 30).
 - **Tier chip** (S, A, B): the tier our research tables give a Pokémon for the area.
 - **"i"**: the round info button; every explanation of a weight or a rule sits behind one (D17).
 
@@ -98,17 +112,28 @@ Stated so each can be checked against the code.
 2. **Cost beside the arrow**: the build's `HubModel.costShort` split into value and currency: "19k" + stardust icon when
    dust is due; the candy count + candy icon when only candy is due; nothing when free. What the work is goes in the
    icon's label ("Upgrade available: power up to level 30").
-3. **Available**: a raid, Max, Gym or Rocket pick qualifies when its build keeps the copy's own species (`powerUp` and
-   not `formChange` and not `viaMega`); a PvP pick when the option is the copy itself (`option.isSelf`). In Available a
-   raid Mega slot is always empty.
+3. **Available**: only Pokémon in the player's box. A raid, Max, Gym or Rocket pick qualifies when its build keeps the
+   copy's own species (`powerUp` and not `formChange` and not `viaMega`); a PvP pick when the option is the copy itself
+   (`option.isSelf`). In Available a raid Mega slot is always empty. Available never lists a Pokémon the box lacks, and no
+   "could get" list is shown under it (a pick of a Pokémon the box lacks is not placed here; it stays stored and returns
+   under Best).
 4. **A Pokémon is in one slot at a time**: a copy in another slot of the same squad is not listed in that squad's
    picker; the slot being edited lists its own Pokémon, ticked. On Rocket only Pokémon the player chose leave the list
    (D28). One copy may sit in squads on different screens (manager's call, read-back Q6).
 5. **Changing a slot's role** relabels the slot, refills it with the best unused Pokémon for the new role, and keeps a
-   Pokémon the player chose unless it does not fit the new role (D16).
-6. **Could get now** (placeholder, one function): an S or A gap for the area and slot (a raid gap listed under one of the
-   boss's bring types; a Rocket gap that beats one of the slot's options) that is a raid or Max boss on now, or whose
-   research obtain text starts with "Easy". Where tags come from keywords in the same obtain text.
+   Pokémon the player chose (a copy, or under Best a species) unless it does not fit the new role (D16).
+6. **Best** (replaces Could get now, 30 Oct 2026): for a slot, the research tier tables' rows for the area, one per Pokémon,
+   ranked by tier (S, A, B), then the table's order (the # in the PvP tables). Which rows: Raids, the Raids table entries
+   listed under one of the boss's bring types (the strongest bring type first within a tier), with the role `raidRole`
+   gives the entry; Max, the Max table's entries with the table's roles (rule 12; Gigantamax entries never), a type that
+   hits the boss first within a tier; Gym, the Gym table; Rocket, per leader slot, the Rocket table's entries that hit at
+   least one of the slot's options for more than normal damage; PvP, the league's table with the roles of rule 22. Every
+   row of the table for the slot is listed (S, A and B). A row shows the player's best copy or build of that Pokémon when
+   the box has one (the build at Full strength first, then the least dust, then the least candy), with its mark (Full
+   strength, or Upgrade available with the cost); a copy that serves a higher row is not repeated lower down. A row the box
+   lacks reads **Not in your box** and its availability line. The suggested squad fills each slot with the first unused row
+   for its role, owned or not; a not-owned Pokémon in a slot reads "Not in your box". A pick of a Pokémon the box lacks is
+   stored as its species (rule 27) and reads as the player's copy once the box has one.
 7. **Type icons**: every type chip is a round icon in the game's type colour, glyph white or ink by
    `Theme.pokemonTypeText`; the type name is its accessibility label.
 
@@ -174,7 +199,27 @@ Stated so each can be checked against the code.
 
 27. **Where squads and picks are kept** (D58): per account, on the phone, surviving re-scans. A raid or Max squad is
    dropped when its event ends. A pick whose copy leaves the box empties the slot, and the slot refills with the
-   suggestion. Available | Best is remembered per screen.
+   suggestion. Available | Best is remembered per screen. A slot holds either a copy (its entry id) or, for a Best pick of a
+   Pokémon the box lacks, a species key; a species pick is not touched when copies leave the box. A pick that does not fit
+   the mode is kept and comes back under its mode. A file saved before species picks existed reads as it did.
+
+28. **Available upgrades** (phone feedback item 10): an Available picker lists the player's own Pokémon with those at Full
+   strength first and, under the heading "Available upgrades:", those whose build still needs work (the mark and cost stay
+   on each row), each group in the slot's order. When the box has nothing for the slot the text is the screen's own "No
+   <screen> build in your box." alone.
+
+### Squad status
+
+29. **Slot status**: **ready** (green) when the slot holds a Pokémon the player has, at Full strength, rated S or A in the
+   tier table for this area and slot; **needs work** (amber) when it holds one the player has that shows Upgrade available,
+   is rated B or lower, or is not in the table; **to get** (red) when, under Best, it holds a Pokémon the box lacks;
+   **empty** (red) when it holds nothing. The card's background is a soft tint of the status colour (Theme's green,
+   orange and red); the disc and the role text keep the role colour. A card's VoiceOver label ends with the status.
+
+30. **Squad status line** (identifier `squad-status`): "Ready" when every slot is ready; else, when no slot is empty or to
+   get, "Nearly ready: N need work" (N = the slots needing work; "1 needs work"); else "Not ready: " with "N to get" (Best
+   only) and "N empty", in that order, joined by a comma. The dot beside it is green, amber or red as the squad is ready,
+   nearly ready or not ready. It sits under the squad's heading, above the slots, on all five screens.
 
 ## Word check
 
@@ -184,7 +229,7 @@ Greg's read-back answers (D54, D55); item 6 he kept (D56).
 1. **"Available" (the switch) vs "TOP AVAILABLE" (Gym list heading)**: settled. The heading is now "Gym builds" (D54),
    so "available" means only "usable as it is".
 2. **"Best" (the switch) vs "Next best" (Rocket) vs "Best defenders first" (Gym "i") vs "best copies" (Showcase)**: four
-   meanings of "best". "Next best" was chosen over "Best available" and "Top options" for this reason (D50, D53); the
+   meanings of "best". (The switch's Best now means the best in the game for the slot, not the best the box can make.) "Next best" was chosen over "Best available" and "Top options" for this reason (D50, D53); the
    others remain.
 3. **"Top"**: "Top defenders" (a squad), "Top 3" (Raids list toggle), "top pick" (PvP grade). A top pick is a grade,
    the rest are lists; acceptable. ("TOP AVAILABLE" is gone, D54.)

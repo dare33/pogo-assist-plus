@@ -82,21 +82,6 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertEqual(HubSquads.raidCandidates(row: fireBoss, mode: .best, ctx: P23.ctx()), [], "an empty box")
     }
 
-    func testRaidGapsAreTheBringTypesAttainableNowByRole() {
-        let gaps = [P23.gap("Raids", "Kyogre", "kyogre", tier: "S", section: "Water", obtain: "Easy. Raids"),
-                    P23.gap("Raids", "Terrakion", "terrakion", tier: "A", section: "Rock", obtain: "Easy"),
-                    P23.gap("Raids", "Groudon", "groudon", tier: "S", section: "Fire", obtain: "Easy"),                // not a bring type
-                    P23.gap("Raids", "Kingler", "kingler", tier: "B", section: "Water", obtain: "Easy"),               // B tier
-                    P23.gap("Raids", "Mega Swampert", "swampert_mega", tier: "S", section: "Ground", obtain: "Hard")]  // not attainable
-        let ctx = P23.ctx(gaps: gaps)
-        let all = HubSquads.raidCouldGet(row: fireBoss, ctx: ctx)
-        XCTAssertEqual(all.map(\.gap.name), ["Kyogre", "Terrakion"])
-        XCTAssertEqual(all.map(\.roles), [["Bulky hitter"], ["Heavy hitter"]])
-        XCTAssertEqual(all[0].whereTags, ["Raids"])
-        XCTAssertEqual(HubSquads.raidCouldGet(row: fireBoss, role: "Heavy hitter", ctx: ctx).map(\.gap.name), ["Terrakion"])
-        XCTAssertEqual(HubSquads.raidCouldGet(row: fireBoss, role: squadRoleAll, ctx: ctx).count, 2)
-        XCTAssertEqual(HubSquads.raidCouldGet(row: fireBoss, role: "Mega", ctx: ctx), [])
-    }
 
     // MARK: Max
 
@@ -161,16 +146,6 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertFalse(avail.map(\.entryId).contains("m2"))
     }
 
-    func testMaxGapsByRole() {
-        let ctx = P23.ctx(gaps: [P23.gap("Max", "Blissey", "blissey", obtain: "Easy. Chansey wild"), P23.gap("Max", "Vaporeon", "vaporeon", section: "Attackers", obtain: "Easy"),
-                                 P23.gap("Max", "Mew", "mew", section: "Attackers", obtain: "Hard"), P23.gap("Gym", "Snorlax", "snorlax", obtain: "Easy")],
-                          table: maxTable())
-        XCTAssertEqual(HubSquads.maxCouldGet(ctx: ctx).map(\.gap.name), ["Blissey", "Vaporeon"])
-        XCTAssertEqual(HubSquads.maxCouldGet(role: "Healer", ctx: ctx).map(\.gap.name), ["Blissey"])
-        XCTAssertEqual(HubSquads.maxCouldGet(role: "Attacker", ctx: ctx).map(\.gap.name), ["Vaporeon"])
-        XCTAssertEqual(HubSquads.maxCouldGet(role: "Tank", ctx: ctx).map(\.gap.name), ["Blissey"])
-        XCTAssertEqual(HubSquads.maxCouldGet(role: "Tank", ctx: P23.ctx(gaps: [], table: maxTable())), [])
-    }
 
     // MARK: Gym
 
@@ -256,11 +231,6 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertEqual(HubSquads.defaultGymSlots().count, 6)
     }
 
-    func testGymGaps() {
-        let ctx = P23.ctx(gaps: [P23.gap("Gym", "Chansey", "chansey", tier: "S", obtain: "Easy. Wild"), P23.gap("Gym", "Slowbro", "slowbro", tier: "B", obtain: "Easy"),
-                                 P23.gap("Gym", "Mew", "mew", tier: "S", obtain: "Hard")])
-        XCTAssertEqual(HubSquads.gymCouldGet(ctx: ctx).map(\.gap.name), ["Chansey"])
-    }
 
     // MARK: Rocket
 
@@ -388,12 +358,6 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertEqual(HubSquads.beatenBy(gruntType: "water", hub: P23.hub), ["electric", "grass"])
     }
 
-    func testRocketGaps() {
-        let ctx = P23.ctx(gaps: [P23.gap("Rocket", "Togekiss", "togekiss", obtain: "Easy. Eggs"), P23.gap("Raids", "Snorlax", "snorlax", obtain: "Easy"),
-                                 P23.gap("Rocket", "Mewtwo", "mewtwo", obtain: "Hard"), P23.gap("Rocket", "Alakazam", "alakazam", tier: "B", obtain: "Easy")])
-        XCTAssertEqual(HubSquads.rocketCouldGet(options: [machamp], ctx: ctx).map(\.gap.name), ["Togekiss"], "Snorlax does not beat Fighting; Mewtwo is not attainable; Alakazam is B")
-        XCTAssertEqual(HubSquads.rocketCouldGet(options: [kangaskhan], ctx: ctx), [])
-    }
 
     // MARK: PvP
 
@@ -495,13 +459,4 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertEqual(HubTeams.suggestedTeam(candidates: c.map(\.candidate), gm: P23.gm, hub: P23.hub).count, 3)
     }
 
-    func testPvpGapsByRole() {
-        let ctx = P23.ctx(gaps: [P23.gap("GL", "Medicham", "medicham", obtain: "Easy. Wild"), P23.gap("GL", "Azumarill", "azumarill", obtain: "Easy"),
-                                 P23.gap("UL", "Registeel", "registeel", obtain: "Easy"), P23.gap("GL", "Lapras", "lapras", tier: "B", obtain: "Easy")],
-                          table: leagueTable())
-        XCTAssertEqual(HubSquads.pvpCouldGet(league: "gl", ctx: ctx).map(\.gap.name), ["Medicham", "Azumarill"])
-        XCTAssertEqual(HubSquads.pvpCouldGet(league: "gl", role: "Closer", ctx: ctx).map(\.gap.name), ["Medicham"])
-        XCTAssertEqual(HubSquads.pvpCouldGet(league: "gl", role: "Safe swap", ctx: ctx).map(\.gap.name), ["Azumarill"])
-        XCTAssertEqual(HubSquads.pvpCouldGet(league: "ul", ctx: ctx).map(\.gap.name), ["Registeel"], "the UL gap has no UL table role: listed for any role")
-    }
 }

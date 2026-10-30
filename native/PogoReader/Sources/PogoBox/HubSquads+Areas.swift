@@ -55,22 +55,6 @@ extension HubSquads {
         fill(slots: slots, pool: { _, role in Pool(preferred: pool(role: role, in: candidates)) }, placeable: placeable)
     }
 
-    /// Rule 6 for a raid slot: S and A Raids gaps listed under one of the boss's bring types (or, for a section that is not a type, whose species has
-    /// such a type) that are attainable now; `role` narrows to the slot's role (nil or All: any).
-    public static func raidCouldGet(row: HubData.RotationRow, role: String? = nil, ctx: HubContext) -> [CouldGet] {
-        let bring = Set(HubRaidsModel.bring(row: row, hub: ctx.hub))
-        let gaps = ctx.advice.gaps.filter { g in
-            guard g.area == "Raids" else { return false }
-            let section = (g.section ?? "").lowercased()
-            if HubData.typeOrder.contains(section) { return bring.contains(section) }
-            return !Set(ctx.gm.byId[g.speciesId ?? ""]?.types ?? []).isDisjoint(with: bring)
-        }
-        let all = couldGet(gaps, ctx: ctx) { g in
-            [PogoRules.raidRole(targetId: g.speciesId ?? "", viaMega: g.name.hasPrefix("Mega ") || g.name.hasPrefix("Primal "), shadow: g.name.hasPrefix("Shadow "), gm: ctx.gm).rawValue]
-        }
-        return all.filter { role == nil || role == squadRoleAll || $0.roles.contains(role!) }
-    }
-
     // MARK: Max (rule 12)
 
     public struct MaxCandidate: SquadCandidate, Equatable {
@@ -117,15 +101,6 @@ extension HubSquads {
         }, placeable: placeable)
     }
 
-    /// Rule 6 for a Max slot: S and A Max gaps attainable now, by the slot's role (Tank, Healer, Attacker; nil or All: any).
-    public static func maxCouldGet(role: String? = nil, ctx: HubContext) -> [CouldGet] {
-        let all = couldGet(ctx.advice.gaps.filter { $0.area == "Max" }, ctx: ctx) { g in
-            let roles = PogoRules.maxRoles(of: g.speciesId ?? "", table: ctx.table).map(\.rawValue)
-            return roles.isEmpty && g.section == "Attackers" ? [PogoRules.MaxRole.attacker.rawValue] : roles
-        }
-        return all.filter { role == nil || role == squadRoleAll || $0.roles.contains(role!) }
-    }
-
     // MARK: Gym (rules 13 and 14)
 
     public struct GymRow: Equatable {
@@ -142,20 +117,23 @@ extension HubSquads {
         public var ivsNotRead: Bool { bulk == .ivsNotRead }
     }
 
+    /// One Gym build as a row: its Gym table tier, whether it is at full strength, and its bulk (rule 14).
+    public static func gymRow(_ b: BoxAdvice.Build, ctx: HubContext) -> GymRow {
+        let tiers = ctx.table.entries(for: b.targetId, area: "gym").map(\.tier)
+        let tier = tiers.min { PogoRules.tierRank($0) < PogoRules.tierRank($1) } ?? b.tier
+        let built = isFullStrength(b, screen: .gym, ctx: ctx)
+        // Read or not is the copy's own level: the engine fills a missing one with 20 in the build (`p.level ?? 20`), which must never stand in for it.
+        let copy = ctx.entry(b.entryId)
+        let level: Double? = copy?.row.level.map { current in built ? current : (b.targetLevel ?? current) }
+        let bulk = PogoRules.bulk(target: b.targetId, ivs: copy?.row.ivs, level: level, gm: ctx.gm)
+        return GymRow(build: b, tier: tier, bulk: bulk, level: level, built: built)
+    }
+
     /// Rule 13: Gym builds ordered by Gym table tier, then bulk (CP is not a key). Within a tier, a copy whose level is not read (or whose bulk cannot be
     /// worked out) comes after those with a known bulk, in the advisor's order. One row per copy (its first build in the order).
     public static func gymRows(mode: SquadMode, ctx: HubContext) -> [GymRow] {
         var rows: [(r: GymRow, offset: Int)] = []
-        for (i, b) in HubTeams.gymAvailable(builds: ctx.advice.builds).enumerated() where isUsable(b, mode: mode) {
-            let tiers = ctx.table.entries(for: b.targetId, area: "gym").map(\.tier)
-            let tier = tiers.min { PogoRules.tierRank($0) < PogoRules.tierRank($1) } ?? b.tier
-            let built = isFullStrength(b, screen: .gym, ctx: ctx)
-            // Read or not is the copy's own level: the engine fills a missing one with 20 in the build (`p.level ?? 20`), which must never stand in for it.
-            let copy = ctx.entry(b.entryId)
-            let level: Double? = copy?.row.level.map { current in built ? current : (b.targetLevel ?? current) }
-            let bulk = PogoRules.bulk(target: b.targetId, ivs: copy?.row.ivs, level: level, gm: ctx.gm)
-            rows.append((GymRow(build: b, tier: tier, bulk: bulk, level: level, built: built), i))
-        }
+        for (i, b) in HubTeams.gymAvailable(builds: ctx.advice.builds).enumerated() where isUsable(b, mode: mode) { rows.append((gymRow(b, ctx: ctx), i)) }
         rows.sort { l, r in
             let (a, b) = (l.r, r.r)
             if PogoRules.tierRank(a.tier) != PogoRules.tierRank(b.tier) { return PogoRules.tierRank(a.tier) < PogoRules.tierRank(b.tier) }
@@ -180,14 +158,9 @@ extension HubSquads {
         fill(slots: slots, pool: { _, _ in Pool(preferred: rows.map { $0.build.entryId }) }, placeable: placeable)
     }
 
-    /// Rule 6 for the Gym: S and A Gym gaps attainable now.
-    public static func gymCouldGet(ctx: HubContext) -> [CouldGet] {
-        couldGet(ctx.advice.gaps.filter { $0.area == "Gym" }, ctx: ctx) { _ in [gymSlotRole] }
-    }
-
     // MARK: Team Rocket (rules 16 to 21)
 
-    private static func isRocketArea(_ b: BoxAdvice.Build) -> Bool { b.areas.contains("Rocket") || b.areas.contains("Raids") }
+    static func isRocketArea(_ b: BoxAdvice.Build) -> Bool { b.areas.contains("Rocket") || b.areas.contains("Raids") }
 
     /// One of a build's types, in colour when it hits one of the slot's options for more than normal damage, grey otherwise (rule 17).
     public struct TypeFlag: Equatable {
@@ -282,14 +255,6 @@ extension HubSquads {
         return fill(slots: slots, pool: { i, _ in Pool(preferred: pickers.indices.contains(i) ? pickers[i] : []) }, placeable: placeable(screen: .rocket, mode: mode, ctx: ctx))
     }
 
-    /// Rule 6 for a Rocket slot: S and A Rocket or Raids gaps that beat one of the slot's options and are attainable now.
-    public static func rocketCouldGet(options: [HubData.Boss], ctx: HubContext) -> [CouldGet] {
-        let gaps = ctx.advice.gaps.filter { g in
-            (g.area == "Rocket" || g.area == "Raids") && options.contains { ctx.hub.beats(ctx.gm.byId[g.speciesId ?? ""]?.types ?? [], $0.types) }
-        }
-        return couldGet(gaps, ctx: ctx) { _ in [] }
-    }
-
     /// Rule 19: the box's counters for a grunt type: up to eight, one per species, built first, then `HubTeams.gruntCounter`'s order (Rocket area, tier,
     /// score, advisor order); the first is the app's own pick. A typeless grunt (Mixed team, Decoy) reads "Any strong attacker" and lists none.
     public struct GruntCounters: Equatable {
@@ -358,13 +323,4 @@ extension HubSquads {
         return (types.count, types)
     }
 
-    /// Rule 6 for a PvP slot: S and A gaps of the league (`gl`, `ul`, `ml`) attainable now whose league-table role fits the slot's role (nil or All: any).
-    public static func pvpCouldGet(league: String, role: String? = nil, ctx: HubContext) -> [CouldGet] {
-        let label = BoxAdvice.areaLabel[league] ?? league
-        let all = couldGet(ctx.advice.gaps.filter { $0.area == label }, ctx: ctx) { g in
-            let roles = ctx.table.entries(for: g.speciesId ?? "", area: league).flatMap { pvpRoles($0.role ?? "") }
-            return PvpRole.allCases.filter(roles.contains).map(\.rawValue)
-        }
-        return all.filter { role == nil || role == squadRoleAll || $0.roles.contains(role!) }
-    }
 }
