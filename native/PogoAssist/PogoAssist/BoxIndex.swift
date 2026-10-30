@@ -241,7 +241,7 @@ struct BoxIndex {
         static func cpRange(_ word: String) -> ClosedRange<Int>? {
             guard word.hasPrefix("cp") else { return nil }
             let rest = word.dropFirst(2).replacingOccurrences(of: "–", with: "-")
-            if let n = Int(rest) { return n...n }
+            if !rest.hasPrefix("-"), let n = Int(rest) { return n...n }   // "cp-2500" is a limit, not a negative CP
             let parts = rest.split(separator: "-", omittingEmptySubsequences: false)
             guard parts.count == 2 else { return nil }
             switch (Int(parts[0]), Int(parts[1])) {
