@@ -28,13 +28,13 @@ struct BoxView: View {
     @State private var sections: [BoxIndex.Section] = []
     /// The index key `sections` were computed for; they show only while it is the current account's and box version's.
     @State private var sectionsFor: String?
-    @State private var jumped: String?
     @State private var rankingInfo = false
     /// The species opened in place (one at a time; another tap on its row closes it).
     @State private var openTitle: String?
     /// The advice's builds by the copy they are for, so a row's build mark does not walk the report.
     @State private var buildsByEntry: [String: [BoxAdvice.Build]] = [:]
-    @StateObject private var scrollActivity = ScrollActivity()
+    /// Not observed here: whether the list is moving changes the A-Z index (which observes it), not the rows.
+    @State private var scrollActivity = ScrollActivity()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @FocusState private var searching: Bool
@@ -502,7 +502,7 @@ struct BoxView: View {
     private func jumpIndex(_ proxy: ScrollViewProxy) -> some View {
         let labels: [String] = sort == .name ? ((65...90).map { String(UnicodeScalar($0)!) } + (sections.contains { $0.id == "#" } ? ["#"] : [])) : sections.map(\.short)
         let present = Dictionary(sections.map { ($0.short, $0.id) }, uniquingKeysWith: { a, _ in a })
-        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, lettersShown: showsIndex, jumped: $jumped) { id in proxy.scrollTo(id, anchor: .top) }
+        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, lettersShown: showsIndex) { id in proxy.scrollTo(id, anchor: .top) }
     }
 
     // MARK: saved panel

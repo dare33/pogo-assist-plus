@@ -64,6 +64,90 @@ public enum PokemonPage {
         return edit.marksOnly
     }
 
+    // MARK: edits the page has not saved yet
+
+    /// The row after the edit, made as saving it would (`BoxMerge.correct`), so the page can draw a mark or chip in its new state before the box version is written.
+    /// nil when the edit is refused (it never is for a mark or a chip).
+    public static func row(applying edit: BoxMerge.Edit, to entry: BoxEntry, gm: GameMaster) -> ScanRow? {
+        (try? BoxMerge.correct(entry, with: edit, gameMaster: gm))?.row
+    }
+
+    /// Whether two rows carry the same hand-set marks and details (the fields a mark or chip on the page changes). Shadow / Purified "marked neither by hand" (0) is
+    /// not the same as never marked (nil): turning a mark on and off again from nil stores 0, as `BoxMerge.ShadowEdit` says.
+    public static func sameMarks(_ a: ScanRow, _ b: ScanRow) -> Bool {
+        a.dynamax == b.dynamax && a.gigantamax == b.gigantamax && a.lucky == b.lucky && a.shadow == b.shadow && a.details == b.details
+    }
+
+    /// One field a tap on the page can change: a mark, or one part of the details (a move, a Max move level, the Mega level, a flag chip).
+    public enum MarkField: Hashable, CaseIterable {
+        case dynamax, gigantamax, lucky, shadow
+        case fastMove, chargedMove, chargedMove2, maxAttack, maxGuard, maxSpirit, megaLevel, bestBuddy, weatherBoosted
+    }
+
+    private static func differs(_ f: MarkField, _ a: ScanRow, _ b: ScanRow) -> Bool {
+        switch f {
+        case .dynamax: return a.dynamax != b.dynamax
+        case .gigantamax: return a.gigantamax != b.gigantamax
+        case .lucky: return a.lucky != b.lucky
+        case .shadow: return a.shadow != b.shadow
+        case .fastMove: return a.details?.fastMove != b.details?.fastMove
+        case .chargedMove: return a.details?.chargedMove != b.details?.chargedMove
+        case .chargedMove2: return a.details?.chargedMove2 != b.details?.chargedMove2
+        case .maxAttack: return a.details?.maxAttack != b.details?.maxAttack
+        case .maxGuard: return a.details?.maxGuard != b.details?.maxGuard
+        case .maxSpirit: return a.details?.maxSpirit != b.details?.maxSpirit
+        case .megaLevel: return a.details?.megaLevel != b.details?.megaLevel
+        case .bestBuddy: return a.details?.bestBuddy != b.details?.bestBuddy
+        case .weatherBoosted: return a.details?.weatherBoosted != b.details?.weatherBoosted
+        }
+    }
+
+    /// The fields a tap changed: those that differ between the row before it and the row after.
+    public static func touched(from before: ScanRow, to after: ScanRow) -> Set<MarkField> {
+        Set(MarkField.allCases.filter { differs($0, before, after) })
+    }
+
+    /// `row` with the marks and details of `wanted`: what the page draws while edits wait to be saved (every other field is the saved row's).
+    public static func showing(_ wanted: ScanRow, on row: ScanRow) -> ScanRow {
+        var r = row
+        r.dynamax = wanted.dynamax; r.gigantamax = wanted.gigantamax; r.lucky = wanted.lucky; r.shadow = wanted.shadow; r.details = wanted.details
+        return r
+    }
+
+    /// The one edit that takes the saved row to the row the player has left the marks in, for the fields they touched (`touching`; all of them by default): only those that
+    /// differ, from the latest desired values, so any number of taps on a mark come to one edit (an even number to none), and a field the player did not touch is never
+    /// written, whatever the saved row has become meanwhile. Applied to `saved` with `BoxMerge.correct` it gives `wanted`'s values for those fields.
+    public static func edit(from saved: ScanRow, to wanted: ScanRow, touching: Set<MarkField> = Set(MarkField.allCases)) -> BoxMerge.Edit {
+        var e = BoxMerge.Edit()
+        func changed(_ f: MarkField) -> Bool { touching.contains(f) && differs(f, saved, wanted) }
+        if changed(.dynamax) { e.dynamax = BoxMerge.DynamaxEdit(wanted.dynamax) }
+        if changed(.gigantamax) { e.gigantamax = wanted.gigantamax == true }
+        if changed(.lucky) { e.lucky = wanted.lucky == true }
+        if changed(.shadow) { e.shadow = BoxMerge.ShadowEdit(wanted.shadow) }
+        let detailFields = MarkField.allCases.filter(changed).filter { ![.dynamax, .gigantamax, .lucky, .shadow].contains($0) }
+        if !detailFields.isEmpty {
+            // The details as saved now, with only the touched parts taken from the wanted ones.
+            var d = saved.details ?? CopyDetails()
+            let w = wanted.details ?? CopyDetails()
+            for f in detailFields {
+                switch f {
+                case .fastMove: d.fastMove = w.fastMove
+                case .chargedMove: d.chargedMove = w.chargedMove
+                case .chargedMove2: d.chargedMove2 = w.chargedMove2
+                case .maxAttack: d.maxAttack = w.maxAttack
+                case .maxGuard: d.maxGuard = w.maxGuard
+                case .maxSpirit: d.maxSpirit = w.maxSpirit
+                case .megaLevel: d.megaLevel = w.megaLevel
+                case .bestBuddy: d.bestBuddy = w.bestBuddy
+                case .weatherBoosted: d.weatherBoosted = w.weatherBoosted
+                default: break
+                }
+            }
+            e.details = d
+        }
+        return e
+    }
+
     /// The types of a species; the fallback species' when the game master does not know it (the Mega form the page shows has its own types).
     public static func types(of speciesId: String, fallback: String, gm: GameMaster?) -> [String] {
         gm?.byId[speciesId]?.types ?? gm?.byId[fallback]?.types ?? []

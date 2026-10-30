@@ -16,9 +16,8 @@ struct PokemonDetailView: View {
     @State private var fixing = false
     @State private var deleting: DeleteTarget?
     @State private var advancedOpen = false
-    /// An edit is being saved: the marks and chips wait for it (two quick taps would save twice).
-    @State private var saving = false
-    @State private var queue: [(ScanRow) -> BoxMerge.Edit] = []
+    /// The marks and chips as the player has left them, drawn at once and saved behind (see `MarkEditor`).
+    @StateObject private var editor = MarkEditor()
     @AppStorage(PrefKey.megaDefault) private var megaDefault = MegaDefault.normal.rawValue
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @Environment(\.showToast) private var showToast
@@ -65,7 +64,7 @@ struct PokemonDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
                         if !e.row.checkFlags.isEmpty { checkPanel(e) }
-                        PokemonDetailsCard(entry: e, mega: megaShown(e), advancedOpen: $advancedOpen, apply: apply)
+                        PokemonDetailsCard(entry: shown(e), mega: megaShown(e), advancedOpen: $advancedOpen, apply: apply)
                         if e.shownMegaForm != nil { formSwitch(on: megaShown(e) != nil).frame(maxWidth: .infinity, alignment: .leading) }
                         if megaShown(e) != nil { megaSearchNote }
                         ActivityTabBar(selection: $tab)
@@ -88,7 +87,16 @@ struct PokemonDetailView: View {
         .toolbar(.hidden, for: .navigationBar)
         .hidesTabBar()
         .confirmDelete($deleting) { dismiss() }
-        .onChange(of: model.advice) { _, _ in adviceGen += 1 }
+        .onChange(of: model.advice) { _, new in adviceGen += 1; if case .ready = new { PageTimings.advice("whole box") } }
+        .onChange(of: model.familyStamp) { _, _ in adviceGen += 1 }
+        .onChange(of: markKey) { _, _ in PageTimings.drawn() }
+    }
+
+    /// What the details card draws from the row (the marks and chips), to time when it changes.
+    private var markKey: String {
+        guard let e = model.entry(id) else { return "" }
+        let r = shown(e).row
+        return "\(String(describing: r.dynamax))\(String(describing: r.gigantamax))\(String(describing: r.shadow))\(String(describing: r.lucky))\(String(describing: r.details))"
     }
 
     // MARK: header
@@ -125,25 +133,27 @@ struct PokemonDetailView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// Every mark and chip saves through the data model's edit as a box version; the advice is worked out again (AppModel.correct). An edit made while a save is
-    /// under way waits its turn (none is dropped) and is made from the row as it is then, so two quick edits both persist. An edit that would not change the row
-    /// (the chip already chosen, a mark already in that state) saves nothing and does not re-run the advice.
+    /// Every mark and chip changes the page at once and is saved as a box version behind (`MarkEditor`); the advice is worked out again (AppModel.correct). Taps
+    /// made while a save is under way, or in quick succession, settle on the state the player left the mark in and go as one edit; an edit that would not change the
+    /// row (the chip already chosen, a mark tapped twice) saves nothing and does not re-run the advice.
     private func apply(_ make: @escaping (ScanRow) -> BoxMerge.Edit) {
-        queue.append(make)
-        guard !saving else { return }
-        saving = true
-        Task {
-            while !queue.isEmpty {
-                let make = queue.removeFirst()
-                guard let row = model.entry(id)?.row else { break }
-                let edit = make(row)
-                if PokemonPage.isNoOp(edit, row) { continue }
+        editor.apply(make, MarkEditor.Backing(
+            entry: { [model, id] in model.entry(id) },
+            account: { [model] in model.account },
+            save: { [model, id] edit in
                 let result = await model.correct(id, edit)
-                if let error = result.error { model.message = error }
-            }
-            queue = []
-            saving = false
-        }
+                if let error = result.error { model.message = error; return false }
+                return true
+            },
+            tell: { [model] in model.message = $0 }))
+    }
+
+    /// The entry with the marks and chips the player has left them in, which may not be saved yet.
+    private func shown(_ e: BoxEntry) -> BoxEntry {
+        guard let w = editor.wanted else { return e }
+        var s = e
+        s.row = PokemonPage.showing(w, on: e.row)
+        return s
     }
 
     // MARK: Normal / Mega
@@ -198,9 +208,13 @@ struct PokemonDetailView: View {
 
     // MARK: the tabs
 
-    /// What the advice gives the page: the last ready advice stays on show while a new one is worked out (an edit recomputes it), so the page does not jump.
+    /// What the advice gives the page: after an edit, the edited family's advice (worked out at once, `AppModel.familyAdvice`) stands in until the whole box's is ready;
+    /// otherwise the last ready advice stays on show while a new one is worked out, so the page does not jump.
     private var readyAdvice: BoxAdvice? {
         if case .ready(let a) = model.advice { cache.lastReady = a; return a }
+        // A whole-box advise that failed shows its failure, not the family result or the advice before it.
+        if case .failed = model.advice { cache.lastReady = nil; return nil }
+        if let f = model.familyAdvice { cache.lastReady = f; return f }
         return cache.lastReady
     }
 
@@ -218,7 +232,7 @@ struct PokemonDetailView: View {
                 let rows = cache.value("summary|\(pogoAssist)") { PokemonActivities.summary(copy: e, ctx: ctx, pogoAssist: pogoAssist) }
                 SummaryRowsPanel(rows: rows) { tab = $0 }
                 AdvicePanel(entry: e, advice: advice)
-            case .pvp: leaguesPanel(e, advice: advice)
+            case .pvp: leaguesPanel(shown(e), advice: advice)   // the shown row: the Shadow note follows a tap at once
             case .raids:
                 let cards = cache.value("raids") { PokemonActivities.raidCards(copy: e, ctx: ctx) }
                 RaidsTab(copy: e, family: familyName(e, ctx), cards: cards)

@@ -248,6 +248,52 @@ final class PokemonPageTests: XCTestCase {
         waitForExpectations(timeout: 15)
     }
 
+    /// A mark answers a tap on the spot, before any save (the settle is widened to 4 s so the save cannot have begun), and two taps on a mark leave it as it was and
+    /// save nothing (a UI test cannot send two taps closer than a few tenths of a second, so the same widened settle makes them one burst).
+    func testAMarkAnswersAtOnceAndTwoTapsSaveNothing() throws {
+        let app = launchPopulated(["-uitest-mark-settle", "4"])
+        let versionBefore = latestVersion(app)
+        openCopy(app, "Scyther")
+        let dynamax = app.buttons["mark-dynamax"], shadow = app.buttons["mark-shadow"]
+        dynamax.tap(); dynamax.tap()
+        XCTAssertEqual(dynamax.value as? String, "Off", "tapped twice: as it was")
+        sleep(6)   // long enough for a save to have been made, had there been one
+        XCTAssertEqual(dynamax.value as? String, "Off")
+        shadow.tap()
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 'On'"), object: shadow)], timeout: 2.5), .completed,
+                       "the Shadow mark draws its new state at once, not after the save")
+        closeCopy(app)
+        // Only the Shadow tap saved a version (the page was left before the 4 s settle, and the save still went); the two taps on Dynamax saved nothing.
+        sleep(6)
+        XCTAssertEqual(latestVersion(app), versionBefore + 1)
+    }
+
+    /// Rapid taps on different marks and chips settle on the state the player left them in: Dynamax tapped three times is on, Shadow then Purified leaves Purified.
+    func testRapidTapsSettleOnTheLastState() throws {
+        let app = launchPopulated()
+        openCopy(app, "Scyther")
+        let dynamax = app.buttons["mark-dynamax"], shadow = app.buttons["mark-shadow"]
+        app.buttons["mark-advanced"].tap()
+        XCTAssertTrue(el(app, "flag-purified").waitForExistence(timeout: 10))
+        dynamax.tap(); dynamax.tap(); dynamax.tap()
+        shadow.tap()
+        el(app, "flag-purified").tap()
+        el(app, "flag-lucky").tap()
+        XCTAssertEqual(dynamax.value as? String, "On")
+        XCTAssertEqual(shadow.value as? String, "Off", "Purified on cleared Shadow")
+        waitValue(dynamax, "On", "Dynamax stays on")
+        sleep(4)   // the saves and the advice finish
+        XCTAssertEqual(dynamax.value as? String, "On"); XCTAssertEqual(shadow.value as? String, "Off")
+        closeCopy(app)
+        openCopy(app, "Scyther")
+        XCTAssertEqual(app.buttons["mark-dynamax"].value as? String, "On")
+        XCTAssertEqual(app.buttons["mark-shadow"].value as? String, "Off")
+        app.buttons["mark-advanced"].tap()
+        XCTAssertTrue(app.buttons["flag-purified"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["flag-purified"].isSelected, "Purified was saved")
+        XCTAssertTrue(app.buttons["flag-lucky"].isSelected, "Lucky was saved")
+    }
+
     /// A default move that was only shown is not saved by leaving the page; tapping a move saves it. And a Lucky edit makes a new box version with new advice: the
     /// cost shown on a Summary row changes (Lucky halves the power-up dust).
     func testDefaultsStayUnsavedAndLuckyReRunsTheAdvice() throws {

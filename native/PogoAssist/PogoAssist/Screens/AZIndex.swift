@@ -29,6 +29,43 @@ final class ScrollActivity: ObservableObject {
     }
 }
 
+/// Scrolls the list for the A-Z index, at most once every `gap` while a finger is dragging down the letters, always with the latest letter. Each jump lays out a
+/// screenful of new rows (tens of milliseconds), so a drag that crossed ten letters in a quarter of a second used to queue ten of them and freeze the list; now the
+/// letter that is lit follows the finger at once and the list follows at the pace it can keep up with. The first jump of a touch (a tap) goes at once, and the last
+/// letter is always scrolled to when the finger lifts.
+@MainActor
+final class JumpThrottle {
+    static let gap: TimeInterval = 0.07
+    private var last = Date.distantPast
+    private var scrolled: String?
+    private var pending: String?
+    private var timer: Task<Void, Never>?
+
+    /// Asks for a jump to `id`; `scroll` does it.
+    func request(_ id: String, scroll: @escaping (String) -> Void) {
+        pending = id
+        let wait = Self.gap - Date().timeIntervalSince(last)
+        if wait <= 0 { flush(scroll) }
+        else if timer == nil {
+            timer = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(wait))
+                if !Task.isCancelled { self?.flush(scroll) }
+            }
+        }
+    }
+
+    /// Scrolls to the latest letter asked for, if the list is not already there.
+    func flush(_ scroll: (String) -> Void) {
+        timer?.cancel(); timer = nil
+        guard let id = pending else { return }
+        pending = nil
+        if scrolled != id { scrolled = id; last = Date(); scroll(id) }
+    }
+
+    /// The finger lifted: the last letter is scrolled to, and the next touch starts afresh (the list may have been scrolled elsewhere meanwhile).
+    func finish(_ scroll: (String) -> Void) { flush(scroll); scrolled = nil; last = .distantPast }
+}
+
 /// The A-Z index in the right gutter (22 pt wide). The letters are drawn only while the list moves (or the index is being dragged); VoiceOver always has it, as
 /// one adjustable "Jump to letter" element, even while the letters are hidden (READBACK Q4). With Reduce Motion on, the letters appear and go without a fade.
 struct AZIndex: View {
@@ -41,23 +78,39 @@ struct AZIndex: View {
     let sections: [(id: String, heading: String)]
     /// The letters are drawn only when the list is long enough to want them (three sections or more, no search); the VoiceOver element is always there.
     var lettersShown = true
-    @Binding var jumped: String?
     let scrollTo: (String) -> Void
     @Environment(\.accent) private var accent
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dragging = false
+    /// True while a finger is on the letters. A gesture state, so a drag the system cancels (a call, a gesture that takes over) puts it back too.
+    @GestureState private var dragging = false
     /// The letter the finger is on now: a drag that comes back to a letter after the list was scrolled elsewhere jumps again.
     @State private var dragLetter: String?
+    /// The section the list was last sent to, lit in the index. Held here, not in the list's screen: a change to it must rebuild only the letters, not every row on the list.
+    @State private var jumped: String?
+    @State private var throttle = JumpThrottle()
 
     private let rowHeight: CGFloat = 14
 
     private func jump(to label: String) {
         // A letter with nothing under it goes to the next letter that has something.
         guard let at = labels.firstIndex(of: label), let hit = labels[at...].first(where: { present[$0] != nil }) ?? labels.last(where: { present[$0] != nil }), let id = present[hit] else { return }
-        if dragLetter != hit { dragLetter = hit; jumped = id; scrollTo(id) }
+        if dragLetter != hit { dragLetter = hit; jumped = id; throttle.request(id, scroll: scrollTo) }
     }
 
-    private var shown: Bool { lettersShown && (activity.moving || dragging) }
+    /// The finger lifted: the list goes to the last letter it was asked for.
+    private func finishDrag() { throttle.finish(scrollTo); dragLetter = nil }
+
+    /// A DEBUG build honours `-uitest-az-always`: the letters stay drawn and touchable, so a UI test (which cannot tap within the second the letters fade after the list
+    /// stops) can use them.
+    private static var alwaysShown: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-uitest-az-always")
+        #else
+        return false
+        #endif
+    }
+
+    private var shown: Bool { lettersShown && (activity.moving || dragging || Self.alwaysShown) }
 
     var body: some View {
         letters
@@ -69,6 +122,7 @@ struct AZIndex: View {
             .overlay { voiceOverElement }
             .padding(.trailing, 1)
             .accessibilityElement(children: .contain)
+            .onChange(of: dragging) { _, now in if !now { finishDrag() } }   // also when the system cancelled the drag, so the next touch starts afresh
     }
 
     private var letters: some View {
@@ -84,8 +138,9 @@ struct AZIndex: View {
         .frame(width: 22)
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 0)
-            .onChanged { v in dragging = true; jump(to: labels[min(max(Int(v.location.y / rowHeight), 0), labels.count - 1)]) }
-            .onEnded { _ in dragging = false; dragLetter = nil })
+            .updating($dragging) { _, state, _ in state = true }
+            .onChanged { v in jump(to: labels[min(max(Int(v.location.y / rowHeight), 0), labels.count - 1)]) }
+            .onEnded { _ in finishDrag() })
     }
 
     /// Always present, not drawn: the one element VoiceOver finds, whether or not the letters show.
