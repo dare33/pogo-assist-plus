@@ -223,12 +223,6 @@ final class ReviewFoldTests: XCTestCase {
 
     // MARK: F15
 
-    func testWhereTagMatchesCommunityDayCaseInsensitivelyAndAsAWord() {
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. CD move", bossOnNow: false), ["Community Day"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. Cd only", bossOnNow: false), ["Community Day"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Cd", bossOnNow: false), ["Community Day"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. Abcde", bossOnNow: false), ["Easy to get"], "cd inside a word is not a tag")
-    }
 
     func testThePlainSpeciesIsTheOneWithoutAFormInItsNameNotTheOneWithoutAnUnderscore() throws {
         let json = #"{"pokemon":[{"dex":900,"speciesId":"foo_bar_galarian","speciesName":"Foo Bar (Galarian)","released":true,"tags":["galarian"]},"#

@@ -139,34 +139,7 @@ final class HubSquadsTests: XCTestCase {
 
     // MARK: rule 6
 
-    func testAttainableNowIsABossOnNowOrAnEasyResearchLine() {
-        let rotation = [P23.row("2026-10-20", "2026-10-30", bosses: [P23.boss("palkia", types: ["water", "dragon"])]),
-                        P23.row("2026-11-20", "2026-11-30", bosses: [P23.boss("giratina_altered", types: ["ghost", "dragon"])])]
-        let ctx = P23.ctx(rotation: rotation)
-        XCTAssertEqual(HubSquads.attainable(P23.gap("Raids", "Palkia", "palkia", obtain: "Hard"), ctx: ctx), "Boss on right now")
-        XCTAssertNil(HubSquads.attainable(P23.gap("Raids", "Giratina", "giratina_altered", obtain: "Hard"), ctx: ctx), "a boss coming up is not now")
-        XCTAssertEqual(HubSquads.attainable(P23.gap("Raids", "Palkia", "palkia_shadow"), ctx: ctx), "Boss on right now", "a Shadow of a boss on now")
-        XCTAssertEqual(HubSquads.attainable(P23.gap("Gym", "Chansey", "chansey", obtain: "Easy. Wild, eggs"), ctx: ctx), "Easy to get: Wild, eggs")
-        XCTAssertEqual(HubSquads.attainable(P23.gap("Gym", "Chansey", "chansey", obtain: "Easy"), ctx: ctx), "Easy to get")
-        XCTAssertNil(HubSquads.attainable(P23.gap("Gym", "Chansey", "chansey", obtain: "Medium. Wild"), ctx: ctx))
-        XCTAssertNil(HubSquads.attainable(P23.gap("Gym", "Chansey", "chansey", obtain: nil), ctx: ctx))
-        // The last day of the boss's run still counts; the next day it does not.
-        XCTAssertEqual(HubSquads.attainable(P23.gap("Raids", "Palkia", "palkia"), ctx: P23.ctx(today: "2026-10-30", rotation: rotation)), "Boss on right now")
-        XCTAssertNil(HubSquads.attainable(P23.gap("Raids", "Palkia", "palkia"), ctx: P23.ctx(today: "2026-10-31", rotation: rotation)))
-    }
 
-    func testWhereTagsComeFromTheObtainText() {
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. Wild, eggs and research tasks", bossOnNow: false), ["Wild", "Eggs", "Research"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Medium. Team Rocket grunts; Giovanni; raids", bossOnNow: false), ["Team Rocket", "Raids"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Hard. Raids, trade, incense", bossOnNow: true), ["Raids now", "Incense", "Trade"], "a boss on now says Raids now, not Raids")
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. Evolve Pupitar", bossOnNow: false), ["Evolve"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. Fire stone", bossOnNow: false), ["Evolve"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. Community Day or cd", bossOnNow: false), ["Community Day"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. Buy with a GO Pass", bossOnNow: false), ["GO Pass"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: "Easy. Walk about", bossOnNow: false), ["Easy to get"], "no keyword: EASY TO GET")
-        XCTAssertEqual(HubSquads.whereTags(obtain: nil, bossOnNow: false), ["Easy to get"])
-        XCTAssertEqual(HubSquads.whereTags(obtain: nil, bossOnNow: true), ["Raids now"])
-    }
 
     // MARK: rule 27: the store
 

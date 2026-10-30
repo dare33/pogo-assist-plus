@@ -97,6 +97,17 @@ class SquadUITestCase: XCTestCase {
         return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: p, object: e)], timeout: timeout) == .completed
     }
 
+    /// The Best-mode set of a screen: Best on, a slot's picker open, so a Pokémon the box lacks shows on its card and in the list (the box is kept from the first launch).
+    func bestSet(_ screen: String, slot n: Int, tile: String? = nil, prepare: @escaping (XCUIApplication) -> Void = { _ in }) {
+        screenSet("\(screen)-best", tile: tile ?? screen) { app in
+            prepare(app)
+            let best = app.buttons["squad-mode-best"]
+            if best.waitForExistence(timeout: 30) { best.tap() }
+            let s = self.slot(app, screen, n)
+            if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
+        }
+    }
+
     /// The screenshots of one screen: light and dark at the default text size and at AX5 (the box is kept from the first launch), each with `prepare` done (a
     /// picker open, say), the top of the page and then the page scrolled once.
     func screenSet(_ screen: String, tile: String? = nil, prepare: (XCUIApplication) -> Void = { _ in }) {

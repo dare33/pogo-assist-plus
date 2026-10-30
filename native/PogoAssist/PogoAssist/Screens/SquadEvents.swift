@@ -235,12 +235,18 @@ struct BringLine: View {
 
 // MARK: the squad of an event
 
-/// A Pokémon a raid or Max slot may take, with what the picker says about it.
+/// A Pokémon a raid or Max slot may take, with what the picker says about it: one of the player's own builds (Available, and a Best row the box has) or, under Best, a
+/// Pokémon the box lacks (`best`, with its availability line).
 private struct EventOption: SquadCandidate {
-    let build: BoxAdvice.Build
+    let build: BoxAdvice.Build?
+    let best: HubSquads.BestRow?
+    let name: String
     let tier: String
     let roles: [String]
-    var entryId: String { build.entryId }
+    let types: [String]
+    /// The id a slot and a pick hold: the copy's entry id, or `squadSpeciesPrefix` + the species key.
+    let id: String
+    var entryId: String { id }
     var roleNames: [String] { roles }
 }
 
@@ -263,8 +269,9 @@ struct EventSquadView: View {
         let mode = keeper.store.mode(for: screen)
         let saved = keeper.store.eventSquad(row, screen: screen)
         let (options, filled) = resolve(saved: saved, mode: mode)
-        let byId = Dictionary(options.map { ($0.entryId, $0) }, uniquingKeysWith: { a, _ in a })
-        let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId, count: filled.count) }
+        let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
+        let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId, count: filled.count, mode: mode) }
+        let team = HubSquads.teamStatus(cards.map(\.status))
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 4) {
                 Text(title).font(.figtree(16, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
@@ -277,6 +284,7 @@ struct EventSquadView: View {
                     .padding(.top, -4).accessibilityIdentifier("\(prefix)-advice")
             }
             if infoOpen { squadInfo.frame(maxWidth: .infinity, alignment: .leading) }
+            if let team { SquadStatusLine(status: team) }
             SlotGrid(slots: cards, selected: selected) { i in withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i } }
             SetSquadFooter(isSet: saved.isSet, onSet: { edit { $0.isSet = true } }, onUndo: { edit { $0.isSet = false } })
             if let i = selected, filled.indices.contains(i) {
@@ -288,15 +296,24 @@ struct EventSquadView: View {
 
     // MARK: the squad as shown
 
-    /// The Pokémon the slots may take under `mode`, and the slots filled from the player's picks and the suggestions (rules 3, 4, 10, 12).
+    /// The Pokémon the slots may take under `mode`, and the slots filled from the player's picks and the suggestions (rules 3, 4, 6, 10, 12). Available: the player's own
+    /// builds. Best: the tier tables' rows for the boss, owned or not.
     private func resolve(saved: SquadStore.Saved, mode: SquadMode) -> (options: [EventOption], filled: [FilledSlot]) {
+        if mode == .best {
+            let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
+            let options = rows.map { EventOption(build: $0.build, best: $0, name: $0.name, tier: $0.tier, roles: $0.roles, types: $0.types, id: $0.entryId) }
+            return (options, HubSquads.bestSquad(slots: saved.slots, rows: rows))
+        }
         let placeable = HubSquads.placeable(screen: screen, mode: mode, ctx: ctx)
+        func option(_ b: BoxAdvice.Build, _ tier: String, _ roles: [String]) -> EventOption {
+            EventOption(build: b, best: nil, name: b.targetName, tier: tier, roles: roles, types: ctx.gm.byId[b.targetId]?.types ?? [], id: b.entryId)
+        }
         if screen == .raids {
             let c = HubSquads.raidCandidates(row: row, mode: mode, ctx: ctx)
-            return (c.map { EventOption(build: $0.build, tier: $0.tier, roles: $0.roleNames) }, HubSquads.raidSquad(slots: saved.slots, candidates: c, placeable: placeable))
+            return (c.map { option($0.build, $0.tier, $0.roleNames) }, HubSquads.raidSquad(slots: saved.slots, candidates: c, placeable: placeable))
         }
         let c = HubSquads.maxCandidates(row: row, mode: mode, ctx: ctx)
-        return (c.map { EventOption(build: $0.build, tier: $0.tier, roles: $0.roleNames) }, HubSquads.maxSquad(slots: saved.slots, candidates: c, placeable: placeable))
+        return (c.map { option($0.build, $0.tier, $0.roleNames) }, HubSquads.maxSquad(slots: saved.slots, candidates: c, placeable: placeable))
     }
 
     // MARK: edits
@@ -311,51 +328,86 @@ struct EventSquadView: View {
 
     // MARK: slots
 
-    private func card(_ i: Int, _ f: FilledSlot, byId: [String: EventOption], count: Int) -> SlotCardModel {
+    private func card(_ i: Int, _ f: FilledSlot, byId: [String: EventOption], count: Int, mode: SquadMode) -> SlotCardModel {
         let palette = SquadPalette.of(f.role)
         let head = "Slot \(i + 1) of \(count), \(f.role)"
-        guard let id = f.entryId else {
-            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: nil, spoken: head + ", empty", identifier: "\(prefix)-slot-\(i + 1)")
+        let identifier = "\(prefix)-slot-\(i + 1)"
+        guard let id = f.pickId else {
+            // A raid Mega slot under Available is empty by rule 3, not for want of a Pokémon: drawn neutral, and not counted in the squad line.
+            if HubSquads.slotNotCounted(screen: screen, mode: mode, role: f.role, filled: false) {
+                return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: nil, lines: ["Mega: needs a mega evolution"], status: .notCounted,
+                                     spoken: "Slot \(i + 1) of \(count), Mega slot, \(HubSquads.SlotStatus.notCounted.spoken)", identifier: identifier)
+            }
+            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: nil, status: .empty, spoken: head + ", " + HubSquads.SlotStatus.empty.spoken, identifier: identifier)
         }
-        guard let o = byId[id] else {
-            // A pick the list no longer offers (its build is gone from the advice): the slot still names the copy.
+        guard let o = (f.species.flatMap { byId[squadSpeciesPrefix + $0] } ?? byId[id]) else {
+            // A pick the list no longer offers (its build is gone from the advice, or it was chosen under the other mode): the slot still names it.
+            if let key = f.species {
+                let name = ctx.gm.byId[key]?.name ?? ctx.gm.byId[key.replacingOccurrences(of: "_shadow", with: "")]?.name ?? "Pokémon"
+                return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, lines: ["Not in your box"], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
+                                     spoken: [head, name, HubSquads.SlotStatus.toGet.spoken].joined(separator: ", "), identifier: identifier)
+            }
             let name = ctx.entry(id)?.row.title ?? "Pokémon"
-            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, types: ctx.entryTypes(id), spoken: head + ", " + name, identifier: "\(prefix)-slot-\(i + 1)")
+            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, types: ctx.entryTypes(id), status: .needsWork,
+                                 spoken: [head, name, HubSquads.SlotStatus.needsWork.spoken].joined(separator: ", "), identifier: identifier)
         }
-        let types = ctx.gm.byId[o.build.targetId]?.types ?? []
-        let mark = SquadMark.of(o.build, screen: screen, ctx: ctx)
-        let spoken = [head, o.build.targetName, SquadWords.typeList(types), mark.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: o.build.targetName, types: types, mark: mark, spoken: spoken, identifier: "\(prefix)-slot-\(i + 1)")
+        guard let build = o.build, o.best?.hasBuild != false else {
+            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", best: o.best!, head: head, identifier: identifier)
+        }
+        let mark = SquadMark.of(build, screen: screen, ctx: ctx)
+        let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: o.tier)
+        let shared = o.best?.sharedWith.map { "same copy as \($0)" }
+        let spoken = [head, o.name, SquadWords.typeList(o.types), mark.spoken, shared, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: o.name, lines: shared.map { [$0] } ?? [], types: o.types, mark: mark, status: status, spoken: spoken, identifier: identifier)
     }
 
     // MARK: picker
 
     private func picker(_ i: Int, filled: [FilledSlot], options: [EventOption], byId: [String: EventOption], saved: SquadStore.Saved, mode: SquadMode) -> some View {
         let role = filled[i].role
-        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: false)
-        let listed = HubSquads.picker(candidates: HubSquads.pool(role: role, in: options), excluded: excluded, own: filled[i].entryId)
-        let rows: [PickerRowModel] = listed.compactMap { r in
-            guard let o = byId[r.entryId] else { return nil }
-            let types = ctx.gm.byId[o.build.targetId]?.types ?? []
-            let mark = SquadMark.of(o.build, screen: screen, ctx: ctx)
+        let bestRows = options.compactMap(\.best)
+        // A copy sits in one slot however many rows show it (Primal Kyogre and Kyogre): rows are hidden by the copy they stand for.
+        let copyOf = HubSquads.copyResolver(rows: bestRows)
+        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: false, copyOf: copyOf)
+        var ids = HubSquads.pool(role: role, in: options)
+        let boxHasOptions = !ids.isEmpty
+        let ticks = HubSquads.tickIds(filled[i], rows: bestRows)
+        // The slot's own Pokémon is always listed, ticked, even when this mode's list does not hold it (a copy chosen under the other mode).
+        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
+        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf)
+        var rows: [PickerRowModel] = listed.compactMap { r in
+            guard let o = byId[r.entryId] else { return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: screen, ctx: ctx) }
             let roleWord = o.roles.joined(separator: " · ")
-            let spoken = [o.build.targetName, roleWord, o.tier.isEmpty ? nil : "tier \(o.tier)", SquadWords.typeList(types), mark.spoken, r.ticked ? "in this slot" : nil]
+            guard let build = o.build, o.best?.hasBuild != false else { return PickerRowModel(best: o.best!, ticked: r.ticked, role: roleWord) }
+            let mark = SquadMark.of(build, screen: screen, ctx: ctx)
+            let shared = o.best?.sharedWith.map { "same copy as \($0)" }
+            let spoken = [o.name, roleWord, o.tier.isEmpty ? nil : "tier \(o.tier)", SquadWords.typeList(o.types), mark.spoken, shared, r.ticked ? "in this slot" : nil]
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-            return PickerRowModel(id: r.entryId, name: o.build.targetName, ticked: r.ticked, mark: mark, role: roleWord, tier: o.tier, types: types.map { PickerType(type: $0) }, spoken: spoken)
+            return PickerRowModel(id: r.entryId, name: o.name, ticked: r.ticked, mark: mark, role: roleWord, tier: o.tier, types: o.types.map { PickerType(type: $0) }, note: shared, spoken: spoken)
         }
-        let could = (screen == .raids ? HubSquads.raidCouldGet(row: row, role: role, ctx: ctx) : HubSquads.maxCouldGet(role: role, ctx: ctx))
-            .map { CouldGetModel($0, types: ctx.gm.byId[$0.gap.speciesId ?? ""]?.types ?? []) }
+        if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: screen == .raids ? .raids : .max, roles: chips, role: role,
             onRole: { new in edit { $0.changeRole(at: i, to: new) { HubSquads.fits($0, role: new, in: options) } } },
-            rows: rows, emptyText: "Nothing in your box for this role.", couldGet: could,
-            onChoose: { id in edit { $0.choose(id, at: i) } },
+            rows: rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, none: mode == .available ? "Nothing in your box for this role." : "Nothing listed for this role."),
+            onChoose: { id in
+                // Under Available there are no Best rows on screen, but a species pick stored under Best may resolve to this copy: read the Best rows to clear it.
+                let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
+                edit { $0.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: rows)) }
+            },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
-            info: { pickerInfo })
+            info: { pickerInfo(mode) })
     }
 
-    @ViewBuilder private var pickerInfo: some View {
-        if screen == .raids {
+    @ViewBuilder private func pickerInfo(_ mode: SquadMode) -> some View {
+        if mode == .best {
+            SquadExplainer(items: [
+                ("Ranked from our tables:", screen == .raids
+                 ? "every Pokémon our raid tables list under the boss's weak types, S then A then B, the strongest weak type first. Ones you do not have say when they might be available."
+                 : "every Pokémon our Max tables list for the role, S then A then B, ones that hit the boss first. Ones you do not have say when they might be available."),
+                ("Roles:", screen == .raids ? "Mega if it mega evolves; Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise." : "from our Max table: Tank, Healer, or Attacker."),
+            ], identifier: "squad-picker-explainer")
+        } else if screen == .raids {
             SquadExplainer(items: [
                 ("Best for this boss first:", "the tier our raid tables give it against the boss's weak types, then built before to build, then how many of those types it covers."),
                 ("Roles:", "Mega if it mega evolves; Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise."),

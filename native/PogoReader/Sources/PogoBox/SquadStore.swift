@@ -3,7 +3,8 @@ import Foundation
 /// Design pass 2, rule 27 (D58): what the squad screens keep, per account, on the phone. This is the model and its rules only; where the value is
 /// written (one file per account next to the account's box, say) is the app's job. One `SquadStore` is one account's.
 ///
-/// What is kept is the player's own choices: each slot's role and the Pokémon they picked. A slot with no pick shows the suggestion, so a pick whose copy
+/// What is kept is the player's own choices: each slot's role and the Pokémon they picked (a copy, or under Best a species the box may not have: `SquadSlot.species`,
+/// which a copy leaving the box does not touch). A slot with no pick shows the suggestion, so a pick whose copy
 /// leaves the box is simply dropped and the slot refills with the suggestion (`reconciled`). Copies are keyed by the box entry id, which the app keeps
 /// through power-ups, evolutions, hand corrections and re-scans (`BoxEntry.id`), so a re-scan keeps every pick whose Pokémon is still in the box.
 public struct SquadStore: Codable, Equatable {
@@ -14,11 +15,23 @@ public struct SquadStore: Codable, Equatable {
         public var isSet: Bool
         public init(slots: [SquadSlot], isSet: Bool = false) { self.slots = slots; self.isSet = isSet }
 
-        /// A copy sits in one slot at a time: choosing it here takes it out of the squad's other slots.
-        public mutating func choose(_ entryId: String?, at index: Int) {
+        /// A Pokémon sits in one slot at a time: choosing it here takes it out of the squad's other slots. `id` is a copy's entry id, or `squadSpeciesPrefix` + a
+        /// species key for a Best pick of a Pokémon the box does not have (kept as `SquadSlot.species`); nil clears the slot's pick.
+        /// `alsoClearing` are the other ids that stand for the same Pokémon (its copy and its species: `HubSquads.equivalents`), so a copy chosen here wins over a
+        /// species pick of it in another slot, and the reverse.
+        public mutating func choose(_ id: String?, at index: Int, alsoClearing: [String] = []) {
             guard slots.indices.contains(index) else { return }
-            if let entryId { for i in slots.indices where i != index && slots[i].pick == entryId { slots[i].pick = nil } }
-            slots[index].pick = entryId
+            if let id {
+                let same = Set([id] + alsoClearing)
+                for i in slots.indices where i != index && (slots[i].pickId.map(same.contains) ?? false) { slots[i].pick = nil; slots[i].species = nil }
+            }
+            if let id, id.hasPrefix(squadSpeciesPrefix) {
+                slots[index].pick = nil
+                slots[index].species = String(id.dropFirst(squadSpeciesPrefix.count))
+            } else {
+                slots[index].pick = id
+                slots[index].species = nil
+            }
         }
 
         /// Rule 5 (see `HubSquads.changeRole`).

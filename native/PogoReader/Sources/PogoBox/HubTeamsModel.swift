@@ -1,7 +1,7 @@
 import Foundation
 
 /// The suggested teams of the Gym, Team Rocket and PvP screens, worked out from the advice report, the game master's types and the Hub's type
-/// chart. The teams are read-only suggestions (slot pickers and saved assignments are not built yet). Pure, so the fixture pins them (`HubTeamsModelTests`).
+/// chart: the Gym, Rocket and PvP lists and counters the squad screens read (`HubSquads` builds the squads, their picks and their pickers on them). Pure, so the fixture pins them (`HubTeamsModelTests`).
 public enum HubTeams {
     // MARK: shared
 

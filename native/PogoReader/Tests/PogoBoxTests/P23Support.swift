@@ -30,9 +30,9 @@ enum P23 {
     }
 
     static func tierEntry(_ area: String, _ section: String, _ tier: String, _ species: String, role: String? = nil, shadow: Bool = false, mega: Bool = false,
-                          max: Bool = false, name: String? = nil) -> TierTable.Entry {
-        TierTable.Entry(area: area, kind: "x", section: section, tier: tier, rank: nil, name: name ?? gm.byId[species]?.name ?? species, speciesId: species,
-                        flags: .init(shadow: shadow, mega: mega, max: max), role: role)
+                          max: Bool = false, name: String? = nil, rank: Double? = nil, obtain: String? = nil) -> TierTable.Entry {
+        TierTable.Entry(area: area, kind: "x", section: section, tier: tier, rank: rank, name: name ?? gm.byId[species]?.name ?? species, speciesId: species,
+                        flags: .init(shadow: shadow, mega: mega, max: max), role: role, obtain: obtain)
     }
 
     static func table(_ e: [TierTable.Entry]) -> TierTable { TierTable(entries: e) }

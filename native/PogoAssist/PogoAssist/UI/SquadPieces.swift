@@ -2,7 +2,7 @@ import SwiftUI
 import PogoBox
 
 // The pieces the five squad screens (Raids, Max, Gym, Rocket, PvP) share, from the pass 2 handoff's "Shared components": the SUGGESTIONS row, the slot card, the
-// picker with its role chips and rows, and the Could get now list. They draw what the screens hand them; the rules (who is listed, in what order, what a role
+// picker with its role chips and rows, the squad status line and the status colour of a card. They draw what the screens hand them; the rules (who is listed, in what order, what a role
 // allows) are PogoBox's `HubSquads`. Every colour is a Theme token, so light and dark follow.
 
 // MARK: role colours
@@ -120,8 +120,8 @@ struct SuggestionsRow: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
             if infoOpen {
                 SquadExplainer(items: [
-                    ("Available", "suggests \(noun) from your Pokémon as they are now: nothing to evolve or mega evolve first."),
-                    ("Best", "suggests the strongest \(noun) your box can make, with the work each one needs."),
+                    ("Available", "suggests \(noun) from the Pokémon in your box, best first for each slot, as they are now: nothing to evolve or mega evolve first."),
+                    ("Best", "lists the best Pokémon in the game for each slot, ranked from our tier tables, whether or not you have them. The ones you lack say when they might be available."),
                 ], identifier: "squad-mode-explainer")
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -159,13 +159,80 @@ struct SlotCardModel: Identifiable {
     var lines: [String] = []
     var types: [String] = []
     var mark: SquadMark = .none
+    /// How ready the slot is (CONCEPTS rule 29): the card's background is a soft tint of it.
+    var status: HubSquads.SlotStatus
     /// The whole card for VoiceOver.
     var spoken: String
     var identifier: String
 }
 
+extension HubSquads.SlotStatus {
+    /// The card's background and the status line's badge: Theme's soft green, amber and red (the tints keep the ink readable in light and dark).
+    var tint: Color {
+        switch self {
+        case .ready: return Theme.statusGreenTint
+        case .needsWork: return Theme.statusAmberTint
+        case .toGet, .empty: return Theme.statusRedTint
+        case .notCounted: return Theme.surface2
+        }
+    }
+    /// The word and icon a card carries so its status is not told by colour alone.
+    var word: String {
+        switch self {
+        case .ready: return "Ready"
+        case .needsWork: return "Needs work"
+        case .toGet: return "To get"
+        case .empty: return "Empty"
+        case .notCounted: return "Not counted"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .ready: return "checkmark.circle.fill"
+        case .needsWork: return "exclamationmark.triangle.fill"
+        case .toGet: return "arrow.down.circle.fill"
+        case .empty: return "circle.dashed"
+        case .notCounted: return "minus.circle"
+        }
+    }
+    /// The status line's dot.
+    var dot: Color {
+        switch self {
+        case .ready: return Theme.green
+        case .needsWork: return Theme.orange
+        case .toGet, .empty: return Theme.red
+        case .notCounted: return Theme.faint
+        }
+    }
+}
+
+extension HubSquads.TeamStatus {
+    var tint: Color { level == .green ? Theme.statusGreenTint : level == .amber ? Theme.statusAmberTint : Theme.statusRedTint }
+    var dot: Color { level == .green ? Theme.green : level == .amber ? Theme.orange : Theme.red }
+}
+
+/// The squad's one-line status over its slots (CONCEPTS rule 30): a dot and "Ready", "Nearly ready: 2 need work" or "Not ready: 2 to get, 1 empty".
+struct SquadStatusLine: View {
+    let status: HubSquads.TeamStatus
+    @ScaledMetric(relativeTo: .footnote) private var dotSize: CGFloat = 10
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(status.dot).frame(width: dotSize, height: dotSize).accessibilityHidden(true)
+            Text(status.text).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(status.tint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))   // not a capsule: the text wraps at the accessibility sizes
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(status.text)
+        .accessibilityIdentifier("squad-status")
+    }
+}
+
 /// A slot card (pass 2 README, "Slot card"): radius 16, at least 92 pt; the role row in the role colour with the mark at its trailing end; a 30 pt disc; the name 13/700;
-/// the type icons at the foot. Filled = the palette's tint; empty = a 2 pt inset outline; selected = a 2 pt inset outline in the accent.
+/// the type icons at the foot. The background is the slot's status tint (green ready, amber needs work, red to get or empty; the disc and the role text keep the role
+/// colour); an empty card also keeps a 2 pt inset outline; selected = a 2 pt inset outline in the accent.
 struct SlotCardView: View {
     let model: SlotCardModel
     let selected: Bool
@@ -196,16 +263,23 @@ struct SlotCardView: View {
                     .frame(width: min(discSize, 80), height: min(discSize, 80))
                     .background(Circle().fill(filled ? model.palette.ink : Theme.off))
                     .accessibilityHidden(true)
-                Text(model.name ?? "Empty").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(filled ? Theme.ink : Theme.muted)
+                Text(model.name ?? "Empty").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(filled ? Theme.ink : Theme.mutedOnTint)
                     .lineLimit(2).multilineTextAlignment(.leading)
-                ForEach(model.lines, id: \.self) { Text($0).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.muted).lineLimit(4).multilineTextAlignment(.leading) }
+                ForEach(model.lines, id: \.self) { Text($0).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.mutedOnTint).lineLimit(4).multilineTextAlignment(.leading) }
                 Spacer(minLength: 0)
                 if !model.types.isEmpty { TypeIcons(types: model.types, size: 18) }
+                HStack(spacing: 4) {
+                    Image(systemName: model.status.icon).font(.figtree(11, .bold, relativeTo: .caption2))
+                    Text(model.status.word).font(.figtree(11, .heavy, relativeTo: .caption2))
+                }
+                .foregroundStyle(Theme.ink).padding(.top, 2).accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, minHeight: 76, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 10).padding(.vertical, 8)
-            .background(filled ? model.palette.tint : Color.clear, in: shape)
-            .overlay { if !filled { shape.strokeBorder(model.emptyOutline, lineWidth: 2) } }
+            .background(model.status.tint, in: shape)
+            .overlay { if !filled && model.status != .notCounted { shape.strokeBorder(model.emptyOutline, lineWidth: 2) } }
+            // A card that is not counted has no fill to show against the page: a dashed edge (muted ink, 3:1 or more against the page in light and dark) does.
+            .overlay { if model.status == .notCounted { shape.strokeBorder(Theme.muted, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
             .overlay { if selected { shape.strokeBorder(accent.solid, lineWidth: 2) } }
             .contentShape(shape)
         }
@@ -260,35 +334,75 @@ struct PickerRowModel: Identifiable {
     var types: [PickerType] = []
     /// A muted line under the first ("From Eevee", "Not weak to this slot").
     var note: String? = nil
+    /// The note is drawn in the amber ink ("In your box · no build for this").
+    var noteAmber = false
     /// An extra line in place of `note` (PvP's graded IV line).
     var noteView: AnyView? = nil
     /// The stacked figures before the end figure (Gym's DEF and HP).
     var stats: AnyView? = nil
     /// The end figure (Gym's BULK, PvP's SCORE).
     var figure: AnyView? = nil
+    /// A heading over this row ("Available upgrades:").
+    var sectionHeading: String? = nil
     var spoken: String
 }
 
-/// A Could get now entry (rule 6): a top-tier Pokémon the box cannot make and that is attainable now, with where to get it.
-struct CouldGetModel: Identifiable {
-    var id: String
-    var name: String
-    var tier: String
-    var roles: [String]
-    var types: [String]
-    var whereTags: [String]
-    /// The research's own words, for VoiceOver.
-    var why: String
+extension PickerRowModel {
+    static let upgradesHeading = "Available upgrades:"
+
+    /// CONCEPTS rule 28: an Available picker lists the Pokémon at Full strength first and, under "Available upgrades:", those whose build still needs work. Each group
+    /// keeps the slot's order.
+    static func availableUpgradesLast(_ rows: [PickerRowModel]) -> [PickerRowModel] {
+        let done = rows.filter { $0.mark == .fullStrength }
+        var work = rows.filter { $0.mark != .fullStrength }
+        if !work.isEmpty { work[0].sectionHeading = upgradesHeading }
+        return done + work
+    }
+
+    /// The note under a Best row: "Not in your box · <when it might be had>" for a Pokémon the box lacks, an amber "In your box · no build for this" for a copy no build of
+    /// the area serves, plus "same copy as <higher row>" when a higher row already shows that copy. nil for a row with a build (its mark says the rest).
+    static func bestNote(_ r: HubSquads.BestRow) -> (text: String, amber: Bool)? {
+        let shared = r.sharedWith.map { "same copy as \($0)" }
+        if !r.inBox { return ("Not in your box · " + r.availability, false) }
+        if !r.hasBuild { return (["In your box · no build for this", shared].compactMap { $0 }.joined(separator: " · "), true) }
+        return shared.map { ($0, false) }
+    }
+
+    /// A Best row without a build: a Pokémon the box lacks, or a copy of it that no build of the area serves.
+    init(best r: HubSquads.BestRow, ticked: Bool, role: String? = nil, types: [PickerType]? = nil, extraSpoken: String? = nil) {
+        let n = PickerRowModel.bestNote(r)
+        let spoken = [r.name, role, "tier \(r.tier)", SquadWords.typeList(r.types), n?.text.replacingOccurrences(of: " · ", with: ", "), extraSpoken, ticked ? "in this slot" : nil]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        self.init(id: r.entryId, name: r.name, ticked: ticked, role: role, tier: r.tier, types: types ?? r.types.map { PickerType(type: $0) }, note: n?.text, noteAmber: n?.amber ?? false, spoken: spoken)
+    }
+
+    /// The row of a pick the lists do not offer (a copy chosen under the other mode, or whose build is gone): the copy, with its build's mark when it has one.
+    static func keptPick(id: String, ticked: Bool, screen: SquadScreen, ctx: HubContext) -> PickerRowModel? {
+        guard !id.hasPrefix(squadSpeciesPrefix), let e = ctx.entry(id) else { return nil }
+        let area = ["raids": "Raids", "max": "Max", "gym": "Gym", "rocket": "Rocket", "pvp": "PvP"][screen.rawValue] ?? ""
+        let build = ctx.advice.builds.first { $0.entryId == id && ($0.areas.contains(area) || (screen == .rocket && $0.areas.contains("Raids"))) }
+        let mark = build.map { SquadMark.of($0, screen: screen, ctx: ctx) } ?? .none
+        let types = ctx.entryTypes(id)
+        let note = build == nil ? "In your box · no build for this" : nil
+        let spoken = [e.row.title, SquadWords.typeList(types), mark.spoken, note?.replacingOccurrences(of: " · ", with: ", "), ticked ? "in this slot" : nil].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return PickerRowModel(id: id, name: e.row.title, ticked: ticked, mark: mark, types: types.map { PickerType(type: $0) }, note: note, noteAmber: note != nil, spoken: spoken)
+    }
 }
 
-extension CouldGetModel {
-    init(_ c: HubSquads.CouldGet, types: [String]) {
-        self.init(id: c.gap.id, name: c.gap.name, tier: c.gap.tier, roles: c.roles, types: types, whereTags: c.whereTags, why: c.why)
+extension SlotCardModel {
+    /// The card of a Best row without a build: a Pokémon the box lacks (red, with the short rotation date when there is one; VoiceOver carries the whole availability
+    /// line), or a copy no build of the area serves (amber).
+    init(id: Int, role: String?, palette: SquadPalette, emptyOutline: Color, disc: String, best r: HubSquads.BestRow, extra: [String] = [], spokenExtra: [String] = [], head: String, identifier: String) {
+        let status: HubSquads.SlotStatus = r.inBox ? .needsWork : .toGet
+        let own: [String] = r.inBox ? ["In your box · no build for this"] + (r.sharedWith.map { ["same copy as \($0)"] } ?? []) : ["Not in your box"] + (r.rotationLine.map { [$0] } ?? [])
+        let said = r.inBox ? ["in your box, no build for this"] + (r.sharedWith.map { ["same copy as \($0)"] } ?? []) : [r.availability]
+        let spoken = ([head, r.name, SquadWords.typeList(r.types)] + spokenExtra + said + [status.spoken]).filter { !$0.isEmpty }.joined(separator: ", ")
+        self.init(id: id, role: role, palette: palette, emptyOutline: emptyOutline, disc: disc, name: r.name, lines: own + extra, types: r.types, status: status, spoken: spoken, identifier: identifier)
     }
 }
 
 /// The picker under a squad (README, "Picker"): `surface`, a 2 pt inset accent outline, radius 20, padding 12; the title with the "i" and Done; the role chips; the
-/// rows; then Could get now. A row is a button with a selected state; choosing one puts the Pokémon in the slot and ticks it.
+/// rows. A row is a button with a selected state; choosing one puts the Pokémon in the slot and ticks it.
 struct SquadPicker<Info: View>: View {
     let title: String
     let type: ContentType
@@ -301,12 +415,10 @@ struct SquadPicker<Info: View>: View {
     let rows: [PickerRowModel]
     /// What to say when there is no row.
     let emptyText: String
-    var couldGet: [CouldGetModel] = []
     let onChoose: (String) -> Void
     let onDone: () -> Void
     @ViewBuilder var info: Info
     @State private var infoOpen = false
-    @State private var couldGetOpen: Bool?
     @Environment(\.accent) private var accent
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -332,16 +444,19 @@ struct SquadPicker<Info: View>: View {
                         .accessibilityAddTraits(.isHeader)
                 }
                 ForEach(rows) { row in
+                    if let h = row.sectionHeading {
+                        Text(h).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).padding(.top, 10).padding(.bottom, 4).padding(.horizontal, 2)
+                            .accessibilityAddTraits(.isHeader).accessibilityIdentifier("squad-picker-upgrades")
+                    }
                     Rectangle().fill(Theme.line).frame(height: 1)
                     rowView(row)
                 }
                 if rows.isEmpty {
-                    Text(couldGet.isEmpty ? emptyText : emptyText + " You could get these now:")
+                    Text(emptyText)
                         .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).padding(.vertical, 6).padding(.horizontal, 2)
                         .accessibilityIdentifier("squad-picker-empty")
                 }
             }
-            if !couldGet.isEmpty { couldGetView }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -391,7 +506,7 @@ struct SquadPicker<Info: View>: View {
         let main = VStack(alignment: .leading, spacing: 4) {
             head
             line
-            if let v = row.noteView { v } else if let n = row.note { Text(n).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+            if let v = row.noteView { v } else if let n = row.note { Text(n).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(row.noteAmber ? Theme.orangeInk : Theme.muted).fixedSize(horizontal: false, vertical: true) }
         }
         return Button { onChoose(row.id) } label: {
             HStack(alignment: .top, spacing: 10) {
@@ -429,72 +544,6 @@ struct SquadPicker<Info: View>: View {
             .overlay { if !on { Circle().strokeBorder(Theme.line, lineWidth: 2) } }
             .padding(.top, 1)
             .accessibilityHidden(true)
-    }
-
-    // MARK: Could get now
-
-    private var couldGetView: some View {
-        // Open when the box has no option for the slot; Next best rows are the closest options, not ones that fit, so it stays open under them too (D48).
-        let open = couldGetOpen ?? (rows.isEmpty || heading != nil)
-        return Group {
-            if !open {
-                Button { withAnimation(.easeOut(duration: 0.15)) { couldGetOpen = true } } label: {
-                    Text("Could get now (\(couldGet.count)) ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink)
-                        .frame(minHeight: 44, alignment: .leading).contentShape(Rectangle())
-                }
-                .buttonStyle(PressStyle())
-                .accessibilityIdentifier("squad-couldget-toggle")
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text("YOU COULD GET NOW").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityAddTraits(.isHeader)
-                        Spacer(minLength: 8)
-                        // With no option in the box the list stays open: there is nothing to hide it behind.
-                        if !rows.isEmpty && heading == nil {
-                            Button { withAnimation(.easeOut(duration: 0.15)) { couldGetOpen = false } } label: {
-                                Text("Hide").font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(accent.ink).frame(minHeight: 44).contentShape(Rectangle())
-                            }
-                            .buttonStyle(PressStyle())
-                            .accessibilityIdentifier("squad-couldget-hide")
-                        }
-                    }
-                    ForEach(couldGet) { g in
-                        Rectangle().fill(Theme.line).frame(height: 1)
-                        couldGetRow(g)
-                    }
-                }
-                .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .accessibilityIdentifier("squad-couldget")
-            }
-        }
-    }
-
-    private func couldGetRow(_ g: CouldGetModel) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(g.name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
-                TierChip(tier: g.tier, type: type)
-            }
-            FlowLayout(spacing: 6) {
-                ForEach(g.roles, id: \.self) { r in Text(r).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(SquadPalette.of(r).ink) }
-                ForEach(Array(g.types.enumerated()), id: \.offset) { _, t in TypeIcon(type: t, size: 22) }
-            }
-            FlowLayout(spacing: 4) {
-                ForEach(g.whereTags, id: \.self) { w in
-                    let now = w == "Raids now"
-                    Text(w.uppercased()).font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.04 * 10)
-                        .foregroundStyle(now ? accent.ink : Theme.ink)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(now ? accent.tint : Theme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-            }
-        }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(g.name), tier \(g.tier)\(g.roles.isEmpty ? "" : ", " + g.roles.joined(separator: " and ")). \(g.types.map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " and ")). \(g.why). \(g.whereTags.joined(separator: ", "))")
     }
 }
 
@@ -535,6 +584,13 @@ struct SetSquadFooter: View {
 // MARK: shared words
 
 enum SquadWords {
+    /// An empty picker's text, true to what the box has: when the box has options for the slot but they are all in other slots, it says so; "none" only when the box
+    /// truly has none (and under Best, where the list is the table's).
+    static func emptyPicker(mode: SquadMode, boxHasOptions: Bool, speciesRuleOnly: Bool = false, none: String) -> String {
+        if speciesRuleOnly { return "Your other options are the same species as a Pokémon already in this squad." }
+        return mode == .available && boxHasOptions ? "Everything in your box for this slot is already in your squad." : none
+    }
+
     /// "Rock and Dark" for a VoiceOver label.
     static func typeList(_ types: [String]) -> String {
         let names = types.map { $0.prefix(1).uppercased() + $0.dropFirst() }

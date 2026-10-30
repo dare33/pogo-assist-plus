@@ -24,7 +24,17 @@ final class HubMaxSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "max", 3).label.hasPrefix("Slot 3 of 3, Attacker"), slot(app, "max", 3).label)
         // No Pokémon is marked Dynamax yet, so every Max pick reads Upgrade available (read-back Q7).
         XCTAssertTrue(slot(app, "max", 1).label.contains("Upgrade available"), slot(app, "max", 1).label)
+        // An Upgrade available pick is amber: the slot says it needs work, and the squad line counts it (CONCEPTS rules 29 and 30).
+        XCTAssertTrue(slot(app, "max", 1).label.hasSuffix("needs work"), slot(app, "max", 1).label)
+        XCTAssertTrue(el(app, "squad-status").label.hasPrefix("Nearly ready: ") || el(app, "squad-status").label.hasPrefix("Not ready: "), el(app, "squad-status").label)
         shot("max-open-row")
+
+        // Available lists the player's own Pokémon; those whose build still needs work come under "Available upgrades:" (every Max pick does until it is marked Dynamax).
+        openPicker(app, "max", slot: 1)
+        XCTAssertTrue(pickerRows(app).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(el(app, "squad-picker-upgrades").label, "Available upgrades:")
+        XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
+        closePicker(app)
 
         // The role chips of a slot: Tank | Healer | Attacker | All. A role change relabels the slot and is kept.
         openPicker(app, "max", slot: 3)
@@ -64,6 +74,8 @@ final class HubMaxSquadTests: SquadUITestCase {
         let rows = pickerRows(app)
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(rows.firstMatch.isSelected, "the slot's own Pokémon is ticked")
+        XCTAssertTrue(rows.matching(NSPredicate(format: "label CONTAINS 'Not in your box,'")).firstMatch.exists, "Best lists a Pokémon the box lacks with its availability line: \(rows.allElementsBoundByIndex.map(\.label))")
+        XCTAssertFalse(el(app, "squad-picker-upgrades").exists, "the Available upgrades heading belongs to Available")
         let name = rows.firstMatch.label.components(separatedBy: ",").first ?? ""
         rows.firstMatch.tap()
         XCTAssertTrue(slot(app, "max", 1).label.contains(name), slot(app, "max", 1).label)
@@ -103,6 +115,10 @@ final class HubMaxSquadTests: SquadUITestCase {
             if r.waitForExistence(timeout: 30) { r.tap() }
             let s = self.slot(app, "max", 2)
             if s.waitForExistence(timeout: 10) { self.reveal(app, s).tap() }
+        }
+        bestSet("max", slot: 2) { app in
+            let r = self.el(app, "hub-max-row-0")
+            if r.waitForExistence(timeout: 30) { r.tap() }
         }
     }
 }

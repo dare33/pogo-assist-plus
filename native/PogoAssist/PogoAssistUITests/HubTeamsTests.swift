@@ -79,7 +79,7 @@ final class HubTeamsTests: XCTestCase {
         app.buttons["hub-tile-rocket"].tap()
         XCTAssertTrue(app.buttons["hub-leader-Giovanni"].waitForExistence(timeout: 10), "a leader card")
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR GIOVANNI"].exists)
-        // Best suggests what the box can make (Available only what is usable as it is).
+        // Best fills the slots from the Rocket table, whether or not the box has the Pokémon (Available only what the box has and is usable as it is).
         app.buttons["squad-mode-best"].tap()
         sleep(1)
         shot("rocket-01-light")
@@ -88,10 +88,10 @@ final class HubTeamsTests: XCTestCase {
         let slot2 = app.descendants(matching: .any)["hub-rocket-slot-2"]
         XCTAssertTrue(slot2.exists)
         let giovanniSlot1 = slot1.label, giovanniSlot2 = slot2.label
-        // Lucario is the Fighting counter for Persian (slot 1); a copy serves one slot, so slot 2 (Kangaskhan, Rhyperior, Machamp) takes the next
-        // copy that beats the most of them, Zamazenta (Crowned Shield), which beats two.
+        // Lucario is the table's first Fighting counter for Persian (slot 1); slot 2 (Kangaskhan, Rhyperior, Machamp) takes the table's next row that beats one of
+        // them, a Pokémon the box may lack, which its card says.
         XCTAssertTrue(giovanniSlot1.contains("Lucario"), giovanniSlot1)
-        XCTAssertTrue(giovanniSlot2.contains("Zamazenta") && giovanniSlot2.contains("beats 2 of 3"), giovanniSlot2)
+        XCTAssertTrue(giovanniSlot2.contains("beats") && giovanniSlot2.contains("against Kangaskhan / Rhyperior / Machamp"), giovanniSlot2)
         app.buttons["hub-change-leader"].tap()
         let sierra = app.buttons["Sierra"]
         XCTAssertTrue(sierra.waitForExistence(timeout: 5), "the menu lists Sierra")
@@ -141,9 +141,10 @@ final class HubTeamsTests: XCTestCase {
         app.buttons["hub-pvp-league-ml"].tap()
         XCTAssertTrue(app.staticTexts["Suggested squad"].waitForExistence(timeout: 5), "Master League shows a squad")
         app.buttons["squad-mode-best"].tap()
-        // All three cards always exist: with two candidates, slot 2 names a Pokémon and slot 3 is empty.
+        // All three cards always exist: Best fills every slot from the league table, and a Pokémon the box lacks says so.
         XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-2"].label.hasPrefix("Slot 2 of 3, Safe swap") && !app.descendants(matching: .any)["hub-pvp-slot-2"].label.contains("empty"), app.descendants(matching: .any)["hub-pvp-slot-2"].label)
-        XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-3"].label.contains("empty"), app.descendants(matching: .any)["hub-pvp-slot-3"].label)
+        XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-3"].label.hasPrefix("Slot 3 of 3, Closer") && !app.descendants(matching: .any)["hub-pvp-slot-3"].label.contains("empty"), app.descendants(matching: .any)["hub-pvp-slot-3"].label)
+        XCTAssertTrue(app.descendants(matching: .any)["squad-status"].exists, "the squad line")
         sleep(1)
         shot("pvp-02-light-master")
         app.terminate()

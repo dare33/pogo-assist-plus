@@ -11,27 +11,31 @@ final class HubRocketSquadTests: SquadUITestCase {
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR GIOVANNI"].waitForExistence(timeout: 30))
         XCTAssertFalse(app.staticTexts["YOUR TEAM FOR GIOVANNI"].exists)
 
-        // Best: the strongest the box can make fills the slots (Available leaves a slot empty when nothing is usable as it is).
+        // Best: the Rocket table's rows fill the slots, whether or not the box has them (Available leaves a slot empty when nothing is usable as it is).
         app.buttons["squad-mode-best"].tap()
         let one = slot(app, "rocket", 1), two = slot(app, "rocket", 2), three = slot(app, "rocket", 3)
         XCTAssertTrue(one.label.contains("Lucario") && one.label.contains("against Persian"), one.label)
         // A slot of one option has no "beats" line; a slot of three says how many it beats.
         XCTAssertFalse(one.label.contains("beats"), one.label)
         XCTAssertTrue(one.label.contains("Fighting"), "a slot card names the Pokémon's types: \(one.label)")
-        XCTAssertTrue(two.label.contains("Zamazenta") && two.label.contains("beats 2 of 3") && two.label.contains("against Kangaskhan / Rhyperior / Machamp"), two.label)
+        XCTAssertTrue(two.label.contains("beats") && two.label.contains("against Kangaskhan / Rhyperior / Machamp"), two.label)
+        XCTAssertTrue([one, two, three].contains { $0.label.contains("not in your box, to get") }, "a Pokémon the box lacks is drawn as such")
+        XCTAssertTrue(el(app, "squad-status").label.hasPrefix("Not ready: "), el(app, "squad-status").label)
 
         // Slot 3's picker: choose another row than the suggestion; the slot shows it and it is kept.
         openPicker(app, "rocket", slot: 3)
         XCTAssertTrue(app.staticTexts["Slot 3 · vs Zekrom"].exists)
         let rows = pickerRows(app)
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(rows.firstMatch.isSelected, "the slot's own Pokémon is ticked")
-        XCTAssertGreaterThan(rows.count, 1, "the box has more than one counter for Zekrom")
-        let other = rows.element(boundBy: 1)
+        let ticked = rows.matching(NSPredicate(format: "selected == true"))
+        XCTAssertEqual(ticked.count, 1, "the slot's own Pokémon is ticked")
+        XCTAssertGreaterThan(rows.count, 1, "the table lists more than one counter for Zekrom")
+        XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "there is no Could get now list")
+        let other = rows.matching(NSPredicate(format: "selected == false")).firstMatch
         let chosen = other.label.components(separatedBy: ",").first ?? ""
         other.tap()
         XCTAssertTrue(three.label.contains(chosen), "the slot shows the choice: \(three.label)")
-        XCTAssertTrue(rows.element(boundBy: 1).isSelected && !rows.firstMatch.isSelected, "and the tick moves")
+        XCTAssertTrue(ticked.count == 1 && ticked.firstMatch.label.hasPrefix(chosen), "and the tick moves")
         shot("rocket-picker")
         closePicker(app)
 
@@ -39,7 +43,7 @@ final class HubRocketSquadTests: SquadUITestCase {
         app.buttons["hub-change-leader"].tap()
         app.buttons["Sierra"].tap()
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR SIERRA"].waitForExistence(timeout: 5))
-        XCTAssertFalse(slot(app, "rocket", 3).label.contains(chosen), "another leader's squad is its own: \(slot(app, "rocket", 3).label)")
+        XCTAssertFalse(slot(app, "rocket", 3).label.contains("against Zekrom"), "another leader's squad is its own: \(slot(app, "rocket", 3).label)")
         app.buttons["hub-leader-Giovanni"].tap()
         XCTAssertTrue(slot(app, "rocket", 3).label.contains(chosen), "Giovanni's pick is kept: \(slot(app, "rocket", 3).label)")
         back(app, toTile: "rocket")
@@ -58,7 +62,7 @@ final class HubRocketSquadTests: SquadUITestCase {
         shot("rocket-grunts")
     }
 
-    /// Under Available a slot with nothing usable as it is lists Next best (up to three closest options) or, with none, says so; either way Could get now is open.
+    /// Under Available a slot with nothing usable as it is lists Next best (up to three closest options) or, with none, says so; there is no Could get now list.
     func testRocketNextBestUnderAvailable() throws {
         let app = launch(reset: true)
         populate(app)
@@ -70,7 +74,7 @@ final class HubRocketSquadTests: SquadUITestCase {
             openPicker(app, "rocket", slot: n)
             if app.staticTexts["Next best"].exists {
                 nextBestRows.append(pickerRows(app).count)
-                XCTAssertFalse(el(app, "squad-couldget-toggle").exists, "Could get now stays open under Next best")
+                XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
                 if nextBestRows.count == 1 { shot("rocket-next-best") }
             }
             closePicker(app)
@@ -88,5 +92,6 @@ final class HubRocketSquadTests: SquadUITestCase {
             let s = self.slot(app, "rocket", 2)
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
+        bestSet("rocket", slot: 2)
     }
 }

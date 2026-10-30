@@ -11,6 +11,9 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "gym", 1).label.contains("Blissey"), slot(app, "gym", 1).label)
         XCTAssertTrue(slot(app, "gym", 1).label.contains("Full strength"), "a built defender carries the Full strength mark: \(slot(app, "gym", 1).label)")
         XCTAssertTrue(slot(app, "gym", 2).label.contains("empty"), slot(app, "gym", 2).label)
+        // Slot status (CONCEPTS rules 29 and 30): Blissey is at Full strength and tier S, so its slot is ready; the other five are empty.
+        XCTAssertTrue(slot(app, "gym", 1).label.hasSuffix("ready"), "a ready slot says so: \(slot(app, "gym", 1).label)")
+        XCTAssertEqual(el(app, "squad-status").label, "Not ready: 5 empty")
 
         // Slot 1's picker: its own Pokémon, ticked, with Defence, HP and bulk.
         openPicker(app, "gym", slot: 1)
@@ -28,11 +31,11 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(el(app, "squad-picker-explainer").waitForExistence(timeout: 5), "the order of the list is behind an i")
         closePicker(app)
 
-        // Slot 2: the one build is in slot 1, so nothing is listed and Could get now stays open.
+        // Slot 2: the one build is in slot 1, so nothing is listed. Available lists only the box: the empty text stands alone, with no "could get" list.
         openPicker(app, "gym", slot: 2)
         XCTAssertEqual(rows.count, 0, "a Pokémon in another slot is not listed")
-        XCTAssertTrue(el(app, "squad-picker-empty").exists)
-        XCTAssertTrue(el(app, "squad-couldget").waitForExistence(timeout: 5), "with no option, Could get now is open")
+        XCTAssertEqual(el(app, "squad-picker-empty").label, "Everything in your box for this slot is already in your squad.", "the box has a Gym build, in slot 1: the text says so")
+        XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
         shot("gym-picker-empty")
         closePicker(app)
 
@@ -42,6 +45,16 @@ final class HubGymSquadTests: SquadUITestCase {
         app.swipeDown(); app.swipeDown()
         app.buttons["squad-mode-best"].tap()
         XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true)
+        // Best fills the six slots from the Gym table whether or not the box has them: the ones it lacks are red, in the squad line and on their cards.
+        XCTAssertTrue(el(app, "squad-status").label.hasPrefix("Not ready: ") && el(app, "squad-status").label.contains("to get"), el(app, "squad-status").label)
+        XCTAssertTrue((2...6).contains { slot(app, "gym", $0).label.contains("not in your box, to get") }, "a not-owned Pokémon is drawn as such: \(slot(app, "gym", 2).label)")
+        openPicker(app, "gym", slot: 2)
+        let notOwned = rows.matching(NSPredicate(format: "label CONTAINS 'Not in your box'")).firstMatch
+        XCTAssertTrue(notOwned.waitForExistence(timeout: 5), "Best lists a Pokémon the box lacks, with its availability line: \(rows.allElementsBoundByIndex.map(\.label))")
+        XCTAssertTrue(rows.firstMatch.label.contains("tier"), rows.firstMatch.label)
+        XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists)
+        shot("gym-picker-best")
+        closePicker(app)
         app.terminate()
 
         // Relaunched: the box, the picks and the setting are where they were left.
@@ -60,5 +73,6 @@ final class HubGymSquadTests: SquadUITestCase {
             let s = self.slot(app, "gym", 2)
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
+        bestSet("gym", slot: 2)
     }
 }
