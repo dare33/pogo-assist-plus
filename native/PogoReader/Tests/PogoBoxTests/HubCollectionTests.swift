@@ -154,7 +154,7 @@ final class HubCollectionTests: XCTestCase {
                    P23.entry("d", "charizard", shadow: 1), P23.entry("e", "charizard", shadow: 2)]
         func ids(_ k: HubCollection.SetKind) -> [String] { HubCollection.members(of: k, entries: box, gm: gm).map(\.id) }
         XCTAssertEqual(ids(.shadow), ["c", "d"])
-        XCTAssertEqual(ids(.megaCapable), ["e"], "a purified Charizard can Mega Evolve; a purified _shadow species is not a Mega species")
+        XCTAssertEqual(ids(.megaCapable), ["a", "b", "e"], "a Purified (or unmarked-0) copy of Charizard (Shadow) is a Charizard again and can Mega Evolve; a Shadow copy cannot")
         // The Shadow to Purified transition: the same copy leaves the set when its mark changes.
         let before = [P23.entry("x", "charizard", shadow: 1)], after = [P23.entry("x", "charizard", shadow: 2)]
         XCTAssertEqual(HubCollection.members(of: .shadow, entries: before, gm: gm).count, 1)

@@ -133,6 +133,19 @@ final class BoxSearchWordsTests: XCTestCase {
         XCTAssertTrue(ids("mega").isDisjoint(with: ["marshadow", "pika-shadow", "nihil"]))
     }
 
+    /// "Charizard (Shadow)" is a form label, not a name that starts with the word: a Purified copy of the `_shadow` species is not found by "shadow" (and is by
+    /// "purified" and "mega"), a Shadow-marked one is found by membership; Meganium still starts with "mega".
+    func testABracketedFormLabelIsNotANameStart() {
+        let entries = [entry("purified", "charizard_shadow", shadow: 2), entry("marked", "charizard", shadow: 1), entry("unmarked", "charizard_shadow"),
+                       entry("meganium", "meganium")]
+        let idx = BoxIndex(entries: entries, gm: gm)
+        func found(_ q: String) -> Set<String> { let query = BoxIndex.Query(q); return Set(idx.items.filter { idx.matches($0, query, .all) }.map(\.id)) }
+        XCTAssertEqual(found("shadow"), ["marked", "unmarked"])
+        XCTAssertEqual(found("purified"), ["purified"])
+        XCTAssertTrue(found("mega").isSuperset(of: ["purified", "meganium"]), "a purified Charizard can Mega Evolve; Meganium starts with mega")
+        XCTAssertFalse(found("mega").contains("marked"))
+    }
+
     func testNamesWithPunctuationAndWordsTogether() {
         XCTAssertEqual(ids("farfetch'd"), ["farfetchd"])
         XCTAssertEqual(ids("nidoran♀"), [], "the game master spells it Nidoran Female, as before")
@@ -194,9 +207,10 @@ final class BoxSearchWordsTests: XCTestCase {
 
     /// The sheet shows its sections only with the index they were built for (a row is a position in that index).
     func testTheSheetShowsSectionsOnlyForTheIndexTheyWereBuiltFor() {
-        XCTAssertTrue(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: "Greg|3"))
-        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: "Greg|4"), "a newer index: the old rows would point at the wrong copies")
-        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: nil))
-        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: nil, storeKey: nil))
+        XCTAssertTrue(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: "Greg|3", modelKey: "Greg|3"))
+        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: "Greg|4", modelKey: "Greg|4"), "a newer index: the old rows would point at the wrong copies")
+        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: "Greg|3", modelKey: "Greg|4"), "both stored keys agree but the box has moved on: wait for the new index")
+        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: "Greg|3", storeKey: nil, modelKey: "Greg|3"))
+        XCTAssertFalse(CollectionSetSheet.showsSections(computedFor: nil, storeKey: nil, modelKey: "Greg|3"))
     }
 }

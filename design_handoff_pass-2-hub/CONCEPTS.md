@@ -21,8 +21,8 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Special sets**: counts of copies or species in named groups (100% IVs, Legendary, Mythical, Ultra Beasts,
   Mega-capable, Lucky, Shadow).
   A card opens a sheet listing the player's Pokémon in the set, in My Pokémon's rows (Greg, phone run 30 Oct 2026): the
-  copies in the set for 100% IVs, Lucky and Shadow, each owned species with all its copies for Legendary, Mythical, Ultra
-  Beasts and Mega-capable. The card's count and the list are one definition (`HubCollection.Membership`). Lucky shows
+  copies in the set for 100% IVs, Lucky and Shadow, each owned species with all its copies for Legendary, Mythical and Ultra
+  Beasts, and for Mega-capable only the copies that can Mega Evolve. The card's count and the list are one definition (`HubCollection.Membership`). Lucky shows
   "Not in your scans yet" until a copy is marked.
   Rulings after review (manager, 31 Oct 2026): the species sets count species but the sheet lists form rows as My Pokémon
   shows them (Giratina Altered and Origin are two rows, one species), and says "Forms are listed separately." under

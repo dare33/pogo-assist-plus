@@ -142,8 +142,8 @@ public enum HubCollection {
         case hundo = "100% IVs", legendary = "Legendary", mythical = "Mythical", ultraBeasts = "Ultra Beasts", megaCapable = "Mega-capable", lucky = "Lucky", shadow = "Shadow"
         public var name: String { rawValue }
         public var id: String { rawValue }
-        /// Legendary, Mythical, Ultra Beasts and Mega-capable are species sets (owned of released, and the list shows each owned species with all its copies);
-        /// the others count copies.
+        /// Legendary, Mythical, Ultra Beasts and Mega-capable are species sets: the card counts owned species of released, and the list shows each owned species'
+        /// copies (all of them for the first three; for Mega-capable only the copies that can Mega Evolve). The others count copies.
         public var isSpeciesSet: Bool {
             switch self {
             case .legendary, .mythical, .ultraBeasts, .megaCapable: return true
@@ -155,8 +155,8 @@ public enum HubCollection {
     /// A copy's Lucky mark: the one definition the set, its list and the My Pokémon search read.
     public static func isLuckyMarked(_ e: BoxEntry) -> Bool { e.row.lucky == true }
 
-    /// A copy's Shadow state: the hand mark wins when it is set (1 Shadow, 2 Purified, 0 neither); only a copy with no mark is a Shadow by its `_shadow` species id,
-    /// as `HubRaidsModel.isShadow` reads an unmarked copy. The one definition the Shadow set, Mega-capable and the search read.
+    /// A copy's Shadow state: the hand mark wins when it is set (1 Shadow, 2 Purified, 0 neither); only a copy with no mark is a Shadow by its `_shadow` species id.
+    /// The one definition the Shadow set, Mega-capable and the search read.
     public static func isShadow(_ row: ScanRow) -> Bool {
         switch row.shadow {
         case 1?: return true
@@ -200,7 +200,9 @@ public enum HubCollection {
                 for (k, set) in tagDex where set.contains(dex) { out.insert(k) }
             }
             let shadow = HubCollection.isShadow(e.row)
-            if shadow { out.insert(.shadow) } else if megaIds.contains(e.row.speciesId) { out.insert(.megaCapable) }
+            // A Purified copy of a `_shadow` species is the plain species again, so its Mega is looked up by the id without the suffix.
+            let id = e.row.speciesId.hasSuffix("_shadow") ? String(e.row.speciesId.dropLast("_shadow".count)) : e.row.speciesId
+            if shadow { out.insert(.shadow) } else if megaIds.contains(id) { out.insert(.megaCapable) }
             if isLucky(e) { out.insert(.lucky) }
             return out
         }
@@ -212,7 +214,7 @@ public enum HubCollection {
         return entries.filter { m.kinds(of: $0).contains(kind) }
     }
 
-    /// Counts for the named groups, read from `Membership`. 100% IVs, Lucky and Shadow count copies (a Shadow is a copy marked Shadow or of a `_shadow` species, as `HubRaidsModel.isShadow` reads it); Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
+    /// Counts for the named groups, read from `Membership`. 100% IVs, Lucky and Shadow count copies (a Shadow follows `isShadow`: the hand mark when there is one, else a `_shadow` species); Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
     /// released). `isLucky` reads the copy's Lucky mark (the data model adds it); while no copy is marked the Lucky tile has no count.
     public static func specialSets(entries: [BoxEntry], gm: GameMaster, isLucky: @escaping (BoxEntry) -> Bool = isLuckyMarked) -> [SpecialSet] {
         let m = Membership(entries: entries, gm: gm, isLucky: isLucky)

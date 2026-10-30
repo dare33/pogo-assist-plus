@@ -422,7 +422,7 @@ final class HubScreensTests: XCTestCase {
     }
 
     /// A Zapdos copy renamed to its Galarian form is a second Zapdos row under Legendary: the sheet says "Forms are listed separately." while the card still counts one species.
-    /// Also takes the screenshots of that sheet and of the empty Lucky sheet (out/screens/fb-collection-r2).
+    /// Also takes the screenshots of that sheet and of the empty Lucky sheet (out/screens/fb-collection-r3).
     func testTheFormsLineAndTheEmptyLuckySheet() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
@@ -475,14 +475,14 @@ final class HubScreensTests: XCTestCase {
             card.tap()
             XCTAssertTrue(again.staticTexts["collection-set-sheet-forms"].waitForExistence(timeout: 30))
             sleep(2)
-            shot("collection-set-sheet-forms-\(name)", in: "fb-collection-r2")
+            shot("collection-set-sheet-forms-\(name)", in: "fb-collection-r3")
             again.buttons["collection-set-sheet-done"].tap()
             let lucky = again.buttons["collection-set-lucky"]
             scrollTo(lucky, in: again)
             lucky.tap()
             XCTAssertTrue(again.staticTexts["collection-set-sheet-count"].waitForExistence(timeout: 10))
             sleep(2)
-            shot("collection-set-sheet-lucky-empty-\(name)", in: "fb-collection-r2")
+            shot("collection-set-sheet-lucky-empty-\(name)", in: "fb-collection-r3")
             again.terminate()
         }
     }
@@ -509,11 +509,11 @@ final class HubScreensTests: XCTestCase {
             let card = again.buttons["collection-set-legendary"]
             scrollTo(card, in: again)
             sleep(1)
-            shot("collection-cards-\(name)", in: "fb-collection-r2")
+            shot("collection-cards-\(name)", in: "fb-collection-r3")
             card.tap()
             XCTAssertTrue(any(again, "collection-set-sheet").firstMatch.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
             sleep(2)
-            shot("collection-set-sheet-\(name)", in: "fb-collection-r2")
+            shot("collection-set-sheet-\(name)", in: "fb-collection-r3")
             again.terminate()
         }
     }

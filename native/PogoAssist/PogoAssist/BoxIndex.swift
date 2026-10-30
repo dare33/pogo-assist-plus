@@ -220,9 +220,10 @@ struct BoxIndex {
                 }
             }
 
-            /// `key` holds "|"-separated names; a word of any of them (after a space or a bracket) starts with `text`.
+            /// `key` holds "|"-separated names; `text` starts one of them or a word after a space. Not a word in brackets: "(Shadow)" is a form label, and whether a copy is a
+            /// Shadow is the membership's call (a Purified copy of a `_shadow` species is not).
             static func startsAName(_ key: String, _ text: String) -> Bool {
-                key.hasPrefix(text) || key.contains("|" + text) || key.contains(" " + text) || key.contains("(" + text)
+                key.hasPrefix(text) || key.contains("|" + text) || key.contains(" " + text)
             }
         }
 

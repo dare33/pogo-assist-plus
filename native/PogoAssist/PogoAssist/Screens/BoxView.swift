@@ -272,7 +272,7 @@ struct BoxView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").font(.figtree(16, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
-            TextField("", text: $query, prompt: Text("Name, CP, shadow, lucky…").foregroundStyle(Theme.faint))
+            TextField("", text: $query, prompt: Text("Name, CP, cp1500-2500, shadow…").foregroundStyle(Theme.faint))
                 .font(.figtree(16, .regular, relativeTo: .body))
                 .foregroundStyle(Theme.ink)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()

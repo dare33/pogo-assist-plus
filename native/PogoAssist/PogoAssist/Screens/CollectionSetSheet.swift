@@ -3,7 +3,7 @@ import PogoBox
 
 /// What a Special sets card opens: a sheet with the player's Pokémon in that set, laid out as My Pokémon is (species rows by letter, each opening in place, a copy opens
 /// its Pokémon page). The set's members are `HubCollection.Membership`'s, the definition the card's count reads, asked of the index as the matching search word.
-/// A copy set lists only its copies; a species set lists the owned species with all their copies.
+/// A copy set lists only its copies; Legendary, Mythical and Ultra Beasts list each owned species with all its copies, and Mega-capable only the copies that can Mega Evolve.
 struct CollectionSetSheet: View {
     let kind: HubCollection.SetKind
     /// The card the sheet opened from: its count until the sheet has worked out its own (an edit on a copy page opened from here changes the set).
@@ -26,9 +26,10 @@ struct CollectionSetSheet: View {
     private var query: BoxIndex.Query { .keyword(BoxIndex.SearchWord(kind)) }
 
     /// The sections show only with the index they were built for: a row holds positions in that index, so with another one they would be the wrong rows (or none).
-    static func showsSections(computedFor: String?, storeKey: String?) -> Bool { computedFor != nil && computedFor == storeKey }
-    private var ready: Bool { Self.showsSections(computedFor: sectionsFor, storeKey: store.indexKey) }
-    private var shown: HubCollection.SpecialSet { ready ? current ?? set : set }
+    /// They also wait for the box version the model is on: while a newer one is being indexed, the old rows are not shown.
+    static func showsSections(computedFor: String?, storeKey: String?, modelKey: String) -> Bool { computedFor != nil && computedFor == storeKey && storeKey == modelKey }
+    private var ready: Bool { Self.showsSections(computedFor: sectionsFor, storeKey: store.indexKey, modelKey: indexKey) }
+    private var shown: HubCollection.SpecialSet { current ?? set }
 
     /// "14 of 52 species", "6 copies"; the card's note while a set has nothing yet.
     private var figure: String {

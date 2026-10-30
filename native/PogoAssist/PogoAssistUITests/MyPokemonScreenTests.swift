@@ -230,7 +230,7 @@ final class MyPokemonScreenTests: XCTestCase {
 
     private func shot(_ name: String) {
         var dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
-        dir = (dir as NSString).appendingPathComponent("fb-collection-r2")
+        dir = (dir as NSString).appendingPathComponent("fb-collection-r3")
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
     }
@@ -245,6 +245,8 @@ final class MyPokemonScreenTests: XCTestCase {
             app.launch()
             XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
             let search = app.textFields["box-search"]
+            sleep(2)
+            shot("my-pokemon-placeholder-\(mode)-\(size)")   // the empty search field with its hint
             search.tap(); search.typeText("legendary\n")
             XCTAssertTrue(row(app, "Moltres").waitForExistence(timeout: 10))
             sleep(2)
