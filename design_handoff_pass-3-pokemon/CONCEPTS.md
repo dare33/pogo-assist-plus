@@ -80,6 +80,20 @@ Stated so each can be checked against the code. "Proposal" marks the session's o
    its keep or transfer tag.
 6. **Tapping a TOP PVP row** opens that copy with its league's tile chosen.
 7. **The A–Z index** appears while the list scrolls and fades a second after it stops (D24).
+8. **Search words for the special types** (Greg, phone run 30 Oct 2026): the search also takes the game's words, matched whole
+   and in any case: shadow, purified, lucky, dynamax (or max), gigantamax (or gmax), legendary, mythical, ultra beasts (ultra
+   beast, ultrabeast), mega (a copy that can Mega Evolve), 100% (or hundo) and buddy (or best buddy). Words are separated by spaces
+   or "&" and every one must match; a word that is not one of these is a piece of a name ("pika shadow" finds Shadow Pikachu).
+   A word that also starts a name (mega, in Meganium) finds both. Shadow, legendary, mythical, ultra beasts, mega, 100% and
+   lucky use the Special sets' membership (`HubCollection.Membership`); purified, dynamax, gigantamax and best buddy read the
+   copy's own marks. Legendary, mythical and ultra beasts match every copy of the species; mega only the copies that can Mega Evolve.
+   Rulings after review (manager, 31 Oct 2026): when a special word is also tried as a name, it matches only the start of a name or of a word in it (not a word in brackets, so "shadow" does not find a
+   Purified "Charizard (Shadow)"), so "mega" finds Meganium but not Yanmega, "shadow" never finds Marshadow and "max" does not find
+   Eternatus; a word that is not a special word stays a piece of a name (any part, as before). Also accepted:
+   "ultra-beast(s)", "g-max", "best buddies", and a trailing "," "." or ";" on a word is ignored. A CP word
+   ("cp2819", "cp1500-2500", "cp1500-" for 1,500 and up, "cp-2500" for up to 2,500) can be combined with words and
+   must match too ("shadow cp1500-2500", "shadow&cp1500-2500", "legendary cp2500-"); a bare number among words is
+   a piece of a name. The search field's hint reads "Name, CP, cp1500-2500, shadow…".
 
 ### The Pokémon page
 

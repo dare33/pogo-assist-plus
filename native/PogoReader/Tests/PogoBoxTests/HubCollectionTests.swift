@@ -105,6 +105,9 @@ final class HubCollectionTests: XCTestCase {
         XCTAssertEqual(by["Ultra Beasts"]?.owned, 1); XCTAssertEqual(by["Ultra Beasts"]?.total, 12)
         XCTAssertEqual(by["Mega-capable"]?.owned, 1, "Charizard (two copies) is one species"); XCTAssertEqual(by["Mega-capable"]?.total, 58)
         XCTAssertEqual(by["Shadow"]?.owned, 1)
+        XCTAssertEqual(by["Shadow"]?.unitWord, "copy", "one copy reads singular")
+        XCTAssertEqual(by["100% IVs"]?.unitWord, "copies")
+        XCTAssertEqual(by["Legendary"]?.unitWord, "species")
         XCTAssertEqual(by["Lucky"]?.note, "Not in your scans yet", "no copy carries a Lucky mark"); XCTAssertNil(by["Lucky"]?.owned)
     }
 
@@ -119,6 +122,59 @@ final class HubCollectionTests: XCTestCase {
         let sets = HubCollection.specialSets(entries: box, gm: gm, isLucky: { $0.id == "b" })
         XCTAssertEqual(sets.first { $0.name == "Lucky" }?.owned, 1)
         XCTAssertNil(sets.first { $0.name == "Lucky" }?.note)
+    }
+
+    /// A card's count and the list that opens from it are one definition: copies for the copy sets, the owned species (with all their copies) for the species sets.
+    func testEachSetsCountIsItsListSize() {
+        let hundo = IVs(atk: 15, def: 15, hp: 15)
+        let box = [P23.entry("a", "pikachu", ivs: hundo), P23.entry("b", "registeel"), P23.entry("c", "charizard", shadow: 1), P23.entry("d", "mew"),
+                   P23.entry("e", "nihilego"), P23.entry("f", "charizard", ivs: hundo), P23.entry("g", "charizard_shadow"), P23.entry("h", "registeel"),
+                   P23.entry("i", "eevee")]
+        let lucky: (BoxEntry) -> Bool = { ["b", "i"].contains($0.id) }
+        let by = Dictionary(uniqueKeysWithValues: HubCollection.specialSets(entries: box, gm: gm, isLucky: lucky).map { ($0.name, $0) })
+        for kind in HubCollection.SetKind.allCases {
+            let list = HubCollection.members(of: kind, entries: box, gm: gm, isLucky: lucky)
+            let size = kind.isSpeciesSet ? Set(list.compactMap { gm.byId[$0.row.speciesId]?.dex }).count : list.count
+            XCTAssertEqual(by[kind.name]?.owned, size, "\(kind.name): the card counts what the list shows")
+        }
+        func ids(_ k: HubCollection.SetKind) -> [String] { HubCollection.members(of: k, entries: box, gm: gm, isLucky: lucky).map(\.id) }
+        XCTAssertEqual(ids(.hundo), ["a", "f"])
+        XCTAssertEqual(ids(.legendary), ["b", "h"], "every copy of an owned species")
+        XCTAssertEqual(ids(.megaCapable), ["f"], "a Shadow Charizard cannot Mega Evolve, marked or by its species")
+        XCTAssertEqual(ids(.shadow), ["c", "g"])
+        XCTAssertEqual(ids(.lucky), ["b", "i"])
+        XCTAssertEqual(ids(.mythical), ["d"])
+        XCTAssertEqual(ids(.ultraBeasts), ["e"])
+        XCTAssertEqual(HubCollection.members(of: .lucky, entries: box, gm: gm), [], "no row carries the Lucky mark")
+    }
+
+    /// The hand mark wins: a `_shadow` species marked Purified is Purified, not Shadow; a Shadow mark makes any species a Shadow; no mark leaves it to the species.
+    func testTheShadowMarkBeatsTheSpeciesSuffix() {
+        let box = [P23.entry("a", "charizard_shadow", shadow: 2), P23.entry("b", "charizard_shadow", shadow: 0), P23.entry("c", "charizard_shadow"),
+                   P23.entry("d", "charizard", shadow: 1), P23.entry("e", "charizard", shadow: 2)]
+        func ids(_ k: HubCollection.SetKind) -> [String] { HubCollection.members(of: k, entries: box, gm: gm).map(\.id) }
+        XCTAssertEqual(ids(.shadow), ["c", "d"])
+        XCTAssertEqual(ids(.megaCapable), ["a", "b", "e"], "a Purified (or unmarked-0) copy of Charizard (Shadow) is a Charizard again and can Mega Evolve; a Shadow copy cannot")
+        // The Shadow to Purified transition: the same copy leaves the set when its mark changes.
+        let before = [P23.entry("x", "charizard", shadow: 1)], after = [P23.entry("x", "charizard", shadow: 2)]
+        XCTAssertEqual(HubCollection.members(of: .shadow, entries: before, gm: gm).count, 1)
+        XCTAssertEqual(HubCollection.members(of: .shadow, entries: after, gm: gm).count, 0)
+        XCTAssertEqual(HubCollection.members(of: .megaCapable, entries: after, gm: gm).count, 1)
+    }
+
+    /// Mega-capable is the copy's own species-form: Galarian Slowbro, Armored Mewtwo and Alolan Raichu have no Mega of their own.
+    func testMegaCapableIsTheCopysOwnForm() {
+        let box = [P23.entry("a", "slowbro"), P23.entry("b", "slowbro_galarian"), P23.entry("c", "mewtwo"), P23.entry("d", "mewtwo_armored"),
+                   P23.entry("e", "raichu"), P23.entry("f", "raichu_alolan"), P23.entry("g", "kyogre")]
+        XCTAssertEqual(HubCollection.members(of: .megaCapable, entries: box, gm: gm).map(\.id), ["a", "c", "e", "g"])
+    }
+
+    /// A species set counts species while the list can hold a species' forms: Giratina Altered and Origin are one species (one dex number).
+    func testASpeciesSetCountsFormsAsOneSpecies() {
+        let box = [P23.entry("a", "giratina_altered"), P23.entry("b", "giratina_origin"), P23.entry("c", "giratina_origin")]
+        let by = Dictionary(uniqueKeysWithValues: HubCollection.specialSets(entries: box, gm: gm).map { ($0.name, $0) })
+        XCTAssertEqual(by["Legendary"]?.owned, 1)
+        XCTAssertEqual(HubCollection.members(of: .legendary, entries: box, gm: gm).count, 3)
     }
 
     func testAnEmptyBoxHasEmptySets() {
