@@ -295,7 +295,7 @@ final class HubScreensTests: XCTestCase {
         }
         XCTAssertEqual(any(app, "collection-region-row").count, 9, "nine regions")
         XCTAssertTrue(any(app, "collection-region-row").firstMatch.label.hasSuffix("Kanto species"), any(app, "collection-region-row").firstMatch.label)
-        XCTAssertGreaterThanOrEqual(any(app, "collection-showcase-card").count, 1, "a best copy")
+        XCTAssertGreaterThanOrEqual(any(app, "collection-showcase-card").count, 1, "a highest IV copy")
         XCTAssertEqual(any(app, "collection-set").count, 7, "seven special sets")
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Lucky. Not in your scans yet'")).firstMatch.exists, "Lucky reads Not in your scans yet")
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '100% IVs'")).firstMatch.exists)

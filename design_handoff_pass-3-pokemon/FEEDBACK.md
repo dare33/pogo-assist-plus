@@ -18,5 +18,7 @@ Each eyeball item with Greg's words, the decision and its review size (`docs/des
    it up? make it feel responsive/instant." Decision: an edit no longer queues a whole-box advice per tap; the edited
    Pokémon's family is worked out first for its page, then the whole box. Size: full.
 5. Greg: "why are these amaura/aurorus considered weak #110/849 and #154/1152 is pretty good yeah? or is pvp really
-   that shallow that if you're #110 its still weak." Answered, no change: WEAK means the species is below the B-tier
-   line of our league tables (the top 25 or so per league), not a judgement of the rank alone.
+   that shallow that if you're #110 its still weak." Answered, no change: a species is S, A or B for a league when the
+   league's tier table names it or its PvPoke score is 88 or more (about 80 species in Great League, 63 in Ultra);
+   below that line the tag is WEAK whatever the rank (Aurorus scores 84.1 and 85.6). WEAK is also given to an S, A or
+   B species whose IVs are outside the top fifth for the league, or not read.

@@ -14,10 +14,10 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 **Hub and Collection**
 
 - **Squads and collection**: the section on the Hub tab that holds the six area tiles (was WHAT NEXT; D4, D55).
-- **Collection**: the area for the player's dex, best copies, sets and missing species, plus the builds, gaps and
+- **Collection**: the area for the player's dex, highest IV copies, sets and missing species, plus the builds, gaps and
   duplicates summaries (replaces Everything; D2, D3).
 - **Species (in Collection)**: one dex number released in Pokémon GO; Mega and Shadow entries are not separate species.
-- **Showcase**: the strip of the player's best copy of each species, ranked by IV % (name kept, D56).
+- **Showcase**: the strip of the player's highest IV copy of each species, ranked by IV % (name kept, D56; heading "YOUR HIGHEST IV COPIES", Greg, 30 Oct 2026).
 - **Special sets**: counts of copies or species in named groups (100% IVs, Legendary, Mythical, Ultra Beasts,
   Mega-capable, Lucky, Shadow).
 - **Missing**: released species with no copy in the box; **you can evolve** means an earlier member of its family is in
@@ -168,7 +168,7 @@ Stated so each can be checked against the code.
 
 25. **Species count**: game-master entries with `released`, one per dex number, Mega, Shadow and duplicate entries not
    counted; owned when a box copy's species has that dex number. Regions by dex range (Kanto 1–151 … Paldea 906–1025).
-26. **Showcase**: each species' best copy by IV %, ties by CP, first twelve.
+26. **Showcase**: each species' highest IV copy (IV %), ties by CP, first twelve.
 
 ### Keeping squads
 
@@ -183,7 +183,7 @@ Greg's read-back answers (D54, D55); item 6 he kept (D56).
 
 1. **"Available" (the switch) vs "TOP AVAILABLE" (Gym list heading)**: settled. The heading is now "Gym builds" (D54),
    so "available" means only "usable as it is".
-2. **"Best" (the switch) vs "Next best" (Rocket) vs "Best defenders first" (Gym "i") vs "best copies" (Showcase)**: four
+2. **"Best" (the switch) vs "Next best" (Rocket) vs "Best defenders first" (Gym "i") vs "best copies" (Showcase, until 30 Oct 2026)**: four
    meanings of "best". "Next best" was chosen over "Best available" and "Top options" for this reason (D50, D53); the
    Showcase now reads "highest IV copies" (Greg, phone run 30 Oct 2026); the others remain.
 3. **"Top"**: "Top defenders" (a squad), "Top 3" (Raids list toggle), "top pick" (PvP grade). A top pick is a grade,
