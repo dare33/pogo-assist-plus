@@ -753,7 +753,9 @@ final class AppModel: ObservableObject {
                     // Every edit's family is chained on the last known advice, even when a newer edit has come since (skipping one would leave that family out of the next
                     // one's base); only an account that is not the known advice's, or a Pokémon no longer in the box, ends it.
                     guard let base = gate.known(account: a), let gm = try? GameMaster.bundled() else { return nil }
+                    #if DEBUG
                     let t = Date()
+                    #endif
                     guard let merged = try BoxAdvice.afterEdit(of: editedId, base: base, entries: entries, scanDate: scanDate, engine: engine, gm: gm) else { return nil }
                     gate.setKnown(merged, account: a)
                     #if DEBUG
@@ -960,6 +962,8 @@ final class AppModel: ObservableObject {
     }
 
     private func afterCommit(_ snap: BoxSnapshot, editedId: String? = nil) {
+        // The version is saved, but an account switch during the awaited edit means the box now on screen is another account's: it stays.
+        guard snap.account == account else { return }
         boxToken += 1   // a box read still in flight began before this and must not put an older snapshot back
         boxLoaded = true
         snapshot = snap

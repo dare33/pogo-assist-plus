@@ -78,14 +78,14 @@ import PogoBox
                 try? await Task.sleep(for: .seconds(quiet))
             }
             guard let backing, let target = wanted else { return }
-            guard backing.account() == pendingAccount, let saved = backing.entry()?.row else {
-                return giveUp("Your mark change was not saved: that Pokémon is no longer in this box.")
-            }
+            guard backing.account() == pendingAccount else { return giveUp("Your mark change was not saved: the account changed.") }
+            guard let saved = backing.entry()?.row else { return giveUp("Your mark change was not saved: that Pokémon is no longer in this box.") }
             let mine = touched
             let edit = PokemonPage.edit(from: saved, to: target, touching: mine)
             if edit == BoxMerge.Edit() { return giveUp() }   // the taps cancelled out
             touched = []   // taps from here on are for the next save
             guard await backing.save(edit) else { return giveUp() }   // the marks go back to the saved row
+            guard backing.account() == pendingAccount else { return giveUp() }   // the account changed during the save: its box is not the one on screen
             if !touched.isEmpty { retried = false; continue }         // taps came during the save: they go next
             guard let now = backing.entry()?.row, let target = wanted else { return giveUp() }
             if PokemonPage.edit(from: now, to: target, touching: mine) == BoxMerge.Edit() { return giveUp() }   // saved: the shown row is the saved row again

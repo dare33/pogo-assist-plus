@@ -163,7 +163,17 @@ import PogoReader
         tap(editor, s) { PokemonPage.toggleShadow($0) }
         s.account = "b"
         await settled(editor)
-        XCTAssertTrue(s.edits.isEmpty); XCTAssertNil(editor.wanted); XCTAssertEqual(s.messages.count, 1)
+        XCTAssertTrue(s.edits.isEmpty); XCTAssertNil(editor.wanted)
+        XCTAssertEqual(s.messages, ["Your mark change was not saved: the account changed."])
+    }
+
+    func testAnAccountSwitchDuringTheSaveLeavesTheOtherAccountsBoxAlone() async {
+        let s = store(), editor = MarkEditor(settle: 0.05)
+        s.afterSave = { $0.account = "b" }   // the switch happens while the save is awaited
+        tap(editor, s) { PokemonPage.toggleDynamax($0) }
+        await settled(editor)
+        XCTAssertEqual(s.edits.count, 1, "saved once, and not again against the other account's box")
+        XCTAssertNil(editor.wanted)
     }
 
     func testASaveThatDoesNotTakeIsTriedOnceMoreThenReportedNotLooped() async {

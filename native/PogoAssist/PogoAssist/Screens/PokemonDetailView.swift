@@ -212,6 +212,8 @@ struct PokemonDetailView: View {
     /// otherwise the last ready advice stays on show while a new one is worked out, so the page does not jump.
     private var readyAdvice: BoxAdvice? {
         if case .ready(let a) = model.advice { cache.lastReady = a; return a }
+        // A whole-box advise that failed shows its failure, not the family result or the advice before it.
+        if case .failed = model.advice { cache.lastReady = nil; return nil }
         if let f = model.familyAdvice { cache.lastReady = f; return f }
         return cache.lastReady
     }

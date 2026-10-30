@@ -10,18 +10,18 @@ import Foundation
 
     /// The page drew the marks as they now are (called when what it draws changes).
     static func drawn() {
-        guard let t = tapped, !drawnLogged else { return }
+        guard tapped != nil, !drawnLogged else { return }
         drawnLogged = true
         #if DEBUG
-        NSLog("pogo timings: tap to mark drawn %.3f s", Date().timeIntervalSince(t))
+        if let t = tapped { NSLog("pogo timings: tap to mark drawn %.3f s", Date().timeIntervalSince(t)) }
         #endif
     }
 
     /// The page got advice for the edited box (`source` says which: the family's or the whole box's).
     static func advice(_ source: String) {
-        guard let t = tapped else { return }
+        guard tapped != nil else { return }
         #if DEBUG
-        NSLog("pogo timings: tap to advice on the page (%@) %.3f s", source, Date().timeIntervalSince(t))
+        if let t = tapped { NSLog("pogo timings: tap to advice on the page (%@) %.3f s", source, Date().timeIntervalSince(t)) }
         #endif
         if source == "whole box" { tapped = nil }
     }

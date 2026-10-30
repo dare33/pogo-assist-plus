@@ -124,6 +124,15 @@ final class FamilyAdviceTests: XCTestCase {
         // And the other way round: a copy whose own dex is missing is found by the others' number.
         let other = try XCTUnwrap(Self.box.first { $0.row.dex == 133 && $0.id != copy.id })
         XCTAssertTrue(BoxAdvice.family(of: other, in: box, gm: Self.gm).contains { $0.id == copy.id })
+        // And the advice itself: with no dex number on any Eevee or Pikachu row, the family result after an edit still equals the whole box's.
+        for i in box.indices where [133, 25].contains(box[i].row.dex) { box[i].row.dex = nil }
+        let base = try whole(box)
+        let target = try XCTUnwrap(box.first { Self.gm.byId[$0.row.speciesId]?.dex == 133 })
+        let after = try edited(box, target.id, BoxMerge.Edit(lucky: true))
+        let merged = try XCTUnwrap(try BoxAdvice.afterEdit(of: target.id, base: base, entries: after, scanDate: Self.when, engine: sharedEngine, gm: Self.gm))
+        let truth = try whole(after)
+        XCTAssertEqual(merged.builds, truth.builds); XCTAssertEqual(merged.duplicates, truth.duplicates); XCTAssertEqual(merged.leagues, truth.leagues)
+        XCTAssertEqual(merged.fit, truth.fit); XCTAssertEqual(merged.bestOf, truth.bestOf); XCTAssertEqual(merged.spareBuilds, truth.spareBuilds)
     }
 
     /// Marks already on several families (Shadow, Purified, Lucky, Dynamax), then edits that turn them off and swap them, each family result chained on the one
