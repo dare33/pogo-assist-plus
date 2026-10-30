@@ -20,6 +20,10 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Showcase**: the strip of the player's highest IV copy of each species, ranked by IV % (name kept, D56; heading "YOUR HIGHEST IV COPIES", Greg, 30 Oct 2026).
 - **Special sets**: counts of copies or species in named groups (100% IVs, Legendary, Mythical, Ultra Beasts,
   Mega-capable, Lucky, Shadow).
+  A card opens a sheet listing the player's Pokémon in the set, in My Pokémon's rows (Greg, phone run 30 Oct 2026): the
+  copies in the set for 100% IVs, Lucky and Shadow, each owned species with all its copies for Legendary, Mythical, Ultra
+  Beasts and Mega-capable. The card's count and the list are one definition (`HubCollection.Membership`). Lucky shows
+  "Not in your scans yet" until a copy is marked.
 - **Missing**: released species with no copy in the box; **you can evolve** means an earlier member of its family is in
   the box.
 - **Build**: one thing the advisor wants done to a copy for an area (power up, evolve, mega evolve, form change, moves).

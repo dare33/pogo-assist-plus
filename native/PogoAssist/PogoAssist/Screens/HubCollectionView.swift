@@ -39,6 +39,8 @@ struct HubCollectionView: View {
     @Environment(\.accent) private var accent
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: CollectionData?
+    /// The Special sets card whose list is open.
+    @State private var openSet: HubCollection.SetKind?
 
     private var adviceReady: BoxAdvice? { model.hubAdvice }
     /// The box, the account and whether the advice is in (the Missing "how to get" reads the advice's gaps).
@@ -65,6 +67,11 @@ struct HubCollectionView: View {
                 if !model.entries.isEmpty { cleanUp }
             } else if !model.entries.isEmpty {
                 ProgressView().frame(maxWidth: .infinity)
+            }
+        }
+        .sheet(item: $openSet) { kind in
+            if let set = data?.sets.first(where: { $0.name == kind.name }) {
+                CollectionSetSheet(kind: kind, set: set).environmentObject(model).environment(\.accent, accent)
             }
         }
         .task(id: key) {
@@ -146,7 +153,9 @@ struct HubCollectionView: View {
         Grid(horizontalSpacing: 10, verticalSpacing: 10) {
             ForEach(Array(stride(from: 0, to: d.sets.count, by: per)), id: \.self) { start in
                 GridRow {
-                    ForEach(d.sets[start..<min(start + per, d.sets.count)], id: \.name) { SpecialSetTile(set: $0) }
+                    ForEach(d.sets[start..<min(start + per, d.sets.count)], id: \.name) { s in
+                        if let kind = HubCollection.SetKind(rawValue: s.name) { SpecialSetTile(set: s, kind: kind) { openSet = kind } }
+                    }
                 }
             }
         }
@@ -286,11 +295,28 @@ private struct ShowcaseCard: View {
 }
 
 /// A special set: its name, "14 of 52" (or a plain count) and a bar when there is a total; Lucky reads "Not in your scans yet" until a copy is marked.
+/// A button: it opens the list of the Pokémon in the set (`CollectionSetSheet`).
 private struct SpecialSetTile: View {
     let set: HubCollection.SpecialSet
+    let kind: HubCollection.SetKind
+    let open: () -> Void
+
+    /// The tile's identifier suffix: the set's name as a word ("hundo" for 100% IVs, which has no letters to spell it from).
+    private var slug: String { kind == .hundo ? "hundo" : kind.name.lowercased().replacingOccurrences(of: " ", with: "-") }
 
     var body: some View {
-        let figure = set.note ?? (set.owned.map { n in set.total.map { "\(n) of \($0)" } ?? HubModel.grouped(n) } ?? "")
+        Button(action: open) { tile }
+            .buttonStyle(PressStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(set.note.map { "\(set.name). \($0)" } ?? "\(set.name), \(figure) \(set.unit)")
+            .accessibilityHint("Opens the list")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("collection-set-\(slug)")
+    }
+
+    private var figure: String { self.set.note ?? (self.set.owned.map { n in self.set.total.map { "\(n) of \($0)" } ?? HubModel.grouped(n) } ?? "") }
+
+    private var tile: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(set.name).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
             if set.note != nil {
@@ -304,9 +330,7 @@ private struct SpecialSetTile: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .panelShadow()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(set.note.map { "\(set.name). \($0)" } ?? "\(set.name), \(figure) \(set.unit)")
-        .accessibilityIdentifier("collection-set")
+        .contentShape(Rectangle())
     }
 }
 
