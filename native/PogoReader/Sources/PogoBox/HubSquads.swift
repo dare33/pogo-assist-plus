@@ -47,6 +47,8 @@ public struct FilledSlot: Equatable {
     public var fallback: Bool
     /// The slot's Pokémon as one id (the copy's entry id, else `squadSpeciesPrefix` + the species key); nil when the slot is empty.
     public var pickId: String? { entryId ?? species.map { squadSpeciesPrefix + $0 } }
+    /// Every id the slot's Pokémon goes by: its copy and its species (a species pick that reads as a copy has both).
+    public var ids: Set<String> { Set([entryId, species.map { squadSpeciesPrefix + $0 }].compactMap { $0 }) }
 }
 
 /// A Pokémon a slot may take, with the roles it is listed for. Each screen's candidate type conforms.
@@ -186,6 +188,11 @@ public enum HubSquads {
     }
 
     /// The picker's rows: `candidates` (best first) without the excluded ones; the edited slot's own Pokémon stays and is ticked.
+    /// The same with every id the edited slot's Pokémon goes by (`FilledSlot.ids`): the row of its copy, or of its species, is ticked.
+    public static func picker(candidates: [String], excluded: Set<String>, ownIds: Set<String>) -> [PickerRow] {
+        candidates.filter { !excluded.contains($0) || ownIds.contains($0) }.map { PickerRow(entryId: $0, ticked: ownIds.contains($0)) }
+    }
+
     public static func picker(candidates: [String], excluded: Set<String>, own: String?) -> [PickerRow] {
         candidates.filter { !excluded.contains($0) || $0 == own }.map { PickerRow(entryId: $0, ticked: $0 == own) }
     }

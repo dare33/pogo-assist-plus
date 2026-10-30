@@ -17,9 +17,14 @@ public struct SquadStore: Codable, Equatable {
 
         /// A Pokémon sits in one slot at a time: choosing it here takes it out of the squad's other slots. `id` is a copy's entry id, or `squadSpeciesPrefix` + a
         /// species key for a Best pick of a Pokémon the box does not have (kept as `SquadSlot.species`); nil clears the slot's pick.
-        public mutating func choose(_ id: String?, at index: Int) {
+        /// `alsoClearing` are the other ids that stand for the same Pokémon (its copy and its species: `HubSquads.equivalents`), so a copy chosen here wins over a
+        /// species pick of it in another slot, and the reverse.
+        public mutating func choose(_ id: String?, at index: Int, alsoClearing: [String] = []) {
             guard slots.indices.contains(index) else { return }
-            if let id { for i in slots.indices where i != index && slots[i].pickId == id { slots[i].pick = nil; slots[i].species = nil } }
+            if let id {
+                let same = Set([id] + alsoClearing)
+                for i in slots.indices where i != index && (slots[i].pickId.map(same.contains) ?? false) { slots[i].pick = nil; slots[i].species = nil }
+            }
             if let id, id.hasPrefix(squadSpeciesPrefix) {
                 slots[index].pick = nil
                 slots[index].species = String(id.dropFirst(squadSpeciesPrefix.count))
