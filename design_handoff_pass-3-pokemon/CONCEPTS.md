@@ -87,6 +87,13 @@ Stated so each can be checked against the code. "Proposal" marks the session's o
    A word that also starts a name (mega, in Meganium) finds both. Shadow, legendary, mythical, ultra beasts, mega, 100% and
    lucky use the Special sets' membership (`HubCollection.Membership`); purified, dynamax, gigantamax and best buddy read the
    copy's own marks. A species set's word matches every copy of the species.
+   Rulings after review (manager, 31 Oct 2026): when a special word is also tried as a name, it matches only names that
+   start with it, so "mega" finds Meganium but not Yanmega, "shadow" never finds Marshadow and "max" does not find
+   Eternatus; a word that is not a special word stays a piece of a name (any part, as before). Also accepted:
+   "ultra-beast(s)", "g-max", "best buddies", and a trailing "," "." or ";" on a word is ignored. A CP word
+   ("cp2819", "cp1500-2500", "cp1500-" for 1,500 and up, "cp-2500" for up to 2,500) can be combined with words and
+   must match too ("shadow cp1500-2500", "shadow&cp1500-2500", "legendary cp2500-"); a bare number among words is
+   a piece of a name. The search field's hint reads "Name, CP, shadow, lucky…".
 
 ### The Pokémon page
 

@@ -31,6 +31,15 @@ final class BoxSearchWordsTests: XCTestCase {
         entry("zard", "charizard", dynamax: true, gigantamax: true),
         entry("eevee", "eevee", buddy: true),
         entry("eevee2", "eevee", cp: 2100),
+        entry("marshadow", "marshadow"),
+        entry("yanmega", "yanmega"),
+        entry("mime-shadow", "mr_mime", shadow: 1),
+        entry("mime", "mr_mime"),
+        entry("farfetchd", "farfetchd"),
+        entry("nidoran", "nidoran_female"),
+        entry("shadow-1800", "slowbro", cp: 1800, shadow: 1),
+        entry("gira-a", "giratina_altered"),
+        entry("gira-o", "giratina_origin"),
     ]
     private lazy var index = BoxIndex(entries: box, gm: gm)
 
@@ -48,12 +57,17 @@ final class BoxSearchWordsTests: XCTestCase {
         XCTAssertEqual(BoxIndex.Query("cp1500-2500"), .cp(1500...2500))
         XCTAssertEqual(BoxIndex.Query(""), .none)
         XCTAssertEqual(BoxIndex.Query("mr. mime"), .text("mr. mime"))
+        XCTAssertEqual(BoxIndex.Query("farfetch'd"), .text("farfetch'd"))
+        XCTAssertEqual(BoxIndex.Query("nidoran♀"), .text("nidoran♀"))
+        XCTAssertEqual(BoxIndex.Query("cp1500-"), .cp(1500...Int.max))
+        XCTAssertEqual(BoxIndex.Query("cp-2500"), .cp(0...2500))
     }
 
     func testTheSpecialWordsAreRecognisedWhole() {
         for (word, expected) in [("shadow", BoxIndex.SearchWord.shadow), ("Purified", .purified), ("LUCKY", .lucky), ("dynamax", .dynamax), ("max", .dynamax),
                                  ("gigantamax", .gigantamax), ("gmax", .gigantamax), ("legendary", .legendary), ("mythical", .mythical),
-                                 ("ultra beasts", .ultraBeast), ("ultra beast", .ultraBeast), ("ultrabeast", .ultraBeast), ("mega", .mega),
+                                 ("ultra beasts", .ultraBeast), ("ultra beast", .ultraBeast), ("ultrabeast", .ultraBeast), ("ultra-beast", .ultraBeast), ("ultra-beasts", .ultraBeast),
+                                 ("g-max", .gigantamax), ("best buddies", .buddy), ("shadow,", .shadow), ("hundo.", .hundo), ("mega", .mega),
                                  ("100%", .hundo), ("hundo", .hundo), ("buddy", .buddy), ("best buddy", .buddy)] {
             guard case .words(let w) = BoxIndex.Query(word) else { return XCTFail("\(word) is a special word") }
             XCTAssertEqual(w.tokens.map(\.word), [expected], word)
@@ -76,27 +90,28 @@ final class BoxSearchWordsTests: XCTestCase {
     // MARK: matching
 
     func testEachWordFindsItsCopies() {
-        XCTAssertEqual(ids("shadow"), ["pika-shadow", "nihil"])
+        XCTAssertEqual(ids("shadow"), ["pika-shadow", "nihil", "mime-shadow", "shadow-1800"])
         XCTAssertEqual(ids("purified"), ["pika-purified"])
         XCTAssertEqual(ids("lucky"), ["regi"])
         XCTAssertEqual(ids("dynamax"), ["zard"])
         XCTAssertEqual(ids("max"), ["zard"])
         XCTAssertEqual(ids("gmax"), ["zard"])
         XCTAssertEqual(ids("gigantamax"), ["zard"])
-        XCTAssertEqual(ids("legendary"), ["regi"])
-        XCTAssertEqual(ids("mythical"), ["mew"])
+        XCTAssertEqual(ids("legendary"), ["regi", "gira-a", "gira-o"])
+        XCTAssertEqual(ids("mythical"), ["mew", "marshadow"])
         XCTAssertEqual(ids("ultra beasts"), ["nihil"])
         XCTAssertEqual(ids("ultrabeast"), ["nihil"])
         XCTAssertEqual(ids("hundo"), ["pika"])
         XCTAssertEqual(ids("100%"), ["pika"])
         XCTAssertEqual(ids("buddy"), ["eevee"])
         XCTAssertEqual(ids("best buddy"), ["eevee"])
-        XCTAssertEqual(ids("SHADOW"), ["pika-shadow", "nihil"], "case does not matter")
+        XCTAssertEqual(ids("SHADOW"), ["pika-shadow", "nihil", "mime-shadow", "shadow-1800"], "case does not matter")
     }
 
     func testCombinationsNeedEveryWord() {
         XCTAssertEqual(ids("shadow ultra beasts"), ["nihil"])
         XCTAssertEqual(ids("shadow & legendary"), [])
+        XCTAssertEqual(ids("shadow & mythical"), [])
         XCTAssertEqual(ids("mythical hundo"), [])
     }
 
@@ -107,8 +122,43 @@ final class BoxSearchWordsTests: XCTestCase {
     }
 
     func testAWordThatStartsANameReturnsTheUnion() {
-        // "mega": Charizard (Mega-capable) and Meganium (a name); Pikachu has no Mega.
-        XCTAssertEqual(ids("mega"), ["zard", "meganium"])
+        // "mega": Charizard (Mega-capable) and Meganium (a name that starts with it); not Yanmega, which only contains it.
+        XCTAssertTrue(ids("mega").isSuperset(of: ["zard", "meganium"]))
+        XCTAssertFalse(ids("mega").contains("yanmega"))
+        XCTAssertFalse(ids("shadow").contains("marshadow"), "Marshadow only contains the word")
+        XCTAssertEqual(ids("max"), ["zard"], "no name starts with max")
+        // A plain piece of a name stays a substring.
+        XCTAssertEqual(ids("shadow").contains("marshadow"), false)
+        XCTAssertTrue(ids("adow").contains("marshadow"))
+        XCTAssertTrue(ids("mega").isDisjoint(with: ["marshadow", "pika-shadow", "nihil"]))
+    }
+
+    func testNamesWithPunctuationAndWordsTogether() {
+        XCTAssertEqual(ids("farfetch'd"), ["farfetchd"])
+        XCTAssertEqual(ids("nidoran♀"), [], "the game master spells it Nidoran Female, as before")
+        XCTAssertEqual(ids("mr. mime"), ["mime-shadow", "mime"])
+        XCTAssertEqual(ids("mr. mime shadow"), ["mime-shadow"])
+        XCTAssertEqual(ids("mr mime, shadow"), ["mime-shadow"])
+    }
+
+    func testCPCombinesWithWords() {
+        XCTAssertEqual(ids("shadow cp1500-2500"), ["shadow-1800"])
+        XCTAssertEqual(ids("shadow&cp1500-2500"), ["shadow-1800"])
+        XCTAssertEqual(ids("shadow cp1500-"), ["shadow-1800"])
+        XCTAssertEqual(ids("shadow cp-1100"), ["pika-shadow", "nihil", "mime-shadow"])
+        XCTAssertEqual(ids("shadow cp1800"), ["shadow-1800"])
+        XCTAssertEqual(ids("eevee cp2000-"), ["eevee2"])
+        XCTAssertEqual(ids("eevee 2100"), [], "a bare number among words is a piece of a name")
+    }
+
+    /// The sheet lists a species set's forms as separate rows; grouped by dex number they are the card's species count.
+    func testASpeciesSetsRowsGroupedByDexAreTheCardsCount() {
+        let sets = HubCollection.specialSets(entries: box, gm: gm)
+        let legendary = sets.first { $0.name == "Legendary" }!
+        let rows = index.sections(query: .keyword(.legendary), chip: .all, sort: .name).flatMap(\.rows)
+        XCTAssertTrue(rows.contains { $0.title.hasPrefix("Giratina (Altered") } && rows.contains { $0.title.hasPrefix("Giratina (Origin") }, "forms are rows of their own")
+        XCTAssertEqual(Set(rows.compactMap { gm.byId[$0.speciesId]?.dex }).count, legendary.owned, "one species each")
+        XCTAssertGreaterThan(rows.count, legendary.owned ?? 0)
     }
 
     func testCPSearchesStillWork() {

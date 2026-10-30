@@ -133,6 +133,8 @@ public enum HubCollection {
         public var unit: String
         /// "Not in your scans yet" for Lucky while no copy carries the mark; nil otherwise.
         public var note: String?
+        /// The unit as it reads after the count: "1 copy", "6 copies", "3 of 52 species".
+        public var unitWord: String { unit == "copies" && owned == 1 ? "copy" : unit }
     }
 
     /// The seven groups, in the order the Collection shows them.
@@ -153,11 +155,25 @@ public enum HubCollection {
     /// A copy's Lucky mark: the one definition the set, its list and the My Pokémon search read.
     public static func isLuckyMarked(_ e: BoxEntry) -> Bool { e.row.lucky == true }
 
-    /// Which sets a copy belongs to: the single definition behind a card's count, the list that opens from it and the My Pokémon search words. A species set holds
-    /// a copy of any form of the species (the dex number is the species, as everywhere on the Collection); `released` includes an owned species PvPoke flags
-    /// unreleased, so the sets and the species totals agree.
+    /// A copy's Shadow state: the hand mark wins when it is set (1 Shadow, 2 Purified, 0 neither); only a copy with no mark is a Shadow by its `_shadow` species id,
+    /// as `HubRaidsModel.isShadow` reads an unmarked copy. The one definition the Shadow set, Mega-capable and the search read.
+    public static func isShadow(_ row: ScanRow) -> Bool {
+        switch row.shadow {
+        case 1?: return true
+        case .some: return false
+        case nil: return row.speciesId.hasSuffix("_shadow")
+        }
+    }
+
+    /// Which sets a copy belongs to: the single definition behind a card's count, the list that opens from it and the My Pokémon search words. Legendary, Mythical and
+    /// Ultra Beasts hold a copy of any form of the species (the dex number is the species, as everywhere on the Collection); `released` includes an owned species PvPoke
+    /// flags unreleased, so the sets and the species totals agree. Mega-capable is the copy's own: its species-form has a Mega Evolution in the game master and it is not
+    /// a Shadow (a Shadow Pokémon cannot Mega Evolve), so Galarian Slowbro, Armored Mewtwo, Alolan Raichu and any Shadow copy are out.
     public struct Membership {
         let tagDex: [SetKind: Set<Int>]
+        /// Species ids that have a Mega Evolution (or Primal Reversion): `charizard` for `charizard_mega_x`.
+        let megaIds: Set<String>
+        let megaTotal: Int
         let gm: GameMaster
         let isLucky: (BoxEntry) -> Bool
 
@@ -165,13 +181,17 @@ public enum HubCollection {
             self.gm = gm; self.isLucky = isLucky
             let released = HubCollection.releasedSpecies(gm: gm, owned: HubCollection.ownedDex(entries: entries, gm: gm))
             func dex(_ tag: String) -> Set<Int> { Set(released.filter { $0.tags.contains(tag) }.map(\.dex)) }
-            var mega = Set<Int>()
-            for s in gm.ordered where s.released && s.tags.contains("mega") { mega.insert(s.dex) }
-            tagDex = [.legendary: dex("legendary"), .mythical: dex("mythical"), .ultraBeasts: dex("ultrabeast"), .megaCapable: mega]
+            var megaDex = Set<Int>(), ids = Set<String>()
+            for s in gm.ordered where s.released && s.tags.contains("mega") {
+                megaDex.insert(s.dex)
+                for suffix in ["_mega_x", "_mega_y", "_mega", "_primal"] where s.id.hasSuffix(suffix) { ids.insert(String(s.id.dropLast(suffix.count))); break }
+            }
+            megaIds = ids; megaTotal = megaDex.count
+            tagDex = [.legendary: dex("legendary"), .mythical: dex("mythical"), .ultraBeasts: dex("ultrabeast")]
         }
 
         /// The species total of a species set (nil for a set of copies).
-        public func total(_ kind: SetKind) -> Int? { kind.isSpeciesSet ? tagDex[kind]?.count ?? 0 : nil }
+        public func total(_ kind: SetKind) -> Int? { kind == .megaCapable ? megaTotal : (kind.isSpeciesSet ? tagDex[kind]?.count ?? 0 : nil) }
 
         public func kinds(of e: BoxEntry) -> Set<SetKind> {
             var out = Set<SetKind>()
@@ -179,8 +199,9 @@ public enum HubCollection {
             if let dex = gm.byId[e.row.speciesId]?.dex {
                 for (k, set) in tagDex where set.contains(dex) { out.insert(k) }
             }
+            let shadow = HubCollection.isShadow(e.row)
+            if shadow { out.insert(.shadow) } else if megaIds.contains(e.row.speciesId) { out.insert(.megaCapable) }
             if isLucky(e) { out.insert(.lucky) }
-            if e.row.shadow == 1 || e.row.speciesId.hasSuffix("_shadow") { out.insert(.shadow) }
             return out
         }
     }

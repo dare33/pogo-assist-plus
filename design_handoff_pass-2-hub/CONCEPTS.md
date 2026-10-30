@@ -24,6 +24,14 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   copies in the set for 100% IVs, Lucky and Shadow, each owned species with all its copies for Legendary, Mythical, Ultra
   Beasts and Mega-capable. The card's count and the list are one definition (`HubCollection.Membership`). Lucky shows
   "Not in your scans yet" until a copy is marked.
+  Rulings after review (manager, 31 Oct 2026): the species sets count species but the sheet lists form rows as My Pokémon
+  shows them (Giratina Altered and Origin are two rows, one species), and says "Forms are listed separately." under
+  the title when it has more rows than species. **Mega-capable** is the copy's own: its species-form has a Mega
+  Evolution in the game master and it is not a Shadow (a Shadow Pokémon cannot Mega Evolve), so Galarian Slowbro,
+  Armored Mewtwo, Alolan Raichu and any Shadow copy are out; the card, the sheet and the "mega" search follow it.
+  **Shadow** follows the hand mark when there is one (Shadow = Shadow, Purified or 0 = not Shadow) and the `_shadow`
+  species only decides for a copy with no mark. The sheet's count and list follow the box as it is edited; the
+  empty Lucky sheet says "Not in your scans yet" once.
 - **Missing**: released species with no copy in the box; **you can evolve** means an earlier member of its family is in
   the box.
 - **Build**: one thing the advisor wants done to a copy for an area (power up, evolve, mega evolve, form change, moves).

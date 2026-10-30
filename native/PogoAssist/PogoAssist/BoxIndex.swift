@@ -55,16 +55,16 @@ struct BoxIndex {
         /// What a typed word means, whole and lower case; nil for a piece of a name.
         static let spellings: [String: SearchWord] = [
             "shadow": .shadow, "purified": .purified, "lucky": .lucky,
-            "dynamax": .dynamax, "max": .dynamax, "gigantamax": .gigantamax, "gmax": .gigantamax,
+            "dynamax": .dynamax, "max": .dynamax, "gigantamax": .gigantamax, "gmax": .gigantamax, "g-max": .gigantamax,
             "legendary": .legendary, "mythical": .mythical,
-            "ultra beasts": .ultraBeast, "ultra beast": .ultraBeast, "ultrabeasts": .ultraBeast, "ultrabeast": .ultraBeast,
-            "mega": .mega, "100%": .hundo, "hundo": .hundo, "buddy": .buddy, "best buddy": .buddy,
+            "ultra beasts": .ultraBeast, "ultra beast": .ultraBeast, "ultra-beasts": .ultraBeast, "ultra-beast": .ultraBeast, "ultrabeasts": .ultraBeast, "ultrabeast": .ultraBeast,
+            "mega": .mega, "100%": .hundo, "hundo": .hundo, "buddy": .buddy, "best buddy": .buddy, "best buddies": .buddy,
         ]
 
         static func of(_ entry: BoxEntry, membership: HubCollection.Membership) -> Set<SearchWord> {
             var out = Set(membership.kinds(of: entry).map(SearchWord.init))
             let r = entry.row
-            if r.shadow == 2 { out.insert(.purified) }
+            if r.shadow == 2 { out.insert(.purified) }   // the hand mark; `HubCollection.isShadow` leaves a Purified copy out of Shadow
             if r.dynamax == true { out.insert(.dynamax) }
             if r.gigantamax == true { out.insert(.gigantamax) }
             if r.details?.bestBuddy == true { out.insert(.buddy) }
@@ -181,36 +181,48 @@ struct BoxIndex {
         /// A search with at least one special-type word ("shadow", "pika shadow", "ultra beasts & shadow").
         case words(Words)
 
-        /// The words of a typed search, split at spaces and "&": a special-type word (`SearchWord`) means the type, any other word is a piece of a name, and every
-        /// word must match. A word that is both (mega, in Meganium and Mega Charizard) matches either way.
+        /// The words of a typed search, split at spaces and "&": a special-type word (`SearchWord`) means the type, a CP word ("cp1500-2500", "cp1500-", "cp-2500",
+        /// "cp2819") is a CP filter, and any other word is a piece of a name. Every word must match. A special word that is not found as a type is also matched against names,
+        /// but only names that start with it ("mega" finds Meganium, not Yanmega; "shadow" does not find Marshadow); a piece of a name stays a substring as before.
         struct Words: Hashable {
-            struct Token: Hashable { var text: String; var word: SearchWord? }
-            /// The whole search as typed, matched as one piece of a name first (as before the special words: "mr. mime"); nil for a search built from a word.
+            struct Token: Hashable {
+                var text: String
+                var word: SearchWord?
+                var cp: ClosedRange<Int>?
+            }
+            /// The whole search as typed, matched as one piece of a name first (as before the special words: "mega charizard x"); nil for one word or a search built from a word.
             var whole: String?
             var tokens: [Token]
 
-            /// nil when no word is a special-type word (the search is then plain `.text`).
+            /// nil when no word is a special-type word or a CP filter (the search is then plain `.text`).
             init?(_ q: String) {
-                var raw = q.replacingOccurrences(of: "&", with: " ").split(whereSeparator: \.isWhitespace).map(String.init)
+                var raw = q.replacingOccurrences(of: "&", with: " ").split(whereSeparator: \.isWhitespace).map { String($0).trimmingCharacters(in: CharacterSet(charactersIn: ",.;")) }.filter { !$0.isEmpty }
                 var merged = [String]()
                 while !raw.isEmpty {
                     let w = raw.removeFirst()
-                    if let next = raw.first, (w == "ultra" && (next == "beast" || next == "beasts")) || (w == "best" && next == "buddy") {
+                    if let next = raw.first, (w == "ultra" && (next == "beast" || next == "beasts")) || (w == "best" && (next == "buddy" || next == "buddies")) {
                         merged.append(w + " " + next); raw.removeFirst()
                     } else { merged.append(w) }
                 }
-                let tokens = merged.map { Token(text: $0, word: SearchWord.spellings[$0]) }
-                guard tokens.contains(where: { $0.word != nil }) else { return nil }
-                self.whole = q; self.tokens = tokens
+                let tokens = merged.map { Token(text: $0, word: SearchWord.spellings[$0], cp: Query.cpRange($0)) }
+                guard tokens.contains(where: { $0.word != nil || $0.cp != nil }) else { return nil }
+                self.whole = tokens.count > 1 ? q : nil; self.tokens = tokens
             }
             init(word: SearchWord) { whole = nil; tokens = [Token(text: "", word: word)] }
 
             func matches(_ it: Item) -> Bool {
                 if let whole, it.key.contains(whole) { return true }
                 return tokens.allSatisfy { t in
-                    if let w = t.word, it.words.contains(w) { return true }
-                    return !t.text.isEmpty && it.key.contains(t.text)
+                    if let r = t.cp { return it.cp > 0 && r.contains(it.cp) }
+                    if t.text.isEmpty { return t.word.map { it.words.contains($0) } ?? false }
+                    if let w = t.word { return it.words.contains(w) || Self.startsAName(it.key, t.text) }
+                    return it.key.contains(t.text)
                 }
+            }
+
+            /// `key` holds "|"-separated names; a word of any of them (after a space or a bracket) starts with `text`.
+            static func startsAName(_ key: String, _ text: String) -> Bool {
+                key.hasPrefix(text) || key.contains("|" + text) || key.contains(" " + text) || key.contains("(" + text)
             }
         }
 
@@ -222,13 +234,22 @@ struct BoxIndex {
             let q = raw.trimmingCharacters(in: .whitespaces).lowercased()
             if q.isEmpty { self = .none; return }
             if let n = Int(q) { self = .cp(n...n); return }
-            if q.hasPrefix("cp") {
-                let rest = q.dropFirst(2).replacingOccurrences(of: "–", with: "-")
-                if let n = Int(rest) { self = .cp(n...n); return }
-                let parts = rest.split(separator: "-", omittingEmptySubsequences: false)
-                if parts.count == 2, let a = Int(parts[0]), let b = Int(parts[1]) { self = .cp(min(a, b)...max(a, b)); return }
-            }
+            if let r = Self.cpRange(q) { self = .cp(r); return }
             self = Words(q).map(Query.words) ?? .text(q)
+        }
+        /// "cp2819", "cp1500-2500", "cp1500-" (1500 and up) or "cp-2500" (up to 2500); nil for anything else. A bare number is not one: among words it is a piece of a name.
+        static func cpRange(_ word: String) -> ClosedRange<Int>? {
+            guard word.hasPrefix("cp") else { return nil }
+            let rest = word.dropFirst(2).replacingOccurrences(of: "–", with: "-")
+            if let n = Int(rest) { return n...n }
+            let parts = rest.split(separator: "-", omittingEmptySubsequences: false)
+            guard parts.count == 2 else { return nil }
+            switch (Int(parts[0]), Int(parts[1])) {
+            case let (a?, b?): return min(a, b)...max(a, b)
+            case let (a?, nil) where parts[1].isEmpty: return a...Int.max
+            case let (nil, b?) where parts[0].isEmpty: return 0...b
+            default: return nil
+            }
         }
         var isEmpty: Bool { self == .none }
     }
