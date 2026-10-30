@@ -60,4 +60,37 @@ final class PvPPlacementTests: XCTestCase {
         XCTAssertEqual(PvPPlacement.sharedWeakness(memberTypes: [["fire"], ["flying"], ["water"]], hub: hub).hasPrefix("Weak to"), true)
         XCTAssertEqual(PvPPlacement.sharedWeakness(memberTypes: [["fire"]], hub: hub), "No shared weakness.")
     }
+
+    /// Best: a squad may hold Pokémon the box lacks (a `squadSpeciesPrefix` id), and the one-species rule still holds across copies and species ids.
+    func testABestSquadMayHoldPokemonTheBoxLacks() {
+        let owned = ["a": "azumarill", "b": "medicham"]
+        let species: (String) -> String? = { $0.hasPrefix(squadSpeciesPrefix) ? String($0.dropFirst(squadSpeciesPrefix.count)) : owned[$0] }
+        let roles = ["Lead": ["species:medicham", "b"], "Safe swap": ["a"], "Closer": ["species:lanturn", "species:medicham"]]
+        let all = ["species:medicham", "a", "species:lanturn"]
+        let filled = PvPPlacement.squad(slots: HubSquads.defaultPvpSlots(), pool: { roles[$0] ?? [] }, all: all, placeable: { _, _ in true }, species: species)
+        XCTAssertEqual(filled.map(\.pickId), ["species:medicham", "a", "species:lanturn"])
+        XCTAssertEqual(filled.map(\.species), ["medicham", nil, "lanturn"])
+        XCTAssertEqual(filled.map(\.entryId), [nil, "a", nil])
+        // A kept species pick wins; a copy of the same species is then not suggested for another slot.
+        var slots = HubSquads.defaultPvpSlots(); slots[2] = SquadSlot(role: "Closer", species: "medicham")
+        let kept = PvPPlacement.squad(slots: slots, pool: { roles[$0] ?? [] }, all: all, placeable: { _, _ in true }, species: species)
+        XCTAssertEqual(kept.map(\.pickId), ["a", "species:lanturn", "species:medicham"], "no Lead is listed that is not Medicham, so the Lead and Safe swap fall back in rank order")
+        XCTAssertEqual(kept.map(\.chosen), [false, false, true])
+        // The picker of another slot does not offer a species the squad holds, whether it is listed as a copy or as a species.
+        let ex = PvPPlacement.excluded(by: kept, editing: 0, ids: ["b", "species:medicham", "species:lanturn", "a"], species: species)
+        XCTAssertTrue(ex.contains("b") && ex.contains("species:medicham") && ex.contains("species:lanturn"))
+        XCTAssertFalse(ex.contains("a"), "the edited slot's own Pokémon stays listed")
+    }
+
+    /// Phone feedback item 10: an Available picker lists the Pokémon at Full strength first and the ones that need work under "Available upgrades:".
+    func testAvailablePickerListsUpgradesLast() {
+        func row(_ id: String, _ mark: SquadMark) -> PickerRowModel { PickerRowModel(id: id, name: id, ticked: false, mark: mark, spoken: id) }
+        let up = SquadMark.upgrade(cost: nil, label: "Upgrade available: power up")
+        let rows = PickerRowModel.availableUpgradesLast([row("a", up), row("b", .fullStrength), row("c", up), row("d", .fullStrength)])
+        XCTAssertEqual(rows.map(\.id), ["b", "d", "a", "c"], "each group keeps the slot's order")
+        XCTAssertEqual(rows.map(\.sectionHeading), [nil, nil, "Available upgrades:", nil])
+        XCTAssertEqual(PickerRowModel.availableUpgradesLast([row("b", .fullStrength)]).map(\.sectionHeading), [nil], "no heading without upgrades")
+        XCTAssertEqual(PickerRowModel.availableUpgradesLast([row("a", up)]).map(\.sectionHeading), ["Available upgrades:"])
+        XCTAssertEqual(PickerRowModel.availableUpgradesLast([]).count, 0)
+    }
 }

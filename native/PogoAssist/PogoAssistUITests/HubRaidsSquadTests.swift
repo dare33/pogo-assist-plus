@@ -15,10 +15,13 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 1).label.contains("Mega, empty"), slot(app, "raids", 1).label)
         XCTAssertEqual(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Heavy hitter"), true)
         XCTAssertEqual(app.buttons["squad-mode-available"].isSelected, true)
+        // The box has no counter for Shadow Landorus, so every slot is empty and the squad line says so (CONCEPTS rule 30).
+        XCTAssertEqual(el(app, "squad-status").label, "Not ready: 6 empty")
 
-        // The picker of a slot: role chips, and an empty list says so and keeps Could get now open.
+        // The picker of a slot: role chips, and an empty list says so (Available lists only the box: no Could get now list).
         openPicker(app, "raids", slot: 2)
         XCTAssertTrue(app.buttons["squad-role-All"].exists && app.buttons["squad-role-Mega"].exists, "the role chips")
+        XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
         app.buttons["squad-role-Bulky hitter"].tap()
         XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Bulky hitter"), "choosing a role relabels the slot: \(slot(app, "raids", 2).label)")
         shot("raids-picker")
@@ -67,38 +70,49 @@ final class HubRaidsSquadTests: SquadUITestCase {
         // The Mega slot is the one Available leaves empty (rule 3); Best may fill it.
         let available = (1...6).map { slot(app, "raids", $0).label }
         XCTAssertTrue(available[0].contains("empty"), available[0])
+        XCTAssertFalse(available.contains { $0.contains("not in your box") }, "Available never puts a Pokémon the box lacks in a slot: \(available)")
         app.buttons["squad-mode-best"].tap()
         XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true)
         let best = (1...6).map { slot(app, "raids", $0).label }
         shot("raids-palkia-best")
         XCTAssertNotEqual(available.joined(), best.joined(), "switching to Best changes the suggestions: \(best)")
+        // Best fills every slot from the raid table, so the Mega slot holds a Mega; a Pokémon the box lacks is drawn as such and counted in the squad line.
+        XCTAssertFalse(best[0].contains("empty"), best[0])
+        XCTAssertTrue(best.contains { $0.contains("not in your box, to get") }, "a Pokémon the box lacks is drawn as such: \(best)")
+        XCTAssertTrue(el(app, "squad-status").label.hasPrefix("Not ready: ") && el(app, "squad-status").label.contains("to get"), el(app, "squad-status").label)
+        // Each filled slot's spoken label ends with its status.
+        XCTAssertTrue(best.allSatisfy { $0.hasSuffix("ready") || $0.hasSuffix("needs work") || $0.hasSuffix("to get") || $0.hasSuffix("empty") }, "\(best)")
+        let megaName = best[0].components(separatedBy: ", ")[2]
 
-        // The picker of slot 2 under any role: the copy in slot 1 is not offered (a Pokémon sits in one slot at a time), the slot's own is, ticked.
+        // The picker of slot 2 under any role: the tier table's rows, the Pokémon the box lacks with an availability line; the copy in slot 1 is not offered (a Pokémon
+        // sits in one slot at a time), the slot's own is, ticked.
         openPicker(app, "raids", slot: 2)
         app.buttons["squad-role-All"].tap()
         let rows = pickerRows(app)
-        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5), "the box has a counter for Palkia")
-        XCTAssertFalse(rows.allElementsBoundByIndex.contains { $0.label.hasPrefix("Rayquaza") }, "a Pokémon in another slot is not listed")
-        let chosen = rows.firstMatch.label.components(separatedBy: ",").first ?? ""
-        XCTAssertEqual(chosen, "Xerneas")
-        XCTAssertTrue(rows.firstMatch.isSelected, "the slot's own Pokémon is listed, ticked")
-        rows.firstMatch.tap()
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5), "Best lists the table's rows for Palkia")
+        XCTAssertFalse(rows.allElementsBoundByIndex.contains { $0.label.hasPrefix(megaName) }, "a Pokémon in another slot is not listed")
+        XCTAssertTrue(rows.matching(NSPredicate(format: "label CONTAINS 'Not in your box ·'")).firstMatch.exists, "a Pokémon the box lacks says when it might be available: \(rows.allElementsBoundByIndex.map(\.label))")
+        XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "there is no Could get now list")
+        let ticked = rows.matching(NSPredicate(format: "selected == true")).firstMatch
+        XCTAssertTrue(ticked.exists, "the slot's own Pokémon is listed, ticked")
+        let chosen = ticked.label.components(separatedBy: ",").first ?? ""
+        ticked.tap()
         XCTAssertTrue(slot(app, "raids", 2).label.contains(chosen), "the slot shows the choice: \(slot(app, "raids", 2).label)")
         XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, All"), "and the role it was given: \(slot(app, "raids", 2).label)")
         closePicker(app)
 
-        // A pick that is NOT the current Pokémon: slot 2 holds Xerneas, and Rayquaza (the suggested Mega) is made free by turning slot 1 into a Bulky hitter slot, which
-        // Rayquaza does not fit. Then Rayquaza is chosen for slot 2.
+        // A pick that is NOT the current Pokémon: slot 2 holds one Pokémon, and the suggested Mega is made free by turning slot 1 into a Bulky hitter slot, which a Mega
+        // does not fit. Then that Mega is chosen for slot 2.
         openPicker(app, "raids", slot: 1)
         app.buttons["squad-role-Bulky hitter"].tap()
-        XCTAssertFalse(slot(app, "raids", 1).label.contains("Rayquaza"), "a Pokémon that does not fit the new role leaves the slot: \(slot(app, "raids", 1).label)")
+        XCTAssertFalse(slot(app, "raids", 1).label.contains(megaName), "a Pokémon that does not fit the new role leaves the slot: \(slot(app, "raids", 1).label)")
         closePicker(app)
         openPicker(app, "raids", slot: 2)
-        let rayquaza = pickerRows(app).matching(NSPredicate(format: "label BEGINSWITH 'Rayquaza'")).firstMatch
-        XCTAssertTrue(rayquaza.waitForExistence(timeout: 5), "the freed copy is listed for slot 2")
-        XCTAssertTrue(slot(app, "raids", 2).label.contains("Xerneas") && !slot(app, "raids", 2).label.contains("Rayquaza"), "slot 2 holds a different Pokémon before the pick: \(slot(app, "raids", 2).label)")
-        rayquaza.tap()
-        XCTAssertTrue(slot(app, "raids", 2).label.contains("Rayquaza"), "the slot shows the choice: \(slot(app, "raids", 2).label)")
+        let mega = pickerRows(app).matching(NSPredicate(format: "label BEGINSWITH %@", megaName)).firstMatch
+        XCTAssertTrue(mega.waitForExistence(timeout: 5), "the freed Mega is listed for slot 2")
+        XCTAssertTrue(slot(app, "raids", 2).label.contains(chosen) && !slot(app, "raids", 2).label.contains(megaName), "slot 2 holds a different Pokémon before the pick: \(slot(app, "raids", 2).label)")
+        mega.tap()
+        XCTAssertTrue(slot(app, "raids", 2).label.contains(megaName), "the slot shows the choice: \(slot(app, "raids", 2).label)")
         closePicker(app)
 
         // The pick and the setting are remembered for the screen.
@@ -108,7 +122,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true, "Best is remembered")
         el(app, "hub-raid-row-1").tap()
         XCTAssertTrue(slot(app, "raids", 2).waitForExistence(timeout: 10))
-        XCTAssertTrue(slot(app, "raids", 2).label.contains("Rayquaza") && slot(app, "raids", 2).label.contains("All"), "the exact pick and its role survive leaving the screen: \(slot(app, "raids", 2).label)")
+        XCTAssertTrue(slot(app, "raids", 2).label.contains(megaName) && slot(app, "raids", 2).label.contains("All"), "the exact pick and its role survive leaving the screen: \(slot(app, "raids", 2).label)")
         XCTAssertTrue(slot(app, "raids", 1).label.hasPrefix("Slot 1 of 6, Bulky hitter"), slot(app, "raids", 1).label)
     }
 

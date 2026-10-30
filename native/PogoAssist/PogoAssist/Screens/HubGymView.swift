@@ -21,22 +21,44 @@ struct HubGymView: View {
     }
 }
 
+/// A defender a slot may take: one of the player's builds (with its bulk row) or, under Best, a Pokémon the box lacks.
+private struct GymOption {
+    let id: String
+    let name: String
+    let tier: String
+    let types: [String]
+    let row: HubSquads.GymRow?
+    let best: HubSquads.BestRow?
+}
+
 private struct GymSquadView: View {
     let ctx: HubContext
     @ObservedObject var keeper: SquadKeeper
     @State private var selected: Int?
     @Environment(\.accent) private var accent
 
+    /// The defenders the screen may use under `mode` (Available: the player's own Gym builds; Best: the Gym table, owned or not) and the six slots filled from them.
+    private func resolve(mode: SquadMode, saved: SquadStore.Saved) -> (options: [GymOption], candidates: [HubSquads.BestRow], filled: [FilledSlot]) {
+        if mode == .best {
+            let rows = HubSquads.bestGymRows(ctx: ctx)
+            let options = rows.map { r in GymOption(id: r.entryId, name: r.name, tier: r.tier, types: r.types, row: r.build.map { HubSquads.gymRow($0, ctx: ctx) }, best: r) }
+            return (options, rows, HubSquads.bestSquad(slots: saved.slots, rows: rows))
+        }
+        let rows = HubSquads.gymRows(mode: mode, ctx: ctx)
+        let options = rows.map { GymOption(id: $0.build.entryId, name: $0.build.targetName, tier: $0.tier, types: ctx.gm.byId[$0.build.targetId]?.types ?? [], row: $0, best: nil) }
+        return (options, [], HubSquads.gymSquad(slots: saved.slots, rows: rows, placeable: HubSquads.placeable(screen: .gym, mode: mode, ctx: ctx)))
+    }
+
     var body: some View {
         let mode = keeper.store.mode(for: .gym)
-        let saved = keeper.store.gym
-        let rows = HubSquads.gymRows(mode: mode, ctx: ctx)
-        let filled = HubSquads.gymSquad(slots: saved.slots, rows: rows, placeable: HubSquads.placeable(screen: .gym, mode: mode, ctx: ctx))
-        let byId = Dictionary(rows.map { ($0.build.entryId, $0) }, uniquingKeysWith: { a, _ in a })
+        let (options, _, filled) = resolve(mode: mode, saved: keeper.store.gym)
+        let byId = Dictionary(options.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId) }
         SuggestionsRow(mode: Binding(get: { mode }, set: { m in keeper.update { $0.setMode(m, for: .gym) } }), noun: "defenders")
         VStack(alignment: .leading, spacing: 10) {
             Text("Top defenders").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            SlotGrid(slots: filled.enumerated().map { card($0.offset, $0.element, byId: byId) }, selected: selected) { i in
+            if let team = HubSquads.teamStatus(cards.map(\.status)) { SquadStatusLine(status: team) }
+            SlotGrid(slots: cards, selected: selected) { i in
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
             }
         }
@@ -44,63 +66,80 @@ private struct GymSquadView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .panelShadow()
-        if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, rows: rows, byId: byId) }
+        if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, options: options, byId: byId, mode: mode) }
         builds
         HubGapList(gaps: HubModel.gaps(ctx.advice.gaps, for: .gym), type: .gym)
     }
 
     // MARK: slots
 
-    private func card(_ i: Int, _ f: FilledSlot, byId: [String: HubSquads.GymRow]) -> SlotCardModel {
+    private func card(_ i: Int, _ f: FilledSlot, byId: [String: GymOption]) -> SlotCardModel {
         let palette = SquadPalette(ink: ContentType.gym.ink(accent), tint: ContentType.gym.tint(accent))
         let id = "hub-gym-slot-\(i + 1)"
-        guard let entryId = f.entryId else {
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: nil, spoken: "Slot \(i + 1) of 6, empty", identifier: id)
+        let head = "Slot \(i + 1) of 6"
+        guard let pick = f.pickId else {
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: nil, status: .empty, spoken: head + ", " + HubSquads.SlotStatus.empty.spoken, identifier: id)
         }
-        guard let r = byId[entryId] else {
-            let name = ctx.entry(entryId)?.row.title ?? "Pokémon"
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, types: ctx.entryTypes(entryId), spoken: "Slot \(i + 1) of 6, \(name)", identifier: id)
+        guard let o = byId[pick] else {
+            if let key = f.species {
+                let name = ctx.gm.byId[key]?.name ?? "Pokémon"
+                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: ["Not in your box"], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
+                                     spoken: [head, name, HubSquads.SlotStatus.toGet.spoken].joined(separator: ", "), identifier: id)
+            }
+            let name = ctx.entry(pick)?.row.title ?? "Pokémon"
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, types: ctx.entryTypes(pick), status: .needsWork,
+                                 spoken: [head, name, HubSquads.SlotStatus.needsWork.spoken].joined(separator: ", "), identifier: id)
         }
-        let types = ctx.gm.byId[r.build.targetId]?.types ?? []
+        guard let r = o.row else {
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), notOwned: o.best!, head: head, identifier: id)
+        }
         let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
+        let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: o.tier)
         let line = GymFigures.bulkLine(r)
-        let spoken = ["Slot \(i + 1) of 6", r.build.targetName, SquadWords.typeList(types), line, mark.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: r.build.targetName, lines: line.isEmpty ? [] : [line], types: types, mark: mark, spoken: spoken, identifier: id)
+        let spoken = [head, o.name, SquadWords.typeList(o.types), line, mark.spoken, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: o.name, lines: line.isEmpty ? [] : [line], types: o.types, mark: mark, status: status, spoken: spoken, identifier: id)
     }
 
     // MARK: picker
 
-    private func picker(_ i: Int, filled: [FilledSlot], rows: [HubSquads.GymRow], byId: [String: HubSquads.GymRow]) -> some View {
-        let listed = HubSquads.picker(candidates: rows.map { $0.build.entryId }, excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false), own: filled[i].entryId)
-        let models: [PickerRowModel] = listed.compactMap { l in
-            guard let r = byId[l.entryId] else { return nil }
-            let types = ctx.gm.byId[r.build.targetId]?.types ?? []
+    private func picker(_ i: Int, filled: [FilledSlot], options: [GymOption], byId: [String: GymOption], mode: SquadMode) -> some View {
+        let listed = HubSquads.picker(candidates: options.map(\.id), excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false), own: filled[i].pickId)
+        var models: [PickerRowModel] = listed.compactMap { l in
+            guard let o = byId[l.entryId] else { return nil }
+            guard let r = o.row else { return PickerRowModel(notOwned: o.best!, ticked: l.ticked) }
             let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
             let stats = GymFigures.stats(r, ctx: ctx)
             let level = r.level.map { "at level \(GymFigures.levelText($0))" }
-            var spoken = [r.build.targetName, "tier \(r.tier)", SquadWords.typeList(types), mark.spoken].compactMap { $0 }
+            var spoken = [o.name, "tier \(o.tier)", SquadWords.typeList(o.types), mark.spoken].compactMap { $0 }
             if let stats { spoken.append("Defence \(stats.def), HP \(stats.hp)") }
             spoken.append(GymFigures.bulkLine(r))
             if let level { spoken.append(level) }
             if l.ticked { spoken.append("in this slot") }
             return PickerRowModel(
-                id: l.entryId, name: r.build.targetName, ticked: l.ticked, mark: mark, tier: r.tier, types: types.map { PickerType(type: $0) },
+                id: l.entryId, name: o.name, ticked: l.ticked, mark: mark, tier: o.tier, types: o.types.map { PickerType(type: $0) },
                 note: stats == nil ? GymFigures.bulkLine(r) : nil,
                 stats: stats.map { AnyView(GymStatsColumn(def: $0.def, hp: $0.hp)) },
                 figure: stats == nil ? nil : AnyView(GymBulkFigure(text: GymFigures.bulkShort(r.bulk))),
                 spoken: spoken.joined(separator: ", "))
         }
+        if mode == .available { models = PickerRowModel.availableUpgradesLast(models) }
         return SquadPicker(
-            title: "Slot \(i + 1) · \(HubSquads.gymSlotRole)", type: .gym, rows: models, emptyText: "No Gym build in your box.",
-            couldGet: HubSquads.gymCouldGet(ctx: ctx).map { CouldGetModel($0, types: ctx.gm.byId[$0.gap.speciesId ?? ""]?.types ?? []) },
+            title: "Slot \(i + 1) · \(HubSquads.gymSlotRole)", type: .gym, rows: models, emptyText: mode == .available ? "No Gym build in your box." : "No Gym defender listed.",
             onChoose: { id in keeper.update { $0.gym.choose(id, at: i) } },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
             info: {
-                SquadExplainer(items: [
-                    ("Best defenders first:", "the tier our gym table gives it, then this copy's bulk: its Defence × HP with its own IVs, at the level its build reaches (its level now if nothing is left to do)."),
-                    ("", "Bulk is how long it lasts against attackers. Defence and HP count equally. CP is left out: it is mostly Attack, and high CP makes a defender lose motivation faster."),
-                    ("", "A copy whose level the scan did not read comes after the others in its tier and reads level not read: no level is assumed."),
-                ], identifier: "squad-picker-explainer")
+                if mode == .best {
+                    SquadExplainer(items: [
+                        ("Ranked from our gym table:", "every defender it lists, S then A then B, in the table's order, whether or not you have it. Ones you do not have say when they might be available."),
+                        ("", "Ones you have show your best copy and the work it needs, with its bulk: Defence × HP with its own IVs."),
+                    ], identifier: "squad-picker-explainer")
+                } else {
+                    SquadExplainer(items: [
+                        ("Best defenders first:", "the tier our gym table gives it, then this copy's bulk: its Defence × HP with its own IVs, at the level its build reaches (its level now if nothing is left to do)."),
+                        ("", "Bulk is how long it lasts against attackers. Defence and HP count equally. CP is left out: it is mostly Attack, and high CP makes a defender lose motivation faster."),
+                        ("", "A copy whose level the scan did not read comes after the others in its tier and reads level not read: no level is assumed."),
+                    ], identifier: "squad-picker-explainer")
+                }
             })
     }
 

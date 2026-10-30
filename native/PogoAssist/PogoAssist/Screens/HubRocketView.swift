@@ -109,20 +109,27 @@ private struct RocketSquadView: View {
     @State private var selected: Int?
     @Environment(\.accent) private var accent
 
-    /// What a slot's card or picker row says about a Pokémon for that slot.
+    /// What a slot's card or picker row says about a Pokémon for that slot: one of the player's builds or, under Best, a Pokémon the box lacks.
     private struct Entry {
-        var build: BoxAdvice.Build
+        var id: String
+        var name: String
+        var tier: String
+        var build: BoxAdvice.Build?
+        var best: HubSquads.BestRow?
         var hits: Int
         var flags: [PickerType]
         var line: String?
         var notWeak = false
     }
 
+    private typealias SlotLists = (rows: [Entry], next: [Entry])
+
     var body: some View {
         let mode = keeper.store.mode(for: .rocket)
         let saved = keeper.store.rocketSquad(leader: leader.name)
-        let filled = HubSquads.rocketSquad(leader: leader, slots: saved.slots, mode: mode, ctx: ctx)
+        let filled = mode == .best ? HubSquads.bestRocketSquad(leader: leader, slots: saved.slots, ctx: ctx) : HubSquads.rocketSquad(leader: leader, slots: saved.slots, mode: mode, ctx: ctx)
         let lists = leader.slots.map { entries(for: $0, mode: mode) }
+        let cards = filled.enumerated().map { card($0.offset, $0.element, lists: lists) }
         HubHeaderLine("YOUR SQUAD FOR \(leader.name.uppercased())") {
             Menu {
                 ForEach(leaders, id: \.name) { l in
@@ -137,7 +144,8 @@ private struct RocketSquadView: View {
         }
         VStack(alignment: .leading, spacing: 10) {
             Text("Slot by slot").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            SlotGrid(slots: filled.enumerated().map { card($0.offset, $0.element, lists: lists) }, selected: selected) { i in
+            if let team = HubSquads.teamStatus(cards.map(\.status)) { SquadStatusLine(status: team) }
+            SlotGrid(slots: cards, selected: selected) { i in
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
             }
         }
@@ -150,73 +158,98 @@ private struct RocketSquadView: View {
 
     private func options(_ i: Int) -> String { leader.slots[i].map { HubTeams.plain($0.name) }.joined(separator: " / ") }
 
-    /// The picker's rows for a slot (rule 16) and, when there are none, the Next best rows (rule 18), each with what it says for the slot.
-    private func entries(for slot: [HubData.Boss], mode: SquadMode) -> (rows: [Entry], next: [Entry]) {
+    /// The picker's rows for a slot (rule 16 under Available, the Rocket table under Best, rule 6) and, when there are none, the Next best rows (rule 18), each with what
+    /// it says for the slot.
+    private func entries(for slot: [HubData.Boss], mode: SquadMode) -> SlotLists {
         func flags(_ b: BoxAdvice.Build) -> [PickerType] {
             HubTeams.types(of: b, gm: ctx.gm).map { t in PickerType(type: t, grey: !slot.contains { ctx.hub.beats([t], $0.types) }) }
         }
-        let rows = HubSquads.rocketPicker(options: slot, mode: mode, ctx: ctx).map {
-            Entry(build: $0.build, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
+        let rows: [Entry]
+        if mode == .best {
+            rows = HubSquads.bestRocketRows(options: slot, ctx: ctx).map {
+                Entry(id: $0.entryId, name: $0.name, tier: $0.tier, build: $0.build, best: $0, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
+            }
+        } else {
+            rows = HubSquads.rocketPicker(options: slot, mode: mode, ctx: ctx).map {
+                Entry(id: $0.entryId, name: $0.build.targetName, tier: $0.build.tier, build: $0.build, best: nil, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
+            }
         }
         let next = rows.isEmpty ? HubSquads.rocketNextBest(options: slot, mode: mode, ctx: ctx).map {
-            Entry(build: $0.build, hits: 0, flags: flags($0.build), line: $0.notWeak ? "Not weak to this slot" : nil, notWeak: $0.notWeak)
+            Entry(id: $0.build.entryId, name: $0.build.targetName, tier: $0.build.tier, build: $0.build, best: nil, hits: 0, flags: flags($0.build), line: $0.notWeak ? "Not weak to this slot" : nil, notWeak: $0.notWeak)
         } : []
         return (rows, next)
     }
 
-    private func find(_ id: String, in lists: (rows: [Entry], next: [Entry])) -> Entry? {
-        lists.rows.first { $0.build.entryId == id } ?? lists.next.first { $0.build.entryId == id }
+    private func find(_ id: String, in lists: SlotLists) -> Entry? {
+        lists.rows.first { $0.id == id } ?? lists.next.first { $0.id == id }
     }
 
     // MARK: cards
 
-    private func card(_ i: Int, _ f: FilledSlot, lists: [(rows: [Entry], next: [Entry])]) -> SlotCardModel {
+    private func card(_ i: Int, _ f: FilledSlot, lists: [SlotLists]) -> SlotCardModel {
         let palette = SquadPalette(ink: ContentType.rocket.ink(accent), tint: ContentType.rocket.tint(accent))
         let id = "hub-rocket-slot-\(i + 1)"
         let vs = "vs \(options(i))"
         let head = "Slot \(i + 1) of \(leader.slots.count)"
-        guard let entryId = f.entryId else {
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: nil, lines: ["No counter", vs],
-                                 spoken: "\(head), empty. No counter in your box, against \(options(i))", identifier: id)
+        guard let pick = f.pickId else {
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: nil, lines: ["No counter", vs], status: .empty,
+                                 spoken: "\(head), \(HubSquads.SlotStatus.empty.spoken). No counter in your box, against \(options(i))", identifier: id)
         }
-        let e = find(entryId, in: lists[i]) ?? ctx.advice.builds.first { $0.entryId == entryId }.map {
+        let e = find(pick, in: lists[i]) ?? f.entryId.flatMap { entryId in ctx.advice.builds.first { $0.entryId == entryId } }.map {
             // A pick the lists no longer offer (it stopped beating the slot): the slot still names it.
             let hits = HubTeams.beaten(by: $0, options: leader.slots[i], gm: ctx.gm, hub: ctx.hub).count
-            return Entry(build: $0, hits: hits, flags: [], line: HubSquads.slotLine(hits: hits, of: leader.slots[i].count))
+            return Entry(id: $0.entryId, name: $0.targetName, tier: $0.tier, build: $0, best: nil, hits: hits, flags: [], line: HubSquads.slotLine(hits: hits, of: leader.slots[i].count))
         }
         guard let e else {
-            let name = ctx.entry(entryId)?.row.title ?? "Pokémon"
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [vs], types: ctx.entryTypes(entryId), spoken: "\(head), \(name), against \(options(i))", identifier: id)
+            if let key = f.species {
+                let name = ctx.gm.byId[key]?.name ?? ctx.gm.byId[key.replacingOccurrences(of: "_shadow", with: "")]?.name ?? "Pokémon"
+                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: ["Not in your box", vs], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
+                                     spoken: [head, name, HubSquads.SlotStatus.toGet.spoken, "against \(options(i))"].joined(separator: ", "), identifier: id)
+            }
+            let name = f.entryId.flatMap { ctx.entry($0)?.row.title } ?? "Pokémon"
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [vs], types: f.entryId.map(ctx.entryTypes) ?? [], status: .needsWork,
+                                 spoken: "\(head), \(name), \(HubSquads.SlotStatus.needsWork.spoken), against \(options(i))", identifier: id)
         }
-        let mark = SquadMark.of(e.build, screen: .rocket, ctx: ctx)
+        guard let build = e.build else {
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), notOwned: e.best!, extra: (e.line.map { [$0] } ?? []) + [vs], spokenExtra: [e.line, "against \(options(i))"].compactMap { $0 }, head: head, identifier: id)
+        }
+        let mark = SquadMark.of(build, screen: .rocket, ctx: ctx)
+        let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: e.tier)
         let lines = (e.line.map { [$0] } ?? []) + [vs]
-        let spoken = [head, e.build.targetName, SquadWords.typeList(HubTeams.types(of: e.build, gm: ctx.gm)), e.line, "against \(options(i))", mark.spoken].compactMap { $0 }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: e.build.targetName, lines: lines, types: HubTeams.types(of: e.build, gm: ctx.gm), mark: mark, spoken: spoken, identifier: id)
+        let types = e.best?.types ?? HubTeams.types(of: build, gm: ctx.gm)
+        let spoken = [head, e.name, SquadWords.typeList(types), e.line, "against \(options(i))", mark.spoken, status.spoken].compactMap { $0 }.joined(separator: ", ")
+        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: e.name, lines: lines, types: types, mark: mark, status: status, spoken: spoken, identifier: id)
     }
 
     // MARK: picker
 
-    private func picker(_ i: Int, filled: [FilledSlot], lists: [(rows: [Entry], next: [Entry])], mode: SquadMode) -> some View {
+    private func picker(_ i: Int, filled: [FilledSlot], lists: [SlotLists], mode: SquadMode) -> some View {
         let l = lists[i]
         let showsNext = l.rows.isEmpty && !l.next.isEmpty
         let source = showsNext ? l.next : l.rows
         // Only a Pokémon the player chose in another slot leaves this list (D28): the app's own suggestions stay.
         let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: true)
-        let listed = HubSquads.picker(candidates: source.map { $0.build.entryId }, excluded: excluded, own: filled[i].entryId)
-        let byId = Dictionary(source.map { ($0.build.entryId, $0) }, uniquingKeysWith: { a, _ in a })
-        let rows: [PickerRowModel] = listed.compactMap { r in
+        let listed = HubSquads.picker(candidates: source.map(\.id), excluded: excluded, own: filled[i].pickId)
+        let byId = Dictionary(source.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var rows: [PickerRowModel] = listed.compactMap { r in
             guard let e = byId[r.entryId] else { return nil }
-            let mark = SquadMark.of(e.build, screen: .rocket, ctx: ctx)
+            if e.build == nil, let best = e.best {
+                return PickerRowModel(notOwned: best, ticked: r.ticked, types: e.flags, extraSpoken: {
+                    let hitting = e.flags.filter { !$0.grey }.map(\.type)
+                    return hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot"
+                }())
+            }
+            let mark = SquadMark.of(e.build!, screen: .rocket, ctx: ctx)
             let types = e.flags
             let hitting = types.filter { !$0.grey }.map(\.type)
-            let spoken = [e.build.targetName, e.line, hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot", mark.spoken, r.ticked ? "in this slot" : nil]
+            let spoken = [e.name, e.line, hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot", mark.spoken, r.ticked ? "in this slot" : nil]
                 .compactMap { $0 }.joined(separator: ", ")
-            return PickerRowModel(id: r.entryId, name: e.build.targetName, ticked: r.ticked, mark: mark, tier: e.build.tier, types: types, note: e.line, spoken: spoken)
+            return PickerRowModel(id: r.entryId, name: e.name, ticked: r.ticked, mark: mark, tier: e.tier, types: types, note: e.line, spoken: spoken)
         }
+        if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
         return SquadPicker(
             title: "Slot \(i + 1) · vs \(options(i))", type: .rocket, heading: showsNext ? "Next best" : nil, rows: rows,
-            emptyText: "Nothing in your box beats this slot.",
-            couldGet: HubSquads.rocketCouldGet(options: leader.slots[i], ctx: ctx).map { CouldGetModel($0, types: ctx.gm.byId[$0.gap.speciesId ?? ""]?.types ?? []) },
+            emptyText: mode == .available ? "Nothing in your box beats this slot." : "Nothing listed beats this slot.",
             onChoose: { id in
                 keeper.update { s in
                     var saved = s.rocketSquad(leader: leader.name)
@@ -226,11 +259,18 @@ private struct RocketSquadView: View {
             },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
             info: {
-                SquadExplainer(items: [
-                    ("Best first:", "beats the most of the Pokémon the leader may bring in this slot (a type that hits them for more than normal damage), then built before to build, then Rocket counters before raid attackers, then tier and score."),
-                    ("Type icons:", "in colour when that type hits one of the slot's Pokémon for more than normal damage, grey when it does not."),
-                    ("Next best:", "when nothing in your box beats the slot: the Pokémon that take the least extra damage from it, up to three."),
-                ], identifier: "squad-picker-explainer")
+                if mode == .best {
+                    SquadExplainer(items: [
+                        ("Ranked from our Rocket table:", "every Pokémon it lists that beats at least one of the Pokémon the leader may bring in this slot (a type that hits them for more than normal damage), S then A then B, whether or not you have it. Ones you do not have say when they might be available."),
+                        ("Type icons:", "in colour when that type hits one of the slot's Pokémon for more than normal damage, grey when it does not."),
+                    ], identifier: "squad-picker-explainer")
+                } else {
+                    SquadExplainer(items: [
+                        ("Best first:", "beats the most of the Pokémon the leader may bring in this slot (a type that hits them for more than normal damage), then built before to build, then Rocket counters before raid attackers, then tier and score."),
+                        ("Type icons:", "in colour when that type hits one of the slot's Pokémon for more than normal damage, grey when it does not."),
+                        ("Next best:", "when nothing in your box beats the slot: the Pokémon that take the least extra damage from it, up to three."),
+                    ], identifier: "squad-picker-explainer")
+                }
             })
     }
 }

@@ -141,7 +141,7 @@ final class HubRaidsMaxTests: XCTestCase {
         XCTAssertTrue(tank.waitForExistence(timeout: 10))
         let name = memberLabel.components(separatedBy: CharacterSet(charactersIn: ",\n")).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
         XCTAssertFalse(name.isEmpty, memberLabel)
-        XCTAssertTrue(tank.label.contains(name) && tank.label.hasSuffix("Full strength"), "the marked copy reads Full strength: \(tank.label) (row '\(memberLabel)')")
+        XCTAssertTrue(tank.label.contains(name) && tank.label.hasSuffix("Full strength, ready"), "the marked copy reads Full strength, and ready (Blissey is tier S in the Max table): \(tank.label) (row '\(memberLabel)')")
         shot("max-01-light-squad")
     }
 }

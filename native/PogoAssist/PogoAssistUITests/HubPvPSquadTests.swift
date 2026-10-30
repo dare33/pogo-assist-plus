@@ -10,16 +10,29 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertTrue(el(app, "hub-pvp-league").waitForExistence(timeout: 30))
         // Great League has no candidate in this box.
         XCTAssertTrue(el(app, "hub-pvp-none").waitForExistence(timeout: 60), "Great League has no candidate")
-        // The squad still shows with its three empty slots and their roles, and a slot opens its picker with what could be got now (READBACK 1.15).
+        // The squad still shows with its three empty slots and their roles, and the squad line says so.
         XCTAssertTrue(app.staticTexts["Suggested squad"].exists)
         for (n, role) in [(1, "Lead"), (2, "Safe swap"), (3, "Closer")] {
             XCTAssertTrue(slot(app, "pvp", n).label.hasPrefix("Slot \(n) of 3, \(role)") && slot(app, "pvp", n).label.hasSuffix("empty"), slot(app, "pvp", n).label)
         }
+        XCTAssertEqual(el(app, "squad-status").label, "Not ready: 3 empty")
         openPicker(app, "pvp", slot: 1)
         XCTAssertEqual(pickerRows(app).count, 0)
-        XCTAssertTrue(el(app, "squad-picker-empty").exists)
-        XCTAssertFalse(el(app, "squad-couldget-toggle").exists, "with no option Could get now is not folded away")
+        XCTAssertEqual(el(app, "squad-picker-empty").label, "No candidate in your box for this role.", "Available lists only the box")
+        XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
         closePicker(app)
+        // Best lists the league's table whether or not the box has them: the same slots hold Pokémon the box lacks, red, and the picker says when they might be had.
+        app.buttons["squad-mode-best"].tap()
+        XCTAssertTrue(slot(app, "pvp", 1).waitForExistence(timeout: 10))
+        XCTAssertTrue((1...3).allSatisfy { slot(app, "pvp", $0).label.hasSuffix("not in your box, to get") }, (1...3).map { slot(app, "pvp", $0).label }.joined(separator: " | "))
+        XCTAssertEqual(el(app, "squad-status").label, "Not ready: 3 to get")
+        openPicker(app, "pvp", slot: 1)
+        XCTAssertTrue(pickerRows(app).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(pickerRows(app).firstMatch.label.contains("Not in your box"), pickerRows(app).firstMatch.label)
+        shot("pvp-picker-best")
+        closePicker(app)
+        app.buttons["squad-mode-available"].tap()
+        XCTAssertTrue(waitGone(el(app, "squad-picker")))
         app.buttons["hub-pvp-league-ul"].tap()
         XCTAssertTrue(app.staticTexts["Suggested squad"].waitForExistence(timeout: 30), "Ultra League shows a squad")
         XCTAssertFalse(app.staticTexts["Suggested team"].exists)
