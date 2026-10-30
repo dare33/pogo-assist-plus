@@ -541,6 +541,14 @@ final class AppModel: ObservableObject {
         }
         library = BoxLibrary(root: libraryRoot)
         pendingStore = PendingScanStore(directory: BoxExportFile.pendingDirectory ?? URL(fileURLWithPath: "/dev/null/pogo-assist-pending", isDirectory: true))
+        #if DEBUG
+        // A UI test or a timing run can start from a big box: `-uitest-seed-box <csv path>` writes that CSV (Poke Genie or the app's own export) as the first version of "Greg main".
+        if let i = CommandLine.arguments.firstIndex(of: "-uitest-seed-box"), i + 1 < CommandLine.arguments.count, root != nil,
+           let text = try? String(contentsOfFile: CommandLine.arguments[i + 1], encoding: .utf8), let gm = try? GameMaster.bundled() {
+            let seeded = BoxCSVReader.entries(csv: text, gm: gm)
+            if (try? library.createAccount("Greg main")) != nil { _ = try? library.commit(account: "Greg main", entries: seeded, reason: .scan, note: "Seeded for a UI test") }
+        }
+        #endif
         // A pass is never restored at launch: the next scan after one is an ordinary scan unless the person chooses Special scan again. (A broadcast that was running keeps the pass it
         // started with in its own state and in the waiting-scan record.)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
@@ -740,8 +748,11 @@ final class AppModel: ObservableObject {
         // An edit of the hand-set marks only (Dynamax, Gigantamax, Shadow/Purified, Lucky, details) is a setting, not a correction of a read value.
         let marksOnly = edit.marksOnly && (edit.dynamax != nil || edit.gigantamax != nil || edit.lucky != nil || edit.shadow != nil || edit.details != nil)
         do {
+            let asked = Date()
             let (new, notice) = try await worker.run { engine -> (BoxSnapshot, String?) in
                 var notice: String?
+                let started = Date()
+                defer { NSLog("pogo timings: edit saved (waited %.2f s, mutate %.2f s)", started.timeIntervalSince(asked), Date().timeIntervalSince(started)) }
                 let snap = try lib.mutate(account: a, reason: .edit, note: marksOnly ? "Marks set for \(label)" : "Corrected \(label)") { entries in
                     guard let i = entries.firstIndex(where: { $0.id == id }) else { throw BoxMerge.EditFailure.badValue("That Pokémon is no longer in the box.") }
                     var fixed = try BoxMerge.correct(entries[i], with: edit, gameMaster: try .bundled())

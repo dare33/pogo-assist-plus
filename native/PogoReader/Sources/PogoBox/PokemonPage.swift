@@ -64,6 +64,40 @@ public enum PokemonPage {
         return edit.marksOnly
     }
 
+    // MARK: edits the page has not saved yet
+
+    /// The row after the edit, made as saving it would (`BoxMerge.correct`), so the page can draw a mark or chip in its new state before the box version is written.
+    /// nil when the edit is refused (it never is for a mark or a chip).
+    public static func row(applying edit: BoxMerge.Edit, to entry: BoxEntry, gm: GameMaster) -> ScanRow? {
+        (try? BoxMerge.correct(entry, with: edit, gameMaster: gm))?.row
+    }
+
+    /// Whether two rows carry the same hand-set marks and details (the fields a mark or chip on the page changes).
+    /// Shadow / Purified "marked neither by hand" (0) and never marked (nil) are the same here: the only way to reach 0 from nil is to mark Shadow or Purified and
+    /// clear it again, which is no change.
+    public static func sameMarks(_ a: ScanRow, _ b: ScanRow) -> Bool {
+        a.dynamax == b.dynamax && a.gigantamax == b.gigantamax && a.lucky == b.lucky && (a.shadow ?? 0) == (b.shadow ?? 0) && a.details == b.details
+    }
+
+    /// `row` with the marks and details of `wanted`: what the page draws while edits wait to be saved (every other field is the saved row's).
+    public static func showing(_ wanted: ScanRow, on row: ScanRow) -> ScanRow {
+        var r = row
+        r.dynamax = wanted.dynamax; r.gigantamax = wanted.gigantamax; r.lucky = wanted.lucky; r.shadow = wanted.shadow; r.details = wanted.details
+        return r
+    }
+
+    /// The one edit that takes the saved row to the row the player has left the marks in: only the fields that differ, from the latest desired values, so any number
+    /// of taps on a mark come to one edit (an even number to none). Applied to `saved` with `BoxMerge.correct` it gives `wanted`'s marks and details.
+    public static func edit(from saved: ScanRow, to wanted: ScanRow) -> BoxMerge.Edit {
+        var e = BoxMerge.Edit()
+        if wanted.dynamax != saved.dynamax { e.dynamax = BoxMerge.DynamaxEdit(wanted.dynamax) }
+        if wanted.gigantamax != saved.gigantamax { e.gigantamax = wanted.gigantamax == true }
+        if wanted.lucky != saved.lucky { e.lucky = wanted.lucky == true }
+        if (wanted.shadow ?? 0) != (saved.shadow ?? 0) { e.shadow = BoxMerge.ShadowEdit(wanted.shadow) }
+        if wanted.details != saved.details { e.details = wanted.details ?? CopyDetails() }
+        return e
+    }
+
     /// The types of a species; the fallback species' when the game master does not know it (the Mega form the page shows has its own types).
     public static func types(of speciesId: String, fallback: String, gm: GameMaster?) -> [String] {
         gm?.byId[speciesId]?.types ?? gm?.byId[fallback]?.types ?? []
