@@ -209,6 +209,50 @@ final class MyPokemonScreenTests: XCTestCase {
         XCTAssertTrue(row(app, "Staraptor").label.contains("Full strength"), row(app, "Staraptor").label)
     }
 
+    // MARK: the special-type words (phone feedback item 12)
+
+    /// A keyword in the search lists only the species with a copy of that type: "legendary" keeps Moltres and leaves Blissey out; a name with a keyword narrows to both.
+    func testTheSearchUnderstandsTheSpecialTypeWords() throws {
+        let app = launchOnMoltres()
+        let search = app.textFields["box-search"]
+        search.tap(); clearSearch(app); search.typeText("legendary\n")
+        XCTAssertTrue(row(app, "Moltres").waitForExistence(timeout: 10), "a legendary species is listed")
+        XCTAssertFalse(row(app, "Blissey").exists, "a species that is not legendary is not")
+        XCTAssertFalse(row(app, "Staraptor").exists)
+        search.tap(); clearSearch(app); search.typeText("molt legendary\n")
+        XCTAssertTrue(row(app, "Moltres").waitForExistence(timeout: 10), "a piece of a name and a word together")
+        XCTAssertFalse(row(app, "Zapdos").exists, "the name part still narrows it")
+        search.tap(); clearSearch(app); search.typeText("shadow & legendary\n")
+        XCTAssertTrue(app.staticTexts["No Pokémon match."].waitForExistence(timeout: 10), "every word must match: the sample box has no Shadow legendary")
+        search.tap(); clearSearch(app); search.typeText("Moltres\n")
+        XCTAssertTrue(row(app, "Moltres").waitForExistence(timeout: 10), "a plain name still works")
+    }
+
+    private func shot(_ name: String) {
+        var dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
+        dir = (dir as NSString).appendingPathComponent("fb-collection")
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
+    }
+
+    /// My Pokémon with a keyword in the search, for Greg's page: out/screens/fb-collection.
+    func testKeywordSearchScreenshots() throws {
+        launchOnMoltres().terminate()
+        for (mode, size, category) in [("light", "default", "UICTContentSizeCategoryL"), ("dark", "default", "UICTContentSizeCategoryL"),
+                                       ("light", "ax5", "UICTContentSizeCategoryAccessibilityXXXL"), ("dark", "ax5", "UICTContentSizeCategoryAccessibilityXXXL")] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-appearance", mode, "-UIPreferredContentSizeCategoryName", category]
+            app.launch()
+            XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
+            let search = app.textFields["box-search"]
+            search.tap(); search.typeText("legendary\n")
+            XCTAssertTrue(row(app, "Moltres").waitForExistence(timeout: 10))
+            sleep(2)
+            shot("my-pokemon-keyword-legendary-\(mode)-\(size)")
+            app.terminate()
+        }
+    }
+
     // MARK: screenshots (design process section 6)
 
     private func attach(_ name: String) {

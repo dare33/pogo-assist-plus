@@ -80,6 +80,13 @@ Stated so each can be checked against the code. "Proposal" marks the session's o
    its keep or transfer tag.
 6. **Tapping a TOP PVP row** opens that copy with its league's tile chosen.
 7. **The A–Z index** appears while the list scrolls and fades a second after it stops (D24).
+8. **Search words for the special types** (Greg, phone run 30 Oct 2026): the search also takes the game's words, matched whole
+   and in any case: shadow, purified, lucky, dynamax (or max), gigantamax (or gmax), legendary, mythical, ultra beasts (ultra
+   beast, ultrabeast), mega (a Mega-capable species), 100% (or hundo) and buddy (or best buddy). Words are separated by spaces
+   or "&" and every one must match; a word that is not one of these is a piece of a name ("pika shadow" finds Shadow Pikachu).
+   A word that also starts a name (mega, in Meganium) finds both. Shadow, legendary, mythical, ultra beasts, mega, 100% and
+   lucky use the Special sets' membership (`HubCollection.Membership`); purified, dynamax, gigantamax and best buddy read the
+   copy's own marks. A species set's word matches every copy of the species.
 
 ### The Pokémon page
 
