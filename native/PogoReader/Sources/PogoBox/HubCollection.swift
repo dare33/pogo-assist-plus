@@ -19,6 +19,15 @@ public enum HubCollection {
     /// that list: 132 Ditto, 292 Shedinja, 665 Spewpa, 774 Minior, 789 Cosmog, 790 Cosmoem, 946 Bramblin, 947 Brambleghast. The data file is shared and stays as PvPoke has it.
     public static let releasedInGoDespiteFlag: Set<Int> = [132, 292, 665, 774, 789, 790, 946, 947]
 
+    /// Species that are Legendary in Pokémon GO although the game master gives them no `legendary` tag: Cosmog and Cosmoem. Source: Bulbapedia, "Legendary Pokémon", section "Cosmog and
+    /// Cosmoem", page revision 4642431 (6 Oct 2026), read 1 Nov 2026. The same page and "Mythical Pokémon" (revision 4646884) list none of the other six `releasedInGoDespiteFlag`
+    /// species. Read only here (the Collection's sets, Missing and the search); the game master, the engine and the squads are not changed.
+    public static let legendaryDespiteNoTag: Set<Int> = [789, 790]
+
+    private static func tags(of s: GameMaster.Species) -> [String] {
+        legendaryDespiteNoTag.contains(s.dex) && !s.tags.contains("legendary") ? s.tags + ["legendary"] : s.tags
+    }
+
     /// One per dex number, the plain species rather than a form when the file lists both (`pikachu` before `pikachu_libre`: a form has a bracket in
     /// its game master name, so ids such as `mr_mime` and `ho_oh` are plain); in dex order. The flag is corrected by `releasedInGoDespiteFlag`. A dex number in `owned` also always counts, even where it is
     /// on neither list: a box that holds a species has it, so owned never exceeds the total.
@@ -27,11 +36,11 @@ public enum HubCollection {
         func skipped(_ s: GameMaster.Species) -> Bool { s.tags.contains("shadow") || s.tags.contains("mega") || s.tags.contains("duplicate") }
         var byDex = [Int: ReleasedSpecies]()
         for s in gm.ordered where (s.released || releasedInGoDespiteFlag.contains(s.dex)) && !skipped(s) {
-            if byDex[s.dex] == nil || isPlain(s) { byDex[s.dex] = ReleasedSpecies(dex: s.dex, id: s.id, name: s.name, tags: s.tags) }
+            if byDex[s.dex] == nil || isPlain(s) { byDex[s.dex] = ReleasedSpecies(dex: s.dex, id: s.id, name: s.name, tags: tags(of: s)) }
         }
         var extra = [Int: ReleasedSpecies]()
         for s in gm.ordered where owned.contains(s.dex) && byDex[s.dex] == nil && !skipped(s) {
-            if extra[s.dex] == nil || isPlain(s) { extra[s.dex] = ReleasedSpecies(dex: s.dex, id: s.id, name: s.name, tags: s.tags) }
+            if extra[s.dex] == nil || isPlain(s) { extra[s.dex] = ReleasedSpecies(dex: s.dex, id: s.id, name: s.name, tags: tags(of: s)) }
         }
         return byDex.merging(extra) { a, _ in a }.values.sorted { $0.dex < $1.dex }
     }

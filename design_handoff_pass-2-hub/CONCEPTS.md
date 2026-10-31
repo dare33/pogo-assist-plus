@@ -223,14 +223,18 @@ Stated so each can be checked against the code.
 
 25. **Species count**: game-master entries with `released`, plus eight species released in Pokémon GO that the flag leaves out (Ditto, Shedinja,
    Spewpa, Minior, Cosmog, Cosmoem, Bramblin, Brambleghast; `HubCollection.releasedInGoDespiteFlag`), 959 in all. The flag is PvPoke's and mixes species
-   missing from GO with species in GO; the eight come from Bulbapedia's "Unreleased Pokémon" list (66 species, page revision 4657810, read 31 Oct 2026),
-   which the other 66 flagged ones are on. One per dex number, Mega, Shadow and duplicate entries not
+   missing from GO with species in GO; the eight are the ones the flag marks unreleased that are NOT on Bulbapedia's "Unreleased Pokémon" list (66 species, page revision 4657810, read 31 Oct 2026);
+   the other 66 flagged ones are on it and stay out. Cosmog and Cosmoem are also counted as Legendary (`HubCollection.legendaryDespiteNoTag`): the game master gives them no tag, and
+   Bulbapedia's "Legendary Pokémon" page (revision 4642431, read 1 Nov 2026) lists them under "Cosmog and Cosmoem"; none of the other six is on that page or on the Mythical one
+   (revision 4646884), so the Legendary set is 54 species, not 52. One per dex number, Mega, Shadow and duplicate entries not
    counted; owned when a box copy's species has that dex number. Regions by dex range (Kanto 1–151 … Paldea 906–1025).
 26. **Special set strips** (replaces the Showcase, 31 Oct 2026): a set's strip is its copies, best first, the first ten. Rank: the set's activity, then
    IV % (a copy with no read IVs last), then CP, then entry id. An activity rank is the advisor's tag for the area (Strong, then OK, then Weak, then not in the tables),
-   then the table tier (S, A, B); a copy with no table entry for the area is Weak (so it ranks below every Strong or OK copy), and unranked (no rank shown) means the advice is not
+   then the table tier (S, A, B); a copy is Weak for the area when it has no table entry for it, its IVs are below 80%, its IVs are unknown, or it is a Shadow copy whose only entries are Mega ones (`src/advise.js`
+   `fit`); Weak ranks below every Strong or OK copy, and unranked (no rank shown) means the advice is not
    in yet. The activity per set (Greg: "Per set"): Dynamax and Gigantamax by Max; Shadow, Legendary, Mythical, Ultra Beasts and Mega-capable
    by Raids; Hundo, Lucky, Shiny and Background by the best rank in any activity (Raids, Gym, Rocket, Max, and PvP in Great or Ultra League by the card's worth: Top, Good, Weak).
+   A PvP Weak card keeps its league tier (S, A or B) while a Raids, Gym, Rocket or Max Weak has none and ranks last, so in the any-activity sets "PvP Weak" can outrank "Raids Weak".
    A species set (Legendary, Mythical, Ultra Beasts, Mega-capable) shows each species once, its best copy, as its card counts species; a copy set shows copies.
 
 ### Keeping squads

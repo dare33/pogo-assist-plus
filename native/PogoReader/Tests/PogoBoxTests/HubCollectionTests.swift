@@ -37,6 +37,26 @@ final class HubCollectionTests: XCTestCase {
         XCTAssertTrue(HubCollection.releasedSpecies(gm: gm, owned: [489]).map(\.dex).contains(489))
     }
 
+    /// Cosmog and Cosmoem are Legendary in Pokémon GO (Bulbapedia, "Legendary Pokémon", revision 4642431) but the game master gives them no tag: the Collection adds it.
+    func testCosmogAndCosmoemAreLegendaryInTheCollection() {
+        XCTAssertFalse(gm.byId["cosmog"]?.tags.contains("legendary") ?? true, "the premise: no tag in the game master")
+        XCTAssertEqual(HubCollection.legendaryDespiteNoTag, [789, 790])
+        let empty = HubCollection.specialSets(entries: [], gm: gm)
+        XCTAssertEqual(empty.first { $0.name == "Legendary" }?.total, 54, "52 tagged and Cosmog and Cosmoem")
+        let missing = HubCollection.missingSpecies(entries: [], advice: BoxAdvice(), gm: gm)
+        XCTAssertEqual(missing.first { $0.dex == 789 }?.how, "Legendary")
+        XCTAssertEqual(missing.first { $0.dex == 790 }?.tags.contains("legendary"), true)
+        XCTAssertEqual(HubCollection.missingSummary(missing).legendary, missing.filter { $0.tags.contains("legendary") }.count)
+        XCTAssertEqual(HubCollection.missingSummary(missing).legendary, 54)
+        // None of the other six species the flag leaves out is Legendary or Mythical.
+        let byDex = Dictionary(uniqueKeysWithValues: HubCollection.releasedSpecies(gm: gm).map { ($0.dex, $0) })
+        for d in [132, 292, 665, 774, 946, 947] { XCTAssertFalse(byDex[d]?.tags.contains("legendary") ?? true || byDex[d]?.tags.contains("mythical") ?? true, "dex \(d)") }
+        // A box with Cosmog: it is in the Legendary set (the card, the list and the search read the same Membership).
+        let box = [P23.entry("c", "cosmog")]
+        XCTAssertEqual(HubCollection.members(of: .legendary, entries: box, gm: gm).map(\.id), ["c"])
+        XCTAssertEqual(HubCollection.specialSets(entries: box, gm: gm).first { $0.name == "Legendary" }?.owned, 1)
+    }
+
     func testRegionsCoverTheDexRanges() {
         XCTAssertEqual(HubCollection.regions.first?.dex, 1...151)
         XCTAssertEqual(HubCollection.regions.last?.dex, 906...1025)
@@ -98,7 +118,7 @@ final class HubCollectionTests: XCTestCase {
         let by = Dictionary(uniqueKeysWithValues: sets.map { ($0.name, $0) })
         XCTAssertEqual(sets.map(\.name), ["Hundo", "Legendary", "Mythical", "Ultra Beasts", "Mega-capable", "Lucky", "Shadow", "Dynamax", "Gigantamax", "Shiny", "Background"])
         XCTAssertEqual(by["Hundo"]?.owned, 2); XCTAssertNil(by["Hundo"]?.total); XCTAssertEqual(by["Hundo"]?.unit, "copies")
-        XCTAssertEqual(by["Legendary"]?.owned, 1); XCTAssertEqual(by["Legendary"]?.total, 52)
+        XCTAssertEqual(by["Legendary"]?.owned, 1); XCTAssertEqual(by["Legendary"]?.total, 54)
         XCTAssertEqual(by["Mythical"]?.owned, 1); XCTAssertEqual(by["Mythical"]?.total, 18)
         XCTAssertEqual(by["Ultra Beasts"]?.owned, 1); XCTAssertEqual(by["Ultra Beasts"]?.total, 12)
         XCTAssertEqual(by["Mega-capable"]?.owned, 1, "Charizard (two copies) is one species"); XCTAssertEqual(by["Mega-capable"]?.total, 58)
@@ -178,7 +198,7 @@ final class HubCollectionTests: XCTestCase {
     func testAnEmptyBoxHasEmptySets() {
         let sets = HubCollection.specialSets(entries: [], gm: gm)
         XCTAssertEqual(sets.map { $0.owned ?? -1 }, [0, 0, 0, 0, 0, -1, 0, 0, 0, -1, -1])
-        XCTAssertEqual(sets[1].total, 52)
+        XCTAssertEqual(sets[1].total, 54)
     }
 
     // MARK: Dynamax, Gigantamax, Shiny and Background (eyeball check C2)
@@ -262,6 +282,20 @@ final class HubCollectionTests: XCTestCase {
         // Master League is left out, as TOP PVP leaves it out.
         adv.leagues["none"] = ["ml": league("pikachu", score: 99)]
         XCTAssertEqual(HubCollection.rank(box[2], in: .pvp, advice: adv), .none)
+    }
+
+    /// A PvP Weak card keeps its league tier; a Raids Weak has none and ranks last, so "PvP Weak" outranks "Raids Weak" in the any-activity sets.
+    func testPvPWeakKeepsItsTierAndOutranksRaidsWeak() {
+        let box = [P23.entry("raidsWeak", "pikachu"), P23.entry("pvpWeak", "pikachu")]
+        var adv = advice(["raidsWeak": ["raids": fit("raids", .weak, nil)]])
+        // IV rank percentile 10: a poor roll, so the card is Weak whatever the tier.
+        adv.leagues = ["pvpWeak": ["gl": league("pikachu", score: 94, rankPct: 10)]]
+        let pvp = HubCollection.rank(box[1], in: .pvp, advice: adv), raids = HubCollection.rank(box[0], in: .raids, advice: adv)
+        XCTAssertEqual(pvp.words, "PvP Weak"); XCTAssertEqual(raids.words, "Raids Weak")
+        XCTAssertEqual(pvp.level, 1); XCTAssertEqual(raids.level, 1)
+        XCTAssertEqual(pvp.tier, 0, "the league card's own tier"); XCTAssertEqual(raids.tier, 9, "no tier on a Weak area fit")
+        XCTAssertGreaterThan(pvp, raids)
+        XCTAssertEqual(HubCollection.strip(kind: .hundo, members: box, gm: gm, advice: adv).map(\.entry.id), ["pvpWeak", "raidsWeak"])
     }
 
     func testTheAnyActivityRankComparesPvPWithRaids() {
