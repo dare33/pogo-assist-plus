@@ -18,10 +18,10 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   duplicates summaries (replaces Everything; D2, D3).
 - **Species (in Collection)**: one dex number released in Pokémon GO; Mega and Shadow entries are not separate species.
 - **Showcase**: the strip of the player's highest IV copy of each species, ranked by IV % (name kept, D56; heading "YOUR HIGHEST IV COPIES", Greg, 30 Oct 2026).
-- **Special sets**: counts of copies or species in named groups (100% IVs, Legendary, Mythical, Ultra Beasts,
+- **Special sets**: counts of copies or species in named groups (Hundo, Legendary, Mythical, Ultra Beasts,
   Mega-capable, Lucky, Shadow).
   A card opens a sheet listing the player's Pokémon in the set, in My Pokémon's rows (Greg, phone run 30 Oct 2026): the
-  copies in the set for 100% IVs, Lucky and Shadow, each owned species with all its copies for Legendary, Mythical and Ultra
+  copies in the set for Hundo, Lucky and Shadow, each owned species with all its copies for Legendary, Mythical and Ultra
   Beasts, and for Mega-capable only the copies that can Mega Evolve. The card's count and the list are one definition (`HubCollection.Membership`). Lucky shows
   "Not in your scans yet" until a copy is marked.
   Rulings after review (manager, 31 Oct 2026): the species sets count species but the sheet lists form rows as My Pokémon
@@ -32,6 +32,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   **Shadow** follows the hand mark when there is one (Shadow = Shadow, Purified or 0 = not Shadow) and the `_shadow`
   species only decides for a copy with no mark. The sheet's count and list follow the box as it is edited; the
   empty Lucky sheet says "Not in your scans yet" once.
+- **Hundo**: a copy with 15/15/15 IVs (a perfect IV spread). Was "100% IVs"; renamed, same meaning (Greg, 31 Oct 2026: "Change the name of 100% IVs to 'Hundo'").
 - **Missing**: released species with no copy in the box; **you can evolve** means an earlier member of its family is in
   the box.
 - **Build**: one thing the advisor wants done to a copy for an area (power up, evolve, mega evolve, form change, moves).

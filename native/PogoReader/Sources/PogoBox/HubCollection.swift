@@ -139,7 +139,7 @@ public enum HubCollection {
 
     /// The seven groups, in the order the Collection shows them.
     public enum SetKind: String, CaseIterable, Hashable, Identifiable {
-        case hundo = "100% IVs", legendary = "Legendary", mythical = "Mythical", ultraBeasts = "Ultra Beasts", megaCapable = "Mega-capable", lucky = "Lucky", shadow = "Shadow"
+        case hundo = "Hundo", legendary = "Legendary", mythical = "Mythical", ultraBeasts = "Ultra Beasts", megaCapable = "Mega-capable", lucky = "Lucky", shadow = "Shadow"
         public var name: String { rawValue }
         public var id: String { rawValue }
         /// Legendary, Mythical, Ultra Beasts and Mega-capable are species sets: the card counts owned species of released, and the list shows each owned species'
@@ -214,7 +214,7 @@ public enum HubCollection {
         return entries.filter { m.kinds(of: $0).contains(kind) }
     }
 
-    /// Counts for the named groups, read from `Membership`. 100% IVs, Lucky and Shadow count copies (a Shadow follows `isShadow`: the hand mark when there is one, else a `_shadow` species); Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
+    /// Counts for the named groups, read from `Membership`. Hundo (15/15/15, once called 100% IVs), Lucky and Shadow count copies (a Shadow follows `isShadow`: the hand mark when there is one, else a `_shadow` species); Legendary, Mythical, Ultra Beasts and Mega-capable count species (owned of
     /// released). `isLucky` reads the copy's Lucky mark (the data model adds it); while no copy is marked the Lucky tile has no count.
     public static func specialSets(entries: [BoxEntry], gm: GameMaster, isLucky: @escaping (BoxEntry) -> Bool = isLuckyMarked) -> [SpecialSet] {
         let m = Membership(entries: entries, gm: gm, isLucky: isLucky)

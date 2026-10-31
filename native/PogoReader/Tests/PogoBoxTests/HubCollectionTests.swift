@@ -98,15 +98,15 @@ final class HubCollectionTests: XCTestCase {
                    P23.entry("d", "mew"), P23.entry("e", "nihilego"), P23.entry("f", "charizard", ivs: IVs(atk: 15, def: 15, hp: 15))]
         let sets = HubCollection.specialSets(entries: box, gm: gm)
         let by = Dictionary(uniqueKeysWithValues: sets.map { ($0.name, $0) })
-        XCTAssertEqual(sets.map(\.name), ["100% IVs", "Legendary", "Mythical", "Ultra Beasts", "Mega-capable", "Lucky", "Shadow"])
-        XCTAssertEqual(by["100% IVs"]?.owned, 2); XCTAssertNil(by["100% IVs"]?.total); XCTAssertEqual(by["100% IVs"]?.unit, "copies")
+        XCTAssertEqual(sets.map(\.name), ["Hundo", "Legendary", "Mythical", "Ultra Beasts", "Mega-capable", "Lucky", "Shadow"])
+        XCTAssertEqual(by["Hundo"]?.owned, 2); XCTAssertNil(by["Hundo"]?.total); XCTAssertEqual(by["Hundo"]?.unit, "copies")
         XCTAssertEqual(by["Legendary"]?.owned, 1); XCTAssertEqual(by["Legendary"]?.total, 52)
         XCTAssertEqual(by["Mythical"]?.owned, 1); XCTAssertEqual(by["Mythical"]?.total, 18)
         XCTAssertEqual(by["Ultra Beasts"]?.owned, 1); XCTAssertEqual(by["Ultra Beasts"]?.total, 12)
         XCTAssertEqual(by["Mega-capable"]?.owned, 1, "Charizard (two copies) is one species"); XCTAssertEqual(by["Mega-capable"]?.total, 58)
         XCTAssertEqual(by["Shadow"]?.owned, 1)
         XCTAssertEqual(by["Shadow"]?.unitWord, "copy", "one copy reads singular")
-        XCTAssertEqual(by["100% IVs"]?.unitWord, "copies")
+        XCTAssertEqual(by["Hundo"]?.unitWord, "copies")
         XCTAssertEqual(by["Legendary"]?.unitWord, "species")
         XCTAssertEqual(by["Lucky"]?.note, "Not in your scans yet", "no copy carries a Lucky mark"); XCTAssertNil(by["Lucky"]?.owned)
     }

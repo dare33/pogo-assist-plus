@@ -298,7 +298,7 @@ final class HubScreensTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(any(app, "collection-showcase-card").count, 1, "a highest IV copy")
         for slug in ["hundo", "legendary", "mythical", "ultra-beasts", "mega-capable", "lucky", "shadow"] { XCTAssertTrue(any(app, "collection-set-\(slug)").firstMatch.exists, "the \(slug) set card") }
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Lucky. Not in your scans yet'")).firstMatch.exists, "Lucky reads Not in your scans yet")
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '100% IVs'")).firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Hundo'")).firstMatch.exists)
         let missingRows = any(app, "collection-missing-row").count
         XCTAssertTrue((1...6).contains(missingRows), "the first six missing (\(missingRows))")
         let cards = any(app, "collection-showcase-card").count

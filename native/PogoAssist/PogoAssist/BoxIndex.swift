@@ -35,7 +35,7 @@ struct BoxIndex {
     }
 
     /// The game's own words for the special types, which My Pokémon's search understands beside names and CPs. The sets (shadow, legendary, mythical, ultra beasts, mega,
-    /// 100% IVs, lucky) come from `HubCollection.Membership`, the same definition the Collection's Special sets count and list; the marks (purified, dynamax,
+    /// Hundo, lucky) come from `HubCollection.Membership`, the same definition the Collection's Special sets count and list; the marks (purified, dynamax,
     /// gigantamax, best buddy) are read off the copy's row.
     enum SearchWord: Hashable {
         case shadow, purified, lucky, dynamax, gigantamax, legendary, mythical, ultraBeast, mega, hundo, buddy

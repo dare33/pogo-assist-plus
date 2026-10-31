@@ -301,8 +301,8 @@ private struct SpecialSetTile: View {
     let kind: HubCollection.SetKind
     let open: () -> Void
 
-    /// The tile's identifier suffix: the set's name as a word ("hundo" for 100% IVs, which has no letters to spell it from).
-    private var slug: String { kind == .hundo ? "hundo" : kind.name.lowercased().replacingOccurrences(of: " ", with: "-") }
+    /// The tile's identifier suffix: the set's name as a word, lower case with hyphens ("ultra-beasts").
+    private var slug: String { kind.name.lowercased().replacingOccurrences(of: " ", with: "-") }
 
     var body: some View {
         Button(action: open) { tile }
