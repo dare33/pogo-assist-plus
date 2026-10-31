@@ -35,3 +35,5 @@ Greg checked the changes built from phone run 1, screen by screen.
   letter on screen. it seems like this only happens while screen is in motion, when still the selecitno works fine."
   Decision: a letter pressed while the list is still scrolling stops the scroll and jumps to that letter, as it does
   when the list is still. Size: full (what a tap does).
+
+Read back to Greg at the end of the check (the build list in the pass-2 and pass-3 FEEDBACK entries above, all full review except the Hundo rename alone): Greg: "Agreed, build it".

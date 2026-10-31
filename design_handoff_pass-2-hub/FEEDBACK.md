@@ -108,3 +108,5 @@ Points the last build session flagged, put to Greg in this check:
 - F5. Item 10 and how Best shows Pokémon the player does not own (both flagged for the phone): replaced by S1 above.
   "Last available" (no history data, so Best falls back to the research's obtain line): Greg's three Best statuses in
   S1 carry when a Pokémon is next on, if known; no history of past dates is added.
+
+Read back to Greg at the end of the check (the build list in the pass-2 and pass-3 FEEDBACK entries above, all full review except the Hundo rename alone): Greg: "Agreed, build it".
