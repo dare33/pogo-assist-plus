@@ -44,8 +44,11 @@ enum SquadMark: Equatable {
         let c = HubSquads.cost(of: b)
         let cost = c.value.map { MyPokemon.Cost(value: $0, currency: c.currency == .dust ? .dust : .candy) }
         // Only the Dynamax mark is left (Max): there is no upgrade work to name.
-        return .upgrade(cost: cost, label: HubSquads.upgradeLabel(b) ?? "Upgrade available: mark it as Dynamax on its page")
+        return .upgrade(cost: cost, label: HubSquads.upgradeLabel(b) ?? dynamaxMarkOnly)
     }
+
+    /// The label when only the Dynamax mark is left: nothing to pay for, but not "Free" either (a copy that is not Dynamax cannot be made one).
+    static let dynamaxMarkOnly = "Upgrade available: mark it as Dynamax on its page"
 
     /// The same for a league candidate: Built reads Full strength; else the work is the evolution and power-up the league option needs.
     static func of(_ c: HubTeams.Candidate) -> SquadMark { of(option: c.option, built: c.built, copyTitle: c.copyTitle) }
@@ -270,8 +273,8 @@ struct SlotCardView: View {
                     .lineLimit(2).multilineTextAlignment(.leading)
                 ForEach(model.lines, id: \.self) { Text($0).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.mutedOnTint).lineLimit(4).multilineTextAlignment(.leading) }
                 // The work's cost, as a picker row shows it beside the mark (Greg: the needs-work status and its cost are shown); under the name so it never crowds the role.
-                // A step that costs nothing (Mega Evolve alone) reads "Free".
-                if case .upgrade(let cost, _) = model.mark {
+                // A step that costs nothing (Mega Evolve alone) reads "Free"; only the Dynamax mark left shows no cost line.
+                if case .upgrade(let cost, let label) = model.mark, cost != nil || label != SquadMark.dynamaxMarkOnly {
                     Text(cost?.words ?? "Free").font(.figtree(11, .bold, relativeTo: .caption2)).foregroundStyle(Theme.orangeInk).lineLimit(2).multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
