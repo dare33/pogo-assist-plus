@@ -8,14 +8,37 @@ final class ScrollActivity: ObservableObject {
     private var last: CGFloat?
     private var lastMove = Date.distantPast
     private var timer: Task<Void, Never>?
-    /// The list's own scroll view, found from inside its content (`ScrollViewFinder`), so a coasting list can be stopped.
-    fileprivate weak var scrollView: UIScrollView?
+    /// A view inside the list's content (`ScrollViewFinder`). The list's scroll view is looked up from it each time it is needed, so a list that was rebuilt (a new
+    /// scroll view, or none for a moment) never leaves a dead reference behind.
+    fileprivate weak var probe: UIView?
+    /// Whether the index's touch area may reach left over the list's cards: not while the list's top part (the chips, the sort line with its "i") is behind the strip.
+    @Published private(set) var wide = true
+    /// How tall the list's top part is (from the top of the list's content), where the list's content starts on the screen, and where the strip starts. The first is
+    /// only measured while the top part is built (the list is lazy); it does not change as the list scrolls, so what was measured stays right once it is scrolled away.
+    private var chromeHeight: CGFloat = 0
+    private var contentTop: CGFloat = -.infinity
+    private var stripTop: CGFloat = .infinity
+    /// DEBUG, with `-uitest-az-always`: one character per jump the index made, "1" if the list was still coasting when the jump was asked for, else "0".
+    @Published private(set) var jumpLog = ""
+
+    private var scrollView: UIScrollView? {
+        var up = probe?.superview
+        while let v = up, !(v is UIScrollView) { up = v.superview }
+        return up as? UIScrollView
+    }
+
+    func chromeMeasured(height: CGFloat) { chromeHeight = height; refreshWide() }
+    func contentMoved(top: CGFloat) { contentTop = top; refreshWide() }
+    func stripMoved(top: CGFloat) { stripTop = top; refreshWide() }
+    private func refreshWide() { let now = contentTop + chromeHeight <= stripTop; if now != wide { wide = now } }
 
     /// Stops a list that is coasting after a fling. A jump to a letter made while it coasts is lost otherwise: the scroll view goes on decelerating from where it was
     /// and overwrites the offset `scrollTo` set, so the list ends wherever the fling would have taken it (phone feedback 31 Oct, 3b). Setting the offset to itself
     /// ends the deceleration; a list that is not coasting is left alone.
-    func stopCoasting() {
-        guard let scrollView, scrollView.isDecelerating else { return }
+    func stopCoasting(log: Bool = false) {
+        let coasting = scrollView?.isDecelerating ?? false
+        if log { jumpLog += coasting ? "1" : "0" }
+        guard coasting, let scrollView else { return }
         scrollView.setContentOffset(scrollView.contentOffset, animated: false)
     }
 
@@ -39,24 +62,14 @@ final class ScrollActivity: ObservableObject {
     }
 }
 
-/// Finds the scroll view that holds it and tells `activity`, so the A-Z index can stop the list coasting. Placed in the list's content, drawn as nothing.
+/// Gives `activity` a view inside the list's content, so the A-Z index can find the list's scroll view and stop it coasting. Drawn as nothing.
 struct ScrollViewFinder: UIViewRepresentable {
     let activity: ScrollActivity
 
-    final class Probe: UIView {
-        var activity: ScrollActivity?
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            var up: UIView? = superview
-            while let v = up, !(v is UIScrollView) { up = v.superview }
-            activity?.scrollView = up as? UIScrollView
-        }
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView(); v.isUserInteractionEnabled = false; activity.probe = v; return v
     }
-
-    func makeUIView(context: Context) -> Probe {
-        let v = Probe(); v.isUserInteractionEnabled = false; v.activity = activity; return v
-    }
-    func updateUIView(_ v: Probe, context: Context) { v.activity = activity }
+    func updateUIView(_ v: UIView, context: Context) { activity.probe = v }
 }
 
 /// Scrolls the list for the A-Z index, at most once every `gap` while a finger is dragging down the letters, always with the latest letter. Each jump lays out a
@@ -96,8 +109,11 @@ final class JumpThrottle {
     func finish(_ scroll: (String) -> Void) { flush(scroll); scrolled = nil; last = .distantPast }
 }
 
-/// The A-Z index in the right gutter. The letters are drawn in a 22 pt column; each letter's touch area is 44 pt wide (the column and 22 pt of nothing to its left) and
-/// `rowHeight` tall, up from 22 by 14 (phone feedback 31 Oct, 3a). The letters are drawn only while the list moves (or the index is being dragged); VoiceOver always has it, as
+/// The A-Z index in the right gutter. The letters are drawn in a 22 pt column. Each letter's touch area is `rowHeight` (16 pt, up from 14) tall, so the strip is 2 pt per
+/// letter taller (52 pt on 26 letters); and it is `reach` wide (32 pt, up from 22): the column and 10 pt to its left, over the blank trailing padding of the row cards.
+/// The cards' padding is 16 pt, so the reach stops 7 pt short of a row's chevron (phone feedback 31 Oct, 3a). It is only that wide while the list's top part (the chips,
+/// the sort line with its "i" button, which reach the right edge) is not behind the strip; there it is the drawn column. VoiceOver's element is the drawn column
+/// either way. The letters are drawn only while the list moves (or the index is being dragged); VoiceOver always has it, as
 /// one adjustable "Jump to letter" element, even while the letters are hidden (READBACK Q4). With Reduce Motion on, the letters appear and go without a fade.
 struct AZIndex: View {
     @ObservedObject var activity: ScrollActivity
@@ -121,7 +137,8 @@ struct AZIndex: View {
     @State private var throttle = JumpThrottle()
 
     private let rowHeight: CGFloat = 16
-    private let touchWidth: CGFloat = 44
+    private let column: CGFloat = 22
+    private let reach: CGFloat = 32
 
     private func jump(to label: String) {
         // A letter with nothing under it goes to the next letter that has something.
@@ -134,7 +151,7 @@ struct AZIndex: View {
 
     /// A DEBUG build honours `-uitest-az-always`: the letters stay drawn and touchable, so a UI test (which cannot tap within the second the letters fade after the list
     /// stops) can use them.
-    private static var alwaysShown: Bool {
+    static var alwaysShown: Bool {
         #if DEBUG
         return ProcessInfo.processInfo.arguments.contains("-uitest-az-always")
         #else
@@ -148,11 +165,19 @@ struct AZIndex: View {
         letters
             .opacity(shown ? 1 : 0)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: shown)
-            .allowsHitTesting(shown)
             .accessibilityHidden(true)
-            .frame(width: touchWidth)
-            .overlay { voiceOverElement }
+            .frame(width: column)
+            .overlay { voiceOverElement }   // the drawn column, not the wider touch area
+            .overlay { debugElement }
+            .padding(.leading, activity.wide ? reach - column : 0)   // touch area only: nothing is drawn there
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .updating($dragging) { _, state, _ in state = true }
+                .onChanged { v in jump(to: labels[min(max(Int(v.location.y / rowHeight), 0), labels.count - 1)]) }
+                .onEnded { _ in finishDrag() })
+            .allowsHitTesting(shown)
             .padding(.trailing, 1)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { activity.stripMoved(top: $0) }
             .accessibilityElement(children: .contain)
             .onChange(of: dragging) { _, now in if !now { finishDrag() } }   // also when the system cancelled the drag, so the next touch starts afresh
     }
@@ -167,13 +192,17 @@ struct AZIndex: View {
                     .background { if on { Capsule().fill(accent.solid) } }
             }
         }
-        .frame(width: 22)
-        .padding(.leading, touchWidth - 22)   // the wider touch area is nothing drawn, to the letters' left
-        .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 0)
-            .updating($dragging) { _, state, _ in state = true }
-            .onChanged { v in jump(to: labels[min(max(Int(v.location.y / rowHeight), 0), labels.count - 1)]) }
-            .onEnded { _ in finishDrag() })
+        .frame(width: column)
+    }
+
+    /// DEBUG, with `-uitest-az-always`: what a UI test reads of the index ("letters=26 wide=1 jumps=1101"): how many letters, whether the touch area is wide, and for each jump whether the list was coasting.
+    @ViewBuilder private var debugElement: some View {
+        if Self.alwaysShown {
+            Color.clear.frame(width: 1, height: 1).allowsHitTesting(false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityIdentifier("az-debug")
+                .accessibilityValue("letters=\(labels.count) wide=\(activity.wide ? 1 : 0) jumps=\(activity.jumpLog)")
+        }
     }
 
     /// Always present, not drawn: the one element VoiceOver finds, whether or not the letters show.

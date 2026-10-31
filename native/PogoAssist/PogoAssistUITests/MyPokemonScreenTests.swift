@@ -195,12 +195,10 @@ final class MyPokemonScreenTests: XCTestCase {
         func visible(startingWith letter: String) -> Bool {
             app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", letter)).allElementsBoundByIndex.contains { $0.exists && $0.isHittable }
         }
-        // The letters are kept drawn by the launch argument (they fade a second after the list stops, which a UI test cannot beat). They are 16 pt each (the touch area's height), A first, over the index element's frame.
-        for (letter, at) in [("M", 12), ("T", 19), ("C", 2)] {
-            let frame = jump.frame, size = app.frame.size
-            XCTAssertGreaterThan(frame.height, 300, "the index is the height of its letters")
-            let letterSpot = app.coordinate(withNormalizedOffset: CGVector(dx: frame.midX / size.width, dy: (frame.minY + (CGFloat(at) + 0.5) * 16) / size.height))
-            letterSpot.tap()
+        // The letters are kept drawn by the launch argument (they fade a second after the list stops, which a UI test cannot beat). A is first, over the index element's frame.
+        for letter in ["M", "T", "C"] {
+            XCTAssertGreaterThan(jump.frame.height, 300, "the index is the height of its letters")
+            letterSpot(app, letter).tap()
             expectation(for: NSPredicate(format: "count > 0"), evaluatedWith: app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", letter)))
             waitForExpectations(timeout: 15)
             XCTAssertTrue(visible(startingWith: letter), "a row starting with \(letter) is on the screen after the tap on \(letter)")
@@ -219,89 +217,192 @@ final class MyPokemonScreenTests: XCTestCase {
         return app
     }
 
-    /// The screen point of the letter at `at` (A is 0): the middle of its row, `inset` points in from the strip's trailing edge.
-    private func letterPoint(_ app: XCUIApplication, at: Int, inset: CGFloat = 11) -> CGPoint {
-        let frame = app.descendants(matching: .any)["az-jump"].frame
-        return CGPoint(x: frame.maxX - inset, y: frame.minY + (CGFloat(at) + 0.5) * frame.height / CGFloat(26))   // 26 letters on the big box (no "#" section)
+    /// What the DEBUG index says of itself (see `AZIndex.debugElement`): the number of letters, and one character per jump, "1" if the list was coasting at the jump.
+    private func debugState(_ app: XCUIApplication) -> (letters: Int, wide: Bool, jumps: String) {
+        let value = app.descendants(matching: .any)["az-debug"].value as? String ?? ""
+        let parts = value.split(separator: " ").map { $0.split(separator: "=", omittingEmptySubsequences: false) }
+        let letters = parts.first { $0.first == "letters" }.flatMap { $0.last }.flatMap { Int($0) } ?? 0
+        let jumps = parts.first { $0.first == "jumps" }.flatMap { $0.count > 1 ? String($0[1]) : "" } ?? ""
+        let wide = parts.first { $0.first == "wide" }.flatMap { $0.last } == "1"
+        return (letters, wide, jumps)
     }
 
-    private func letterSpot(_ app: XCUIApplication, at: Int, inset: CGFloat = 11) -> XCUICoordinate {
-        let p = letterPoint(app, at: at, inset: inset), size = app.frame.size
+    /// The screen point over the letter `letter` of the index (A is first; the index has the letters of the big box, no "#"): `inset` points in from the strip's trailing
+    /// edge, and `along` of the way down the letter's own row (0.5 is the middle).
+    private func letterPoint(_ app: XCUIApplication, _ letter: String, inset: CGFloat = 11, along: CGFloat = 0.5) -> CGPoint {
+        let frame = app.descendants(matching: .any)["az-jump"].frame
+        let letters = debugState(app).letters
+        XCTAssertGreaterThan(letters, 0, "the index says how many letters it has")
+        let at = CGFloat(Int(letter.unicodeScalars.first!.value) - 65)
+        return CGPoint(x: frame.maxX - inset, y: frame.minY + (at + along) * frame.height / CGFloat(max(letters, 1)))
+    }
+
+    private func letterSpot(_ app: XCUIApplication, _ letter: String, inset: CGFloat = 11, along: CGFloat = 0.5) -> XCUICoordinate {
+        let p = letterPoint(app, letter, inset: inset, along: along), size = app.frame.size
         return app.coordinate(withNormalizedOffset: CGVector(dx: p.x / size.width, dy: p.y / size.height))
     }
 
     /// One touch record with two fingers: the first flings the list from `from` to `to` in `flingTime` seconds and lifts, the second presses `press` `pressAt` seconds
     /// after the record starts and lifts. XCTest's own swipe and tap each wait for the list to stop moving before they return, so a press cannot follow a fling
-    /// while it is still coasting through them; this sends both in one record (XCTest's synthesized-event classes, reached by name; test-only).
-    private func flingThenPress(from: CGPoint, to: CGPoint, flingTime: TimeInterval = 0.08, press: CGPoint, pressAt: TimeInterval) throws {
+    /// while it is still coasting through them; this sends both in one record (XCTest's synthesized-event classes, reached by name; test-only). If this Xcode no longer
+    /// has them the test fails with that said, instead of crashing.
+    private func flingThenPress(from: CGPoint, to: CGPoint, flingTime: TimeInterval = 0.08, press: CGPoint, pressAt: TimeInterval) {
+        guard let pathType = NSClassFromString("XCPointerEventPath") as? NSObject.Type, let recordType = NSClassFromString("XCSynthesizedEventRecord") as? NSObject.Type else {
+            XCTFail("this Xcode's XCTest has no XCPointerEventPath or XCSynthesizedEventRecord: the fling-and-press helper has to be redone"); return
+        }
+        let needed: [(NSObject.Type, String)] = [(pathType, "initForTouchAtPoint:offset:"), (pathType, "moveToPoint:atOffset:"), (pathType, "liftUpAtOffset:"),
+                                                 (recordType, "initWithName:interfaceOrientation:"), (recordType, "addPointerEventPath:"), (recordType, "synthesizeWithError:")]
+        for (type, name) in needed where !type.instancesRespond(to: NSSelectorFromString(name)) {
+            XCTFail("this Xcode's XCTest no longer has -[\(type) \(name)]: the fling-and-press helper has to be redone"); return
+        }
         typealias InitTouch = @convention(c) (AnyObject, Selector, CGPoint, TimeInterval) -> AnyObject
         typealias AtPoint = @convention(c) (AnyObject, Selector, CGPoint, TimeInterval) -> Void
         typealias AtOffset = @convention(c) (AnyObject, Selector, TimeInterval) -> Void
         typealias InitRecord = @convention(c) (AnyObject, Selector, NSString, Int) -> AnyObject
         typealias Add = @convention(c) (AnyObject, Selector, AnyObject) -> Void
         typealias Synthesize = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>?) -> Bool
-        func call<T>(_ o: AnyObject, _ sel: String, as: T.Type) -> T { unsafeBitCast(o.method(for: NSSelectorFromString(sel)), to: T.self) }
-        let pathClass = try XCTUnwrap(NSClassFromString("XCPointerEventPath")), recordClass = try XCTUnwrap(NSClassFromString("XCSynthesizedEventRecord"))
+        func imp<T>(_ o: AnyObject, _ sel: String, as: T.Type) -> T { unsafeBitCast(o.method(for: NSSelectorFromString(sel)), to: T.self) }
         func touch(at point: CGPoint, offset: TimeInterval) -> AnyObject {
-            let o = (pathClass as AnyObject).perform(NSSelectorFromString("alloc"))!.takeUnretainedValue()
-            let initSel = NSSelectorFromString("initForTouchAtPoint:offset:")
-            return unsafeBitCast(o.method(for: initSel), to: InitTouch.self)(o, initSel, point, offset)
+            let o = pathType.perform(NSSelectorFromString("alloc"))!.takeUnretainedValue()
+            return imp(o, "initForTouchAtPoint:offset:", as: InitTouch.self)(o, NSSelectorFromString("initForTouchAtPoint:offset:"), point, offset)
         }
         let fling = touch(at: from, offset: 0)
-        call(fling, "moveToPoint:atOffset:", as: AtPoint.self)(fling, NSSelectorFromString("moveToPoint:atOffset:"), to, flingTime)
-        call(fling, "liftUpAtOffset:", as: AtOffset.self)(fling, NSSelectorFromString("liftUpAtOffset:"), flingTime)
+        imp(fling, "moveToPoint:atOffset:", as: AtPoint.self)(fling, NSSelectorFromString("moveToPoint:atOffset:"), to, flingTime)
+        imp(fling, "liftUpAtOffset:", as: AtOffset.self)(fling, NSSelectorFromString("liftUpAtOffset:"), flingTime)
         let tap = touch(at: press, offset: pressAt)   // a touch path starts pressed
-        call(tap, "liftUpAtOffset:", as: AtOffset.self)(tap, NSSelectorFromString("liftUpAtOffset:"), pressAt + 0.06)
-        let record = (recordClass as AnyObject).perform(NSSelectorFromString("alloc"))!.takeUnretainedValue()
-        let initRec = NSSelectorFromString("initWithName:interfaceOrientation:")
-        let r = unsafeBitCast(record.method(for: initRec), to: InitRecord.self)(record, initRec, "fling and press", 1)
-        let add = NSSelectorFromString("addPointerEventPath:")
-        unsafeBitCast(r.method(for: add), to: Add.self)(r, add, fling)
-        unsafeBitCast(r.method(for: add), to: Add.self)(r, add, tap)
+        imp(tap, "liftUpAtOffset:", as: AtOffset.self)(tap, NSSelectorFromString("liftUpAtOffset:"), pressAt + 0.06)
+        let record = recordType.perform(NSSelectorFromString("alloc"))!.takeUnretainedValue()
+        let r = imp(record, "initWithName:interfaceOrientation:", as: InitRecord.self)(record, NSSelectorFromString("initWithName:interfaceOrientation:"), "fling and press", 1)
+        imp(r, "addPointerEventPath:", as: Add.self)(r, NSSelectorFromString("addPointerEventPath:"), fling)
+        imp(r, "addPointerEventPath:", as: Add.self)(r, NSSelectorFromString("addPointerEventPath:"), tap)
         var error: NSError?
-        let ok = unsafeBitCast(r.method(for: NSSelectorFromString("synthesizeWithError:")), to: Synthesize.self)(r, NSSelectorFromString("synthesizeWithError:"), &error)
+        let ok = imp(r, "synthesizeWithError:", as: Synthesize.self)(r, NSSelectorFromString("synthesizeWithError:"), &error)
         XCTAssertTrue(ok, "the touch record was sent: \(String(describing: error))")
     }
 
-    /// The y of a section's heading ("T") if it is built and on the screen, else nil. Matched by label and by sitting at the leading edge, as the index draws the same
-    /// letters at the trailing edge.
-    private func headerY(_ app: XCUIApplication, _ letter: String) -> CGFloat? {
-        app.staticTexts.matching(NSPredicate(format: "label == %@", letter)).allElementsBoundByIndex.first { $0.frame.minX < app.frame.width / 3 }?.frame.minY
+    /// The section headings on the screen, top to bottom: single-letter labels at the leading edge (the index draws the same letters at the trailing edge).
+    private func headers(_ app: XCUIApplication) -> [(letter: String, y: CGFloat)] {
+        // One snapshot of the whole screen, so a row built or dropped by the list while it is read cannot make an element vanish halfway.
+        guard let root = try? app.snapshot() else { return [] }
+        var found = [(letter: String, y: CGFloat)]()
+        func walk(_ node: XCUIElementSnapshot) {
+            if node.elementType == .staticText, node.label.count == 1, node.label.range(of: "^[A-Z#]$", options: .regularExpression) != nil, node.frame.minX < app.frame.width / 3 {
+                found.append((node.label, node.frame.minY))
+            }
+            node.children.forEach(walk)
+        }
+        walk(root)
+        return found.sorted { $0.y < $1.y }
+    }
+
+    /// True when `letter`'s heading is the first section heading on the list and sits directly under the pinned header (the search field's bottom edge): measured 20 pt
+    /// below it, allowed 0 to 32. Returns where it is, for the failure message.
+    private func isAtTop(_ app: XCUIApplication, _ letter: String, listTop: CGFloat) -> (ok: Bool, seen: String) {
+        let visible = headers(app).filter { $0.y >= listTop - 4 }
+        guard let first = visible.first else { return (false, "no heading") }
+        return (first.letter == letter && first.y <= listTop + 32, "first heading \(first.letter) at \(first.y - listTop) under the pinned header")
+    }
+
+    private func waitUntil(_ seconds: TimeInterval, _ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline { if condition() { return true }; usleep(100_000) }
+        return condition()
     }
 
     /// Phone feedback 31 Oct, 3b: a letter pressed while the list is still coasting from a fling stops it and takes the list to that letter, as it does when the list is
-    /// still. The section header of the letter must be at the top of the list, and still there once any momentum would have run out.
+    /// still. Every press goes against the fling's direction (or far past where it would stop), so the list ends wrong if the jump is lost. The index says, for every
+    /// jump, whether the list was coasting when it was made: a round where it was not fails the test instead of counting as a pass. The heading of the letter must be the
+    /// first on the list, directly under its top, and still there once any momentum would have run out.
     func testALetterPressedWhileTheListIsStillScrollingJumpsThere() throws {
         let app = bigBoxApp()
-        let height = app.frame.height, x = app.frame.midX
-        for (letter, at, up) in [("T", 19, true), ("D", 3, false), ("W", 22, true), ("C", 2, false), ("S", 18, true)] {
-            let spot = letterPoint(app, at: at)   // worked out before the fling: reading the big list's frames afterwards takes longer than the fling lasts
-                        // 0.4 s after the fling is lifted the list is still coasting (a fling this fast coasts for about two seconds).
-            try flingThenPress(from: CGPoint(x: x, y: height * (up ? 0.75 : 0.3)), to: CGPoint(x: x, y: height * (up ? 0.3 : 0.75)), press: spot, pressAt: 0.5)
-            let top = height * 0.4
-            func atTop() -> Bool { headerY(app, letter).map { $0 >= 0 && $0 < top } ?? false }
-            let deadline = Date().addingTimeInterval(8)
-            while Date() < deadline, !atTop() { usleep(100_000) }
-            XCTAssertTrue(atTop(), "after a press on \(letter) during a fling, the \(letter) header is at the top of the list")
+        let height = app.frame.height, x = app.frame.midX, listTop = app.textFields["box-search"].frame.maxY
+        // The list starts in the middle (M), so a fling either way has a long way to go. That jump is the setup, not a round: nothing is coasting.
+        letterSpot(app, "M").tap()
+        XCTAssertTrue(waitUntil(15) { isAtTop(app, "M", listTop: listTop).ok }, "the setup jump to M")
+        sleep(3)
+        let setup = debugState(app).jumps.count
+        for (round, (letter, up)) in [("D", true), ("X", false), ("E", true), ("X", false), ("D", true)].enumerated() {
+            let spot = letterPoint(app, letter)   // worked out before the fling: reading the big list's frames afterwards takes longer than the fling lasts
+            // 0.5 s after the fling is lifted the list is still coasting (a fling this fast coasts for about two seconds).
+            flingThenPress(from: CGPoint(x: x, y: height * (up ? 0.75 : 0.3)), to: CGPoint(x: x, y: height * (up ? 0.3 : 0.75)), press: spot, pressAt: 0.5)
+            XCTAssertTrue(waitUntil(8) { debugState(app).jumps.count == setup + round + 1 }, "round \(round + 1) (\(letter)): the index made a jump (jumps: \(debugState(app).jumps))")
+            XCTAssertEqual(debugState(app).jumps.last, "1", "round \(round + 1) (\(letter)): the list was still coasting when the jump was made (jumps: \(debugState(app).jumps))")
+            _ = waitUntil(8) { isAtTop(app, letter, listTop: listTop).ok }
+            let first = isAtTop(app, letter, listTop: listTop)
+            XCTAssertTrue(first.ok, "round \(round + 1): after a press on \(letter) during a fling, the \(letter) heading is the first on the list, at its top (\(first.seen))")
             sleep(2)
-            XCTAssertTrue(atTop(), "and it stays there (header at \(headerY(app, letter) ?? -1) of \(height))")
+            let later = isAtTop(app, letter, listTop: listTop)
+            XCTAssertTrue(later.ok, "round \(round + 1): and it stays there (\(later.seen))")
         }
     }
 
-    /// Phone feedback 31 Oct, 3a: each letter's touch area is at least 44 pt wide and 16 pt tall (it was 22 by 14), so the strip is easier to hit; the strip's look
-    /// is the same. A press at the far leading edge of the touch area, outside the drawn letters, still selects the letter.
+    /// A species row (not open) whose middle is behind the strip's height, as a press point for its chevron: the row's trailing edge less the card's 16 pt padding and
+    /// half the chevron's width.
+    private func rowBehindTheStrip(_ app: XCUIApplication) -> XCUIElement? {
+        let strip = app.descendants(matching: .any)["az-jump"].frame
+        return app.buttons.matching(identifier: "species-row").allElementsBoundByIndex.first {
+            $0.exists && $0.label.hasSuffix("Opens in place") && $0.frame.midY > strip.minY + 20 && $0.frame.midY < min(strip.maxY - 20, app.frame.height * 0.7)
+        }
+    }
+
+    /// Phone feedback 31 Oct, 3a (review): the index's wider touch area never takes a press meant for a row's chevron: with the letters shown, a tap on the chevron of a
+    /// row behind the strip opens the species. At rest (the list's top part behind the strip) and after a jump (the list's top part gone).
+    func testTheIndexDoesNotTakeAPressOnARowsChevron() throws {
+        let app = bigBoxApp()
+        let strip = app.descendants(matching: .any)["az-jump"].frame
+        for stage in ["at rest", "after a jump"] {
+            if stage == "after a jump" { letterSpot(app, "M").tap(); XCTAssertTrue(waitUntil(15) { isAtTop(app, "M", listTop: app.textFields["box-search"].frame.maxY).ok }); sleep(1) }
+            let row = try XCTUnwrap(rowBehindTheStrip(app), "a closed species row is behind the strip \(stage)")
+            let chevron = CGPoint(x: row.frame.maxX - 16 - 4, y: row.frame.midY)
+            print("PAGE-BAND \(stage) (wide \(debugState(app).wide)): the strip's trailing edge \(strip.maxX), the row's trailing edge \(row.frame.maxX), the chevron's layout edge \(row.frame.maxX - 16), the band's leading edge \(strip.maxX - 32), gap \(strip.maxX - 32 - (row.frame.maxX - 16))")
+            XCTAssertGreaterThanOrEqual(strip.maxX - 32 - (row.frame.maxX - 16), 4, "the band stops at least 4 pt short of the chevron")
+            let title = row.label.components(separatedBy: ",").first ?? ""
+            let size = app.frame.size
+            app.coordinate(withNormalizedOffset: CGVector(dx: chevron.x / size.width, dy: chevron.y / size.height)).tap()
+            let opened = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@ AND label ENDSWITH 'Open'", title)).firstMatch
+            XCTAssertTrue(opened.waitForExistence(timeout: 5), "\(stage): a tap on \(title)'s chevron opened it, with the letters shown")
+            opened.tap()   // closes it again, on its left part
+        }
+    }
+
+    /// The same for the "i" button at the first accessibility text size, where the rows of chips and the sort line are tall and reach the strip: a tap on the right edge
+    /// of the "i" opens the explainer.
+    func testTheIndexDoesNotTakeAPressOnTheInfoButtonAtAX5() throws {
+        let app = bigBoxApp(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let info = app.buttons["list-scoring-info"]
+        let strip = app.descendants(matching: .any)["az-jump"].frame
+        // At this size the sort line starts below the fold: the list is brought up until the "i" is level with the strip, where the index could take a press for it.
+        var moves = 0
+        while moves < 8, !(info.exists && info.isHittable && info.frame.midY > strip.minY && info.frame.midY < strip.maxY) {
+            if info.exists, info.frame.midY < strip.minY { app.smallDrag(up: false) } else { app.nudgeUp() }
+            moves += 1
+        }
+        XCTAssertTrue(info.exists && info.frame.midY > strip.minY && info.frame.midY < strip.maxY, "the i button is level with the strip (\(info.frame), strip \(strip))")
+        print("PAGE-BAND AX5: the i button \(info.frame), the strip \(strip), wide \(debugState(app).wide)")
+        XCTAssertFalse(debugState(app).wide, "the touch area is the drawn column while the list's top part is behind the strip")
+        let size = app.frame.size
+        app.coordinate(withNormalizedOffset: CGVector(dx: (info.frame.maxX - 2) / size.width, dy: info.frame.midY / size.height)).tap()
+        XCTAssertTrue(waitUntil(5) { info.value as? String == "Expanded" }, "a tap on the right edge of the i button opens the explainer")
+    }
+
+    /// Phone feedback 31 Oct, 3a: each letter's touch area is bigger (it was 22 wide by 14 tall): measured by pressing, not by the VoiceOver element's frame. Once the
+    /// list's top part is gone a press 30 pt in from the trailing edge (beyond the drawn 22 pt column) still jumps; a press 1 pt inside the top and 1 pt inside the bottom
+    /// of a letter's 16 pt row jumps to that letter. The VoiceOver element stays the drawn column.
     func testEachLetterHasALargerTouchArea() throws {
         let app = bigBoxApp()
-        let frame = app.descendants(matching: .any)["az-jump"].frame
-        let perLetter = frame.height / 26
-        print("A-Z hit area per letter: \(frame.width) x \(perLetter) pt")
-        XCTAssertGreaterThanOrEqual(frame.width, 44, "the touch area is 44 pt wide")
-        XCTAssertGreaterThanOrEqual(perLetter, 16, "and 16 pt tall per letter")
-        letterSpot(app, at: 19, inset: frame.width - 3).tap()   // 3 pt in from the leading edge, well left of the drawn letter
-        let deadline = Date().addingTimeInterval(15)
-        while Date() < deadline, headerY(app, "T") == nil { usleep(100_000) }
+        let jump = app.descendants(matching: .any)["az-jump"], listTop = app.textFields["box-search"].frame.maxY
+        let letters = debugState(app).letters
+        let row = jump.frame.height / CGFloat(letters)
+        print("A-Z letter row \(row) pt, strip \(jump.frame), the Scan button \(app.buttons["Scan"].frame)")
+        XCTAssertGreaterThanOrEqual(row, 16, "each letter's row is 16 pt tall")
+        XCTAssertEqual(jump.frame.width, 22, "the VoiceOver element is the drawn column")
+        letterSpot(app, "M").tap()   // takes the list past its top part, so the touch area is at its widest
+        XCTAssertTrue(waitUntil(15) { isAtTop(app, "M", listTop: listTop).ok }, "the first jump")
         sleep(1)
-        XCTAssertLessThan(headerY(app, "T") ?? .infinity, app.frame.height * 0.4, "a press at the leading edge of the strip jumps to that letter")
+        for (letter, inset, along, what) in [("D", 11, 0.94, "1 pt inside the bottom of its row"), ("W", 30, 0.5, "30 pt in from the trailing edge"), ("T", 11, 0.06, "1 pt inside the top of its row")] as [(String, CGFloat, CGFloat, String)] {
+            letterSpot(app, letter, inset: inset, along: along).tap()
+            XCTAssertTrue(waitUntil(15) { isAtTop(app, letter, listTop: listTop).ok }, "a press \(what) jumps to \(letter) (\(isAtTop(app, letter, listTop: listTop).seen); index \(debugState(app)))")
+        }
     }
 
     func testTheJumpToLetterElementIsAlwaysThereForVoiceOver() throws {
@@ -438,8 +539,8 @@ final class MyPokemonScreenTests: XCTestCase {
             sleep(3)
             var dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
             dir = (dir as NSString).appendingPathComponent("page")
-            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("my-pokemon-index-\(tag)-\(mode)-\(size).png"))
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("my-pokemon-index-\(tag)-\(mode)-\(size).png"))
             app.terminate()
         }
     }
