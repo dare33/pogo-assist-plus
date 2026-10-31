@@ -29,7 +29,7 @@ let package = Package(
         .testTarget(name: "PogoReaderTests", dependencies: ["PogoReader"]),
         .target(name: "PogoBox", dependencies: ["PogoReader", "PogoImport"], resources: [
             .copy("Resources/pogo-core.js"), .copy("Resources/gamemaster.json"),
-            .copy("Resources/tiers.json"), .copy("Resources/pvp-rankings.json"),
+            .copy("Resources/tiers.json"), .copy("Resources/pvp-rankings.json"), .copy("Resources/hub.json"),
         ]),
         .executableTarget(name: "pogo-rows", dependencies: ["PogoBox", "PogoReader"]),
         .executableTarget(name: "pogo-voice", dependencies: ["PogoBox"]),

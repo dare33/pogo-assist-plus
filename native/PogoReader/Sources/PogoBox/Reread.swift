@@ -65,8 +65,8 @@ extension BoxLibrary {
 }
 
 extension BoxLibrary {
-    /// What happened to the Pokémon that first came from a scan after it was saved, as the box versions record it: hand corrections and
-    /// removals, one line each. A Pokémon "came from" the scan when it was first seen on the scan's date. Edits to Pokémon from earlier
+    /// What happened to the Pokémon that first came from a scan after it was saved, as the box versions record it: hand corrections (the Dynamax setting
+    /// included) and removals, one line each. A Pokémon "came from" the scan when it was first seen on the scan's date. Edits to Pokémon from earlier
     /// scans, and "These values are right", are not included (an edit version only keeps the box, not what the person did).
     public func editsAfter(account: String, scanId: String) throws -> [String] {
         let headers = try history(account: account).sorted { $0.seq < $1.seq }
@@ -85,7 +85,8 @@ extension BoxLibrary {
                 if now.row.hp != e.row.hp { changes.append("HP \(e.row.hp.map(String.init) ?? "none") to \(now.row.hp.map(String.init) ?? "none")") }
                 if now.row.ivs != e.row.ivs { changes.append("IVs \(e.row.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "none") to \(now.row.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "none")") }
                 if now.row.speciesId != e.row.speciesId { changes.append("species \(e.row.speciesId) to \(now.row.speciesId)") }
-                if !changes.isEmpty { lines.append("Corrected by hand: \(e.row.title): \(changes.joined(separator: ", ")).") }
+                if now.row.dynamax != e.row.dynamax { changes.append("Dynamax \(now.row.dynamax.map { $0 ? "set to Yes" : "set to No" } ?? "cleared")") }
+                if !changes.isEmpty { lines.append("Corrected or set by hand: \(e.row.title): \(changes.joined(separator: ", ")).") }
             }
             before = after
         }

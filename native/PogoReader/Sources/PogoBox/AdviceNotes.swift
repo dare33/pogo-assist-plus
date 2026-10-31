@@ -38,7 +38,10 @@ public extension BoxAdvice {
 
     /// Why hygiene kept this copy: it has the best IVs (known, and at least every copy it did not keep: a tie goes to CP, but a transferred copy may
     /// have the higher CP, so a tie still reads "best IVs"), or it is the strongest because its IVs are unknown.
+    /// A copy kept beyond the IV-ranked keeps (the trailing `dynamaxExtras`) is kept because it is marked as caught as a Dynamax; the IV wording counts only the IV-ranked keeps.
     internal static func keepReason(_ d: Duplicate, copy: Int) -> String {
+        let ranked = max(0, d.keep.count - (d.dynamaxExtras ?? 0))
+        if copy >= ranked { return "it is marked as caught as a Dynamax" }
         func pct(_ line: String) -> Double {
             // "CP 1960, 13/15/14" or "CP 1960, IVs unknown"
             guard let ivs = line.split(separator: ",").last?.trimmingCharacters(in: .whitespaces) else { return 0 }
@@ -48,7 +51,7 @@ public extension BoxAdvice {
         let mine = d.keep.indices.contains(copy) ? pct(d.keep[copy]) : 0
         let bestOther = d.transfer.map(pct).max() ?? -1
         let wonOnIVs = mine > 0 && mine >= bestOther
-        let two = d.keep.count >= 2
+        let two = ranked >= 2
         switch (two, wonOnIVs) {
         case (false, true): return "it has your best IVs of the \(d.count)"
         case (true, true): return "it has one of your two best IV sets of the \(d.count)"

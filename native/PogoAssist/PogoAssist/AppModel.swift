@@ -178,6 +178,16 @@ final class AppModel: ObservableObject {
     /// The eggs shown in the game's storage, typed for a Full scan (0 to `StorageCountRules.maxEggSlots`), remembered per account; empty means the flat allowance.
     @Published var eggText: String { didSet { if let a = account { UserDefaults.standard.set(eggText, forKey: Keys.eggs + "." + a) }; refreshReaderSettings(); if eggText != oldValue { rescanCount = nil } } }
 
+    /// The stardust the person has, typed on the Hub's Everything screen and remembered per account; nil until entered. It is not read from the game.
+    var stardust: Int? {
+        get { account.flatMap { UserDefaults.standard.object(forKey: Keys.stardust + "." + $0) as? Int } }
+        set {
+            guard let a = account else { return }
+            objectWillChange.send()
+            if let n = newValue { UserDefaults.standard.set(n, forKey: Keys.stardust + "." + a) } else { UserDefaults.standard.removeObject(forKey: Keys.stardust + "." + a) }
+        }
+    }
+
     // The broadcast, as the extension last reported it.
     /// A scan going live ends a re-scan suggestion (`rescanCount`).
     @Published var broadcast: BroadcastState? { didSet { if rescanCount != nil, live { rescanCount = nil } } }
@@ -198,7 +208,7 @@ final class AppModel: ObservableObject {
     private var holdReview: Bool { sheet != nil }
     private var timer: Timer?
 
-    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", partial = "partialCount", eggs = "eggCount", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
+    private enum Keys { static let account = "selectedAccount", kind = "scanKind", count = "storageCount", partial = "partialCount", eggs = "eggCount", stardust = "stardust", pace = "voicePaceV2", hand = "pagedByHand", voice = "voiceLast.", set = "voiceSet." }
 
     // MARK: - "Make scans better"
 
@@ -709,10 +719,12 @@ final class AppModel: ObservableObject {
     func correct(_ id: String, _ edit: BoxMerge.Edit) async -> CorrectionResult {
         guard let a = account else { return CorrectionResult(error: "There is no account.", notice: nil) }
         let lib = library, label = entry(id)?.row.title ?? "a Pokémon"   // the history note only; the values come from the box inside the call
+        // A Dynamax-only edit is a setting, not a correction of a read value.
+        let dynamaxOnly = edit.dynamax != nil && edit.cp == nil && edit.hp == nil && edit.ivs == nil && edit.speciesName == nil
         do {
             let (new, notice) = try await worker.run { engine -> (BoxSnapshot, String?) in
                 var notice: String?
-                let snap = try lib.mutate(account: a, reason: .edit, note: "Corrected \(label)") { entries in
+                let snap = try lib.mutate(account: a, reason: .edit, note: dynamaxOnly ? "Dynamax set for \(label)" : "Corrected \(label)") { entries in
                     guard let i = entries.firstIndex(where: { $0.id == id }) else { throw BoxMerge.EditFailure.badValue("That Pokémon is no longer in the box.") }
                     var fixed = try BoxMerge.correct(entries[i], with: edit, gameMaster: try .bundled())
                     // The level and dust follow the corrected values: the JavaScript solver is run again for this Pokémon.
@@ -768,7 +780,7 @@ final class AppModel: ObservableObject {
             let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
             if let v = d.data(forKey: k(old)) { d.set(v, forKey: k(new)); d.removeObject(forKey: k(old)) }
         }
-        for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + "."] {
+        for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + ".", Keys.stardust + "."] {
             if let v = d.object(forKey: key + old) { d.set(v, forKey: key + new); d.removeObject(forKey: key + old) }
         }
     }

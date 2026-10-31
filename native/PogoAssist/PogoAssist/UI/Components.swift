@@ -239,13 +239,17 @@ struct IconButton: View {
     let systemImage: String
     var kind: IconButtonKind = .neutral
     let label: String
+    /// The button's accessibility identifier, for a UI test.
+    var identifier: String? = nil
     var action: () -> Void
     @Environment(\.accent) private var accent
 
     var body: some View {
-        Button(action: action) { face }
+        // The identifier modifier is applied only when one is given, so a caller's own outer identifier (part-leave-*, guide-close) is never shadowed.
+        let button = Button(action: action) { face }
             .buttonStyle(PressStyle())
             .accessibilityLabel(label)
+        if let identifier { button.accessibilityIdentifier(identifier) } else { button }
     }
 
     /// The circle without the button, for use as a Menu's label.

@@ -849,4 +849,43 @@ final class BoxScreensTests: XCTestCase {
         shot("league-about")
     }
 
+    /// The Dynamax switch in the facts panel: it starts at Not set, Yes sticks after leaving the page and coming back.
+    func testDynamaxSwitchOnThePokemonPage() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-reset", "-appearance", "light"]
+        app.launch()
+        populate(app)
+        let members = app.buttons.matching(identifier: "pokemon-row")
+        func openFirstPokemon() {
+            let species = app.buttons.matching(identifier: "species-row").firstMatch
+            XCTAssertTrue(species.waitForExistence(timeout: 10)); species.tap()
+            XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5)); members.firstMatch.tap()
+            XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
+        }
+        func dynamaxSwitch() -> XCUIElement {
+            let control = app.descendants(matching: .any).matching(identifier: "dynamax-switch").firstMatch
+            var swipes = 0
+            while !(control.exists && control.isHittable) && swipes < 10 { app.swipeUp(); swipes += 1 }
+            XCTAssertTrue(control.isHittable, "the Dynamax switch is on the page")
+            return control
+        }
+        openFirstPokemon()
+        var control = dynamaxSwitch()
+        XCTAssertEqual(control.value as? String, "Not set")
+        XCTAssertTrue(app.staticTexts["Only Pokémon caught as Dynamax can join Max battles. The app cannot read this from the game."].exists)
+        // The middle segment is Yes (Not set | Yes | No); the switch is one adjustable element, so it is tapped by position.
+        control.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).tap()
+        let yes = NSPredicate(format: "value == 'Yes'")
+        expectation(for: yes, evaluatedWith: control)
+        waitForExpectations(timeout: 10)
+        shot("dynamax-switch-light")
+
+        // Back to the list and reopen the same Pokémon (the first row again): the flag was saved with the box.
+        app.buttons["Back"].tap()
+        XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5))
+        members.firstMatch.tap()
+        XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
+        control = dynamaxSwitch()
+        XCTAssertEqual(control.value as? String, "Yes")
+    }
 }
