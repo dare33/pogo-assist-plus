@@ -239,9 +239,39 @@ final class HubCollectionTests: XCTestCase {
         let adv = advice(["a": ["gym": fit("gym", .ok, "B")], "b": ["rocket": fit("rocket", .strong, "S")], "c": ["raids": fit("raids", .weak, nil)]])
         let strip = HubCollection.strip(kind: .lucky, members: box, gm: gm, advice: adv)
         XCTAssertEqual(strip.map(\.entry.id), ["b", "a", "c"])
-        XCTAssertEqual(strip.map(\.rank.words), ["Rocket S", "Gym B", "Raids weak"])
+        XCTAssertEqual(strip.map(\.rank.words), ["Rocket S", "Gym B", "Raids Weak"])
         // With no advice yet every copy is unranked and the IVs order them.
         XCTAssertEqual(HubCollection.strip(kind: .lucky, members: box, gm: gm, advice: BoxAdvice()).map(\.entry.id), ["a", "b", "c"])
+    }
+
+    private func league(_ id: String, score: Double?, pct: Double = 97, rankPct: Double = 95) -> BoxAdvice.LeagueRating {
+        BoxAdvice.LeagueRating(options: [.init(speciesId: id, name: id.capitalized, isSelf: false, genderLocked: nil, strength: score.map { .init(score: $0, rank: 10, of: 1152) }, moves: nil, needs: nil,
+                                               iv: .init(rank: 100, pct: pct, rankPct: rankPct, level: 20, cp: 1490), overCap: false, cost: nil)])
+    }
+
+    /// The PvP rank path: the best Great or Ultra League card's worth is the level and its own tier (S, A, B) the tier, so a Great League S copy is not ranked behind a Raids B one.
+    func testPvPRanksByTheLeagueCardsWorthAndTier() {
+        let box = [P23.entry("s", "pikachu"), P23.entry("a", "pikachu"), P23.entry("none", "pikachu")]
+        var adv = advice([:])
+        adv.leagues = ["s": ["gl": league("pikachu", score: 94)], "a": ["ul": league("pikachu", score: 90.5)]]
+        let s = HubCollection.rank(box[0], in: .pvp, advice: adv), a = HubCollection.rank(box[1], in: .pvp, advice: adv)
+        XCTAssertEqual(s.level, 3); XCTAssertEqual(s.tier, 0); XCTAssertEqual(s.words, "PvP Top")
+        XCTAssertEqual(a.level, 2); XCTAssertEqual(a.tier, 1); XCTAssertEqual(a.words, "PvP Good")
+        XCTAssertEqual(HubCollection.rank(box[2], in: .pvp, advice: adv), .none, "no league card: not in PvP")
+        XCTAssertGreaterThan(s, a)
+        // Master League is left out, as TOP PVP leaves it out.
+        adv.leagues["none"] = ["ml": league("pikachu", score: 99)]
+        XCTAssertEqual(HubCollection.rank(box[2], in: .pvp, advice: adv), .none)
+    }
+
+    func testTheAnyActivityRankComparesPvPWithRaids() {
+        let box = [P23.entry("pvp", "pikachu"), P23.entry("raid", "pikachu"), P23.entry("pvpB", "pikachu")]
+        var adv = advice(["raid": ["raids": fit("raids", .strong, "B")]])
+        adv.leagues = ["pvp": ["gl": league("pikachu", score: 94)]]
+        // A Strong Great League S copy beats a Strong Raids B copy: same level, better tier.
+        XCTAssertEqual(HubCollection.strip(kind: .hundo, members: box, gm: gm, advice: adv).map(\.entry.id).prefix(2), ["pvp", "raid"])
+        XCTAssertEqual(HubCollection.rank(box[0], for: .hundo, advice: adv).words, "PvP Top")
+        XCTAssertEqual(HubCollection.rank(box[1], for: .hundo, advice: adv).words, "Raids B")
     }
 
     func testASpeciesSetStripShowsEachSpeciesOnceAndACopySetShowsCopies() {

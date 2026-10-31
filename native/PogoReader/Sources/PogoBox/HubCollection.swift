@@ -288,22 +288,26 @@ extension HubCollection {
         var label: String { self == .pvp ? "PvP" : rawValue.capitalized }
     }
 
+    private static let tierOrder = ["S": 0, "A": 1, "B": 2]
+
     public static func rank(_ e: BoxEntry, in activity: Activity, advice: BoxAdvice, pogoAssist: Bool = false) -> ActivityRank {
         if activity == .pvp {
             var best = ActivityRank.none
             for key in MyPokemon.pvpLeagues {
-                guard let r = advice.leagues[e.id]?[key],
-                      let w = LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist), key: key, level: e.row.level).worth else { continue }
+                guard let r = advice.leagues[e.id]?[key] else { continue }
+                let card = LeaguePanel.card(r, shown: LeaguePanel.shownIndex(r, pogoAssist: pogoAssist), key: key, level: e.row.level)
+                guard let w = card.worth else { continue }
                 let level = w == .strong ? 3 : w == .ok ? 2 : 1
-                let cand = ActivityRank(level: level, tier: 9, words: "PvP \(w.label)")
+                // The card's own tier (the species' S, A or B in that league), so a Great League S copy is not ranked behind a Raids B one.
+                let cand = ActivityRank(level: level, tier: card.tier.flatMap { tierOrder[$0] } ?? 9, words: "PvP \(w.label)")
                 if cand > best { best = cand }
             }
             return best
         }
         guard let f = advice.fit[e.id]?[activity.rawValue] else { return .none }
         let level = f.tag == .strong ? 3 : f.tag == .ok ? 2 : 1
-        let tier = f.tier.flatMap { ["S": 0, "A": 1, "B": 2][$0] } ?? 9
-        let words = f.tag == .weak ? "\(activity.label) weak" : "\(activity.label) \(f.tier ?? "")"
+        let tier = f.tier.flatMap { tierOrder[$0] } ?? 9
+        let words = f.tag == .weak ? "\(activity.label) Weak" : "\(activity.label) \(f.tier ?? "")"
         return ActivityRank(level: level, tier: tier, words: words.trimmingCharacters(in: .whitespaces))
     }
 

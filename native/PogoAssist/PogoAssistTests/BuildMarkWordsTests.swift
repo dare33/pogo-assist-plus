@@ -25,7 +25,7 @@ final class BuildMarkWordsTests: XCTestCase {
         XCTAssertEqual(BuildMarkWords.copy([build("A", dust: 5, steps: [])]), "Full strength")
         XCTAssertNil(BuildMarkWords.copy([]))
         // Two copies: each adds its one build. One copy with two builds adds only its top one (F3, 31 Oct 2026).
-        XCTAssertEqual(BuildMarkWords.species(MyPokemon.speciesMark(builds: [build("A", dust: 5_000, steps: work), build("B", dust: 7_000, entry: "f", steps: work)])), "Upgrade available: 2 builds to do, 12k dust")
-        XCTAssertEqual(BuildMarkWords.species(MyPokemon.speciesMark(builds: [build("A", dust: 5_000, steps: work), build("B", dust: 7_000, steps: work)])), "Upgrade available: 2 builds to do, 5,000 dust")
+        XCTAssertEqual(BuildMarkWords.species(MyPokemon.speciesMark(builds: [build("A", dust: 5_000, steps: work), build("B", dust: 7_000, entry: "f", steps: work)])), "Upgrade available: 2 builds to do, 12k dust for each copy's top build")
+        XCTAssertEqual(BuildMarkWords.species(MyPokemon.speciesMark(builds: [build("A", dust: 5_000, steps: work), build("B", dust: 7_000, steps: work)])), "Upgrade available: 2 builds to do, 5,000 dust for each copy's top build")
     }
 }

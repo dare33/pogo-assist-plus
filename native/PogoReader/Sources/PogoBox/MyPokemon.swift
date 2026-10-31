@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the My Pokémon tab says that is not a layout choice (design pass 3, `CONCEPTS.md` rules 2 to 5 and 9): the number grades, the species build mark,
+/// What the My Pokémon tab says that is not a layout choice (design pass 3, `CONCEPTS.md` rules 2 to 5 and 9): the number grades, the species build mark (its cost counts one build per copy, the copy's top one with work left),
 /// and the two groups a species shows when it opens in place. Pure functions over what the advisor already worked out, so `swift test` pins them and pass 2's
 /// screens can use the same grades and marks.
 public enum MyPokemon {
@@ -43,7 +43,7 @@ public enum MyPokemon {
     }
 
     public enum BuildMark: Equatable {
-        /// Some copy has a build with work left. `cost` is nil when that work costs no dust and no candy (a second move, an Elite TM).
+        /// Some copy has a build with work left. `cost` is the dust (else candy) of each copy's top build with work left, one per copy, not of every build; `builds` counts every build with work left. `cost` is nil when that work costs no dust and no candy (a second move, an Elite TM).
         case upgrade(cost: Cost?, builds: Int)
         case fullStrength
         case none
@@ -57,14 +57,14 @@ public enum MyPokemon {
         guard !builds.isEmpty else { return .none }
         let open = builds.filter { !HubTeams.isBuilt($0) }
         guard !open.isEmpty else { return .fullStrength }
-        var top = [String: (at: Int, build: BoxAdvice.Build)](), order = [String]()
-        for (n, b) in open.enumerated() {
+        var top = [String: BoxAdvice.Build](), order = [String]()
+        for b in open {
             if let cur = top[b.entryId] {
-                let better = HubTeams.tierRank(b) != HubTeams.tierRank(cur.build) ? HubTeams.tierRank(b) < HubTeams.tierRank(cur.build) : b.score > cur.build.score
-                if better { top[b.entryId] = (cur.at, b) }
-            } else { top[b.entryId] = (n, b); order.append(b.entryId) }
+                let better = HubTeams.tierRank(b) != HubTeams.tierRank(cur) ? HubTeams.tierRank(b) < HubTeams.tierRank(cur) : b.score > cur.score
+                if better { top[b.entryId] = b }
+            } else { top[b.entryId] = b; order.append(b.entryId) }
         }
-        return .upgrade(cost: cost(of: order.compactMap { top[$0]?.build }), builds: open.count)
+        return .upgrade(cost: cost(of: order.compactMap { top[$0] }), builds: open.count)
     }
 
     /// The mark on one copy: the same rule over its own builds, all of which count (the copy's page lists each build's own work).

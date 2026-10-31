@@ -317,10 +317,6 @@ final class ScanPassTests: XCTestCase {
         }
         return out
     }
-}
-
-private extension ScanRow {
-    func withCP(_ cp: Int) -> ScanRow { var r = self; r.cp = cp; return r }
 
     /// Lucky, Shiny and Background are listed on the Scan screen but cannot be chosen: none is a pass, so none can be stored or saved (eyeball check C1).
     func testComingSoonPassesAreNotPasses() {
@@ -328,4 +324,8 @@ private extension ScanRow {
         for name in ScanPass.comingSoon { XCTAssertNil(ScanPass(stored: name.lowercased()), name) }
         XCTAssertEqual(ScanPass.allCases.map(\.rawValue), ["shadow", "purified", "dynamax", "gigantamax"])
     }
+}
+
+private extension ScanRow {
+    func withCP(_ cp: Int) -> ScanRow { var r = self; r.cp = cp; return r }
 }
