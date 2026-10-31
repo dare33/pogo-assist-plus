@@ -16,6 +16,8 @@ struct BoxView: View {
     @Environment(\.showToast) private var showToast
     @Environment(\.accent) private var accent
     @StateObject private var store = BoxIndexStore()
+    /// False while another tab is showing: a menu in a hidden stack stays reachable by accessibility, so the header's menus wait until this tab is shown.
+    var active = true
 
     @State private var query = ""
     @State private var choosingExport = false
@@ -128,13 +130,13 @@ struct BoxView: View {
 
     private var header: some View {
         HStack(spacing: 4) {
-            AccountPill()
+            if active { AccountPill() }
             Spacer(minLength: 8)
             if !model.entries.isEmpty {
                 IconButton(systemImage: "square.and.arrow.up", kind: .floating, label: "Export") { choosingExport = true }
                     .exportChoice(isPresented: $choosingExport) { format in Task { await model.export(format) } }
             }
-            MoreButton()
+            if active { MoreButton() }
         }
         .padding(.horizontal, Theme.Space.screen)
         .frame(minHeight: 52)

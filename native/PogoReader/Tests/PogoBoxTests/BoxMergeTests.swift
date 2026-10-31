@@ -295,6 +295,51 @@ final class BoxMergeTests: XCTestCase {
         XCTAssertEqual(c.row.flags, ["hp-computed"], "the note on how the HP was read stays"); XCTAssertFalse(c.isHandCorrected); XCTAssertFalse(c.needsCheck)
     }
 
+    // MARK: Dynamax flag
+
+    func testDynamaxSurvivesARescanOnEveryPath() throws {
+        for flag in [true, false, nil] as [Bool?] {
+            var r = row(cp: 300); r.dynamax = flag
+            let v = entry(r, id: "a")
+            // Same: the scan reads the identical Pokémon.
+            let same = try BoxMerge.apply(plan([row(cp: 300)], [v]), to: [v])
+            XCTAssertEqual(same.first?.row.dynamax, flag, "same")
+            // Powered up (asked, answered "this one"): the values are replaced, the flag is not.
+            let p = plan([row(cp: 450)], [v])
+            XCTAssertEqual(p.unsure.first?.kind, .poweredUp)
+            let up = try BoxMerge.apply(p, resolutions: accept(p), to: [v])
+            XCTAssertEqual(up.first?.row.cp, 450); XCTAssertEqual(up.first?.row.dynamax, flag, "powered up")
+            XCTAssertEqual(BoxMerge.updated(v, with: row(cp: 450), date: date(11)).row.dynamax, flag, "updated")
+        }
+    }
+
+    func testDynamaxEditSetsAndClearsWithoutBeingACorrection() throws {
+        let v = entry(row(), id: "a")
+        XCTAssertNil(v.row.dynamax)
+        let yes = try BoxMerge.correct(v, with: BoxMerge.Edit(dynamax: .yes), gameMaster: gm)
+        XCTAssertEqual(yes.row.dynamax, true); XCTAssertFalse(yes.isHandCorrected)
+        let no = try BoxMerge.correct(yes, with: BoxMerge.Edit(dynamax: .no), gameMaster: gm)
+        XCTAssertEqual(no.row.dynamax, false)
+        XCTAssertNil(try BoxMerge.correct(no, with: BoxMerge.Edit(dynamax: .notSet), gameMaster: gm).row.dynamax)
+        // nil leaves it alone; an edit of another field leaves it alone too.
+        XCTAssertEqual(try BoxMerge.correct(yes, with: BoxMerge.Edit(cp: 310), gameMaster: gm).row.dynamax, true)
+        XCTAssertEqual(try BoxMerge.correct(yes, with: BoxMerge.Edit(), gameMaster: gm), yes)
+        // a value equal to the current one changes nothing
+        XCTAssertEqual(try BoxMerge.correct(yes, with: BoxMerge.Edit(dynamax: .yes), gameMaster: gm), yes)
+        XCTAssertEqual(BoxMerge.DynamaxEdit(nil), .notSet); XCTAssertEqual(BoxMerge.DynamaxEdit(true), .yes); XCTAssertEqual(BoxMerge.DynamaxEdit(false), .no)
+    }
+
+    func testRowsDecodeWithAndWithoutTheDynamaxKey() throws {
+        var r = row(); r.dynamax = true
+        let data = try JSONEncoder().encode(r)
+        XCTAssertEqual(try JSONDecoder().decode(ScanRow.self, from: data).dynamax, true)
+        // an unset flag is not written, so every stored box and reader output looks as it did before
+        let plain = try JSONEncoder().encode(row())
+        let object = try JSONSerialization.jsonObject(with: plain) as! [String: Any]
+        XCTAssertNil(object["dynamax"]); XCTAssertNotNil(object["cp"])
+        XCTAssertNil(try JSONDecoder().decode(ScanRow.self, from: plain).dynamax)
+    }
+
     // MARK: flags
 
     func testEveryKnownFlagHasASentenceAndAFallbackExists() {

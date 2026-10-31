@@ -1064,6 +1064,8 @@ public enum BoxMerge {
                     // first-seen date is kept on the base entry). Any other answer than "this one" keeps both.
                     guard id == u.candidates.first, u.candidates.count == 2, let m = byId[u.candidates[1]] else { break }
                     byId[id]?.firstSeen = min(e.firstSeen, m.firstSeen)
+                    // The Dynamax flag is hand-set and belongs to the Pokémon: the removed entry's value is kept when the base entry has none.
+                    if byId[id]?.row.dynamax == nil, let d = m.row.dynamax { byId[id]?.row.dynamax = d }
                     touch(id)
                     // The other entry's values keep their OWN last-seen date (a base scan did not see the Mega form), so an existing, more recently seen Mega form wins over them; then a Mega row
                     // the scan read (CP fitting a level) is stored on top like an automatic Same pair, so what ends up held is what was read now.
@@ -1137,6 +1139,8 @@ public enum BoxMerge {
             row.level = s.level ?? row.level; row.levelMax = s.levelMax ?? row.levelMax; row.dust = s.dust ?? row.dust
         }
         row.shadow = s.shadow ?? row.shadow
+        // Dynamax is set by hand only; a scan never reads it, so the saved value stays (as corrections do).
+        row.dynamax = e.row.dynamax
         // The scan's flags about IVs it did not read do not apply to IVs that were kept.
         let scanFlags = keepIVs ? s.flags.filter { FlagInfo.field(of: $0) != .ivs } : s.flags
         row.flags = FlagInfo.remaining(scanFlags, corrected: fix)
@@ -1160,7 +1164,18 @@ public enum BoxMerge {
         public var hp: Int?
         public var ivs: IVs?
         public var speciesName: String?
-        public init(cp: Int? = nil, hp: Int? = nil, ivs: IVs? = nil, speciesName: String? = nil) { self.cp = cp; self.hp = hp; self.ivs = ivs; self.speciesName = speciesName }
+        /// nil leaves the flag alone; `.notSet` clears it back to unknown (unlike the other fields, which cannot be cleared).
+        public var dynamax: DynamaxEdit?
+        public init(cp: Int? = nil, hp: Int? = nil, ivs: IVs? = nil, speciesName: String? = nil, dynamax: DynamaxEdit? = nil) {
+            self.cp = cp; self.hp = hp; self.ivs = ivs; self.speciesName = speciesName; self.dynamax = dynamax
+        }
+    }
+
+    /// The Dynamax switch on the Pokémon page: Not set (unknown, nil), Yes (caught as a Dynamax), No.
+    public enum DynamaxEdit: Equatable, Hashable {
+        case notSet, yes, no
+        public var value: Bool? { switch self { case .notSet: return nil; case .yes: return true; case .no: return false } }
+        public init(_ value: Bool?) { self = value == nil ? .notSet : (value! ? .yes : .no) }
     }
 
     /// Apply a hand correction. A value equal to the current one is not a correction. The first correction of a value
@@ -1192,6 +1207,8 @@ public enum BoxMerge {
                 row.speciesId = id; row.name = nf.name; row.display = nf.name; row.form = nf.form; row.dex = sp.dex
             }
         }
+        // Not a correction of a read value: nothing is remembered as "was", and a scan never contradicts it.
+        if let d = edit.dynamax, d.value != row.dynamax { row.dynamax = d.value }
         row.flags = FlagInfo.remaining(row.flags, corrected: fix)
         out.row = row; out.corrections = fix
         return out

@@ -258,6 +258,19 @@ final class MegaFormTests: XCTestCase {
         XCTAssertEqual(mf.firstSeen, date(-5)); XCTAssertEqual(mf.lastSeen, date(3))
     }
 
+    /// The Dynamax flag is hand-set: a join keeps the base entry's own value and takes the removed Mega-species entry's only when the base has none.
+    func testJoiningCarriesTheRemovedEntrysDynamaxFlagOnlyWhereTheBaseHasNone() throws {
+        for (base, removed, want) in [(nil, true, true), (nil, false, false), (false, true, false), (true, nil, true), (nil, nil, nil)] as [(Bool?, Bool?, Bool?)] {
+            var saved = savedPair()
+            saved[0].row.dynamax = base; saved[1].row.dynamax = removed
+            let p = plan([row("staraptor", cp: 2819)], saved, .full)
+            XCTAssertEqual(p.unsure.first?.kind, .megaPair)
+            let out = try BoxMerge.apply(p, resolutions: [0: .existing("base")], to: saved)
+            XCTAssertEqual(out.count, 1)
+            XCTAssertEqual(out[0].row.dynamax, want, "base \(String(describing: base)), removed \(String(describing: removed))")
+        }
+    }
+
     func testJoiningThroughTheBaseRowKeepsTheAdoptedValuesOwnDatesAndALaterFormWins() throws {
         var saved = savedPair()
         saved[1].row.level = 39

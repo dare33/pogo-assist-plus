@@ -128,6 +128,7 @@ export function analyseBox(box, ctx) {
   const pokemon = [];
   const ownedBase = new Set();       // base species ids present in the box (any variant)
   const ownedIds = new Set();
+  const ownedMaxIds = new Set();     // the same, without copies marked "not caught as a Dynamax": they cannot cover a Max entry
   const megaCapable = new Set();     // resolved ids owned by at least one non-Shadow copy: only those can reach a Mega
   const needLeagues = [];            // entries whose leagues are worked out after the loop, grouped by species
 
@@ -135,6 +136,7 @@ export function analyseBox(box, ctx) {
     const r = resolveSpecies(gm, p.name, { form: p.form, shadow: p.shadow });
     if (!r) { pokemon.push({ p, unresolved: true }); continue; }
     ownedIds.add(r.speciesId); if (!isShadow(r)) megaCapable.add(r.speciesId); ownedBase.add(baseSpeciesId(gm, r.speciesId));
+    if (p.dynamax !== false) ownedMaxIds.add(r.speciesId);
     const reach = [r.speciesId, ...evolutionsOf(gm, r.speciesId), ...formChangesOf(gm, r.speciesId)];
     const targets = new Set(reach);
     // A Shadow can never Mega evolve. isShadow reads the resolver's flag OR the resolved id, so a copy flagged Shadow, one named "Shadow X"
@@ -147,11 +149,13 @@ export function analyseBox(box, ctx) {
       for (const e of tiers.bySpecies.get(id) || []) {
         // A Gigantamax entry is only ever satisfied by a Gigantamax catch, which an export cannot show: never credit it to a box Pokémon.
         if (e.area === 'max' && /gigantamax|g-max/i.test(e.name)) continue;
+        // A copy the player has marked "not caught as a Dynamax" cannot take part in Max battles: no Max hit at all. (Unset, `undefined`, is unknown: the hit stays.)
+        if (e.area === 'max' && p.dynamax === false) continue;
         // A shadow-flagged entry is for Shadow copies only. Three of them (Shadow Pheromosa, Roserade, Giratina Origin) keep the plain species id, so the id alone cannot tell.
         if (e.flags?.shadow && !p.shadow) continue;
         // Mega targets are the same Pokémon plus Mega Energy: credit them to the base target.
         const targetId = /_(mega(_[xy])?|primal)$/.test(id) ? baseSpeciesId(gm, id) : id;
-        hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId, viaMega: targetId !== id ? id : null, needsDynamax: e.area === 'max', moves: e.moves, obtain: e.obtain, notes: e.notes });
+        hits.push({ kind: 'tier', area: e.area, section: e.section, tier: e.tier, name: e.name, targetId, viaMega: targetId !== id ? id : null, needsDynamax: e.area === 'max' && p.dynamax !== true, moves: e.moves, obtain: e.obtain, notes: e.notes });
       }
       // A Shadow copy also does the job of the plain species' raid and Rocket entries (a Shadow attacks as well as, and harder than, the plain
       // one). Not the plain gym entry (a Shadow defends worse, 0.83x; a manager call) and not max (a Shadow is never a Dynamax catch).
@@ -226,6 +230,7 @@ export function analyseBox(box, ctx) {
       const bestTier = ths.reduce((t, h) => (TIER_W[h.tier] > TIER_W[t] ? h.tier : t), 'B');
       const isMega = false;
       const viaMega = ths.some((h) => h.viaMega);
+      // A copy marked "caught as a Dynamax" already has the copy its Max hits need: its hits say so, so there is no step (and the build does not need one).
       const needsDynamax = ths.some((h) => h.needsDynamax);
       const stepTarget = targetId;
       const path = evolutionPath(gm, r.speciesId, stepTarget) ?? [];
@@ -311,7 +316,7 @@ export function analyseBox(box, ctx) {
   for (const e of tiers.entries) {
     if (!/^[SA]$/.test(e.tier)) continue;
     const base = baseSpeciesId(gm, e.speciesId);
-    const reachable = [...ownedIds].some((id) => {
+    const reachable = [...(e.area === 'max' ? ownedMaxIds : ownedIds)].some((id) => {
       const reach = [id, ...evolutionsOf(gm, id), ...formChangesOf(gm, id)];
       if (reach.includes(e.speciesId)) return true;
       // Same rule as the Shadow credit above: a Shadow of the species covers its plain raid and Rocket entries.
@@ -336,7 +341,10 @@ export function analyseBox(box, ctx) {
     const sorted = [...es].sort((a, b) => (b.p.ivPercent ?? 0) - (a.p.ivPercent ?? 0) || b.p.cp - a.p.cp);
     const legendary = (gm.byId.get(id)?.tags ?? []).some((t) => ['legendary', 'mythical', 'ultrabeast'].includes(t));
     const keepCount = legendary ? Math.min(2, es.length) : 1;
-    hygiene.push({ speciesId: id, name: gm.byId.get(id).speciesName, count: es.length, keep: sorted.slice(0, keepCount).map((e) => e.p), transfer: sorted.slice(keepCount).map((e) => e.p) });
+    // A copy the player has marked as caught as a Dynamax is never one to transfer (it is the only kind that can join Max battles): it is kept as well.
+    // `dynamaxExtras` (only when there are some) says how many of the trailing keeps are there for that reason, so the app can word them.
+    const kept = sorted.slice(0, keepCount), rest = sorted.slice(keepCount), extras = rest.filter((e) => e.p.dynamax === true);
+    hygiene.push({ speciesId: id, name: gm.byId.get(id).speciesName, count: es.length, keep: [...kept, ...extras].map((e) => e.p), transfer: rest.filter((e) => e.p.dynamax !== true).map((e) => e.p), ...(extras.length ? { dynamaxExtras: extras.length } : {}) });
   }
   hygiene.sort((a, b) => b.transfer.length - a.transfer.length);
 
