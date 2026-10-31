@@ -108,6 +108,51 @@ final class BoxInsightStoreTests: XCTestCase {
         XCTAssertTrue(index.sections(query: .none, chip: .activity(.gl), sort: .name, scoring: .none).isEmpty, "no insight: nothing is Top or Good yet")
     }
 
+    // MARK: the species page's cards
+
+    /// Two Eevee copies, both rated for Great League as Flareon; "b" is the better roll. A third is rated as Eevee itself, so its card has nothing to add.
+    private func twoCopies() -> (BoxInsight, [BoxEntry]) {
+        let es = [entry("a", "Eevee"), entry("b", "Eevee")]
+        let adv = advice(["a": ["gl": R(options: [option("flareon", score: 93, pct: 90, rankPct: 80)])], "b": ["gl": R(options: [option("flareon", score: 93, pct: 99, rankPct: 98)])]])
+        return (BoxInsight.make(advice: adv, entries: es), es)
+    }
+
+    private func gl(_ cards: [BestCard]) -> BestCard? { cards.first(where: { (c: BestCard) in c.activity == BoxInsight.Activity.gl }) }
+
+    func testACardReadsAsTheOtherPokemonOnlyWhenItDiffers() {
+        let (insight, es) = twoCopies()
+        let cards = BestCard.cards(title: "Eevee", insight: insight, index: BoxIndex(entries: es), pogoAssist: false)
+        XCTAssertEqual(gl(cards)?.detail, "as Flareon")
+        let same = BoxInsight.make(advice: advice(["a": ["gl": R(options: [option("eevee", score: 93, pct: 99, rankPct: 98)])]]), entries: [es[0]])
+        let none = BestCard.cards(title: "Eevee", insight: same, index: BoxIndex(entries: [es[0]]), pogoAssist: false)
+        XCTAssertNotNil(gl(none), "the card is there")
+        XCTAssertNil(gl(none)?.detail, "\"as Eevee\" on Eevee's page is left out")
+        let upper = BestCard.cards(title: "Eevee", insight: BoxInsight.make(advice: advice(["a": ["gl": R(options: [option("eevee", score: 93, pct: 99, rankPct: 98)])]]), entries: [es[0]]),
+                                   index: BoxIndex(entries: [es[0]]), pogoAssist: false)
+        XCTAssertNotNil(gl(upper), "the card is there")
+        XCTAssertNil(gl(upper)?.detail, "compared without regard to case")
+        // The same rule for an activity: the raids card reads "as <asName>" only when that is another Pokémon, whatever the case of the name.
+        func raids(_ asName: String) -> BestCard? {
+            var adv = advice([:])
+            adv.fit = ["a": ["raids": BoxAdvice.Fit(area: "raids", tag: .ok, asName: asName, tier: "A", reason: nil, species: nil, ivPercent: 98)]]; adv.bestOf = ["a": ["raids"]]
+            return BestCard.cards(title: "Eevee", insight: BoxInsight.make(advice: adv, entries: [es[0]]), index: BoxIndex(entries: [es[0]]), pogoAssist: false)
+                .first(where: { $0.activity == BoxInsight.Activity.raids })
+        }
+        XCTAssertEqual(raids("Flareon")?.detail, "as Flareon")
+        XCTAssertNotNil(raids("EEVEE"), "the raids card is there")
+        XCTAssertNil(raids("EEVEE")?.detail, "\"as EEVEE\" on Eevee's page is left out")
+        XCTAssertEqual(BestCard(activity: .gl, copyId: "a", cp: 1400, pct: 100, worth: .strong, detail: nil).spoken, "Great League, best: CP 1400, 100 percent, Top")
+    }
+
+    func testACardMovesOnWhenItsFirstCopyIsGoneFromTheIndex() {
+        let (insight, es) = twoCopies()
+        XCTAssertEqual(insight.top(title: "Eevee", .gl, pogoAssist: false).first, "b", "b is the first place")
+        let rebuilt = BoxIndex(entries: [es[0]])   // the box has since lost b; the insight on show is still the old one
+        let cards = BestCard.cards(title: "Eevee", insight: insight, index: rebuilt, pogoAssist: false)
+        XCTAssertEqual(gl(cards)?.copyId, "a", "the card takes the next copy that is still there rather than vanishing")
+        XCTAssertTrue(BestCard.cards(title: "Eevee", insight: insight, index: BoxIndex(entries: []), pogoAssist: false).isEmpty, "no copy left: no card")
+    }
+
     // MARK: the tiles
 
     func testTheTileWordsForEveryStatus() {
@@ -123,16 +168,6 @@ final class BoxInsightStoreTests: XCTestCase {
 
     func testTheTilesStackFromTheAccessibilitySizes() {
         for size in DynamicTypeSize.allCases { XCTAssertEqual(LeagueTiles.stacked(size), size >= .accessibility1, "\(size)") }
-    }
-
-    func testTheTagWordsForEachWorth() {
-        XCTAssertEqual(WorthTag.detail(.ok, best: "best as Tyranitar (Shadow)"), "Good · best as Tyranitar (Shadow)")
-        XCTAssertEqual(WorthTag.detail(.strong, best: "best: Flareon 97.2%"), "Top · best: Flareon 97.2%")
-        XCTAssertEqual(WorthTag.detail(.strong, best: nil), "Top")
-        XCTAssertEqual(WorthTag.detail(.weak, best: nil), "Weak")
-        XCTAssertEqual(WorthTag.detail(.weak, best: "best: Flareon 97.2%"), "Weak · best: Flareon 97.2%", "a species whose every copy is Weak still has a best copy: both words show")
-        XCTAssertEqual(WorthTag.detail(.ok, best: "best (needs a Dynamax copy)"), "Good · best (needs a Dynamax copy)")
-        XCTAssertEqual(WorthTag.detail(nil, best: nil), "Not rated", "a copy with no fit for the area")
     }
 
     func testAnUnreadCopyGivesTheIVsNotReadTile() {
@@ -384,18 +419,26 @@ final class ListTagColourTests: XCTestCase {
         XCTAssertNil(top.borderOpacity, "Top has no border")
         XCTAssertEqual(weak.tintOpacity, 1, "Weak keeps its own fill")
         XCTAssertNil(weak.borderOpacity, "Weak has no faded border")
-        for dark in [false, true] {
-            let surface = resolve(Theme.surface, dark)
-            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.muted, dark), surface), 4.5, "Weak: muted text on the surface, dark \(dark)")
+        // The page's rows and the species page's cards: the same ground under the chip, so a chip reads on a card as it does on a row.
+        for (where_, ground) in [("row", Theme.surface), ("card", BestCard.ground)] {
+          for dark in [false, true] {
+            let surface = resolve(ground, dark)
+            XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.muted, dark), surface), 4.5, "Weak: muted text on the \(where_), dark \(dark)")
             for accent in Accent.allCases {
                 for a in activities {
                     let ink = resolve(a.ink(accent), dark), full = over(resolve(a.tint(accent), dark), surface)
                     let good = over(resolve(a.tint(accent), dark), surface, opacity: good.tintOpacity)
-                    XCTAssertGreaterThanOrEqual(ratio(ink, full), 4.5, "Top: \(a) \(accent) dark \(dark)")
-                    XCTAssertGreaterThanOrEqual(ratio(ink, good), 4.5, "Good: \(a) \(accent) dark \(dark)")
+                    XCTAssertGreaterThanOrEqual(ratio(ink, full), 4.5, "Top on a \(where_): \(a) \(accent) dark \(dark)")
+                    XCTAssertGreaterThanOrEqual(ratio(ink, good), 4.5, "Good on a \(where_): \(a) \(accent) dark \(dark)")
                     XCTAssertGreaterThan(ratio(ink, good), ratio(ink, full) - 0.0001, "Good's lighter ground gives the ink no less contrast than Top's: \(a) \(accent) dark \(dark)")
+                    // The chip's shape must show against the card: Top's tint is not the ground (the card is no longer tinted), and the outline is the activity's ink.
+                    XCTAssertGreaterThanOrEqual(ratio(full, surface), 1.05, "Top's tint is told from the \(where_) ground: \(a) \(accent) dark \(dark)")
+                    XCTAssertGreaterThanOrEqual(ratio(ink, surface), 3, "the card's 2 pt outline in the ink shows on the ground: \(a) \(accent) dark \(dark)")
                 }
             }
+          }
+        }
+        for dark in [false, true] {
             let tint = resolve(Theme.greenTint, dark), base = resolve(Theme.surface2, dark)
             XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), over(tint, base)), 4.5, "league card Top, dark \(dark)")
             XCTAssertGreaterThanOrEqual(ratio(resolve(Theme.greenInk, dark), over(tint, base, opacity: good.tintOpacity)), 4.5, "league card Good, dark \(dark)")

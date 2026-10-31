@@ -11,10 +11,12 @@
 		001F90DC60A4D0CBD81D6EDE /* HubEverythingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A52B34F2A7384C8792F6CDE /* HubEverythingView.swift */; };
 		010D3C19F2091112AC2A3098 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2851EAE92D472650A78CD032 /* SampleHandler.swift */; };
 		011C9B2C9BF4A0F295963426 /* ScanSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D046E11C4BEA7319F8A8A09 /* ScanSteps.swift */; };
+		028D99810BA092BE68E6909B /* SpeciesTopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF9900FD297825B9A0090D7 /* SpeciesTopTests.swift */; };
 		0563960A24FF888D73AC819E /* ScanDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7C58A2C7DF3150EE8DFF3A /* ScanDebug.swift */; };
 		07C0A342DB6EF69CA4E5CC3D /* ScanDoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */; };
 		097E0FD25CF23550DF82C742 /* PogoBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0A3EC8BBA5B78347A0413F5C /* ReviewWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B793340E977374E8287D10D /* ReviewWording.swift */; };
+		0C187F71378A2C77EC2C19E2 /* SpeciesBest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD137EFAD6E7F01FB0C0E81 /* SpeciesBest.swift */; };
 		0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4B281BB0B64267189CDB87 /* SetupProgress.swift */; };
 		0F891C84859B0B932A876EC3 /* ReviewResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052B76A429D7B08291119B9 /* ReviewResult.swift */; };
 		15DF09FE6C1E2A69EDBF9B42 /* HubRaidsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F07C1AF615AD4789157D020 /* HubRaidsView.swift */; };
@@ -173,11 +175,13 @@
 		1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSearch.swift; sourceTree = "<group>"; };
 		1D1F19255D086D56FE73A735 /* HubGymView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubGymView.swift; sourceTree = "<group>"; };
 		1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesListView.swift; sourceTree = "<group>"; };
+		1FD137EFAD6E7F01FB0C0E81 /* SpeciesBest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesBest.swift; sourceTree = "<group>"; };
 		1FFAC0B18897FB5A85E55764 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarsAndAccounts.swift; sourceTree = "<group>"; };
 		2174CAD06ADF7ECC068B88FD /* SampleScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleScan.swift; sourceTree = "<group>"; };
 		2851EAE92D472650A78CD032 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		2E3538488989AE3C1ABAA66B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		2FF9900FD297825B9A0090D7 /* SpeciesTopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeciesTopTests.swift; sourceTree = "<group>"; };
 		33F7555EA4686DD09DCFBD34 /* PokemonDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonDetailView.swift; sourceTree = "<group>"; };
 		36F79E6F5214D43CBB4A984D /* ScanBroadcastButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanBroadcastButton.swift; sourceTree = "<group>"; };
 		384EC74CAE6F7A853DC89045 /* ScreenshotImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotImport.swift; sourceTree = "<group>"; };
@@ -374,6 +378,7 @@
 				FF431B58AD9F1CBECFD3F225 /* ScanScreensTests.swift */,
 				7576F57445609D7B4888792D /* ScreenshotImportTests.swift */,
 				4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */,
+				2FF9900FD297825B9A0090D7 /* SpeciesTopTests.swift */,
 			);
 			path = PogoAssistUITests;
 			sourceTree = "<group>";
@@ -484,6 +489,7 @@
 				01F723B7B2F32D040376093D /* SetupChecklistView.swift */,
 				EC4B281BB0B64267189CDB87 /* SetupProgress.swift */,
 				00B7030AC596BFDD03757B5C /* SetupStepView.swift */,
+				1FD137EFAD6E7F01FB0C0E81 /* SpeciesBest.swift */,
 				1D7C1D0CD02C3BFCCA7FC894 /* SpeciesListView.swift */,
 			);
 			path = Screens;
@@ -728,6 +734,7 @@
 				998DD7FEE2B19F19D45DEEA5 /* ScanScreensTests.swift in Sources */,
 				391A1C3B445B6E751C85CA27 /* ScreenshotImportTests.swift in Sources */,
 				C0A0118C2725F58B90F1E11A /* SetupTests.swift in Sources */,
+				028D99810BA092BE68E6909B /* SpeciesTopTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -799,6 +806,7 @@
 				0F0C6EA26079673391250074 /* SetupProgress.swift in Sources */,
 				31CA236599307F00B33A65CA /* SetupStepView.swift in Sources */,
 				CFF2FE78AEBD89E1B6CAB06C /* SharedState.swift in Sources */,
+				0C187F71378A2C77EC2C19E2 /* SpeciesBest.swift in Sources */,
 				FCC6A2B1D4B58BED4B8BA355 /* SpeciesListView.swift in Sources */,
 				53E565D8D2134740F880785D /* StateModel.swift in Sources */,
 				408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */,
