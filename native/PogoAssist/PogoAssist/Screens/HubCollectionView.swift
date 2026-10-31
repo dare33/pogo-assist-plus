@@ -183,7 +183,7 @@ struct HubCollectionView: View {
             }
             .buttonStyle(PressStyle())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(m.count) species missing. \(line)")
+            .accessibilityLabel("\(m.count) species missing. \(m.parts.joined(separator: ", "))")
             .accessibilityHint("Opens the list of missing species")
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("collection-missing-card")
@@ -281,6 +281,7 @@ private struct SpecialSetStrip: View {
     let gm: GameMaster
     let open: () -> Void
     @Environment(\.accent) private var accent
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// The identifier suffix: the set's name as a word, lower case with hyphens ("ultra-beasts").
     private var slug: String { kind.name.lowercased().replacingOccurrences(of: " ", with: "-") }
@@ -291,23 +292,17 @@ private struct SpecialSetStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(info.name).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-                Text(info.note == nil ? "\(figure) \(info.unitWord)" : (kind.isComingSoon ? figure : "")).font(.figtree(13, .semibold, relativeTo: .footnote)).monospacedDigit().foregroundStyle(Theme.muted)
-                Spacer(minLength: 8)
-                if hasList {
-                    Button(action: open) {
-                        Text("All \(HubModel.grouped(allCount)) ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).frame(minHeight: 44)
-                    }
-                    .buttonStyle(PressStyle())
-                    .accessibilityLabel("\(info.name), \(figure) \(info.unitWord)")
-                    .accessibilityHint("Opens the full list")
-                    .accessibilityIdentifier("collection-set-\(slug)")
+            // At the accessibility text sizes the title, the count and "All N ›" stack, so no word has to break to fit one line.
+            Group {
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 2) { titleText; countText; allButton }
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) { titleText; countText; Spacer(minLength: 8); allButton }
                 }
             }
             .accessibilityElement(children: .contain)
             if kind.isComingSoon {
-                strip { SetCard(title: nil, headline: "Coming soon", line: "Not scanned yet", rank: nil, types: [], id: "collection-set-coming-soon-\(slug)", entryId: nil) }
+                strip { SetCard(title: nil, headline: "Coming soon", line: "Not scanned yet", rank: nil, types: [], id: "collection-set-coming-soon-\(slug)", entryId: nil, setName: info.name) }
             } else if picks.isEmpty {
                 Text(info.note ?? "No Pokémon in this set yet.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
                     .accessibilityIdentifier("collection-set-empty-\(slug)")
@@ -320,6 +315,29 @@ private struct SpecialSetStrip: View {
                 }
                 .accessibilityIdentifier("collection-strip-\(slug)")
             }
+        }
+    }
+
+    private var titleText: some View {
+        Text(info.name).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+    }
+
+    private var countText: some View {
+        Text(info.note == nil ? "\(figure) \(info.unitWord)" : (kind.isComingSoon ? figure : "")).font(.figtree(13, .semibold, relativeTo: .footnote)).monospacedDigit().foregroundStyle(Theme.muted)
+    }
+
+    /// "All 14 ›". Spoken as shown ("All 14") so Voice Control's "tap All 14" works, then the set it opens; "All Legendary" works too.
+    @ViewBuilder private var allButton: some View {
+        if hasList {
+            let n = HubModel.grouped(allCount)
+            Button(action: open) {
+                Text("All \(n) ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).frame(minHeight: 44)
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityLabel("All \(n), \(info.name), \(figure) \(info.unitWord)")
+            .accessibilityInputLabels(["All \(n)", "All \(info.name)", "All \(n) \(info.name)"])
+            .accessibilityHint("Opens the full list")
+            .accessibilityIdentifier("collection-set-\(slug)")
         }
     }
 
@@ -344,10 +362,12 @@ private struct SetCard: View {
     let types: [String]
     let id: String
     let entryId: String?
+    /// The set a "Coming soon" card stands for, so its spoken label names it.
+    var setName: String?
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
-    init(title: String?, headline: String? = nil, line: String? = nil, ivs: IVs? = nil, cp: Int? = nil, rank: String?, types: [String], id: String, entryId: String?) {
-        self.title = title; self.headline = headline; self.line = line; self.ivs = ivs; self.cp = cp; self.rank = rank; self.types = types; self.id = id; self.entryId = entryId
+    init(title: String?, headline: String? = nil, line: String? = nil, ivs: IVs? = nil, cp: Int? = nil, rank: String?, types: [String], id: String, entryId: String?, setName: String? = nil) {
+        self.title = title; self.headline = headline; self.line = line; self.ivs = ivs; self.cp = cp; self.rank = rank; self.types = types; self.id = id; self.entryId = entryId; self.setName = setName
     }
 
     private var sum: Int? { ivs.map { $0.atk + $0.def + $0.hp } }
@@ -374,7 +394,7 @@ private struct SetCard: View {
         } else {
             card
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(headline ?? ""). \(line ?? "")")
+                .accessibilityLabel("\(setName.map { $0 + ", " } ?? "")\(headline?.lowercased() ?? ""). \(line ?? "")")
                 .accessibilityIdentifier(id)
         }
     }
@@ -389,7 +409,7 @@ private struct SetCard: View {
                 Text(percent).font(.figtree(22, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(sum == 45 ? Theme.greenInk : Theme.ink)
             }
             Text(detail).font(.figtree(12, .medium, relativeTo: .caption)).foregroundStyle(Theme.muted)
-            if let rank { Text(rank).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.faint) }
+            if let rank { Text(rank).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.muted) }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .frame(width: min(150 * scale, 330), alignment: .leading)

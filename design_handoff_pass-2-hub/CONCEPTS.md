@@ -14,7 +14,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 **Hub and Collection**
 
 - **Squads and collection**: the section on the Hub tab that holds the six area tiles (was WHAT NEXT; D4, D55).
-- **Collection**: the area for the player's dex, highest IV copies, sets and missing species, plus the builds, gaps and
+- **Collection**: the area for the player's dex, special sets and missing species, plus the builds, gaps and
   duplicates summaries (replaces Everything; D2, D3).
 - **Species (in Collection)**: one dex number released in Pokémon GO; Mega and Shadow entries are not separate species.
 - **Showcase**: removed on 31 Oct 2026 (Greg: "we'd just remove the currently highest IV copy showcase as we won't need it with the 'hundo' one"). It was the strip of the player's highest IV copy of each species (name kept, D56; heading "YOUR HIGHEST IV COPIES", Greg, 30 Oct 2026). Each Special set is now laid out like it (rule 26).
@@ -24,15 +24,14 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   "All N ›" opens a sheet listing the player's Pokémon in the set, in My Pokémon's rows (Greg, phone run 30 Oct 2026): the
   copies in the set for Hundo, Lucky and Shadow, each owned species with all its copies for Legendary, Mythical and Ultra
   Beasts, and for Mega-capable only the copies that can Mega Evolve. The card's count and the list are one definition (`HubCollection.Membership`). Lucky shows
-  "Not in your scans yet" until a copy is marked.
+  "Not in your scans yet" until a copy is marked: its strip says so and it has no "All" button. A set with no Pokémon has no "All" button.
   Rulings after review (manager, 31 Oct 2026): the species sets count species but the sheet lists form rows as My Pokémon
   shows them (Giratina Altered and Origin are two rows, one species), and says "Forms are listed separately." under
   the title when it has more rows than species. **Mega-capable** is the copy's own: its species-form has a Mega
   Evolution in the game master and it is not a Shadow (a Shadow Pokémon cannot Mega Evolve), so Galarian Slowbro,
   Armored Mewtwo, Alolan Raichu and any Shadow copy are out; the card, the sheet and the "mega" search follow it.
   **Shadow** follows the hand mark when there is one (Shadow = Shadow, Purified or 0 = not Shadow) and the `_shadow`
-  species only decides for a copy with no mark. The sheet's count and list follow the box as it is edited; the
-  empty Lucky sheet says "Not in your scans yet" once.
+  species only decides for a copy with no mark. The sheet's count and list follow the box as it is edited.
 - **Hundo**: a copy with 15/15/15 IVs (a perfect IV spread). Was "100% IVs"; renamed, same meaning (Greg, 31 Oct 2026: "Change the name of 100% IVs to 'Hundo'").
 - **Missing**: released species with no copy in the box; **you can evolve** means an earlier member of its family is in
   the box. The species are the 959 of rule 25. On the Collection it is one summary card (how many are missing, with a short breakdown: the ones you can evolve now, the Legendary, the Mythical and the region with the most missing) that opens the full list (Greg, 31 Oct 2026: "turn the Missing segment into a bit of a summary card and when clicked it opens up to the list").
@@ -229,7 +228,8 @@ Stated so each can be checked against the code.
    counted; owned when a box copy's species has that dex number. Regions by dex range (Kanto 1–151 … Paldea 906–1025).
 26. **Special set strips** (replaces the Showcase, 31 Oct 2026): a set's strip is its copies, best first, the first ten. Rank: the set's activity, then
    IV % (a copy with no read IVs last), then CP, then entry id. An activity rank is the advisor's tag for the area (Strong, then OK, then Weak, then not in the tables),
-   then the table tier (S, A, B). The activity per set (Greg: "Per set"): Dynamax and Gigantamax by Max; Shadow, Legendary, Mythical, Ultra Beasts and Mega-capable
+   then the table tier (S, A, B); a copy with no table entry for the area is Weak (so it ranks below every Strong or OK copy), and unranked (no rank shown) means the advice is not
+   in yet. The activity per set (Greg: "Per set"): Dynamax and Gigantamax by Max; Shadow, Legendary, Mythical, Ultra Beasts and Mega-capable
    by Raids; Hundo, Lucky, Shiny and Background by the best rank in any activity (Raids, Gym, Rocket, Max, and PvP in Great or Ultra League by the card's worth: Top, Good, Weak).
    A species set (Legendary, Mythical, Ultra Beasts, Mega-capable) shows each species once, its best copy, as its card counts species; a copy set shows copies.
 
@@ -279,9 +279,8 @@ Greg's read-back answers (D54, D55); item 6 he kept (D56).
 
 1. **"Available" (the switch) vs "TOP AVAILABLE" (Gym list heading)**: settled. The heading is now "Gym builds" (D54),
    so "available" means only "usable as it is".
-2. **"Best" (the switch) vs "Next best" (Rocket) vs "Best defenders first" (Gym "i") vs "best copies" (Showcase, until 30 Oct 2026; since 31 Oct the Special sets strips)**: four
-   meanings of "best". (The switch's Best now means the best in the game for the slot, not the best the box can make.) "Next best" was chosen over "Best available" and "Top options" for this reason (D50, D53); the
-   Showcase now reads "highest IV copies" (Greg, phone run 30 Oct 2026); the others remain.
+2. **"Best" (the switch) vs "Next best" (Rocket) vs "Best defenders first" (Gym "i") vs "best copies" (Showcase, until 30 Oct 2026; since 31 Oct the Special sets strips, which put the set's best Pokémon for its activity first)**: four
+   meanings of "best". (The switch's Best now means the best in the game for the slot, not the best the box can make.) "Next best" was chosen over "Best available" and "Top options" for this reason (D50, D53); the others remain.
 3. **"Top"**: "Top defenders" (a squad), "Top 3" (Raids list toggle), "top pick" (PvP grade). A top pick is a grade,
    the rest are lists; acceptable. ("TOP AVAILABLE" is gone, D54.)
 4. **"Team" vs "Squad"**: settled. "Squad" everywhere (D55): Set this squad / Squad set, Suggested squad, YOUR SQUAD

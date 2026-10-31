@@ -54,7 +54,7 @@ final class ScanPassFlowTests: XCTestCase {
             var dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
             dir = (dir as NSString).appendingPathComponent("collection")
             try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-9-special-scan.png"))
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-92-special-scan.png"))
             app.terminate()
         }
     }
