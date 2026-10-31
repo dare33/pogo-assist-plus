@@ -10,6 +10,13 @@ extension XCUIApplication {
         let (a, b): (CGFloat, CGFloat) = up ? (0.65, 0.55) : (0.55, 0.65)
         coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: a)).press(forDuration: 0.05, thenDragTo: coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: b)))
     }
+    /// Moves the list's content by `fraction` of the screen's height (positive: down, so what is above comes into view), slowly and holding at the end so the list
+    /// stops where the finger stopped. A fast drag throws it on past the mark, and a fixed step wider than the target band then swings it from one side to the other.
+    func dragContent(by fraction: CGFloat) {
+        let f = max(-0.3, min(0.3, fraction))
+        coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55 - f / 2)).press(forDuration: 0.05, thenDragTo: coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55 + f / 2)),
+                                                                                  withVelocity: .slow, thenHoldForDuration: 0.4)
+    }
     /// Waits until the insight is built, which only it can show: under the Raids chip a species row carries its best copy's tag ("Top for Raids"). Puts the chip back on All.
     func awaitInsight() {
         XCTAssertTrue(buttons["chip-raids"].waitForExistence(timeout: 20))
@@ -308,13 +315,17 @@ final class MyPokemonScreenTests: XCTestCase {
             let caption = app.staticTexts["top-pvp-caption"], pvp = app.buttons["top-pvp-row"].firstMatch
             n = 0
             while !(caption.exists && caption.isHittable) && n < 10 { app.nudgeUp(); n += 1 }
+            // Aimed at 0.32 of the screen's height, each drag as far as the caption still is from there; accepted anywhere in 0.28...0.36.
+            var seen = [String]()
             n = 0
             while caption.exists && n < 8 {
                 let y = caption.frame.minY / app.frame.height
-                if y > 0.36 { app.smallDrag(up: true) } else if y < 0.28 { app.smallDrag(up: false) } else { break }
+                seen.append(String(format: "%.2f", y))
+                if y >= 0.28 && y <= 0.36 { break }
+                app.dragContent(by: 0.32 - y)
                 n += 1
             }
-            XCTAssertTrue(caption.isHittable && pvp.exists, "the TOP PVP caption and its first row are on the screen")
+            XCTAssertTrue(caption.isHittable && pvp.exists, "the TOP PVP caption and its first row are on the screen (\(mode) \(size); caption at \(seen.joined(separator: ", ")) of the screen's height, hittable \(caption.isHittable))")
             sleep(1)
             attach("my-pokemon-open-\(mode)-\(size)")
             app.terminate()

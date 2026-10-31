@@ -162,7 +162,10 @@ final class BoxScreensTests: XCTestCase {
         app.swipeDown(velocity: .fast)
         XCTAssertTrue(app.buttons["Export"].waitForExistence(timeout: 10))
 
+        // Just after a share sheet is swiped away its popover layer can still be up for a moment and swallow the first tap on the header's button (the hierarchy then shows
+        // My Pokémon with no dialog): tap again, as `openSpeciesList` does for a tap lost in a screen transition. Two taps that open nothing still fail.
         app.buttons["Export"].tap()
+        if !app.buttons["CSV"].waitForExistence(timeout: 3) { app.buttons["Export"].tap() }
         XCTAssertTrue(app.buttons["CSV"].waitForExistence(timeout: 5))
         app.buttons["CSV"].tap()
         XCTAssertTrue(sheetFile("csv").waitForExistence(timeout: 30), "the share sheet offers a .csv file")
