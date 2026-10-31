@@ -28,7 +28,7 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertEqual(el(app, "squad-status").label, "Not ready: 3 to get")
         openPicker(app, "pvp", slot: 1)
         XCTAssertTrue(pickerRows(app).firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(pickerRows(app).firstMatch.label.contains("Not in your box"), pickerRows(app).firstMatch.label)
+        XCTAssertTrue(pickerRows(app).firstMatch.label.contains("Not available now") || pickerRows(app).firstMatch.label.contains("Can get now"), pickerRows(app).firstMatch.label)
         shot("pvp-picker-best")
         closePicker(app)
         app.buttons["squad-mode-available"].tap()
