@@ -317,7 +317,9 @@ public struct BoxAdvice: Codable, Equatable {
     /// Versions 10 and 11 were written by dev builds of a branch that carried interim payload fields (since removed), so they are taken: the next real
     /// bump must be 12 or higher, or such a cache would pass for the new shape (`loadAdvice` keeps any version at or above this one).
     /// 12 since each Pokémon carries `fit` (a Strong / OK / Weak tag per Raids, Gym, Rocket and Max, in the compact form the bridge sends) and `bestOf` (the areas it is its species' best copy for).
-    public static let currentVersion = 12
+    /// 14 since the Gigantamax Max rows kept their prefix (a Dynamax copy is no longer credited with a Gigantamax entry); 13 is reserved by
+    /// the open design stack, so any later merge must go above 14.
+    public static let currentVersion = 14
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
