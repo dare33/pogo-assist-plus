@@ -9,11 +9,11 @@ struct CopyRoute: Hashable {
 
 /// The words VoiceOver reads for a build mark; the picture is `BuildMarkView`.
 enum BuildMarkWords {
-    /// A species row: "Upgrade available: 2 builds to do, 12k dust for each copy's top build", or "Full strength"; nil without a build. The count is every build with work
+    /// A species row: "Upgrade available: 2 builds to do, 12k dust in all, one build per copy", or "Full strength"; nil without a build. The count is every build with work
     /// left; the cost is one build per copy (the copy's top one), so the words say so.
     static func species(_ mark: MyPokemon.BuildMark) -> String? {
         switch mark {
-        case .upgrade(let cost, let n): return "Upgrade available: \(n) \(n == 1 ? "build" : "builds") to do" + (cost.map { ", " + $0.words + " for each copy's top build" } ?? "")
+        case .upgrade(let cost, let n): return "Upgrade available: \(n) \(n == 1 ? "build" : "builds") to do" + (cost.map { ", " + $0.words + " in all, one build per copy" } ?? "")
         case .fullStrength: return "Full strength"
         case .none: return nil
         }

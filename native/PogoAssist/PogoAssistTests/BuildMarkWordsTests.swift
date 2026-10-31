@@ -2,7 +2,8 @@ import XCTest
 @testable import PogoAssist
 @testable import PogoBox
 
-/// What VoiceOver says for a build mark is the cost the mark draws: the dust of all the builds with work left, in total (review of My Pokémon, round 1, M3).
+/// What VoiceOver says for a build mark is the cost the mark draws. A copy's mark is the dust of all its builds with work left in total; a species row's is one build per copy (each copy's
+/// top one), said as "in all, one build per copy" (review of My Pokémon, round 1, M3; F3, 31 Oct 2026).
 final class BuildMarkWordsTests: XCTestCase {
     private func build(_ target: String, dust: Int, candy: Int = 0, entry: String = "e", steps: [BoxAdvice.Build.Step]) -> BoxAdvice.Build {
         BoxAdvice.Build(entryId: entry, title: "Eevee", cp: 300, level: 20, ivs: nil, targetId: target.lowercased(), targetName: target, powerUp: true, formChange: false,
@@ -25,7 +26,7 @@ final class BuildMarkWordsTests: XCTestCase {
         XCTAssertEqual(BuildMarkWords.copy([build("A", dust: 5, steps: [])]), "Full strength")
         XCTAssertNil(BuildMarkWords.copy([]))
         // Two copies: each adds its one build. One copy with two builds adds only its top one (F3, 31 Oct 2026).
-        XCTAssertEqual(BuildMarkWords.species(MyPokemon.speciesMark(builds: [build("A", dust: 5_000, steps: work), build("B", dust: 7_000, entry: "f", steps: work)])), "Upgrade available: 2 builds to do, 12k dust for each copy's top build")
-        XCTAssertEqual(BuildMarkWords.species(MyPokemon.speciesMark(builds: [build("A", dust: 5_000, steps: work), build("B", dust: 7_000, steps: work)])), "Upgrade available: 2 builds to do, 5,000 dust for each copy's top build")
+        XCTAssertEqual(BuildMarkWords.species(MyPokemon.speciesMark(builds: [build("A", dust: 5_000, steps: work), build("B", dust: 7_000, entry: "f", steps: work)])), "Upgrade available: 2 builds to do, 12k dust in all, one build per copy")
+        XCTAssertEqual(BuildMarkWords.species(MyPokemon.speciesMark(builds: [build("A", dust: 5_000, steps: work), build("B", dust: 7_000, steps: work)])), "Upgrade available: 2 builds to do, 5,000 dust in all, one build per copy")
     }
 }
