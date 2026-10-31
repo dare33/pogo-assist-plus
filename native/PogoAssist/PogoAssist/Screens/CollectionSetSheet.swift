@@ -23,7 +23,8 @@ struct CollectionSetSheet: View {
     private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }
     private var readyAdvice: BoxAdvice? { if case .ready(let a) = model.advice { return a } else { return nil } }
     private var insightKey: InsightKey { InsightKey(account: model.account, seq: model.snapshot?.seq, state: InsightKey.State(model.advice)) }
-    private var query: BoxIndex.Query { .keyword(BoxIndex.SearchWord(kind)) }
+    /// A set that is coming soon has no search word and is never opened (its strip has no "All"); the empty text is a placeholder.
+    private var query: BoxIndex.Query { BoxIndex.SearchWord(kind).map { .keyword($0) } ?? .text("") }
 
     /// The sections show only with the index they were built for: a row holds positions in that index, so with another one they would be the wrong rows (or none).
     /// They also wait for the box version the model is on: while a newer one is being indexed, the old rows are not shown.

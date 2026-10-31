@@ -40,7 +40,8 @@ struct BoxIndex {
     enum SearchWord: Hashable {
         case shadow, purified, lucky, dynamax, gigantamax, legendary, mythical, ultraBeast, mega, hundo, buddy
 
-        init(_ kind: HubCollection.SetKind) {
+        /// nil for Shiny and Background, which have no search word until a scan reads them.
+        init?(_ kind: HubCollection.SetKind) {
             switch kind {
             case .hundo: self = .hundo
             case .legendary: self = .legendary
@@ -49,6 +50,9 @@ struct BoxIndex {
             case .megaCapable: self = .mega
             case .lucky: self = .lucky
             case .shadow: self = .shadow
+            case .dynamax: self = .dynamax
+            case .gigantamax: self = .gigantamax
+            case .shiny, .background: return nil
             }
         }
 
@@ -62,7 +66,7 @@ struct BoxIndex {
         ]
 
         static func of(_ entry: BoxEntry, membership: HubCollection.Membership) -> Set<SearchWord> {
-            var out = Set(membership.kinds(of: entry).map(SearchWord.init))
+            var out = Set(membership.kinds(of: entry).compactMap(SearchWord.init))
             let r = entry.row
             if r.shadow == 2 { out.insert(.purified) }   // the hand mark; `HubCollection.isShadow` leaves a Purified copy out of Shadow
             if r.dynamax == true { out.insert(.dynamax) }

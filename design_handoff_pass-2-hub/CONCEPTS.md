@@ -17,10 +17,11 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Collection**: the area for the player's dex, highest IV copies, sets and missing species, plus the builds, gaps and
   duplicates summaries (replaces Everything; D2, D3).
 - **Species (in Collection)**: one dex number released in Pokémon GO; Mega and Shadow entries are not separate species.
-- **Showcase**: the strip of the player's highest IV copy of each species, ranked by IV % (name kept, D56; heading "YOUR HIGHEST IV COPIES", Greg, 30 Oct 2026).
+- **Showcase**: removed on 31 Oct 2026 (Greg: "we'd just remove the currently highest IV copy showcase as we won't need it with the 'hundo' one"). It was the strip of the player's highest IV copy of each species (name kept, D56; heading "YOUR HIGHEST IV COPIES", Greg, 30 Oct 2026). Each Special set is now laid out like it (rule 26).
 - **Special sets**: counts of copies or species in named groups (Hundo, Legendary, Mythical, Ultra Beasts,
-  Mega-capable, Lucky, Shadow).
-  A card opens a sheet listing the player's Pokémon in the set, in My Pokémon's rows (Greg, phone run 30 Oct 2026): the
+  Mega-capable, Lucky, Shadow, Dynamax, Gigantamax, Shiny, Background). Each is a strip of copy cards, laid out like the old Showcase, the set's best Pokémon for its activity first, with "All N ›" opening the set's full list (Greg, 31 Oct 2026: "Best pokemon for that activity first + All").
+  Dynamax and Gigantamax are the copies carrying those marks (the hand marks and the Dynamax and Gigantamax passes set them). Shiny and Background hold no data yet: their strips are one "Coming soon" card with no list (Greg, 31 Oct 2026).
+  "All N ›" opens a sheet listing the player's Pokémon in the set, in My Pokémon's rows (Greg, phone run 30 Oct 2026): the
   copies in the set for Hundo, Lucky and Shadow, each owned species with all its copies for Legendary, Mythical and Ultra
   Beasts, and for Mega-capable only the copies that can Mega Evolve. The card's count and the list are one definition (`HubCollection.Membership`). Lucky shows
   "Not in your scans yet" until a copy is marked.
@@ -34,7 +35,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   empty Lucky sheet says "Not in your scans yet" once.
 - **Hundo**: a copy with 15/15/15 IVs (a perfect IV spread). Was "100% IVs"; renamed, same meaning (Greg, 31 Oct 2026: "Change the name of 100% IVs to 'Hundo'").
 - **Missing**: released species with no copy in the box; **you can evolve** means an earlier member of its family is in
-  the box.
+  the box. On the Collection it is one summary card (how many are missing, with a short breakdown: the ones you can evolve now, the Legendary, the Mythical and the region with the most missing) that opens the full list (Greg, 31 Oct 2026: "turn the Missing segment into a bit of a summary card and when clicked it opens up to the list").
 - **Build**: one thing the advisor wants done to a copy for an area (power up, evolve, mega evolve, form change, moves).
 - **Gap**: an S or A tier Pokémon in a table that nothing in the box can become.
 - **Duplicate**: a species with more copies than the advisor keeps; the rest are "copies you can transfer or trade" (Greg, phone run 30 Oct 2026).
@@ -223,7 +224,11 @@ Stated so each can be checked against the code.
 
 25. **Species count**: game-master entries with `released`, one per dex number, Mega, Shadow and duplicate entries not
    counted; owned when a box copy's species has that dex number. Regions by dex range (Kanto 1–151 … Paldea 906–1025).
-26. **Showcase**: each species' highest IV copy (IV %), ties by CP, first twelve.
+26. **Special set strips** (replaces the Showcase, 31 Oct 2026): a set's strip is its copies, best first, the first ten. Rank: the set's activity, then
+   IV % (a copy with no read IVs last), then CP, then entry id. An activity rank is the advisor's tag for the area (Strong, then OK, then Weak, then not in the tables),
+   then the table tier (S, A, B). The activity per set (Greg: "Per set"): Dynamax and Gigantamax by Max; Shadow, Legendary, Mythical, Ultra Beasts and Mega-capable
+   by Raids; Hundo, Lucky, Shiny and Background by the best rank in any activity (Raids, Gym, Rocket, Max, and PvP in Great or Ultra League by the card's worth: Top, Good, Weak).
+   A species set (Legendary, Mythical, Ultra Beasts, Mega-capable) shows each species once, its best copy, as its card counts species; a copy set shows copies.
 
 ### Keeping squads
 
@@ -271,7 +276,7 @@ Greg's read-back answers (D54, D55); item 6 he kept (D56).
 
 1. **"Available" (the switch) vs "TOP AVAILABLE" (Gym list heading)**: settled. The heading is now "Gym builds" (D54),
    so "available" means only "usable as it is".
-2. **"Best" (the switch) vs "Next best" (Rocket) vs "Best defenders first" (Gym "i") vs "best copies" (Showcase, until 30 Oct 2026)**: four
+2. **"Best" (the switch) vs "Next best" (Rocket) vs "Best defenders first" (Gym "i") vs "best copies" (Showcase, until 30 Oct 2026; since 31 Oct the Special sets strips)**: four
    meanings of "best". (The switch's Best now means the best in the game for the slot, not the best the box can make.) "Next best" was chosen over "Best available" and "Top options" for this reason (D50, D53); the
    Showcase now reads "highest IV copies" (Greg, phone run 30 Oct 2026); the others remain.
 3. **"Top"**: "Top defenders" (a squad), "Top 3" (Raids list toggle), "top pick" (PvP grade). A top pick is a grade,

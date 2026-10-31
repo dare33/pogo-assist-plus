@@ -98,7 +98,7 @@ final class HubCollectionTests: XCTestCase {
                    P23.entry("d", "mew"), P23.entry("e", "nihilego"), P23.entry("f", "charizard", ivs: IVs(atk: 15, def: 15, hp: 15))]
         let sets = HubCollection.specialSets(entries: box, gm: gm)
         let by = Dictionary(uniqueKeysWithValues: sets.map { ($0.name, $0) })
-        XCTAssertEqual(sets.map(\.name), ["Hundo", "Legendary", "Mythical", "Ultra Beasts", "Mega-capable", "Lucky", "Shadow"])
+        XCTAssertEqual(sets.map(\.name), ["Hundo", "Legendary", "Mythical", "Ultra Beasts", "Mega-capable", "Lucky", "Shadow", "Dynamax", "Gigantamax", "Shiny", "Background"])
         XCTAssertEqual(by["Hundo"]?.owned, 2); XCTAssertNil(by["Hundo"]?.total); XCTAssertEqual(by["Hundo"]?.unit, "copies")
         XCTAssertEqual(by["Legendary"]?.owned, 1); XCTAssertEqual(by["Legendary"]?.total, 52)
         XCTAssertEqual(by["Mythical"]?.owned, 1); XCTAssertEqual(by["Mythical"]?.total, 18)
@@ -132,7 +132,7 @@ final class HubCollectionTests: XCTestCase {
                    P23.entry("i", "eevee")]
         let lucky: (BoxEntry) -> Bool = { ["b", "i"].contains($0.id) }
         let by = Dictionary(uniqueKeysWithValues: HubCollection.specialSets(entries: box, gm: gm, isLucky: lucky).map { ($0.name, $0) })
-        for kind in HubCollection.SetKind.allCases {
+        for kind in HubCollection.SetKind.allCases where !kind.isComingSoon {
             let list = HubCollection.members(of: kind, entries: box, gm: gm, isLucky: lucky)
             let size = kind.isSpeciesSet ? Set(list.compactMap { gm.byId[$0.row.speciesId]?.dex }).count : list.count
             XCTAssertEqual(by[kind.name]?.owned, size, "\(kind.name): the card counts what the list shows")
@@ -179,7 +179,94 @@ final class HubCollectionTests: XCTestCase {
 
     func testAnEmptyBoxHasEmptySets() {
         let sets = HubCollection.specialSets(entries: [], gm: gm)
-        XCTAssertEqual(sets.map { $0.owned ?? -1 }, [0, 0, 0, 0, 0, -1, 0])
+        XCTAssertEqual(sets.map { $0.owned ?? -1 }, [0, 0, 0, 0, 0, -1, 0, 0, 0, -1, -1])
         XCTAssertEqual(sets[1].total, 52)
+    }
+
+    // MARK: Dynamax, Gigantamax, Shiny and Background (eyeball check C2)
+
+    func testDynamaxAndGigantamaxSetsReadTheMarksTheBoxHas() {
+        var g = P23.entry("g", "charizard"); g.row.gigantamax = true
+        var both = P23.entry("b", "lapras", dynamax: true); both.row.gigantamax = true
+        let box = [P23.entry("d", "snorlax", dynamax: true), g, both, P23.entry("n", "pikachu", dynamax: false)]
+        func ids(_ k: HubCollection.SetKind) -> [String] { HubCollection.members(of: k, entries: box, gm: gm).map(\.id) }
+        XCTAssertEqual(ids(.dynamax), ["d", "b"]); XCTAssertEqual(ids(.gigantamax), ["g", "b"])
+        let by = Dictionary(uniqueKeysWithValues: HubCollection.specialSets(entries: box, gm: gm).map { ($0.name, $0) })
+        XCTAssertEqual(by["Dynamax"]?.owned, 2); XCTAssertEqual(by["Gigantamax"]?.owned, 2)
+        XCTAssertEqual(by["Dynamax"]?.unit, "copies"); XCTAssertNil(by["Dynamax"]?.note)
+    }
+
+    func testShinyAndBackgroundSayComingSoonAndHaveNoMembers() {
+        let box = [P23.entry("a", "pikachu")]
+        let by = Dictionary(uniqueKeysWithValues: HubCollection.specialSets(entries: box, gm: gm).map { ($0.name, $0) })
+        for name in ["Shiny", "Background"] {
+            XCTAssertEqual(by[name]?.note, "Coming soon"); XCTAssertNil(by[name]?.owned); XCTAssertNil(by[name]?.total)
+        }
+        XCTAssertTrue(HubCollection.SetKind.shiny.isComingSoon && HubCollection.SetKind.background.isComingSoon)
+        XCTAssertEqual(HubCollection.SetKind.allCases.filter(\.isComingSoon).count, 2)
+        XCTAssertEqual(HubCollection.members(of: .shiny, entries: box, gm: gm), [])
+    }
+
+    // MARK: the strips (eyeball check C4)
+
+    private func fit(_ area: String, _ tag: BoxAdvice.Fit.Tag, _ tier: String?) -> BoxAdvice.Fit {
+        BoxAdvice.Fit(area: area, tag: tag, asName: "X", tier: tier, reason: tag == .weak ? BoxAdvice.Fit.Reason.none : nil, species: nil, ivPercent: 90)
+    }
+    private func advice(_ fits: [String: [String: BoxAdvice.Fit]]) -> BoxAdvice { var a = BoxAdvice(); a.fit = fits; return a }
+
+    func testEachSetIsRankedByItsOwnActivity() {
+        XCTAssertEqual(HubCollection.rankingActivity(.dynamax), .max); XCTAssertEqual(HubCollection.rankingActivity(.gigantamax), .max)
+        for k in [HubCollection.SetKind.shadow, .legendary, .mythical, .ultraBeasts, .megaCapable] { XCTAssertEqual(HubCollection.rankingActivity(k), .raids, k.name) }
+        for k in [HubCollection.SetKind.hundo, .lucky, .shiny, .background] { XCTAssertNil(HubCollection.rankingActivity(k), k.name) }
+    }
+
+    func testMaxSetsRankByMaxFitNotByRaids() {
+        // "a" is the better raid copy, "b" the better Max one; the Dynamax strip puts b first and the Shadow strip a first.
+        var a = P23.entry("a", "snorlax", dynamax: true), b = P23.entry("b", "snorlax", dynamax: true); a.row.shadow = 1; b.row.shadow = 1
+        let adv = advice(["a": ["raids": fit("raids", .strong, "S"), "max": fit("max", .weak, nil)], "b": ["raids": fit("raids", .ok, "B"), "max": fit("max", .strong, "A")]])
+        XCTAssertEqual(HubCollection.strip(kind: .dynamax, members: [a, b], gm: gm, advice: adv).map(\.entry.id), ["b", "a"])
+        XCTAssertEqual(HubCollection.strip(kind: .shadow, members: [a, b], gm: gm, advice: adv).map(\.entry.id), ["a", "b"])
+    }
+
+    func testTierBreaksATieInTagAndIVsBreakTheRest() {
+        let hi = IVs(atk: 15, def: 15, hp: 15), lo = IVs(atk: 10, def: 10, hp: 10)
+        let box = [P23.entry("a", "snorlax", ivs: lo), P23.entry("b", "snorlax", ivs: hi), P23.entry("c", "snorlax", ivs: lo), P23.entry("d", "snorlax", ivs: nil)]
+        let adv = advice(["a": ["raids": fit("raids", .ok, "A")], "b": ["raids": fit("raids", .ok, "B")], "c": ["raids": fit("raids", .ok, "A")], "d": ["raids": fit("raids", .ok, "A")]])
+        XCTAssertEqual(HubCollection.strip(kind: .hundo, members: box, gm: gm, advice: adv).map(\.entry.id), ["a", "c", "d", "b"],
+                       "A tier before B tier; a and c tie on IVs and CP so the id decides; the unread IVs come last of the A tier")
+    }
+
+    func testTheAnyActivityRankTakesTheBestActivity() {
+        let box = [P23.entry("a", "pikachu"), P23.entry("b", "pikachu"), P23.entry("c", "pikachu")]
+        let adv = advice(["a": ["gym": fit("gym", .ok, "B")], "b": ["rocket": fit("rocket", .strong, "S")], "c": ["raids": fit("raids", .weak, nil)]])
+        let strip = HubCollection.strip(kind: .lucky, members: box, gm: gm, advice: adv)
+        XCTAssertEqual(strip.map(\.entry.id), ["b", "a", "c"])
+        XCTAssertEqual(strip.map(\.rank.words), ["Rocket S", "Gym B", "Raids weak"])
+        // With no advice yet every copy is unranked and the IVs order them.
+        XCTAssertEqual(HubCollection.strip(kind: .lucky, members: box, gm: gm, advice: BoxAdvice()).map(\.entry.id), ["a", "b", "c"])
+    }
+
+    func testASpeciesSetStripShowsEachSpeciesOnceAndACopySetShowsCopies() {
+        let box = [P23.entry("a", "registeel", cp: 1000), P23.entry("b", "registeel", cp: 2000), P23.entry("c", "mewtwo", cp: 500)]
+        XCTAssertEqual(HubCollection.strip(kind: .legendary, members: box, gm: gm, advice: BoxAdvice()).map(\.entry.id), ["b", "c"], "one card per species, its best copy")
+        XCTAssertEqual(HubCollection.strip(kind: .hundo, members: box, gm: gm, advice: BoxAdvice()).map(\.entry.id), ["b", "a", "c"], "a set of copies lists copies")
+        XCTAssertEqual(HubCollection.strip(kind: .hundo, members: box, gm: gm, advice: BoxAdvice(), limit: 2).count, 2)
+        XCTAssertEqual(HubCollection.strip(kind: .shiny, members: [], gm: gm, advice: BoxAdvice()), [])
+    }
+
+    // MARK: the Missing summary (eyeball check C3)
+
+    func testMissingSummaryCountsAndBreaksDown() {
+        let missing = HubCollection.missingSpecies(entries: [P23.entry("a", "charmander")], advice: BoxAdvice(), gm: gm)
+        let s = HubCollection.missingSummary(missing)
+        XCTAssertEqual(s.count, missing.count)
+        XCTAssertEqual(s.canEvolve, 2, "Charmeleon and Charizard")
+        XCTAssertEqual(s.legendary, missing.filter { $0.tags.contains("legendary") }.count); XCTAssertGreaterThan(s.legendary, 40)
+        XCTAssertEqual(s.mythical, missing.filter { $0.tags.contains("mythical") }.count); XCTAssertGreaterThan(s.mythical, 10)
+        XCTAssertEqual(s.topRegion?.name, "Unova", "156 species, the most of any region")
+        XCTAssertEqual(s.parts.first, "2 you can evolve now")
+        XCTAssertTrue(s.parts.last?.hasPrefix("most in Unova (") == true, s.parts.description)
+        let none = HubCollection.missingSummary([])
+        XCTAssertEqual(none.count, 0); XCTAssertNil(none.topRegion); XCTAssertEqual(none.parts, [])
     }
 }

@@ -188,7 +188,10 @@ final class BoxSearchWordsTests: XCTestCase {
         let lucky: (BoxEntry) -> Bool = HubCollection.isLuckyMarked
         for kind in HubCollection.SetKind.allCases {
             let members = Set(HubCollection.members(of: kind, entries: box, gm: gm, isLucky: lucky).map(\.id))
-            let query = BoxIndex.Query.keyword(BoxIndex.SearchWord(kind))
+            guard let word = BoxIndex.SearchWord(kind) else {
+                XCTAssertTrue(kind.isComingSoon, "only a coming-soon set has no search word"); XCTAssertTrue(members.isEmpty, kind.name); continue
+            }
+            let query = BoxIndex.Query.keyword(word)
             let listed = Set(index.items.filter { index.matches($0, query, .all) }.map(\.id))
             XCTAssertEqual(listed, members, kind.name)
             let sectioned = index.sections(query: query, chip: .all, sort: .name).flatMap(\.rows).reduce(0) { $0 + $1.stats.count }
