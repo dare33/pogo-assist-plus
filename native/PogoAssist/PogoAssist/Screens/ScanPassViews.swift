@@ -31,7 +31,9 @@ struct PassPicker: View {
                         Text("Coming soon").font(.figtree(11, .semibold, relativeTo: .caption2)).foregroundStyle(Theme.muted)
                     }
                     .frame(maxWidth: .infinity, minHeight: 40)
-                    .background(Theme.off.opacity(0.5), in: Capsule())
+                    // The panel's own surface with an outline: muted text measures 4.92:1 (light) and 5.84:1 (dark) on it; the old half-strength fill gave 4.43:1 in light.
+                    .background(Theme.surface, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.line, lineWidth: 1))
                     .frame(minHeight: 44)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(name), coming soon")

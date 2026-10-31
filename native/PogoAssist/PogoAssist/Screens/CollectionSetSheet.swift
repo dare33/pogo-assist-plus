@@ -88,7 +88,7 @@ struct CollectionSetSheet: View {
             Button("OK") { model.message = nil }
         } message: { Text(model.message ?? "") }
         .onAppear { model.alertHosts += 1 }
-        .onDisappear { model.alertHosts -= 1 }
+        .onDisappear { model.alertHosts = max(0, model.alertHosts - 1) }   // never below 0, so a missed onAppear cannot hold the root alert back for good
         .accessibilityIdentifier("collection-set-sheet")
         .task(id: indexKey) { await store.refresh(key: indexKey, entries: model.entries) }
         .task(id: insightKey) { await store.refreshInsight(key: insightKey, advice: readyAdvice, entries: model.entries) }

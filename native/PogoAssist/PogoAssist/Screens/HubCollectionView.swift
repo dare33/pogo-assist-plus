@@ -20,7 +20,7 @@ struct CollectionData {
     var sets: [HubCollection.SpecialSet]
     /// Each set's strip: its best Pokémon for its activity first (`HubCollection.strip`). Empty for a set with no Pokémon and for one that is coming soon.
     var strips: [HubCollection.SetKind: [HubCollection.StripPick]]
-    /// Evolvable first, then dex order: the first six are the screen's preview and the full list keeps the same order.
+    /// Evolvable first, then dex order: the order of the full Missing list.
     var missing: [HubCollection.MissingSpecies]
     var missingSummary: HubCollection.MissingSummary
     var gm: GameMaster
