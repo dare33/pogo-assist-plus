@@ -205,8 +205,8 @@ private struct RocketSquadView: View {
         guard let e else {
             if let key = f.species {
                 let name = ctx.gm.byId[key]?.name ?? ctx.gm.byId[key.replacingOccurrences(of: "_shadow", with: "")]?.name ?? "Pokémon"
-                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: ["Not in your box", vs], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
-                                     spoken: [head, name, HubSquads.SlotStatus.toGet.spoken, "against \(options(i))"].joined(separator: ", "), identifier: id)
+                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [HubSquads.BestStatus.unlisted.text, vs], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
+                                     spoken: [head, name, HubSquads.BestStatus.unlisted.text.replacingOccurrences(of: " · ", with: ", "), HubSquads.SlotStatus.toGet.spoken, "against \(options(i))"].joined(separator: ", "), identifier: id)
             }
             let name = f.entryId.flatMap { ctx.entry($0)?.row.title } ?? "Pokémon"
             return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [vs], types: f.entryId.map(ctx.entryTypes) ?? [], status: .needsWork,
@@ -218,10 +218,10 @@ private struct RocketSquadView: View {
         let mark = SquadMark.of(build, screen: .rocket, ctx: ctx)
         // Rule 29: the Rocket table's tier (a Pokémon the table does not list needs work), not the build's tier from another area.
         let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: HubSquads.rocketTableTier(build, ctx: ctx))
-        let shared = e.best?.sharedWith.map { "same copy as \($0)" }
+        let shared = e.best?.statusLine
         let lines = (e.line.map { [$0] } ?? []) + (shared.map { [$0] } ?? []) + [vs]
         let types = e.best?.types ?? HubTeams.types(of: build, gm: ctx.gm)
-        let spoken = [head, e.name, SquadWords.typeList(types), e.line, shared, "against \(options(i))", mark.spoken, status.spoken].compactMap { $0 }.joined(separator: ", ")
+        let spoken = [head, e.name, SquadWords.typeList(types), e.line, e.best?.spokenStatus, "against \(options(i))", mark.spoken, status.spoken].compactMap { $0 }.joined(separator: ", ")
         return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: e.name, lines: lines, types: types, mark: mark, status: status, spoken: spoken, identifier: id)
     }
 
@@ -252,9 +252,9 @@ private struct RocketSquadView: View {
             let mark = SquadMark.of(e.build!, screen: .rocket, ctx: ctx)
             let types = e.flags
             let hitting = types.filter { !$0.grey }.map(\.type)
-            let spoken = [e.name, e.line, hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot", mark.spoken, r.ticked ? "in this slot" : nil]
+            let spoken = [e.name, e.line, hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot", mark.spoken, e.best?.spokenStatus, r.ticked ? "in this slot" : nil]
                 .compactMap { $0 }.joined(separator: ", ")
-            let note = [e.line, e.best?.sharedWith.map { "same copy as \($0)" }].compactMap { $0 }.joined(separator: " · ")
+            let note = [e.line, e.best?.statusLine].compactMap { $0 }.joined(separator: " · ")
             return PickerRowModel(id: r.entryId, name: e.name, ticked: r.ticked, mark: mark, tier: e.tier, types: types, note: note.isEmpty ? nil : note, spoken: spoken)
         }
         if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
@@ -289,7 +289,7 @@ private struct RocketSquadView: View {
 // MARK: grunts
 
 /// GRUNTS · WHAT THEY SAY, WHO YOU BRING: one row per grunt in two lines. Line 1: the type icon, the type word, the quote and the types that beat it. Line 2: a sideways
-/// strip of the box's counters (up to eight; the first, the app's own pick, on the Rocket tint), "Any strong attacker" for a typeless grunt or "Not in your box".
+/// strip of the box's counters (up to eight; the first, the app's own pick, on the Rocket tint), "Any strong attacker" for a typeless grunt or "No counter in your box".
 private struct RocketGrunts: View {
     let ctx: HubContext
     let mode: SquadMode
@@ -323,7 +323,7 @@ private struct RocketGrunts: View {
             if !beaten.isEmpty { TypeIcons(types: beaten, size: 13) }
         }
         let spokenCounters: String = counters.anyAttacker ? "Any strong attacker"
-            : counters.builds.isEmpty ? "Not in your box"
+            : counters.builds.isEmpty ? "No counter in your box"
             : "Counters: " + counters.builds.map { b in
                 let m = SquadMark.of(b, screen: .rocket, ctx: ctx).spoken.map { ", " + $0.lowercased() } ?? ""
                 return b.targetName + m
@@ -333,7 +333,7 @@ private struct RocketGrunts: View {
             if counters.anyAttacker {
                 Text("Any strong attacker").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
             } else if counters.builds.isEmpty {
-                Text("Not in your box").font(.figtree(11, .heavy, relativeTo: .caption2)).foregroundStyle(Theme.muted)
+                Text("No counter in your box").font(.figtree(11, .heavy, relativeTo: .caption2)).foregroundStyle(Theme.muted)
                     .padding(.horizontal, 8).padding(.vertical, 3).background(Theme.off, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else if wide {
                 FlowLayout(spacing: 6) { ForEach(Array(counters.builds.enumerated()), id: \.offset) { pill($0.element, first: $0.offset == 0) } }

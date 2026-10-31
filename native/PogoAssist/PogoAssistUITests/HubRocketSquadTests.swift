@@ -11,7 +11,7 @@ final class HubRocketSquadTests: SquadUITestCase {
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR GIOVANNI"].waitForExistence(timeout: 30))
         XCTAssertFalse(app.staticTexts["YOUR TEAM FOR GIOVANNI"].exists)
 
-        // Best: the Rocket table's rows fill the slots, whether or not the box has them (Available leaves a slot empty when nothing is usable as it is).
+        // Best: the Rocket table's rows fill the slots, whether or not the box has them (Available leaves a slot empty when nothing in the box beats it).
         app.buttons["squad-mode-best"].tap()
         let one = slot(app, "rocket", 1), two = slot(app, "rocket", 2), three = slot(app, "rocket", 3)
         XCTAssertTrue(one.label.contains("Lucario") && one.label.contains("against Persian"), one.label)
@@ -62,16 +62,17 @@ final class HubRocketSquadTests: SquadUITestCase {
         shot("rocket-grunts")
     }
 
-    /// Under Available a slot with nothing usable as it is lists Next best (up to three closest options) or, with none, says so; there is no Could get now list.
+    /// Under Available a slot nothing in the box beats lists Next best (up to three closest options) or, with none, says so; there is no Could get now list.
     func testRocketNextBestUnderAvailable() throws {
         let app = launch(reset: true)
         populate(app)
         openTile(app, "rocket")
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR GIOVANNI"].waitForExistence(timeout: 60))
         XCTAssertEqual(app.buttons["squad-mode-available"].isSelected, true, "Available is the default")
-        var nextBestRows = [Int]()
+        var nextBestRows = [Int](), listed = [Int]()
         for n in 1...3 {
             openPicker(app, "rocket", slot: n)
+            listed.append(pickerRows(app).count)
             if app.staticTexts["Next best"].exists {
                 nextBestRows.append(pickerRows(app).count)
                 XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
@@ -79,8 +80,10 @@ final class HubRocketSquadTests: SquadUITestCase {
             }
             closePicker(app)
         }
-        // The sample box has no usable counter for at least one of Giovanni's slots, so Next best must be offered, with one to three rows.
-        XCTAssertFalse(nextBestRows.isEmpty, "a slot nothing usable beats lists Next best under Available")
+        // S1: Available takes any build, so the sample box may beat every slot and offer no Next best. Every slot lists something (counters, or Next best), and where
+        // Next best is offered it has one to three rows.
+        XCTAssertEqual(listed.count, 3)
+        XCTAssertTrue(listed.allSatisfy { $0 > 0 }, "each slot's picker lists counters or Next best: \(listed)")
         XCTAssertTrue(nextBestRows.allSatisfy { (1...3).contains($0) }, "up to three rows: \(nextBestRows)")
     }
 

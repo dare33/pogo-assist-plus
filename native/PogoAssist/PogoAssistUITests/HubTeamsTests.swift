@@ -79,7 +79,7 @@ final class HubTeamsTests: XCTestCase {
         app.buttons["hub-tile-rocket"].tap()
         XCTAssertTrue(app.buttons["hub-leader-Giovanni"].waitForExistence(timeout: 10), "a leader card")
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR GIOVANNI"].exists)
-        // Best fills the slots from the Rocket table, whether or not the box has the Pokémon (Available only what the box has and is usable as it is).
+        // Best fills the slots from the Rocket table, whether or not the box has the Pokémon (Available only what the box has, whatever upgrade it needs).
         app.buttons["squad-mode-best"].tap()
         sleep(1)
         shot("rocket-01-light")
