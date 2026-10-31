@@ -49,8 +49,8 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(el(app, "squad-status").label.hasPrefix("Not ready: ") && el(app, "squad-status").label.contains("to get"), el(app, "squad-status").label)
         XCTAssertTrue((2...6).contains { slot(app, "gym", $0).label.contains("not in your box, to get") }, "a not-owned Pokémon is drawn as such: \(slot(app, "gym", 2).label)")
         openPicker(app, "gym", slot: 2)
-        let notOwned = rows.matching(NSPredicate(format: "label CONTAINS 'Not in your box'")).firstMatch
-        XCTAssertTrue(notOwned.waitForExistence(timeout: 5), "Best lists a Pokémon the box lacks, with its availability line: \(rows.allElementsBoundByIndex.map(\.label))")
+        let notOwned = rows.matching(NSPredicate(format: "label CONTAINS 'Not available now' OR label CONTAINS 'Can get now'")).firstMatch
+        XCTAssertTrue(notOwned.waitForExistence(timeout: 5), "Best lists a Pokémon the box lacks, with its status (Can get now or Not available now): \(rows.allElementsBoundByIndex.map(\.label))")
         XCTAssertTrue(rows.firstMatch.label.contains("tier"), rows.firstMatch.label)
         XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists)
         shot("gym-picker-best")
