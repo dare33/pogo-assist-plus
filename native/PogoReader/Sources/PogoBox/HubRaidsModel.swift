@@ -140,39 +140,70 @@ public enum HubRaidsModel {
     /// **Max.** The Max table has no type sections, so a Dynamax-Yes COPY counts for the types of the species of its Max entry. The copy
     /// reaches an entry through its own species (a Blissey), or through a build whose target has one and which covers the copy as its carrier or
     /// as a spare (the advisor emits one build per species and target, so a spare copy has none of its own); then it counts once that build
-    /// has nothing left to do. A copy marked No or not set counts for nothing.
-    static func typesCounted(by b: BoxAdvice.Build, screen: Screen, table: TierTable, gm: GameMaster, shadow: Bool = false) -> Set<String> {
+    /// has nothing left to do. A copy not marked Dynamax counts for nothing.
+    static func typesCounted(by b: BoxAdvice.Build, screen: Screen, table: TierTable, gm: GameMaster, shadow: Bool = false, gigantamax: Bool = false) -> Set<String> {
         switch screen {
         case .raids:
-            // A Shadow entry listed under a plain id ("Shadow Pheromosa") is only credited to a Shadow copy.
-            var entries = table.entries(for: b.targetId, area: "raids").filter { shadow || !$0.flags.shadow }
-            if b.viaMega {
-                entries += table.entries.filter { $0.area == "raids" && $0.flags.mega && (shadow || !$0.flags.shadow) && ($0.speciesId.hasPrefix(b.targetId + "_mega") || $0.speciesId.hasPrefix(b.targetId + "_primal")) }
-            }
-            let typed = Set(entries.map { $0.section.lowercased() }).intersection(HubData.typeOrder)
-            if !typed.isEmpty { return typed }
-            return entries.isEmpty ? [] : Set(gm.byId[b.targetId]?.types ?? [])
+            let entries = raidEntries(targetId: b.targetId, viaMega: b.viaMega, table: table, shadow: shadow)
+            return raidTypes(entries, speciesTypes: gm.byId[b.targetId]?.types ?? [])
         case .max:
-            return maxTypes(of: b.targetId, table: table, gm: gm)
+            return maxTypes(of: b.targetId, table: table, gm: gm, gigantamax: gigantamax)
         }
     }
 
-    private static func maxTypes(of speciesId: String, table: TierTable, gm: GameMaster) -> Set<String> {
-        maxEntries(speciesId, table).isEmpty ? [] : Set(gm.byId[speciesId]?.types ?? [])
+    /// The Raids table entries a target can fill: its own, without a Shadow entry (listed under a plain id, such as "Shadow Pheromosa") unless the copy is
+    /// Shadow, plus, for a build that mega evolves, the target's Mega and Primal entries (`lucario` counts under Fighting through `lucario_mega`).
+    static func raidEntries(targetId: String, viaMega: Bool, table: TierTable, shadow: Bool) -> [TierTable.Entry] {
+        // A Shadow target (`x_shadow`) also fills the plain species' entries, as the advisor credits it (`src/advise.js`): a Shadow Garchomp keeps Garchomp's own row.
+        let plain = targetId.hasSuffix("_shadow") ? String(targetId.dropLast("_shadow".count)) : targetId
+        var entries = (table.entries(for: targetId, area: "raids") + (plain == targetId ? [] : table.entries(for: plain, area: "raids"))).filter { shadow || !$0.flags.shadow }
+        if viaMega {
+            entries += table.entries.filter { $0.area == "raids" && $0.flags.mega && (shadow || !$0.flags.shadow) && ($0.speciesId.hasPrefix(plain + "_mega") || $0.speciesId.hasPrefix(plain + "_primal")) }
+        }
+        return entries
     }
 
-    /// The Max entries an ordinary Dynamax copy can fill. A Gigantamax entry is only filled by a Gigantamax catch, which the box cannot show, so
-    /// the advisor never credits one (`src/advise.js`) and neither does the Hub: Gengar has no usable entry, Kingler its A entry.
-    static func maxEntries(_ speciesId: String, _ table: TierTable) -> [TierTable.Entry] {
-        table.entries(for: speciesId, area: "max").filter { $0.name.range(of: "gigantamax|g-max", options: [.regularExpression, .caseInsensitive]) == nil }
+    /// The attacking types one Raids entry stands for, agreeing with `raidTypes`: its section when that is a type; an entry that is not sectioned by a type
+    /// stands for the species' own types only when NO entry of `entries` is typed, and for nothing when some are.
+    static func entryTypes(_ e: TierTable.Entry, in entries: [TierTable.Entry], speciesTypes: [String]) -> [String] {
+        if HubData.typeOrder.contains(e.section.lowercased()) { return [e.section.lowercased()] }
+        return entries.contains { HubData.typeOrder.contains($0.section.lowercased()) } ? [] : speciesTypes
+    }
+
+    /// The types the entries count for: the typed sections; when none is typed, the species' own types; nothing without entries.
+    static func raidTypes(_ entries: [TierTable.Entry], speciesTypes: [String]) -> Set<String> {
+        let typed = Set(entries.map { $0.section.lowercased() }).intersection(HubData.typeOrder)
+        if !typed.isEmpty { return typed }
+        return entries.isEmpty ? [] : Set(speciesTypes)
+    }
+
+    private static func maxTypes(of speciesId: String, table: TierTable, gm: GameMaster, gigantamax: Bool = false) -> Set<String> {
+        maxEntries(speciesId, table, gigantamax: gigantamax).isEmpty ? [] : Set(gm.byId[speciesId]?.types ?? [])
+    }
+
+    /// The Max entries a copy can fill. A Gigantamax entry is only filled by a copy marked Gigantamax (by hand: the box cannot show it), as the
+    /// advisor credits it (`src/advise.js`); an ordinary copy gets none: Gengar has no usable entry, Kingler its A entry.
+    static func maxEntries(_ speciesId: String, _ table: TierTable, gigantamax: Bool = false) -> [TierTable.Entry] {
+        table.entries(for: speciesId, area: "max").filter { gigantamax || $0.name.range(of: "gigantamax|g-max", options: [.regularExpression, .caseInsensitive]) == nil }
     }
 
     /// S before A before B; anything else last. (Compared as strings, "A" would sort before "S".)
     static func tierRank(_ tier: String) -> Int { ["S": 0, "A": 1, "B": 2][tier] ?? 3 }
 
-    /// True for a Shadow copy: the box marks it, or the build targets a `_shadow` species.
+    /// True when the build's carrier is marked Gigantamax: its Max hits may include Gigantamax entries.
+    static func isGigantamax(_ b: BoxAdvice.Build, entries: [BoxEntry]) -> Bool { entries.first { $0.id == b.entryId }?.row.gigantamax == true }
+
+    /// True for a Shadow copy. The copy's hand mark wins over its species id: 1 is Shadow, 2 is Purified (not Shadow, even when the species id ends `_shadow`) and 0 is neither;
+    /// the `_shadow` suffix of the build's target decides only when the copy has no mark.
     static func isShadow(_ b: BoxAdvice.Build, entries: [BoxEntry]) -> Bool {
-        b.targetId.hasSuffix("_shadow") || (entries.first { $0.id == b.entryId }?.row.shadow ?? 0) == 1
+        if let mark = entries.first(where: { $0.id == b.entryId })?.row.shadow { return mark == 1 }
+        return b.targetId.hasSuffix("_shadow")
+    }
+
+    /// True for a Shadow copy (the one definition the Pokémon page's tabs share): the hand mark wins over the species id, as above.
+    static func isShadow(_ e: BoxEntry) -> Bool {
+        if let mark = e.row.shadow { return mark == 1 }
+        return e.row.speciesId.hasSuffix("_shadow")
     }
 
     /// Nothing left to do but the Dynamax requirement.
@@ -195,7 +226,7 @@ public enum HubRaidsModel {
     }
 
     /// The Max table entry a copy takes part under, and whether the copy is ready to take part (`built`). Of several entries of one species the
-    /// best tier wins; Gigantamax entries are never used.
+    /// best tier wins; Gigantamax entries are used only for a copy marked Gigantamax.
     ///
     /// A copy that is its own entry's species is built only when the advisor wants nothing more of it: the Max build that covers it (as carrier or
     /// spare) is finished, or no build covers it at all (it is already at the table's target); a build covering it without the Max area, or an
@@ -206,7 +237,7 @@ public enum HubRaidsModel {
         var build: BoxAdvice.Build?
     }
     static func maxUse(of copy: BoxEntry, advice: BoxAdvice, table: TierTable) -> MaxUse? {
-        func best(_ id: String) -> TierTable.Entry? { maxEntries(id, table).min { tierRank($0.tier) < tierRank($1.tier) } }
+        func best(_ id: String) -> TierTable.Entry? { maxEntries(id, table, gigantamax: copy.row.gigantamax == true).min { tierRank($0.tier) < tierRank($1.tier) } }
         let spares = advice.spareBuilds[copy.id] ?? []
         let covering = advice.builds.filter { b in b.entryId == copy.id || spares.contains { $0.id == b.id } }
         if let e = best(copy.row.speciesId) {
@@ -228,7 +259,7 @@ public enum HubRaidsModel {
                 .reduce(into: Set<String>()) { $0.formUnion(typesCounted(by: $1, screen: .raids, table: table, gm: gm, shadow: isShadow($1, entries: entries))) }
         case .max:
             return entries.filter { $0.row.dynamax == true }.reduce(into: Set<String>()) { acc, e in
-                if let u = maxUse(of: e, advice: advice, table: table), u.built { acc.formUnion(maxTypes(of: u.entry.speciesId, table: table, gm: gm)) }
+                if let u = maxUse(of: e, advice: advice, table: table), u.built { acc.formUnion(maxTypes(of: u.entry.speciesId, table: table, gm: gm, gigantamax: e.row.gigantamax == true)) }
             }
         }
     }
@@ -273,7 +304,7 @@ public enum HubRaidsModel {
         if let table = try? TierTable.bundled() {
             for type in r.missing {
                 if let b = advice.builds.first(where: { $0.areas.contains(screen.area) && !isBuilt($0, advice: advice, entries: entries, screen: screen)
-                                                        && typesCounted(by: $0, screen: screen, table: table, gm: gm, shadow: isShadow($0, entries: entries)).contains(type) }) {
+                                                        && typesCounted(by: $0, screen: screen, table: table, gm: gm, shadow: isShadow($0, entries: entries), gigantamax: isGigantamax($0, entries: entries)).contains(type) }) {
                     if screen == .max, isFinished(b) { return "Mark \(b.title) as Dynamax on its page." }
                     return "\(sentence(for: b)) (\(HubModel.costShort(b)))."
                 }
@@ -287,7 +318,7 @@ public enum HubRaidsModel {
         guard let table = try? TierTable.bundled() else { return [] }
         let wanted = Set(rows.flatMap { bring(row: $0, hub: hub) })
         return advice.builds.filter { $0.areas.contains(screen.area) && !isBuilt($0, advice: advice, entries: entries, screen: screen)
-                                      && !typesCounted(by: $0, screen: screen, table: table, gm: gm, shadow: isShadow($0, entries: entries)).isDisjoint(with: wanted) }
+                                      && !typesCounted(by: $0, screen: screen, table: table, gm: gm, shadow: isShadow($0, entries: entries), gigantamax: isGigantamax($0, entries: entries)).isDisjoint(with: wanted) }
     }
 
     // MARK: Max roster
@@ -303,7 +334,7 @@ public enum HubRaidsModel {
         public var hasUse: Bool
     }
 
-    /// The copies marked Dynamax, those with a Max entry first (best tier, then CP). `unsetCount` is how many copies not yet marked either way
+    /// The copies marked Dynamax, those with a Max entry first (best tier, then CP). `unsetCount` is how many copies not marked
     /// have a Max entry, which marking would put in the roster.
     public static func maxRoster(entries: [BoxEntry], advice: BoxAdvice) -> (tiles: [RosterTile], unsetCount: Int) {
         guard let table = try? TierTable.bundled() else { return ([], 0) }

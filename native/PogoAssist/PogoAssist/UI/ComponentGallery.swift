@@ -40,6 +40,12 @@ struct ComponentGallery: View {
                     bars
                     heading("Accounts")
                     accounts
+                    heading("Type icons")
+                    typeIcons
+                    heading("Build marks and grades")
+                    marksAndGrades
+                    heading("Tab header")
+                    tabHeader
                     heading("Floating tab bar")
                     Text("Shown over this screen; the Scan button is live.").paText(.secondary).foregroundStyle(Theme.muted)
                 }
@@ -245,6 +251,50 @@ struct ComponentGallery: View {
                 }
             }
         }
+    }
+
+    private var typeIcons: some View {
+        Panel {
+            ForEach([22, 18, 16, 13] as [CGFloat], id: \.self) { size in
+                HStack(spacing: 3) {
+                    Text("\(Int(size))").font(.chipLabel).foregroundStyle(Theme.muted).frame(width: 26, alignment: .leading)
+                    ForEach(Theme.pokemonTypeHex.keys.sorted(), id: \.self) { TypeIcon(type: $0, size: size) }
+                }
+            }
+            HStack(spacing: 3) {
+                Text("grey").font(.chipLabel).foregroundStyle(Theme.muted).frame(width: 26, alignment: .leading)
+                TypeIcons(types: ["fire", "flying", "water"], size: 18, grey: true)
+            }
+        }
+    }
+
+    private var marksAndGrades: some View {
+        Panel {
+            HStack(spacing: 16) {
+                UpgradeMark(label: "Upgrade available")
+                UpgradeMark(cost: .init(value: "12k", currency: .dust), label: "Upgrade available: power up Umbreon, 12k dust")
+                UpgradeMark(cost: .init(value: "125", currency: .candy), label: "Upgrade available: evolve Eevee, 125 candy")
+                FullStrengthBadge()
+                FullStrengthBadge(size: 26)
+            }
+            HStack(spacing: 14) {
+                Text("Score").foregroundStyle(Theme.muted)
+                GradedNumber("93.1", .top); GradedNumber("90.2", .good); GradedNumber("88.4", .plain)
+                Text("IV #").foregroundStyle(Theme.muted)
+                GradedNumber("99", .top); GradedNumber("351", .good); GradedNumber("812", .plain)
+            }
+            .font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.ink)
+        }
+    }
+
+    private var tabHeader: some View {
+        VStack(spacing: 0) {
+            TabHeader(title: "My Pokémon") {
+                IconButton(systemImage: "square.and.arrow.up", kind: .floating, label: "Export") {}
+                MoreButton()
+            }
+        }
+        .padding(.horizontal, -Theme.Space.screen)
     }
 
     private var accounts: some View {

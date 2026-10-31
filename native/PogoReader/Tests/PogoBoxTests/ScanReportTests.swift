@@ -175,6 +175,26 @@ final class ScanReportTests: XCTestCase {
         var cleared = a; cleared.row.dynamax = nil
         try lib.commit(account: "Zorblax", entries: [cleared], reason: .edit, note: "Dynamax set for Pidgey", now: d.addingTimeInterval(20))
         XCTAssertEqual(try lib.editsAfter(account: "Zorblax", scanId: s.id),
-                       ["Corrected or set by hand: Pidgey: Dynamax set to Yes.", "Corrected or set by hand: Pidgey: Dynamax cleared."])
+                       ["Corrected or set by hand: Pidgey: Dynamax turned on.", "Corrected or set by hand: Pidgey: Dynamax turned off."])
+    }
+
+    func testEditsAfterListsTheOtherHandMarks() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-rep-\(UUID().uuidString)"); defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        let d = Date(timeIntervalSince1970: 1_790_000_000)
+        let a = BoxEntry(id: "a", row: ScanRow(index: 1, name: "Pidgey", display: "Pidgey", form: "", speciesId: "pidgey", dex: 16, cp: 100, hp: 40, ivs: nil, ivsRead: nil, ivsGuess: nil, level: 5, levelMax: 5, dust: 1,
+                                               solveStatus: "exact", flags: [], frames: []), firstSeen: d, lastSeen: d)
+        let s = try lib.store.save(ScanResult(rows: [], review: [], unmatched: []), account: "Zorblax", scanDate: d, source: "broadcast", replayLog: Data("x\n".utf8))
+        try lib.commit(account: "Zorblax", entries: [a], reason: .scan, note: "scan", scanId: s.id, scanKind: .full, scanDate: d)
+        var b = a; b.row.dynamax = true; b.row.gigantamax = true; b.row.lucky = true; b.row.shadow = 1; b.row.details = CopyDetails(fastMove: "X")
+        try lib.commit(account: "Zorblax", entries: [b], reason: .edit, note: "Marks", now: d.addingTimeInterval(10))
+        var c = b; c.row.shadow = 2; c.row.lucky = nil
+        try lib.commit(account: "Zorblax", entries: [c], reason: .edit, note: "Marks", now: d.addingTimeInterval(20))
+        var e = c; e.row.shadow = 0
+        try lib.commit(account: "Zorblax", entries: [e], reason: .edit, note: "Marks", now: d.addingTimeInterval(30))
+        XCTAssertEqual(try lib.editsAfter(account: "Zorblax", scanId: s.id), [
+            "Corrected or set by hand: Pidgey: Dynamax turned on, Gigantamax turned on, Lucky turned on, marked Shadow, details changed.",
+            "Corrected or set by hand: Pidgey: Lucky turned off, marked Purified.",
+            "Corrected or set by hand: Pidgey: Shadow or Purified mark turned off."])
     }
 }

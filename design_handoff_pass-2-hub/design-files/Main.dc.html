@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pogo Hub tab</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+.t-light{--bg:#F3F5F9;--bg0:rgba(243,245,249,0);--surface:#FFFFFF;--surface2:#F3F5F9;--ink:#15192B;--muted:#6A7085;--faint:#8A90A3;--line:#E6E9F0;--off:#E3E7EF;--acc:#2F6BFF;--acc-ink:#1F4FD1;--acc-tint:#EAF0FF;--mark:#FFFFFF;--open-glyph:#000000;--orange-ink:#B34D00;--orange-tint:#FFF1E3;--green-ink:#1C7A3E;--green-tint:#E6F6EC;--red:#D92D3A;--rocket-ink:#2A3042;--rocket-tint:#E9EBF0;--pvp-ink:#7A2FB5;--pvp-tint:#EFEBFF;--max-ink:#5B3FD6;--max-tint:#EFEBFF;--shadow:0 1px 2px rgba(20,30,60,.06);--lift:0 4px 8px rgba(20,30,60,.1);--float:0 2px 6px rgba(20,30,60,.12);--scan-lift:0 10px 13px rgba(20,30,60,.25)}
+.t-dark{--bg:#0E1118;--bg0:rgba(14,17,24,0);--surface:#181C26;--surface2:#20242F;--ink:#EEF1F8;--muted:#9097AB;--faint:#6D7489;--line:#262B38;--off:#232836;--acc:#5B8CFF;--acc-ink:#8FB0FF;--acc-tint:rgba(91,140,255,.18);--mark:#1B2A4E;--open-glyph:#0E1118;--orange-ink:#FFB273;--orange-tint:rgba(255,150,60,.16);--green-ink:#6FD796;--green-tint:rgba(80,200,120,.16);--red:#FF6B76;--rocket-ink:#B5BBCB;--rocket-tint:rgba(90,98,118,.3);--pvp-ink:#D1A3FF;--pvp-tint:rgba(156,131,255,.2);--max-ink:#BFAEFF;--max-tint:rgba(156,131,255,.2);--shadow:none;--lift:none;--float:none;--scan-lift:none}
+.ty-everything{--ty-ink:var(--acc-ink);--ty-tint:var(--acc-tint);--ty-solid:#1F4FD1}
+.ty-raids{--ty-ink:var(--orange-ink);--ty-tint:var(--orange-tint);--ty-solid:#B34D00}
+.ty-gym{--ty-ink:var(--green-ink);--ty-tint:var(--green-tint);--ty-solid:#1C7A3E}
+.ty-rocket{--ty-ink:var(--rocket-ink);--ty-tint:var(--rocket-tint);--ty-solid:#2A3042}
+.ty-pvp{--ty-ink:var(--pvp-ink);--ty-tint:var(--pvp-tint);--ty-solid:#7A2FB5}
+.ty-max{--ty-ink:var(--max-ink);--ty-tint:var(--max-tint);--ty-solid:#5B3FD6}
+.board{display:flex;gap:40px;align-items:flex-start;font-family:'Figtree',system-ui,sans-serif;font-variant-numeric:tabular-nums;line-height:1.2}
+.col{display:flex;flex-direction:column;gap:12px;width:402px}
+.mode{font-weight:700;font-size:13px;letter-spacing:.04em;color:#6A7085;height:20px}
+.phone{width:402px;height:874px;background:var(--bg);color:var(--ink);border-radius:44px;overflow:hidden;position:relative;box-sizing:border-box;padding-top:54px;box-shadow:0 0 0 1px rgba(20,30,60,.14)}
+.hdr{position:relative;display:flex;align-items:center;justify-content:center;min-height:52px;padding:0 14px}
+.acct{display:flex;align-items:center;gap:6px;min-height:44px;font-weight:700;font-size:22px;color:var(--acc-ink);background:none;border:0;padding:0;font-family:inherit}
+.mono{width:28px;height:28px;border-radius:50%;background:#14A3B8;color:#FFFFFF;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;margin-right:2px}
+.circle{width:40px;height:40px;border-radius:50%;background:var(--surface);box-shadow:var(--float);display:flex;align-items:center;justify-content:center;color:var(--ink);border:0;padding:0}
+.more{position:absolute;right:16px;top:6px}
+.content{display:flex;flex-direction:column;gap:14px;padding:0 14px 16px}
+.hline{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.htext{font-weight:700;font-size:13px;letter-spacing:.52px;color:var(--muted)}
+.hlink{display:flex;align-items:center;min-height:44px;font-weight:700;font-size:13px;color:var(--acc-ink);text-decoration:none;background:none;border:0;padding:0;font-family:inherit;cursor:pointer}
+.strip{display:flex;gap:10px;overflow-x:auto;margin:0 -14px;padding:0 14px;scrollbar-width:none}
+.ecard{flex:none;width:236px;min-height:112px;box-sizing:border-box;border-radius:22px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;color:#FFFFFF;text-decoration:none}
+.ecard:hover{color:#FFFFFF}
+.kick{font-weight:800;font-size:11px;letter-spacing:.88px}
+.ctitle{font-weight:800;font-size:17px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cline{font-weight:600;font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.spring{flex:1;min-height:6px}
+.cpill{align-self:flex-start;font-weight:800;font-size:11px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.22)}
+.t-light .bg-everything{background:linear-gradient(to bottom right,#1F4FD1,#183FA7)}.t-dark .bg-everything{background:#1F4FD1}
+.t-light .bg-raids{background:linear-gradient(to bottom right,#B34D00,#8F3D00)}.t-dark .bg-raids{background:#B34D00}
+.t-light .bg-gym{background:linear-gradient(to bottom right,#1C7A3E,#166131)}.t-dark .bg-gym{background:#1C7A3E}
+.t-light .bg-rocket{background:linear-gradient(to bottom right,#2A3042,#212634)}.t-dark .bg-rocket{background:#2A3042}
+.t-light .bg-pvp{background:linear-gradient(to bottom right,#7A2FB5,#612590)}.t-dark .bg-pvp{background:#7A2FB5}
+.t-light .bg-max{background:linear-gradient(to bottom right,#5B3FD6,#4832AB)}.t-dark .bg-max{background:#5B3FD6}
+.rk{display:flex;align-items:center;gap:8px}
+.rk-cap{font-weight:800;font-size:10px;letter-spacing:.6px;color:var(--faint)}
+.seg{display:flex;padding:4px;background:var(--off);border-radius:999px}
+.seg button{font-family:inherit;font-weight:700;font-size:12px;min-height:26px;padding:0 9px;color:var(--ink);background:transparent;border:0;border-radius:999px;cursor:pointer;white-space:nowrap}
+.seg button.on{background:var(--surface)}
+.info-hit{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:none;border:0;padding:0;cursor:pointer}
+.info{width:26px;height:26px;border-radius:50%;background:var(--off);color:var(--muted);font:italic 800 13px Georgia,serif;display:flex;align-items:center;justify-content:center}
+.info.on{background:var(--acc);color:var(--open-glyph)}
+.explain{background:var(--acc-tint);border-radius:16px;padding:12px 14px;font-weight:500;font-size:13px;line-height:1.35;display:flex;flex-direction:column;gap:8px;color:var(--ink)}
+.explain b{color:var(--acc-ink)}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tile{background:var(--surface);border-radius:22px;padding:14px 16px;min-height:92px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow);text-decoration:none;color:var(--ink)}
+.tile:hover{color:var(--ink)}
+.tile-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.glyph{color:var(--ty-ink);display:flex}
+.count{font-weight:800;font-size:12px;color:var(--muted);background:var(--surface2);border-radius:999px;padding:4px 10px}
+.tname{font-weight:800;font-size:16px}
+.tblurb{font-weight:600;font-size:12px;color:var(--muted)}
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:150px;background:linear-gradient(to bottom,var(--bg0) 0%,var(--bg) 40%,var(--bg) 100%);display:flex;align-items:flex-end;pointer-events:none}
+.tabrow{display:flex;align-items:center;justify-content:space-between;width:100%;padding:0 14px 38px;box-sizing:border-box;pointer-events:auto}
+.pill{width:118px;min-height:54px;border-radius:999px;background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;font-size:14px;box-shadow:var(--lift);border:0;font-family:inherit;padding:0}
+.pill.on{background:var(--acc-tint);color:var(--acc-ink)}
+.scan{width:96px;height:96px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 8px var(--acc-tint),var(--scan-lift);display:flex;align-items:center;justify-content:center;border:0;padding:0;margin-bottom:10px}
+.muted-line{font-weight:500;font-size:14px;color:var(--muted)}
+</style>
+</helmet>
+<div class="board" style="width: 844px; height: 906px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="col">
+<div class="mode">{{t.label}}</div>
+<div class="phone {{t.cls}}">
+<div class="hdr">
+<button class="acct" aria-label="Account, Account name">Account name<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9l7 7 7-7"></path></svg></button>
+<button class="circle more" aria-label="More"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg></button>
+</div>
+<div class="content">
+<div class="hline">
+<div class="htext">HAPPENING NOW IN POKÉMON GO</div>
+<a class="hlink" href="https://pokemongo.com/news">All news ›</a>
+</div>
+<div class="strip">
+<sc-for list="{{events}}" as="e" hint-placeholder-count="3">
+<sc-if value="{{e.linked}}" hint-placeholder-val="{{true}}">
+<a class="ecard {{e.bg}}" href="{{e.href}}">
+<div class="kick">{{e.kicker}}</div>
+<div class="ctitle">{{e.title}}</div>
+<div class="cline">{{e.line}}</div>
+<div class="spring"></div>
+<div class="cpill">{{e.pill}}</div>
+</a>
+</sc-if>
+<sc-if value="{{e.plain}}" hint-placeholder-val="{{false}}">
+<div class="ecard {{e.bg}}">
+<div class="kick">{{e.kicker}}</div>
+<div class="ctitle">{{e.title}}</div>
+<div class="cline">{{e.line}}</div>
+<div class="spring"></div>
+</div>
+</sc-if>
+</sc-for>
+</div>
+<div class="hline">
+<div class="htext">TEAMS AND COLLECTION</div>
+<div class="rk">
+<div class="rk-cap">RANKING</div>
+<div class="seg" role="group" aria-label="Ranking">
+<button class="{{rkClassic}}" onClick="{{pickClassic}}">Classic</button>
+<button class="{{rkPogo}}" onClick="{{pickPogo}}">Pogo Assist</button>
+</div>
+<button class="info-hit" aria-label="About ranking" onClick="{{toggleInfo}}"><span class="info {{infoCls}}">i</span></button>
+</div>
+</div>
+<sc-if value="{{infoOpen}}" hint-placeholder-val="{{false}}">
+<div class="explain">
+<div><b>Classic</b> takes the family member this copy's IVs suit best under the CP cap. In Master League, or when the IVs are not known, it takes the strongest species.</div>
+<div><b>Pogo Assist</b> starts from the strongest species and moves to a weaker one only when it is within 3 PvPoke points and this copy's IVs rank higher for it.</div>
+</div>
+</sc-if>
+<sc-if value="{{loading}}" hint-placeholder-val="{{false}}">
+<div class="muted-line">Working out advice</div>
+</sc-if>
+<div class="tiles">
+<a class="tile ty-everything" href="Collection.dc.html">
+<div class="tile-top"><span class="glyph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="3"></rect><circle cx="9" cy="8" r="2.5"></circle><path d="M14 6.8h3M14 9.3h3M7.5 14h9M7.5 17.5h6" stroke-linecap="round"></path></svg></span><span class="count">{{counts.collection}}</span></div>
+<div class="tname">Collection</div>
+<div class="tblurb">Dex, showcase and builds</div>
+</a>
+<a class="tile ty-raids" href="Raids.dc.html">
+<div class="tile-top"><span class="glyph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5C8 2.5 5 8.5 5 13.5a7 7 0 0 0 14 0c0-5-3-11-7-11z"></path><path d="M12 9.5l1.3 2.6 2.8.4-2 2 .5 2.8-2.6-1.4-2.6 1.4.5-2.8-2-2 2.8-.4z" fill="currentColor"></path></svg></span><span class="count">{{counts.raids}}</span></div>
+<div class="tname">Raids</div>
+<div class="tblurb">Attackers for raid bosses</div>
+</a>
+<a class="tile ty-gym" href="Gym.dc.html">
+<div class="tile-top"><span class="glyph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="6.5" r="4"></circle><path d="M8 6.5h8M10 11l-1.5 9.5h7L14 11M5.5 20.5h13"></path></svg></span><span class="count">{{counts.gym}}</span></div>
+<div class="tname">Gym battles</div>
+<div class="tblurb">Defenders and gym attackers</div>
+</a>
+<a class="tile ty-rocket" href="Rocket.dc.html">
+<div class="tile-top"><span class="glyph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 20V4h5a4 4 0 0 1 0 8h-5M13 12l4.5 8" stroke-width="2.6" stroke-linecap="round"></path></svg></span><span class="count">{{counts.rocket}}</span></div>
+<div class="tname">Team Rocket</div>
+<div class="tblurb">Counters for grunts and leaders</div>
+</a>
+<a class="tile ty-pvp" href="PvP.dc.html">
+<div class="tile-top"><span class="glyph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2.5l7.5 3v5.5c0 5-3.2 8.7-7.5 10.5-4.3-1.8-7.5-5.5-7.5-10.5V5.5z" stroke-linejoin="round"></path><path d="M9 8.5l6 6M15 8.5l-6 6"></path></svg></span><span class="count">{{counts.pvp}}</span></div>
+<div class="tname">PvP leagues</div>
+<div class="tblurb">Great, Ultra and Master picks</div>
+</a>
+<a class="tile ty-max" href="Max.dc.html">
+<div class="tile-top"><span class="glyph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M7 15a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 6.5a4.25 4.25 0 0 1 .5 8.5z" stroke-linejoin="round"></path><path d="M12 22v-8M8.5 17.5L12 14l3.5 3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></span><span class="count">{{counts.max}}</span></div>
+<div class="tname">Max battles</div>
+<div class="tblurb">Dynamax and Gigantamax</div>
+</a>
+</div>
+</div>
+<div class="tabbar">
+<div class="tabrow">
+<button class="pill" aria-label="Box"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"></rect><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"></rect><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"></rect><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"></rect></svg>Box</button>
+<button class="scan" aria-label="Scan"><svg width="80" height="80" viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="markgold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE38F"></stop><stop offset="1" stop-color="#FFAE1A"></stop></linearGradient></defs><path d="M37.85 21.56A14.0625 14.0625 0 1 1 26.44 10.15" fill="none" stroke="var(--mark)" stroke-width="3.094" stroke-linecap="round"></path><polygon points="19.028,25.972 19.91,27.758 21.881,28.045 20.455,29.435 20.791,31.399 19.028,30.472 17.265,31.399 17.602,29.435 16.175,28.045 18.146,27.758" fill="url(#markgold)" stroke="url(#markgold)" stroke-width="1.02" stroke-linejoin="round"></polygon><polygon points="24.994,18.975 26.179,21.375 28.828,21.76 26.911,23.628 27.364,26.267 24.994,25.021 22.625,26.267 23.078,23.628 21.16,21.76 23.81,21.375" fill="url(#markgold)" stroke="url(#markgold)" stroke-width="1.371" stroke-linejoin="round"></polygon><polygon points="32.452,10.298 33.995,13.424 37.445,13.926 34.949,16.359 35.538,19.795 32.452,18.173 29.366,19.795 29.955,16.359 27.459,13.926 30.909,13.424" fill="url(#markgold)" stroke="url(#markgold)" stroke-width="1.785" stroke-linejoin="round"></polygon></svg></button>
+<button class="pill on" aria-label="Pogo Hub"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>Pogo Hub</button>
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":906}}'>
+const BOX_DATA = '/_blob/2599037ead1dfb16b67d31a886cb9968';
+const PILL = { raids: 'See raid picks', pvp: 'See PvP picks', max: 'See Max picks', gym: 'See gym picks', rocket: 'See Rocket picks' };
+const SCREEN = { everything: 'Collection.dc.html', raids: 'Raids.dc.html', gym: 'Gym.dc.html', rocket: 'Rocket.dc.html', pvp: 'PvP.dc.html', max: 'Max.dc.html' };
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { d: null, rank: 'classic', info: false };
+  }
+  componentDidMount() {
+    fetch(BOX_DATA).then((r) => r.json()).then((d) => this.setState({ d })).catch(() => {});
+  }
+  renderVals() {
+    const d = this.state.d;
+    const events = (d ? d.events : []).map((e) => {
+      const tie = e.tie || '';
+      return { kicker: e.kicker, title: e.title, line: e.line, bg: 'bg-' + (tie || 'everything'),
+        linked: !!SCREEN[tie], plain: !SCREEN[tie], href: SCREEN[tie] || '', pill: PILL[tie] || '' };
+    });
+    const c = d ? d.counts : {};
+    return {
+      themes: [{ cls: 't-light', label: 'LIGHT' }, { cls: 't-dark', label: 'DARK' }],
+      events,
+      counts: { collection: d ? d.collection.speciesHave + '/' + d.collection.speciesTotal : '', raids: c.raids ?? '', gym: c.gym ?? '', rocket: c.rocket ?? '', pvp: c.pvp ?? '', max: c.max ?? '' },
+      loading: !d,
+      rkClassic: this.state.rank === 'classic' ? 'on' : '',
+      rkPogo: this.state.rank === 'pogo' ? 'on' : '',
+      pickClassic: () => this.setState({ rank: 'classic' }),
+      pickPogo: () => this.setState({ rank: 'pogo' }),
+      infoOpen: this.state.info,
+      infoCls: this.state.info ? 'on' : '',
+      toggleInfo: () => this.setState({ info: !this.state.info }),
+    };
+  }
+}
+</script>
+</body>
+</html>

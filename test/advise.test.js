@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { importPokeGenie } from '../src/import/pokegenie.js';
 import { loadGamemaster, loadTiers, loadRankings } from '../src/node/load.js';
 import { analyseBox, FIT_IV_PCT } from '../src/advise.js';
+import { toPokeGenieCsv } from '../src/extract/pipeline.js';
+
+const csvOf = (rows) => toPokeGenieCsv(rows.map((r) => ({ shadow: null, ...r })), { scanDate: new Date('2026-10-26T00:00:00Z') });
 
 const ctx = { gm: loadGamemaster(), tiers: loadTiers(), rankings: loadRankings() };
 const box = importPokeGenie(readFileSync(new URL('../fixtures/greg-2026-09-25.pokegenie.csv', import.meta.url), 'utf8'));
@@ -23,7 +26,7 @@ test('duplicate copies fold into one build with spares', () => {
   assert.equal(out.builds.filter((b) => b.speciesId === 'charmander' && b.targetId === 'charizard').length, 1);
 });
 
-test('Gigantamax entries are never credited to a box Pokémon, Dynamax ones are flagged', () => {
+test('Gigantamax entries are never credited to an unmarked box Pokémon, Dynamax ones are flagged', () => {
   for (const b of out.builds) for (const h of b.hits) assert.ok(!/gigantamax|g-max/i.test(h.name), `${h.name} credited to ${b.speciesId}`);
   const chansey = out.builds.find((b) => b.speciesId === 'chansey' && b.targetId === 'blissey');
   assert.ok(chansey.needsDynamax);
@@ -304,7 +307,7 @@ test('a Pokémon with no league-viable target carries only its other areas (Abra
   assert.deepEqual(abra.map((b) => [b.targetId, b.areas]), [['alakazam', ['raids']]]);
 });
 
-test('a hand-set Dynamax flag: true drops the Dynamax-copy step, false drops the Max hits, unset is as before', () => {
+test('a hand-set Dynamax flag: true drops the Dynamax-copy step; false is no longer a state and reads as unset', () => {
   const chansey = box.find((p) => p.name === 'Chansey');
   assert.ok(chansey);
   const run = (dynamax) => {
@@ -326,14 +329,9 @@ test('a hand-set Dynamax flag: true drops the Dynamax-copy step, false drops the
   assert.ok(yes[0].hits.filter((h) => h.area === 'max').every((h) => !h.needsDynamax), 'the hit agrees with the build');
   assert.equal(yes[0].needsDynamax, false);
 
+  // `false` (the old "No") no longer means anything: it reads as unset, so the Max hits and the step stay.
   const no = run(false);
-  // Max was this copy's only reason to be a build, or it stays a build for its other areas without any Max area or step.
-  for (const b of no) {
-    assert.ok(!b.hits.some((h) => h.area === 'max'));
-    assert.ok(!b.areas.includes('max'));
-    assert.ok(!b.steps.some((s) => s.kind === 'needsDynamaxCopy'));
-    assert.equal(b.needsDynamax, false);
-  }
+  assert.deepEqual(no.map((b) => [b.areas, b.needsDynamax, b.steps]), unset.map((b) => [b.areas, b.needsDynamax, b.steps]));
 });
 
 test('hygiene never transfers a copy marked Dynamax (it is kept as an extra keep)', () => {
@@ -344,7 +342,7 @@ test('hygiene never transfers a copy marked Dynamax (it is kept as an extra keep
   assert.equal(plain.keep.length, 2);
   assert.equal(plain.transfer.length, 0);
   assert.ok(plain.keep.some((p) => p.dynamax === true));
-  // Unset (or No) at 0% is still the one transferred, as before.
+  // Unset (or a stored false) at 0% is still the one transferred, as before.
   for (const flag of [undefined, false]) {
     const h = analyseBox([{ ...yes, dynamax: flag }, best], ctx).hygiene.find((x) => x.speciesId === 'chansey');
     assert.equal(h.keep.length, 1);
@@ -352,13 +350,12 @@ test('hygiene never transfers a copy marked Dynamax (it is kept as an extra keep
   }
 });
 
-test('a copy marked not Dynamax does not cover a Max entry in the gaps; unset and Yes copies do', () => {
+test('a Dynamax flag of false does not remove Max credit or open a Max gap', () => {
   const base = box.find((p) => p.name === 'Chansey');
   const maxGap = (copies) => analyseBox(copies, ctx).gaps.some((g) => g.area === 'max' && g.speciesId === 'blissey');
-  assert.equal(maxGap([{ ...base }]), false, 'unset: Chansey can become the Blissey entry');
+  assert.equal(maxGap([{ ...base }]), false);
   assert.equal(maxGap([{ ...base, dynamax: true }]), false);
-  assert.equal(maxGap([{ ...base, dynamax: false }]), true, 'every Chansey marked No: the entry is a gap');
-  assert.equal(maxGap([{ ...base, dynamax: false }, { ...base }]), false, 'one copy not marked No still covers it');
+  assert.equal(maxGap([{ ...base, dynamax: false }]), false);
 });
 
 test('hygiene reports how many keeps are Dynamax extras, only when there are some', () => {
@@ -552,4 +549,91 @@ test('fit: with equal-tier entries at two stages the nearest stage wins (a spare
 test('bestOf: a Shadow and a plain copy of one species are separate groups (hygiene\'s resolved species, not the base species)', () => {
   const res = analyseBox([cp('Charmander', ...GOOD), cp('Charmander', ...GOOD, { shadow: true })], ctx);
   assert.deepEqual(res.pokemon.map((e) => e.bestOf.includes('rocket')), [true, true]);
+});
+
+test('a Gigantamax-only Max row is not credited to an ordinary Dynamax copy of the species', () => {
+  const maxHits = (from, to) => out.builds.find((b) => b.speciesId === from && b.targetId === to)?.hits.filter((h) => h.area === 'max') ?? [];
+  // These species are only in the Max tables as Gigantamax (the G-Max Blastoise, Venusaur and Pikachu rows were once split into plain names).
+  for (const [from, to] of [['squirtle', 'blastoise'], ['bulbasaur', 'venusaur'], ['pikachu', 'pikachu'], ['caterpie', 'butterfree']])
+    assert.deepEqual(maxHits(from, to), [], `${from}->${to}`);
+  // Lapras and Snorlax are also Dynamax healers/tanks: only those rows are credited.
+  assert.deepEqual(maxHits('lapras', 'lapras').map((h) => h.name), ['Lapras']);
+  assert.deepEqual(maxHits('snorlax', 'snorlax').map((h) => [h.name, h.tier]), [['Snorlax', 'A'], ['Snorlax', 'A']]);
+  assert.deepEqual(maxHits('regice', 'regice').map((h) => h.name), ['Dynamax Regice']);
+});
+
+// ---- Gigantamax mark, hand Shadow / Purified mark, Lucky ----
+const gmaxHits = (o) => {
+  const base = box.find((p) => p.name === 'Charmander' && !p.shadow);
+  const b = analyseBox([{ ...base, ...o }], ctx).builds.find((x) => x.speciesId === 'charmander' && x.targetId === 'charizard');
+  return b.hits.filter((h) => h.area === 'max' && /gigantamax|g-max/i.test(h.name));
+};
+
+test('a Gigantamax entry is credited only to a copy marked Gigantamax, and needs no Dynamax step', () => {
+  assert.deepEqual(gmaxHits({}), [], 'unmarked');
+  assert.deepEqual(gmaxHits({ dynamax: true }), [], 'a Dynamax copy is not a Gigantamax one');
+  assert.deepEqual(gmaxHits({ gigantamax: false }), []);
+  const g = gmaxHits({ gigantamax: true });
+  assert.ok(g.length > 0, 'Gigantamax Charizard credited');
+  assert.ok(g.every((h) => !h.needsDynamax), 'a Gigantamax copy needs no Dynamax step');
+  const withDyn = gmaxHits({ gigantamax: true, dynamax: true });
+  assert.equal(withDyn.length, g.length);
+});
+
+test('fit: a Gigantamax-marked copy is Max-rated as Gigantamax Charizard; an unmarked one is not', () => {
+  const rows = (o) => analyseBox([cp('Charmander', ...HUNDO, o)], ctx).pokemon[0].fit.max;
+  assert.equal(rows({}).tag, 'weak');
+  const g = rows({ gigantamax: true });
+  assert.notEqual(g.tag, 'weak');
+  assert.match(g.as, /gigantamax/i);
+});
+
+test('known limit: a Gigantamax-marked copy that is a spare beside a better unmarked copy gets no G-Max credit; a marked carrier does', () => {
+  const base = box.find((p) => p.name === 'Snorlax' && !p.shadow);
+  const g = { ...base, gigantamax: true, dynamax: true, ivPercent: 10 };
+  const plain = { ...base, ivPercent: 100 };
+  const gmax = (b) => b.hits.some((h) => /gigantamax|g-max/i.test(h.name));
+  const rows = analyseBox([plain, g], ctx).builds.filter((b) => b.speciesId === 'snorlax' && b.targetId === 'snorlax');
+  assert.equal(rows.length, 1, 'one row: the better copy carries the build, the marked one is its spare');
+  assert.ok(!rows[0].pokemon.gigantamax && !gmax(rows[0]));
+  const alone = analyseBox([g], ctx).builds.filter((b) => b.speciesId === 'snorlax' && b.targetId === 'snorlax');
+  assert.ok(alone.length === 1 && gmax(alone[0]) && !alone[0].needsDynamax, 'as the carrier it is credited');
+});
+
+test('the Max fit line says "needs a Dynamax copy" only for a copy not marked Dynamax or Gigantamax', () => {
+  const base = box.find((p) => p.name === 'Snorlax' && !p.shadow);
+  const line = (o) => analyseBox([{ ...base, ivPercent: 100, ivs: { atk: 15, def: 15, hp: 15 }, ...o }], ctx).pokemon[0].fit.max.line;
+  assert.match(line({}), /needs a Dynamax copy/);
+  assert.doesNotMatch(line({ dynamax: true }), /needs a Dynamax copy/);
+  assert.doesNotMatch(line({ gigantamax: true }), /needs a Dynamax copy/);
+});
+
+test('hygiene keeps a Gigantamax-marked copy as it does a Dynamax one', () => {
+  const base = box.find((p) => p.name === 'Chansey');
+  const g = { ...base, gigantamax: true, ivPercent: 0, cp: 100 };
+  const best = { ...base, ivPercent: 100, cp: 200 };
+  const h = analyseBox([g, best], ctx).hygiene.find((x) => x.speciesId === 'chansey');
+  assert.equal(h.transfer.length, 0);
+  assert.equal(h.dynamaxExtras, 1);
+});
+
+test('a hand Shadow mark reaches the engine as shadow, purified or neither', () => {
+  const imp = (sp) => importPokeGenie(csvOf([{ index: 1, name: 'Charmander', form: '', dex: 4, cp: 300, hp: 40, ivs: { atk: 10, def: 10, hp: 10 }, level: 20, levelMax: 20, dust: 2500, shadow: sp }]))[0];
+  assert.equal(imp(1).shadow, true);
+  assert.equal(imp(2).purified, true);
+  for (const sp of [0, null, undefined]) { assert.equal(imp(sp).shadow, false); assert.equal(imp(sp).purified, false); }
+  const id = (sp) => analyseBox([imp(sp)], ctx).pokemon[0].resolved.speciesId;
+  assert.equal(id(1), 'charmander_shadow');
+  assert.equal(id(0), 'charmander');
+});
+
+test('Lucky 1 from the CSV writer reaches the engine and halves the power-up dust', () => {
+  const row = { index: 1, name: 'Charmander', form: '', dex: 4, cp: 300, hp: 40, ivs: { atk: 10, def: 10, hp: 10 }, level: 20, levelMax: 20, dust: 2500 };
+  assert.match(csvOf([{ ...row, lucky: true }]).split('\n')[1], /,1,,,/, 'Lucky column holds 1');
+  const lucky = importPokeGenie(csvOf([{ ...row, lucky: true }]))[0];
+  const plain = importPokeGenie(csvOf([{ ...row, lucky: false }]))[0];
+  assert.equal(lucky.lucky, true);
+  assert.equal(plain.lucky, false);
+  const dust = (p) => analyseBox([p], ctx).builds.find((b) => b.speciesId === 'charmander' && b.targetId === 'charizard').cost.dust;
+  assert.ok(dust(lucky) < dust(plain), `lucky ${dust(lucky)} < plain ${dust(plain)}`);
 });

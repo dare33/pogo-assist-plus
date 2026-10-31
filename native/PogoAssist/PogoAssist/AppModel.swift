@@ -27,6 +27,20 @@ final class NotificationActions: NSObject, UNUserNotificationCenterDelegate {
 /// Everything the screens share: the accounts, the selected account's box and its advice, the scan in progress and the
 /// scan waiting for review. All heavy work (JavaScript, merge, advice, file writes) runs on `worker`'s one queue; this class
 /// only holds results and starts that work.
+/// Which whole-box advice is wanted now, and the newest advice known for the box, shared between the main actor (which asks) and the engine's worker (which checks before
+/// it starts the engine and chains one family result on the last). A whole-box advise that is no longer wanted never starts.
+final class AdviceGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var token = 0
+    private var known: (account: String, advice: BoxAdvice)?
+
+    /// A newer box (or account) is now the one wanted; the older asks are out of date.
+    func supersede() -> Int { lock.lock(); defer { lock.unlock() }; token += 1; return token }
+    func isCurrent(_ t: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return t == token }
+    func setKnown(_ advice: BoxAdvice?, account: String) { lock.lock(); known = advice.map { (account, $0) }; lock.unlock() }
+    func known(account: String) -> BoxAdvice? { lock.lock(); defer { lock.unlock() }; return known?.account == account ? known?.advice : nil }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     enum AdviceState: Equatable { case none, computing, ready(BoxAdvice), failed(String) }
@@ -58,6 +72,12 @@ final class AppModel: ObservableObject {
         var reportHash: String?
         /// The current box version this review was prepared against (nil: there was none). A save is refused if the box has moved on.
         var boxSeq: Int?
+        /// A filtered pass (`plan.pass`) whose rows mostly matched nothing in the box asks "Was this a <kind> search?" before it is saved. `searchConfirmed`: the person said yes.
+        var searchConfirmed = false
+        /// The person answered "No, save as Add and update": the scan was started as a pass (so saving or discarding it clears the pass choice) though its plan no longer is one.
+        var droppedPass = false
+        var wasPass: Bool { plan.pass != nil || droppedPass }
+        var askingSearch = false
         /// The extension ended this scan itself because the end of the list was reached.
         var endedAtListEnd = false
         /// The person ended the scan, or a pause went unanswered until the time limit (`BroadcastState`); both are false for a saved scan read again, whose end the replay log tells (`ScanEnding`).
@@ -105,10 +125,21 @@ final class AppModel: ObservableObject {
     @Published var account: String? { didSet { UserDefaults.standard.set(account, forKey: Keys.account); ReaderSettings.scanAccount = account; if account != oldValue { rescanCount = nil } } }
     @Published var snapshot: BoxSnapshot?
     @Published var advice: AdviceState = .none
+    /// The Pokémon page's advice while the whole box's is being worked out after an edit of a mark: the last advice with the edited copy's family worked out again
+    /// (`BoxAdvice.afterEdit`). Only that page reads it; it is never saved as the box version's advice and no other screen sees it. Cleared when the whole box's is ready.
+    @Published private(set) var familyHold = FamilyAdviceHold()
+    /// The family advice, only while it is for the account and box version showing now (`FamilyAdviceHold`).
+    var familyAdvice: BoxAdvice? { familyHold.advice(account: account, seq: snapshot?.seq) }
+    /// Counts the family results shown, so a page can tell a new one without comparing two whole advices.
+    @Published private(set) var familyStamp = 0
+    private let adviceGate = AdviceGate()
+    private var wholeAdviceTask: Task<Void, Never>?
+    /// How long the whole-box advise waits after the last edit before it starts, so a burst of edits makes one.
+    static let adviceSettle: Duration = .milliseconds(300)
     @Published var flow: ScanFlow = .idle { didSet { if case .idle = flow { scanDonePending = false; dropCopy(); screenshots.flowEnded() } } }
     /// The review's private copy of its scan's log, kept on disk (`PendingScanStore`) until that review is saved or discarded, so it survives a relaunch. `state` is the
     /// broadcast's state file as it was when the scan ended, which the next broadcast overwrites; `kind` and `date` are what the scan was asked to be and when it ended.
-    private struct ScanCopy { var signature: String; var url: URL; var state: BroadcastState?; var kind: BoxStore.Kind; var date: Date?; var account: String }
+    private struct ScanCopy { var signature: String; var url: URL; var state: BroadcastState?; var kind: BoxStore.Kind; var date: Date?; var account: String; var pass: String? }
     private var scanCopy: ScanCopy?
     /// A copy is being made off the main actor, or a waiting scan is being looked at: the one-second timer starts nothing else, and a rename waits.
     private var copying = false
@@ -133,6 +164,9 @@ final class AppModel: ObservableObject {
     /// (a saved scan read again, retry after a failure) never set it.
     @Published var scanDonePending = false
     @Published var message: String?
+    /// How many sheets show the app's alert (`message`) themselves. The root view's alert waits while one does: a sheet that is up would be closed by an alert shown
+    /// from underneath it (a "No level fits" notice from a copy's page opened inside a Special sets sheet closed the sheet; Greg, 31 Oct 2026).
+    @Published var alertHosts = 0
     @Published var history: [BoxSnapshot.Header] = []
     @Published var previous: BoxSnapshot.Header?
     /// What the last Save changed, for the Saved panel at the top of Box (see `SaveSummary`).
@@ -153,7 +187,15 @@ final class AppModel: ObservableObject {
     @Published private(set) var recoveryProblem: String?
     nonisolated static func recoveryText(_ error: Error) -> String { "A rename of an account was cut off and could not be finished yet (\(plain(error))) Your boxes have not been deleted. The app tries again each time it opens a box." }
 
-    @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind); refreshReaderSettings(); if scanKind != oldValue { rescanCount = nil } } }
+    @Published var scanKind: BoxStore.Kind { didSet { UserDefaults.standard.set(scanKind.rawValue, forKey: Keys.kind); if scanKind == .full { scanPass = nil }; refreshReaderSettings(); if scanKind != oldValue { rescanCount = nil } } }
+    /// The filtered pass chosen on the Scan screen ("Special scan"), or nil. A pass is a partial scan: choosing one sets Add and update underneath, and choosing Full scan clears it.
+    @Published var scanPass: ScanPass? {
+        didSet {
+            if scanPass != nil, scanKind != .partial { scanKind = .partial }
+            refreshReaderSettings()
+            if scanPass != oldValue { rescanCount = nil }
+        }
+    }
     /// "Re-scan N" was pressed in the Box: how many Pokémon are to be checked. Held only for the next scan and never saved. It goes when a scan starts, when the scan kind or the
     /// options change, when the account changes and when the Scan screen closes (see `startRescan`), so it cannot name a command for a later, unrelated scan.
     @Published var rescanCount: Int? { didSet { if rescanCount == nil { rescanShown = nil } } }
@@ -164,6 +206,7 @@ final class AppModel: ObservableObject {
     /// Sets Add and update and records the re-scan; the root view opens the Scan screen on the change. The kind is set first because changing it drops the count.
     /// `shown` sizes the command (`ScanWords.current`) without writing into the remembered Add and update number, so the next ordinary scan is not sized for this one.
     func startRescan(count: Int, shown: Int) {
+        scanPass = nil
         scanKind = .partial
         rescanCount = count
         rescanShown = shown
@@ -178,7 +221,7 @@ final class AppModel: ObservableObject {
     /// The eggs shown in the game's storage, typed for a Full scan (0 to `StorageCountRules.maxEggSlots`), remembered per account; empty means the flat allowance.
     @Published var eggText: String { didSet { if let a = account { UserDefaults.standard.set(eggText, forKey: Keys.eggs + "." + a) }; refreshReaderSettings(); if eggText != oldValue { rescanCount = nil } } }
 
-    /// The stardust the person has, typed on the Hub's Everything screen and remembered per account; nil until entered. It is not read from the game.
+    /// The stardust the person has, typed on the Collection lists screen and remembered per account; nil until entered. It is not read from the game.
     var stardust: Int? {
         get { account.flatMap { UserDefaults.standard.object(forKey: Keys.stardust + "." + $0) as? Int } }
         set {
@@ -326,6 +369,7 @@ final class AppModel: ObservableObject {
         // Only a Full scan uses the count and the eggs, and only a Full scan may pause; an Add-and-update scan ends at the end wait and remembers neither.
         ReaderSettings.scanIsFull = scanKind == .full
         ReaderSettings.scanKind = scanKind.rawValue
+        ReaderSettings.scanPass = scanPass?.rawValue
         ReaderSettings.scanAccount = account   // an account chosen in an earlier run is set at launch without going through its didSet
         ReaderSettings.storageCount = scanKind == .full ? storageCount : nil
         ReaderSettings.eggCount = scanKind == .full ? eggCount : nil
@@ -525,6 +569,16 @@ final class AppModel: ObservableObject {
         }
         library = BoxLibrary(root: libraryRoot)
         pendingStore = PendingScanStore(directory: BoxExportFile.pendingDirectory ?? URL(fileURLWithPath: "/dev/null/pogo-assist-pending", isDirectory: true))
+        #if DEBUG
+        // A UI test or a timing run can start from a big box: `-uitest-seed-box <csv path>` writes that CSV (Poke Genie or the app's own export) as the first version of "Greg main".
+        if let i = CommandLine.arguments.firstIndex(of: "-uitest-seed-box"), i + 1 < CommandLine.arguments.count, root != nil,
+           let text = try? String(contentsOfFile: CommandLine.arguments[i + 1], encoding: .utf8), let gm = try? GameMaster.bundled() {
+            let seeded = BoxCSVReader.entries(csv: text, gm: gm)
+            if (try? library.createAccount("Greg main")) != nil { _ = try? library.commit(account: "Greg main", entries: seeded, reason: .scan, note: "Seeded for a UI test") }
+        }
+        #endif
+        // A pass is never restored at launch: the next scan after one is an ordinary scan unless the person chooses Special scan again. (A broadcast that was running keeps the pass it
+        // started with in its own state and in the waiting-scan record.)
         scanKind = BoxStore.Kind(rawValue: UserDefaults.standard.string(forKey: Keys.kind) ?? "") ?? .full
         eggText = ""
         partialCountText = ""
@@ -594,9 +648,9 @@ final class AppModel: ObservableObject {
     /// wrote it, and the newest in full. Interrupted renames are repaired first. A newer call, or another account, makes an older read's answer unwanted.
     func loadBox() {
         boxToken += 1
-        if storageMissing { snapshot = nil; advice = .none; clearHistory(); scans = []; scansLoaded = true; boxNeedsNewerApp = false; boxProblem = BoxExportFile.storageUnavailableText; boxAccount = nil; boxLoaded = true; return }
-        guard let a = account else { snapshot = nil; advice = .none; clearHistory(); scans = []; scansLoaded = true; boxProblem = nil; boxNeedsNewerApp = false; boxAccount = nil; boxLoaded = true; return }
-        if boxAccount != a { snapshot = nil; advice = .none; boxProblem = nil; boxNeedsNewerApp = false; boxAccount = a }
+        if storageMissing { snapshot = nil; advice = .none; familyHold.clear(); clearHistory(); scans = []; scansLoaded = true; boxNeedsNewerApp = false; boxProblem = BoxExportFile.storageUnavailableText; boxAccount = nil; boxLoaded = true; return }
+        guard let a = account else { snapshot = nil; advice = .none; familyHold.clear(); clearHistory(); scans = []; scansLoaded = true; boxProblem = nil; boxNeedsNewerApp = false; boxAccount = nil; boxLoaded = true; return }
+        if boxAccount != a { snapshot = nil; advice = .none; familyHold.clear(); boxProblem = nil; boxNeedsNewerApp = false; boxAccount = a }
         boxLoaded = false
         let token = boxToken, lib = library
         let ps = pendingStore
@@ -680,25 +734,61 @@ final class AppModel: ObservableObject {
 
     func entry(_ id: String) -> BoxEntry? { entries.first { $0.id == id } }
 
-    func loadAdvice() {
-        guard let a = account, let snap = snapshot else { advice = .none; return }
-        if let cached = library.loadAdvice(account: a, seq: snap.seq) { advice = .ready(cached); return }
+    private struct Superseded: Error {}
+
+    /// Works out the advice for the current box version. `editedId` is the copy whose marks were just edited: its family's advice is worked out first and shown on that
+    /// copy's page at once, and the whole box's follows after a short wait for further edits (and not at all if another edit makes this version out of date first).
+    func loadAdvice(afterEditOf editedId: String? = nil) {
+        wholeAdviceTask?.cancel()
+        let token = adviceGate.supersede()
+        guard let a = account, let snap = snapshot else { advice = .none; familyHold.clear(); adviceGate.setKnown(nil, account: ""); return }
+        if let cached = library.loadAdvice(account: a, seq: snap.seq) { advice = .ready(cached); familyHold.clear(); adviceGate.setKnown(cached, account: a); return }
         advice = .computing
-        let lib = library, entries = snap.entries, seq = snap.seq
-        Task {
+        if editedId == nil { familyHold.clear() }   // a box that was not made by one mark edit (a scan, a restore, a rename) has no family result to show
+        let lib = library, entries = snap.entries, seq = snap.seq, gate = adviceGate
+        let scanDate = snap.scanDate ?? snap.createdAt
+        if let editedId {
+            Task {
+                #if DEBUG
+                let asked = Date()
+                #endif
+                let found = try? await worker.run { engine -> BoxAdvice? in
+                    // Every edit's family is chained on the last known advice, even when a newer edit has come since (skipping one would leave that family out of the next
+                    // one's base); only an account that is not the known advice's, or a Pokémon no longer in the box, ends it.
+                    guard let base = gate.known(account: a), let gm = try? GameMaster.bundled() else { return nil }
+                    #if DEBUG
+                    let t = Date()
+                    #endif
+                    guard let merged = try BoxAdvice.afterEdit(of: editedId, base: base, entries: entries, scanDate: scanDate, engine: engine, gm: gm) else { return nil }
+                    gate.setKnown(merged, account: a)
+                    #if DEBUG
+                    NSLog("pogo timings: advise (family) %.3f s, %.3f s after the ask", Date().timeIntervalSince(t), Date().timeIntervalSince(asked))
+                    #endif
+                    return merged
+                }
+                if let merged = found ?? nil, self.snapshot?.seq == seq, self.account == a, case .computing = self.advice { self.familyHold.set(merged, account: a, seq: seq); self.familyStamp += 1; PageTimings.advice("family") }
+            }
+        }
+        let wait: Duration = editedId == nil ? .zero : Self.adviceSettle
+        wholeAdviceTask = Task {
+            if wait > .zero { try? await Task.sleep(for: wait) }
+            guard !Task.isCancelled else { return }
             do {
                 let result = try await worker.run { engine -> BoxAdvice in
+                    guard gate.isCurrent(token) else { throw Superseded() }   // a newer edit came while this waited its turn: do not start the engine
                     let t = Date()
                     let rows = Self.csvRows(entries)
-                    let report = try engine.advise(rows: rows, scanDate: snap.scanDate ?? snap.createdAt)
+                    let report = try engine.advise(rows: rows, scanDate: scanDate)
                     let adv = BoxAdvice.make(from: report, entries: entries)
                     NSLog("pogo timings: advise (engine, model) %.2f s", Date().timeIntervalSince(t))
                     try? lib.saveAdvice(adv, account: a, seq: seq)
+                    if gate.isCurrent(token) { gate.setKnown(adv, account: a) }
                     return adv
                 }
-                if self.snapshot?.seq == seq && self.account == a { self.advice = .ready(result) }
+                if self.snapshot?.seq == seq && self.account == a { self.advice = .ready(result); self.familyHold.clear() }
+            } catch is Superseded {
             } catch {
-                if self.snapshot?.seq == seq && self.account == a { self.advice = .failed(Self.plain(error)) }
+                if self.snapshot?.seq == seq && self.account == a { self.advice = .failed(Self.plain(error)); self.familyHold.clear() }
             }
         }
     }
@@ -719,12 +809,19 @@ final class AppModel: ObservableObject {
     func correct(_ id: String, _ edit: BoxMerge.Edit) async -> CorrectionResult {
         guard let a = account else { return CorrectionResult(error: "There is no account.", notice: nil) }
         let lib = library, label = entry(id)?.row.title ?? "a Pokémon"   // the history note only; the values come from the box inside the call
-        // A Dynamax-only edit is a setting, not a correction of a read value.
-        let dynamaxOnly = edit.dynamax != nil && edit.cp == nil && edit.hp == nil && edit.ivs == nil && edit.speciesName == nil
+        // An edit of the hand-set marks only (Dynamax, Gigantamax, Shadow/Purified, Lucky, details) is a setting, not a correction of a read value.
+        let marksOnly = edit.marksOnly && (edit.dynamax != nil || edit.gigantamax != nil || edit.lucky != nil || edit.shadow != nil || edit.details != nil)
         do {
+            #if DEBUG
+            let asked = Date()
+            #endif
             let (new, notice) = try await worker.run { engine -> (BoxSnapshot, String?) in
                 var notice: String?
-                let snap = try lib.mutate(account: a, reason: .edit, note: dynamaxOnly ? "Dynamax set for \(label)" : "Corrected \(label)") { entries in
+                #if DEBUG
+                let started = Date()
+                defer { NSLog("pogo timings: edit saved (waited %.2f s, mutate %.2f s)", started.timeIntervalSince(asked), Date().timeIntervalSince(started)) }
+                #endif
+                let snap = try lib.mutate(account: a, reason: .edit, note: marksOnly ? "Marks set for \(label)" : "Corrected \(label)") { entries in
                     guard let i = entries.firstIndex(where: { $0.id == id }) else { throw BoxMerge.EditFailure.badValue("That Pokémon is no longer in the box.") }
                     var fixed = try BoxMerge.correct(entries[i], with: edit, gameMaster: try .bundled())
                     // The level and dust follow the corrected values: the JavaScript solver is run again for this Pokémon.
@@ -734,7 +831,7 @@ final class AppModel: ObservableObject {
                 }
                 return (snap, notice)
             }
-            afterCommit(new)
+            afterCommit(new, editedId: marksOnly ? id : nil)
             return CorrectionResult(error: nil, notice: notice)
         } catch { return CorrectionResult(error: Self.plain(error), notice: nil) }
     }
@@ -772,7 +869,7 @@ final class AppModel: ObservableObject {
 
     private var renaming = false
 
-    /// The per-account settings follow the account's name: the voice records, the one-time set record and the remembered counts and eggs. The old-name records go, so a stale tap-set
+    /// The per-account settings follow the account's name: the voice records, the one-time set record, the remembered counts and eggs, the stardust and the squads. The old-name records go, so a stale tap-set
     /// record under the old name cannot keep the wrong-screen warning on. Used by a rename made here and by one that a recovery finished.
     static func moveAccountKeys(from old: String, to new: String) {
         let d = UserDefaults.standard
@@ -780,7 +877,7 @@ final class AppModel: ObservableObject {
             let k = { (a: String) in Keys.voice + a + "." + p.rawValue }
             if let v = d.data(forKey: k(old)) { d.set(v, forKey: k(new)); d.removeObject(forKey: k(old)) }
         }
-        for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + ".", Keys.stardust + "."] {
+        for key in [Keys.set, Keys.count + ".", Keys.partial + ".", Keys.eggs + ".", Keys.stardust + ".", SquadKeeper.keyPrefix] {
             if let v = d.object(forKey: key + old) { d.set(v, forKey: key + new); d.removeObject(forKey: key + old) }
         }
     }
@@ -867,12 +964,14 @@ final class AppModel: ObservableObject {
         return out
     }
 
-    private func afterCommit(_ snap: BoxSnapshot) {
+    private func afterCommit(_ snap: BoxSnapshot, editedId: String? = nil) {
+        // The version is saved, but an account switch during the awaited edit means the box now on screen is another account's: it stays.
+        guard snap.account == account else { return }
         boxToken += 1   // a box read still in flight began before this and must not put an older snapshot back
         boxLoaded = true
         snapshot = snap
         loadHistory(for: snap.account, withPrevious: true)
-        loadAdvice()
+        loadAdvice(afterEditOf: editedId)
         loadScans()
     }
 
@@ -1049,7 +1148,9 @@ final class AppModel: ObservableObject {
         guard case .account(let a) = accountOfScan(st) else { return }
         if a == account, !boxLoaded || boxProblem != nil { return }
         let kind = st?.kind.flatMap(BoxStore.Kind.init(rawValue:)) ?? scanKind   // what the scan was started as, not the preference now
-        let meta = PendingScanMeta(signature: signature, account: a, kind: kind, scanDate: st?.updated, doneFirst: doneFirst, attempts: 0, state: Self.encode(st))
+        // The pass is what the scan was started as, from its state; a state without a kind (the sample scan) takes the one chosen now, as the kind does.
+        let pass = ScanPass(stored: st?.pass) ?? (st?.kind == nil ? scanPass : nil)
+        let meta = PendingScanMeta(signature: signature, account: a, kind: pass == nil ? kind : .partial, scanDate: st?.updated, doneFirst: doneFirst, attempts: 0, state: Self.encode(st), pass: pass?.rawValue)
         let store = pendingStore
         copying = true
         Task {
@@ -1065,7 +1166,7 @@ final class AppModel: ObservableObject {
                 guard !renaming, !isReviewing || retrying, ReplayMarker.processedSignature() != signature else { store.clear(ifSignature: signature); return }
                 copyRetryAfter = nil
                 if account == a, boxLoaded, boxProblem == nil {
-                    let c = ScanCopy(signature: signature, url: url, state: st, kind: meta.kind, date: meta.scanDate, account: a)
+                    let c = ScanCopy(signature: signature, url: url, state: st, kind: meta.kind, date: meta.scanDate, account: a, pass: meta.pass)
                     scanCopy = c
                     beginReading(signature: signature, doneFirst: doneFirst, copy: c, state: st)
                 } else {
@@ -1135,7 +1236,7 @@ final class AppModel: ObservableObject {
             case .gone: break
             }
             guard case .ready(let meta, let copy) = pendingStore.load() else { adoptWaiting(); return }
-            scanCopy = ScanCopy(signature: meta.signature, url: copy, state: Self.decode(meta.state), kind: meta.kind, date: meta.scanDate, account: meta.account)
+            scanCopy = ScanCopy(signature: meta.signature, url: copy, state: Self.decode(meta.state), kind: meta.kind, date: meta.scanDate, account: meta.account, pass: meta.pass)
             waitingScan = nil
             flow = .failed(message: Self.accountGoneText(meta.account), signature: meta.signature)
             return
@@ -1156,7 +1257,7 @@ final class AppModel: ObservableObject {
             guard !isReviewing, !renaming, scanCopy == nil, account == a, boxProblem == nil, !live, waitingScan?.signature == sig else { return }   // still waiting (or discarded meanwhile); the next event asks again
             if saved == .saved { ReplayMarker.markProcessed(sig); pendingStore.clear(ifSignature: sig); waitingScan = nil; return }
             waitingScan = nil
-            let c = ScanCopy(signature: sig, url: copy, state: Self.decode(meta.state), kind: meta.kind, date: meta.scanDate, account: a)
+            let c = ScanCopy(signature: sig, url: copy, state: Self.decode(meta.state), kind: meta.kind, date: meta.scanDate, account: a, pass: meta.pass)
             scanCopy = c
             if saved == .unknown { message = "This scan may already have been saved before the app closed. Look at the version history in Settings before saving it again." }
             if meta.attempts > 0 {
@@ -1174,6 +1275,7 @@ final class AppModel: ObservableObject {
     /// Throw the waiting scan away without needing its box to be readable, so a scan that cannot be opened can never stop scanning for good.
     func discardWaitingScan() {
         guard let w = waitingScan else { return }
+        if !w.damaged, case .ready(let meta, _) = pendingStore.load(), meta.signature == w.signature, meta.pass != nil { scanPass = nil }
         if w.damaged { pendingStore.clear() } else { ReplayMarker.markProcessed(w.signature); pendingStore.clear(ifSignature: w.signature) }
         waitingScan = nil
     }
@@ -1204,7 +1306,7 @@ final class AppModel: ObservableObject {
         flow = .processing("Reading the scan")
         scanDonePending = doneFirst
         // The kind asked and the date of the scan are the ones it was copied with (a relaunch must not use today's preference or time): the date is when the broadcast last wrote, i.e. ended.
-        let asked = copy.kind, date = copy.date ?? Date(), lib = library
+        let asked = copy.kind, date = copy.date ?? Date(), lib = library, pass = ScanPass(stored: copy.pass)
         // How the scan was paged is what the extension was told when it started (a command at its period, or by hand), not a setting changed since.
         let period: Double? = { if let b = state { return b.commandPeriod }; return pagedByHand ? nil : pace.every }()
         let paging = period == nil ? PagingHint(pagedByCommand: false) : PagingHint(pagedByCommand: true, expectedPeriod: period, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
@@ -1220,10 +1322,11 @@ final class AppModel: ObservableObject {
                     var kind = asked, note: String?
                     let d = ScanKindAdvice.decide(endedAtListEnd: ended, pokemonRead: outcome.scan.rows.count, typedCount: typed, logTruncated: logFull, logFailed: logFailed, commandPeriod: period, eggCount: eggs, endedByTimeout: byTimeout)
                     if asked == .full && !d.fullIsSound { kind = .partial; note = d.reason }
+                    if pass != nil { kind = .partial; note = nil }   // a pass removes nothing and is not judged as a Full scan
                     let current = try lib.current(account: a)   // the box as it is when the plan is made
                     let entries = current?.entries ?? []
                     let t = Date()
-                    let plan = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled())
+                    let plan = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled(), pass: pass)
                     // Where it stopped: the last Pokémon, how many, whether the appraisal had closed (from the whole log, the tail the end marker cuts included).
                     var stop: String?
                     if ended || byPerson || byTimeout {
@@ -1311,7 +1414,7 @@ final class AppModel: ObservableObject {
 
     /// Change the scan kind on the review screen; the merge is recomputed (it is pure and quick).
     func setReviewKind(_ kind: BoxStore.Kind) async {
-        guard case .review(var r) = flow, r.kind != kind, r.importPrepared == nil else { return }   // a screenshot import is always Add and update
+        guard case .review(var r) = flow, r.kind != kind, r.importPrepared == nil, r.plan.pass == nil else { return }   // a screenshot import is always Add and update
         scanKind = kind
         let base = r.base, rows = r.outcome.scan.rows, date = r.plan.scanDate
         let unmatched = r.outcome.scan.unmatched
@@ -1325,6 +1428,17 @@ final class AppModel: ObservableObject {
         guard case .review(var r) = flow else { return }
         r.resolutions[scanned] = resolution
         flow = .review(r)
+    }
+
+    /// The answer to "Was this a <kind> search?": yes saves it as the pass; no saves it as an ordinary Add and update scan (nothing is marked); cancelling leaves the review open.
+    func answerPassSearch(yes: Bool?) async {
+        guard case .review(var r) = flow else { return }
+        r.askingSearch = false
+        guard let yes else { flow = .review(r); return }
+        r.searchConfirmed = true
+        if !yes { r.plan.pass = nil; r.droppedPass = true; r.planToken = UUID() }
+        flow = .review(r)
+        await saveReview()
     }
 
     func setRemove(_ id: String, _ remove: Bool) {
@@ -1355,6 +1469,12 @@ final class AppModel: ObservableObject {
         guard case .review(let r) = flow else { return }
         if let why = saveBlocker(r) { message = why; return }
         if r.importPrepared != nil { await saveImport(r); return }
+        // A pass whose rows mostly match nothing in the box was probably searched for wrongly: ask first (a read-again scan was asked when it was first saved).
+        if r.reread == nil, !r.searchConfirmed, BoxMerge.passSearchLooksWrong(r.plan, resolutions: r.resolutions) {
+            var asking = r; asking.askingSearch = true
+            flow = .review(asking)
+            return
+        }
         busy = "Saving to the box"
         defer { busy = nil }
         let lib = library
@@ -1366,17 +1486,18 @@ final class AppModel: ObservableObject {
                 if let plan = r.reread { return try lib.commitReread(plan, entries: entries, account: r.account, expectedCurrentSeq: .some(r.boxSeq)) }
                 let log = r.log.flatMap { try? Data(contentsOf: $0) }
                 let n = r.outcome.scan.rows.count
-                let note = (r.kind == .full ? "Full scan" : "Add and update") + ", \(n) Pokémon"
+                let note = (r.plan.pass?.passName ?? (r.kind == .full ? "Full scan" : "Add and update")) + ", \(n) Pokémon"
                 // The scan record and the box version go in as one step: a version that cannot be written takes the record back out (BoxLibrary.commitScan).
                 return try lib.commitScan(r.outcome.scan, entries: entries, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, note: note,
                                           expectedCurrentSeq: .some(r.boxSeq), storageCount: r.storageCount, replayLog: log, paging: r.paging,
                                           refineChanges: r.outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" },
                                           reviewActions: ScanReportBuilder.reviewLines(plan: r.plan, resolutions: r.resolutions, keepGone: r.keepGone, base: r.base),
-                                          reportSentAt: r.reportSentAt, reportHash: r.reportHash, sourceSignature: r.signature).snapshot
+                                          reportSentAt: r.reportSentAt, reportHash: r.reportHash, sourceSignature: r.signature, pass: r.plan.pass?.rawValue).snapshot
             }
             if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
             // A scan paged by the voice command is saved: setup counts as done (`SetupProgress.pagedScanSaved`).
             if r.reread == nil, r.paging?.pagedByCommand == true { setup.notePagedScanSaved() }
+            if r.reread == nil, r.wasPass { scanPass = nil }   // the scan screen goes back to Add and update; a Special scan chosen for the next scan is not touched by an ordinary one's save
             flow = .idle
             // A scan read again was merged into the box as it was BEFORE that scan, so the box it started from is not the box the person had: no counts for it.
             lastSave = SaveSummary(base: r.base, saved: snap, showsCounts: r.reread == nil)
@@ -1393,12 +1514,12 @@ final class AppModel: ObservableObject {
     private func refreshReview(_ r: Review) async {
         if let plan = r.reread { flow = .idle; rereadScan(id: plan.scan.id); return }
         if let p = r.importPrepared { flow = .idle; await screenshots.review(batch: p.manifest.batchId); return }
-        let lib = library, rows = r.outcome.scan.rows, unmatched = r.outcome.scan.unmatched, kind = r.kind, date = r.plan.scanDate, a = r.account
+        let lib = library, rows = r.outcome.scan.rows, unmatched = r.outcome.scan.unmatched, kind = r.kind, date = r.plan.scanDate, a = r.account, pass = r.plan.pass
         do {
             let (plan, base, seq) = try await worker.run { _ -> (BoxMerge.Plan, [BoxEntry], Int?) in
                 let cur = try lib.current(account: a)
                 let entries = cur?.entries ?? []
-                return (BoxMerge.plan(scanned: rows, unmatched: unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled()), entries, cur?.seq)
+                return (BoxMerge.plan(scanned: rows, unmatched: unmatched, into: entries, kind: kind, scanDate: date, gameMaster: try .bundled(), pass: pass), entries, cur?.seq)
             }
             var n = r; n.plan = plan; n.planToken = UUID(); n.base = base; n.boxSeq = seq; n.resolutions = [:]; n.markedForRemoval = []
             flow = .review(n)
@@ -1409,10 +1530,13 @@ final class AppModel: ObservableObject {
     func discardReview() {
         switch flow {
         case .review(let r) where r.importPrepared != nil: screenshots.reviewClosedWithoutSaving()   // the screenshots stay queued; discarding them is a choice in Import screenshots
-        case .review(let r): if r.reread == nil { ReplayMarker.markProcessed(r.signature) }
+        case .review(let r): if r.reread == nil { ReplayMarker.markProcessed(r.signature); if r.wasPass { scanPass = nil } }
         case .failed(_, let sig):
             if sig == Self.damagedPrefix { pendingStore.clear(); waitingScan = nil }   // the person's choice: what was kept goes
-            else if !sig.hasPrefix(Self.rereadPrefix) { ReplayMarker.markProcessed(sig) }
+            else if !sig.hasPrefix(Self.rereadPrefix) {
+                ReplayMarker.markProcessed(sig)
+                if scanCopy?.signature == sig, scanCopy?.pass != nil { scanPass = nil }   // a pass whose reading failed
+            }
         default: break
         }
         flow = .idle
@@ -1441,7 +1565,7 @@ final class AppModel: ObservableObject {
                     let plan = try lib.prepareReread(account: a, scanId: id)
                     let outcome = try ScanPipeline.process(replay: plan.replayURL, engine: engine, paging: plan.paging)
                     let t = Date()
-                    let merge = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: plan.baseEntries, kind: plan.scan.kind, scanDate: plan.scan.scanDate, gameMaster: try .bundled())
+                    let merge = BoxMerge.plan(scanned: outcome.scan.rows, unmatched: outcome.scan.unmatched, into: plan.baseEntries, kind: plan.scan.kind, scanDate: plan.scan.scanDate, gameMaster: try .bundled(), pass: ScanPass(stored: plan.scan.pass))
                     return (plan, outcome, merge, Date().timeIntervalSince(t), try lib.current(account: a)?.seq)
                 }
                 flow = .review(Review(account: a, kind: plan.scan.kind, outcome: outcome, plan: merge, base: plan.baseEntries, storageCount: plan.scan.storageCount, signature: signature,

@@ -14,6 +14,8 @@ enum Theme {
     enum Space {
         static let screen: CGFloat = 14
         static let panelGap: CGFloat = 12
+        /// My Pokémon: the list and the search field sit 24 pt in from both edges, so the list is centred under the Scan button; the A-Z index lives in the right gutter (design pass 3, D23).
+        static let listGutter: CGFloat = 24
     }
 
     /// Widest the content gets. The screens are laid out as a phone (the widest is about 440 pt); in a regular-width
@@ -40,6 +42,14 @@ enum Theme {
     static let red = pair(0xD92D3A, 0xFF6B76)
     /// Behind the "over cap" indicator.
     static let redTint = pair(0xFBE4E6, rgba: (255, 107, 118, 0.16))
+
+    /// Slot status (CONCEPTS rule 29): the card backgrounds and the text colour that stays readable on them. Measured, text on each tint (light / dark, over the white
+    /// or dark surface and over the page): ink 14.9+ / 9.9+; `mutedOnTint` 5.8+ / 5.8+; the role inks 4.5+ (light) and 5.7+ (dark); the amber ink 4.5+ / 6.3+. The dark tints
+    /// differ in luminance ratio by 1.11 (green and amber), 1.14 (green and red) and 1.26 (amber and red), and a card also says its status in a word and an icon, so colour is never the only sign.
+    static let statusGreenTint = pair(0xE3F5EA, rgba: (80, 200, 120, 0.16))
+    static let statusAmberTint = pair(0xFFF1DC, rgba: (255, 170, 60, 0.20))
+    static let statusRedTint = pair(0xFDE9EB, rgba: (255, 107, 118, 0.13))
+    static let mutedOnTint = pair(0x555B70, 0xB4BACB)
 
     /// Question kind: match to one you have.
     static let match = pair(0x0E9AA7, 0x2EC4CF)
@@ -119,13 +129,14 @@ enum League: String, CaseIterable, Identifiable {
     }
 }
 
-/// The kinds of content on the Pogo Hub. Each has an ink and a tint; `.everything` follows the accent, so both take it.
+/// The kinds of content on the Pogo Hub. Each has an ink and a tint; `.everything` (the Collection: the case and raw value stay because the events data ties to
+/// "everything" and the identifiers hang on it) follows the accent, so both take it.
 enum ContentType: String, CaseIterable, Identifiable {
     case everything, raids, gym, rocket, pvp, max
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .everything: return "Everything"
+        case .everything: return "Collection"
         case .raids: return "Raids"
         case .gym: return "Gym battles"
         case .rocket: return "Team Rocket"

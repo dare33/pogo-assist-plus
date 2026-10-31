@@ -27,11 +27,11 @@ final class ListScreensTests: XCTestCase {
     /// Types a species into the search so its row is built (the list is lazy), then opens the species.
     private func openSpecies(_ app: XCUIApplication, _ name: String) {
         let search = app.textFields["box-search"]
-        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText(name)
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText(name + "\n")   // Return puts the keyboard away, so the opened species is not under it
         // A species with a form reads "Zamazenta (Hero), 3 Pokémon", so match the name's start, not "name,".
         let r = rows(app).matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
         XCTAssertTrue(r.waitForExistence(timeout: 5), "\(name) is in the sample box")
-        r.tap()
+        app.openSpeciesList(r)
     }
     private func launchPopulated(_ extra: [String] = ["-appearance", "light"]) -> XCUIApplication {
         let app = XCUIApplication()
@@ -40,9 +40,7 @@ final class ListScreensTests: XCTestCase {
         populate(app)
         // The tiles and the chips read the advice; wait for it (a tile that has it never says "…").
         XCTAssertTrue(row(app, "Blissey").waitForExistence(timeout: 10))
-        let ready = NSPredicate(format: "label CONTAINS 'Great League: Over cap'")
-        expectation(for: ready, evaluatedWith: row(app, "Blissey"))
-        waitForExpectations(timeout: 60)
+        app.awaitInsight()
         return app
     }
     private func resetRanking(_ app: XCUIApplication) {
@@ -102,28 +100,37 @@ final class ListScreensTests: XCTestCase {
         XCTAssertTrue(row(app, "Blissey").waitForExistence(timeout: 5), "tapping again clears it")
     }
 
-    func testLeagueTilesShowValuesAndOverCap() throws {
+    /// The league tiles left the species row with design pass 3 (the open species' TOP PVP says it instead): Blissey is over the cap for Great League and fits Ultra
+    /// League; the pick follows the ranking switch, which is the same app-wide preference the species list shows.
+    func testTopPvPShowsTheLeagueAndFollowsTheRanking() throws {
         let app = launchPopulated()
         resetRanking(app)
-        let blissey = row(app, "Blissey").label
-        XCTAssertTrue(blissey.contains("Great League: Over cap. Ultra League: Blissey, 94.9 percent. Master League: Blissey, 89.3 percent"), blissey)
-        // The tiles follow the ranking switch, which is the same app-wide preference the species list shows.
+        let search = app.textFields["box-search"]
+        search.tap(); search.typeText("Blissey\n")
+        let blissey = row(app, "Blissey")
+        XCTAssertTrue(blissey.waitForExistence(timeout: 5))
+        blissey.tap()
+        let pvp = app.buttons["top-pvp-row"].firstMatch
+        XCTAssertTrue(pvp.waitForExistence(timeout: 10))
+        XCTAssertTrue(pvp.label.contains("Ultra League: Blissey"), pvp.label)
+        XCTAssertFalse(pvp.label.contains("Great League"), "over the cap for Great League: " + pvp.label)
+        app.buttons["Clear search"].tap()
+        // A species whose pick differs between the rankings (the sample's Scyther: Classic takes the IV fit, Pogo Assist the stronger Scizor).
         let control = app.descendants(matching: .any)["list-scoring"]
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
         XCTAssertEqual(control.value as? String, "Pogo Assist")
-        XCTAssertTrue(row(app, "Blissey").label.contains("Master League: Blissey"), row(app, "Blissey").label)
-        // A species whose tile differs between the rankings (the sample's Scyther: Classic takes the IV fit, Pogo Assist the stronger Scizor). The search builds its row.
-        let search = app.textFields["box-search"]
         search.tap(); search.typeText("Scyther\n")   // Return closes the keyboard, so the switch can be tapped
         XCTAssertTrue(row(app, "Scyther").waitForExistence(timeout: 5))
-        XCTAssertTrue(row(app, "Scyther").label.contains("Ultra League: Scizor, 95.3 percent"), row(app, "Scyther").label)
+        row(app, "Scyther").tap()
+        XCTAssertTrue(app.buttons["top-pvp-row"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["top-pvp-row"].firstMatch.label.contains("Ultra League: Scizor"), app.buttons["top-pvp-row"].firstMatch.label)
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap()
         XCTAssertEqual(control.value as? String, "Classic")
-        XCTAssertTrue(row(app, "Scyther").label.contains("Ultra League: Scyther, 96.2 percent"), row(app, "Scyther").label)
+        XCTAssertTrue(app.buttons["top-pvp-row"].firstMatch.label.contains("Ultra League: Scyther"), app.buttons["top-pvp-row"].firstMatch.label)
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
         app.buttons["Clear search"].tap()
         XCTAssertTrue(reveal(app, "Moltres").waitForExistence(timeout: 5))
-        row(app, "Moltres").tap()
+        app.openSpeciesList(row(app, "Moltres"))
         let species = app.descendants(matching: .any)["species-scoring"]
         XCTAssertTrue(species.waitForExistence(timeout: 5))
         XCTAssertEqual(species.value as? String, "Pogo Assist", "one app-wide setting")
@@ -135,7 +142,7 @@ final class ListScreensTests: XCTestCase {
     func testSpeciesListTagsAndTheChipTag() throws {
         let app = launchPopulated()
         resetRanking(app)
-        row(app, "Charizard").tap()
+        app.openSpeciesList(row(app, "Charizard"))
         let copy = app.buttons.matching(identifier: "pokemon-row").firstMatch
         XCTAssertTrue(copy.waitForExistence(timeout: 5))
         // The numbered places replace the old "best for" tags: the copies that are first for a use say so in their label, and the card carries the member.
@@ -153,7 +160,7 @@ final class ListScreensTests: XCTestCase {
         app.buttons["Back"].tap()
 
         app.buttons["chip-raids"].tap()
-        row(app, "Moltres").tap()
+        app.openSpeciesList(row(app, "Moltres"))
         XCTAssertTrue(app.buttons["pokemon-tag"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Moltres · 3 of 6 for Raids"].exists, "the header counts the Top and Good copies under the chip")
         XCTAssertEqual(app.staticTexts["species-order"].label, "Raids first")
@@ -192,43 +199,32 @@ final class ListScreensTests: XCTestCase {
         }
     }
 
-    func testDetailActivitiesRow() throws {
+    /// The page's Summary tab lists the five activities (PvP leagues first), each a button that opens its tab.
+    func testDetailSummaryRows() throws {
         let app = launchPopulated()
-        row(app, "Charizard").tap()
+        app.openSpeciesList(row(app, "Charizard"))
         app.buttons.matching(identifier: "pokemon-row").firstMatch.tap()
-        let raids = app.buttons["activity-raids"]
-        var n = 0
-        while !raids.isHittable && n < 8 { app.swipeUp(); n += 1 }
+        let raids = app.buttons["summary-row-raids"]
         XCTAssertTrue(raids.waitForExistence(timeout: 20))
-        XCTAssertEqual(raids.label, "Raids: Good")
-        for area in ["gym", "rocket", "max"] { XCTAssertTrue(app.buttons["activity-\(area)"].exists, area) }
-        XCTAssertTrue(app.staticTexts["activities-panel"].exists)
+        XCTAssertTrue(raids.label.hasPrefix("Raids. "), raids.label)
+        for area in ["pvp", "gym", "rocket", "max"] { XCTAssertTrue(app.buttons["summary-row-\(area)"].exists, area) }
+        XCTAssertLessThan(app.buttons["summary-row-pvp"].frame.minY, raids.frame.minY, "PvP leagues come first")
         raids.tap()
-        let line = app.staticTexts["activity-raids-line"]
-        XCTAssertTrue(line.waitForExistence(timeout: 3))
-        XCTAssertTrue(line.label.hasPrefix("Raids"), line.label)
-        // The rows' tap targets are 6 pt taller than the chip each way and do not overlap: a tap on the bottom edge of Raids' target opens Raids, not Gym's line.
-        raids.tap()
-        XCTAssertTrue(line.waitForNonExistence(timeout: 3))
-        raids.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.97)).tap()
-        XCTAssertTrue(line.waitForExistence(timeout: 3), "the bottom of the Raids target opens Raids")
-        XCTAssertFalse(app.staticTexts["activity-gym-line"].exists, "and not the Gym line under it")
-        sleep(1); shot("detail-activities")
+        XCTAssertTrue(app.descendants(matching: .any)["raids-tab"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["page-tab-raids"].isSelected)
+        sleep(1); shot("detail-summary-raids-tab")
     }
 
-    /// The Zamazenta (Hero) with CP 2661 carries the advisor's build for an area: its Activities row shows the "ADVICE BUILDS" chip, with the cost spoken in grouped figures.
-    func testDetailActivitiesRowShowsTheBuildChip() throws {
+    /// The Zamazenta (Hero) with CP 2661 carries the advisor's build for an area: a Summary row shows its upgrade mark with the cost spoken in grouped figures.
+    func testDetailSummaryRowShowsTheBuildCost() throws {
         let app = launchPopulated()
         openSpecies(app, "Zamazenta")
         let copy = app.buttons.matching(NSPredicate(format: "identifier == 'pokemon-row' AND label CONTAINS '2661'")).firstMatch
         XCTAssertTrue(copy.waitForExistence(timeout: 5)); copy.tap()
-        let chip = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'activity-' AND identifier ENDSWITH '-builds'")).firstMatch
-        var n = 0
-        while !chip.exists && n < 10 { app.swipeUp(); n += 1 }
-        XCTAssertTrue(chip.waitForExistence(timeout: 20), "the build chip on the Activities row")
-        XCTAssertTrue(chip.label.lowercased().hasPrefix("advice builds"), chip.label)
-        XCTAssertTrue(chip.label.contains("dust"), chip.label)
-        sleep(1); shot("detail-activities-builds")
+        let costly = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'summary-row-' AND label CONTAINS 'Upgrade available'")).firstMatch
+        XCTAssertTrue(costly.waitForExistence(timeout: 20), "a Summary row with an upgrade mark")
+        XCTAssertTrue(costly.label.contains("dust") || costly.label.contains("candy"), costly.label)
+        sleep(1); shot("detail-summary-builds")
     }
 
     /// A hand fix made on the Pokémon page, then back to the list under a chip: the Box screen's tasks fire while the child screens are pushed, so the list is
@@ -237,7 +233,7 @@ final class ListScreensTests: XCTestCase {
         let app = launchPopulated()
         app.buttons["chip-raids"].tap()
         XCTAssertFalse(app.buttons["chip-fixed"].exists)
-        row(app, "Moltres").tap()
+        app.openSpeciesList(row(app, "Moltres"))
         openFirstCopy(app)
         let fix = app.buttons["Fix a value"]
         XCTAssertTrue(fix.waitForExistence(timeout: 5)); fix.tap()
@@ -268,16 +264,13 @@ final class ListScreensTests: XCTestCase {
             shot("\(tag)-list")
             app.buttons["chip-raids"].tap(); sleep(1); shot("\(tag)-list-raids")
             XCTAssertTrue(rows(app).firstMatch.exists)
-            rows(app).firstMatch.tap()
+            app.openSpeciesList(rows(app).firstMatch)
             XCTAssertTrue(app.buttons["pokemon-row"].firstMatch.waitForExistence(timeout: 5))
             sleep(1); shot("\(tag)-species")
             openFirstCopy(app)
             XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
-            let raids = app.buttons["activity-raids"]
-            var n = 0
-            while !raids.isHittable && n < 10 { app.swipeUp(); n += 1 }
-            XCTAssertTrue(raids.exists)
-            sleep(1); shot("\(tag)-detail-activities")
+            XCTAssertTrue(app.buttons["summary-row-raids"].waitForExistence(timeout: 30))
+            sleep(1); shot("\(tag)-detail-summary")
             app.buttons["Back"].tap(); app.buttons["Back"].tap()
             app.buttons["chip-all"].tap()
         }
@@ -315,13 +308,11 @@ final class ListScreensTests: XCTestCase {
                 app.launchArguments = ["-appearance", "light", "-UIPreferredContentSizeCategoryName", category]
                 app.launch()
                 XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
-                let ready = NSPredicate(format: "label CONTAINS 'Great League'")
-                expectation(for: ready, evaluatedWith: rows(app).firstMatch)
-                waitForExpectations(timeout: 60)
+                app.awaitInsight()   // the advice is read from the box saved by the default-size launch above
             } else {
                 app = launchPopulated(["-appearance", "light", "-UIPreferredContentSizeCategoryName", category])
             }
-            sleep(1); app.swipeUp(velocity: .slow); sleep(1)   // the saved panel (the top of the scrolling list, under the fixed header) is scrolled off, so the rows fill the screen
+            sleep(2)
             shot("size-\(name)-list")
             let sort = app.descendants(matching: .any)["sort-menu"], list = app.descendants(matching: .any)["list-scoring"]
             XCTAssertTrue(sort.waitForExistence(timeout: 10) && list.exists, "\(name): the sort line")
@@ -341,114 +332,75 @@ final class ListScreensTests: XCTestCase {
         }
     }
 
-    /// The Pokémon list's header (count line, search, chips, sort line with the ranking switch) is fixed: after the list is scrolled well down it is where it was,
-    /// still hittable, and the species rows have moved under it. At the default size, AX3 and AX5 (light), and default and AX5 in dark; the ranking explainer is
-    /// opened inside the fixed block too, and the search is focused with the keyboard up. Screenshots go to POGO_SCREENS.
-    func testHeaderStaysFixedAtTheDefaultSize() throws { try headerFixed("hdr-default-light", "UICTContentSizeCategoryL", "light") }
-    func testHeaderStaysFixedInDark() throws { try headerFixed("hdr-default-dark", "UICTContentSizeCategoryL", "dark") }
-    func testHeaderStaysFixedAtAX3() throws { try headerFixed("hdr-ax3-light", "UICTContentSizeCategoryAccessibilityXL", "light") }
-    func testHeaderStaysFixedAtAX5() throws { try headerFixed("hdr-ax5-light", "UICTContentSizeCategoryAccessibilityXXXL", "light") }
-    func testHeaderStaysFixedAtAX5InDark() throws { try headerFixed("hdr-ax5-dark", "UICTContentSizeCategoryAccessibilityXXXL", "dark") }
+    /// My Pokémon's search field stays under the header while the list scrolls (design pass 3, D7); the count line, chips, sort line and the saved-scan panel scroll
+    /// with the list (READBACK Q7). After the list is scrolled well down the search is where it was and hittable, the chips are gone from the screen, and the rows have
+    /// moved. At the default size and AX5, in light and dark. Screenshots go to POGO_SCREENS.
+    func testSearchStaysFixedAtTheDefaultSize() throws { try searchFixed("hdr-default-light", "UICTContentSizeCategoryL", "light") }
+    func testSearchStaysFixedInDark() throws { try searchFixed("hdr-default-dark", "UICTContentSizeCategoryL", "dark") }
+    func testSearchStaysFixedAtAX3() throws { try searchFixed("hdr-ax3-light", "UICTContentSizeCategoryAccessibilityXL", "light") }
+    func testSearchStaysFixedAtAX3InDark() throws { try searchFixed("hdr-ax3-dark", "UICTContentSizeCategoryAccessibilityXL", "dark") }
+    func testSearchStaysFixedAtAX5InDark() throws { try searchFixed("hdr-ax5-dark", "UICTContentSizeCategoryAccessibilityXXXL", "dark") }
 
-    private func headerFixed(_ name: String, _ category: String, _ appearance: String) throws {
+    /// The saved-scan panel is the top of the scrolling list: right after the save it is there, under the fixed search field, and it scrolls away with the list while
+    /// the search stays (no relaunch: the panel goes with one).
+    func testTheSavedScanPanelScrollsAwayWhileTheSearchStays() throws {
+        let app = launchPopulated()
+        sleep(1)
+        let panel = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Saved to'")).firstMatch
+        let search = app.textFields["box-search"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 10) && panel.isHittable, "the saved-scan panel is on the list right after the save")
+        let frame = search.frame
+        for _ in 0..<3 { app.swipeUp() }
+        sleep(1)
+        XCTAssertEqual(search.frame, frame, "the search field did not move")
+        XCTAssertFalse(panel.isHittable, "the panel scrolled away with the list")
+        shot("hdr-saved-panel")
+    }
+
+    /// The ranking explainer opens inside the scrolling list, under the sort line, and the list is still there under it.
+    func testTheRankingExplainerOpensInTheList() throws {
+        let app = launchPopulated()
+        let info = app.buttons["list-scoring-info"]
+        XCTAssertTrue(info.waitForExistence(timeout: 10))
+        info.tap()
+        let explainer = app.descendants(matching: .any)["list-scoring-explainer"]
+        XCTAssertTrue(explainer.waitForExistence(timeout: 5), "the explainer opens")
+        sleep(1)
+        XCTAssertTrue(explainer.isHittable, "the open explainer is on the screen")
+        XCTAssertTrue(app.textFields["box-search"].isHittable, "the search is still there")
+        XCTAssertGreaterThan(app.buttons.matching(identifier: "species-row").count, 0, "rows follow the explainer in the list")
+        info.tap()
+        XCTAssertTrue(explainer.waitForNonExistence(timeout: 5), "and it closes")
+    }
+
+    func testSearchStaysFixedAtAX5() throws { try searchFixed("hdr-ax5-light", "UICTContentSizeCategoryAccessibilityXXXL", "light") }
+
+    private func searchFixed(_ name: String, _ category: String, _ appearance: String) throws {
         launchPopulated().terminate()
         let app = XCUIApplication()
         app.launchArguments = ["-appearance", appearance, "-UIPreferredContentSizeCategoryName", category]
         app.launch()
         XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 20))
         sleep(2)
-        let search = app.textFields["box-search"], sort = app.descendants(matching: .any)["sort-menu"], chipAll = app.buttons["chip-all"]
-        XCTAssertTrue(search.waitForExistence(timeout: 10) && sort.exists && chipAll.exists, name)
-        let before = (search.frame, sort.frame, chipAll.frame)
+        let search = app.textFields["box-search"], chipAll = app.buttons["chip-all"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10) && chipAll.exists, name)
+        XCTAssertTrue(app.staticTexts["tab-title"].exists, "\(name): the header names the tab")
+        let searchFrame = search.frame, firstRow = rows(app).firstMatch.label
         shot("\(name)-top")
-        let firstRow = rows(app).firstMatch.label
-        let first = rows(app).firstMatch.frame
-        XCTAssertGreaterThanOrEqual(first.minY, headerBottom(app), "\(name): the first row starts below the header")
-        XCTAssertLessThan(first.minY, app.frame.maxY, "\(name): and on the screen")
-        for _ in 0..<4 { app.swipeUp(); }
+        for _ in 0..<5 { app.swipeUp() }
         sleep(1)
-        XCTAssertEqual(search.frame, before.0, "\(name): the search field did not move")
-        XCTAssertEqual(sort.frame, before.1, "\(name): the sort line did not move")
-        XCTAssertEqual(chipAll.frame, before.2, "\(name): the chips did not move")
-        XCTAssertTrue(search.isHittable && sort.isHittable && chipAll.isHittable, name)
+        XCTAssertEqual(search.frame, searchFrame, "\(name): the search field did not move")
+        XCTAssertTrue(search.isHittable, name)
+        XCTAssertFalse(chipAll.isHittable, "\(name): the chips scrolled away with the list")
         XCTAssertNotEqual(rows(app).firstMatch.label, firstRow, "\(name): the list did scroll")
-        XCTAssertGreaterThan(visibleRows(app).count, 0, "\(name): a row is on the screen under the header after the scroll")
         shot("\(name)-scrolled")
-        // The search focused with the keyboard up: the header is still there, hittable, and some of the list is left above the keyboard.
+        // The search focused with the keyboard up: still hittable, and the keyboard closes with Return.
         search.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "\(name): the keyboard is up")
-        sleep(1)
-        XCTAssertTrue(search.isHittable, "\(name): the search field is hittable with the keyboard up")
-        // At the accessibility sizes the header is capped and scrolls inside itself: with the keyboard up the search field has been scrolled into the capped block
-        // and the chips are out of its visible part (seen on the iPhone Air simulator at AX5, 25 Oct 2026). Greg's ruling: check on his phone before any change, so the
-        // chips are asserted only below the accessibility sizes.
-        if !category.contains("Accessibility") { XCTAssertTrue(chipAll.isHittable, "\(name): the chips are hittable with the keyboard up") }
-        // Same ruling: at AX5 with the keyboard up the simulator leaves only a sliver of a row above it, and the layout is not changed before Greg has seen it on his phone,
-        // so a row above the keyboard is asserted only below the accessibility sizes.
-        if !category.contains("Accessibility") { XCTAssertGreaterThan(visibleRows(app).count, 0, "\(name): a row is visible above the keyboard") }
-        shot("\(name)-keyboard")
-        search.typeText("\n")   // Return closes the keyboard
+        XCTAssertTrue(search.isHittable, name)
+        search.typeText("\n")
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), name)
-        // The explainer opens inside the fixed block.
-        let info = app.buttons["list-scoring-info"]
-        XCTAssertTrue(info.exists, name)
-        info.tap()
-        let explainer = app.descendants(matching: .any)["list-scoring-explainer"]
-        XCTAssertTrue(explainer.waitForExistence(timeout: 5), "\(name): the explainer opens in the header")
-        sleep(1)   // the header scrolls the explainer into view after its first layout
-        XCTAssertTrue(explainer.isHittable, "\(name): the open explainer is on the screen")
-        XCTAssertTrue(search.exists && sort.exists, "\(name): the header is still there with the explainer open")
-        XCTAssertLessThanOrEqual(explainer.frame.maxY, app.frame.height, "\(name): the explainer is not cut off by the screen")
-        let open = visibleRows(app)
-        XCTAssertGreaterThan(open.count, 0, "\(name): some of the list is left under an open explainer")
-        // The list is still reachable: scrolling it under the open explainer moves its rows.
-        let labelBefore = open.first?.label, topBefore = open.first?.frame.minY
-        dragList(app, up: true)
-        sleep(2)
-        if visibleRows(app).first?.label == labelBefore && visibleRows(app).first?.frame.minY == topBefore { dragList(app, up: false); sleep(2) }   // the list was already at its end
-        let after = visibleRows(app).first
-        XCTAssertTrue(after?.label != labelBefore || after?.frame.minY != topBefore, "\(name): the list scrolls under an open explainer")
-        sleep(1); shot("\(name)-explainer")
         app.terminate()
-    }
-
-    /// The bottom edge of the fixed header: its last line is the sort menu and the ranking switch beside or under it, and under them the ranking explainer while it is open.
-    private func headerBottom(_ app: XCUIApplication) -> CGFloat {
-        let explainer = app.descendants(matching: .any)["list-scoring-explainer"]
-        return max(app.descendants(matching: .any)["sort-menu"].frame.maxY, app.descendants(matching: .any)["list-scoring"].frame.maxY, explainer.exists ? min(explainer.frame.maxY, app.frame.maxY) : 0)
-    }
-    /// Drags the list up (or down) from the middle of the screen below the header (a swipe on a row can start under the header, where the row has no visible frame).
-    private func dragList(_ app: XCUIApplication, up: Bool) {
-        let top = headerBottom(app), height = app.frame.height
-        let from = (top + height) / 2, span = (height - top) * 0.3
-        let (start, end) = up ? (from + span, from - span) : (from - span, from + span)
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: start / height))
-            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: end / height)))
-    }
-    /// The species rows with at least 20 pt of their height on the screen below the header and above the keyboard when one is up, top to bottom.
-    private func visibleRows(_ app: XCUIApplication) -> [XCUIElement] {
-        let keyboard = app.keyboards.firstMatch
-        let top = headerBottom(app), bottom = keyboard.exists ? min(app.frame.maxY, keyboard.frame.minY) : app.frame.maxY
-        return rows(app).allElementsBoundByIndex.filter { min($0.frame.maxY, bottom) - max($0.frame.minY, top) >= 20 }
-    }
-
-    /// The saved-scan panel is the top of the scrolling list, under the fixed header (Greg, 25 Oct 2026): present right after a save, below the sort line, hittable
-    /// controls above it, and scrolled away with the list while the header stays. The sample scan's save is the seed; the panel goes with the relaunch.
-    func testSavedScanPanelScrollsUnderTheFixedHeader() throws {
-        let app = launchPopulated()
-        sleep(1)
-        let panel = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Saved to'")).firstMatch
-        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the saved-scan panel is on the list right after the save")
-        let search = app.textFields["box-search"], sort = app.descendants(matching: .any)["sort-menu"], chipAll = app.buttons["chip-all"]
-        XCTAssertTrue(search.isHittable && sort.isHittable && chipAll.isHittable, "the header is hittable above the panel")
-        XCTAssertGreaterThanOrEqual(panel.frame.minY, headerBottom(app), "the panel sits below the fixed sort line")
-        let before = (search.frame, sort.frame)
-        for _ in 0..<3 { app.swipeUp() }
-        sleep(1)
-        XCTAssertEqual(search.frame, before.0, "the search field did not move")
-        XCTAssertEqual(sort.frame, before.1, "the sort line did not move")
-        XCTAssertFalse(panel.isHittable, "the panel scrolled away with the list")
-        shot("hdr-saved-panel")
     }
 
     /// A fresh account with the sample scan reviewed and saved; leaves the app on the list.

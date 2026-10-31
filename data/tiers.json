@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-24T15:51:28.003Z",
+ "generated": "2026-10-25T07:31:48.783Z",
  "gamemaster": "2026-09-23 03:24:34",
  "entries": [
   {
@@ -5828,12 +5828,12 @@
    "section": "Attackers",
    "tier": "A",
    "rank": null,
-   "name": "Kingler",
+   "name": "Dynamax Kingler",
    "speciesId": "kingler",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": "Max Geyser",
@@ -5868,12 +5868,12 @@
    "section": "Attackers",
    "tier": "A",
    "rank": null,
-   "name": "Regice",
+   "name": "Dynamax Regice",
    "speciesId": "regice",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": "Max Flare / Max Hailstorm",
@@ -5908,12 +5908,12 @@
    "section": "Attackers",
    "tier": "A",
    "rank": null,
-   "name": "Toxtricity",
+   "name": "Gigantamax Toxtricity",
    "speciesId": "toxtricity",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": "G-Max Wildfire / Stun Shock / Resonance",
@@ -5928,12 +5928,12 @@
    "section": "Attackers",
    "tier": "A",
    "rank": null,
-   "name": "Lapras",
+   "name": "Gigantamax Lapras",
    "speciesId": "lapras",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": "G-Max Wildfire / Stun Shock / Resonance",
@@ -5968,12 +5968,12 @@
    "section": "Attackers",
    "tier": "B",
    "rank": null,
-   "name": "Grimmsnarl",
+   "name": "Gigantamax Grimmsnarl",
    "speciesId": "grimmsnarl",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": null,
@@ -5988,12 +5988,12 @@
    "section": "Attackers",
    "tier": "B",
    "rank": null,
-   "name": "Venusaur",
+   "name": "Gigantamax Venusaur",
    "speciesId": "venusaur",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": null,
@@ -6008,12 +6008,12 @@
    "section": "Attackers",
    "tier": "B",
    "rank": null,
-   "name": "Blastoise",
+   "name": "Gigantamax Blastoise",
    "speciesId": "blastoise",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": null,
@@ -6028,12 +6028,12 @@
    "section": "Attackers",
    "tier": "B",
    "rank": null,
-   "name": "Butterfree",
+   "name": "Gigantamax Butterfree",
    "speciesId": "butterfree",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": null,
@@ -6048,12 +6048,12 @@
    "section": "Attackers",
    "tier": "B",
    "rank": null,
-   "name": "Snorlax",
+   "name": "Gigantamax Snorlax",
    "speciesId": "snorlax",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": null,
@@ -6068,12 +6068,12 @@
    "section": "Attackers",
    "tier": "B",
    "rank": null,
-   "name": "Pikachu",
+   "name": "Gigantamax Pikachu",
    "speciesId": "pikachu",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": null,
@@ -6088,12 +6088,12 @@
    "section": "Attackers",
    "tier": "B",
    "rank": null,
-   "name": "Meowth",
+   "name": "Gigantamax Meowth",
    "speciesId": "meowth",
    "flags": {
     "shadow": false,
     "mega": false,
-    "max": false
+    "max": true
    },
    "role": null,
    "moves": null,

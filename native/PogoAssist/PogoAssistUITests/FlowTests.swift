@@ -13,7 +13,7 @@ final class FlowTests: XCTestCase {
     private func openPokemon(_ app: XCUIApplication, species: Int = 2) {
         let rows = app.buttons.matching(identifier: "species-row")
         XCTAssertTrue(rows.element(boundBy: 0).waitForExistence(timeout: 10), "the box shows no species")
-        rows.element(boundBy: min(species, rows.count - 1)).tap()
+        app.openSpeciesList(rows.element(boundBy: min(species, rows.count - 1)))
         let first = app.buttons.matching(identifier: "pokemon-row").firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 5), "the species list shows no Pokémon")
         first.tap()
@@ -99,7 +99,7 @@ final class FlowTests: XCTestCase {
         shot("11-next-gaps")
 
         // Round 2: a part-read CP is asked about, and "Fix a value".
-        app.buttons["Pokémon"].tap()
+        app.buttons["My Pokémon"].tap()
         app.buttons["More"].tap()
         let diagnostics2 = app.buttons["Diagnostics"]
         XCTAssertTrue(diagnostics2.waitForExistence(timeout: 5))
@@ -305,7 +305,7 @@ final class FlowTests: XCTestCase {
             app.launch()
             let scroll = app.scrollViews["gallery-scroll"]
             XCTAssertTrue(scroll.waitForExistence(timeout: 10), "the gallery did not open")
-            XCTAssertTrue(app.buttons["Scan"].exists && app.buttons["Pokémon"].exists && app.buttons["Pogo Hub"].exists, "the tab bar's buttons are labelled Pokémon, Scan, Pogo Hub")
+            XCTAssertTrue(app.buttons["Scan"].exists && app.buttons["My Pokémon"].exists && app.buttons["Pogo Hub"].exists, "the tab bar's buttons are labelled My Pokémon, Scan, Pogo Hub")
             let pages = name == "light" || name == "large-text" ? 14 : 9
             for i in 0..<pages {
                 shot("gallery-\(name)-\(String(format: "%02d", i))")
