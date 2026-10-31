@@ -6,11 +6,13 @@ import PogoBox
 struct PassPicker: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Which search?").font(.secondary).foregroundStyle(Theme.muted)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            // One column at the accessibility text sizes: "Gigantamax" and "Background" do not fit half a row there and would break mid-word.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 8) {
                 ForEach(ScanPass.allCases, id: \.self) { pass in
                     let on = model.scanPass == pass
                     Button { model.scanPass = pass } label: {
@@ -25,8 +27,8 @@ struct PassPicker: View {
                 }
                 ForEach(ScanPass.comingSoon, id: \.self) { name in
                     VStack(spacing: 0) {
-                        Text(name).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.faint)
-                        Text("Coming soon").font(.figtree(11, .semibold, relativeTo: .caption2)).foregroundStyle(Theme.faint)
+                        Text(name).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+                        Text("Coming soon").font(.figtree(11, .semibold, relativeTo: .caption2)).foregroundStyle(Theme.muted)
                     }
                     .frame(maxWidth: .infinity, minHeight: 40)
                     .background(Theme.off.opacity(0.5), in: Capsule())
