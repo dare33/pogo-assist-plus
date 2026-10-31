@@ -50,17 +50,30 @@ public enum MyPokemon {
     }
 
     /// The mark on a species row, from the builds of the species' copies (the caller keeps only the builds whose `entryId` is one of them): the upgrade
-    /// arrow when any build has work left, its cost the dust of those builds in total, or their candy in total when none needs dust; Full strength when
-    /// there are builds and all are built (`HubTeams.isBuilt`); nothing without a build.
+    /// arrow when any build has work left; Full strength when there are builds and all are built (`HubTeams.isBuilt`); nothing without a build. Its cost
+    /// counts ONE build per copy, that copy's top build with work left (tier S, A, B, then the higher score, then the advisor's order), so a copy with
+    /// a raid build and a PvP build adds one of them, not both (Greg, 31 Oct 2026). `builds` is still the number of builds with work left.
     public static func speciesMark(builds: [BoxAdvice.Build]) -> BuildMark {
+        guard !builds.isEmpty else { return .none }
+        let open = builds.filter { !HubTeams.isBuilt($0) }
+        guard !open.isEmpty else { return .fullStrength }
+        var top = [String: (at: Int, build: BoxAdvice.Build)](), order = [String]()
+        for (n, b) in open.enumerated() {
+            if let cur = top[b.entryId] {
+                let better = HubTeams.tierRank(b) != HubTeams.tierRank(cur.build) ? HubTeams.tierRank(b) < HubTeams.tierRank(cur.build) : b.score > cur.build.score
+                if better { top[b.entryId] = (cur.at, b) }
+            } else { top[b.entryId] = (n, b); order.append(b.entryId) }
+        }
+        return .upgrade(cost: cost(of: order.compactMap { top[$0]?.build }), builds: open.count)
+    }
+
+    /// The mark on one copy: the same rule over its own builds, all of which count (the copy's page lists each build's own work).
+    public static func copyMark(builds: [BoxAdvice.Build]) -> BuildMark {
         guard !builds.isEmpty else { return .none }
         let open = builds.filter { !HubTeams.isBuilt($0) }
         guard !open.isEmpty else { return .fullStrength }
         return .upgrade(cost: cost(of: open), builds: open.count)
     }
-
-    /// The mark on one copy: the same rule over its own builds.
-    public static func copyMark(builds: [BoxAdvice.Build]) -> BuildMark { speciesMark(builds: builds) }
 
     /// The dust of the builds in total, else their candy in total (formatted as `HubModel.costShort`); nil when neither is due.
     static func cost(of builds: [BoxAdvice.Build]) -> Cost? {

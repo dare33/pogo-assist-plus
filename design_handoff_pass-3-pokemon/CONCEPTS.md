@@ -70,7 +70,8 @@ Stated so each can be checked against the code. "Proposal" marks the session's o
 
 1. **Species rows**: `BoxIndex.sections(query:chip:sort:)` as today; the row's types are its first member's species types.
 2. **Species build mark** (proposal, C2): the upgrade arrow when any member has a build with work left, the cost being the
-   dust of those builds in total, or their candy when no dust is due; the Full strength tick when it has builds and all
+   dust in total, or the candy when no dust is due, of ONE build per copy: that copy's top build with work left (tier S, A, B, then the
+   higher score), so a copy with a raid build and a PvP build adds one (Greg, 31 Oct 2026, "Count one per copy"); the Full strength tick when it has builds and all
    are built (`HubTeams.isBuilt`).
 3. **IV % grade on rows** (proposal, C3): top at 100%, good at 93% (42 of 45) or more.
 4. **TOP PVP** (D1; rule a proposal, the Great and Ultra limit confirmed by Greg): a copy's PvP standing is its best Great
