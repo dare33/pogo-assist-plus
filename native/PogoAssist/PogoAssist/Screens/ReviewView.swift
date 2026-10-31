@@ -21,7 +21,7 @@ struct ReviewView: View {
             }
             .contentColumn()
         }
-        // The cover is a new presentation: it needs the theme (accent, colour scheme, toast host) of its own.
+        // The cover is a new presentation: it needs the theme (accent, help level, toast host) of its own; the colour scheme follows the window.
         .themeRoot()
         .interactiveDismissDisabled()
     }

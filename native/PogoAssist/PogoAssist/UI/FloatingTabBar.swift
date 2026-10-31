@@ -3,8 +3,8 @@ import SwiftUI
 enum AppTab: String { case box, next }
 
 /// The floating tab bar (design handoff component 10): a Box pill, the 96 pt scan button (the scan mark, with an
-/// 8 pt accent-tint halo) and a Next pill, over a gradient that fades the screen into the background.
-/// The accessibility labels are "Box", "Scan" and "Next".
+/// 8 pt accent-tint halo) and a Pogo Hub pill (the `.next` case), over a gradient that fades the screen into the background.
+/// The accessibility labels are "Pokémon" (the Box tab, named as in the design; its identifier stays "tab-box"), "Scan" and "Pogo Hub" (identifier "tab-next").
 struct FloatingTabBar: View {
     @Binding var selection: AppTab
     var scanDisabled = false
@@ -22,11 +22,11 @@ struct FloatingTabBar: View {
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
             HStack {
-                pill("Box", "square.grid.2x2", .box)
+                pill("Pokémon", "square.grid.2x2", .box, identifier: "tab-box")
                 Spacer(minLength: 8)
                 scanButton
                 Spacer(minLength: 8)
-                pill("Next", "list.number", .next)
+                pill("Pogo Hub", "line.3.horizontal", .next, identifier: "tab-next")
             }
             .padding(.horizontal, Theme.Space.screen)
             .padding(.bottom, 4)
@@ -34,12 +34,12 @@ struct FloatingTabBar: View {
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    private func pill(_ title: String, _ symbol: String, _ tab: AppTab) -> some View {
+    private func pill(_ title: String, _ symbol: String, _ tab: AppTab, identifier: String) -> some View {
         let on = selection == tab
         return Button { selection = tab } label: {
             HStack(spacing: 6) {
                 Image(systemName: symbol).font(.figtree(15, .bold)).accessibilityHidden(true)
-                Text(title).font(.figtree(14, .bold, relativeTo: .subheadline))
+                Text(title).font(.figtree(14, .bold, relativeTo: .subheadline)).lineLimit(1).minimumScaleFactor(0.8)
             }
             .foregroundStyle(on ? accent.ink : Theme.muted)
             .frame(minWidth: 88, idealWidth: 118, maxWidth: 118, minHeight: 54)
@@ -49,6 +49,7 @@ struct FloatingTabBar: View {
         }
         .buttonStyle(PressStyle())
         .accessibilityLabel(title)
+        .accessibilityIdentifier(identifier)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 

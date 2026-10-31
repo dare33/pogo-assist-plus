@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <style>
+    @font-face { font-family: 'Figtree'; src: url('fonts/Figtree-Variable.ttf') format('truetype'); font-weight: 300 900; }
+    body { margin: 0; background: #DADEE6; font-family: 'Figtree', sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+    a { color: #B0235A; } a:hover { color: #D6336C; }
+  </style>
+</helmet>
+<sc-for list="{{ turns }}" as="turn" hint-placeholder-count="2">
+<section style="padding:40px; display:flex; flex-direction:column; gap:36px">
+  <div style="max-width:760px; display:flex; flex-direction:column; gap:6px">
+    <div style="font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#6A7085">{{ turn.kicker }}</div>
+    <div style="font-size:24px; font-weight:800; letter-spacing:-0.02em; color:#15192B">{{ turn.title }}</div>
+    <div style="font-size:15px; line-height:1.5; color:#3D4459; text-wrap:pretty">{{ turn.blurb }}</div>
+  </div>
+  <sc-for list="{{ turn.groups }}" as="g" hint-placeholder-count="6">
+  <div style="display:flex; flex-direction:column; gap:14px">
+    <div style="display:flex; align-items:center; gap:12px"><span style="width:36px; height:36px; border-radius:12px; background:{{ g.tint }}; color:{{ g.ink }}; display:grid; place-items:center; font-size:18px">{{ g.glyph }}</span><span style="font-size:20px; font-weight:800; color:#15192B">{{ g.title }}</span><span style="font-size:14px; color:#6A7085">{{ g.blurb }}</span></div>
+    <div style="display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap">
+      <sc-for list="{{ g.options }}" as="o" hint-placeholder-count="3">
+      <div id="{{ o.id }}" style="width:393px; flex-shrink:0; display:flex; flex-direction:column; gap:10px">
+        <div style="display:flex; align-items:center; gap:10px"><span style="background:#15192B; color:#fff; font-size:12px; font-weight:800; padding:3px 8px; border-radius:8px">{{ o.id }}</span><span style="font-size:14px; font-weight:600; color:#15192B">{{ o.label }}</span></div>
+        <div style="--bg:{{ c.bg }}; --surface:{{ c.surface }}; --surface2:{{ c.surface2 }}; --ink:{{ c.ink }}; --muted:{{ c.muted }}; --faint:{{ c.faint }}; --line:{{ c.line }}; --off:{{ c.off }}; --orangeInk:{{ c.orangeInk }}; --orangeTint:{{ c.orangeTint }}; --greenInk:{{ c.greenInk }}; --greenTint:{{ c.greenTint }}; --red:{{ c.red }}; --accent:{{ c.accent }}; --accentInk:{{ c.accentInk }}; --accentTint:{{ c.accentTint }}; --onAccent:{{ c.onAccent }}; --shadow:{{ c.shadow }}; background:var(--bg); color:var(--ink); border-radius:32px; padding:14px 14px 22px; display:flex; flex-direction:column; gap:12px; font-size:15px; box-shadow:0 0 0 1px rgba(20,30,60,.06)" data-screen-label="{{ o.id }} {{ o.label }}">
+          <div style="display:flex; align-items:center; gap:10px; padding:0 2px">
+            <span style="width:36px; height:36px; border-radius:18px; background:var(--surface); box-shadow:var(--shadow); display:grid; place-items:center; font-weight:800">‹</span>
+            <div style="flex:1; display:flex; flex-direction:column"><span style="font-size:20px; font-weight:800; letter-spacing:-0.01em">{{ g.title }}</span><span style="font-size:13px; color:var(--muted); font-weight:500">{{ o.sub }}</span></div>
+            <span style="font-size:12px; font-weight:800; padding:4px 9px; border-radius:9px; background:{{ g.tint }}; color:{{ g.ink }}">{{ g.count }}</span>
+          </div>
+          <sc-for list="{{ o.blocks }}" as="b" hint-placeholder-count="3">
+            <sc-if value="{{ b.isHeader }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; padding:0 6px"><span style="font-size:13px; font-weight:700; color:var(--muted); letter-spacing:.04em">{{ b.text }}</span><span style="font-size:13px; font-weight:700; color:var(--accentInk)">{{ b.right }}</span></div>
+            </sc-if>
+            <sc-if value="{{ b.isNote }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 6px; font-size:13px; color:var(--muted); line-height:1.45">{{ b.text }}</div>
+            </sc-if>
+            <sc-if value="{{ b.isSegments }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; padding:4px; background:var(--off); border-radius:999px">
+                <sc-for list="{{ b.items }}" as="t" hint-placeholder-count="3"><div style="flex:1; min-height:36px; display:flex; align-items:center; justify-content:center; gap:6px; border-radius:999px; font-size:14px; font-weight:700; background:{{ t.bg }}; color:{{ t.ink }}"><sc-if value="{{ t.dot }}" hint-placeholder-val="{{ false }}"><span style="width:8px; height:8px; border-radius:4px; background:{{ t.dot }}"></span></sc-if>{{ t.label }}</div></sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ b.isCards }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:10px; overflow-x:auto; scrollbar-width:none; margin:0 -14px; padding:0 14px">
+                <sc-for list="{{ b.items }}" as="k" hint-placeholder-count="3">
+                <div style="flex:0 0 {{ b.w }}px; border-radius:20px; padding:12px 14px; background:{{ k.bg }}; color:{{ k.ink }}; display:flex; flex-direction:column; gap:4px; min-height:88px; box-sizing:border-box; box-shadow:{{ k.shadow }}">
+                  <span style="font-size:11px; font-weight:800; letter-spacing:.06em; opacity:.8">{{ k.kicker }}</span>
+                  <span style="font-size:16px; font-weight:800; line-height:1.2">{{ k.title }}</span>
+                  <span style="font-size:12px; font-weight:600; opacity:.9; line-height:1.35">{{ k.sub }}</span>
+                </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ b.isGrid }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid; grid-template-columns:repeat({{ b.cols }}, minmax(0,1fr)); gap:8px">
+                <sc-for list="{{ b.items }}" as="k" hint-placeholder-count="6">
+                <div style="border-radius:16px; padding:10px 12px; background:{{ k.bg }}; display:flex; flex-direction:column; gap:2px; min-width:0; border-left:3px solid {{ k.edge }}">
+                  <span style="font-size:11px; font-weight:800; letter-spacing:.06em; color:{{ k.ink }}">{{ k.label }}</span>
+                  <span style="font-size:14px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ k.value }}</span>
+                  <span style="font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ k.sub }}</span>
+                </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ b.isSlots }}" hint-placeholder-val="{{ false }}">
+              <div style="background:var(--surface); border-radius:24px; box-shadow:var(--shadow); padding:14px; display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; justify-content:space-between; align-items:baseline"><span style="font-size:15px; font-weight:800">{{ b.title }}</span><span style="font-size:12px; font-weight:700; color:var(--muted)">{{ b.right }}</span></div>
+                <div style="display:grid; grid-template-columns:repeat({{ b.cols }}, minmax(0,1fr)); gap:8px">
+                  <sc-for list="{{ b.items }}" as="k" hint-placeholder-count="3">
+                  <div style="border-radius:16px; padding:12px 10px; min-height:84px; background:{{ k.bg }}; border:{{ k.border }}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; text-align:center; box-sizing:border-box">
+                    <span style="width:34px; height:34px; border-radius:17px; background:{{ k.disc }}; color:{{ k.discInk }}; display:grid; place-items:center; font-size:14px; font-weight:800">{{ k.glyph }}</span>
+                    <span style="font-size:13px; font-weight:700; color:{{ k.ink }}">{{ k.name }}</span>
+                    <span style="font-size:11px; color:var(--muted)">{{ k.sub }}</span>
+                  </div>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ b.foot }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px; color:var(--muted); line-height:1.4">{{ b.foot }}</div></sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{ b.isTimeline }}" hint-placeholder-val="{{ false }}">
+              <div style="background:var(--surface); border-radius:24px; box-shadow:var(--shadow); overflow:hidden">
+                <sc-for list="{{ b.items }}" as="t" hint-placeholder-count="4">
+                <div style="display:flex; gap:12px; padding:12px 14px; border-bottom:1px solid var(--line); background:{{ t.bg }}">
+                  <div style="width:54px; flex-shrink:0; display:flex; flex-direction:column; gap:2px"><span style="font-size:11px; font-weight:800; letter-spacing:.05em; color:{{ t.dateInk }}">{{ t.date }}</span><span style="font-size:11px; font-weight:600; color:var(--muted)">{{ t.days }}</span></div>
+                  <div style="flex:1; display:flex; flex-direction:column; gap:5px; min-width:0">
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap"><span style="font-size:15px; font-weight:700">{{ t.name }}</span><span style="font-size:10px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:6px; background:var(--off); color:var(--muted)">{{ t.tier }}</span></div>
+                    <div style="display:flex; align-items:center; gap:8px"><span style="flex:1; height:6px; border-radius:3px; background:var(--off); overflow:hidden"><span style="display:block; height:100%; width:{{ t.pct }}%; border-radius:3px; background:{{ t.barInk }}"></span></span><span style="font-size:12px; font-weight:700; color:{{ t.barInk }}; white-space:nowrap">{{ t.ready }}</span></div>
+                    <span style="font-size:12px; color:var(--muted); line-height:1.35">{{ t.prep }}</span>
+                  </div>
+                  <span style="color:var(--faint); font-weight:700; font-size:13px; align-self:center">›</span>
+                </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ b.isList }}" hint-placeholder-val="{{ false }}">
+              <div style="background:var(--surface); border-radius:24px; box-shadow:var(--shadow); overflow:hidden">
+                <sc-for list="{{ b.items }}" as="r" hint-placeholder-count="3">
+                <div style="display:flex; align-items:center; gap:12px; padding:11px 14px; border-bottom:1px solid var(--line); background:{{ r.bg }}">
+                  <sc-if value="{{ r.n }}" hint-placeholder-val="{{ true }}"><span style="width:28px; height:28px; border-radius:14px; background:{{ r.nBg }}; color:{{ r.nInk }}; display:grid; place-items:center; font-size:12px; font-weight:800; flex-shrink:0">{{ r.n }}</span></sc-if>
+                  <div style="flex:1; display:flex; flex-direction:column; gap:1px; min-width:0; line-height:1.3">
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap"><span style="font-size:15px; font-weight:700">{{ r.name }}</span><sc-if value="{{ r.tag }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; font-weight:800; letter-spacing:.04em; padding:2px 6px; border-radius:6px; background:{{ r.tagBg }}; color:{{ r.tagInk }}">{{ r.tag }}</span></sc-if></div>
+                    <span style="font-size:13px; font-weight:600; color:var(--ink)">{{ r.action }}</span>
+                    <span style="font-size:12px; color:var(--muted)">{{ r.sub }}</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; align-items:flex-end; gap:1px; flex-shrink:0"><span style="font-size:14px; font-weight:800; color:{{ r.figInk }}">{{ r.fig }}</span><span style="font-size:10px; font-weight:700; letter-spacing:.05em; color:var(--muted)">{{ r.figLabel }}</span></div>
+                  <span style="color:var(--faint); font-weight:700; font-size:13px">›</span>
+                </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </sc-for>
+        </div>
+        <div style="font-size:13px; line-height:1.45; color:#3D4459; text-wrap:pretty">{{ o.note }}</div>
+      </div>
+      </sc-for>
+    </div>
+  </div>
+  </sc-for>
+</section>
+</sc-for>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;light&quot;, &quot;tsType&quot;: &quot;'light' | 'dark'&quot;, &quot;options&quot;: [&quot;light&quot;, &quot;dark&quot;], &quot;section&quot;: &quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  light = { bg: '#F3F5F9', surface: '#FFFFFF', surface2: '#F3F5F9', ink: '#15192B', muted: '#6A7085', faint: '#8A90A3', line: '#E6E9F0', off: '#E3E7EF', orangeInk: '#B34D00', orangeTint: '#FFF1E3', greenInk: '#1C7A3E', greenTint: '#E6F6EC', red: '#D92D3A', accent: '#D6336C', accentInk: '#B0235A', accentTint: '#FCE7EF', onAccent: '#FFFFFF', shadow: '0 1px 2px rgba(20,30,60,.06)' };
+  dark = { bg: '#0E1118', surface: '#181C26', surface2: '#20242F', ink: '#EEF1F8', muted: '#9097AB', faint: '#6D7489', line: '#262B38', off: '#232836', orangeInk: '#FFB273', orangeTint: 'rgba(255,150,60,.16)', greenInk: '#6FD796', greenTint: 'rgba(80,200,120,.16)', red: '#FF6B76', accent: '#F06595', accentInk: '#F7A1C1', accentTint: 'rgba(240,101,149,.18)', onAccent: '#0E1118', shadow: 'none' };
+  // Type colours: raids orange, gym green, rocket graphite, pvp = league colours, max = change purple, everything = accent.
+  type = {
+    light: { raids: ['#B34D00', '#FFF1E3'], gym: ['#1C7A3E', '#E6F6EC'], rocket: ['#2A3042', '#E9EBF0'], pvp: ['#7A2FB5', '#EFEBFF'], max: ['#5B3FD6', '#EFEBFF'], all: ['#B0235A', '#FCE7EF'] },
+    dark: { raids: ['#FFB273', 'rgba(255,150,60,.16)'], gym: ['#6FD796', 'rgba(80,200,120,.16)'], rocket: ['#B5BBCB', 'rgba(90,98,118,.3)'], pvp: ['#D1A3FF', 'rgba(156,131,255,.2)'], max: ['#BFAEFF', 'rgba(156,131,255,.2)'], all: ['#F7A1C1', 'rgba(240,101,149,.18)'] },
+  };
+  league = { light: { gl: '#1F5FD1', ul: '#8A5A00', ml: '#7A2FB5' }, dark: { gl: '#8FB0FF', ul: '#F0C33C', ml: '#D1A3FF' } };
+  leagueTint = { light: { gl: 'rgba(59,130,246,.10)', ul: 'rgba(224,168,42,.14)', ml: 'rgba(168,85,247,.10)' }, dark: { gl: 'rgba(111,163,255,.14)', ul: 'rgba(240,195,60,.14)', ml: 'rgba(197,140,255,.14)' } };
+
+  renderVals() {
+    const th = this.props.theme || 'light';
+    const c = th === 'dark' ? this.dark : this.light;
+    const T = this.type[th], LG = this.league[th], LT = this.leagueTint[th];
+    const header = (text, right = '') => ({ isHeader: true, text, right });
+    const note = text => ({ isNote: true, text });
+    const segments = (items, onIdx = 0, dots) => ({ isSegments: true, items: items.map((label, i) => ({ label, bg: i === onIdx ? c.surface : 'transparent', ink: dots && i === onIdx ? dots[i] : c.ink, dot: dots ? dots[i] : null })) });
+    const cards = (items, w = 200) => ({ isCards: true, w, items: items.map(([kicker, title, sub, solid]) => ({ kicker, title, sub, bg: solid || c.surface, ink: solid ? '#FFFFFF' : c.ink, shadow: solid ? 'none' : c.shadow })) });
+    const grid = (items, cols = 3) => ({ isGrid: true, cols, items: items.map(([label, value, sub, ink, bg]) => ({ label, value, sub, ink: ink || c.muted, bg: bg || c.surface, edge: ink || c.line })) });
+    const slots = (title, right, items, cols = 3, foot = '') => ({ isSlots: true, title, right, cols, foot, items: items.map(([name, sub, glyph, filled, tone]) => ({ name, sub, glyph, bg: filled ? (tone || c.surface2) : 'transparent', border: filled ? 'none' : '2px dashed ' + c.line, disc: filled ? c.ink : c.off, discInk: filled ? c.bg : c.muted, ink: filled ? c.ink : c.muted })) });
+    const list = (items, typeKey = 'all') => ({ isList: true, items: items.map(([name, action, sub, fig, figLabel, tag, n, hi], i) => ({ name, action, sub, fig, figLabel, tag, tagBg: tag === 'S' ? T[typeKey][1] : c.off, tagInk: tag === 'S' ? T[typeKey][0] : c.muted, n: n === false ? null : (n || i + 1), nBg: hi ? T[typeKey][0] : c.surface2, nInk: hi ? '#FFFFFF' : c.muted, figInk: fig && fig.startsWith('0') ? c.greenInk : c.ink, bg: hi ? T[typeKey][1] : 'transparent' })) });
+    const O = (id, label, sub, blocks, note) => ({ id, label, sub, blocks, note });
+    const timeline = (items, typeKey) => ({ isTimeline: true, items: items.map(([date, days, name, tier, have, need, prep, now]) => { const pct = Math.round(have / need * 100); const full = have >= need; return { date, days, name, tier, prep, pct, ready: have + ' of ' + need + (full ? ' ready' : ' counters'), barInk: full ? c.greenInk : (have === 0 ? c.red : T[typeKey][0]), dateInk: now ? T[typeKey][0] : c.muted, bg: now ? T[typeKey][1] : 'transparent' }; }) });
+
+    const picked = [
+      { key: 'all', glyph: '☰', title: 'Everything', blurb: '1c, note removed', count: '143 builds', options: [
+        O('7a', 'Three for today, then by budget', 'What your dust and candy allow', [
+          cards([['DO FIRST', 'Mega evolve Rayquaza', 'Free. Your best raid attacker.', T.raids[0]], ['CHEAP WIN', 'Evolve Eevee → Flareon', '6,600 dust. Great League pick.', LG.gl], ['WORTH SAVING FOR', 'Lugia to level 50', '483k dust, 296 XL. Master League.', LG.ml]], 220),
+          header('YOU HAVE 612,400 DUST · THESE FIT', 'Change'),
+          list([['Snorlax', 'Power up to level 30', 'Gym, Max · 10k dust', '10k', 'DUST', 'S', false], ['Lucario', 'Mega + Second move', 'Raids, Rocket · 75k dust', '75k', 'DUST', 'S', false], ['Pupitar', 'Evolve to Tyranitar', 'Raids, Rocket, PvP · 100 candy', '100', 'CANDY', 'S', false], ['Kirlia', 'Evolve to Gallade, if male', 'Great League · 52k dust', '52k', 'DUST', 'A', false]], 'all'),
+          header('SHOW ALL 143 ›', ''),
+        ], 'As 1c. The dust figure is a box-wide total; "Change" lets the player type it in if the scan has not read it.'),
+      ] },
+      { key: 'raids', glyph: '◈', title: 'Raids', blurb: '2a, with preparation ahead', count: '38 builds', options: [
+        O('7b', 'Boss first, with the month ahead', 'Rotation announced to 1 Dec', [
+          segments(['Now', 'Coming up'], 1),
+          timeline([['21 – 27 OCT', 'now', 'Palkia', '5★', 4, 4, 'Ready. Raid Hour Wed 21 Oct, 6 pm.', true], ['28 OCT – 3 NOV', 'in 6 d', 'Giratina (Origin)', '5★', 3, 4, 'Build Tyranitar: evolve Pupitar, 100 candy. Raid Hour 28 Oct.'], ['28 OCT – 8 NOV', 'in 6 d', 'Mega Sableye', 'MEGA', 2, 4, 'Fairy and Steel: power up Gardevoir, Metagross is ready.'], ['4 – 8 NOV', 'in 13 d', 'Giratina (Altered)', '5★', 3, 4, 'Same team as Origin. Ice is the gap: Mamoswine is not in your box.'], ['9 – 24 NOV', 'in 18 d', 'Cresselia · Darkrai', '5★', 1, 4, 'Dark and Bug for Cresselia; Fighting for Darkrai: Lucario needs its second move.'], ['25 NOV – 1 DEC', 'in 34 d', 'Deoxys (4 formes)', '5★', 2, 4, 'Dark, Ghost and Bug. Tyranitar covers two.']], 'raids'),
+          note('Rotations come from Niantic\'s monthly events post, published in the last week of the month before, so the page can see 4 to 6 weeks ahead. Bosses after 1 Dec are not announced yet.'),
+        ], 'Each boss gets a readiness bar (counters you have built against the six a raid needs) and the one build that would close the gap. Tapping a boss opens the counters list from 2a. Needs the bundled rotation JSON, refreshed monthly.'),
+      ] },
+      { key: 'gym', glyph: '⛫', title: 'Gym battles', blurb: '3b, renamed', count: '21 builds', options: [
+        O('7c', 'Your gym team', 'Six you would leave in gyms today', [
+          slots('Top defenders', '4 of 6', [['Blissey', '3036 CP', 'B', true, T.gym[1]], ['Snorlax', '2636 CP', 'S', true, T.gym[1]], ['Metagross', '3200 CP', 'M', true, T.gym[1]], ['Chansey', '1120 CP', 'C', true, T.gym[1]], ['Empty', 'Power up Lapras', '+', false], ['Empty', 'Evolve Munchlax', '+', false]], 3, 'The game lets one Pokémon per gym and one of each species per gym. Six here means six gyms.'),
+          header('TOP AVAILABLE', ''),
+          list([['Lapras', 'Power up to level 35', 'Bulky Water/Ice · 2400 CP', '60k', 'DUST', 'A', false], ['Munchlax', 'Evolve to Snorlax (2nd)', 'A second Snorlax for a second gym', '50', 'CANDY', 'A', false]], 'gym'),
+        ], 'As 3b with Greg\'s labels: "Top defenders" and "Top available".'),
+      ] },
+      { key: 'rocket', glyph: '☄', title: 'Team Rocket', blurb: '4a, with how lineups are known', count: '17 builds', options: [
+        O('7d', 'Leader first', 'Lineups since the 4 Oct Takeover', [
+          cards([['LEADER · SINCE 4 OCT', 'Giovanni', 'Persian → Kingler / Rhyperior → Shadow Dialga', T.rocket[0]], ['LEADER', 'Sierra', 'Shadow Lapras → …'], ['LEADER', 'Cliff', 'Shadow Machop → …'], ['LEADER', 'Arlo', 'Shadow Golett → …']], 210),
+          header('YOUR TEAM FOR GIOVANNI', 'Change leader'),
+          slots('Slot by slot', '3 of 3', [['Lucario', 'vs Persian', '1', true, T.rocket[1]], ['Kyogre', 'vs Kingler / Rhyperior', '2', true, T.rocket[1]], ['Groudon', 'vs Dialga', '3', true, T.rocket[1]]], 3, 'Picked from what you have built. Lucario needs its second move first (75k dust).'),
+          note('Unlike raids, Rocket lineups are not announced ahead. They change with each Team GO Rocket Takeover (roughly every six to eight weeks) and are worked out by the community within a day or two. The page shows the current set and a "lineups may have changed" banner once a Takeover event starts.'),
+        ], 'As 4a. Preparation is general rather than dated: the grunt-type chart from 4b could sit under this as a second section, since grunt types never change.'),
+      ] },
+      { key: 'pvp', glyph: '⚔', title: 'PvP leagues', blurb: '5b', count: '46 builds', options: [
+        O('7e', 'Team builder', 'A Great League team from your box', [
+          segments(['Great', 'Ultra', 'Master'], 0, [LG.gl, LG.ul, LG.ml]),
+          slots('Suggested team', 'Coverage 11 of 18 types', [['Umbreon', 'Dark · lead', 'U', true, LT.gl], ['Gallade', 'Psychic/Fighting', 'G', true, LT.gl], ['Charizard', 'Fire/Flying · closer', 'C', true, LT.gl]], 3, 'Weak to Fairy and Rock. Swapping Charizard for Magnezone covers Fairy.'),
+          header('OTHER CANDIDATES', 'All 46'),
+          list([['Magnezone', 'From Magnemite', 'Covers Fairy, Ice · #365', '78.4', 'SCORE', 'A', false], ['Flareon', 'From Eevee', 'Poke Genie\'s pick · #710', '68.9', 'SCORE', 'B', false], ['Charizard', 'From Charmander', 'In the team · #260', '80.8', 'SCORE', 'A', false]], 'pvp'),
+          note('GO Battle League seasons and their league rotation are announced at season start (about three months), so the control can mark which league is live this week.'),
+        ], 'As 5b, with the Default / Pogo Assist switch applying to the candidates.'),
+      ] },
+      { key: 'max', glyph: '✦', title: 'Max battles', blurb: '6a, with the month ahead', count: '12 builds', options: [
+        O('7f', 'Max boss first, with the month ahead', 'Max Mondays and Battle Days to 1 Dec', [
+          segments(['Now', 'Coming up'], 1),
+          timeline([['19 – 25 OCT', 'now', 'Dynamax Sneasel', 'MAX MON', 2, 2, 'Ready. Fighting, Fire, Rock.', true], ['SAT 24 OCT', 'in 2 d', 'Dynamax Azelf · Mesprit · Uxie', 'BATTLE DAY', 1, 3, 'Dark and Ghost: Dynamax Gengar is ready; a second Dark Dynamax would help.'], ['16 – 23 NOV', 'in 25 d', 'Dynamax Trails', 'EVENT', 2, 3, 'Rotating bosses; your tanks (Blissey, Snorlax) cover most.'], ['28 NOV', 'in 37 d', 'Super Mega Raid Day', 'MEGA', 0, 3, 'Boss not named yet.']], 'max'),
+          note('Max bosses follow the same monthly post as raids: Max Mondays and Max Battle Days are known 4 to 6 weeks ahead. Only Pokémon caught as Dynamax can take part; the readiness bar counts those only.'),
+        ], 'Same shape as Raids (7b). The readiness bar counts Dynamax copies; the advisor already flags "needs a Dynamax copy".'),
+      ] },
+    ].map(g => ({ ...g, ink: T[g.key][0], tint: T[g.key][1] }));
+
+    const groups = [
+      { key: 'all', glyph: '☰', title: 'Everything', blurb: 'the whole advice list', count: '143 builds', options: [
+        O('1a', 'Flat ranked list, as today', '143 builds, best first', [
+          segments(['Best first', 'Cheapest', 'Nearly done']),
+          list([['Rayquaza', 'Mega evolve', 'Raids · CP 4262, 13/12/14, L50', '0 dust', 'TO SPEND', 'S', 1, true], ['Blissey', 'Already built', 'Gym, Max · L50', '0 dust', 'TO SPEND', 'S'], ['Lucario', 'Mega evolve + Second move', 'Raids, Rocket · L50', '75k', 'DUST', 'S'], ['Snorlax', 'Power up to level 30', 'Gym, Max · L29', '10k', 'DUST', 'S'], ['Lugia', 'Power up to level 50', 'Raids, PvP · L25', '483k', 'DUST', 'S']], 'all'),
+          note('Show all 143 ›'),
+        ], 'One list, re-sortable. Familiar, scales to any count, but says nothing about where the Pokémon is used until you read each row.'),
+        O('1b', 'Grouped by what you would do', '4 kinds of action', [
+          header('EVOLVE · 31', 'See all'),
+          list([['Pupitar', 'Evolve to Tyranitar', 'Raids, Rocket, PvP', '100', 'CANDY', 'S', false], ['Eevee', 'Evolve to Flareon', 'Great League', '6,600', 'DUST', 'B', false]], 'all'),
+          header('POWER UP · 58', 'See all'),
+          list([['Snorlax', 'To level 30', 'Gym, Max', '10k', 'DUST', 'S', false], ['Lugia', 'To level 50', 'Raids, Master League', '483k', 'DUST', 'S', false]], 'all'),
+          header('MEGA EVOLVE · 9', 'See all'),
+          list([['Rayquaza', 'Mega evolve', 'Raids', '0', 'TO SPEND', 'S', false]], 'all'),
+          header('SECOND MOVE · 45', 'See all'),
+        ], 'Reads as a to-do list for a play session: everything you can evolve while walking, everything to power up at home. Good when you have a specific resource to spend.'),
+        O('1c', 'Three for today, then by budget', 'What your dust and candy allow', [
+          cards([['DO FIRST', 'Mega evolve Rayquaza', 'Free. Your best raid attacker.', T.raids[0]], ['CHEAP WIN', 'Evolve Eevee → Flareon', '6,600 dust. Great League pick.', LG.gl], ['WORTH SAVING FOR', 'Lugia to level 50', '483k dust, 296 XL. Master League.', LG.ml]], 220),
+          header('YOU HAVE 612,400 DUST · THESE FIT', 'Change'),
+          list([['Snorlax', 'Power up to level 30', 'Gym, Max · 10k dust', '10k', 'DUST', 'S', false], ['Lucario', 'Mega + Second move', 'Raids, Rocket · 75k dust', '75k', 'DUST', 'S', false], ['Pupitar', 'Evolve to Tyranitar', 'Raids, Rocket, PvP · 100 candy', '100', 'CANDY', 'S', false]], 'all'),
+          note('Needs your dust total: it is read on the Box screen already (Power-up dust per Pokémon), so a box-wide figure is a small addition.'),
+        ], 'Leads with three decisions, then everything your resources can pay for right now. Most opinionated; hides the long tail behind a budget line.'),
+      ] },
+      { key: 'raids', glyph: '◈', title: 'Raids', blurb: 'attackers for raid bosses', count: '38 builds', options: [
+        O('2a', 'Boss first', 'Bosses in raids this week', [
+          cards([['5★ UNTIL 4 NOV', 'Dialga', 'Fighting, Ground · you have 4 counters', T.raids[0]], ['MEGA', 'Mega Rayquaza', 'Ice, Dragon, Fairy · 3 counters'], ['3★', 'Snorlax', 'Fighting · 2 counters']], 200),
+          header('YOUR COUNTERS FOR DIALGA', 'All bosses'),
+          list([['Lucario', 'Mega evolve + Second move', 'Fighting · Counter / Aura Sphere', '75k', 'DUST', 'S', 1, true], ['Pupitar → Tyranitar', 'Evolve', 'Not a counter; Rock · skip for Dialga', '100', 'CANDY', 'S'], ['Groudon', 'Already built', 'Ground · Mud Shot / Precipice Blades', '0', 'TO SPEND', 'S']], 'raids'),
+        ], 'Starts from the boss you are about to fight. Needs a current-bosses list, which is new data (a small bundled JSON updated with the game master).'),
+        O('2b', 'By attack type', 'Your best attacker of each type', [
+          grid([['DRAGON', 'Rayquaza', 'Mega · S', T.raids[0], T.raids[1]], ['FIGHTING', 'Lucario', 'Mega · S', T.raids[0], T.raids[1]], ['ROCK', 'Tyranitar', 'from Pupitar · S', T.raids[0], T.raids[1]], ['FIRE', 'Charizard', 'from Charmander · A'], ['PSYCHIC', 'Alakazam', 'from Abra · A'], ['WATER', '—', 'no S or A attacker'], ['ICE', '—', 'gap: Mamoswine'], ['GROUND', 'Groudon', 'built · S', T.raids[0], T.raids[1]], ['DARK', 'Tyranitar', 'from Pupitar · S', T.raids[0], T.raids[1]]], 3),
+          header('GAPS WORTH FILLING', 'Gaps'),
+          list([['Mamoswine', 'Nothing in your box becomes it', 'Ice · S tier · from Swinub', '—', '', 'S', false], ['Kyogre', 'Nothing in your box becomes it', 'Water · S tier', '—', '', 'S', false]], 'raids'),
+        ], 'A type chart of your own box: tap a type to see every attacker of it. Uses the advisor\'s areas and tiers as they are; the gaps section is the existing Gaps list, split by type.'),
+        O('2c', 'Ranked build list', '38 raid builds, best first', [
+          segments(['All raids', 'Mega', 'Legendary']),
+          list([['Rayquaza', 'Mega evolve', 'Dragon, Flying · CP 4262, L50', '0', 'TO SPEND', 'S', 1, true], ['Lucario', 'Mega evolve + Second move', 'Fighting, Steel · L50', '75k', 'DUST', 'S'], ['Pupitar', 'Evolve to Tyranitar', 'Rock, Dark · L51', '100', 'CANDY', 'S'], ['Lugia', 'Power up to level 50', 'Psychic, Flying · L25', '483k', 'DUST', 'S'], ['Charmander', 'Evolve to Charizard', 'Fire, Flying · L2.5', '39k', 'DUST', 'A']], 'raids'),
+        ], 'The current list filtered to raids. No new data. Least guidance on when to use what.'),
+      ] },
+      { key: 'gym', glyph: '⛫', title: 'Gym battles', blurb: 'defenders and attackers', count: '21 builds', options: [
+        O('3a', 'Defend / Attack', 'Two jobs, two lists', [
+          segments(['Defenders', 'Attackers'], 0),
+          list([['Blissey', 'Already built', 'Stays longest · 3036 CP · S', '0', 'TO SPEND', 'S', 1, true], ['Snorlax', 'Power up to level 30', 'Bulky · 2636 CP → 2719', '10k', 'DUST', 'S'], ['Chansey', 'Evolve to Blissey (2nd copy)', 'For a second gym', '50', 'CANDY', 'A'], ['Metagross', 'Power up to level 40', 'Steel · 3200 CP', '120k', 'DUST', 'A']], 'gym'),
+          note('Defenders are ranked by how long they hold a gym; attackers by damage against the common defenders.'),
+        ], 'Mirrors how the game splits gyms: what you leave in one, what you knock others out with. The advisor\'s "Gym" area already covers both; the split is a label per build.'),
+        O('3b', 'Your gym team', 'Six you would leave in gyms today', [
+          slots('Defenders ready now', '4 of 6', [['Blissey', '3036 CP', 'B', true, T.gym[1]], ['Snorlax', '2636 CP', 'S', true, T.gym[1]], ['Metagross', '3200 CP', 'M', true, T.gym[1]], ['Chansey', '1120 CP', 'C', true, T.gym[1]], ['Empty', 'Power up Lapras', '+', false], ['Empty', 'Evolve Munchlax', '+', false]], 3, 'The game lets one Pokémon per gym and one of each species per gym. Six here means six gyms.'),
+          header('TO FILL THE EMPTY SLOTS', ''),
+          list([['Lapras', 'Power up to level 35', 'Bulky Water/Ice · 2400 CP', '60k', 'DUST', 'A', false], ['Munchlax', 'Evolve to Snorlax (2nd)', 'A second Snorlax for a second gym', '50', 'CANDY', 'A', false]], 'gym'),
+        ], 'A roster view: who is ready, who fills the gaps. Visual and quick, but the slot count is a convention (six gyms) rather than something the game enforces.'),
+        O('3c', 'Ranked build list', '21 gym builds, best first', [
+          list([['Blissey', 'Already built', 'Gym, Max · CP 3036, L50', '0', 'TO SPEND', 'S', 1, true], ['Snorlax', 'Power up to level 30', 'Gym, Max · CP 2636, L29', '10k', 'DUST', 'S'], ['Metagross', 'Power up to level 40', 'Gym, Raids · CP 3200', '120k', 'DUST', 'A'], ['Lapras', 'Power up to level 35', 'Gym · CP 2400', '60k', 'DUST', 'A']], 'gym'),
+        ], 'The current list filtered to the Gym area. No new data.'),
+      ] },
+      { key: 'rocket', glyph: '☄', title: 'Team Rocket', blurb: 'grunts, leaders, Giovanni', count: '17 builds', options: [
+        O('4a', 'Leader first', 'This month\'s leader lineups', [
+          cards([['LEADER', 'Giovanni', 'Persian → Kingler / Rhyperior → Shadow Dialga', T.rocket[0]], ['LEADER', 'Sierra', 'Shadow Lapras → …'], ['LEADER', 'Cliff', 'Shadow Machop → …'], ['LEADER', 'Arlo', 'Shadow Golett → …']], 210),
+          header('YOUR TEAM FOR GIOVANNI', 'Change leader'),
+          slots('Slot by slot', '3 of 3', [['Lucario', 'vs Persian', '1', true, T.rocket[1]], ['Kyogre', 'vs Kingler / Rhyperior', '2', true, T.rocket[1]], ['Groudon', 'vs Dialga', '3', true, T.rocket[1]]], 3, 'Picked from what you have built. Lucario needs its second move first (75k dust).'),
+        ], 'The question players actually ask: "what do I bring to Giovanni?". Needs the leader lineups, which change monthly; another small bundled JSON, or typed in by hand in Settings.'),
+        O('4b', 'By grunt type', 'What the grunt says, who you bring', [
+          grid([['"NORMAL"', 'Lucario', 'Fighting · built', T.rocket[0], T.rocket[1]], ['"FIRE"', 'Kyogre', 'Water · built', T.rocket[0], T.rocket[1]], ['"WATER"', 'Zekrom', 'Electric · built', T.rocket[0], T.rocket[1]], ['"GRASS"', 'Charizard', 'Fire · evolve Charmander'], ['"DARK"', 'Lucario', 'Fighting · built', T.rocket[0], T.rocket[1]], ['"PSYCHIC"', 'Tyranitar', 'Dark · evolve Pupitar'], ['"ROCK"', 'Metagross', 'Steel · built', T.rocket[0], T.rocket[1]], ['"FLYING"', '—', 'gap: Rhyperior'], ['"DRAGON"', 'Rayquaza', 'Dragon · built', T.rocket[0], T.rocket[1]]], 3),
+          note('Filled tiles are built already; plain tiles name the build that would fill them. Tap a tile for the full counter list for that grunt.'),
+        ], 'Maps the grunt\'s line to one answer. Grunt types are fixed in the game, so this needs only a static table of the twelve lines and their types; counters come from the advisor.'),
+        O('4c', 'Ranked build list', '17 Rocket builds, best first', [
+          list([['Lucario', 'Mega evolve + Second move', 'Rocket, Raids · L50', '75k', 'DUST', 'S', 1, true], ['Pupitar', 'Evolve to Tyranitar', 'Rocket, Raids, PvP · L51', '100', 'CANDY', 'S'], ['Charmander', 'Evolve to Charizard', 'Rocket, Raids · L2.5', '39k', 'DUST', 'A'], ['Machamp', 'Second move', 'Rocket · Cross Chop', '50k', 'DUST', 'A']], 'rocket'),
+        ], 'The current list filtered to the Rocket area. No new data.'),
+      ] },
+      { key: 'pvp', glyph: '⚔', title: 'PvP leagues', blurb: 'Great, Ultra, Master', count: '46 builds', options: [
+        O('5a', 'League first', 'Great League · under 1,500 CP', [
+          segments(['Great', 'Ultra', 'Master'], 0, [LG.gl, LG.ul, LG.ml]),
+          header('YOUR BEST FOR GREAT LEAGUE', 'Default · Pogo Assist'),
+          list([['Umbreon', 'From Eevee (copy 1) · 56,800 dust', 'PvPoke #24 · this copy 94.8%', '90.2', 'SCORE', 'S', 1, true], ['Gallade', 'From Kirlia, if it is male', 'PvPoke #96 · 96.9%', '86.1', 'SCORE', 'S'], ['Charizard', 'From Charmander · 39,400 dust', 'PvPoke #260 · 96.7%', '80.8', 'SCORE', 'A'], ['Magnezone', 'From Magnemite · 25,400 dust', 'PvPoke #365 · 94.9%', '78.4', 'SCORE', 'A'], ['Flareon', 'From Eevee · Poke Genie\'s pick', 'PvPoke #710 · 97.2%', '68.9', 'SCORE', 'B']], 'pvp'),
+        ], 'One league at a time, the same control as the Pokémon page, your box ranked by species score with this copy\'s IV fit. Uses the league data from PR #7 directly; the scoring switch applies here too.'),
+        O('5b', 'Team builder', 'A Great League team from your box', [
+          segments(['Great', 'Ultra', 'Master'], 0, [LG.gl, LG.ul, LG.ml]),
+          slots('Suggested team', 'Coverage 11 of 18 types', [['Umbreon', 'Dark · lead', 'U', true, LT.gl], ['Gallade', 'Psychic/Fighting', 'G', true, LT.gl], ['Charizard', 'Fire/Flying · closer', 'C', true, LT.gl]], 3, 'Weak to Fairy and Rock. Swapping Charizard for Magnezone covers Fairy.'),
+          header('OTHER CANDIDATES', 'All 46'),
+          list([['Magnezone', 'From Magnemite', 'Covers Fairy, Ice · #365', '78.4', 'SCORE', 'A', false], ['Flareon', 'From Eevee', 'Poke Genie\'s pick · #710', '68.9', 'SCORE', 'B', false]], 'pvp'),
+        ], 'Goes a step beyond ranking: a three-Pokémon team with type coverage. Coverage needs typing data (in the game master) and a simple rule; it is new logic, not new data.'),
+        O('5c', 'Ranked build list with league tags', '46 PvP builds, best first', [
+          list([['Lugia', 'Power up to level 50', 'Master · PvPoke #9', '483k', 'DUST', 'S', 1, true], ['Pupitar', 'Evolve to Tyranitar', 'Ultra, Master · #88 / #40', '100', 'CANDY', 'S'], ['Kirlia', 'Evolve to Gallade, if male', 'Great, Ultra · #96 / #72', '52k', 'DUST', 'A'], ['Charmander', 'Evolve to Charizard', 'Great, Ultra · #260 / #97', '39k', 'DUST', 'A'], ['Magnemite', 'Evolve to Magneton', 'Great · #449', '54k', 'DUST', 'B'], ['Eevee', 'Evolve to Flareon', 'Great, Ultra · #710 / #623', '6,600', 'DUST', 'B']], 'pvp'),
+        ], 'The current list filtered to PvP, with the leagues named per row. No new data, but mixes three leagues in one ranking.'),
+      ] },
+      { key: 'max', glyph: '✦', title: 'Max battles', blurb: 'Dynamax and Gigantamax', count: '12 builds', options: [
+        O('6a', 'Max boss first', 'Bosses in Power Spots now', [
+          cards([['5★ MAX', 'Gigantamax Charizard', 'Rock, Water · 2 of your Dynamax counter', T.max[0]], ['3★ MAX', 'Dynamax Blastoise', 'Grass, Electric · 1 counter'], ['1★ MAX', 'Dynamax Snorlax', 'Fighting']], 210),
+          header('YOUR MAX TEAM FOR G-MAX CHARIZARD', 'All bosses'),
+          slots('Attackers and tank', '2 of 3', [['Dynamax Blissey', 'tank · Max Guard 3', 'B', true, T.max[1]], ['Dynamax Snorlax', 'tank · Max Spirit 2', 'S', true, T.max[1]], ['Empty', 'needs a Dynamax Rock or Water', '+', false]], 3, 'Only Pokémon caught as Dynamax can Max battle; the advisor already flags "needs a Dynamax copy".'),
+        ], 'Boss-first like Raids. Max bosses rotate, so this needs the same kind of small bundled schedule.'),
+        O('6b', 'Your Max roster', 'Dynamax copies and their Max moves', [
+          grid([['BLISSEY', 'Max Guard 3', 'Max Spirit 2 · tank', T.max[0], T.max[1]], ['SNORLAX', 'Max Strike 1', 'Max Spirit 1 · power up', T.max[0], T.max[1]], ['CHARIZARD', 'Not Dynamax', 'G-Max Charizard needs a Max copy'], ['GENGAR', 'Max Strike 2', 'Max Guard 1 · attacker', T.max[0], T.max[1]]], 2),
+          header('NEXT STEPS', ''),
+          list([['Snorlax', 'Power up to level 30 + Max Spirit 2', '10k dust · 400 MP', '400', 'MAX PARTICLES', 'S', false], ['Gengar', 'Max Strike 3', '600 MP', '600', 'MAX PARTICLES', 'A', false]], 'max'),
+          note('Max move levels and Max Particles are not in the box data today: a scan reads neither. This option needs them added to the Pokémon record and the cost model.'),
+        ], 'Treats Max as its own economy (Max Particles, Max moves), which the current advisor does not model. Honest about what is missing.'),
+        O('6c', 'Ranked build list', '12 Max builds, best first', [
+          list([['Blissey', 'Already built (needs a Dynamax copy)', 'Max, Gym · CP 3036', '0', 'TO SPEND', 'S', 1, true], ['Snorlax', 'Power up to level 30', 'Max, Gym · CP 2636', '10k', 'DUST', 'S'], ['Gengar', 'Second move', 'Max, Raids', '75k', 'DUST', 'A']], 'max'),
+        ], 'The current list filtered to the Max area. No new data.'),
+      ] },
+    ].map(g => ({ ...g, ink: T[g.key][0], tint: T[g.key][1] }));
+    return { c, turns: [
+      { kicker: 'Turn 2 · Greg\'s picks, refined', title: 'One screen per type, with the schedule where the game publishes one', blurb: 'Raids and Max battles get a "Coming up" timeline: Niantic\'s monthly events post names the 5-star, Mega and Max rotations about 4 to 6 weeks ahead (November 2026 is already public on 22 October), so each boss shows how many counters you have built and the one build that closes the gap. Team GO Rocket lineups are not published ahead; they change with Takeover events and are known a day or two after, so 7d shows the current set with a date. Gym uses Greg\'s labels; Everything drops the data note; PvP is 5b.', groups: picked },
+      { kicker: 'Turn 1 · Next tab sections', title: 'Three ways into each content type', blurb: 'Each row is one of the six tiles on the Next tab, shown as the screen that opens when it is tapped (header and tab bar left out). Option a is organised around the game\'s content (bosses, leaders, leagues), b around your box (teams, rosters, budgets), c is the plain ranked build list we have today, dressed for that type.', groups },
+    ] };
+  }
+}
+</script>
+</body>
+</html>

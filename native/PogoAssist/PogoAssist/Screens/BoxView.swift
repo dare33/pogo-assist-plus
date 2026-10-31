@@ -16,6 +16,8 @@ struct BoxView: View {
     @Environment(\.showToast) private var showToast
     @Environment(\.accent) private var accent
     @StateObject private var store = BoxIndexStore()
+    /// False while another tab is showing: a menu in a hidden stack stays reachable by accessibility, so the header's menus wait until this tab is shown.
+    var active = true
 
     @State private var query = ""
     @State private var choosingExport = false
@@ -24,8 +26,13 @@ struct BoxView: View {
     @State private var chip = BoxIndex.Chip.all
     @State private var sort = BoxIndex.Sort.name
     @State private var sections: [BoxIndex.Section] = []
-    @State private var sectionsReady = false
+    /// The index key `sections` were computed for; they show only while it is the current account's and box version's.
+    @State private var sectionsFor: String?
     @State private var jumped: String?
+    @State private var rankingInfo = false
+    @State private var headerContentHeight: CGFloat = 0
+    @State private var listAreaHeight: CGFloat = 0
+    @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @FocusState private var searching: Bool
     #if DEBUG
     @State private var benchText: String?
@@ -35,9 +42,31 @@ struct BoxView: View {
     #endif
 
     private var indexKey: String { "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)" }
+    /// What the store's index and the sections must be built for to be shown (the synthetic box installs its own).
+    private var wantedKey: String { synthetic ? "synthetic" : indexKey }
+    /// The sections are the current account's and box version's. A big box builds its index away from the main thread, so after a switch of account the previous
+    /// account's sections can still be in `sections`: they are never shown, the progress view stands in until the new ones are computed.
+    private var sectionsCurrent: Bool { Self.showsSections(computedFor: sectionsFor, current: wantedKey) }
+    /// Keys read "account|seq". Sections of the same account stay up while a newer box version is indexed (a hand fix keeps the rows and the scroll position); another account's never show.
+    static func showsSections(computedFor: String?, current: String) -> Bool {
+        guard let computedFor else { return false }
+        func account(_ k: String) -> Substring { k.lastIndex(of: "|").map { k[..<$0] } ?? k[...] }
+        return account(computedFor) == account(current)
+    }
     private var index: BoxIndex { store.index }
 
-    private struct SectionKey: Equatable { var query: String; var chip: BoxIndex.Chip; var sort: BoxIndex.Sort; var version: Int }
+    private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }
+    /// The advice, once it is ready for this box version (the tags, tiles and activity chips read it).
+    private var readyAdvice: BoxAdvice? { if case .ready(let a) = model.advice { return a } else { return nil } }
+    private var adviceState: InsightKey.State { InsightKey.State(model.advice) }
+    private var insightKey: InsightKey { InsightKey(account: model.account, seq: model.snapshot?.seq, state: adviceState) }
+    /// The insight read for this account (never another account's).
+    private var insight: BoxInsight? { store.insight(forAccount: model.account) }
+    /// The advice is still being worked out, or it is ready but the insight is not yet built for this box version (cached advice at launch or after a switch of
+    /// account): "…" and "Working out…", not "—". A failed advice is not waiting: it never arrives.
+    private var insightWaiting: Bool { insightKey.isWaiting(builtFor: store.insightBuiltFor) }
+
+    private struct SectionKey: Equatable { var query: String; var chip: BoxIndex.Chip; var sort: BoxIndex.Sort; var version: Int; var insightVersion: Int; var pogoAssist: Bool }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +75,7 @@ struct BoxView: View {
                 if let problem = model.boxProblem { problemState(problem) }
                 else if !model.boxLoaded && model.entries.isEmpty && !synthetic { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
                 else if model.entries.isEmpty && !synthetic { emptyState }
+                else if !sectionsCurrent { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
                 else { list }
             }
         }
@@ -80,7 +110,11 @@ struct BoxView: View {
             }
         }
         #endif
-        .task(id: SectionKey(query: query, chip: chip, sort: sort, version: store.version)) { await recompute() }
+        .task(id: insightKey) {
+            if synthetic { return }
+            await store.refreshInsight(key: insightKey, advice: readyAdvice, entries: model.entries)
+        }
+        .task(id: SectionKey(query: query, chip: chip, sort: sort, version: store.version, insightVersion: store.insightVersion, pogoAssist: pogoAssist)) { await recompute() }
         .onChange(of: store.version) { _, _ in
             // A chip whose Pokémon are all gone (the last check cleared, say) would show an empty list with no way to know why.
             if (chip == .toCheck && index.toCheckCount == 0) || (chip == .fixed && index.fixedCount == 0) { chip = .all }
@@ -96,13 +130,13 @@ struct BoxView: View {
 
     private var header: some View {
         HStack(spacing: 4) {
-            AccountPill()
+            if active { AccountPill() }
             Spacer(minLength: 8)
             if !model.entries.isEmpty {
                 IconButton(systemImage: "square.and.arrow.up", kind: .floating, label: "Export") { choosingExport = true }
                     .exportChoice(isPresented: $choosingExport) { format in Task { await model.export(format) } }
             }
-            MoreButton()
+            if active { MoreButton() }
         }
         .padding(.horizontal, Theme.Space.screen)
         .frame(minHeight: 52)
@@ -150,22 +184,63 @@ struct BoxView: View {
 
     private var showsIndex: Bool { sections.count >= 3 && query.isEmpty }
 
+    /// The count line, search, chips and sort line (with the ranking switch and its explainer) stay fixed while the species list scrolls under them (Greg, 25 Oct 2026).
+    /// The saved-scan panel is not part of that block; it stays at the top of the scrolling list. An open ranking explainer sits inside the fixed block and pushes the list down.
     private var list: some View {
+        VStack(spacing: 0) {
+            frozenHeader
+            listScroll
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listAreaHeight = $0 }
+    }
+
+    /// The fixed block is as tall as its content up to `headerShare` of the list's area; beyond that (an open ranking explainer at the largest text sizes would
+    /// otherwise fill the screen and cut itself off) it scrolls inside itself and the list keeps the rest. Below that share nothing scrolls.
+    private static let headerShare: CGFloat = 0.55
+
+    private var frozenHeader: some View {
+        ScrollViewReader { headerProxy in
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
+                countLine
+                searchField
+                chips
+                if chip == .toCheck { rescanButton }
+                sortLine
+            }
+            .padding(.horizontal, Theme.Space.screen)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerContentHeight = $0 }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        // An opened explainer is brought into view inside the capped block.
+        .onChange(of: rankingInfo) { _, open in
+            // After the explainer's first layout, or the scroll runs to where its end was.
+            if open { Task { try? await Task.sleep(nanoseconds: 250_000_000); withAnimation { headerProxy.scrollTo("ranking-explainer", anchor: .bottom) } } }
+        }
+        .frame(height: headerContentHeight > 0 && listAreaHeight > 0 ? min(headerContentHeight, listAreaHeight * Self.headerShare) : nil)
+        .background(Theme.bg)
+        .zIndex(1)
+        }
+    }
+
+    private var listScroll: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Theme.Space.panelGap) {
                     if let s = savedSummary { savedPanel(s) }
-                    countLine
-                    searchField
-                    chips
-                    if chip == .toCheck { rescanButton }
-                    sortLine
-                    if sectionsReady && sections.isEmpty { Text("No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20) }
+                    if sections.isEmpty {
+                        // An activity chip waits for the advice: until then nothing can be Top or Good, which is not the same as no match. A failed advice says so.
+                        let isActivity: Bool = { if case .activity = chip { return true } else { return false } }()
+                        Text(isActivity && insight == nil ? (adviceState == .failed ? "Advice could not be worked out" : "Working out advice…") : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
+                    }
                     ForEach(sections) { sectionView($0) }
                 }
                 .padding(.leading, Theme.Space.screen)
                 .padding(.trailing, Theme.Space.screen + (showsIndex ? 18 : 0))
-                .padding(.top, 6)
+                .padding(.top, 4)
                 .padding(.bottom, 12)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -173,16 +248,44 @@ struct BoxView: View {
         }
     }
 
+    /// "2,115 Pokémon · 349 species" with the to-check badge at its trailing end (it wraps under the count where the two no longer fit).
     private var countLine: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(index.count.formatted()).paText(.screenTitle).foregroundStyle(Theme.ink)
-                Text("Pokémon · \(index.speciesCount.formatted()) species").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
-            }
-            if let d = model.snapshot?.scanDate { Text("Last scan \(Fmt.date(d))").font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted) }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) { countText; Spacer(minLength: 8); toCheckBadge }
+            VStack(alignment: .leading, spacing: 2) { countText; toCheckBadge }
         }
         .padding(.horizontal, 6)
+    }
+
+    private var countText: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(index.count.formatted()).paText(.screenTitle).foregroundStyle(Theme.ink)
+            Text("Pokémon · \(index.speciesCount.formatted()) species").font(.figtree(15, .semibold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+        }
         .accessibilityElement(children: .combine)
+    }
+
+    /// The flag and the number of Pokémon to check: tapping filters the list to them (what the To check chip did), tapping again clears it. Hidden at 0.
+    @ViewBuilder private var toCheckBadge: some View {
+        if index.toCheckCount > 0 {
+            let on = chip == .toCheck
+            Button { chip = on ? .all : .toCheck; searching = false } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: on ? "flag.fill" : "flag").font(.figtree(11, .heavy)).accessibilityHidden(true)
+                    Text(index.toCheckCount.formatted()).font(.figtree(12, .heavy, relativeTo: .caption)).monospacedDigit()
+                }
+                .foregroundStyle(on ? Theme.bg : Theme.orangeInk)
+                .padding(.horizontal, 9).padding(.vertical, 3)
+                .background(on ? Theme.orangeInk : Theme.orangeTint, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .padding(.vertical, 8).padding(.horizontal, 2).frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .padding(.vertical, -8)
+            .accessibilityLabel("To check \(index.toCheckCount.formatted())")
+            .accessibilityHint(on ? "Shows every Pokémon again" : "Shows only the Pokémon to check")
+            .accessibilityAddTraits(on ? .isSelected : [])
+            .accessibilityIdentifier("to-check-badge")
+        }
     }
 
     private var searchField: some View {
@@ -210,19 +313,20 @@ struct BoxView: View {
 
     /// How many Pokémon pass the search and chip, once the debounced search has run.
     private var matchCount: Int? {
-        guard sectionsReady, applied == BoxIndex.Query(query) else { return nil }
+        guard sectionsCurrent, applied == BoxIndex.Query(query) else { return nil }
         return sections.reduce(0) { $0 + $1.rows.reduce(0) { $0 + $1.stats.count } }
     }
 
     // MARK: chips and sort
 
-    /// A chip only when the box has something for it: To check from the entries' checks, Fixed by hand from the hand corrections. There is no "Not seen" chip: the
-    /// saved box does not record which entries a Full scan saw but could not read ("On screen but not read", "Stationed"), so an old last-seen date cannot say "not seen".
+    /// The activity filter: All, then Great, Ultra, Master, Raids, Gym, Rocket and Max (each in its colours; the order of `BoxInsight.Activity`), and Fixed by hand after them while the box has any hand
+    /// corrections. "To check" moved to the badge in the count line. There is no "Not seen" chip: the saved box does not record which entries a Full scan saw but could
+    /// not read ("On screen but not read", "Stationed"), so an old last-seen date cannot say "not seen".
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 filterChip("All", .all)
-                if index.toCheckCount > 0 { filterChip("To check \(index.toCheckCount.formatted())", .toCheck) }
+                ForEach(BoxInsight.Activity.allCases, id: \.self) { filterChip($0.title, .activity($0)) }
                 if index.fixedCount > 0 { filterChip("Fixed by hand", .fixed) }
             }
             .padding(.horizontal, 1).padding(.vertical, 4)
@@ -268,41 +372,56 @@ struct BoxView: View {
         index.gameSearch(picked: index.items.indices.filter { index.items[$0].needsCheck })
     }
 
+    /// A selected chip is filled with its colour, the others are soft: an activity or league tint with its ink, All and Fixed by hand on the surface.
     private func filterChip(_ title: String, _ value: BoxIndex.Chip) -> some View {
         let on = chip == value
-        let orange = value == .toCheck
+        var ink = Theme.ink, tint = Theme.surface
+        var identifier = "chip-all", soft = false
+        if case .activity(let a) = value { ink = a.ink(accent); tint = a.tint(accent); identifier = "chip-\(a.rawValue)"; soft = true }
+        if value == .fixed { identifier = "chip-fixed" }
         return Button { chip = value; searching = false } label: {
-            Text(title).font(.figtree(14, orange || on ? .bold : .semibold, relativeTo: .subheadline))
-                .foregroundStyle(on ? Theme.bg : (orange ? Theme.orangeInk : Theme.ink))
+            Text(title).font(.figtree(14, on || soft ? .bold : .semibold, relativeTo: .subheadline))
+                .foregroundStyle(on ? Theme.bg : ink)
                 .padding(.horizontal, 14).frame(minHeight: 36)
-                .background(Capsule().fill(on ? Theme.ink : (orange ? Theme.orangeTint : Theme.surface)))
-                .modifier(ChipShadow(on: !on && !orange))
+                .background(Capsule().fill(on ? ink : tint))
+                .modifier(ChipShadow(on: !on && !soft))
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressStyle())
         .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityIdentifier(identifier)
     }
 
+    /// Left the sort menu (Name or Top CP), right the ranking switch (Classic | Pogo Assist) and its "i"; the explainer opens under the line. The switch is the
+    /// app-wide preference the Leagues panel and the species list share.
     private var sortLine: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { sortMenu; Spacer(minLength: 8); RankingSwitch(infoOpen: $rankingInfo, identifier: "list-scoring") }
+                VStack(alignment: .leading, spacing: 0) { sortMenu; RankingSwitch(infoOpen: $rankingInfo, identifier: "list-scoring") }
+            }
+            if rankingInfo { RankingExplainer(identifier: "list-scoring-explainer").id("ranking-explainer").transition(.opacity) }
+        }
+        .animation(.easeOut(duration: 0.15), value: rankingInfo)
+        .padding(.horizontal, 4)
+    }
+
+    private var sortMenu: some View {
         Menu {
             Picker("Sort", selection: $sort) {
                 Text("Name").tag(BoxIndex.Sort.name)
                 Text("Top CP").tag(BoxIndex.Sort.topCP)
             }
         } label: {
-            HStack(spacing: 8) {
-                Label(sort == .name ? "Name" : "Top CP", systemImage: "arrow.up.arrow.down")
-                Text("·").foregroundStyle(Theme.faint)
-                Label("By species", systemImage: "square.stack")
-            }
-            .font(.figtree(14, .bold, relativeTo: .subheadline)).labelStyle(.titleAndIcon)
-            .foregroundStyle(accent.ink)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            Label(sort == .name ? "Name" : "Top CP", systemImage: "arrow.up.arrow.down")
+                .font(.figtree(13, .bold, relativeTo: .footnote)).labelStyle(.titleAndIcon)
+                .foregroundStyle(accent.ink)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 4)
-        .accessibilityLabel("Sort, \(sort == .name ? "Name" : "Top CP"), by species")
+        .accessibilityLabel("Sort, \(sort == .name ? "Name" : "Top CP")")
+        .accessibilityIdentifier("sort-menu")
     }
 
     // MARK: sections
@@ -331,28 +450,36 @@ struct BoxView: View {
     }
 
     private func speciesRow(_ r: BoxIndex.Row, last: Bool) -> some View {
-        var parts = [r.stats.bestPct.map { "best \($0)%" } ?? "IVs not read"]
-        if let cp = r.stats.topCP { parts.append("top \(cp)") }
-        let sub = parts.joined(separator: " · ")
-        let check = r.stats.toCheck > 0 ? " · \(r.stats.toCheck) to check" : ""
-        return HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(r.title).paText(.rowTitle).foregroundStyle(Theme.ink)
-                Text("\(sub)\(Text(check).fontWeight(.bold).foregroundStyle(Theme.orangeInk))")
-                    .font(.figtree(13, .regular, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+        let activity: BoxInsight.Activity? = { if case .activity(let a) = chip { return a } else { return nil } }()
+        let check = r.stats.toCheck > 0 ? "\(r.stats.toCheck) to check" : nil
+        var label = "\(r.title), \(r.stats.count) Pokémon"
+        if let activity, let lead = r.lead { label += ", \(lead.label) for \(activity.title)" }
+        label += ". " + LeagueTiles.spoken(title: r.title, insight: insight, waiting: insightWaiting, pogoAssist: pogoAssist)
+        if let check { label += ". " + check }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 1) {
+                    FlowLayout(spacing: 8) {
+                        Text(r.title).font(.figtree(16, .bold, relativeTo: .body)).foregroundStyle(Theme.ink)
+                        // With a chip chosen, the species' best copy's tag for it: the list reads as a ranking.
+                        if let activity, let lead = r.lead { WorthTag(activity: activity, worth: lead) }
+                    }
+                    if let check { Text(check).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.orangeInk) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(r.stats.count.formatted()).font(.figtree(13, .heavy, relativeTo: .footnote)).monospacedDigit().foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 6).frame(minWidth: 34, minHeight: 26)
+                    .background(Theme.surface2, in: Capsule())
+                Image(systemName: "chevron.right").font(.figtree(13, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Text(r.stats.count.formatted()).font(.figtree(13, .heavy, relativeTo: .footnote)).monospacedDigit().foregroundStyle(Theme.ink)
-                .padding(.horizontal, 6).frame(minWidth: 34, minHeight: 26)
-                .background(Theme.surface2, in: Capsule())
-            Image(systemName: "chevron.right").font(.figtree(13, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
+            LeagueTiles(title: r.title, insight: insight, waiting: insightWaiting, pogoAssist: pogoAssist)
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(minHeight: 56)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) { if !last { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 16) } }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(r.title), \(r.stats.count) Pokémon, \(sub)\(check)")
+        .accessibilityLabel(label)
     }
 
     // MARK: A-Z index
@@ -465,12 +592,14 @@ struct BoxView: View {
         let q = BoxIndex.Query(query)
         if q != applied { try? await Task.sleep(nanoseconds: 150_000_000) }
         if Task.isCancelled { return }
-        let idx = index, chip = chip, sort = sort
+        let idx = index, built = store.indexKey, chip = chip, sort = sort
+        let scoring = BoxIndex.Scoring(insight: insight, pogoAssist: pogoAssist)
         let result: [BoxIndex.Section]
-        if idx.count < 2000 { result = idx.sections(query: q, chip: chip, sort: sort) }
-        else { result = await Task.detached(priority: .userInitiated) { idx.sections(query: q, chip: chip, sort: sort) }.value }
-        if Task.isCancelled { return }
-        applied = q; sections = result; sectionsReady = true
+        if idx.count < 2000 { result = idx.sections(query: q, chip: chip, sort: sort, scoring: scoring) }
+        else { result = await Task.detached(priority: .userInitiated) { idx.sections(query: q, chip: chip, sort: sort, scoring: scoring) }.value }
+        // Only for the index still on the store: a detached pass for the previous account or box version must not land on this one.
+        if Task.isCancelled || built != store.indexKey { return }
+        applied = q; sections = result; sectionsFor = built
     }
 }
 

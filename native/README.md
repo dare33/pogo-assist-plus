@@ -64,13 +64,15 @@ scratchpad. So:
    `/private/tmp/claude-*`, and the session scratchpad holds only small intermediate files: briefs,
    logs, screenshots, JSON diffs.
 2. **Slots, not per-run folders.** `xcodebuild` output goes to `<location>/<slot>` where `<slot>` is
-   one of `main` (the session's own builds and tests), `review-a` and `review-b` (the two reviewers
-   of the paired gate), `merge` (the manager's merge check). That is the whole set: one implementer,
-   two reviewers and a merge check can build at once, which is the parallelism the project has
-   needed. Never a fresh folder, never a path of your own. If a run genuinely needs more than four
-   builds at once, say so in the PR and ask Greg for a further NAMED slot (the list is in `xcb.sh`
-   and here); do not fall back to per-run folders. Every implementer session shares `main`, so a
-   build from another worktree makes the next one cold (about 3.5 minutes); that is the trade.
+   one of `main` (the session's own builds and tests), `main-2` (a second implementer building at
+   the same time; added by Greg's ruling of 26 Oct 2026, AEDT), `review-a` and `review-b` (the two
+   reviewers of the paired gate), `merge` (the manager's merge check). That is the whole set: two
+   implementers, two reviewers and a merge check can build at once. Never a fresh folder, never a
+   path of your own. If a run genuinely needs more than five builds at once, say so in the PR and
+   ask Greg for a further NAMED slot (the list is in `xcb.sh` and here); do not fall back to per-run
+   folders. An implementer builds in the slot it was given (`main` unless the manager assigns
+   `main-2`); implementers in one slot share it, so a build from another worktree makes the next
+   one in that slot cold (about 3.5 minutes); that is the trade.
 3. **One `xcodebuild` per slot at a time, through the helper.** Xcode's build database is not safe
    to share between concurrent `xcodebuild` invocations, so each slot has a lock,
    `<location>/<slot>.lock`: an empty file that the helper opens and locks in the kernel with
@@ -524,7 +526,7 @@ What the app will call after a scan: `let engine = CoreEngine()` (own queue) the
 
 ### Rebuild the bundle
 
-`PogoBox/Resources/pogo-core.js` and the three data files are generated from a checkout of the JavaScript (they are
+`PogoBox/Resources/pogo-core.js` and the four data files (game master, tiers, PvP rankings, Hub data) are generated from a checkout of the JavaScript (they are
 committed; do not edit them):
 
     node native/tools/build-js-bundle.mjs --repo <checkout> --out native/PogoReader/Sources/PogoBox/Resources
@@ -581,7 +583,13 @@ button, a detail screen per Pokemon (flags in plain words, the advisor's entries
 Scan result: opens by itself when the app finds a `replay.jsonl` that has not been through review (a `replay.processed` marker
 beside it holds the size and time of the last one that was); it runs `ScanPipeline.process` (log, `finish`, `Refine`) and
 `BoxMerge.plan` on one engine queue (`EngineWorker`) and shows New, Updated, Same, Unsure (each answered by hand) and, for a
-full scan, Gone, then Save to box or Discard. Next: the advisor's builds, gaps and duplicates, cached per box version.
+full scan, Gone, then Save to box or Discard. The second tab is the Pogo Hub (below); its Everything screen holds the advisor's builds, gaps and duplicates, cached per box version, that the old Next tab listed.
+
+### Pogo Hub (design handover PR 4, 25 Oct 2026)
+
+The second tab. Its screen: an events strip (static cards from the bundled schedule, "All news" to pokemongo.com/news), the RANKING switch, and six tiles with build counts that push a type screen each: Everything (`DO FIRST` / `CHEAP WIN` / `WORTH SAVING FOR` cards, the stardust card whose figure is typed on the card and kept per account, `THESE FIT`, then every build, the gaps and the duplicates), Raids and Max battles (a `Now | Coming up` timeline with each boss's BRING types from the type chart, a readiness bar of the box's built counters of those types, a to-do sentence and the builds that close the gaps; Max counts only copies marked Dynamax and lists them as `YOUR MAX ROSTER`), Gym battles (`Top defenders` from the built Gym builds, `TOP AVAILABLE`, the Gym gaps), Team Rocket (leader cards, `Slot by slot` counters ranked by how many of a slot's options they beat, the grunt grid by type word), PvP leagues (a suggested three with type coverage, `OTHER CANDIDATES` from score 80). Slot pickers are not built: the teams are read-only suggestions.
+
+Reference data: `data/source/10-hub-rotation.md`, `11-rocket-lineups.md` and `12-type-chart.md` (hand-edited markdown, cited per row) are built by `npm run build:hub` into `data/hub.json`, which the bundle tool copies to `PogoBox/Resources`; the build refuses a name that does not resolve exactly, a wrong row width, an empty boss on a raid row or a bad date. The derivations are Swift (`PogoBox/HubModel.swift`, `HubRaidsModel.swift`, `HubTeamsModel.swift`, `TierTable.swift` for the bundled `tiers.json`, `HubData.swift` for `hub.json`), over the advice report the engine already produces, so the advice bridge and its cache version are unchanged. The per-copy Dynamax flag is a Not set | Yes | No switch in the Pokémon page's facts panel (`ScanRow.dynamax`, nil = unknown), saved as a box version and carried over re-scans; the advisor drops the "needs a Dynamax copy" step for a Yes copy, gives a No copy no Max credit, and hygiene never transfers a Yes copy.
 
 Diagnostics is the old one-screen test rig, unchanged in behaviour, plus "Load sample scan", which copies a bundled device log
 (`Resources/sample-scan.replay.jsonl`, the owner's own 51-Pokemon run) into the app group as if a broadcast had just finished.
@@ -629,7 +637,7 @@ none is deleted; Settings restores any of them (as a new version). The replay lo
   digits are a subsequence of a saved same-species CP (182 in 1982) with the same HP (or HP unread) is Unsure with those saved
   Pokemon as candidates. The answers are "It is this one" (only marks it seen; the part-read values are not copied over), "It is new"
   and "Leave it out of the box". Leave it out is available for every unsure row.
-- Delete one Pokemon (swipe, with a confirmation) and Settings > Scans (date, kind, Pokemon read, with a share button for the scan's
+- Delete one Pokemon (swipe, with a confirmation) and Settings > History and scans > Scans (date, kind, Pokemon read, with a share button for the scan's
   `replay.jsonl` and result JSON). "Fix a value" re-runs the JavaScript solver for the Pokemon (`LevelSolve`, the way `Refine` solves
   a hidden-CP row) so level and dust follow the corrected values; when no level fits it keeps the edit, adds `no-level-fits` and says so.
 - Diagnostics has "Load partial-read sample" (one Staraptor read as CP 182) to drive the unsure card in the simulator.
@@ -895,7 +903,7 @@ What this was tested on, and what it was not: the owner's two screenshots (19 / 
   checks otherwise; `form-ambiguous` and `level-ambiguous` are always notes; everything else, including a flag nobody has seen yet, is a check.
   Notes show on the Pokemon's detail under "How it was read". On the owner's 313-Pokemon scan (`run8-tap-300`) 72 rows were flagged and 9 remain
   in "To check". "These values are right" clears the check flags and leaves the notes.
-- Settings > Scans > "Read again with the latest rules" runs the pipeline on a scan's stored `replay.jsonl` with its stored kind and paging hint and
+- Settings > History and scans > Scans > "Read again with the latest rules" runs the pipeline on a scan's stored `replay.jsonl` with its stored kind and paging hint and
   opens the normal review screen against the box as it was before that scan was first saved (`BoxLibrary.prepareReread`: the version before the
   lowest version that names the scan). Save adds one box version (earlier box plus the new read) and records `lastReread` on the scan; the scan's
   stored result is not rewritten. Scans and corrections saved after it are not re-applied (the screen says so; their versions stay in the history).
@@ -1072,7 +1080,7 @@ Two entry points, one importer. **In the app:** More > Import screenshots > Choo
 
 A local notification (below, "Scan stopped") is posted by the app's own broadcast extension on the phone and sends nothing anywhere.
 
-Screenshots chosen or shared for import are copied into the app group on the phone, read there, and deleted after the save; they are never uploaded. Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > Scans) and then Send. There is no analytics,
+Screenshots chosen or shared for import are copied into the app group on the phone, read there, and deleted after the save; they are never uploaded. Nothing leaves the phone except when "Make scans better" is tapped (on a scan result or in Settings > History and scans > Scans) and then Send. There is no analytics,
 no background upload and no retry. One tap sends one file, `yyyy-mm/yyyymmddThhmmssZ-<random id>.json.gz`, to a private storage bucket
 (`scan-reports`, write-only for the app: it can add a file, never read, list or overwrite one). The file is a gzip of one JSON document with these
 keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone17,2, system version, screen size in points, language);
