@@ -47,7 +47,11 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertEqual(best.map(\.built), [true, true, true, true, true, false, false])
         XCTAssertEqual(best.map(\.role), [.bulky, .mega, .bulky, .bulky, .heavy, .bulky, .heavy])
         let available = HubSquads.raidCandidates(row: fireBoss, mode: .available, ctx: ctx)
-        XCTAssertEqual(available.map(\.entryId), ["e5", "e1", "e2", "e4", "e7", "e3"], "the Mega build is not usable as it is")
+        // S1: Available takes every build and judges e6 as the plain Swampert (A, tied with e2, behind it in the advisor's order); its Mega build is for the Mega slot only.
+        // e9 (Charizard, Fire: not a bring type) is a candidate too, unlisted, last (S1: every copy with a Raids build is one).
+        XCTAssertEqual(available.map(\.entryId), ["e5", "e1", "e2", "e6", "e4", "e7", "e3", "e9"])
+        XCTAssertEqual(available.map(\.tier), ["S", "S", "A", "A", "A", "A", "B", ""])
+        XCTAssertEqual(available.map(\.role), [.bulky, .bulky, .bulky, .bulky, .heavy, .bulky, .heavy, .bulky], "no Mega role under Available outside the Mega slot")
     }
 
     func testRaidRolesFollowRule8() {
@@ -65,8 +69,14 @@ final class HubSquadsAreasTests: XCTestCase {
         let best = HubSquads.raidSquad(candidates: HubSquads.raidCandidates(row: fireBoss, mode: .best, ctx: ctx), placeable: P23.anyone)
         XCTAssertEqual(best.map(\.role), ["Mega", "Heavy hitter", "Heavy hitter", "Heavy hitter", "Bulky hitter", "Bulky hitter"])
         XCTAssertEqual(best.map(\.entryId), ["e6", "e4", "e3", nil, "e5", "e1"], "two Heavy exist; the third slot stays empty")
-        let available = HubSquads.raidSquad(candidates: HubSquads.raidCandidates(row: fireBoss, mode: .available, ctx: ctx), placeable: P23.anyone)
-        XCTAssertEqual(available.map(\.entryId), [nil, "e4", "e3", nil, "e5", "e1"], "under Available the Mega slot is empty")
+        // e6 is a Swampert, which can Mega Evolve: under Available only a copy the box holds as one takes the Mega slot.
+        let megaCtx = P23.ctx(builds: raidBuilds(), entries: [P23.entry("e6", "swampert")], table: raidTable())
+        let available = HubSquads.raidSquad(candidates: HubSquads.raidCandidates(row: fireBoss, mode: .available, ctx: megaCtx), placeable: P23.anyone)
+        XCTAssertEqual(available.map(\.entryId), ["e6", "e4", "e3", nil, "e5", "e1"], "S1: the Mega slot takes the Mega build under Available too")
+        // Fill with any role: the empty third Heavy slot takes the strongest unused candidate, and the Bulky slots then take what is left.
+        let any = HubSquads.raidSquad(candidates: HubSquads.raidCandidates(row: fireBoss, mode: .available, ctx: megaCtx), fillAnyRole: true, placeable: P23.anyone)
+        XCTAssertEqual(any.map(\.entryId), ["e6", "e4", "e3", "e2", "e5", "e1"], "the Bulky slots keep the Bulky Pokémon; the empty Heavy slot takes the next strongest")
+        XCTAssertEqual(any.map(\.fallback), [false, false, false, true, false, false])
         // A pick the player made stays, and the suggestion skips that copy.
         let picked = HubSquads.raidSquad(slots: [SquadSlot(role: "Mega"), SquadSlot(role: "Heavy hitter"), SquadSlot(role: "Bulky hitter", pick: "e4")],
                                          candidates: HubSquads.raidCandidates(row: fireBoss, mode: .best, ctx: ctx), placeable: P23.anyone)
@@ -136,14 +146,14 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertEqual(HubSquads.maxSquad(candidates: [], placeable: P23.anyone).map(\.entryId), [nil, nil, nil])
     }
 
-    func testMaxBuiltNeedsTheDynamaxMarkAndAvailableKeepsTheSpecies() {
+    func testMaxBuiltNeedsTheDynamaxMarkAndAvailableTakesEveryBuild() {
         let marked = P23.ctx(builds: maxBuilds(), entries: [P23.entry("m0", "blissey", dynamax: true), P23.entry("m2", "vaporeon")], table: maxTable())
         let c = HubSquads.maxCandidates(row: fireBoss, mode: .best, ctx: marked)
         XCTAssertEqual(c.first { $0.entryId == "m0" }?.built, true)
         XCTAssertEqual(c.first { $0.entryId == "m2" }?.built, false, "not marked Dynamax: reads Upgrade available")
         var builds = maxBuilds(); builds[2].powerUp = false
         let avail = HubSquads.maxCandidates(row: fireBoss, mode: .available, ctx: P23.ctx(builds: builds, table: maxTable()))
-        XCTAssertFalse(avail.map(\.entryId).contains("m2"))
+        XCTAssertTrue(avail.map(\.entryId).contains("m2"), "S1: an evolution to do is still a Max candidate under Available")
     }
 
 
@@ -161,7 +171,7 @@ final class HubSquadsAreasTests: XCTestCase {
                       P23.build("l1", "lapras", areas: ["Gym"], level: 20),
                       P23.build("s3", "snorlax", areas: ["Gym"], level: 20, targetLevel: 30),
                       P23.build("b1", "blissey", areas: ["Gym"], score: 1, level: 30),                           // the same copy again
-                      P23.build("x1", "snorlax", areas: ["Gym"], powerUp: false, level: 30),                      // not usable as it is
+                      P23.build("x1", "snorlax", areas: ["Gym"], powerUp: false, level: 30),                      // an evolution or form change still to do: counts too (S1)
                       P23.build("o1", "pikachu", areas: ["Raids"], level: 30)]                                   // not a Gym build
         let entries = [P23.entry("b1", "blissey", ivs: IVs(atk: 0, def: 10, hp: 10), cp: 100), P23.entry("s1", "snorlax", ivs: IVs(atk: 15, def: 15, hp: 15), cp: 1),
                        P23.entry("s2", "snorlax", ivs: IVs(atk: 5, def: 5, hp: 5), cp: 3000), P23.entry("r1", "registeel", ivs: IVs(atk: 1, def: 1, hp: 1), level: nil),
@@ -189,20 +199,21 @@ final class HubSquadsAreasTests: XCTestCase {
 
     func testGymOrderIsTierThenBulkAndAnUnreadLevelRanksLastInItsTier() {
         let rows = HubSquads.gymRows(mode: .available, ctx: gymFixture())
-        // S: Blissey (bulk about 48k), Snorlax s1 (about 34k), Snorlax s2 at its target level 35 (a little less), then s3 with no level.
+        // S: Blissey (bulk about 48k), Snorlax s1 (about 34k) and x1 (the same, so the advisor's order; S1: a build that is not a power-up counts), Snorlax s2 at its
+        // target level 35 (a little less), then s3 with no level.
         // A: Lapras (level 20 known) before Registeel (no level), although Registeel's tier is the same.
-        XCTAssertEqual(rows.map { $0.build.entryId }, ["b1", "s1", "s2", "s3", "l1", "r1"])
-        XCTAssertEqual(rows.map(\.tier), ["S", "S", "S", "S", "A", "A"])
-        XCTAssertEqual(rows.map(\.levelNotRead), [false, false, false, true, false, true])
-        XCTAssertEqual(rows.map(\.bulk.isKnown), [true, true, true, false, true, false])
-        XCTAssertEqual(rows[2].level, 35, "an unbuilt row is worked at its target level")
+        XCTAssertEqual(rows.map { $0.build.entryId }, ["b1", "s1", "x1", "s2", "s3", "l1", "r1"])
+        XCTAssertEqual(rows.map(\.tier), ["S", "S", "S", "S", "S", "A", "A"])
+        XCTAssertEqual(rows.map(\.levelNotRead), [false, false, false, false, true, false, true])
+        XCTAssertEqual(rows.map(\.bulk.isKnown), [true, true, true, true, false, true, false])
+        XCTAssertEqual(rows[3].level, 35, "an unbuilt row is worked at its target level")
         XCTAssertEqual(rows[1].level, 30, "a built row at the copy's level")
         XCTAssertGreaterThan(rows[0].bulk.value!, rows[1].bulk.value!)
-        XCTAssertGreaterThan(rows[1].bulk.value!, rows[2].bulk.value!)
-        XCTAssertEqual(rows.map(\.built), [true, true, false, true, true, true])
+        XCTAssertGreaterThan(rows[1].bulk.value!, rows[3].bulk.value!)
+        XCTAssertEqual(rows.map(\.built), [true, true, true, false, true, true, true])
     }
 
-    func testGymOrderIgnoresCPAndBestIncludesFormChanges() {
+    func testGymOrderIgnoresCPAndBothModesIncludeFormChanges() {
         let ctx = gymFixture()
         XCTAssertEqual(ctx.entry("s2")?.row.cp, 3000, "s2 has the highest CP and still ranks below s1")
         let best = HubSquads.gymRows(mode: .best, ctx: ctx)
@@ -223,10 +234,10 @@ final class HubSquadsAreasTests: XCTestCase {
     func testTheGymSquadIsSixSlotsFilledInOrder() {
         let rows = HubSquads.gymRows(mode: .available, ctx: gymFixture())
         let squad = HubSquads.gymSquad(rows: rows, placeable: P23.anyone)
-        XCTAssertEqual(squad.map(\.entryId), ["b1", "s1", "s2", "s3", "l1", "r1"])
+        XCTAssertEqual(squad.map(\.entryId), ["b1", "s1", "x1", "s2", "s3", "l1"])
         var slots = HubSquads.defaultGymSlots()
         slots[0].pick = "r1"
-        XCTAssertEqual(HubSquads.gymSquad(slots: slots, rows: rows, placeable: P23.anyone).map(\.entryId), ["r1", "b1", "s1", "s2", "s3", "l1"])
+        XCTAssertEqual(HubSquads.gymSquad(slots: slots, rows: rows, placeable: P23.anyone).map(\.entryId), ["r1", "b1", "s1", "x1", "s2", "s3"])
         XCTAssertEqual(HubSquads.gymSquad(rows: Array(rows.prefix(2)), placeable: P23.anyone).map(\.entryId), ["b1", "s1", nil, nil, nil, nil])
         XCTAssertEqual(HubSquads.defaultGymSlots().count, 6)
     }
@@ -278,10 +289,10 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertEqual(medicham.typeFlags, [.init(type: "fighting", hits: false), .init(type: "psychic", hits: true)])
     }
 
-    func testRocketPickerUnderAvailableDropsFormChanges() {
+    func testRocketPickerUnderAvailableKeepsFormChanges() {
         var b = rocketBuilds(); b[6].powerUp = false
         let rows = HubSquads.rocketPicker(options: [machamp], mode: .available, ctx: P23.ctx(builds: b))
-        XCTAssertFalse(rows.map(\.entryId).contains("r7"))
+        XCTAssertTrue(rows.map(\.entryId).contains("r7"), "S1: a form change to do is still a Rocket counter under Available")
         XCTAssertEqual(HubSquads.rocketPicker(options: [machamp], mode: .best, ctx: P23.ctx()), [])
     }
 
@@ -432,8 +443,8 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertNil(slots[1].pick, "Medicham is no Safe swap in the table")
     }
 
-    func testAvailableTakesTheNextCopyWhenTheBestOneIsAnEvolution() {
-        // Two Medicham copies: the better one's pick is an evolution (not usable as it is), the other is itself.
+    func testAvailableTakesTheBestCopyEvenWhenItIsAnEvolution() {
+        // Two Medicham copies: the better one's pick is an evolution, the other is itself. S1: both count, the better wins; still one per species.
         var l = leagueRatings()
         l["m1"] = ["gl": P23.rating([P23.option("medicham", isSelf: false, score: 99)])]
         l["m2"] = ["gl": P23.rating([P23.option("medicham", isSelf: true, score: 90)])]
@@ -441,8 +452,7 @@ final class HubSquadsAreasTests: XCTestCase {
         let best = HubSquads.pvpCandidates(league: "gl", mode: .best, ctx: ctx)
         XCTAssertEqual(best.first?.entryId, "m1")
         let available = HubSquads.pvpCandidates(league: "gl", mode: .available, ctx: ctx)
-        XCTAssertEqual(available.filter { $0.candidate.speciesId == "medicham" }.map(\.entryId), ["c0"], "the best Medicham copy that is itself, not the species dropped")
-        XCTAssertFalse(available.map(\.entryId).contains("m1"))
+        XCTAssertEqual(available.filter { $0.candidate.speciesId == "medicham" }.map(\.entryId), ["m1"], "the best Medicham copy, evolution or not; never two of one species")
     }
 
     func testCoverageIsReturnedAndNeverUsedToPick() {

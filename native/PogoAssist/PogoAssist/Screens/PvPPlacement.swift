@@ -1,14 +1,11 @@
 import PogoBox
 
-/// Which Pokémon a PvP slot may place under a mode, for the ranking the screen shows. Under Available a pick is placed only when the option the screen shows for its copy
-/// (the Classic pick, or the experimental member under the Pogo Assist ranking: `LeaguePanel.shownIndex`) is the copy itself, so the check and the candidate list agree.
+/// Which Pokémon a PvP slot may place under a mode. Under Available (S1) a pick is placed when the box holds the copy and the league rates it, whatever the shown option
+/// needs (power up, evolve): the same copies the candidate list offers. A Pokémon the box lacks (a Best species pick) is not placed.
 enum PvPPlacement {
     static func placeable(league: String, mode: SquadMode, pogoAssist: Bool, ctx: HubContext) -> (String, String) -> Bool {
         guard mode == .available else { return { _, _ in true } }
-        return { id, _ in
-            guard let r = ctx.advice.leagues[id]?[league] else { return false }
-            return r.options[LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)].isSelf
-        }
+        return { id, _ in ctx.advice.leagues[id]?[league] != nil }
     }
 }
 
@@ -44,9 +41,13 @@ extension PvPPlacement {
         }
         var out = slots.map { mint($0.role, nil) }
         for (i, s) in slots.enumerated() { if let p = s.pickId, placeable(p, s.role), take(p) { out[i] = mint(s.role, p, chosen: true) } }
+        // Each role's own slots fill across the whole squad first; a slot still empty then takes the strongest other Pokémon left (S1), so a fallback never takes the
+        // Pokémon a later slot of that role would have had.
         for (i, s) in slots.enumerated() where out[i].pickId == nil {
             if let id = pool(s.role).first(where: take) { out[i] = mint(s.role, id) }
-            else if let id = all.first(where: take) { out[i] = mint(s.role, id, fallback: true) }
+        }
+        for (i, s) in slots.enumerated() where out[i].pickId == nil {
+            if let id = all.first(where: take) { out[i] = mint(s.role, id, fallback: true) }
         }
         return out
     }

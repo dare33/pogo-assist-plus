@@ -11,6 +11,32 @@ import PogoReader
 extension HubSquads {
     // MARK: rule 6: Best rows
 
+    /// A Best row's one status (S1, 31 Oct 2026). `inBox`: the player has it (`needsUpgrade` when its build still needs work, or no build serves it). `canGetNow`: the
+    /// box lacks it and a raid, Max or Rocket boss now has it, or the research's obtain line says it can be got (`detail` is that line). `notAvailableNow`: neither;
+    /// `detail` says when it is next on, when the schedule knows. No history of past dates is kept.
+    public struct BestStatus: Equatable {
+        public enum Kind: String, Equatable { case inBox, canGetNow, notAvailableNow }
+        public var kind: Kind
+        public var needsUpgrade: Bool
+        public var detail: String?
+
+        /// The reason a Pokémon the schedule does not list is not available now: no date is invented.
+        public static let notOnSchedule = "not on the schedule"
+        /// A status for a Pokémon no Best row describes (a stored species pick the lists no longer hold).
+        public static let unlisted = BestStatus(kind: .notAvailableNow, needsUpgrade: false, detail: notOnSchedule)
+
+        /// "In your box", "In your box · needs upgrade", "In your box · needs upgrade · no build for this", "Can get now · Raid boss now", "Not available now · Raids from
+        /// 9 Nov", "Not available now · not on the schedule". Every status but a plain "In your box" carries its reason.
+        public var text: String {
+            let why = detail.flatMap { $0.isEmpty ? nil : " · " + $0 } ?? ""
+            switch kind {
+            case .inBox: return (needsUpgrade ? "In your box · needs upgrade" : "In your box") + why
+            case .canGetNow: return "Can get now" + why
+            case .notAvailableNow: return "Not available now" + why
+            }
+        }
+    }
+
     /// One row of a Best list: a Pokémon the table lists for the slot, with what the box has of it. There are three cases: a build or league candidate for the slot
     /// (`build` or `pvp`: the player's best copy or build, with its mark); a copy in the box that no build of this area serves (`copy`: "In your box · no build for
     /// this"); and nothing (`availability` says when it might be had).
@@ -43,6 +69,8 @@ extension HubSquads {
         public var hits: Int = 0
         public var typeFlags: [TypeFlag] = []
         public var slotLine: String? = nil
+        /// Its one status (S1): in the box, can be got now, or not available now.
+        public var status = BestStatus.unlisted
 
         public init(key: String, name: String, speciesId: String, tier: String, roles: [String], types: [String], build: BoxAdvice.Build? = nil, pvp: PvpCandidate? = nil,
                     copy: BoxEntry? = nil, sharedWith: String? = nil, availability: String, rotationLine: String? = nil) {
@@ -152,11 +180,21 @@ extension HubSquads {
 
     private static func displayName(_ e: TierTable.Entry) -> String { e.name.hasPrefix("Dynamax ") ? String(e.name.dropFirst("Dynamax ".count)) : e.name }
 
-    private static func bestRow(_ e: TierTable.Entry, roles: [String], owner o: Owner = Owner(), pvp: PvpCandidate? = nil, kinds: [HubData.Kind]? = nil, ctx: HubContext) -> BestRow {
+    private static func bestRow(_ e: TierTable.Entry, roles: [String], owner o: Owner = Owner(), pvp: PvpCandidate? = nil, kinds: [HubData.Kind]? = nil, screen: SquadScreen, ctx: HubContext) -> BestRow {
         let owned = o.build != nil || o.copy != nil || pvp != nil
         let parts = availabilityParts(of: e, kinds: kinds, ctx: ctx)
-        return BestRow(key: bestKey(e), name: displayName(e), speciesId: e.speciesId, tier: e.tier, roles: roles, types: speciesTypes(e.speciesId, ctx: ctx), build: o.build, pvp: pvp,
-                       copy: o.copy, sharedWith: o.sharedWith, availability: owned ? "" : parts.text, rotationLine: owned ? nil : parts.rotation)
+        var row = BestRow(key: bestKey(e), name: displayName(e), speciesId: e.speciesId, tier: e.tier, roles: roles, types: speciesTypes(e.speciesId, ctx: ctx), build: o.build, pvp: pvp,
+                          copy: o.copy, sharedWith: o.sharedWith, availability: owned ? "" : parts.text, rotationLine: owned ? nil : parts.rotation)
+        // Rule 6, S1: exactly one status per row. A copy with a build needs an upgrade unless that build is at Full strength; a copy no build serves always does.
+        if owned {
+            let needs = o.build.map { !isFullStrength($0, screen: screen, ctx: ctx) } ?? pvp.map { !$0.candidate.built } ?? true
+            row.status = BestStatus(kind: .inBox, needsUpgrade: needs, detail: o.build == nil && pvp == nil ? "no build for this" : nil)
+        } else if parts.canGetNow {
+            row.status = BestStatus(kind: .canGetNow, needsUpgrade: false, detail: parts.text)
+        } else {
+            row.status = BestStatus(kind: .notAvailableNow, needsUpgrade: false, detail: parts.rotation ?? BestStatus.notOnSchedule)
+        }
+        return row
     }
 
     // MARK: availability
@@ -174,7 +212,8 @@ extension HubSquads {
     /// The rotation's line for a Pokémon, nil when it is no boss now or later. A boss is the entry's Pokémon only when the Shadow state agrees (Shadow Giratina is not
     /// the plain Giratina raid). Kinds that carry no boss (Raid Hour, other) are never read. Under way: "Raid boss now" / "Max battle now", and for a one-day event
     /// "<title> today" ("Max Monday today"). Coming: "Raids from 9 Nov", "Max battles from 16 Nov", and for a one-day event "<title> <day>" ("Max Monday 2 Nov").
-    static func rotationLine(of e: TierTable.Entry, kinds: [HubData.Kind]? = nil, ctx: HubContext) -> String? {
+    /// `now` is true for a line under way.
+    static func rotationInfo(of e: TierTable.Entry, kinds: [HubData.Kind]? = nil, ctx: HubContext) -> (line: String, now: Bool)? {
         let wantShadow = e.flags.shadow || e.speciesId.hasSuffix("_shadow")
         let base = e.speciesId.replacingOccurrences(of: "_shadow", with: "")
         func isBoss(_ b: HubData.Boss) -> Bool {
@@ -188,20 +227,51 @@ extension HubSquads {
             return (raid ? "Raids from " : "Max battles from ") + dayMonth(r.from)
         }
         let under = rows.filter { $0.from <= ctx.today }
-        if let r = under.first(where: { raidKinds.contains($0.kind) }) ?? under.first { return line(r, now: true) }
-        if let r = rows.filter({ $0.from > ctx.today }).min(by: { ($0.from, $0.to) < ($1.from, $1.to) }) { return line(r, now: false) }
+        if let r = under.first(where: { raidKinds.contains($0.kind) }) ?? under.first { return (line(r, now: true), true) }
+        if let r = rows.filter({ $0.from > ctx.today }).min(by: { ($0.from, $0.to) < ($1.from, $1.to) }) { return (line(r, now: false), false) }
         return nil
     }
 
-    static func availabilityParts(of e: TierTable.Entry, kinds: [HubData.Kind]? = nil, ctx: HubContext) -> (rotation: String?, text: String) {
-        let rot = rotationLine(of: e, kinds: kinds, ctx: ctx)
-        if let rot { return (rot, rot) }
-        let obtain = (e.obtain ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return (nil, obtain.isEmpty ? "Last available not known" : obtain)
+    static func rotationLine(of e: TierTable.Entry, kinds: [HubData.Kind]? = nil, ctx: HubContext) -> String? { rotationInfo(of: e, kinds: kinds, ctx: ctx)?.line }
+
+    /// A Rocket entry whose Pokémon a leader brings now, with the Shadow state agreeing as for a raid boss. Only the slot the player can catch counts (manager call,
+    /// 31 Oct 2026: `data/hub.json` does not mark it, so the rule is here): Giovanni's third slot, the first slot of every other leader.
+    static func isRocketBossNow(_ e: TierTable.Entry, ctx: HubContext) -> Bool {
+        let wantShadow = e.flags.shadow || e.speciesId.hasSuffix("_shadow")
+        let base = e.speciesId.replacingOccurrences(of: "_shadow", with: "")
+        return ctx.hub.leaders.contains { leader in
+            let at = leader.name == "Giovanni" ? 2 : 0
+            return leader.slots.indices.contains(at) && leader.slots[at].contains { ($0.speciesId.hasSuffix("_shadow") || $0.shadow == true) == wantShadow && $0.speciesId.replacingOccurrences(of: "_shadow", with: "") == base }
+        }
     }
 
-    /// When a Pokémon the box lacks might be had: the rotation line when it is a boss now or coming, else the table's obtain text ("Medium. T5 raids"); "Last
-    /// available not known" only when the table has none either (nothing in the data says when it was last available).
+    /// Whether the research's obtain line says a Pokémon the schedule does not list can be got now (S1, manager call 31 Oct 2026). All of: the difficulty word (up to the
+    /// first full stop) is Easy or Medium, with no range to Hard and no slash; the row is not a Mega, Primal, Legendary, Mythical or Ultra Beast (those come through
+    /// events, so the schedule decides); the line names no month or year (it is about a past or future run). The line has no dates of its own, so this reads it, it does not know.
+    static func obtainableNow(_ obtain: String, entry e: TierTable.Entry, ctx: HubContext) -> Bool {
+        let head = obtain.split(separator: ".", maxSplits: 1).first.map(String.init)?.lowercased() ?? ""
+        guard head.contains("easy") || head.contains("medium"), !head.contains("hard"), !head.contains("locked"), !head.contains("/") else { return false }
+        guard obtain.range(of: #"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|January|February|March|April|June|July|August|September|October|November|December)\b|\b20[0-9]{2}\b"#, options: .regularExpression) == nil else { return false }
+        if e.flags.mega || e.speciesId.contains("_mega") || e.speciesId.contains("_primal") { return false }
+        let base = e.speciesId.replacingOccurrences(of: "_shadow", with: "")
+        let tags = (ctx.gm.byId[e.speciesId] ?? ctx.gm.byId[base]).map(\.tags) ?? []
+        return !tags.contains { ["mega", "legendary", "mythical", "ultrabeast"].contains($0) }
+    }
+
+    /// When a Pokémon the box lacks can be had. `rotation` is the schedule's line (a boss now or coming, or "Rocket boss now"); `text` the line a plain list shows (the
+    /// rotation line, else the table's obtain text, else empty); `canGetNow`: the schedule has it under way, a Rocket leader brings it now, or, when the schedule never lists
+    /// it, the obtain line reads as obtainable now. A schedule that lists it only later wins over the obtain line: a legend that is a boss next week is not got now.
+    static func availabilityParts(of e: TierTable.Entry, kinds: [HubData.Kind]? = nil, ctx: HubContext) -> (rotation: String?, text: String, canGetNow: Bool) {
+        let info = rotationInfo(of: e, kinds: kinds, ctx: ctx)
+        if let info, info.now { return (info.line, info.line, true) }
+        if e.area == "rocket", isRocketBossNow(e, ctx: ctx) { return ("Rocket boss now", "Rocket boss now", true) }
+        let obtain = (e.obtain ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let info { return (info.line, info.line, false) }
+        return (nil, obtain, obtainableNow(obtain, entry: e, ctx: ctx))
+    }
+
+    /// When a Pokémon the box lacks might be had: the rotation line when it is a boss now or coming, else the table's obtain text ("Medium. T5 raids"); empty when the
+    /// table has none either.
     public static func availability(of e: TierTable.Entry, ctx: HubContext) -> String { availabilityParts(of: e, ctx: ctx).text }
 
     // MARK: Raids
@@ -224,7 +294,7 @@ extension HubSquads {
         let copies = copyIndex(shadowServesPlain: true, ctx: ctx)
         var claims = [String: String]()
         return ranked(items, secondary: { bring.firstIndex(of: $0.section.lowercased()) ?? bring.count }).map { r in
-            bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: fills[bestKey(r.e)] ?? [], screen: .raids, copies: copies, claims: &claims, ctx: ctx), ctx: ctx)
+            bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: fills[bestKey(r.e)] ?? [], screen: .raids, copies: copies, claims: &claims, ctx: ctx), screen: .raids, ctx: ctx)
         }
     }
 
@@ -240,10 +310,10 @@ extension HubSquads {
         }
         let copies = copyIndex(ctx: ctx)
         var claims = [String: String]()
-        let byKey = keyedBuilds(ctx.advice.builds.filter { $0.areas.contains("Max") }, shadowServesPlain: false, ctx: ctx)
+        let byKey = keyedBuilds(plainBuilds(ctx.advice.builds).filter { $0.areas.contains("Max") }, shadowServesPlain: false, ctx: ctx)
         return ranked(items, secondary: { PogoRules.hitsAnyBoss(speciesTypes($0.speciesId, ctx: ctx), row: row, hub: ctx.hub) ? 0 : 1 }).map { r in
             // A Max entry's rotation is the Max battles' only (a raid boss of the same species is no Max battle).
-            var out = bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .max, copies: copies, claims: &claims, ctx: ctx), kinds: maxKinds, ctx: ctx)
+            var out = bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .max, copies: copies, claims: &claims, ctx: ctx), kinds: maxKinds, screen: .max, ctx: ctx)
             out.hitsBoss = PogoRules.hitsAnyBoss(out.types, row: row, hub: ctx.hub)
             return out
         }
@@ -256,9 +326,9 @@ extension HubSquads {
         let items = ctx.table.entries.enumerated().compactMap { i, e -> (e: TierTable.Entry, index: Int, roles: [String])? in e.area == "gym" ? (e, i, [gymSlotRole]) : nil }
         let copies = copyIndex(ctx: ctx)
         var claims = [String: String]()
-        let byKey = keyedBuilds(HubTeams.gymAvailable(builds: ctx.advice.builds), shadowServesPlain: false, ctx: ctx)
+        let byKey = keyedBuilds(HubTeams.gymAvailable(builds: plainBuilds(ctx.advice.builds)), shadowServesPlain: false, ctx: ctx)
         return ranked(items).map { r in
-            bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .gym, copies: copies, claims: &claims, ctx: ctx), ctx: ctx)
+            bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .gym, copies: copies, claims: &claims, ctx: ctx), screen: .gym, ctx: ctx)
         }
     }
 
@@ -278,9 +348,9 @@ extension HubSquads {
         }
         let copies = copyIndex(shadowServesPlain: true, ctx: ctx)
         var claims = [String: String]()
-        let byKey = keyedBuilds(ctx.advice.builds.filter(isRocketArea), shadowServesPlain: true, ctx: ctx)
+        let byKey = keyedBuilds(plainBuilds(ctx.advice.builds).filter(isRocketArea), shadowServesPlain: true, ctx: ctx)
         return ranked(items).map { r in
-            var out = bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .rocket, copies: copies, claims: &claims, ctx: ctx), ctx: ctx)
+            var out = bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .rocket, copies: copies, claims: &claims, ctx: ctx), screen: .rocket, ctx: ctx)
             out.hits = options.filter { ctx.hub.beats(out.types, $0.types) }.count
             out.typeFlags = out.types.map { t in TypeFlag(type: t, hits: options.contains { ctx.hub.beats([t], $0.types) }) }
             out.slotLine = slotLine(hits: out.hits, of: options.count)
@@ -299,7 +369,7 @@ extension HubSquads {
 
     /// Best for a league: its table's entries, best tier first, then the table's # (its rank), with the roles the table's role text gives. The box's copy of an entry
     /// is the league candidate of that species (`pvpCandidates`, which needs a score of `HubTeams.candidateFloor` or more and is not past the cap); a copy of the species
-    /// that is not a candidate reads "In your box · no build for this".
+    /// that is not a candidate reads "In your box · needs upgrade · no build for this".
     public static func bestPvpRows(league: String, pogoAssist: Bool = false, ctx: HubContext) -> [BestRow] {
         let items = ctx.table.entries.enumerated().compactMap { i, e -> (e: TierTable.Entry, index: Int, roles: [String])? in
             e.area == league ? (e, i, PvpRole.allCases.filter(pvpRoles(e.role ?? "").contains).map(\.rawValue)) : nil
@@ -312,8 +382,8 @@ extension HubSquads {
         }
         let copies = copyIndex(ctx: ctx)
         return ranked(items).map { r in
-            if let c = owned[r.e.speciesId] { return bestRow(r.e, roles: r.roles, pvp: c, ctx: ctx) }
-            return bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: [], screen: .pvp, copies: copies, claims: &claims, ctx: ctx), ctx: ctx)
+            if let c = owned[r.e.speciesId] { return bestRow(r.e, roles: r.roles, pvp: c, screen: .pvp, ctx: ctx) }
+            return bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: [], screen: .pvp, copies: copies, claims: &claims, ctx: ctx), screen: .pvp, ctx: ctx)
         }
     }
 
@@ -375,21 +445,29 @@ extension HubSquads {
 
     /// The Best squad's slots: each takes the player's pick, else the first unused row of the ranked list for its role. A Max Attacker slot takes the first row that
     /// hits the boss when there is one, even over a higher tier that does not (rule 12).
-    public static func bestSquad(slots: [SquadSlot], rows: [BestRow], fallback: Bool = false) -> [FilledSlot] {
-        keepingSpecies(fill(slots: resolvingSpecies(slots, rows: rows), pool: { _, role in
+    /// With `oneMega` (raids) a squad holds one Mega: once a slot holds a Mega row, no later slot takes one (the fill skips it).
+    public static func bestSquad(slots: [SquadSlot], rows: [BestRow], fallback: Bool = false, oneMega: Bool = false) -> [FilledSlot] {
+        let megaIds = oneMega ? megaRowIds(rows) : []
+        return keepingSpecies(fill(slots: resolvingSpecies(slots, rows: rows), pool: { _, role in
             var listed = pool(role: role, in: rows)
             if role == PogoRules.MaxRole.attacker.rawValue {
                 let hits = Set(rows.filter(\.hitsBoss).map(\.entryId))
                 listed = listed.filter(hits.contains) + listed.filter { !hits.contains($0) }
             }
             return Pool(preferred: listed, fallback: fallback ? rows.map(\.entryId) : [])
-        }, copyOf: copyResolver(rows: rows)), slots, rows: rows)
+        }, copyOf: copyResolver(rows: rows), allows: { id, _, out in megaIds.isEmpty || !megaIds.contains(id) || !out.contains { $0.pickId.map(megaIds.contains) ?? false } }), slots, rows: rows)
     }
 
-    /// CONCEPTS rule 3 and 29: under Available a raid Mega slot is empty by rule, not for want of a Pokémon, so it is not counted and not drawn as missing. A Mega slot
-    /// the player changed to another role, and every other empty slot, still counts.
-    public static func slotNotCounted(screen: SquadScreen, mode: SquadMode, role: String, filled: Bool) -> Bool {
-        screen == .raids && mode == .available && role == PogoRules.RaidRole.mega.rawValue && !filled
+    /// Every id of a Mega row of a raid Best list (the row's own id and its species id).
+    public static func megaRowIds(_ rows: [BestRow]) -> Set<String> {
+        Set(rows.filter { $0.roles.contains(PogoRules.RaidRole.mega.rawValue) }.flatMap(\.ids))
+    }
+
+    /// The Mega rows another slot's Pokémon rules out of the edited slot's picker: once any other slot holds a Mega, no Mega row is offered (the edited slot's own stays, ticked).
+    public static func megaExcluded(by filled: [FilledSlot], editing: Int, rows: [BestRow]) -> Set<String> {
+        let megas = megaRowIds(rows)
+        let held = filled.enumerated().contains { $0.offset != editing && $0.element.ids.contains(where: megas.contains) }
+        return held ? megas : []
     }
 
     // MARK: rules 29 and 30: how ready a slot and a squad are
@@ -404,8 +482,6 @@ extension HubSquads {
         case toGet
         /// Nothing in the slot.
         case empty
-        /// A raid Mega slot under Available: empty by rule 3, so not counted (`slotNotCounted`).
-        case notCounted
 
         /// The word a VoiceOver label ends with.
         public var spoken: String {
@@ -414,7 +490,6 @@ extension HubSquads {
             case .needsWork: return "needs work"
             case .toGet: return "not in your box, to get"
             case .empty: return "empty"
-            case .notCounted: return "not counted under Available"
             }
         }
     }
@@ -434,7 +509,6 @@ extension HubSquads {
     /// Rule 30: the line over a squad. "Ready" when every slot is ready; "Nearly ready: 2 need work" when none is empty or to get and some need work; else "Not ready:"
     /// with what is missing, "2 to get, 1 empty" (a Best squad can hold Pokémon the box lacks). nil for a squad with no slots.
     public static func teamStatus(_ slots: [SlotStatus]) -> TeamStatus? {
-        let slots = slots.filter { $0 != .notCounted }
         guard !slots.isEmpty else { return nil }
         let count = { (s: SlotStatus) in slots.filter { $0 == s }.count }
         let toGet = count(.toGet), empty = count(.empty), work = count(.needsWork)

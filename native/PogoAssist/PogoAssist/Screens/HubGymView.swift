@@ -83,8 +83,8 @@ private struct GymSquadView: View {
         guard let o = (f.species.flatMap { byId[squadSpeciesPrefix + $0] } ?? byId[pick]) else {
             if let key = f.species {
                 let name = ctx.gm.byId[key]?.name ?? "Pokémon"
-                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: ["Not in your box"], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
-                                     spoken: [head, name, HubSquads.SlotStatus.toGet.spoken].joined(separator: ", "), identifier: id)
+                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [HubSquads.BestStatus.unlisted.text], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
+                                     spoken: [head, name, HubSquads.BestStatus.unlisted.text.replacingOccurrences(of: " · ", with: ", "), HubSquads.SlotStatus.toGet.spoken].joined(separator: ", "), identifier: id)
             }
             let name = ctx.entry(pick)?.row.title ?? "Pokémon"
             return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, types: ctx.entryTypes(pick), status: .needsWork,
@@ -97,9 +97,9 @@ private struct GymSquadView: View {
         // Rule 29: the Gym table's tier, not the build's own (a Pokémon the table does not list needs work).
         let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: HubSquads.gymTableTier(r.build, ctx: ctx))
         let line = GymFigures.bulkLine(r)
-        let shared = o.best?.sharedWith.map { "same copy as \($0)" }
+        let shared = o.best?.statusLine
         let lines = (line.isEmpty ? [] : [line]) + (shared.map { [$0] } ?? [])
-        let spoken = [head, o.name, SquadWords.typeList(o.types), line, mark.spoken, shared, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        let spoken = [head, o.name, SquadWords.typeList(o.types), line, mark.spoken, o.best?.spokenStatus, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: o.name, lines: lines, types: o.types, mark: mark, status: status, spoken: spoken, identifier: id)
     }
 
@@ -116,11 +116,11 @@ private struct GymSquadView: View {
         var models: [PickerRowModel] = listed.compactMap { l in
             guard let o = byId[l.entryId] else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .gym, ctx: ctx) }
             guard let r = o.row, o.best?.hasBuild != false else { return PickerRowModel(best: o.best!, ticked: l.ticked) }
-            let shared = o.best?.sharedWith.map { "same copy as \($0)" }
+            let shared = o.best?.statusLine
             let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
             let stats = GymFigures.stats(r, ctx: ctx)
             let level = r.level.map { "at level \(GymFigures.levelText($0))" }
-            var spoken = [o.name, "tier \(o.tier)", SquadWords.typeList(o.types), mark.spoken].compactMap { $0 }
+            var spoken = [o.name, "tier \(o.tier)", SquadWords.typeList(o.types), mark.spoken, o.best?.spokenStatus].compactMap { $0 }
             if let stats { spoken.append("Defence \(stats.def), HP \(stats.hp)") }
             spoken.append(GymFigures.bulkLine(r))
             if let level { spoken.append(level) }
@@ -141,7 +141,7 @@ private struct GymSquadView: View {
             info: {
                 if mode == .best {
                     SquadExplainer(items: [
-                        ("Ranked from our gym table:", "every defender it lists, S then A then B, in the table's order, whether or not you have it. Ones you do not have say when they might be available."),
+                        ("Ranked from our gym table:", "every defender it lists, S then A then B, in the table's order, whether or not you have it. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."),
                         ("", "Ones you have show your best copy and the work it needs, with its bulk: Defence × HP with its own IVs."),
                     ], identifier: "squad-picker-explainer")
                 } else {

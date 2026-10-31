@@ -82,7 +82,7 @@ private struct PvPSquadView: View {
         SuggestionsRow(mode: Binding(get: { mode }, set: { m in keeper.update { $0.setMode(m, for: .pvp) } }), noun: "squads")
         if candidates.isEmpty && mode == .available {
             // The squad still shows, with its empty slots.
-            Text("No \(LeaguePanel.name(league)) candidate in your box scores \(Int(HubTeams.candidateFloor)) or more as it is.")
+            Text("No \(LeaguePanel.name(league)) candidate in your box scores \(Int(HubTeams.candidateFloor)) or more.")
                 .font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
                 .accessibilityIdentifier("hub-pvp-none")
         }
@@ -107,6 +107,10 @@ private struct PvPSquadView: View {
         /// Best: a Pokémon the box lacks (`candidate` and `option` are nil).
         /// Best: the row of a Pokémon the box lacks, or of a copy no league candidate serves.
         var notOwned: HubSquads.BestRow?
+        /// Best: the row that shows an owned candidate, for its one status (S1).
+        var bestRow: HubSquads.BestRow?
+        /// The roles it is listed for in the league table (shown on a slot it fills from another role).
+        var roles: [String] = []
     }
 
     private func types(_ speciesId: String) -> [String] { ctx.gm.byId[speciesId]?.types ?? [] }
@@ -128,7 +132,8 @@ private struct PvPSquadView: View {
         // A copy of a table Pokémon that no league candidate serves (it scores under the floor, or is past the cap): "In your box · no build for this".
         if byId[id] == nil, let r = best.first(where: { $0.ownedEntryId == id && !$0.hasBuild }) { return Member(name: r.name, types: r.types, mark: .none, candidate: nil, option: nil, tier: "", notOwned: r) }
         if let c = byId[id]?.candidate { return Member(name: c.displayName, types: types(c.speciesId), mark: SquadMark.of(c), candidate: c, option: c.option, copyTitle: c.copyTitle,
-                                                       tier: HubSquads.pvpTier(speciesId: c.speciesId, league: league, score: c.score)) }
+                                                       tier: HubSquads.pvpTier(speciesId: c.speciesId, league: league, score: c.score), bestRow: best.first { $0.ownedEntryId == id },
+                                                       roles: byId[id]?.roles.map(\.rawValue) ?? []) }
         if let r = ctx.advice.leagues[id]?[league] {
             let o = r.options[LeaguePanel.shownIndex(r, pogoAssist: pogoAssist)]
             let c = o.cost
@@ -199,35 +204,44 @@ private struct PvPSquadView: View {
         if let r = m.notOwned { return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", best: r, head: head, identifier: id) }
         // Rule 29: the league tier shown everywhere (the table's, else the 88-score band), the same under Available and Best.
         let status = HubSquads.slotStatus(inBox: true, fullStrength: m.mark == .fullStrength, tier: m.tier)
-        let spoken = [head, m.name, SquadWords.typeList(m.types), m.mark.spoken, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: m.name, types: m.types, mark: m.mark, status: status, spoken: spoken, identifier: id)
+        // A slot filled from another role says which role the Pokémon is listed for (S1); under Best the row's one status shows.
+        let other = f.fallback && !f.chosen && m.candidate != nil ? SquadWords.otherRoleLine(m.roles) : nil
+        let shared = m.bestRow?.statusLine
+        let spoken = [head, m.name, other, SquadWords.typeList(m.types), m.mark.spoken, m.bestRow?.spokenStatus, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: m.name, lines: [other, shared].compactMap { $0 }, types: m.types, mark: m.mark, status: status, spoken: spoken, identifier: id)
     }
 
     // MARK: picker
 
     private func picker(_ i: Int, filled: [FilledSlot], candidates: [HubSquads.PvpCandidate], byId: [String: HubSquads.PvpCandidate], best: [HubSquads.BestRow], mode: SquadMode, pogoAssist: Bool) -> some View {
         let role = filled[i].role
-        var ids = mode == .best ? HubSquads.pool(role: role, in: best) : HubSquads.pool(role: role, in: candidates)
-        let boxHasOptions = !ids.isEmpty
+        // Available (S1): the slot's own role first, then every other unused candidate ("Other roles:"), in the order the squad is filled in.
+        let groups = mode == .best ? (own: HubSquads.pool(role: role, in: best), other: [String]())
+            : HubSquads.pickerGroups(own: HubSquads.pool(role: role, in: candidates), all: candidates.map(\.entryId), allowsOther: true)
+        var ids = groups.own
+        let boxHasOptions = !(groups.own + groups.other).isEmpty
         // The slot's own Pokémon is always listed, ticked, even when it came from outside the role's pool (the fallback) or is no longer a candidate.
         let ticks = HubSquads.tickIds(filled[i], rows: best)
-        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
+        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: groups.own + groups.other) { ids.insert(own, at: 0) }
         let allIds = mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)
         let excluded = PvPPlacement.excluded(by: filled, editing: i, ids: allIds, species: { speciesId($0, pogoAssist: pogoAssist) })
         let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks)
+        let listedOther = HubSquads.picker(candidates: groups.other, excluded: excluded, ownIds: ticks)
         // Options hidden by the one-species rule alone (none is in another slot) are told apart from options that are all in the squad.
         let inSquad = HubSquads.excluded(by: filled, editing: i, onlyChosen: false)
-        let speciesRuleOnly = boxHasOptions && listed.isEmpty && ids.allSatisfy { !inSquad.contains($0) }
-        var rows: [PickerRowModel] = listed.compactMap { l in
+        let speciesRuleOnly = boxHasOptions && listed.isEmpty && listedOther.isEmpty && (ids + groups.other).allSatisfy { !inSquad.contains($0) }
+        func model(_ l: HubSquads.PickerRow) -> PickerRowModel? {
             if let r = best.first(where: { $0.entryId == l.entryId }), !r.hasBuild {
                 return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · "))
             }
-            if let pc = byId[l.entryId] { return row(pc, ticked: l.ticked) }
+            if let pc = byId[l.entryId] { return row(pc, ticked: l.ticked, status: best.first { $0.ownedEntryId == l.entryId }?.statusLine) }
             guard let m = member(l.entryId, byId: byId, best: best, pogoAssist: pogoAssist) else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .pvp, ctx: ctx) }
             if let r = m.notOwned { return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · ")) }
             return fallbackRow(l.entryId, m, ticked: l.ticked)
         }
-        if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
+        let rows: [PickerRowModel] = mode == .available
+            ? PickerRowModel.availableGroups(own: listed.compactMap(model), other: listedOther.compactMap(model))
+            : listed.compactMap(model)
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: .pvp, roles: chips, role: role,
             onRole: { new in keeper.update { s in
@@ -245,7 +259,7 @@ private struct PvPSquadView: View {
             info: {
                 if mode == .best {
                     SquadExplainer(items: [
-                        ("Ranked from our league table:", "every Pokémon it lists for the league, S then A then B, in the table's order, whether or not you have it. Ones you do not have say when they might be available."),
+                        ("Ranked from our league table:", "every Pokémon it lists for the league, S then A then B, in the table's order, whether or not you have it. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."),
                         ("Roles", "come from our league table's role column: lead, safe swap or switch, closer."),
                         ("Green numbers", "mark a top pick (boxed: score 92 or more, or an IV rank in the top 100) and a good pick (green: score 90 or more, or an IV rank in the top 500)."),
                     ], identifier: "squad-picker-explainer")
@@ -283,19 +297,22 @@ private struct PvPSquadView: View {
             spoken: spoken)
     }
 
-    private func row(_ pc: HubSquads.PvpCandidate, ticked: Bool) -> PickerRowModel {
+    private func row(_ pc: HubSquads.PvpCandidate, ticked: Bool, status: String? = nil) -> PickerRowModel {
         let c = pc.candidate
         let tier = HubSquads.pvpTier(speciesId: c.speciesId, league: league, score: c.score)
         let types = ctx.gm.byId[c.speciesId]?.types ?? []
         let mark = SquadMark.of(c)
         let score = LeaguePanel.oneDecimal(c.score), scoreGrade = MyPokemon.scoreGrade(c.score), rankGrade = MyPokemon.rankGrade(c.ivRank)
         let roles = pc.roles.map(\.rawValue).joined(separator: " · ")
-        let spoken = [c.displayName, roles, tier.isEmpty ? nil : "tier \(tier)", mark.spoken, c.fromText, "IV " + c.subText.replacingOccurrences(of: "#", with: "rank "),
+        let spoken = [c.displayName, roles, tier.isEmpty ? nil : "tier \(tier)", mark.spoken, status?.replacingOccurrences(of: " · ", with: ", "), c.fromText, "IV " + c.subText.replacingOccurrences(of: "#", with: "rank "),
                       "score \(score)" + (scoreGrade.spoken.isEmpty ? "" : ", \(scoreGrade.spoken) pick"), ticked ? "in this slot" : nil]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         return PickerRowModel(
             id: c.entryId, name: c.displayName, ticked: ticked, mark: mark, role: roles.isEmpty ? nil : roles, tier: tier, types: types.map { PickerType(type: $0) },
-            noteView: AnyView(ivLine(c, grade: rankGrade)),
+            noteView: AnyView(VStack(alignment: .leading, spacing: 2) {
+                if let status { Text(status).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+                ivLine(c, grade: rankGrade)
+            }),
             figure: AnyView(VStack(alignment: .trailing, spacing: 0) {
                 GradedNumber(score, scoreGrade, size: 14, plain: .heavy, relativeTo: .subheadline)
                 Text("SCORE").font(.figtree(10, .bold, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.muted)

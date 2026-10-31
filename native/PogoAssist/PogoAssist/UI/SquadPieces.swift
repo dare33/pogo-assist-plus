@@ -44,8 +44,11 @@ enum SquadMark: Equatable {
         let c = HubSquads.cost(of: b)
         let cost = c.value.map { MyPokemon.Cost(value: $0, currency: c.currency == .dust ? .dust : .candy) }
         // Only the Dynamax mark is left (Max): there is no upgrade work to name.
-        return .upgrade(cost: cost, label: HubSquads.upgradeLabel(b) ?? "Upgrade available: mark it as Dynamax on its page")
+        return .upgrade(cost: cost, label: HubSquads.upgradeLabel(b) ?? dynamaxMarkOnly)
     }
+
+    /// The label when only the Dynamax mark is left: nothing to pay for, but not "Free" either (a copy that is not Dynamax cannot be made one).
+    static let dynamaxMarkOnly = "Upgrade available: mark it as Dynamax on its page"
 
     /// The same for a league candidate: Built reads Full strength; else the work is the evolution and power-up the league option needs.
     static func of(_ c: HubTeams.Candidate) -> SquadMark { of(option: c.option, built: c.built, copyTitle: c.copyTitle) }
@@ -120,8 +123,8 @@ struct SuggestionsRow: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
             if infoOpen {
                 SquadExplainer(items: [
-                    ("Available", "suggests \(noun) from the Pokémon in your box, best first for each slot, as they are now: nothing to evolve or mega evolve first."),
-                    ("Best", "lists the best Pokémon in the game for each slot, ranked from our tier tables, whether or not you have them. The ones you lack say when they might be available."),
+                    ("Available", "picks \(noun) from the Pokémon in your box right now: the strongest you own for each slot, even if it still needs a power up, an evolution or a Mega Evolution first. Tap a slot for other choices from your box."),
+                    ("Best", "lists the best Pokémon in the game for each slot, whether or not you have them. Each says if it is in your box, can be got now, or is not available now."),
                 ], identifier: "squad-mode-explainer")
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -143,6 +146,13 @@ struct SuggestionsRow: View {
 }
 
 // MARK: slot cards
+
+extension HubSquads.BestRow {
+    /// The row's one status (S1) with "same copy as <higher row>" after it when a higher row already shows the copy.
+    var statusLine: String { [status.text, sharedWith.map { "same copy as \($0)" }].compactMap { $0 }.joined(separator: " · ") }
+    /// The same for VoiceOver: commas, not dots.
+    var spokenStatus: String { statusLine.replacingOccurrences(of: " · ", with: ", ") }
+}
 
 /// One slot of a squad as the card draws it.
 struct SlotCardModel: Identifiable {
@@ -173,7 +183,6 @@ extension HubSquads.SlotStatus {
         case .ready: return Theme.statusGreenTint
         case .needsWork: return Theme.statusAmberTint
         case .toGet, .empty: return Theme.statusRedTint
-        case .notCounted: return Theme.surface2
         }
     }
     /// The word and icon a card carries so its status is not told by colour alone.
@@ -183,7 +192,6 @@ extension HubSquads.SlotStatus {
         case .needsWork: return "Needs work"
         case .toGet: return "To get"
         case .empty: return "Empty"
-        case .notCounted: return "Not counted"
         }
     }
     var icon: String {
@@ -192,7 +200,6 @@ extension HubSquads.SlotStatus {
         case .needsWork: return "exclamationmark.triangle.fill"
         case .toGet: return "arrow.down.circle.fill"
         case .empty: return "circle.dashed"
-        case .notCounted: return "minus.circle"
         }
     }
     /// The status line's dot.
@@ -201,7 +208,6 @@ extension HubSquads.SlotStatus {
         case .ready: return Theme.green
         case .needsWork: return Theme.orange
         case .toGet, .empty: return Theme.red
-        case .notCounted: return Theme.faint
         }
     }
 }
@@ -266,6 +272,11 @@ struct SlotCardView: View {
                 Text(model.name ?? "Empty").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(filled ? Theme.ink : Theme.mutedOnTint)
                     .lineLimit(2).multilineTextAlignment(.leading)
                 ForEach(model.lines, id: \.self) { Text($0).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.mutedOnTint).lineLimit(4).multilineTextAlignment(.leading) }
+                // The work's cost, as a picker row shows it beside the mark (Greg: the needs-work status and its cost are shown); under the name so it never crowds the role.
+                // A step that costs nothing (Mega Evolve alone) reads "Free"; only the Dynamax mark left shows no cost line.
+                if case .upgrade(let cost, let label) = model.mark, cost != nil || label != SquadMark.dynamaxMarkOnly {
+                    Text(cost?.words ?? "Free").font(.figtree(11, .bold, relativeTo: .caption2)).foregroundStyle(Theme.orangeInk).lineLimit(2).multilineTextAlignment(.leading)
+                }
                 Spacer(minLength: 0)
                 if !model.types.isEmpty { TypeIcons(types: model.types, size: 18) }
                 HStack(spacing: 4) {
@@ -277,9 +288,7 @@ struct SlotCardView: View {
             .frame(maxWidth: .infinity, minHeight: 76, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 10).padding(.vertical, 8)
             .background(model.status.tint, in: shape)
-            .overlay { if !filled && model.status != .notCounted { shape.strokeBorder(model.emptyOutline, lineWidth: 2) } }
-            // A card that is not counted has no fill to show against the page: a dashed edge (muted ink, 3:1 or more against the page in light and dark) does.
-            .overlay { if model.status == .notCounted { shape.strokeBorder(Theme.muted, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
+            .overlay { if !filled { shape.strokeBorder(model.emptyOutline, lineWidth: 2) } }
             .overlay { if selected { shape.strokeBorder(accent.solid, lineWidth: 2) } }
             .contentShape(shape)
         }
@@ -334,7 +343,7 @@ struct PickerRowModel: Identifiable {
     var types: [PickerType] = []
     /// A muted line under the first ("From Eevee", "Not weak to this slot").
     var note: String? = nil
-    /// The note is drawn in the amber ink ("In your box · no build for this").
+    /// The note is drawn in the amber ink ("In your box · needs upgrade · no build for this").
     var noteAmber = false
     /// An extra line in place of `note` (PvP's graded IV line).
     var noteView: AnyView? = nil
@@ -349,6 +358,15 @@ struct PickerRowModel: Identifiable {
 
 extension PickerRowModel {
     static let upgradesHeading = "Available upgrades:"
+    static let otherRolesHeading = "Other roles:"
+
+    /// An Available picker (S1): the slot's own role's options first, at Full strength first then under "Available upgrades:", then every other unused Pokémon under
+    /// "Other roles:", each showing its role, in the order the squad is filled in.
+    static func availableGroups(own: [PickerRowModel], other: [PickerRowModel]) -> [PickerRowModel] {
+        var rest = other
+        if !rest.isEmpty { rest[0].sectionHeading = otherRolesHeading }
+        return availableUpgradesLast(own) + rest
+    }
 
     /// CONCEPTS rule 28: an Available picker lists the Pokémon at Full strength first and, under "Available upgrades:", those whose build still needs work. Each group
     /// keeps the slot's order.
@@ -359,31 +377,27 @@ extension PickerRowModel {
         return done + work
     }
 
-    /// The note under a Best row: "Not in your box · <when it might be had>" for a Pokémon the box lacks, an amber "In your box · no build for this" for a copy no build of
-    /// the area serves, plus "same copy as <higher row>" when a higher row already shows that copy. nil for a row with a build (its mark says the rest).
-    static func bestNote(_ r: HubSquads.BestRow) -> (text: String, amber: Bool)? {
-        let shared = r.sharedWith.map { "same copy as \($0)" }
-        if !r.inBox { return ("Not in your box · " + r.availability, false) }
-        if !r.hasBuild { return (["In your box · no build for this", shared].compactMap { $0 }.joined(separator: " · "), true) }
-        return shared.map { ($0, false) }
-    }
+    /// The note under a Best row (S1): the row's one status ("In your box", "In your box · needs upgrade", "Can get now · Raid boss now", "Not available now · Raids from
+    /// 9 Nov"), plus "same copy as <higher row>" when a higher row already shows that copy. Amber for a copy no build of the area serves.
+    static func bestNote(_ r: HubSquads.BestRow) -> (text: String, amber: Bool) { (r.statusLine, r.inBox && !r.hasBuild) }
 
     /// A Best row without a build: a Pokémon the box lacks, or a copy of it that no build of the area serves.
     init(best r: HubSquads.BestRow, ticked: Bool, role: String? = nil, types: [PickerType]? = nil, extraSpoken: String? = nil) {
         let n = PickerRowModel.bestNote(r)
-        let spoken = [r.name, role, "tier \(r.tier)", SquadWords.typeList(r.types), n?.text.replacingOccurrences(of: " · ", with: ", "), extraSpoken, ticked ? "in this slot" : nil]
+        let spoken = [r.name, role, "tier \(r.tier)", SquadWords.typeList(r.types), n.text.replacingOccurrences(of: " · ", with: ", "), extraSpoken, ticked ? "in this slot" : nil]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        self.init(id: r.entryId, name: r.name, ticked: ticked, role: role, tier: r.tier, types: types ?? r.types.map { PickerType(type: $0) }, note: n?.text, noteAmber: n?.amber ?? false, spoken: spoken)
+        self.init(id: r.entryId, name: r.name, ticked: ticked, role: role, tier: r.tier, types: types ?? r.types.map { PickerType(type: $0) }, note: n.text, noteAmber: n.amber, spoken: spoken)
     }
 
     /// The row of a pick the lists do not offer (a copy chosen under the other mode, or whose build is gone): the copy, with its build's mark when it has one.
     static func keptPick(id: String, ticked: Bool, screen: SquadScreen, ctx: HubContext) -> PickerRowModel? {
         guard !id.hasPrefix(squadSpeciesPrefix), let e = ctx.entry(id) else { return nil }
         let area = ["raids": "Raids", "max": "Max", "gym": "Gym", "rocket": "Rocket", "pvp": "PvP"][screen.rawValue] ?? ""
-        let build = ctx.advice.builds.first { $0.entryId == id && ($0.areas.contains(area) || (screen == .rocket && $0.areas.contains("Raids"))) }
+        // Only Raids has a Mega slot: every other screen judges a copy on its plain form.
+        let build = ctx.advice.builds.first { $0.entryId == id && ($0.areas.contains(area) || (screen == .rocket && $0.areas.contains("Raids"))) }.map { screen == .raids ? $0 : HubSquads.plainBuilds([$0])[0] }
         let mark = build.map { SquadMark.of($0, screen: screen, ctx: ctx) } ?? .none
         let types = ctx.entryTypes(id)
-        let note = build == nil ? "In your box · no build for this" : nil
+        let note = build == nil ? "In your box · needs upgrade · no build for this" : nil
         let spoken = [e.row.title, SquadWords.typeList(types), mark.spoken, note?.replacingOccurrences(of: " · ", with: ", "), ticked ? "in this slot" : nil].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         return PickerRowModel(id: id, name: e.row.title, ticked: ticked, mark: mark, types: types.map { PickerType(type: $0) }, note: note, noteAmber: note != nil, spoken: spoken)
     }
@@ -394,8 +408,8 @@ extension SlotCardModel {
     /// line), or a copy no build of the area serves (amber).
     init(id: Int, role: String?, palette: SquadPalette, emptyOutline: Color, disc: String, best r: HubSquads.BestRow, extra: [String] = [], spokenExtra: [String] = [], head: String, identifier: String) {
         let status: HubSquads.SlotStatus = r.inBox ? .needsWork : .toGet
-        let own: [String] = r.inBox ? ["In your box · no build for this"] + (r.sharedWith.map { ["same copy as \($0)"] } ?? []) : ["Not in your box"] + (r.rotationLine.map { [$0] } ?? [])
-        let said = r.inBox ? ["in your box, no build for this"] + (r.sharedWith.map { ["same copy as \($0)"] } ?? []) : [r.availability]
+        let own = [r.statusLine]
+        let said = [r.spokenStatus]
         let spoken = ([head, r.name, SquadWords.typeList(r.types)] + spokenExtra + said + [status.spoken]).filter { !$0.isEmpty }.joined(separator: ", ")
         self.init(id: id, role: role, palette: palette, emptyOutline: emptyOutline, disc: disc, name: r.name, lines: own + extra, types: r.types, status: status, spoken: spoken, identifier: identifier)
     }
@@ -446,7 +460,7 @@ struct SquadPicker<Info: View>: View {
                 ForEach(rows) { row in
                     if let h = row.sectionHeading {
                         Text(h).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).padding(.top, 10).padding(.bottom, 4).padding(.horizontal, 2)
-                            .accessibilityAddTraits(.isHeader).accessibilityIdentifier("squad-picker-upgrades")
+                            .accessibilityAddTraits(.isHeader).accessibilityIdentifier(h == PickerRowModel.otherRolesHeading ? "squad-picker-other-roles" : "squad-picker-upgrades")
                     }
                     Rectangle().fill(Theme.line).frame(height: 1)
                     rowView(row)
@@ -590,6 +604,9 @@ enum SquadWords {
         if speciesRuleOnly { return "Your other options are the same species as a Pokémon already in this squad." }
         return mode == .available && boxHasOptions ? "Everything in your box for this slot is already in your squad." : none
     }
+
+    /// The line a slot filled from another role carries (S1): the role the Pokémon is listed for, so the player sees why it sits in this slot.
+    static func otherRoleLine(_ roles: [String]) -> String { roles.isEmpty ? "No listed role" : "Its role: " + roles.joined(separator: ", ") }
 
     /// "Rock and Dark" for a VoiceOver label.
     static func typeList(_ types: [String]) -> String {

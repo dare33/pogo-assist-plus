@@ -50,7 +50,7 @@ final class ReviewFoldTests: XCTestCase {
 
     // MARK: F4: saved picks and the mode
 
-    func testASavedPickThatIsNotUsableAsItIsIsNotPlacedUnderAvailableAndReturnsUnderBest() {
+    func testASavedPickIsPlacedUnderAvailableWhateverUpgradeItNeedsAndAPickTheBoxCannotServeIsNot() {
         let table = P23.table([P23.tierEntry("raids", "Water", "S", "swampert_mega", mega: true), P23.tierEntry("raids", "Water", "A", "swampert")])
         let builds = [P23.build("mega", "swampert", areas: ["Raids"], powerUp: false, viaMega: true), P23.build("plain", "swampert", areas: ["Raids"])]
         let ctx = P23.ctx(builds: builds, entries: [P23.entry("mega", "swampert"), P23.entry("plain", "swampert")], table: table)
@@ -59,24 +59,30 @@ final class ReviewFoldTests: XCTestCase {
         func squad(_ mode: SquadMode) -> [FilledSlot] {
             HubSquads.raidSquad(slots: slots, candidates: HubSquads.raidCandidates(row: row, mode: mode, ctx: ctx), placeable: HubSquads.placeable(screen: .raids, mode: mode, ctx: ctx))
         }
-        XCTAssertNil(squad(.available)[0].entryId, "Available has no Mega: the slot shows the suggestion (none)")
+        XCTAssertEqual(squad(.available)[0].entryId, "mega", "S1: the copy is a Swampert, which can Mega Evolve, so it holds the Mega slot under Available")
+        XCTAssertTrue(squad(.available)[0].chosen)
         XCTAssertEqual(slots[0].pick, "mega", "the pick stays in the store")
         XCTAssertEqual(squad(.best)[0].entryId, "mega"); XCTAssertTrue(squad(.best)[0].chosen)
-        XCTAssertEqual(squad(.available)[1...].compactMap(\.entryId), ["plain"], "the plain copy is suggested instead")
+        XCTAssertEqual(squad(.available)[1...].compactMap(\.entryId), ["plain"], "the plain copy is suggested for another slot")
+        // A pick in the Mega slot that cannot Mega Evolve is not placed under Available (a Snorlax), and is under Best.
+        let noMega = P23.ctx(builds: [P23.build("s", "snorlax", areas: ["Raids"], built: false)], entries: [P23.entry("s", "snorlax")], table: table)
+        XCTAssertFalse(HubSquads.placeable(screen: .raids, mode: .available, ctx: noMega)("s", "Mega"))
+        XCTAssertTrue(HubSquads.placeable(screen: .raids, mode: .available, ctx: noMega)("s", "Heavy hitter"))
+        XCTAssertTrue(HubSquads.placeable(screen: .raids, mode: .best, ctx: noMega)("s", "Mega"))
         // An evolution-only Gym pick, both ways.
         let gym = P23.ctx(builds: [P23.build("x", "snorlax", areas: ["Gym"], powerUp: false), P23.build("y", "snorlax", areas: ["Gym"])], entries: [P23.entry("x", "snorlax"), P23.entry("y", "snorlax")])
         var g = HubSquads.defaultGymSlots(); g[0].pick = "x"
         func gsq(_ mode: SquadMode) -> [String?] {
             HubSquads.gymSquad(slots: g, rows: HubSquads.gymRows(mode: mode, ctx: gym), placeable: HubSquads.placeable(screen: .gym, mode: mode, ctx: gym)).map(\.entryId)
         }
-        XCTAssertEqual(gsq(.available)[0], "y"); XCTAssertEqual(gsq(.best)[0], "x")
+        XCTAssertEqual(gsq(.available)[0], "x", "S1: an evolution still to do is placed under Available"); XCTAssertEqual(gsq(.best)[0], "x")
     }
 
-    func testAPvpPickMustBeTheCopyItselfUnderAvailable() {
+    func testAPvpPickMustBeRatedByTheLeagueUnderAvailable() {
         let l = ["a": ["gl": P23.rating([P23.option("medicham", isSelf: false, score: 95)])], "b": ["gl": P23.rating([P23.option("azumarill", isSelf: true, score: 94)])]]
         let ctx = P23.ctx(leagues: l)
         let ok = HubSquads.placeable(screen: .pvp, mode: .available, league: "gl", ctx: ctx)
-        XCTAssertFalse(ok("a", "Lead")); XCTAssertTrue(ok("b", "Lead")); XCTAssertFalse(ok("missing", "Lead"))
+        XCTAssertTrue(ok("a", "Lead"), "S1: an evolution is placed"); XCTAssertTrue(ok("b", "Lead")); XCTAssertFalse(ok("missing", "Lead"))
         XCTAssertTrue(HubSquads.placeable(screen: .pvp, mode: .best, league: "gl", ctx: ctx)("a", "Lead"))
     }
 
