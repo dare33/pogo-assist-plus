@@ -22,3 +22,16 @@ Each eyeball item with Greg's words, the decision and its review size (`docs/des
    league's tier table names it or its PvPoke score is 88 or more (about 80 species in Great League, 63 in Ultra);
    below that line the tag is WEAK whatever the rank (Aurorus scores 84.1 and 85.6). WEAK is also given to an S, A or
    B species whose IVs are outside the top fifth for the league, or not read.
+
+## Eyeball check, 31 Oct 2026 (build db4a01b, phone and screenshots page)
+
+Greg checked the changes built from phone run 1, screen by screen.
+
+- Items 1, 2 and 4: Greg: "all green".
+- 3a. Greg: "the A-Z is a little hard to press acurately can we improve that slightly?" Decision: make each letter of
+  My Pokémon's A–Z index easier to hit (a larger touch area per letter, the strip's look kept as close as it is now).
+  Size: full (changes a tap target).
+- 3b. Greg: "while the screen is moving/scrolling and i press a letter it can be selected but it doesnt move me to that
+  letter on screen. it seems like this only happens while screen is in motion, when still the selecitno works fine."
+  Decision: a letter pressed while the list is still scrolling stops the scroll and jumps to that letter, as it does
+  when the list is still. Size: full (what a tap does).
