@@ -349,7 +349,7 @@ final class HubScreensTests: XCTestCase {
         let legendary = app.buttons["collection-set-legendary"]
         scrollTo(legendary, in: app)
         XCTAssertTrue(legendary.isHittable, "the Legendary card is a button")
-        let card = legendary.label   // "All 3, Legendary, 3 of 52 species"
+        let card = legendary.label   // "All 3, Legendary, 3 of 54 species"
         legendary.tap()
         let sheet = any(app, "collection-set-sheet").firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 10), "the sheet opens")
@@ -478,7 +478,7 @@ final class HubScreensTests: XCTestCase {
         sheet.buttons["Back"].firstMatch.tap()   // the page, back to the set's list
         XCTAssertTrue(app.buttons["collection-set-sheet-done"].waitForExistence(timeout: 10), "the set's list")
         XCTAssertTrue(app.staticTexts["collection-set-sheet-forms"].waitForExistence(timeout: 30), "two Zapdos rows, one species")
-        XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, "5 of 52 species", "forms do not change the species count")
+        XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, "5 of 54 species", "forms do not change the species count")
     }
 
     /// The Collection's cards and an open set's sheet, for Greg's page: out/screens/fb-collection (phone feedback item 11).
