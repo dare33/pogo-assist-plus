@@ -2,30 +2,39 @@ import XCTest
 @testable import PogoBox
 import PogoReader
 
-/// Pass 2's Collection numbers (rules 25 and 26, the Showcase replaced by the set strips), on the bundled game master (951 released species, checked in the read-back).
+/// Pass 2's Collection numbers (rules 25 and 26, the Showcase replaced by the set strips), on the bundled game master (959 released species: the flag's 951 and the eight it wrongly leaves out).
 final class HubCollectionTests: XCTestCase {
     private let gm = P23.gm
 
     func testTheReleasedSpeciesAreOnePerDexNumberWithoutMegaShadowOrDuplicates() {
         let s = HubCollection.releasedSpecies(gm: gm)
-        XCTAssertEqual(s.count, 951)
-        XCTAssertEqual(Set(s.map(\.dex)).count, 951, "one per dex number")
+        XCTAssertEqual(s.count, 959)
+        XCTAssertEqual(Set(s.map(\.dex)).count, 959, "one per dex number")
         XCTAssertEqual(s.first { $0.dex == 25 }?.id, "pikachu", "the plain species, not pikachu_libre")
         XCTAssertEqual(s.first { $0.dex == 6 }?.id, "charizard", "not charizard_mega_x")
         XCTAssertFalse(s.contains { $0.tags.contains("mega") || $0.tags.contains("shadow") || $0.tags.contains("duplicate") })
         XCTAssertEqual(s.map(\.dex), s.map(\.dex).sorted())
     }
 
-    /// F4 (eyeball check 31 Oct 2026), the cause pinned: `released` in the bundled game master is PvPoke's "usable in PvP" flag, not "exists in Pokémon GO", so 74 dex numbers
-    /// have no `released` entry and the total is 951 of 1025. A species the player owns is counted anyway. The fix is in the shared data (own branch from main); when it
-    /// lands, these numbers change on purpose.
-    func testTheUnreleasedFlagLeavesOutDittoShedinjaAndOthersUnlessOwned() {
-        let none = Set(HubCollection.releasedSpecies(gm: gm).map(\.dex))
-        for dex in [132, 292, 489, 490, 665, 746, 771, 772, 773, 801, 833, 834] { XCTAssertFalse(none.contains(dex), "dex \(dex) is flagged unreleased") }
-        XCTAssertEqual(1025 - none.count, 74, "74 dex numbers have no released entry")
-        let owned = HubCollection.releasedSpecies(gm: gm, owned: [132, 292]).map(\.dex)
-        XCTAssertTrue(owned.contains(132) && owned.contains(292), "a box that holds Ditto and Shedinja counts them")
-        XCTAssertEqual(owned.count, 953)
+    /// F4 (eyeball check 31 Oct 2026): the game master's `released` flag leaves out 74 dex numbers. 66 of them are unreleased in Pokémon GO (Bulbapedia, "Unreleased
+    /// Pokémon", revision 4657810) and stay out; the other eight are in the game and are counted: 959 species, not 951.
+    func testTheEightReleasedSpeciesTheFlagLeavesOutAreCountedAndTheSixtySixAreNot() {
+        let dex = Set(HubCollection.releasedSpecies(gm: gm).map(\.dex))
+        XCTAssertEqual(dex.count, 959)
+        let inGo: [Int: String] = [132: "Ditto", 292: "Shedinja", 665: "Spewpa", 774: "Minior", 789: "Cosmog", 790: "Cosmoem", 946: "Bramblin", 947: "Brambleghast"]
+        XCTAssertEqual(Set(inGo.keys), HubCollection.releasedInGoDespiteFlag)
+        for (d, name) in inGo {
+            XCTAssertTrue(dex.contains(d), name)
+            XCTAssertTrue(HubCollection.releasedSpecies(gm: gm).first { $0.dex == d }?.name.hasPrefix(name) == true, name)
+            XCTAssertNotNil(HubCollection.missingSpecies(entries: [], advice: BoxAdvice(), gm: gm).first { $0.dex == d }, "\(name) is in the Missing list of an empty box")
+        }
+        let unreleased: [Int] = [489, 490, 493, 746, 771, 772, 773, 801, 833, 834, 868, 869, 871, 875, 878, 879, 880, 881, 882, 883, 896, 897, 898, 902, 951, 952, 953, 954, 963, 964, 967, 976, 981]
+            + Array(984...995) + Array(1001...1010) + Array(1014...1018) + Array(1020...1025)
+        XCTAssertEqual(unreleased.count, 66)
+        for d in unreleased { XCTAssertFalse(dex.contains(d), "dex \(d) is not in Pokémon GO yet") }
+        XCTAssertEqual(1025 - dex.count, 66, "every dex number is counted except the 66")
+        // A box that holds an unreleased one (a hand-made entry) still counts it, so owned never exceeds the total.
+        XCTAssertTrue(HubCollection.releasedSpecies(gm: gm, owned: [489]).map(\.dex).contains(489))
     }
 
     func testRegionsCoverTheDexRanges() {
@@ -42,12 +51,12 @@ final class HubCollectionTests: XCTestCase {
 
     func testAnEmptyBoxOwnsNothing() {
         let o = HubCollection.overview(entries: [], gm: gm)
-        XCTAssertEqual(o.owned, 0); XCTAssertEqual(o.released, 951); XCTAssertEqual(o.percent, 0); XCTAssertEqual(o.canEvolve, 0)
+        XCTAssertEqual(o.owned, 0); XCTAssertEqual(o.released, 959); XCTAssertEqual(o.percent, 0); XCTAssertEqual(o.canEvolve, 0)
         XCTAssertEqual(o.regions.map(\.name), ["Kanto", "Johto", "Hoenn", "Sinnoh", "Unova", "Kalos", "Alola", "Galar", "Paldea"])
-        XCTAssertEqual(o.regions.map(\.total), [150, 100, 134, 104, 156, 71, 80, 80, 76])
-        XCTAssertEqual(o.regions.map(\.total).reduce(0, +), 951)
+        XCTAssertEqual(o.regions.map(\.total), [151, 100, 135, 104, 156, 72, 83, 80, 78])
+        XCTAssertEqual(o.regions.map(\.total).reduce(0, +), 959)
         XCTAssertTrue(o.regions.allSatisfy { $0.owned == 0 })
-        XCTAssertEqual(HubCollection.missingSpecies(entries: [], advice: BoxAdvice(), gm: gm).count, 951)
+        XCTAssertEqual(HubCollection.missingSpecies(entries: [], advice: BoxAdvice(), gm: gm).count, 959)
     }
 
     func testAFormOrAShadowCopyOwnsItsSpeciesAndCopiesAreCountedOnce() {
@@ -55,7 +64,7 @@ final class HubCollectionTests: XCTestCase {
         let o = HubCollection.overview(entries: box, gm: gm)
         XCTAssertEqual(o.owned, 2, "Charizard (three copies, one Shadow, one Mega) and Pikachu (Libre)")
         XCTAssertEqual(o.regions.first?.owned, 2)
-        XCTAssertEqual(o.percent, 0, "2 of 951 rounds to 0 per cent")
+        XCTAssertEqual(o.percent, 0, "2 of 959 rounds to 0 per cent")
         XCTAssertEqual(HubCollection.ownedDex(entries: box, gm: gm), [6, 25])
         // A species the game master does not know owns nothing.
         var odd = P23.entry("z", "pikachu"); odd.row.speciesId = "not_a_species"

@@ -13,14 +13,20 @@ public enum HubCollection {
         public var tags: [String]
     }
 
+    /// Species released in Pokémon GO whose game-master `released` flag is false. The flag is PvPoke's and mixes species that are not in GO (Gen 9 Paldea species such
+    /// as the Iron and Treasure groups) with species that are but are not PvP-usable or not yet in its rankings, so the total left these out. Source: Bulbapedia, "List of Pokémon by
+    /// availability in Pokémon GO", section "Unreleased Pokémon" (66 species), page revision 4657810, read 31 Oct 2026; of the 74 dex numbers the flag leaves out, these 8 are not on
+    /// that list: 132 Ditto, 292 Shedinja, 665 Spewpa, 774 Minior, 789 Cosmog, 790 Cosmoem, 946 Bramblin, 947 Brambleghast. The data file is shared and stays as PvPoke has it.
+    public static let releasedInGoDespiteFlag: Set<Int> = [132, 292, 665, 774, 789, 790, 946, 947]
+
     /// One per dex number, the plain species rather than a form when the file lists both (`pikachu` before `pikachu_libre`: a form has a bracket in
-    /// its game master name, so ids such as `mr_mime` and `ho_oh` are plain); in dex order. A dex number in `owned` always counts, even where PvPoke
-    /// flags it unreleased (Ditto, Shedinja, ...): a box that holds a species has it, so owned never exceeds the total.
+    /// its game master name, so ids such as `mr_mime` and `ho_oh` are plain); in dex order. The flag is corrected by `releasedInGoDespiteFlag`. A dex number in `owned` also always counts, even where it is
+    /// on neither list: a box that holds a species has it, so owned never exceeds the total.
     public static func releasedSpecies(gm: GameMaster, owned: Set<Int> = []) -> [ReleasedSpecies] {
         func isPlain(_ s: GameMaster.Species) -> Bool { GameMaster.nameAndForm(s.name).form.isEmpty }
         func skipped(_ s: GameMaster.Species) -> Bool { s.tags.contains("shadow") || s.tags.contains("mega") || s.tags.contains("duplicate") }
         var byDex = [Int: ReleasedSpecies]()
-        for s in gm.ordered where s.released && !skipped(s) {
+        for s in gm.ordered where (s.released || releasedInGoDespiteFlag.contains(s.dex)) && !skipped(s) {
             if byDex[s.dex] == nil || isPlain(s) { byDex[s.dex] = ReleasedSpecies(dex: s.dex, id: s.id, name: s.name, tags: s.tags) }
         }
         var extra = [Int: ReleasedSpecies]()

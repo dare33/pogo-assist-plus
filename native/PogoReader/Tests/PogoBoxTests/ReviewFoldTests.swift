@@ -211,14 +211,14 @@ final class ReviewFoldTests: XCTestCase {
 
     // MARK: F14: owned dex numbers always count
 
-    func testABoxDittoCountsEvenWhereTheGameMasterSaysUnreleased() {
-        XCTAssertEqual(gm.byId["ditto"]?.released, false, "the premise: PvPoke flags Ditto unreleased")
-        let o = HubCollection.overview(entries: [P23.entry("d", "ditto")], gm: gm)
-        XCTAssertEqual(o.owned, 1); XCTAssertEqual(o.released, 952)
-        XCTAssertEqual(o.regions.first?.owned, 1); XCTAssertEqual(o.regions.first?.total, 151)
+    func testABoxArceusCountsEvenWhereTheSpeciesIsNotInTheGameYet() {
+        XCTAssertEqual(gm.byId["arceus"]?.released, false, "the premise: Arceus is not released")
+        let o = HubCollection.overview(entries: [P23.entry("d", "arceus")], gm: gm)
+        XCTAssertEqual(o.owned, 1); XCTAssertEqual(o.released, 960)
+        XCTAssertEqual(o.regions[3].owned, 1); XCTAssertEqual(o.regions[3].total, 105, "Sinnoh")
         XCTAssertTrue(o.regions.allSatisfy { $0.owned <= $0.total })
-        XCTAssertEqual(HubCollection.overview(entries: [], gm: gm).released, 951, "an empty box keeps the base set")
-        XCTAssertFalse(HubCollection.missingSpecies(entries: [P23.entry("d", "ditto")], advice: BoxAdvice(), gm: gm).contains { $0.dex == 132 })
+        XCTAssertEqual(HubCollection.overview(entries: [], gm: gm).released, 959, "an empty box keeps the base set")
+        XCTAssertFalse(HubCollection.missingSpecies(entries: [P23.entry("d", "arceus")], advice: BoxAdvice(), gm: gm).contains { $0.dex == 493 })
     }
 
     // MARK: F15

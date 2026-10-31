@@ -35,7 +35,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   empty Lucky sheet says "Not in your scans yet" once.
 - **Hundo**: a copy with 15/15/15 IVs (a perfect IV spread). Was "100% IVs"; renamed, same meaning (Greg, 31 Oct 2026: "Change the name of 100% IVs to 'Hundo'").
 - **Missing**: released species with no copy in the box; **you can evolve** means an earlier member of its family is in
-  the box. On the Collection it is one summary card (how many are missing, with a short breakdown: the ones you can evolve now, the Legendary, the Mythical and the region with the most missing) that opens the full list (Greg, 31 Oct 2026: "turn the Missing segment into a bit of a summary card and when clicked it opens up to the list").
+  the box. The species are the 959 of rule 25. On the Collection it is one summary card (how many are missing, with a short breakdown: the ones you can evolve now, the Legendary, the Mythical and the region with the most missing) that opens the full list (Greg, 31 Oct 2026: "turn the Missing segment into a bit of a summary card and when clicked it opens up to the list").
 - **Build**: one thing the advisor wants done to a copy for an area (power up, evolve, mega evolve, form change, moves).
 - **Gap**: an S or A tier Pokémon in a table that nothing in the box can become.
 - **Duplicate**: a species with more copies than the advisor keeps; the rest are "copies you can transfer or trade" (Greg, phone run 30 Oct 2026).
@@ -222,7 +222,10 @@ Stated so each can be checked against the code.
 
 ### Collection
 
-25. **Species count**: game-master entries with `released`, one per dex number, Mega, Shadow and duplicate entries not
+25. **Species count**: game-master entries with `released`, plus eight species released in Pokémon GO that the flag leaves out (Ditto, Shedinja,
+   Spewpa, Minior, Cosmog, Cosmoem, Bramblin, Brambleghast; `HubCollection.releasedInGoDespiteFlag`), 959 in all. The flag is PvPoke's and mixes species
+   missing from GO with species in GO; the eight come from Bulbapedia's "Unreleased Pokémon" list (66 species, page revision 4657810, read 31 Oct 2026),
+   which the other 66 flagged ones are on. One per dex number, Mega, Shadow and duplicate entries not
    counted; owned when a box copy's species has that dex number. Regions by dex range (Kanto 1–151 … Paldea 906–1025).
 26. **Special set strips** (replaces the Showcase, 31 Oct 2026): a set's strip is its copies, best first, the first ten. Rank: the set's activity, then
    IV % (a copy with no read IVs last), then CP, then entry id. An activity rank is the advisor's tag for the area (Strong, then OK, then Weak, then not in the tables),
