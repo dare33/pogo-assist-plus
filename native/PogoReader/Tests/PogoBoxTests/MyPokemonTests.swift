@@ -89,6 +89,22 @@ final class MyPokemonTests: XCTestCase {
         XCTAssertEqual(MyPokemon.copyMark(builds: [builds[0]]), .fullStrength)
     }
 
+    func testSpeciesCostCountsOneBuildPerCopy() {
+        // Copy "a" has a raid build (tier S, 10k) and a PvP build (tier B, 5k): only the top one counts. Copy "b" has one build (3k).
+        func tiered(_ entry: String, tier: String, dust: Int, score: Double) -> BoxAdvice.Build {
+            var b = build(entry, dust: dust, steps: todo); b.tier = tier; b.score = score; return b
+        }
+        let builds = [tiered("a", tier: "B", dust: 5_000, score: 9), tiered("a", tier: "S", dust: 10_000, score: 5), tiered("b", tier: "A", dust: 3_000, score: 1)]
+        XCTAssertEqual(MyPokemon.speciesMark(builds: builds), .upgrade(cost: .init(value: "13k", currency: .dust), builds: 3))
+        // The copy's own mark still lists all of its builds.
+        XCTAssertEqual(MyPokemon.copyMark(builds: Array(builds[0..<2])), .upgrade(cost: .init(value: "15k", currency: .dust), builds: 2))
+        // Same tier: the higher score is the top build; a built build is never the top.
+        let same = [tiered("a", tier: "A", dust: 4_000, score: 2), tiered("a", tier: "A", dust: 6_000, score: 8)]
+        XCTAssertEqual(MyPokemon.speciesMark(builds: same), .upgrade(cost: .init(value: "6,000", currency: .dust), builds: 2))
+        var built = tiered("a", tier: "S", dust: 99_000, score: 99); built.steps = []
+        XCTAssertEqual(MyPokemon.speciesMark(builds: [built, tiered("a", tier: "B", dust: 2_000, score: 1)]), .upgrade(cost: .init(value: "2,000", currency: .dust), builds: 1))
+    }
+
     // MARK: TOP PVP (rule 4)
 
     func testStandingTakesTheBetterScoreOfGreatAndUltra() {

@@ -290,24 +290,40 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(panel.label.contains("of the species in Pokémon GO"), panel.label)
         XCTAssertTrue(panel.label.contains("you can evolve now"), panel.label)
         // The sections, in order.
-        for header in ["DEX BY REGION", "SHOWCASE · YOUR HIGHEST IV COPIES", "SPECIAL SETS", "MISSING", "BUILDS AND CLEAN-UP"] {
+        for header in ["DEX BY REGION", "SPECIAL SETS", "MISSING", "BUILDS AND CLEAN-UP"] {
             XCTAssertTrue(app.staticTexts[header].exists, header)
         }
+        XCTAssertFalse(app.staticTexts["SHOWCASE · YOUR HIGHEST IV COPIES"].exists, "the Showcase is gone")
         XCTAssertEqual(any(app, "collection-region-row").count, 9, "nine regions")
         XCTAssertTrue(any(app, "collection-region-row").firstMatch.label.hasSuffix("Kanto species"), any(app, "collection-region-row").firstMatch.label)
-        XCTAssertGreaterThanOrEqual(any(app, "collection-showcase-card").count, 1, "a highest IV copy")
-        for slug in ["hundo", "legendary", "mythical", "ultra-beasts", "mega-capable", "lucky", "shadow"] { XCTAssertTrue(any(app, "collection-set-\(slug)").firstMatch.exists, "the \(slug) set card") }
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Lucky. Not in your scans yet'")).firstMatch.exists, "Lucky reads Not in your scans yet")
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH '100% IVs'")).firstMatch.exists)
-        let missingRows = any(app, "collection-missing-row").count
-        XCTAssertTrue((1...6).contains(missingRows), "the first six missing (\(missingRows))")
-        let cards = any(app, "collection-showcase-card").count
-        XCTAssertTrue((1...12).contains(cards), "up to twelve highest IV copies (\(cards))")
-        let missingLabels = (0..<missingRows).map { any(app, "collection-missing-row").element(boundBy: $0).label }
-        XCTAssertFalse(missingLabels.contains { $0.contains("Not in your box") }, "a missing species with no how-to-get text shows nothing there: \(missingLabels)")
-        XCTAssertTrue(any(app, "collection-missing-all").firstMatch.exists)
+        // Each special set is a strip of copy cards with "All N ›"; Shiny and Background hold a Coming soon card; Lucky has no copy marked.
+        // The sample box holds Legendary Pokémon and no Hundo, Mythical, Ultra Beast, Shadow, Dynamax or Gigantamax copy: those say so instead of showing cards.
+        XCTAssertTrue(any(app, "collection-set-legendary").firstMatch.exists, "the Legendary set's All button")
+        XCTAssertTrue(any(app, "collection-strip-legendary").firstMatch.exists, "the Legendary set's strip")
+        for slug in ["hundo", "mythical", "shadow", "dynamax", "gigantamax"] {
+            XCTAssertTrue(any(app, "collection-strip-\(slug)").firstMatch.exists || any(app, "collection-set-empty-\(slug)").firstMatch.exists, "the \(slug) set has a strip or says it is empty")
+        }
+        XCTAssertGreaterThanOrEqual(any(app, "collection-strip-card").count, 1, "a set's best Pokémon")
+        XCTAssertEqual(any(app, "collection-set-empty-lucky").firstMatch.label, "Not in your scans yet", "Lucky reads Not in your scans yet")
+        XCTAssertFalse(any(app, "collection-set-lucky").firstMatch.exists, "a set with nothing in it has no All")
+        XCTAssertTrue(app.staticTexts["Dynamax"].exists && app.staticTexts["Gigantamax"].exists && app.staticTexts["Shiny"].exists && app.staticTexts["Background"].exists, "the new sets")
+        XCTAssertTrue(app.staticTexts["Hundo"].exists)
+        XCTAssertFalse(app.staticTexts["100% IVs"].exists)
+        scrollTo(any(app, "collection-set-coming-soon-shiny").firstMatch, in: app)
+        XCTAssertEqual(any(app, "collection-set-coming-soon-shiny").firstMatch.label, "Shiny, coming soon. Not scanned yet", "the card names its set when spoken")
+        XCTAssertTrue(any(app, "collection-set-coming-soon-background").firstMatch.exists)
+        // Missing is one summary card that opens the full list.
+        let missingCard = any(app, "collection-missing-card").firstMatch
+        scrollTo(missingCard, in: app)
+        XCTAssertTrue(missingCard.exists)
+        XCTAssertNotNil(missingCard.label.range(of: "^[0-9]+ species missing\\. ", options: .regularExpression), missingCard.label)
+        XCTAssertEqual(any(app, "collection-missing-row").count, 0, "no list rows on the Collection itself")
         sleep(1)
-        shot("collection-01-top")
+        missingCard.tap()
+        XCTAssertTrue(any(app, "collection-missing-row").firstMatch.waitForExistence(timeout: 10), "the card opens the full Missing list")
+        XCTAssertTrue(any(app, "collection-missing-head").firstMatch.exists)
+        app.buttons["hub-back"].tap()
+        XCTAssertTrue(any(app, "collection-species").firstMatch.waitForExistence(timeout: 5), "back is the Collection")
 
         // A summary card opens the lists screen, back returns to the Collection.
         let builds = app.buttons["collection-card-builds"]
@@ -333,12 +349,12 @@ final class HubScreensTests: XCTestCase {
         let legendary = app.buttons["collection-set-legendary"]
         scrollTo(legendary, in: app)
         XCTAssertTrue(legendary.isHittable, "the Legendary card is a button")
-        let card = legendary.label   // "Legendary, 3 of 52 species"
+        let card = legendary.label   // "All 3, Legendary, 3 of 54 species"
         legendary.tap()
         let sheet = any(app, "collection-set-sheet").firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 10), "the sheet opens")
         XCTAssertTrue(app.staticTexts["Legendary"].exists, "titled with the set's name")
-        XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, card.replacingOccurrences(of: "Legendary, ", with: ""), "and the card's count")
+        XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, card.components(separatedBy: "Legendary, ").last ?? "", "and the card's count")
         // The sheet's own rows: My Pokémon's list stays in the tree behind it.
         func row(_ species: String) -> XCUIElement { sheet.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", "\(species),")).firstMatch }
         let moltres = row("Moltres")
@@ -392,7 +408,7 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(sheet.waitForNonExistence(timeout: 10), "Done closes the sheet")
         let lucky = app.buttons["collection-set-lucky"]
         scrollTo(lucky, in: app)
-        expectation(for: NSPredicate(format: "label == 'Lucky, 1 copy'"), evaluatedWith: lucky)
+        expectation(for: NSPredicate(format: "label == 'All 1, Lucky, 1 copy'"), evaluatedWith: lucky)
         waitForExpectations(timeout: 30)
         lucky.tap()
         XCTAssertTrue(app.staticTexts["collection-set-sheet-count"].waitForExistence(timeout: 10))
@@ -400,7 +416,8 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(any(app, "collection-set-sheet").firstMatch.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Moltres,'")).firstMatch.waitForExistence(timeout: 15))
     }
 
-    func testLuckyWithNoMarkedCopyOpensASheetThatSaysSo() throws {
+    /// Lucky with no copy marked has no list to open: its strip says so, and there is no "All".
+    func testLuckyWithNoMarkedCopyHasNoListToOpen() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
         app.launch()
@@ -408,22 +425,15 @@ final class HubScreensTests: XCTestCase {
         openHub(app)
         app.buttons["hub-tile-everything"].tap()
         XCTAssertTrue(any(app, "collection-species").firstMatch.waitForExistence(timeout: 15))
-        let lucky = app.buttons["collection-set-lucky"]
-        scrollTo(lucky, in: app)
-        XCTAssertEqual(lucky.label, "Lucky. Not in your scans yet")
-        lucky.tap()
-        XCTAssertTrue(app.staticTexts["collection-set-sheet-count"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, "Not in your scans yet")
-        XCTAssertEqual(any(app, "collection-set-sheet").firstMatch.staticTexts.matching(NSPredicate(format: "label == 'Not in your scans yet'")).count, 1, "the note is there once")
-        XCTAssertFalse(app.staticTexts["collection-set-sheet-empty"].exists)
-        XCTAssertEqual(any(app, "collection-set-sheet").firstMatch.buttons.matching(identifier: "species-row").count, 0)
-        app.buttons["collection-set-sheet-done"].tap()
-        XCTAssertTrue(lucky.waitForExistence(timeout: 5))
+        let note = any(app, "collection-set-empty-lucky").firstMatch
+        scrollTo(note, in: app)
+        XCTAssertEqual(note.label, "Not in your scans yet")
+        XCTAssertFalse(any(app, "collection-set-lucky").firstMatch.exists)
     }
 
     /// A Zapdos copy renamed to its Galarian form is a second Zapdos row under Legendary: the sheet says "Forms are listed separately." while the card still counts one species.
-    /// Also takes the screenshots of that sheet and of the empty Lucky sheet (out/screens/fb-collection-r3).
-    func testTheFormsLineAndTheEmptyLuckySheet() throws {
+    /// The Fix a value notice (the one an edit from a copy's page raises) shows over the sheet and leaves the player in the set (eyeball check F1).
+    func testTheFormsLineAndTheAlertOverTheSheet() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
         app.launch()
@@ -453,38 +463,22 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(suggestion.waitForExistence(timeout: 10))
         suggestion.tap()
         app.buttons["Save"].tap()
-        // A species with other base stats than the copy's CP and IVs fit says so in an alert (the values are kept and the copy marked for a check); it also takes the
-        // sheet down with it, since the alert belongs to the screen under the sheet.
-        if app.alerts.buttons["OK"].waitForExistence(timeout: 15) { app.alerts.buttons["OK"].tap() }
-        XCTAssertTrue(legendary.waitForExistence(timeout: 15) || sheet.exists)
-        if !sheet.exists { scrollTo(legendary, in: app); legendary.tap(); XCTAssertTrue(sheet.waitForExistence(timeout: 10)) }
+        // A species with other base stats than the copy's CP and IVs fit says so in an alert (the values are kept and the copy marked for a check). The alert shows over
+        // the sheet and the player is still in the set when it is dismissed (eyeball check F1): it used to take the sheet down with it.
+        // The alert is required: the notice is raised from Fix a value while that screen is still up inside the set's sheet, and it must still reach the player.
+        let alert = app.alerts["Pogo Assist+"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 30), "the notice appears over the set's sheet")
+        XCTAssertTrue(sheet.exists, "the sheet is still there under the alert")
+        XCTAssertTrue(app.staticTexts["collection-set-sheet-forms"].exists || sheet.buttons.firstMatch.exists, "and the set is still shown behind it")
+        alert.buttons["OK"].tap()
+        XCTAssertTrue(alert.waitForNonExistence(timeout: 10), "OK dismisses it")
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10), "still in the set after the alert is dismissed")
+        XCTAssertTrue(sheet.buttons["Back"].firstMatch.waitForExistence(timeout: 10), "and still on the copy's page, where the player was")
+        XCTAssertTrue(app.alerts.count == 0)
+        sheet.buttons["Back"].firstMatch.tap()   // the page, back to the set's list
+        XCTAssertTrue(app.buttons["collection-set-sheet-done"].waitForExistence(timeout: 10), "the set's list")
         XCTAssertTrue(app.staticTexts["collection-set-sheet-forms"].waitForExistence(timeout: 30), "two Zapdos rows, one species")
-        XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, "5 of 52 species", "forms do not change the species count")
-        app.terminate()
-        for (name, args) in [("light-default", ["-appearance", "light"]), ("dark-default", ["-appearance", "dark"]),
-                             ("light-ax5", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]),
-                             ("dark-ax5", ["-appearance", "dark", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
-            let again = XCUIApplication()
-            again.launchArguments = args
-            again.launch()
-            openHub(again)
-            again.buttons["hub-tile-everything"].tap()
-            XCTAssertTrue(any(again, "collection-species").firstMatch.waitForExistence(timeout: 15))
-            let card = again.buttons["collection-set-legendary"]
-            scrollTo(card, in: again)
-            card.tap()
-            XCTAssertTrue(again.staticTexts["collection-set-sheet-forms"].waitForExistence(timeout: 30))
-            sleep(2)
-            shot("collection-set-sheet-forms-\(name)", in: "fb-collection-r3")
-            again.buttons["collection-set-sheet-done"].tap()
-            let lucky = again.buttons["collection-set-lucky"]
-            scrollTo(lucky, in: again)
-            lucky.tap()
-            XCTAssertTrue(again.staticTexts["collection-set-sheet-count"].waitForExistence(timeout: 10))
-            sleep(2)
-            shot("collection-set-sheet-lucky-empty-\(name)", in: "fb-collection-r3")
-            again.terminate()
-        }
+        XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, "5 of 54 species", "forms do not change the species count")
     }
 
     /// The Collection's cards and an open set's sheet, for Greg's page: out/screens/fb-collection (phone feedback item 11).
@@ -518,6 +512,8 @@ final class HubScreensTests: XCTestCase {
         }
     }
 
+    /// The screenshots of the Collection (top and scrolled), a set's "All" sheet, the Missing list and the Special scan options, light and dark at default text and AX5:
+    /// out/screens/collection (eyeball check lane "collection").
     func testCollectionScreenshots() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
@@ -537,15 +533,39 @@ final class HubScreensTests: XCTestCase {
             again.buttons["hub-tile-everything"].tap()
             XCTAssertTrue(any(again, "collection-species").firstMatch.waitForExistence(timeout: 15))
             sleep(2)
-            shot("\(name)-1", in: "collection")
-            let stops: [(String, String)] = [("collection-region-row", "2"), ("collection-showcase-card", "3"), ("collection-set-legendary", "4"), ("collection-missing-row", "5"), ("collection-card-duplicates", "6")]
-            for (id, n) in stops {
-                let target = any(again, id).firstMatch
-                var swipes = 0
-                while !target.isHittable && swipes < 60 { again.swipeUp(); swipes += 1 }
+            shot("\(name)-01-top", in: "collection")
+            // Scroll a screen at a time; every shot shows something new. The first time a strip's cards are fully on screen it gets its own name.
+            var n = 2, strips = false, swipes = 0
+            let screenH = again.windows.firstMatch.frame.height
+            let last = any(again, "collection-card-duplicates").firstMatch
+            while swipes < 40 {
+                again.swipeUp(); swipes += 1
                 sleep(1)
-                shot("\(name)-\(n)", in: "collection")
+                if !strips, let card = any(again, "collection-strip-card").allElementsBoundByIndex.first(where: { $0.isHittable && $0.frame.minY > 160 && $0.frame.maxY < screenH - 40 }) {
+                    _ = card; strips = true
+                    shot("\(name)-\(String(format: "%02d", n))-strip-cards", in: "collection"); n += 1
+                } else {
+                    shot("\(name)-\(String(format: "%02d", n))", in: "collection"); n += 1
+                }
+                if last.isHittable { break }
             }
+            XCTAssertTrue(strips, "a strip's cards were fully on screen at some point")
+            // The Missing list the card opens.
+            let missing = any(again, "collection-missing-card").firstMatch
+            var up = 0
+            while !missing.isHittable && up < 60 { again.swipeDown(); up += 1 }
+            missing.tap()
+            XCTAssertTrue(any(again, "collection-missing-row").firstMatch.waitForExistence(timeout: 10))
+            sleep(1)
+            shot("\(name)-90-missing-list", in: "collection")
+            again.buttons["hub-back"].tap()
+            // A set's All sheet.
+            let all = again.buttons["collection-set-legendary"]
+            scrollTo(all, in: again)
+            all.tap()
+            XCTAssertTrue(any(again, "collection-set-sheet").firstMatch.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
+            sleep(2)
+            shot("\(name)-91-set-all-sheet", in: "collection")
             again.terminate()
         }
     }

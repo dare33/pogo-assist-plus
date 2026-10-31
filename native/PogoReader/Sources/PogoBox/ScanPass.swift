@@ -13,6 +13,10 @@ public enum ScanPass: String, CaseIterable, Codable, Equatable {
     /// "Dynamax pass".
     public var passName: String { title + " pass" }
 
+    /// The passes Greg wants that cannot be scanned yet (31 Oct 2026, "placeholder 'coming soon' tag until scans are developed for it"): the Scan screen lists them tagged
+    /// "Coming soon", not choosable. They are not cases of this enum, so nothing can save, store or broadcast one.
+    public static let comingSoon = ["Lucky", "Shiny", "Background"]
+
     /// The pass for a stored string; nil for none or one this build does not know.
     public init?(stored: String?) {
         guard let stored, let p = ScanPass(rawValue: stored) else { return nil }

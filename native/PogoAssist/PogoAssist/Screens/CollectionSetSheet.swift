@@ -23,7 +23,8 @@ struct CollectionSetSheet: View {
     private var pogoAssist: Bool { rankingRaw == Ranking.pogoAssist.rawValue }
     private var readyAdvice: BoxAdvice? { if case .ready(let a) = model.advice { return a } else { return nil } }
     private var insightKey: InsightKey { InsightKey(account: model.account, seq: model.snapshot?.seq, state: InsightKey.State(model.advice)) }
-    private var query: BoxIndex.Query { .keyword(BoxIndex.SearchWord(kind)) }
+    /// A set that is coming soon has no search word and is never opened (its strip has no "All"); the empty text is a placeholder.
+    private var query: BoxIndex.Query { BoxIndex.SearchWord(kind).map { .keyword($0) } ?? .text("") }
 
     /// The sections show only with the index they were built for: a row holds positions in that index, so with another one they would be the wrong rows (or none).
     /// They also wait for the box version the model is on: while a newer one is being indexed, the old rows are not shown.
@@ -82,6 +83,12 @@ struct CollectionSetSheet: View {
             .navigationDestination(for: CopyRoute.self) { PokemonDetailView(id: $0.id, initialLeague: $0.league) }
             .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
         }
+        // The app's alert shows over this sheet, so the player is still in the set when it is dismissed (the root view's alert waits while a sheet hosts it).
+        .alert("Pogo Assist+", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
+            Button("OK") { model.message = nil }
+        } message: { Text(model.message ?? "") }
+        .onAppear { model.alertHosts += 1 }
+        .onDisappear { model.alertHosts = max(0, model.alertHosts - 1) }   // never below 0, so a missed onAppear cannot hold the root alert back for good
         .accessibilityIdentifier("collection-set-sheet")
         .task(id: indexKey) { await store.refresh(key: indexKey, entries: model.entries) }
         .task(id: insightKey) { await store.refreshInsight(key: insightKey, advice: readyAdvice, entries: model.entries) }

@@ -181,7 +181,7 @@ extension ContentType {
 
     var blurb: String {
         switch self {
-        case .everything: return "Dex, showcase and builds"
+        case .everything: return "Dex, sets and builds"
         case .raids: return "Attackers for raid bosses"
         case .gym: return "Defenders and gym attackers"
         case .rocket: return "Counters for grunts and leaders"
