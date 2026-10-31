@@ -112,27 +112,39 @@ public enum HubSquads {
 
     // MARK: rule 3: Available vs Best
 
-    /// Available: a raid, Max, Gym or Rocket pick keeps the copy's own species (power up only: not a form change, not via a Mega). Best: any.
-    public static func isUsable(_ b: BoxAdvice.Build, mode: SquadMode) -> Bool {
-        mode == .best || (b.powerUp && !b.formChange && !b.viaMega)
+    /// Whether a copy can Mega Evolve (rule 3): its species-form with `_shadow` stripped has a Mega or Primal in the game master, and the copy is not a Shadow (a Shadow
+    /// never Mega Evolves, as the advisor reads it). Per copy, so two Charizards differ when one is a Shadow.
+    public static func megaCapable(entryId: String, ctx: HubContext) -> Bool {
+        guard let e = ctx.entry(entryId), !HubRaidsModel.isShadow(e) else { return false }
+        return hasMegaForm(e.row.speciesId.replacingOccurrences(of: "_shadow", with: ""), gm: ctx.gm)
     }
 
-    /// A PvP pick under Available is the copy itself.
-    public static func isUsable(_ option: BoxAdvice.LeagueRating.Option, mode: SquadMode) -> Bool { mode == .best || option.isSelf }
+    /// A species-form with a Mega or Primal form (`charizard` for `charizard_mega_x`, `kyogre` for `kyogre_primal`). The same rule as the Collection's Mega-capable set
+    /// (`HubCollection.Membership`): the Mega or Primal form is in the game master, released, and carries the `mega` tag.
+    static func hasMegaForm(_ id: String, gm: GameMaster) -> Bool {
+        ["_mega", "_mega_x", "_mega_y", "_primal"].contains { suffix in gm.byId[id + suffix].map { $0.released && $0.tags.contains("mega") } ?? false }
+    }
 
-    /// The `placeable` test of a screen under a mode (see `fill`). Best places any pick. Available places a pick only when the copy has a build of the
-    /// screen's area that is usable as it is (a raid Mega slot never; a PvP pick whose shown option is the copy itself).
+    /// A copy that may take the raid Mega slot under Available (manager call, 31 Oct 2026): it can Mega Evolve now (`megaCapable`), or one of its Raids builds ends in a
+    /// Mega or Primal it reaches by evolving (a Gastly whose build ends in Mega Gengar). A Shadow copy never has such a build.
+    public static func megaCandidate(entryId: String, ctx: HubContext) -> Bool {
+        megaCapable(entryId: entryId, ctx: ctx) || ctx.advice.builds.contains { $0.entryId == entryId && $0.viaMega && $0.areas.contains("Raids") }
+    }
+
+    /// The `placeable` test of a screen under a mode (see `fill`). Best places any pick. Available places a pick only when the box has the copy and it has a build (a
+    /// league rating, on PvP) for the screen's area, whatever upgrade that build needs (S1, 31 Oct 2026: power up, evolve, form change, Mega Evolve); a raid Mega slot takes
+    /// only a Mega candidate (`megaCandidate`). A species pick (a Pokémon the box lacks) is not placed.
     public static func placeable(screen: SquadScreen, mode: SquadMode, league: String? = nil, ctx: HubContext) -> (String, String) -> Bool {
         guard mode == .available else { return { _, _ in true } }
-        func hasUsable(_ id: String, _ areas: [String]) -> Bool {
-            ctx.advice.builds.contains { $0.entryId == id && $0.areas.contains { areas.contains($0) } && isUsable($0, mode: .available) }
+        func hasBuild(_ id: String, _ areas: [String]) -> Bool {
+            ctx.advice.builds.contains { $0.entryId == id && $0.areas.contains { areas.contains($0) } }
         }
         switch screen {
-        case .raids: return { id, role in role != PogoRules.RaidRole.mega.rawValue && hasUsable(id, ["Raids"]) }
-        case .max: return { id, _ in hasUsable(id, ["Max"]) }
-        case .gym: return { id, _ in hasUsable(id, ["Gym"]) }
-        case .rocket: return { id, _ in hasUsable(id, ["Rocket", "Raids"]) }
-        case .pvp: return { id, _ in league.flatMap { ctx.advice.leagues[id]?[$0] }?.shown.isSelf ?? false }
+        case .raids: return { id, role in hasBuild(id, ["Raids"]) && (role != PogoRules.RaidRole.mega.rawValue || megaCandidate(entryId: id, ctx: ctx)) }
+        case .max: return { id, _ in hasBuild(id, ["Max"]) }
+        case .gym: return { id, _ in hasBuild(id, ["Gym"]) }
+        case .rocket: return { id, _ in hasBuild(id, ["Rocket", "Raids"]) }
+        case .pvp: return { id, _ in league.flatMap { ctx.advice.leagues[id]?[$0] } != nil }
         }
     }
 
@@ -143,11 +155,16 @@ public enum HubSquads {
     public struct Pool {
         public var preferred: [String]
         public var fallback: [String]
-        public init(preferred: [String], fallback: [String] = []) { self.preferred = preferred; self.fallback = fallback }
+        /// Taken only after `fallback` has had its turn: the slot's own role's Pokémon the tables do not list (raids, S1 manager call), then `deferredFallback`, any role's.
+        public var deferred: [String]
+        public var deferredFallback: [String]
+        public init(preferred: [String], fallback: [String] = [], deferred: [String] = [], deferredFallback: [String] = []) {
+            self.preferred = preferred; self.fallback = fallback; self.deferred = deferred; self.deferredFallback = deferredFallback
+        }
     }
 
-    /// `placeable(entryId, role)` says whether a saved pick may be placed now. Under Available a pick that is not usable as it is (any Mega, an evolution)
-    /// is not placed and the slot shows the suggestion; the pick stays in the store and returns under Best (`placeable(screen:mode:league:ctx:)`).
+    /// `placeable(entryId, role)` says whether a saved pick may be placed now. Under Available a pick the box cannot serve (a Pokémon it lacks, a copy with no build
+    /// for the area, a non-Mega-capable copy in the Mega slot) is not placed and the slot shows the suggestion; the pick stays in the store and returns under Best (`placeable(screen:mode:league:ctx:)`).
     /// `copyOf` names the copy an id stands for (a species id the box has a copy of resolves to it): a copy sits in one slot at a time however many ids it goes by
     /// (Primal Kyogre and Kyogre are two rows of one copy), so taking an id takes its copy too.
     public static func fill(slots: [SquadSlot], pool: (Int, String) -> Pool, placeable: (String, String) -> Bool = { _, _ in true },
@@ -162,10 +179,20 @@ public enum HubSquads {
         for (i, s) in slots.enumerated() {
             if let p = s.pickId, placeable(p, s.role), free(p) { take(p); put(p, at: i); out[i].chosen = true }
         }
+        // Each role's own slots are filled across the whole squad first, then the slots still empty take another role's Pokémon (S1: fill with any role), so a
+        // fallback never takes the Pokémon a later slot of that role would have had.
         for (i, s) in slots.enumerated() where out[i].pickId == nil {
-            let p = pool(i, s.role)
-            if let id = p.preferred.first(where: free) { take(id); put(id, at: i) }
-            else if let id = p.fallback.first(where: free) { take(id); put(id, at: i); out[i].fallback = true }
+            if let id = pool(i, s.role).preferred.first(where: free) { take(id); put(id, at: i) }
+        }
+        for (i, s) in slots.enumerated() where out[i].pickId == nil {
+            if let id = pool(i, s.role).fallback.first(where: free) { take(id); put(id, at: i); out[i].fallback = true }
+        }
+        // Then what the tables do not list: the slot's own role's first, then any role's.
+        for (i, s) in slots.enumerated() where out[i].pickId == nil {
+            if let id = pool(i, s.role).deferred.first(where: free) { take(id); put(id, at: i) }
+        }
+        for (i, s) in slots.enumerated() where out[i].pickId == nil {
+            if let id = pool(i, s.role).deferredFallback.first(where: free) { take(id); put(id, at: i); out[i].fallback = true }
         }
         return out
     }
@@ -213,6 +240,12 @@ public enum HubSquads {
         guard slots.indices.contains(index) else { return }
         slots[index].role = role
         if let p = slots[index].pickId, !fits(p) { slots[index].pick = nil; slots[index].species = nil }
+    }
+
+    /// A slot's picker under Available (S1): its own role's options first, then every other unused candidate ("Other roles:"). The Mega slot lists Mega candidates only.
+    public static func pickerGroups(own: [String], all: [String], allowsOther: Bool) -> (own: [String], other: [String]) {
+        let mine = Set(own)
+        return (own, allowsOther ? all.filter { !mine.contains($0) } : [])
     }
 
     // MARK: rule 15: built rows on build lists

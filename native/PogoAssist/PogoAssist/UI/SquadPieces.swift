@@ -173,7 +173,6 @@ extension HubSquads.SlotStatus {
         case .ready: return Theme.statusGreenTint
         case .needsWork: return Theme.statusAmberTint
         case .toGet, .empty: return Theme.statusRedTint
-        case .notCounted: return Theme.surface2
         }
     }
     /// The word and icon a card carries so its status is not told by colour alone.
@@ -183,7 +182,6 @@ extension HubSquads.SlotStatus {
         case .needsWork: return "Needs work"
         case .toGet: return "To get"
         case .empty: return "Empty"
-        case .notCounted: return "Not counted"
         }
     }
     var icon: String {
@@ -192,7 +190,6 @@ extension HubSquads.SlotStatus {
         case .needsWork: return "exclamationmark.triangle.fill"
         case .toGet: return "arrow.down.circle.fill"
         case .empty: return "circle.dashed"
-        case .notCounted: return "minus.circle"
         }
     }
     /// The status line's dot.
@@ -201,7 +198,6 @@ extension HubSquads.SlotStatus {
         case .ready: return Theme.green
         case .needsWork: return Theme.orange
         case .toGet, .empty: return Theme.red
-        case .notCounted: return Theme.faint
         }
     }
 }
@@ -277,9 +273,7 @@ struct SlotCardView: View {
             .frame(maxWidth: .infinity, minHeight: 76, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 10).padding(.vertical, 8)
             .background(model.status.tint, in: shape)
-            .overlay { if !filled && model.status != .notCounted { shape.strokeBorder(model.emptyOutline, lineWidth: 2) } }
-            // A card that is not counted has no fill to show against the page: a dashed edge (muted ink, 3:1 or more against the page in light and dark) does.
-            .overlay { if model.status == .notCounted { shape.strokeBorder(Theme.muted, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])) } }
+            .overlay { if !filled { shape.strokeBorder(model.emptyOutline, lineWidth: 2) } }
             .overlay { if selected { shape.strokeBorder(accent.solid, lineWidth: 2) } }
             .contentShape(shape)
         }

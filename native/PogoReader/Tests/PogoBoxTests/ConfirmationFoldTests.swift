@@ -48,16 +48,16 @@ final class ConfirmationFoldTests: XCTestCase {
         let ctx = P23.ctx(builds: [P23.build("a", "blissey", areas: ["Max"], powerUp: false), P23.build("b", "blissey", areas: ["Max"]),
                                    P23.build("c", "togekiss", areas: ["Rocket"], powerUp: false), P23.build("d", "togekiss", areas: ["Raids"]), P23.build("g", "snorlax", areas: ["Gym"])])
         let max = HubSquads.placeable(screen: .max, mode: .available, ctx: ctx)
-        XCTAssertEqual([max("a", "Tank"), max("b", "Tank"), max("g", "Tank")], [false, true, false], "an evolution-only Max build, a plain one, a copy with no Max build")
+        XCTAssertEqual([max("a", "Tank"), max("b", "Tank"), max("g", "Tank")], [true, true, false], "S1: an evolution-only Max build and a plain one are placed; a copy with no Max build is not")
         let rocket = HubSquads.placeable(screen: .rocket, mode: .available, ctx: ctx)
-        XCTAssertEqual([rocket("c", "Counter"), rocket("d", "Counter"), rocket("g", "Counter")], [false, true, false], "Rocket counts the Raids area too")
+        XCTAssertEqual([rocket("c", "Counter"), rocket("d", "Counter"), rocket("g", "Counter")], [true, true, false], "Rocket counts the Raids area too")
         let best = HubSquads.placeable(screen: .max, mode: .best, ctx: ctx)
         XCTAssertTrue(best("a", "Tank")); XCTAssertTrue(HubSquads.placeable(screen: .rocket, mode: .best, ctx: ctx)("c", "Counter"))
-        // The Max squad uses it: the evolution-only pick is not placed under Available.
+        // The Max squad uses it: the evolution-only pick is placed under Available too (S1).
         let candidates = HubSquads.maxCandidates(row: P23.row("2026-10-20", "2026-10-30", bosses: [P23.boss("charizard", types: ["fire"])]), mode: .best,
                                                  ctx: P23.ctx(builds: [P23.build("b", "blissey", areas: ["Max"])], table: P23.table([P23.tierEntry("max", "Tanks and healers", "S", "blissey", role: "Tank")])))
         var slots = HubSquads.defaultMaxSlots(); slots[0].pick = "a"
-        XCTAssertEqual(HubSquads.maxSquad(slots: slots, candidates: candidates, placeable: max).map(\.entryId), ["b", nil, nil])
+        XCTAssertEqual(HubSquads.maxSquad(slots: slots, candidates: candidates, placeable: max).map(\.entryId), ["a", nil, nil])
         XCTAssertEqual(HubSquads.maxSquad(slots: slots, candidates: candidates, placeable: best).map(\.entryId), ["a", nil, nil])
     }
 

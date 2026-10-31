@@ -52,28 +52,31 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   ranked"). He ruled: "Available = the users best available pokemon for that position." "Best = the best pokemon
   obtainable in the game even if not current obtainable (with ideally an indicator of when they might be available next
   if thats known, and if not known then when it was last available)".
-  **Available** (the default, D29) lists only Pokémon in the player's box, best first for the slot, usable as they are
-  (rule 3). **Best** lists the best Pokémon in the game for the slot from our research tier tables, in the tables' order,
-  whether or not the player has it and whether or not it can be got now (rule 6).
+  Redefined again after Greg's eyeball check of 31 Oct 2026 ("Available vs best - still not thinking we're on the same page
+  with this one. I wanted Available to be the one where the app picks for the user ... what it thinks would be the optimal
+  team based on the users box right now ... I wanted Best to be - if the user wanted to go out of their way to get the best
+  pokemon for this activity what would that be and include the availability of that pokemon").
+  **Available** (the default, D29) is the app's suggested squad from the box as it is now: every slot filled with the strongest
+  Pokémon the player owns for it, whatever upgrade it needs, with the needs-work status and its cost shown (rule 3).
+  **Best** lists the best Pokémon in the game for the slot from our research tier tables, in the tables' order, owned or
+  not, each with one of three statuses (rule 6).
 - **Slot**: one place in a squad; it has a **role** (Raids, Max, PvP) or a leader slot (Rocket) or a defender place (Gym).
 - **Role**: the job a slot's Pokémon does; each screen has its own set (below) plus **All**, which allows any Pokémon
   (D16).
 - **Picker**: the list under a squad that opens when a slot is tapped; choosing a row puts that Pokémon in the slot.
-- **Not in your box** (Best only): a row, or a slot, whose Pokémon the box has no copy of and cannot make (rule 6). It carries an
-  **availability line** saying when it might be had: the rotation when the species is a raid or Max boss now or coming ("Raid
-  boss now", "Max battle now", "Max Monday today", "Raids from 9 Nov", "Max Monday 2 Nov", "Max battles from 16 Nov"), else the
-  research table's obtain text ("Medium. T5 raids"), which is the only "last available" information the app has (there is no
-  history of past dates); "Last available not known" only when the table has no obtain text either. A slot card shows the short
-  rotation date when there is one, else only "Not in your box"; VoiceOver always reads the whole line. This replaces **Could
-  get now** and the **Where tags** (retired 30 Oct 2026; D19 and D27 are superseded).
-- **In your box · no build for this**: a Best row or slot whose Pokémon the box has a copy of, but no build or league candidate
+- **Best status** (Best only, S1): every Best row and slot carries exactly one of **In your box** (with "needs upgrade" when its
+  build needs work), **Can get now** (a raid, Max or Rocket boss now, or obtainable now per the research's obtain line) or **Not
+  available now** (with when it is next on, if the schedule knows), rule 6. There is no history of past dates and no "last
+  available" text. This replaces **Could get now** and the **Where tags** (retired 30 Oct 2026; D19 and D27 are superseded) and the
+  earlier "Not in your box" availability line.
+- **In your box · needs upgrade** with no build: a Best row or slot whose Pokémon the box has a copy of, but no build or league candidate
   of this area and slot serves (a Lapras with no Gym build; a PvP species scoring under 80 or past the cap). It shows the
   player's best copy, in amber, and counts as needing work.
 - **Same copy as <row>**: a Best row whose only copy is the one a higher row already shows; it still lists, with that note.
 - **Available upgrades:** the heading in an Available picker over the player's own Pokémon whose build still needs work;
   the ones at Full strength come first, above it (rule 28; phone feedback item 10).
 - **Slot status**: the colour of a slot card's background: **ready** (green), **needs work** (amber), **to get** (red:
-  under Best, not in the box) or **empty** (red), plus **not counted** (neutral: a raid Mega slot under Available). A card also
+  under Best, not in the box) or **empty** (red). A card also
   says it in a word and an icon, so colour is never the only sign. The disc and the role text keep the role colour (rule 29).
 - **Squad status line**: one line over the slots, "Ready", "Nearly ready: 2 need work" or "Not ready: 2 to get, 1 empty",
   with a dot in the same colour (rule 30).
@@ -130,18 +133,38 @@ Stated so each can be checked against the code.
 2. **Cost beside the arrow**: the build's `HubModel.costShort` split into value and currency: "19k" + stardust icon when
    dust is due; the candy count + candy icon when only candy is due; nothing when free. What the work is goes in the
    icon's label ("Upgrade available: power up to level 30").
-3. **Available**: only Pokémon in the player's box. A raid, Max, Gym or Rocket pick qualifies when its build keeps the
-   copy's own species (`powerUp` and not `formChange` and not `viaMega`); a PvP pick when the option is the copy itself
-   (`option.isSelf`). In Available a raid Mega slot is always empty, by this rule and not for want of a Pokémon: it is drawn neutral ("Mega: needs a mega evolution") and not counted in the squad line (rule 29). Available never lists a Pokémon the box lacks, and no
-   "could get" list is shown under it (a pick of a Pokémon the box lacks is not placed here; it stays stored and returns
-   under Best).
+3. **Available** (S1, 31 Oct 2026, Greg: "I wanted Available to be the one where the app picks for the user (and provides
+   alternative options for each slot when clicked on) what it thinks would be the optimal team based on the users box
+   right now (would still show the needs work indicator)"): the app's suggested squad from the box as it is now, on all
+   five squad screens. Every slot is filled with the strongest Pokémon the player owns for it, **whatever upgrade it
+   needs**: power up, evolve, form change or Mega Evolve (Greg: "Yes, include them"); the needs-work status and its cost
+   are shown. No build is dropped for being more than a power up (this replaces the old rule that a pick kept the
+   copy's own species: `powerUp` and not `formChange` and not `viaMega`, `option.isSelf`).
+   **Mega builds belong in the Mega slot, and only there** (manager call, 31 Oct 2026, from the first review). A raid **Mega slot takes a Mega candidate**: a copy
+   that can Mega Evolve now (Mega-capable is per copy: its species-form with `_shadow` stripped has a Mega or Primal in the game master that is released and
+   tagged `mega`, the Collection's own rule, and the copy is not a Shadow, which never Mega Evolves), or one whose build ends in a Mega or Primal it reaches by
+   evolving (a Gastly whose build ends in Mega Gengar; Greg: include Pokémon that need "evolving or Mega Evolving"). In the Mega slot a copy is ranked, graded and
+   costed on its Mega build; a copy that can Mega Evolve but has no build that does shows Mega Evolve still to do, and the Mega slot never reads Ready. In every other
+   slot, fallback slots included, a copy is ranked, graded and costed as the plain Pokémon: its own table entry for the boss, no Mega Evolve step in its cost; a plain
+   form the boss's types do not list ranks below every listed counter. A squad holds one Mega only. **Fill with any role** (Greg's choice): each role's own slots are
+   filled across the whole squad first, strongest first, among the candidates the tables list against the boss; then a slot still empty takes the strongest unused listed Pokémon of
+   another role and shows that role ("Its role: Bulky hitter"); only after that the unlisted ones, the slot's own role's first (manager call, rule 10). The Mega slot never takes a non-Mega. A slot is empty only when the box has nothing left for it; an empty Mega slot says why ("No Mega-capable Pokémon
+   in your box", or "... left" when they are all used) and counts as empty: there is no "Not counted" state. Tapping a slot
+   lists the alternatives from the box (rule 28). Under Available the picker lists the slot's own role first, then every other unused Pokémon under "Other roles:",
+   each with its role, in the order the squad is filled in; the Mega slot lists Mega candidates only. Available never lists a Pokémon the box lacks, and no "could get" list
+   is shown under it (a pick of a Pokémon the box lacks is not placed here; it stays stored and returns under Best). A
+   stored pick is placed under Available when the box holds the copy and it has a build for the area (a league rating on
+   PvP). One copy per squad, the Shadow rules (rule 6), Max rows from Max kinds only and PvP's one species to a squad all
+   hold as before.
 4. **A Pokémon is in one slot at a time**: a copy in another slot of the same squad is not listed in that squad's
    picker, and neither is any row that shows the same copy (Primal Kyogre and Kyogre are two rows of one copy: a suggested
    squad never uses it twice, and a species pick that resolves to it counts as the copy); the slot being edited lists its own Pokémon, ticked. On Rocket only Pokémon the player chose leave the list
    (D28). One copy may sit in squads on different screens (manager's call, read-back Q6).
 5. **Changing a slot's role** relabels the slot, refills it with the best unused Pokémon for the new role, and keeps a
    Pokémon the player chose (a copy, or under Best a species) unless it does not fit the new role (D16).
-6. **Best** (replaces Could get now, 30 Oct 2026): for a slot, the research tier tables' rows for the area, one per Pokémon,
+6. **Best** (replaces Could get now, 30 Oct 2026; S1, 31 Oct 2026, Greg: "if the user wanted to go out of their way to get
+   the best pokemon for this activity what would that be and include the availability of that pokemon (aka not
+   available, or attainable right now, or its in your box you just need to upgrade it)"): for a slot, the research tier tables' rows for the area, one per Pokémon,
    ranked by tier (S, A, B), then the table's order (the # in the PvP tables). Which rows: Raids, the Raids table entries
    listed under one of the boss's bring types (the strongest bring type first within a tier), with the role `raidRole`
    gives the entry; Max, the Max table's entries with the table's roles (rule 12; Gigantamax entries never), a type that
@@ -156,11 +179,13 @@ Stated so each can be checked against the code.
    that one of the advisor's builds for this area can make into it (raid builds as `raidEntries` reads them, Rocket and Raids
    builds for Rocket, league candidates for PvP). A row with a build or candidate shows the player's best of them (the build at
    Full strength first, then the least dust, then the least candy) with its mark; a row with only a copy shows the best copy
-   (highest CP) as **In your box · no build for this**; a row with neither reads **Not in your box** and its availability line.
+   (highest CP) as **In your box · needs upgrade · no build for this**; a row with neither is not in the box. **Each row has exactly one of three statuses** (Greg: "Three statuses"): **In your box** (with "needs upgrade" when its build needs work, or when no build serves the copy);
+   **Can get now** (the box lacks it and a raid, Max or Rocket boss now has it per `data/hub.json`'s rotation and leaders, or, when the schedule never lists it, the research's obtain line counts as now only when ALL of these hold (manager call, 31 Oct 2026): its difficulty word, up to the first full stop, is Easy or Medium (no range to Hard, no slash); the row is not a Mega,
+   Primal, Legendary, Mythical or Ultra Beast (those come through events, so the schedule decides); the line names no month or year; the line is shown after "Can get now". Rocket: only the catchable slot counts as a boss now, Giovanni's third and the first of every other leader); **Not available now** (with when it is next on, "Raids from 9 Nov", when the schedule knows; a Pokémon the schedule lists only later is not got now whatever the obtain line says). Otherwise a Pokémon the schedule does not list reads "Not available now · not on the schedule": no date is invented, and every status but a plain "In your box" carries its reason. No history of past dates is kept, so there is no "last available" text.
    A copy shows against one row at a time: when a row's only copy is the one a higher row shows, the row still lists it with
    "same copy as <that row>", and a pick of that row is a species pick. An availability line matches a boss only when its
    Shadow state agrees with the table entry's; Raid Hours and other kinds with no boss are never read; a one-day event on today
-   reads "<title> today", and the last day of a run counts. The suggested squad fills each slot with the first row for its role whose copy is not already in the squad, owned or not; a not-owned Pokémon in a slot reads "Not in your box". A pick of a Pokémon the box lacks is
+   reads "<title> today", and the last day of a run counts. The suggested squad fills each slot with the first row for its role whose copy is not already in the squad, owned or not; a not-owned Pokémon in a slot shows its status (Can get now or Not available now). A pick of a Pokémon the box lacks is
    stored as its species (rule 27) and reads as the player's copy once the box has one.
 7. **Type icons**: every type chip is a round icon in the game's type colour, glyph white or ink by
    `Theme.pokemonTypeText`; the type name is its accessibility label.
@@ -172,8 +197,15 @@ Stated so each can be checked against the code.
 9. **Raid candidates and order**: Raids builds whose target counts for one of the boss's bring types
    (`HubRaidsModel.typesCounted`); ordered by the best tier the Raids table gives the target under a bring type, then
    built first, then how many bring types it covers, then the advisor's order; one entry per copy.
-10. **Suggested squad**: slots Mega, Heavy, Heavy, Heavy, Bulky, Bulky, each taking the first unused candidate of its role
-   (under Available only usable-as-is candidates).
+10. **Suggested squad**: slots Mega, Heavy, Heavy, Heavy, Bulky, Bulky, each taking the first unused candidate of its role.
+   Under Available (S1) every build is a candidate whatever upgrade it needs, the Mega slot takes a Mega-capable copy (rule 3), and a
+   slot with no unused candidate of its role takes the strongest unused one of another role (fill with any role); the Mega
+   slot never takes a copy that cannot Mega Evolve. **Manager call, 31 Oct 2026** (on Greg's "the users best available pokemon for that position"
+   and "fill with any role"): a role has run out when it has no unused candidate the tables list against this boss. A non-Mega slot under
+   Available takes, in order: (1) an unused listed candidate of its own role; (2) an unused listed candidate of any other role, strongest
+   first; (3) an unused unlisted (tier "") candidate of its own role; (4) an unused unlisted candidate of any role. So a Bulky slot with
+   only an unlisted Bulky left takes a listed Heavy hitter. The Mega slot and Best are unchanged; Max and PvP candidates are always listed
+   (Max needs a table entry, PvP a league score), so the rule changes nothing there.
 11. **Now as cards**: Raids › Now shows one card per raid on now; the first is chosen on opening; tapping the chosen card
    closes its squad; Coming up stays a list whose rows open and close on tap.
 
@@ -214,7 +246,8 @@ Stated so each can be checked against the code.
 22. **PvP role of a candidate**: from the league table's role text: "lead" = Lead; "safe swap" or "switch" = Safe swap;
    "closer" = Closer; a candidate may have several or none.
 23. **Suggested squad**: slots Lead, Safe swap, Closer, each taking the best-scoring unused candidate listed for that
-   role, else the best-scoring unused candidate. Coverage is shown, never used to pick; this replaces today's
+   role, else the best-scoring unused candidate (fill with any role, shown with its role). Under Available (S1) a candidate may be an
+   evolution still to do (its shown option is not the copy itself); never two of one species. Coverage is shown, never used to pick; this replaces today's
    coverage-first `HubTeams.suggestedTeam` (D57).
 24. **Number grades**: score ≥ 92 top, ≥ 90 good; IV rank ≤ 100 top, ≤ 500 good; anything else plain.
 
@@ -237,9 +270,10 @@ Stated so each can be checked against the code.
    own status. A pick that does not fit
    the mode is kept and comes back under its mode. A file saved before species picks existed reads as it did.
 
-28. **Available upgrades** (phone feedback item 10): an Available picker lists the player's own Pokémon with those at Full
+28. **Available upgrades** (phone feedback item 10; S1: "provides alternative options for each slot when clicked on"): tapping a slot
+   under Available lists the alternatives from the box, the player's own Pokémon with those at Full
    strength first and, under the heading "Available upgrades:", those whose build still needs work (the mark and cost stay
-   on each row), each group in the slot's order. When the box has nothing for the slot the text is the screen's own "No
+   on each row), each group in the slot's order, then "Other roles:" (rule 3). When the box has nothing for the slot the text is the screen's own "No
    <screen> build in your box." alone; when it has options but they are all in the squad's other slots the text is "Everything
    in your box for this slot is already in your squad.".
 
@@ -251,12 +285,11 @@ Stated so each can be checked against the code.
    **empty** (red) when it holds nothing. The tier is the one for this area and slot: Raids and Max, the candidate's table tier (Raids: under the boss's bring types);
    Gym, the Gym table only (a Pokémon the table does not list needs work); Rocket, the Rocket table only (not a tier from another
    area); the picker's tier chip on both is that same table tier; PvP, the league tier shown everywhere (`LeaguePanel.tier(speciesId:key:score:)`: the table's, else the 88-score band),
-   the same under Available and Best. **Not counted**: a raid Mega slot under Available that is empty; a Mega slot the player
-   changed to another role, and every other empty slot, still count as empty. When a squad's options are hidden only by PvP's
-   one-species rule, the empty picker says "Your other options are the same species as a Pokémon already in this squad."; the neutral card has a dashed muted edge. The card's background is a soft tint of the status
-   colour (`Theme.statusGreenTint`, `statusAmberTint`, `statusRedTint`; neutral for not counted); the disc and the role text keep
-   the role colour; a word and icon (Ready, Needs work, To get, Empty, Not counted) sit at the card's foot. A card's VoiceOver
-   label ends with the status ("Mega slot, not counted under Available" for the neutral slot).
+   the same under Available and Best. There is no "Not counted" state (S1): an empty raid Mega slot counts as empty like any other. When a squad's options are hidden only by PvP's
+   one-species rule, the empty picker says "Your other options are the same species as a Pokémon already in this squad."; The card's background is a soft tint of the status
+   colour (`Theme.statusGreenTint`, `statusAmberTint`, `statusRedTint`); the disc and the role text keep
+   the role colour; a word and icon (Ready, Needs work, To get, Empty) sit at the card's foot. A card's VoiceOver
+   label ends with the status. Under Best a slot's card also carries the row's one status (rule 6). A card with work to do shows its cost beside the upgrade mark, as a picker row does (Greg: "would still show the needs work indicator"; the needs-work status and its cost are shown), at every text size.
 
 30. **Squad status line** (identifier `squad-status`): "Ready" when every slot is ready; else, when no slot is empty or to
    get, "Nearly ready: N need work" (N = the slots needing work; "1 needs work"); else "Not ready: " with "N to get" (Best

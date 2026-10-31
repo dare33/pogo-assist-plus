@@ -114,13 +114,13 @@ final class HubSquadsBestTests: XCTestCase {
         XCTAssertEqual(line("chandelure"), "Super Mega Raid Day 28 Nov")
         XCTAssertEqual(line("landorus_incarnate_shadow"), "Raid boss now")
         XCTAssertEqual(line("mewtwo", obtain: "Medium. T5 raids"), "Medium. T5 raids", "a boss whose run has ended falls back to the obtain text")
-        XCTAssertEqual(line("mewtwo"), "Last available not known")
-        XCTAssertEqual(line("mewtwo", obtain: "  "), "Last available not known")
-        XCTAssertEqual(line("blissey"), "Last available not known", "a Raid Hour is no boss row: it is never read")
+        XCTAssertEqual(line("mewtwo"), "")
+        XCTAssertEqual(line("mewtwo", obtain: "  "), "")
+        XCTAssertEqual(line("blissey"), "", "a Raid Hour is no boss row: it is never read")
         // The last day of a run still counts; the next day does not.
         XCTAssertEqual(line("palkia", in: P23.ctx(today: "2026-10-30", rotation: rows)), "Raid boss now")
         XCTAssertEqual(line("palkia", obtain: "Hard", in: P23.ctx(today: "2026-10-31", rotation: rows)), "Hard")
-        XCTAssertEqual(line("machop", in: P23.ctx(today: "2026-10-27", rotation: rows)), "Last available not known")
+        XCTAssertEqual(line("machop", in: P23.ctx(today: "2026-10-27", rotation: rows)), "")
         XCTAssertEqual(line("machop", in: P23.ctx(today: "2026-10-20", rotation: rows)), "Max Monday 26 Oct")
     }
 
@@ -130,9 +130,9 @@ final class HubSquadsBestTests: XCTestCase {
         let ctx = P23.ctx(today: "2026-10-26", rotation: rows)
         func line(_ id: String, shadow: Bool) -> String { HubSquads.availability(of: P23.tierEntry("raids", "Ghost", "S", id, shadow: shadow), ctx: ctx) }
         XCTAssertEqual(line("giratina_origin", shadow: false), "Raid boss now")
-        XCTAssertEqual(line("giratina_origin", shadow: true), "Last available not known", "Shadow Giratina is not the plain Giratina raid")
-        XCTAssertEqual(line("giratina_origin_shadow", shadow: true), "Last available not known")
-        XCTAssertEqual(line("landorus_incarnate", shadow: false), "Last available not known", "the plain Landorus is not the Shadow raid")
+        XCTAssertEqual(line("giratina_origin", shadow: true), "", "Shadow Giratina is not the plain Giratina raid")
+        XCTAssertEqual(line("giratina_origin_shadow", shadow: true), "")
+        XCTAssertEqual(line("landorus_incarnate", shadow: false), "", "the plain Landorus is not the Shadow raid")
         XCTAssertEqual(line("landorus_incarnate", shadow: true), "Raid boss now", "a Shadow listed under the plain id")
         XCTAssertEqual(line("landorus_incarnate_shadow", shadow: true), "Raid boss now")
     }
@@ -323,7 +323,7 @@ final class HubSquadsBestTests: XCTestCase {
         let table = P23.table([P23.tierEntry("max", "Attackers", "S", "kingler")])
         let boss = P23.row("2026-10-26", "2026-10-26", .maxMonday, bosses: [P23.boss("charizard", types: ["fire"])])
         let raidBoss = [P23.row("2026-10-20", "2026-10-30", bosses: [P23.boss("kingler", types: ["water"])])]
-        XCTAssertEqual(HubSquads.bestMaxRows(row: boss, ctx: P23.ctx(table: table, rotation: raidBoss)).map(\.availability), ["Last available not known"], "a raid boss is no Max battle")
+        XCTAssertEqual(HubSquads.bestMaxRows(row: boss, ctx: P23.ctx(table: table, rotation: raidBoss)).map(\.availability), [""], "a raid boss is no Max battle")
         let maxBoss = [P23.row("2026-11-02", "2026-11-02", .maxMonday, title: "Max Monday", bosses: [P23.boss("kingler", types: ["water"])])]
         XCTAssertEqual(HubSquads.bestMaxRows(row: boss, ctx: P23.ctx(table: table, rotation: maxBoss)).map(\.availability), ["Max Monday 2 Nov"])
     }
@@ -337,17 +337,13 @@ final class HubSquadsBestTests: XCTestCase {
         XCTAssertEqual(HubSquads.bestSquad(slots: HubSquads.defaultMaxSlots(), rows: rows).map(\.pickId), [nil, nil, "species:kingler"])
     }
 
-    func testAMegaSlotUnderAvailableIsNotCounted() {
-        XCTAssertTrue(HubSquads.slotNotCounted(screen: .raids, mode: .available, role: "Mega", filled: false))
-        XCTAssertFalse(HubSquads.slotNotCounted(screen: .raids, mode: .best, role: "Mega", filled: false))
-        XCTAssertFalse(HubSquads.slotNotCounted(screen: .raids, mode: .available, role: "Heavy hitter", filled: false), "a slot changed from Mega counts as empty")
-        XCTAssertFalse(HubSquads.slotNotCounted(screen: .max, mode: .available, role: "Mega", filled: false))
+    func testTeamStatusLine() {
         typealias S = HubSquads.SlotStatus
-        XCTAssertEqual(HubSquads.teamStatus([.notCounted, .ready, .ready]), .init(level: .green, text: "Ready"))
-        XCTAssertEqual(HubSquads.teamStatus([.notCounted, .needsWork]), .init(level: .amber, text: "Nearly ready: 1 needs work"))
-        XCTAssertEqual(HubSquads.teamStatus([.notCounted, .empty, .ready]), .init(level: .red, text: "Not ready: 1 empty"))
-        XCTAssertNil(HubSquads.teamStatus([.notCounted]))
-        XCTAssertEqual(S.notCounted.spoken, "not counted under Available")
+        XCTAssertEqual(HubSquads.teamStatus([.ready, .ready]), .init(level: .green, text: "Ready"))
+        XCTAssertEqual(HubSquads.teamStatus([.ready, .needsWork]), .init(level: .amber, text: "Nearly ready: 1 needs work"))
+        XCTAssertEqual(HubSquads.teamStatus([.empty, .ready]), .init(level: .red, text: "Not ready: 1 empty"))
+        XCTAssertNil(HubSquads.teamStatus([]))
+        XCTAssertEqual(S.empty.spoken, "empty")
     }
 
     func testStatusTiersAreTheTablesForTheAreaAndSlot() {
@@ -386,7 +382,7 @@ final class HubSquadsBestTests: XCTestCase {
         let rows = HubSquads.bestGymRows(ctx: ctx)
         XCTAssertEqual(rows.map(\.key), ["chansey", "blissey", "snorlax", "lapras"], "S then A then B; the table's order within a tier")
         XCTAssertEqual(rows.map(\.ownedEntryId), [nil, "g1", nil, nil], "g2 has no Gym build")
-        XCTAssertEqual(rows.map(\.availability), ["Easy. Wild", "", "Last available not known", "Last available not known"])
+        XCTAssertEqual(rows.map(\.availability), ["Easy. Wild", "", "", ""])
     }
 
     func testBestRocketRowsAreTheTableEntriesThatBeatTheSlot() {
@@ -414,7 +410,7 @@ final class HubSquadsBestTests: XCTestCase {
         XCTAssertEqual(rows.map(\.key), ["azumarill", "medicham", "lanturn", "registeel"], "tier, then the table's #")
         XCTAssertEqual(rows.map(\.ownedEntryId), ["c0", nil, nil, "c1"])
         XCTAssertEqual(rows.map(\.roles), [["Safe swap"], ["Lead", "Closer"], ["Closer"], ["Safe swap"]])
-        XCTAssertEqual(rows[1].availability, "Last available not known")
+        XCTAssertEqual(rows[1].availability, "")
         let squad = HubSquads.bestSquad(slots: HubSquads.defaultPvpSlots(), rows: rows, fallback: true)
         XCTAssertEqual(squad.map(\.pickId), ["species:medicham", "c0", "species:lanturn"])
     }
@@ -449,15 +445,16 @@ final class HubSquadsBestTests: XCTestCase {
     }
 
     func testAPickThatDoesNotFitUnderAModeStaysInTheStoreAndReturns() {
-        // An evolution pick is not placed under Available, and is under Best; the species pick is the other way round.
-        let ctx = P23.ctx(builds: [P23.build("e6", "swampert", areas: ["Raids"], powerUp: false, viaMega: true)], table: raidTable())
-        let slots = [SquadSlot(role: "Mega", pick: "e6")]
+        // A species pick (a Pokémon the box lacks) is not placed under Available and is under Best; a copy whose build is gone is the other way round.
+        let ctx = P23.ctx(builds: [P23.build("e6", "swampert", areas: ["Raids"], powerUp: false, viaMega: true)], entries: [P23.entry("e6", "swampert")], table: raidTable())
+        let slots = [SquadSlot(role: "Heavy hitter", pick: "e6"), SquadSlot(role: "Heavy hitter", pick: "e9")]
         let available = HubSquads.placeable(screen: .raids, mode: .available, ctx: ctx)
         let best = HubSquads.placeable(screen: .raids, mode: .best, ctx: ctx)
-        XCTAssertFalse(available("e6", "Mega"))
-        XCTAssertTrue(best("e6", "Mega"))
-        XCTAssertNil(HubSquads.fill(slots: slots, pool: { _, _ in .init(preferred: []) }, placeable: available)[0].entryId)
-        XCTAssertEqual(HubSquads.fill(slots: slots, pool: { _, _ in .init(preferred: []) }, placeable: best)[0].entryId, "e6")
+        XCTAssertTrue(available("e6", "Heavy hitter"), "S1: a Mega build is placeable under Available")
+        XCTAssertFalse(available("e9", "Heavy hitter"), "no build of the copy")
+        XCTAssertTrue(best("e9", "Heavy hitter"))
+        XCTAssertEqual(HubSquads.fill(slots: slots, pool: { _, _ in .init(preferred: []) }, placeable: available).map(\.entryId), ["e6", nil])
+        XCTAssertEqual(HubSquads.fill(slots: slots, pool: { _, _ in .init(preferred: []) }, placeable: best).map(\.entryId), ["e6", "e9"])
         XCTAssertFalse(HubSquads.placeable(screen: .raids, mode: .available, ctx: ctx)("species:excadrill", "Heavy hitter"))
         // Changing the slot's role to one the species does not fit drops a species pick, as it does a copy.
         var s = [SquadSlot(role: "Heavy hitter", species: "excadrill")]

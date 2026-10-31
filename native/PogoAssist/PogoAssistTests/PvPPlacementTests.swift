@@ -110,8 +110,8 @@ final class PvPPlacementTests: XCTestCase {
         XCTAssertEqual(card.lines, ["Not in your box"], "no short rotation date: only the words")
         XCTAssertEqual(card.status, .toGet)
         XCTAssertTrue(card.spoken.contains("Medium. T5 raids") && card.spoken.hasSuffix("not in your box, to get"), card.spoken)
-        XCTAssertEqual(HubSquads.SlotStatus.allWords, ["Ready", "Needs work", "To get", "Empty", "Not counted"])
+        XCTAssertEqual(HubSquads.SlotStatus.allWords, ["Ready", "Needs work", "To get", "Empty"])
     }
 }
 
-extension HubSquads.SlotStatus { static var allWords: [String] { [HubSquads.SlotStatus.ready, .needsWork, .toGet, .empty, .notCounted].map(\.word) } }
+extension HubSquads.SlotStatus { static var allWords: [String] { [HubSquads.SlotStatus.ready, .needsWork, .toGet, .empty].map(\.word) } }

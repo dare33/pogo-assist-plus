@@ -333,11 +333,6 @@ struct EventSquadView: View {
         let head = "Slot \(i + 1) of \(count), \(f.role)"
         let identifier = "\(prefix)-slot-\(i + 1)"
         guard let id = f.pickId else {
-            // A raid Mega slot under Available is empty by rule 3, not for want of a Pokémon: drawn neutral, and not counted in the squad line.
-            if HubSquads.slotNotCounted(screen: screen, mode: mode, role: f.role, filled: false) {
-                return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: nil, lines: ["Mega: needs a mega evolution"], status: .notCounted,
-                                     spoken: "Slot \(i + 1) of \(count), Mega slot, \(HubSquads.SlotStatus.notCounted.spoken)", identifier: identifier)
-            }
             return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: nil, status: .empty, spoken: head + ", " + HubSquads.SlotStatus.empty.spoken, identifier: identifier)
         }
         guard let o = (f.species.flatMap { byId[squadSpeciesPrefix + $0] } ?? byId[id]) else {

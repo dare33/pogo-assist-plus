@@ -51,16 +51,16 @@ final class HubSquadsTests: XCTestCase {
 
     // MARK: rule 3
 
-    func testAvailableKeepsTheCopysOwnSpecies() {
-        let own = P23.build("a", "eevee", areas: ["Raids"])
-        let evolve = P23.build("a", "vaporeon", areas: ["Raids"], powerUp: false)
-        let form = P23.build("a", "eevee", areas: ["Raids"], formChange: true)
-        let mega = P23.build("a", "lucario", areas: ["Raids"], viaMega: true)
-        XCTAssertEqual([own, evolve, form, mega].map { HubSquads.isUsable($0, mode: .available) }, [true, false, false, false])
-        XCTAssertEqual([own, evolve, form, mega].map { HubSquads.isUsable($0, mode: .best) }, [true, true, true, true])
-        XCTAssertTrue(HubSquads.isUsable(P23.option("eevee", isSelf: true, score: 90), mode: .available))
-        XCTAssertFalse(HubSquads.isUsable(P23.option("vaporeon", isSelf: false, score: 90), mode: .available))
-        XCTAssertTrue(HubSquads.isUsable(P23.option("vaporeon", isSelf: false, score: 90), mode: .best))
+    func testAvailableTakesEveryBuildWhateverUpgradeItNeeds() {
+        // S1: nothing is filtered by the kind of upgrade (power up, evolve, form change, Mega Evolve); the box must hold the copy and a build of the area.
+        let c = P23.ctx(builds: [P23.build("a", "eevee", areas: ["Raids"]), P23.build("b", "vaporeon", areas: ["Raids"], powerUp: false),
+                                 P23.build("c", "eevee", areas: ["Raids"], formChange: true), P23.build("d", "lucario", areas: ["Raids"], viaMega: true),
+                                 P23.build("x", "eevee", areas: ["Gym"])],
+                        entries: [P23.entry("a", "eevee"), P23.entry("b", "eevee"), P23.entry("c", "eevee"), P23.entry("d", "riolu"), P23.entry("x", "eevee")])
+        let place = HubSquads.placeable(screen: .raids, mode: .available, ctx: c)
+        XCTAssertEqual(["a", "b", "c", "d", "x", "nobody"].map { place($0, "Heavy hitter") }, [true, true, true, true, false, false], "x has no Raids build")
+        XCTAssertFalse(place("species:lucario", "Heavy hitter"))
+        XCTAssertTrue(HubSquads.placeable(screen: .raids, mode: .best, ctx: c)("species:lucario", "Heavy hitter"))
     }
 
     // MARK: rule 4: one slot at a time
