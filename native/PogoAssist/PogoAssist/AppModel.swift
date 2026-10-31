@@ -164,6 +164,9 @@ final class AppModel: ObservableObject {
     /// (a saved scan read again, retry after a failure) never set it.
     @Published var scanDonePending = false
     @Published var message: String?
+    /// How many sheets show the app's alert (`message`) themselves. The root view's alert waits while one does: a sheet that is up would be closed by an alert shown
+    /// from underneath it (a "No level fits" notice from a copy's page opened inside a Special sets sheet closed the sheet; Greg, 31 Oct 2026).
+    @Published var alertHosts = 0
     @Published var history: [BoxSnapshot.Header] = []
     @Published var previous: BoxSnapshot.Header?
     /// What the last Save changed, for the Saved panel at the top of Box (see `SaveSummary`).

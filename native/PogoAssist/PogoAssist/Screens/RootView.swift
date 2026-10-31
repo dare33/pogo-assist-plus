@@ -60,7 +60,7 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { !model.shareURLs.isEmpty }, set: { if !$0 { model.shareURLs = [] } })) {
             ShareSheet(urls: model.shareURLs).presentationDetents([.medium, .large])
         }
-        .alert("Pogo Assist+", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
+        .alert("Pogo Assist+", isPresented: Binding(get: { model.message != nil && model.alertHosts == 0 }, set: { if !$0 { model.message = nil } })) {
             Button("OK") { model.message = nil }
         } message: { Text(model.message ?? "") }
         .overlay { if let work = model.busy { BusyOverlay(text: work) } }

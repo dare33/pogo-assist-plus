@@ -453,11 +453,18 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(suggestion.waitForExistence(timeout: 10))
         suggestion.tap()
         app.buttons["Save"].tap()
-        // A species with other base stats than the copy's CP and IVs fit says so in an alert (the values are kept and the copy marked for a check); it also takes the
-        // sheet down with it, since the alert belongs to the screen under the sheet.
-        if app.alerts.buttons["OK"].waitForExistence(timeout: 15) { app.alerts.buttons["OK"].tap() }
-        XCTAssertTrue(legendary.waitForExistence(timeout: 15) || sheet.exists)
-        if !sheet.exists { scrollTo(legendary, in: app); legendary.tap(); XCTAssertTrue(sheet.waitForExistence(timeout: 10)) }
+        // A species with other base stats than the copy's CP and IVs fit says so in an alert (the values are kept and the copy marked for a check). The alert shows over
+        // the sheet and the player is still in the set when it is dismissed (eyeball check F1): it used to take the sheet down with it.
+        let ok = app.alerts.buttons["OK"]
+        if ok.waitForExistence(timeout: 15) {
+            XCTAssertTrue(sheet.exists, "the sheet is still there under the alert")
+            ok.tap()
+        }
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10), "still in the set after the alert is dismissed")
+        XCTAssertTrue(sheet.buttons["Back"].firstMatch.waitForExistence(timeout: 10), "and still on the copy's page, where the player was")
+        XCTAssertTrue(app.alerts.count == 0)
+        sheet.buttons["Back"].firstMatch.tap()   // the page, back to the set's list
+        XCTAssertTrue(app.buttons["collection-set-sheet-done"].waitForExistence(timeout: 10), "the set's list")
         XCTAssertTrue(app.staticTexts["collection-set-sheet-forms"].waitForExistence(timeout: 30), "two Zapdos rows, one species")
         XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, "5 of 52 species", "forms do not change the species count")
         app.terminate()

@@ -83,6 +83,12 @@ struct CollectionSetSheet: View {
             .navigationDestination(for: CopyRoute.self) { PokemonDetailView(id: $0.id, initialLeague: $0.league) }
             .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
         }
+        // The app's alert shows over this sheet, so the player is still in the set when it is dismissed (the root view's alert waits while a sheet hosts it).
+        .alert("Pogo Assist+", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
+            Button("OK") { model.message = nil }
+        } message: { Text(model.message ?? "") }
+        .onAppear { model.alertHosts += 1 }
+        .onDisappear { model.alertHosts -= 1 }
         .accessibilityIdentifier("collection-set-sheet")
         .task(id: indexKey) { await store.refresh(key: indexKey, entries: model.entries) }
         .task(id: insightKey) { await store.refreshInsight(key: insightKey, advice: readyAdvice, entries: model.entries) }
