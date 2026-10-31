@@ -8,6 +8,16 @@ final class ScrollActivity: ObservableObject {
     private var last: CGFloat?
     private var lastMove = Date.distantPast
     private var timer: Task<Void, Never>?
+    /// The list's own scroll view, found from inside its content (`ScrollViewFinder`), so a coasting list can be stopped.
+    fileprivate weak var scrollView: UIScrollView?
+
+    /// Stops a list that is coasting after a fling. A jump to a letter made while it coasts is lost otherwise: the scroll view goes on decelerating from where it was
+    /// and overwrites the offset `scrollTo` set, so the list ends wherever the fling would have taken it (phone feedback 31 Oct, 3b). Setting the offset to itself
+    /// ends the deceleration; a list that is not coasting is left alone.
+    func stopCoasting() {
+        guard let scrollView, scrollView.isDecelerating else { return }
+        scrollView.setContentOffset(scrollView.contentOffset, animated: false)
+    }
 
     /// The list's top offset changed. The first reading is only where the list starts, not a scroll. One timer task runs while the list moves and ends a second after
     /// the last change; a change only stamps the time (no task per frame).
@@ -27,6 +37,26 @@ final class ScrollActivity: ObservableObject {
             self?.timer = nil
         }
     }
+}
+
+/// Finds the scroll view that holds it and tells `activity`, so the A-Z index can stop the list coasting. Placed in the list's content, drawn as nothing.
+struct ScrollViewFinder: UIViewRepresentable {
+    let activity: ScrollActivity
+
+    final class Probe: UIView {
+        var activity: ScrollActivity?
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            var up: UIView? = superview
+            while let v = up, !(v is UIScrollView) { up = v.superview }
+            activity?.scrollView = up as? UIScrollView
+        }
+    }
+
+    func makeUIView(context: Context) -> Probe {
+        let v = Probe(); v.isUserInteractionEnabled = false; v.activity = activity; return v
+    }
+    func updateUIView(_ v: Probe, context: Context) { v.activity = activity }
 }
 
 /// Scrolls the list for the A-Z index, at most once every `gap` while a finger is dragging down the letters, always with the latest letter. Each jump lays out a
@@ -66,7 +96,8 @@ final class JumpThrottle {
     func finish(_ scroll: (String) -> Void) { flush(scroll); scrolled = nil; last = .distantPast }
 }
 
-/// The A-Z index in the right gutter (22 pt wide). The letters are drawn only while the list moves (or the index is being dragged); VoiceOver always has it, as
+/// The A-Z index in the right gutter. The letters are drawn in a 22 pt column; each letter's touch area is 44 pt wide (the column and 22 pt of nothing to its left) and
+/// `rowHeight` tall, up from 22 by 14 (phone feedback 31 Oct, 3a). The letters are drawn only while the list moves (or the index is being dragged); VoiceOver always has it, as
 /// one adjustable "Jump to letter" element, even while the letters are hidden (READBACK Q4). With Reduce Motion on, the letters appear and go without a fade.
 struct AZIndex: View {
     @ObservedObject var activity: ScrollActivity
@@ -89,7 +120,8 @@ struct AZIndex: View {
     @State private var jumped: String?
     @State private var throttle = JumpThrottle()
 
-    private let rowHeight: CGFloat = 14
+    private let rowHeight: CGFloat = 16
+    private let touchWidth: CGFloat = 44
 
     private func jump(to label: String) {
         // A letter with nothing under it goes to the next letter that has something.
@@ -118,7 +150,7 @@ struct AZIndex: View {
             .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: shown)
             .allowsHitTesting(shown)
             .accessibilityHidden(true)
-            .frame(width: 22)
+            .frame(width: touchWidth)
             .overlay { voiceOverElement }
             .padding(.trailing, 1)
             .accessibilityElement(children: .contain)
@@ -136,6 +168,7 @@ struct AZIndex: View {
             }
         }
         .frame(width: 22)
+        .padding(.leading, touchWidth - 22)   // the wider touch area is nothing drawn, to the letters' left
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 0)
             .updating($dragging) { _, state, _ in state = true }

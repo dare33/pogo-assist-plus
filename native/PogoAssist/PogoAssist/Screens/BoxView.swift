@@ -221,6 +221,7 @@ struct BoxView: View {
                 .background {
                     // Where the list's top is: the A-Z index shows while it moves.
                     Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.scrollSpace)).minY } action: { scrollActivity.offsetChanged($0) }
+                        .background { ScrollViewFinder(activity: scrollActivity) }   // lets the index stop a coasting list before it jumps
                 }
             }
             .coordinateSpace(name: Self.scrollSpace)
@@ -417,7 +418,7 @@ struct BoxView: View {
     private func jumpIndex(_ proxy: ScrollViewProxy) -> some View {
         let labels: [String] = sort == .name ? ((65...90).map { String(UnicodeScalar($0)!) } + (sections.contains { $0.id == "#" } ? ["#"] : [])) : sections.map(\.short)
         let present = Dictionary(sections.map { ($0.short, $0.id) }, uniquingKeysWith: { a, _ in a })
-        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, lettersShown: showsIndex) { id in proxy.scrollTo(id, anchor: .top) }
+        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, lettersShown: showsIndex) { id in scrollActivity.stopCoasting(); proxy.scrollTo(id, anchor: .top) }
     }
 
     // MARK: saved panel
