@@ -48,9 +48,12 @@ struct CopySearchRow: View {
     let pass: ScanPass
     @Environment(\.accent) private var accent
     @Environment(\.showToast) private var showToast
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 10) {
+        // At the accessibility text sizes the search word and "Copy search" stack, so "Copy" does not break letter by letter beside the word.
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 10))
+        layout {
             Image(systemName: "magnifyingglass").font(.figtree(16, .bold)).foregroundStyle(accent.ink).accessibilityHidden(true)
             Text(pass.searchWord).font(.figtree(18, .heavy, relativeTo: .body)).foregroundStyle(Theme.ink)
                 .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("scan-search-word")

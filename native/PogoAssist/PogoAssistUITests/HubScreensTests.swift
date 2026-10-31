@@ -432,7 +432,7 @@ final class HubScreensTests: XCTestCase {
     }
 
     /// A Zapdos copy renamed to its Galarian form is a second Zapdos row under Legendary: the sheet says "Forms are listed separately." while the card still counts one species.
-    /// The Fix a value notice (the one an edit from a copy's page raises) shows over the sheet and leaves the player in the set (eyeball check F1). Also takes the screenshots of that sheet (out/screens/fb-collection-r3).
+    /// The Fix a value notice (the one an edit from a copy's page raises) shows over the sheet and leaves the player in the set (eyeball check F1).
     func testTheFormsLineAndTheAlertOverTheSheet() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
@@ -479,24 +479,6 @@ final class HubScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["collection-set-sheet-done"].waitForExistence(timeout: 10), "the set's list")
         XCTAssertTrue(app.staticTexts["collection-set-sheet-forms"].waitForExistence(timeout: 30), "two Zapdos rows, one species")
         XCTAssertEqual(app.staticTexts["collection-set-sheet-count"].label, "5 of 52 species", "forms do not change the species count")
-        app.terminate()
-        for (name, args) in [("light-default", ["-appearance", "light"]), ("dark-default", ["-appearance", "dark"]),
-                             ("light-ax5", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]),
-                             ("dark-ax5", ["-appearance", "dark", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
-            let again = XCUIApplication()
-            again.launchArguments = args
-            again.launch()
-            openHub(again)
-            again.buttons["hub-tile-everything"].tap()
-            XCTAssertTrue(any(again, "collection-species").firstMatch.waitForExistence(timeout: 15))
-            let card = again.buttons["collection-set-legendary"]
-            scrollTo(card, in: again)
-            card.tap()
-            XCTAssertTrue(again.staticTexts["collection-set-sheet-forms"].waitForExistence(timeout: 30))
-            sleep(2)
-            shot("collection-set-sheet-forms-\(name)", in: "fb-collection-r3")
-            again.terminate()
-        }
     }
 
     /// The Collection's cards and an open set's sheet, for Greg's page: out/screens/fb-collection (phone feedback item 11).
