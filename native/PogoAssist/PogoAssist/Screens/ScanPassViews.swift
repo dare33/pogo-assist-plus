@@ -1,7 +1,8 @@
 import SwiftUI
 import PogoBox
 
-/// The four kinds of Special scan, as one choice. Each kind is its own run and its own save.
+/// The kinds of Special scan, as one choice. Each kind is its own run and its own save. Lucky, Shiny and Background are listed after them, tagged "Coming soon" and not
+/// choosable until a scan is built for each (Greg, 31 Oct 2026).
 struct PassPicker: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
@@ -21,6 +22,19 @@ struct PassPicker: View {
                     .buttonStyle(PressStyle())
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .accessibilityIdentifier("pass-kind-\(pass.rawValue)")
+                }
+                ForEach(ScanPass.comingSoon, id: \.self) { name in
+                    VStack(spacing: 0) {
+                        Text(name).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.faint)
+                        Text("Coming soon").font(.figtree(11, .semibold, relativeTo: .caption2)).foregroundStyle(Theme.faint)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(Theme.off.opacity(0.5), in: Capsule())
+                    .frame(minHeight: 44)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(name), coming soon")
+                    .accessibilityAddTraits(.isStaticText)
+                    .accessibilityIdentifier("pass-soon-\(name.lowercased())")
                 }
             }
         }

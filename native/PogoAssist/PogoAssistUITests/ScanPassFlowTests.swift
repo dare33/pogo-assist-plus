@@ -30,6 +30,35 @@ final class ScanPassFlowTests: XCTestCase {
 
     private func label(_ app: XCUIApplication, _ id: String) -> String { app.descendants(matching: .any)[id].firstMatch.label }
 
+    /// The Special scan options with Lucky, Shiny and Background tagged Coming soon, for Greg's page: out/screens/collection (eyeball check C1).
+    func testSpecialScanScreenshots() throws {
+        let setup = openScan()   // makes the account at the default text size; the runs below reuse it
+        setup.terminate()
+        for (name, args) in [("light-default", ["-appearance", "light"]), ("dark-default", ["-appearance", "dark"]),
+                             ("light-ax5", ["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]),
+                             ("dark-ax5", ["-appearance", "dark", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            let app = XCUIApplication()
+            app.launchArguments = args
+            app.launch()
+            XCTAssertTrue(app.buttons["Scan"].waitForExistence(timeout: 10))
+            app.buttons["Scan"].tap()
+            XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
+            let special = app.buttons["scan-kind-special"]
+            XCTAssertTrue(special.waitForExistence(timeout: 5))
+            special.tap()
+            let soon = app.descendants(matching: .any)["pass-soon-background"].firstMatch
+            var swipes = 0
+            while !soon.isHittable && swipes < 10 { app.swipeUp(); swipes += 1 }
+            XCTAssertTrue(soon.exists)
+            sleep(1)
+            var dir = ProcessInfo.processInfo.environment["POGO_SCREENS"] ?? NSTemporaryDirectory()
+            dir = (dir as NSString).appendingPathComponent("collection")
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name)-9-special-scan.png"))
+            app.terminate()
+        }
+    }
+
     func testSpecialScanDynamaxShowsTheSearchAndPassWordingEverywhere() throws {
         let app = openScan()
         // The options come first: three kinds side by side; Special scan opens the four-kind picker and the search.
@@ -37,6 +66,13 @@ final class ScanPassFlowTests: XCTestCase {
         XCTAssertTrue(special.waitForExistence(timeout: 5))
         special.tap()
         for kind in ["shadow", "purified", "dynamax", "gigantamax"] { XCTAssertTrue(app.buttons["pass-kind-\(kind)"].exists, kind) }
+        // Lucky, Shiny and Background are listed, tagged Coming soon, and cannot be chosen.
+        for kind in ["lucky", "shiny", "background"] {
+            let soon = app.descendants(matching: .any)["pass-soon-\(kind)"].firstMatch
+            XCTAssertTrue(soon.exists, kind)
+            XCTAssertTrue(soon.label.hasSuffix("coming soon"), soon.label)
+            XCTAssertFalse(app.buttons["pass-kind-\(kind)"].exists, "\(kind) is not a choosable pass")
+        }
         app.buttons["pass-kind-dynamax"].tap()
         XCTAssertTrue(app.buttons["scan-copy-search"].waitForExistence(timeout: 3), "the Copy search button")
         XCTAssertEqual(app.staticTexts["scan-search-word"].label, "dynamax")

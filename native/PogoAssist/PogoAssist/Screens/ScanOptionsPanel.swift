@@ -117,7 +117,7 @@ struct ScanOptionsEditor: View {
         HStack(spacing: 0) {
             kindButton("Full scan", on: model.scanKind == .full) { model.scanKind = .full }
             kindButton("Add and update", on: model.scanKind == .partial && model.scanPass == nil) { model.scanPass = nil; model.scanKind = .partial }
-            // One option for the filtered passes; the kind (Shadow, Purified, Dynamax, Gigantamax) is chosen inside it, and each kind is its own run and its own save.
+            // One option for the filtered passes; the kind (Shadow, Purified, Dynamax, Gigantamax; Lucky, Shiny and Background are listed as coming soon) is chosen inside it, and each kind is its own run and its own save.
             kindButton("Special scan", on: model.scanPass != nil, id: "scan-kind-special") { if model.scanPass == nil { model.scanPass = .shadow } }
         }
         .padding(4).background(Theme.off, in: Capsule())
