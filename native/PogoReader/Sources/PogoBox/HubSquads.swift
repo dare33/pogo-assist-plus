@@ -167,8 +167,9 @@ public enum HubSquads {
     /// for the area, a non-Mega-capable copy in the Mega slot) is not placed and the slot shows the suggestion; the pick stays in the store and returns under Best (`placeable(screen:mode:league:ctx:)`).
     /// `copyOf` names the copy an id stands for (a species id the box has a copy of resolves to it): a copy sits in one slot at a time however many ids it goes by
     /// (Primal Kyogre and Kyogre are two rows of one copy), so taking an id takes its copy too.
+    /// `allows(id, slotIndex, filledSoFar)` is a last test on every pick and every pool entry (a raid squad holds one Mega: a Mega row is not allowed in a slot once another holds one).
     public static func fill(slots: [SquadSlot], pool: (Int, String) -> Pool, placeable: (String, String) -> Bool = { _, _ in true },
-                            copyOf: (String) -> String? = { _ in nil }) -> [FilledSlot] {
+                            copyOf: (String) -> String? = { _ in nil }, allows: (String, Int, [FilledSlot]) -> Bool = { _, _, _ in true }) -> [FilledSlot] {
         var used = Set<String>()
         var out = slots.map { FilledSlot(role: $0.role, entryId: nil, chosen: false, fallback: false) }
         func put(_ id: String, at i: Int) {
@@ -177,22 +178,22 @@ public enum HubSquads {
         func free(_ id: String) -> Bool { !used.contains(id) && !(copyOf(id).map(used.contains) ?? false) }
         func take(_ id: String) { used.insert(id); if let c = copyOf(id) { used.insert(c) } }
         for (i, s) in slots.enumerated() {
-            if let p = s.pickId, placeable(p, s.role), free(p) { take(p); put(p, at: i); out[i].chosen = true }
+            if let p = s.pickId, placeable(p, s.role), free(p), allows(p, i, out) { take(p); put(p, at: i); out[i].chosen = true }
         }
         // Each role's own slots are filled across the whole squad first, then the slots still empty take another role's Pokémon (S1: fill with any role), so a
         // fallback never takes the Pokémon a later slot of that role would have had.
         for (i, s) in slots.enumerated() where out[i].pickId == nil {
-            if let id = pool(i, s.role).preferred.first(where: free) { take(id); put(id, at: i) }
+            if let id = pool(i, s.role).preferred.first(where: { free($0) && allows($0, i, out) }) { take(id); put(id, at: i) }
         }
         for (i, s) in slots.enumerated() where out[i].pickId == nil {
-            if let id = pool(i, s.role).fallback.first(where: free) { take(id); put(id, at: i); out[i].fallback = true }
+            if let id = pool(i, s.role).fallback.first(where: { free($0) && allows($0, i, out) }) { take(id); put(id, at: i); out[i].fallback = true }
         }
         // Then what the tables do not list: the slot's own role's first, then any role's.
         for (i, s) in slots.enumerated() where out[i].pickId == nil {
-            if let id = pool(i, s.role).deferred.first(where: free) { take(id); put(id, at: i) }
+            if let id = pool(i, s.role).deferred.first(where: { free($0) && allows($0, i, out) }) { take(id); put(id, at: i) }
         }
         for (i, s) in slots.enumerated() where out[i].pickId == nil {
-            if let id = pool(i, s.role).deferredFallback.first(where: free) { take(id); put(id, at: i); out[i].fallback = true }
+            if let id = pool(i, s.role).deferredFallback.first(where: { free($0) && allows($0, i, out) }) { take(id); put(id, at: i); out[i].fallback = true }
         }
         return out
     }

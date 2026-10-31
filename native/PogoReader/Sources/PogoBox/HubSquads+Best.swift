@@ -310,7 +310,7 @@ extension HubSquads {
         }
         let copies = copyIndex(ctx: ctx)
         var claims = [String: String]()
-        let byKey = keyedBuilds(ctx.advice.builds.filter { $0.areas.contains("Max") }, shadowServesPlain: false, ctx: ctx)
+        let byKey = keyedBuilds(plainBuilds(ctx.advice.builds).filter { $0.areas.contains("Max") }, shadowServesPlain: false, ctx: ctx)
         return ranked(items, secondary: { PogoRules.hitsAnyBoss(speciesTypes($0.speciesId, ctx: ctx), row: row, hub: ctx.hub) ? 0 : 1 }).map { r in
             // A Max entry's rotation is the Max battles' only (a raid boss of the same species is no Max battle).
             var out = bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .max, copies: copies, claims: &claims, ctx: ctx), kinds: maxKinds, screen: .max, ctx: ctx)
@@ -326,7 +326,7 @@ extension HubSquads {
         let items = ctx.table.entries.enumerated().compactMap { i, e -> (e: TierTable.Entry, index: Int, roles: [String])? in e.area == "gym" ? (e, i, [gymSlotRole]) : nil }
         let copies = copyIndex(ctx: ctx)
         var claims = [String: String]()
-        let byKey = keyedBuilds(HubTeams.gymAvailable(builds: ctx.advice.builds), shadowServesPlain: false, ctx: ctx)
+        let byKey = keyedBuilds(HubTeams.gymAvailable(builds: plainBuilds(ctx.advice.builds)), shadowServesPlain: false, ctx: ctx)
         return ranked(items).map { r in
             bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .gym, copies: copies, claims: &claims, ctx: ctx), screen: .gym, ctx: ctx)
         }
@@ -348,7 +348,7 @@ extension HubSquads {
         }
         let copies = copyIndex(shadowServesPlain: true, ctx: ctx)
         var claims = [String: String]()
-        let byKey = keyedBuilds(ctx.advice.builds.filter(isRocketArea), shadowServesPlain: true, ctx: ctx)
+        let byKey = keyedBuilds(plainBuilds(ctx.advice.builds).filter(isRocketArea), shadowServesPlain: true, ctx: ctx)
         return ranked(items).map { r in
             var out = bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .rocket, copies: copies, claims: &claims, ctx: ctx), screen: .rocket, ctx: ctx)
             out.hits = options.filter { ctx.hub.beats(out.types, $0.types) }.count
@@ -445,15 +445,29 @@ extension HubSquads {
 
     /// The Best squad's slots: each takes the player's pick, else the first unused row of the ranked list for its role. A Max Attacker slot takes the first row that
     /// hits the boss when there is one, even over a higher tier that does not (rule 12).
-    public static func bestSquad(slots: [SquadSlot], rows: [BestRow], fallback: Bool = false) -> [FilledSlot] {
-        keepingSpecies(fill(slots: resolvingSpecies(slots, rows: rows), pool: { _, role in
+    /// With `oneMega` (raids) a squad holds one Mega: once a slot holds a Mega row, no later slot takes one (the fill skips it).
+    public static func bestSquad(slots: [SquadSlot], rows: [BestRow], fallback: Bool = false, oneMega: Bool = false) -> [FilledSlot] {
+        let megaIds = oneMega ? megaRowIds(rows) : []
+        return keepingSpecies(fill(slots: resolvingSpecies(slots, rows: rows), pool: { _, role in
             var listed = pool(role: role, in: rows)
             if role == PogoRules.MaxRole.attacker.rawValue {
                 let hits = Set(rows.filter(\.hitsBoss).map(\.entryId))
                 listed = listed.filter(hits.contains) + listed.filter { !hits.contains($0) }
             }
             return Pool(preferred: listed, fallback: fallback ? rows.map(\.entryId) : [])
-        }, copyOf: copyResolver(rows: rows)), slots, rows: rows)
+        }, copyOf: copyResolver(rows: rows), allows: { id, _, out in megaIds.isEmpty || !megaIds.contains(id) || !out.contains { $0.pickId.map(megaIds.contains) ?? false } }), slots, rows: rows)
+    }
+
+    /// Every id of a Mega row of a raid Best list (the row's own id and its species id).
+    public static func megaRowIds(_ rows: [BestRow]) -> Set<String> {
+        Set(rows.filter { $0.roles.contains(PogoRules.RaidRole.mega.rawValue) }.flatMap(\.ids))
+    }
+
+    /// The Mega rows another slot's Pokémon rules out of the edited slot's picker: once any other slot holds a Mega, no Mega row is offered (the edited slot's own stays, ticked).
+    public static func megaExcluded(by filled: [FilledSlot], editing: Int, rows: [BestRow]) -> Set<String> {
+        let megas = megaRowIds(rows)
+        let held = filled.enumerated().contains { $0.offset != editing && $0.element.ids.contains(where: megas.contains) }
+        return held ? megas : []
     }
 
     // MARK: rules 29 and 30: how ready a slot and a squad are

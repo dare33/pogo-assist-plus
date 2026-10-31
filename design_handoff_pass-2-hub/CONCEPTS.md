@@ -146,7 +146,11 @@ Stated so each can be checked against the code.
    evolving (a Gastly whose build ends in Mega Gengar; Greg: include Pokémon that need "evolving or Mega Evolving"). In the Mega slot a copy is ranked, graded and
    costed on its Mega build; a copy that can Mega Evolve but has no build that does shows Mega Evolve still to do, and the Mega slot never reads Ready. In every other
    slot, fallback slots included, a copy is ranked, graded and costed as the plain Pokémon: its own table entry for the boss, no Mega Evolve step in its cost; a plain
-   form the boss's types do not list ranks below every listed counter. A squad holds one Mega only. **Fill with any role** (Greg's choice): each role's own slots are
+   form the boss's types do not list ranks below every listed counter. A raid squad holds one Mega only, in either mode: under Best, once a slot holds a Mega row no later slot takes one and the picker offers none (a manager
+   call; the slot holding it still lists them). A Mega-capable copy with no Mega build is rated against the table for its Mega form like any other Mega build.
+   **Gym, Rocket and Max have no Mega slot** (manager ruling, 31 Oct 2026): every copy there, in every list, squad, Next best and grunt strip, is judged, ranked and
+   costed on its plain form (no Mega Evolve step; a build that does not Mega Evolve comes before one that did). Under Available **every copy with a Raids build is a
+   raid candidate**: one the tables do not list against the boss is unlisted (tier ""), taken only after every listed one. **Fill with any role** (Greg's choice): each role's own slots are
    filled across the whole squad first, strongest first, among the candidates the tables list against the boss; then a slot still empty takes the strongest unused listed Pokémon of
    another role and shows that role ("Its role: Bulky hitter"); only after that the unlisted ones, the slot's own role's first (manager call, rule 10). The Mega slot never takes a non-Mega. A slot is empty only when the box has nothing left for it; an empty Mega slot says why ("No Mega-capable Pokémon
    in your box", or "... left" when they are all used) and counts as empty: there is no "Not counted" state. Tapping a slot
@@ -247,7 +251,7 @@ Stated so each can be checked against the code.
    "closer" = Closer; a candidate may have several or none.
 23. **Suggested squad**: slots Lead, Safe swap, Closer, each taking the best-scoring unused candidate listed for that
    role, else the best-scoring unused candidate (fill with any role, shown with its role). Under Available (S1) a candidate may be an
-   evolution still to do (its shown option is not the copy itself); never two of one species. Coverage is shown, never used to pick; this replaces today's
+   evolution still to do (its shown option is not the copy itself); never two of one species. Each role's own slots fill across the whole squad before any slot takes another role's Pokémon, under Available and under Best alike (manager call, 31 Oct 2026). Coverage is shown, never used to pick; this replaces today's
    coverage-first `HubTeams.suggestedTeam` (D57).
 24. **Number grades**: score ≥ 92 top, ≥ 90 good; IV rank ≤ 100 top, ≤ 500 good; anything else plain.
 

@@ -121,7 +121,7 @@ final class HubSquadsAvailableTests: XCTestCase {
         let c = P23.ctx(builds: builds, entries: entries, table: tbl)
         let cands = HubSquads.raidCandidates(row: giratina, mode: .available, ctx: c)
         let g = try! XCTUnwrap(cands.first { $0.entryId == "g" }?.mega)
-        XCTAssertEqual(g.tier, ""); XCTAssertFalse(g.built)
+        XCTAssertEqual(g.tier, "A", "rated against the table like any Mega build: Garchomp is listed A"); XCTAssertFalse(g.built)
         XCTAssertTrue((g.build.steps ?? []).contains { $0.kind == "megaEvolve" }, "Mega Evolve is still to do")
         XCTAssertEqual(HubSquads.raidPool(role: "Mega", in: cands), ["a", "g"], "the Mega build the tables list first")
         XCTAssertEqual(squad(c, slots: [SquadSlot(role: "Mega")]).map(\.entryId), ["a"])
@@ -182,6 +182,53 @@ final class HubSquadsAvailableTests: XCTestCase {
         XCTAssertEqual(gaps.compactMap(\.entryId), ["sw", "gb", "ab"], "listed Heavy hitters of another role first, then the unlisted Bulky; the fourth slot has nothing left")
     }
 
+    func testABoxWithOnlyUnlistedRaidBuildsStillFillsEveryNonMegaSlot() {
+        // Nothing here is listed against Giratina's weak types and nothing can Mega Evolve: every copy with a Raids build is still a candidate (S1), unlisted, taken
+        // after every listed one, on the role the role function gives.
+        let names = ["snorlax", "blissey", "machamp", "lapras", "vaporeon", "umbreon"]
+        let builds = names.enumerated().map { P23.build("c\($0.offset)", $0.element, areas: ["Raids"], built: false) }
+        let c = P23.ctx(builds: builds, entries: names.enumerated().map { P23.entry("c\($0.offset)", $0.element) }, table: P23.table([P23.tierEntry("raids", "Ghost", "A", "gengar")]))
+        let cands = HubSquads.raidCandidates(row: giratina, mode: .available, ctx: c)
+        XCTAssertEqual(cands.count, 6); XCTAssertTrue(cands.allSatisfy { $0.tier.isEmpty })
+        let slots = squad(c)
+        XCTAssertNil(slots[0].entryId, "no Mega candidate: the Mega slot stays empty")
+        XCTAssertEqual(slots.dropFirst().compactMap(\.entryId).count, 5, "every other slot is filled")
+        // Listed candidates still come first: add one Heavy hitter the tables list and it takes a Bulky slot before any unlisted Bulky.
+        let listed = P23.ctx(builds: builds + [P23.build("g", "garchomp", areas: ["Raids"], built: false)], entries: c.entries + [P23.entry("g", "garchomp")],
+                             table: P23.table([P23.tierEntry("raids", "Dragon", "A", "garchomp")]))
+        let s2 = squad(listed, slots: [SquadSlot(role: "Bulky hitter")])
+        XCTAssertEqual(s2[0].entryId, "g"); XCTAssertTrue(s2[0].fallback)
+    }
+
+    func testABestSquadHoldsOneMegaAndItsPickerOffersNoSecond() {
+        let tbl = P23.table([P23.tierEntry("raids", "Ice", "S", "abomasnow_mega", mega: true), P23.tierEntry("raids", "Ghost", "S", "gengar_mega", mega: true),
+                             P23.tierEntry("raids", "Dragon", "A", "garchomp")])
+        let rows = HubSquads.bestRaidRows(row: giratina, ctx: P23.ctx(table: tbl))
+        let megas = HubSquads.megaRowIds(rows)
+        XCTAssertEqual(rows.filter { $0.roles.contains("Mega") }.count, 2)
+        let slots = [SquadSlot(role: "Mega"), SquadSlot(role: "All"), SquadSlot(role: "All")]
+        let many = HubSquads.bestSquad(slots: slots, rows: rows)
+        XCTAssertEqual(many.filter { $0.pickId.map(megas.contains) ?? false }.count, 2, "without the rule the All slot takes the second Mega")
+        let one = HubSquads.bestSquad(slots: slots, rows: rows, oneMega: true)
+        XCTAssertEqual(one.filter { $0.pickId.map(megas.contains) ?? false }.count, 1, "a squad holds one Mega")
+        XCTAssertEqual(one.compactMap(\.pickId).count, 2, "the other slots take non-Mega rows: only Garchomp is left, and the third slot stays empty")
+        // A stored pick of a second Mega is not placed.
+        let picked = HubSquads.bestSquad(slots: [SquadSlot(role: "Mega"), SquadSlot(role: "All", species: "gengar_mega")], rows: rows, oneMega: true)
+        XCTAssertEqual(picked.filter { $0.pickId.map(megas.contains) ?? false }.count, 1)
+        // The picker of another slot offers no Mega row while a slot holds one; the slot holding it keeps its own.
+        XCTAssertEqual(HubSquads.megaExcluded(by: one, editing: 1, rows: rows), megas)
+        XCTAssertEqual(HubSquads.megaExcluded(by: one, editing: 0, rows: rows), [], "the Mega slot's own picker still offers the Mega rows")
+    }
+
+    func testTheObtainLineRangesCountOnlyIfTheyNeverReachHard() {
+        func now(_ obtain: String) -> Bool {
+            HubSquads.availabilityParts(of: P23.tierEntry("raids", "Water", "B", "snorlax", obtain: obtain), ctx: P23.ctx(rotation: [])).canGetNow
+        }
+        XCTAssertTrue(now("Easy–Medium. Wild"))
+        XCTAssertTrue(now("Easy")); XCTAssertTrue(now("Medium. T5 raids"))
+        XCTAssertFalse(now("Easy–Hard. Wild")); XCTAssertFalse(now("Medium–Hard. Raids")); XCTAssertFalse(now("Medium / Easy"))
+    }
+
     func testMaxFillsASlotWithAnyRoleToo() {
         let boss = P23.row("2026-10-30", "2026-11-05", .maxMonday, bosses: [P23.boss("charizard", types: ["fire"])])
         let tbl = P23.table([P23.tierEntry("max", "Attackers", "S", "swampert"), P23.tierEntry("max", "Attackers", "A", "kingler")])
@@ -231,9 +278,9 @@ final class HubSquadsAvailableTests: XCTestCase {
         }
         XCTAssertTrue(HubSquads.hasMegaForm("charizard", gm: gm))
         XCTAssertFalse(HubSquads.hasMegaForm("pikachu", gm: gm))
-        // Camerupt: whatever the Collection says of it, Raids says the same.
-        XCTAssertEqual(HubSquads.hasMegaForm("camerupt", gm: gm), membership.megaIds.contains("camerupt"))
-        print("CAMERUPT hasMegaForm", HubSquads.hasMegaForm("camerupt", gm: gm), gm.byId["camerupt_mega"].map { "released=\($0.released) tags=\($0.tags)" } ?? "no camerupt_mega")
+        // Camerupt's Mega is not released in the game master, so it is not Mega-capable here, as in the Collection.
+        XCTAssertFalse(HubSquads.hasMegaForm("camerupt", gm: gm))
+        XCTAssertFalse(membership.megaIds.contains("camerupt"))
     }
 
     // MARK: Best: one status per row (S1)
@@ -307,6 +354,52 @@ final class HubSquadsAvailableTests: XCTestCase {
 
     private static var root: URL { URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent() }
 
+    /// Greg's box of 22 Oct 2026 through the real engine, worked out once.
+    private static let realBox: (entries: [BoxEntry], advice: BoxAdvice) = {
+        let text = try! String(contentsOf: root.appendingPathComponent("fixtures/greg-2026-10-22.box.csv"), encoding: .utf8)
+        let box = BoxCSVReader.entries(csv: text, gm: P23.gm)
+        let rows = box.enumerated().map { i, e in var r = e.row; r.index = i + 1; return r }
+        return (box, BoxAdvice.make(from: try! sharedEngine.advise(rows: rows, scanDate: Date(timeIntervalSince1970: 1_790_000_000)), entries: box))
+    }()
+
+    private func isPlain(_ b: BoxAdvice.Build) -> Bool { !b.viaMega && !(b.steps ?? []).contains { $0.kind == "megaEvolve" } }
+
+    /// Gym, Rocket and Max have no Mega slot: on Greg's real box no Available squad slot, picker row, Next best row or grunt strip there holds a Mega build or a Mega Evolve step.
+    func testGymRocketAndMaxOnGregsRealBoxNeverHoldAMegaBuild() throws {
+        let box = Self.realBox
+        let ctx = HubContext(advice: box.advice, entries: box.entries, gm: P23.gm, hub: P23.hub, table: try TierTable.bundled(), today: "2026-10-26")
+        func name(_ b: BoxAdvice.Build) -> String { "\(ctx.entry(b.entryId)?.row.title ?? b.entryId) as \(b.targetName)\(isPlain(b) ? "" : "  [MEGA: viaMega=\(b.viaMega) steps=\((b.steps ?? []).map(\.kind))]")" }
+        var checked = 0
+        func plain(_ b: BoxAdvice.Build, _ what: String) { checked += 1; XCTAssertTrue(isPlain(b), "\(what): \(name(b))") }
+        // Gym
+        let gym = HubSquads.gymRows(mode: .available, ctx: ctx)
+        gym.forEach { plain($0.build, "gym row") }
+        let gsq = HubSquads.gymSquad(rows: gym, placeable: HubSquads.placeable(screen: .gym, mode: .available, ctx: ctx))
+        XCTAssertEqual(gsq.compactMap(\.entryId).count, 6)
+        // Rocket: every leader's squad, every slot's picker and Next best, every grunt strip.
+        for leader in ctx.hub.leaders {
+            let squad = HubSquads.rocketSquad(leader: leader, mode: .available, ctx: ctx)
+            var lines = [String]()
+            for (i, options) in leader.slots.enumerated() {
+                let rows = HubSquads.rocketPicker(options: options, mode: .available, ctx: ctx)
+                rows.forEach { plain($0.build, "\(leader.name) slot \(i + 1) picker") }
+                HubSquads.rocketNextBest(options: options, mode: .available, ctx: ctx).forEach { plain($0.build, "\(leader.name) slot \(i + 1) next best") }
+                let held = squad[i].entryId.flatMap { id in rows.first { $0.entryId == id }?.build }
+                lines.append("slot \(i + 1): " + (held.map(name) ?? "EMPTY"))
+            }
+            if leader.name == "Giovanni" { print("GIOVANNI-REAL-BOX\n" + lines.joined(separator: "\n")) }
+        }
+        for g in ctx.hub.grunts { HubSquads.gruntCounters(type: g.type, mode: .available, ctx: ctx).builds.forEach { plain($0, "grunt \(g.type)") } }
+        // Max: every Max boss on the schedule.
+        for row in ctx.hub.rotation where [.maxMonday, .maxEvent].contains(row.kind) && !row.bosses.isEmpty {
+            let cands = HubSquads.maxCandidates(row: row, mode: .available, ctx: ctx)
+            cands.forEach { plain($0.build, "max \(row.title)") }
+            HubSquads.maxSquad(candidates: cands, fillAnyRole: true, placeable: HubSquads.placeable(screen: .max, mode: .available, ctx: ctx)).compactMap(\.entryId)
+                .forEach { id in XCTAssertTrue(cands.first { $0.entryId == id }.map { isPlain($0.build) } ?? true, "max squad \(id)") }
+        }
+        XCTAssertGreaterThan(checked, 50, "the check looked at real rows")
+    }
+
     /// Raids against Giratina (Origin) on Greg's own box of 22 Oct 2026, through the real engine: every slot is filled.
     func testGiratinaOriginOnGregsRealBoxFillsEverySlot() throws {
         let gm = P23.gm
@@ -337,5 +430,7 @@ final class HubSquadsAvailableTests: XCTestCase {
         XCTAssertEqual(Set(slots.compactMap(\.entryId)).count, 6)
         let mega = try XCTUnwrap(byId[try XCTUnwrap(slots[0].entryId)])
         XCTAssertNotNil(mega.mega, "the Mega slot holds a Mega candidate")
+        XCTAssertTrue(mega.mega.map { !isPlain($0.build) } ?? false, "on its Mega build")
+        for s in slots.dropFirst() { XCTAssertTrue(byId[s.entryId!].map { isPlain($0.build) } ?? false, "no non-Mega slot holds a Mega build: \(s.entryId!)") }
     }
 }

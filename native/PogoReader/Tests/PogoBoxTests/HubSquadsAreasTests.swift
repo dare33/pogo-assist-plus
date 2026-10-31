@@ -48,8 +48,10 @@ final class HubSquadsAreasTests: XCTestCase {
         XCTAssertEqual(best.map(\.role), [.bulky, .mega, .bulky, .bulky, .heavy, .bulky, .heavy])
         let available = HubSquads.raidCandidates(row: fireBoss, mode: .available, ctx: ctx)
         // S1: Available takes every build and judges e6 as the plain Swampert (A, tied with e2, behind it in the advisor's order); its Mega build is for the Mega slot only.
-        XCTAssertEqual(available.map(\.entryId), ["e5", "e1", "e2", "e6", "e4", "e7", "e3"])
-        XCTAssertEqual(available.map(\.role), [.bulky, .bulky, .bulky, .bulky, .heavy, .bulky, .heavy], "no Mega role under Available outside the Mega slot")
+        // e9 (Charizard, Fire: not a bring type) is a candidate too, unlisted, last (S1: every copy with a Raids build is one).
+        XCTAssertEqual(available.map(\.entryId), ["e5", "e1", "e2", "e6", "e4", "e7", "e3", "e9"])
+        XCTAssertEqual(available.map(\.tier), ["S", "S", "A", "A", "A", "A", "B", ""])
+        XCTAssertEqual(available.map(\.role), [.bulky, .bulky, .bulky, .bulky, .heavy, .bulky, .heavy, .bulky], "no Mega role under Available outside the Mega slot")
     }
 
     func testRaidRolesFollowRule8() {

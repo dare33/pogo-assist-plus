@@ -53,6 +53,13 @@ extension HubSquads {
         return m
     }
 
+    /// Gym, Rocket and Max have no Mega slot, so a copy there is judged, ranked and costed on its plain form: the Mega Evolve step and flag come off, and a build that
+    /// does not Mega Evolve comes before one that did (a copy with a plain build is shown on that). Manager ruling, 31 Oct 2026.
+    public static func plainBuilds(_ builds: [BoxAdvice.Build]) -> [BoxAdvice.Build] {
+        func isPlain(_ b: BoxAdvice.Build) -> Bool { !b.viaMega && !(b.steps ?? []).contains { $0.kind == "megaEvolve" } }
+        return builds.filter(isPlain) + builds.filter { !isPlain($0) }.map(plainVariant)
+    }
+
     /// Rule 9: Raids builds whose target counts for one of the boss's bring types (`HubRaidsModel.typesCounted`), ordered by the best tier the Raids table gives the target under a bring type, then built first, then how many bring types it covers, then the advisor's order; one entry per copy.
     /// Under Available (S1) every build counts, and a copy is judged twice: as the plain Pokémon (its tier, cost and role with no Mega Evolve; a plain form the boss's
     /// types do not list ranks below every listed counter) and, when it is a Mega candidate, on its Mega build (`mega`). The Mega view is used in the Mega slot only.
@@ -92,33 +99,37 @@ extension HubSquads {
         plains.sort(by: before); megas.sort(by: before)
         var seen = Set<String>(), out = [RaidCandidate]()
         func role(_ b: BoxAdvice.Build, _ shadow: Bool) -> PogoRules.RaidRole { PogoRules.raidRole(targetId: b.targetId, viaMega: b.viaMega, shadow: shadow, gm: ctx.gm) }
-        var megaOf = [String: MegaView]()
-        if mode == .available {
-            var order = 0
-            for m in megas where megaOf[m.b.entryId] == nil {
-                megaOf[m.b.entryId] = MegaView(build: m.b, tier: m.tier, covers: m.covers, built: false, order: order); order += 1
-            }
-        }
         for it in plains where seen.insert(it.b.entryId).inserted {
-            out.append(RaidCandidate(build: it.b, role: role(it.b, it.shadow), tier: it.tier, covers: it.covers, built: it.built, mega: megaOf[it.b.entryId]))
+            out.append(RaidCandidate(build: it.b, role: role(it.b, it.shadow), tier: it.tier, covers: it.covers, built: it.built))
         }
-        if mode == .available {
-            // A Mega candidate whose plain form the boss's types do not list is still a candidate, below every listed counter; a copy that can Mega Evolve now but has no
-            // build that does takes the Mega slot on its plain build with Mega Evolve still to do, below the copies the tables list.
-            var order = megaOf.count
-            for (id, f) in firstBuild.sorted(by: { $0.value.offset < $1.value.offset }) where !seen.contains(id) || megaOf[id] == nil {
-                let capable = megaCandidate(entryId: id, ctx: ctx)
-                guard capable else { continue }
-                let plain = plainVariant(f.b)
-                if megaOf[id] == nil {
-                    let mv = megaVariant(plain)
-                    megaOf[id] = MegaView(build: mv, tier: "", covers: 0, built: false, order: order); order += 1
-                    if let i = out.firstIndex(where: { $0.entryId == id }) { out[i].mega = megaOf[id]; continue }
-                }
-                if seen.insert(id).inserted {
-                    out.append(RaidCandidate(build: plain, role: role(plain, f.shadow), tier: "", covers: 0, built: isFullStrength(plain, screen: .raids, ctx: ctx), mega: megaOf[id]))
-                }
+        guard mode == .available else { return out }
+        // Mega views: each copy's best build that Mega Evolves; a copy that can Mega Evolve now but has no such build takes its plain build with Mega Evolve still to do,
+        // rated against the table for its Mega form like any other Mega build (tier "" when the tables do not list it).
+        var views = [(id: String, view: MegaView, offset: Int)]()
+        for m in megas where !views.contains(where: { $0.id == m.b.entryId }) {
+            views.append((m.b.entryId, MegaView(build: m.b, tier: m.tier, covers: m.covers, built: false, order: 0), m.offset))
+        }
+        // Under Available every copy with a Raids build is a candidate (S1: "surely there are enough pokemon in my box"): one the tables do not list against this boss is
+        // unlisted (tier ""), which the fill takes only after every listed one (`raidSquad`), and the picker lists last.
+        for (id, f) in firstBuild.sorted(by: { $0.value.offset < $1.value.offset }) {
+            let plain = plainVariant(f.b)
+            if !views.contains(where: { $0.id == id }), megaCandidate(entryId: id, ctx: ctx) {
+                let mv = megaVariant(plain)
+                let v = view(mv, shadow: f.shadow)
+                views.append((id, MegaView(build: mv, tier: v?.tier ?? "", covers: v?.covers ?? 0, built: false, order: 0), f.offset))
             }
+            if seen.insert(id).inserted {
+                out.append(RaidCandidate(build: plain, role: role(plain, f.shadow), tier: "", covers: 0, built: isFullStrength(plain, screen: .raids, ctx: ctx)))
+            }
+        }
+        views.sort { l, r in
+            if rank(l.view.tier) != rank(r.view.tier) { return rank(l.view.tier) < rank(r.view.tier) }
+            if l.view.covers != r.view.covers { return l.view.covers > r.view.covers }
+            return l.offset < r.offset
+        }
+        for (order, v) in views.enumerated() {
+            var mv = v.view; mv.order = order
+            if let i = out.firstIndex(where: { $0.entryId == v.id }) { out[i].mega = mv }
         }
         return out
     }
@@ -174,7 +185,7 @@ extension HubSquads {
     /// order; one entry per copy.
     public static func maxCandidates(row: HubData.RotationRow, mode: SquadMode, ctx: HubContext) -> [MaxCandidate] {
         var out: [(c: MaxCandidate, offset: Int)] = []
-        for (i, b) in ctx.advice.builds.enumerated() where b.areas.contains("Max") {
+        for (i, b) in plainBuilds(ctx.advice.builds).enumerated() where b.areas.contains("Max") {
             let entries = HubRaidsModel.maxEntries(b.targetId, ctx.table)
             guard let best = entries.map({ PogoRules.tierRank($0.tier) }).min() else { continue }
             let hits = PogoRules.hitsAnyBoss(ctx.gm.byId[b.targetId]?.types ?? [], row: row, hub: ctx.hub)
@@ -237,7 +248,7 @@ extension HubSquads {
     /// worked out) comes after those with a known bulk, in the advisor's order. One row per copy (its first build in the order).
     public static func gymRows(mode: SquadMode, ctx: HubContext) -> [GymRow] {
         var rows: [(r: GymRow, offset: Int)] = []
-        for (i, b) in HubTeams.gymAvailable(builds: ctx.advice.builds).enumerated() { rows.append((gymRow(b, ctx: ctx), i)) }
+        for (i, b) in HubTeams.gymAvailable(builds: plainBuilds(ctx.advice.builds)).enumerated() { rows.append((gymRow(b, ctx: ctx), i)) }
         rows.sort { l, r in
             let (a, b) = (l.r, r.r)
             if PogoRules.tierRank(a.tier) != PogoRules.tierRank(b.tier) { return PogoRules.tierRank(a.tier) < PogoRules.tierRank(b.tier) }
@@ -309,7 +320,7 @@ extension HubSquads {
     /// built first, then Rocket area, then tier, score, advisor order. One row per copy.
     public static func rocketPicker(options: [HubData.Boss], mode: SquadMode, ctx: HubContext) -> [RocketRow] {
         var rows: [(row: RocketRow, off: Int)] = []
-        for (i, b) in ctx.advice.builds.enumerated() where isRocketArea(b) {
+        for (i, b) in plainBuilds(ctx.advice.builds).enumerated() where isRocketArea(b) {
             let hits = HubTeams.hits(b, options: options, gm: ctx.gm, hub: ctx.hub)
             guard hits > 0 else { continue }
             rows.append((RocketRow(build: b, hits: hits, built: HubSquads.isBuilt(b), typeFlags: typeFlags(b, options: options, ctx: ctx), slotLine: slotLine(hits: hits, of: options.count)), i))
@@ -337,7 +348,7 @@ extension HubSquads {
     public static func rocketNextBest(options: [HubData.Boss], mode: SquadMode, ctx: HubContext) -> [NextBest] {
         guard rocketPicker(options: options, mode: mode, ctx: ctx).isEmpty else { return [] }
         var rows: [(nb: NextBest, off: Int)] = []
-        for (i, b) in ctx.advice.builds.enumerated() where isRocketArea(b) {
+        for (i, b) in plainBuilds(ctx.advice.builds).enumerated() where isRocketArea(b) {
             let mine = HubTeams.types(of: b, gm: ctx.gm)
             let takes = options.filter { ctx.hub.beats($0.types, mine) }.count
             rows.append((NextBest(build: b, built: HubSquads.isBuilt(b), weakTo: takes), i))
@@ -370,7 +381,7 @@ extension HubSquads {
     public static func gruntCounters(type: String, mode: SquadMode, ctx: HubContext) -> GruntCounters {
         guard !type.isEmpty else { return GruntCounters(anyAttacker: true, builds: []) }
         // `HubTeams.gruntFit` is the order `gruntCounter` picks from (Rocket area, tier, score, advisor order); the list shows the built ones first.
-        let fit = HubTeams.gruntFit(type: type, builds: ctx.advice.builds, gm: ctx.gm, hub: ctx.hub)
+        let fit = HubTeams.gruntFit(type: type, builds: plainBuilds(ctx.advice.builds), gm: ctx.gm, hub: ctx.hub)
         let ordered = fit.filter(HubSquads.isBuilt) + fit.filter { !HubSquads.isBuilt($0) }
         var seen = Set<String>()
         return GruntCounters(anyAttacker: false, builds: Array(ordered.filter { seen.insert($0.targetId).inserted }.prefix(8)))
