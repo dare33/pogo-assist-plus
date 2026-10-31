@@ -218,13 +218,16 @@ final class MyPokemonScreenTests: XCTestCase {
     }
 
     /// What the DEBUG index says of itself (see `AZIndex.debugElement`): the number of letters, and one character per jump, "1" if the list was coasting at the jump.
-    private func debugState(_ app: XCUIApplication) -> (letters: Int, wide: Bool, jumps: String) {
+    private func debugState(_ app: XCUIApplication) -> (letters: Int, wide: Bool, band: CGFloat, row: CGFloat, jumps: String) {
         let value = app.descendants(matching: .any)["az-debug"].value as? String ?? ""
-        let parts = value.split(separator: " ").map { $0.split(separator: "=", omittingEmptySubsequences: false) }
-        let letters = parts.first { $0.first == "letters" }.flatMap { $0.last }.flatMap { Int($0) } ?? 0
-        let jumps = parts.first { $0.first == "jumps" }.flatMap { $0.count > 1 ? String($0[1]) : "" } ?? ""
-        let wide = parts.first { $0.first == "wide" }.flatMap { $0.last } == "1"
-        return (letters, wide, jumps)
+        var fields = [String: String]()
+        for piece in value.split(separator: " ") {
+            let kv = piece.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            fields[String(kv[0])] = kv.count > 1 ? String(kv[1]) : ""
+        }
+        let letters = Int(fields["letters"] ?? "") ?? 0, jumps = fields["jumps"] ?? "", wide = fields["wide"] == "1"
+        func number(_ key: String) -> CGFloat { Double(fields[key] ?? "").map { CGFloat($0) } ?? 0 }
+        return (letters, wide, number("band"), number("row"), jumps)
     }
 
     /// The screen point over the letter `letter` of the index (A is first; the index has the letters of the big box, no "#"): `inset` points in from the strip's trailing
@@ -354,8 +357,10 @@ final class MyPokemonScreenTests: XCTestCase {
             if stage == "after a jump" { letterSpot(app, "M").tap(); XCTAssertTrue(waitUntil(15) { isAtTop(app, "M", listTop: app.textFields["box-search"].frame.maxY).ok }); sleep(1) }
             let row = try XCTUnwrap(rowBehindTheStrip(app), "a closed species row is behind the strip \(stage)")
             let chevron = CGPoint(x: row.frame.maxX - 16 - 4, y: row.frame.midY)
-            print("PAGE-BAND \(stage) (wide \(debugState(app).wide)): the strip's trailing edge \(strip.maxX), the row's trailing edge \(row.frame.maxX), the chevron's layout edge \(row.frame.maxX - 16), the band's leading edge \(strip.maxX - 32), gap \(strip.maxX - 32 - (row.frame.maxX - 16))")
-            XCTAssertGreaterThanOrEqual(strip.maxX - 32 - (row.frame.maxX - 16), 4, "the band stops at least 4 pt short of the chevron")
+            // The band's real width as the index reports it, and the row's measured edge less the card's 16 pt padding (where the chevron's layout ends).
+            let band = debugState(app).band, gap = (strip.maxX - band) - (row.frame.maxX - 16)
+            print("PAGE-BAND \(stage) (wide \(debugState(app).wide)): the strip's trailing edge \(strip.maxX), the row's trailing edge \(row.frame.maxX), the chevron's layout edge \(row.frame.maxX - 16), the band \(band) wide, gap \(gap)")
+            XCTAssertGreaterThanOrEqual(gap, 4, "\(stage): the band (\(band) pt) stops at least 4 pt short of the chevron")
             let title = row.label.components(separatedBy: ",").first ?? ""
             let size = app.frame.size
             app.coordinate(withNormalizedOffset: CGVector(dx: chevron.x / size.width, dy: chevron.y / size.height)).tap()
@@ -365,7 +370,7 @@ final class MyPokemonScreenTests: XCTestCase {
         }
     }
 
-    /// The same for the "i" button at the first accessibility text size, where the rows of chips and the sort line are tall and reach the strip: a tap on the right edge
+    /// The same for the "i" button at AX5, the largest accessibility text size, where the rows of chips and the sort line are tall and reach the strip: a tap on the right edge
     /// of the "i" opens the explainer.
     func testTheIndexDoesNotTakeAPressOnTheInfoButtonAtAX5() throws {
         let app = bigBoxApp(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
@@ -383,6 +388,44 @@ final class MyPokemonScreenTests: XCTestCase {
         let size = app.frame.size
         app.coordinate(withNormalizedOffset: CGVector(dx: (info.frame.maxX - 2) / size.width, dy: info.frame.midY / size.height)).tap()
         XCTAssertTrue(waitUntil(5) { info.value as? String == "Expanded" }, "a tap on the right edge of the i button opens the explainer")
+    }
+
+    /// A far backward jump straight after a jump forward (T, then D) lands on its letter: the list is lazy, and a jump to a section that is not built yet is aimed
+    /// with estimated heights. Four rounds of T then D; each heading must be the first on the list, directly under the pinned header, and stay there.
+    func testAFarBackwardJumpAfterAJumpForwardLandsOnItsLetter() throws {
+        let app = bigBoxApp()
+        let listTop = app.textFields["box-search"].frame.maxY
+        letterSpot(app, "M").tap()
+        XCTAssertTrue(waitUntil(15) { isAtTop(app, "M", listTop: listTop).ok }, "the setup jump to M")
+        letterSpot(app, "W", inset: 30).tap()   // through the band, not the drawn column
+        XCTAssertTrue(waitUntil(15) { isAtTop(app, "W", listTop: listTop).ok }, "the setup jump to W")
+        for cycle in 1...4 {
+            for (letter, along) in [("T", 0.06), ("D", 0.94)] as [(String, CGFloat)] {
+                letterSpot(app, letter, along: along).tap()   // near the edge of its row, as a thumb lands
+                _ = waitUntil(15) { isAtTop(app, letter, listTop: listTop).ok }
+                let first = isAtTop(app, letter, listTop: listTop)
+                XCTAssertTrue(first.ok, "cycle \(cycle): a press on \(letter) lands on \(letter) (\(first.seen); jumps \(debugState(app).jumps))")
+                sleep(1)
+                let later = isAtTop(app, letter, listTop: listTop)
+                XCTAssertTrue(later.ok, "cycle \(cycle): and \(letter) stays there (\(later.seen))")
+            }
+        }
+    }
+
+    /// The last letter can be pressed on the smallest phone at the largest text size: the strip is kept above the floating tab bar (the Scan button is its highest part),
+    /// so Z is not under it. Needs a small simulator (the iPhone 17e clone); on a tall one it simply passes. Reports where the strip and the bar are.
+    func testTheLastLetterIsPressableOnASmallPhoneAtAX5() throws {
+        let app = bigBoxApp(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        let strip = app.descendants(matching: .any)["az-jump"].frame
+        let scan = app.buttons["Scan"].frame, mine = app.buttons["My Pokémon"].frame, hub = app.buttons["Pogo Hub"].frame
+        print("PAGE-SMALL screen \(app.frame.size), strip y \(strip.minY)-\(strip.maxY), Scan y \(scan.minY)-\(scan.maxY), My Pokemon y \(mine.minY)-\(mine.maxY), Pogo Hub y \(hub.minY)-\(hub.maxY), row \(debugState(app).row)")
+        // The tab bar's parts that are level with the strip's column (the Scan button is in the middle, the pills at the sides).
+        let bar = [scan, mine, hub].filter { $0.maxX > strip.minX && $0.minX < strip.maxX }
+        XCTAssertLessThanOrEqual(strip.maxY, bar.map(\.minY).min() ?? .infinity, "the strip ends above the tab bar")
+        let listTop = app.textFields["box-search"].frame.maxY
+        letterSpot(app, "Z").tap()
+        XCTAssertTrue(waitUntil(15) { isAtTop(app, "Z", listTop: listTop).ok || headers(app).contains { $0.letter == "Z" } }, "a press on Z jumps to Z")
+        XCTAssertEqual(debugState(app).jumps.count, 1, "and the index made the jump")
     }
 
     /// Phone feedback 31 Oct, 3a: each letter's touch area is bigger (it was 22 wide by 14 tall): measured by pressing, not by the VoiceOver element's frame. Once the

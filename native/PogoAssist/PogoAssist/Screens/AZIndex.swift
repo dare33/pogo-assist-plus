@@ -42,6 +42,40 @@ final class ScrollActivity: ObservableObject {
         scrollView.setContentOffset(scrollView.contentOffset, animated: false)
     }
 
+    private var settleTask: Task<Void, Never>?
+    /// Where (screen y) each section's top is, for the sections the lazy list has built at the moment. The sections not in it are not built.
+    private var sectionTops: [String: CGFloat] = [:]
+    func sectionMoved(_ id: String, top: CGFloat) { sectionTops[id] = top }
+    func sectionGone(_ id: String) { sectionTops[id] = nil }
+
+    /// The list is lazy, and a jump to a section that is not built is aimed with an estimate of the heights of the sections before it, taken from the sections that are
+    /// built. When those are much taller than the ones being jumped over the aim is far out: a jump back from T to D landed near M (and did before this pass too), and
+    /// asking again aims the same. So after a jump the list is checked as it settles: if the target is built it is jumped to again, exactly; if not, the jump is
+    /// repeated to a section half-way between the target and the nearest built one, which is built on landing and so aims the next, shorter, jump better. Dropped
+    /// when a newer jump is made or the finger takes the list.
+    func settle(on target: String, order: [String], scroll: @escaping (String) -> Void) {
+        settleTask?.cancel()
+        settleTask = Task { [weak self] in
+            var exact = 0
+            for _ in 0..<12 {
+                try? await Task.sleep(for: .seconds(0.1))
+                guard !Task.isCancelled, let self, let view = self.scrollView, !view.isDragging, !view.isDecelerating, let at = order.firstIndex(of: target) else { return }
+                if let top = self.sectionTops[target] {
+                    let listTop = view.convert(view.bounds, to: nil).minY + view.adjustedContentInset.top
+                    if abs(top - listTop) < 3 { return }
+                    exact += 1
+                    if exact > 3 { return }
+                    scroll(target)
+                } else {
+                    let built = order.indices.filter { self.sectionTops[order[$0]] != nil }
+                    guard let nearest = built.min(by: { abs($0 - at) < abs($1 - at) }) else { scroll(target); continue }
+                    let step = max(1, abs(at - nearest) / 2) * (at > nearest ? 1 : -1)
+                    scroll(order[min(max(nearest + step, 0), order.count - 1)])
+                }
+            }
+        }
+    }
+
     /// The list's top offset changed. The first reading is only where the list starts, not a scroll. One timer task runs while the list moves and ends a second after
     /// the last change; a change only stamps the time (no task per frame).
     func offsetChanged(_ y: CGFloat) {
@@ -109,7 +143,7 @@ final class JumpThrottle {
     func finish(_ scroll: (String) -> Void) { flush(scroll); scrolled = nil; last = .distantPast }
 }
 
-/// The A-Z index in the right gutter. The letters are drawn in a 22 pt column. Each letter's touch area is `rowHeight` (16 pt, up from 14) tall, so the strip is 2 pt per
+/// The A-Z index in the right gutter. The letters are drawn in a 22 pt column. Each letter's touch area is 16 pt tall (up from 14; less where the space above the tab bar is short), so the strip is 2 pt per
 /// letter taller (52 pt on 26 letters); and it is `reach` wide (32 pt, up from 22): the column and 10 pt to its left, over the blank trailing padding of the row cards.
 /// The cards' padding is 16 pt, so the reach stops 7 pt short of a row's chevron (phone feedback 31 Oct, 3a). It is only that wide while the list's top part (the chips,
 /// the sort line with its "i" button, which reach the right edge) is not behind the strip; there it is the drawn column. VoiceOver's element is the drawn column
@@ -136,7 +170,13 @@ struct AZIndex: View {
     @State private var jumped: String?
     @State private var throttle = JumpThrottle()
 
-    private let rowHeight: CGFloat = 16
+    /// A letter's row, at most 16 pt. Where the space above the floating tab bar is short (a small phone at a large text size) the rows shrink to fit, so the last
+    /// letter is never under the bar.
+    private let preferredRow: CGFloat = 16
+    private let tabBarGap: CGFloat = 8
+    private let topGap: CGFloat = 8
+    /// The row height in use, for the debug value only (the strip is laid out in `body`).
+    @State private var usedRow: CGFloat = 16
     private let column: CGFloat = 22
     private let reach: CGFloat = 32
 
@@ -162,7 +202,22 @@ struct AZIndex: View {
     private var shown: Bool { lettersShown && (activity.moving || dragging || Self.alwaysShown) }
 
     var body: some View {
-        letters
+        GeometryReader { area in
+            // The strip is centred in the list's area, moved up if it would reach the tab bar, and its rows shrink if it still does not fit.
+            let limit = area.size.height - FloatingTabBar.clearance - tabBarGap
+            let count = CGFloat(max(labels.count, 1))
+            let row = max(1, min(preferredRow, (limit - topGap) / count))
+            let top = max(topGap / 2, min((area.size.height - row * count) / 2, limit - row * count))
+            strip(row: row)
+                .padding(.top, top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .onAppear { usedRow = row }
+                .onChange(of: row) { _, now in usedRow = now }
+        }
+    }
+
+    private func strip(row: CGFloat) -> some View {
+        letters(row: row)
             .opacity(shown ? 1 : 0)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: shown)
             .accessibilityHidden(true)
@@ -173,7 +228,7 @@ struct AZIndex: View {
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
                 .updating($dragging) { _, state, _ in state = true }
-                .onChanged { v in jump(to: labels[min(max(Int(v.location.y / rowHeight), 0), labels.count - 1)]) }
+                .onChanged { v in jump(to: labels[min(max(Int(v.location.y / row), 0), labels.count - 1)]) }
                 .onEnded { _ in finishDrag() })
             .allowsHitTesting(shown)
             .padding(.trailing, 1)
@@ -182,13 +237,13 @@ struct AZIndex: View {
             .onChange(of: dragging) { _, now in if !now { finishDrag() } }   // also when the system cancelled the drag, so the next touch starts afresh
     }
 
-    private var letters: some View {
+    private func letters(row: CGFloat) -> some View {
         VStack(spacing: 0) {
             ForEach(labels, id: \.self) { l in
                 let on = present[l] != nil && present[l] == jumped
                 Text(l).font(.figtree(10, .heavy, relativeTo: .caption2)).dynamicTypeSize(.large)
                     .foregroundStyle(on ? accent.onSolid : (present[l] != nil ? accent.ink : Theme.faint.opacity(0.6)))
-                    .frame(width: 16, height: rowHeight)
+                    .frame(width: 16, height: row)
                     .background { if on { Capsule().fill(accent.solid) } }
             }
         }
@@ -201,7 +256,7 @@ struct AZIndex: View {
             Color.clear.frame(width: 1, height: 1).allowsHitTesting(false)
                 .accessibilityElement(children: .ignore)
                 .accessibilityIdentifier("az-debug")
-                .accessibilityValue("letters=\(labels.count) wide=\(activity.wide ? 1 : 0) jumps=\(activity.jumpLog)")
+                .accessibilityValue("letters=\(labels.count) wide=\(activity.wide ? 1 : 0) band=\(Int(activity.wide ? reach : column)) row=\(usedRow) jumps=\(activity.jumpLog)")
         }
     }
 
