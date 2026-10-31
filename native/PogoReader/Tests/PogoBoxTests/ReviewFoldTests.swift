@@ -41,11 +41,11 @@ final class ReviewFoldTests: XCTestCase {
         XCTAssertFalse(theirs.isTop, "same species, same share, not the top defender's copy"); XCTAssertEqual(theirs.share, 100)
     }
 
-    // MARK: F3: Showcase by dex number
+    // MARK: F3: a species set's strip holds one copy per dex number (was the Showcase's rule)
 
-    func testShowcaseHoldsOneCopyPerDexNumberAcrossForms() {
-        let box = [P23.entry("a", "pikachu", ivs: hundo, cp: 100), P23.entry("b", "pikachu_libre", ivs: hundo, cp: 200), P23.entry("c", "eevee", ivs: hundo, cp: 50)]
-        XCTAssertEqual(HubCollection.showcase(entries: box, gm: gm).map(\.id), ["b", "c"], "Pikachu and Pikachu Libre are dex 25: the higher CP represents it")
+    func testASpeciesSetStripHoldsOneCopyPerDexNumberAcrossForms() {
+        let box = [P23.entry("a", "giratina_altered", ivs: hundo, cp: 100), P23.entry("b", "giratina_origin", ivs: hundo, cp: 200), P23.entry("c", "registeel", ivs: hundo, cp: 50)]
+        XCTAssertEqual(HubCollection.strip(kind: .legendary, members: box, gm: gm, advice: BoxAdvice()).map(\.entry.id), ["b", "c"], "Giratina Altered and Origin are one dex number: the higher CP represents it")
     }
 
     // MARK: F4: saved picks and the mode

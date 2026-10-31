@@ -2,7 +2,7 @@ import XCTest
 @testable import PogoBox
 import PogoReader
 
-/// Pass 2's Collection numbers (rules 25 and 26), on the bundled game master (951 released species, checked in the read-back).
+/// Pass 2's Collection numbers (rules 25 and 26, the Showcase replaced by the set strips), on the bundled game master (951 released species, checked in the read-back).
 final class HubCollectionTests: XCTestCase {
     private let gm = P23.gm
 
@@ -14,6 +14,18 @@ final class HubCollectionTests: XCTestCase {
         XCTAssertEqual(s.first { $0.dex == 6 }?.id, "charizard", "not charizard_mega_x")
         XCTAssertFalse(s.contains { $0.tags.contains("mega") || $0.tags.contains("shadow") || $0.tags.contains("duplicate") })
         XCTAssertEqual(s.map(\.dex), s.map(\.dex).sorted())
+    }
+
+    /// F4 (eyeball check 31 Oct 2026), the cause pinned: `released` in the bundled game master is PvPoke's "usable in PvP" flag, not "exists in Pokémon GO", so 74 dex numbers
+    /// have no `released` entry and the total is 951 of 1025. A species the player owns is counted anyway. The fix is in the shared data (own branch from main); when it
+    /// lands, these numbers change on purpose.
+    func testTheUnreleasedFlagLeavesOutDittoShedinjaAndOthersUnlessOwned() {
+        let none = Set(HubCollection.releasedSpecies(gm: gm).map(\.dex))
+        for dex in [132, 292, 489, 490, 665, 746, 771, 772, 773, 801, 833, 834] { XCTAssertFalse(none.contains(dex), "dex \(dex) is flagged unreleased") }
+        XCTAssertEqual(1025 - none.count, 74, "74 dex numbers have no released entry")
+        let owned = HubCollection.releasedSpecies(gm: gm, owned: [132, 292]).map(\.dex)
+        XCTAssertTrue(owned.contains(132) && owned.contains(292), "a box that holds Ditto and Shedinja counts them")
+        XCTAssertEqual(owned.count, 953)
     }
 
     func testRegionsCoverTheDexRanges() {
@@ -66,29 +78,6 @@ final class HubCollectionTests: XCTestCase {
         let advice = BoxAdvice(gaps: [P23.gap("Gym", "Squirtle", "squirtle", obtain: "Easy. Wild")])
         XCTAssertEqual(HubCollection.missingSpecies(entries: [], advice: advice, gm: gm).first { $0.dex == 7 }?.how, "Easy. Wild")
         XCTAssertEqual(HubCollection.missingSpecies(entries: [], advice: BoxAdvice(), gm: gm).first { $0.dex == 7 }?.how, "")
-    }
-
-    // MARK: Showcase
-
-    func testShowcaseIsTheBestCopyOfEachSpeciesByIVPercentThenCP() {
-        let hundo = IVs(atk: 15, def: 15, hp: 15), high = IVs(atk: 15, def: 15, hp: 14)
-        let box = [P23.entry("p1", "pikachu", ivs: high, cp: 500), P23.entry("p2", "pikachu", ivs: hundo, cp: 100), P23.entry("p3", "pikachu", ivs: hundo, cp: 300),
-                   P23.entry("e1", "eevee", ivs: hundo, cp: 300), P23.entry("l1", "lapras", ivs: high, cp: 2000), P23.entry("u1", "umbreon", ivs: nil, cp: 3000)]
-        let shelf = HubCollection.showcase(entries: box, gm: gm)
-        XCTAssertEqual(shelf.map(\.id), ["e1", "p3", "l1"], "Pikachu's best is p3 (the 100% copy with the higher CP); p3 and e1 tie on IV % and CP, so the id decides; unread IVs are left out")
-        XCTAssertEqual(HubCollection.showcase(entries: [], gm: gm), [])
-        XCTAssertEqual(HubCollection.showcase(entries: [P23.entry("only", "pikachu")], gm: gm).map(\.id), ["only"], "a one-copy species")
-    }
-
-    func testShowcaseHoldsTwelveAndKeepsTheBestOfThem() {
-        let species = ["pikachu", "eevee", "lapras", "snorlax", "blissey", "machamp", "gengar", "togekiss", "dragonite", "charizard", "mewtwo", "kingler", "excadrill", "golem"]
-        let box = species.enumerated().map { i, s in P23.entry("e\(i)", s, ivs: IVs(atk: 15, def: 15, hp: i % 2 == 0 ? 15 : 0), cp: 100 + i) }
-        let shelf = HubCollection.showcase(entries: box, gm: gm)
-        XCTAssertEqual(shelf.count, 12)
-        XCTAssertEqual(HubCollection.showcase(entries: box, gm: gm, limit: 3).count, 3)
-        // The 100% copies come first (even indexes, higher CP first), then the 66.7% ones.
-        XCTAssertEqual(shelf.prefix(7).map(\.id), ["e12", "e10", "e8", "e6", "e4", "e2", "e0"])
-        XCTAssertFalse(shelf.map(\.id).contains("e1"), "the 66.7% copies that miss the cut")
     }
 
     // MARK: Special sets

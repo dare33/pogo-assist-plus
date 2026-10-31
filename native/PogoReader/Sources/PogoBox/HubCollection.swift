@@ -136,29 +136,8 @@ public enum HubCollection {
         }
     }
 
-    // MARK: rule 26: Showcase
-
     /// A copy's IV % (the three IVs over 45); nil when its IVs are not read.
     static func ivPercent(_ e: BoxEntry) -> Double? { e.row.ivs.map { Double($0.atk + $0.def + $0.hp) / 45 * 100 } }
-
-    /// Each species' best copy by IV %, ties by CP, the first twelve. A species is one dex number (the Collection term: a Shadow, Mega or form copy
-    /// competes with the rest of its dex number). A copy whose IVs are not read cannot be ranked and is left out. A remaining tie is broken by entry id so the
-    /// order is stable.
-    public static func showcase(entries: [BoxEntry], gm: GameMaster, limit: Int = 12) -> [BoxEntry] {
-        func better(_ a: BoxEntry, _ b: BoxEntry) -> Bool {
-            let (x, y) = (ivPercent(a) ?? -1, ivPercent(b) ?? -1)
-            if x != y { return x > y }
-            if a.row.cp != b.row.cp { return a.row.cp > b.row.cp }
-            return a.id < b.id
-        }
-        func key(_ e: BoxEntry) -> String { gm.byId[e.row.speciesId].map { "dex \($0.dex)" } ?? "id \(e.row.speciesId)" }
-        var best = [String: BoxEntry]()
-        for e in entries where ivPercent(e) != nil {
-            if let cur = best[key(e)], !better(e, cur) { continue }
-            best[key(e)] = e
-        }
-        return Array(best.values.sorted(by: better).prefix(limit))
-    }
 
     // MARK: Special sets
 

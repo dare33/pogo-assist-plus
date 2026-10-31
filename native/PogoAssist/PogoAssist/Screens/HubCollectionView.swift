@@ -1,5 +1,6 @@
 import SwiftUI
 import PogoBox
+import PogoReader
 
 /// Where the Collection's links go (pass 2 README "Collection"): the lists screen on one of its three tabs, and the full list of missing species.
 enum CollectionRoute: Hashable {
@@ -16,24 +17,34 @@ enum CollectionTab: String, CaseIterable, Hashable {
 /// Everything the Collection screen shows that comes from the box and the game master (`HubCollection`), worked out once per box rather than on every redraw.
 struct CollectionData {
     var overview: HubCollection.Overview
-    var showcase: [BoxEntry]
     var sets: [HubCollection.SpecialSet]
+    /// Each set's strip: its best Pokémon for its activity first (`HubCollection.strip`). Empty for a set with no Pokémon and for one that is coming soon.
+    var strips: [HubCollection.SetKind: [HubCollection.StripPick]]
     /// Evolvable first, then dex order: the first six are the screen's preview and the full list keeps the same order.
     var missing: [HubCollection.MissingSpecies]
+    var missingSummary: HubCollection.MissingSummary
     var gm: GameMaster
 
-    static func make(entries: [BoxEntry], advice: BoxAdvice?, gm: GameMaster) -> CollectionData {
+    static func make(entries: [BoxEntry], advice: BoxAdvice?, gm: GameMaster, pogoAssist: Bool = false) -> CollectionData {
         let missing = HubCollection.missingSpecies(entries: entries, advice: advice ?? BoxAdvice(), gm: gm)
+        // One pass over the box for every set's copies (the card's count and the strip read the same `Membership`).
+        let membership = HubCollection.Membership(entries: entries, gm: gm)
+        var members = [HubCollection.SetKind: [BoxEntry]]()
+        for e in entries { for k in membership.kinds(of: e) { members[k, default: []].append(e) } }
+        let strips = Dictionary(uniqueKeysWithValues: HubCollection.SetKind.allCases.map { k in
+            (k, HubCollection.strip(kind: k, members: members[k] ?? [], gm: gm, advice: advice ?? BoxAdvice(), pogoAssist: pogoAssist))
+        })
         return CollectionData(overview: HubCollection.overview(entries: entries, gm: gm),
-                              showcase: HubCollection.showcase(entries: entries, gm: gm),
                               sets: HubCollection.specialSets(entries: entries, gm: gm, isLucky: HubCollection.isLuckyMarked),
+                              strips: strips,
                               missing: missing.filter { $0.evolvesFrom != nil } + missing.filter { $0.evolvesFrom == nil },
+                              missingSummary: HubCollection.missingSummary(missing),
                               gm: gm)
     }
 }
 
-/// The Collection screen (pass 2 README "Collection", boards `Collection.dc.html`): the species count, the dex by region, the Showcase of the highest IV copies, the special
-/// sets, the missing species and three summary cards that open the lists screen. Replaces the Everything screen.
+/// The Collection screen (pass 2 README "Collection", boards `Collection.dc.html`): the species count, the dex by region, the special sets (a strip of copy cards each, best
+/// first, with "All N ›" opening the set's list), the missing species as one summary card and three summary cards that open the lists screen. Replaces the Everything screen.
 struct HubCollectionView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
@@ -42,11 +53,12 @@ struct HubCollectionView: View {
     /// The Special sets card whose list is open.
     /// Kept whole (not looked up in `data` while the sheet is up): an edit made from the sheet rebuilds `data`, and the sheet must stay on screen meanwhile.
     @State private var openSet: OpenSet?
+    @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     private struct OpenSet: Identifiable { var kind: HubCollection.SetKind; var set: HubCollection.SpecialSet; var id: String { kind.id } }
 
     private var adviceReady: BoxAdvice? { model.hubAdvice }
     /// The box, the account and whether the advice is in (the Missing "how to get" reads the advice's gaps).
-    private var key: String { "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)|\(adviceReady != nil)" }
+    private var key: String { "\(model.account ?? "")|\(model.snapshot?.seq ?? -1)|\(adviceReady != nil)|\(rankingRaw)" }
 
     var body: some View {
         let o = data?.overview
@@ -62,7 +74,6 @@ struct HubCollectionView: View {
             if let data {
                 species(data.overview)
                 regions(data.overview)
-                showcase(data)
                 specialSets(data)
                 missing(data)
                 // With an empty box the one scan prompt is the line at the top, so the summary cards (which would repeat it) wait for a box.
@@ -76,7 +87,7 @@ struct HubCollectionView: View {
         }
         .task(id: key) {
             guard let gm = try? GameMaster.bundled() else { data = nil; return }
-            data = CollectionData.make(entries: model.entries, advice: adviceReady, gm: gm)
+            data = CollectionData.make(entries: model.entries, advice: adviceReady, gm: gm, pogoAssist: rankingRaw == Ranking.pogoAssist.rawValue)
         }
     }
 
@@ -126,36 +137,16 @@ struct HubCollectionView: View {
         .panelShadow()
     }
 
-    // MARK: showcase
-
-    @ViewBuilder private func showcase(_ d: CollectionData) -> some View {
-        HubHeaderLine("SHOWCASE · YOUR HIGHEST IV COPIES")
-        if d.showcase.isEmpty {
-            Text("No copy has its IVs read yet.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(d.showcase) { ShowcaseCard(entry: $0, types: d.gm.byId[$0.row.speciesId]?.types ?? []) }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .scrollClipDisabled()
-            .accessibilityIdentifier("collection-showcase")
-        }
-    }
-
     // MARK: special sets
 
+    /// Each set is a strip of copy cards laid out as the Showcase was (Greg, 31 Oct 2026): a title line with the count and "All N ›" (the set's full list, the sheet),
+    /// then the cards, the set's best Pokémon for its activity first.
     @ViewBuilder private func specialSets(_ d: CollectionData) -> some View {
         HubHeaderLine("SPECIAL SETS")
-        let per = typeSize.isAccessibilitySize ? 1 : 2
-        // Rows of a Grid (not lazy), so the two tiles of a row are as tall as the taller one and every tile is in the accessibility tree.
-        Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-            ForEach(Array(stride(from: 0, to: d.sets.count, by: per)), id: \.self) { start in
-                GridRow {
-                    ForEach(d.sets[start..<min(start + per, d.sets.count)], id: \.name) { s in
-                        if let kind = HubCollection.SetKind(rawValue: s.name) { SpecialSetTile(set: s, kind: kind) { openSet = OpenSet(kind: kind, set: s) } }
-                    }
+        VStack(alignment: .leading, spacing: 18) {
+            ForEach(d.sets, id: \.name) { s in
+                if let kind = HubCollection.SetKind(rawValue: s.name) {
+                    SpecialSetStrip(info: s, kind: kind, picks: d.strips[kind] ?? [], gm: d.gm) { openSet = OpenSet(kind: kind, set: s) }
                 }
             }
         }
@@ -163,18 +154,40 @@ struct HubCollectionView: View {
 
     // MARK: missing
 
+    /// One summary card (Greg, 31 Oct 2026): the count and a short breakdown; it opens the full list.
     @ViewBuilder private func missing(_ d: CollectionData) -> some View {
-        HubHeaderLine("MISSING") {
-            if !d.missing.isEmpty {
-                NavigationLink(value: CollectionRoute.missing) {
-                    Text("All \(HubModel.grouped(d.missing.count)) ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).frame(minHeight: 44)
+        HubHeaderLine("MISSING")
+        let m = d.missingSummary
+        if m.count == 0 {
+            Text("You have every species released in Pokémon GO.").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .panelShadow()
+                .accessibilityIdentifier("collection-missing-card")
+        } else {
+            let line = m.parts.joined(separator: " · ")
+            NavigationLink(value: CollectionRoute.missing) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(HubModel.grouped(m.count)) species").font(.figtree(20, .heavy, relativeTo: .title3)).foregroundStyle(Theme.ink)
+                        Text(line).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.right").font(.figtree(13, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
                 }
-                .buttonStyle(PressStyle())
-                .accessibilityLabel("All \(d.missing.count) missing species")
-                .accessibilityIdentifier("collection-missing-all")
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .panelShadow()
+                .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
+            .buttonStyle(PressStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(m.count) species missing. \(line)")
+            .accessibilityHint("Opens the list of missing species")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("collection-missing-card")
         }
-        MissingPanel(missing: d.missing, evolvable: d.overview.canEvolve, shown: 6)
     }
 
     // MARK: builds and clean-up
@@ -259,78 +272,131 @@ struct CollectionBar: View {
     }
 }
 
-/// A Showcase card: 150 pt wide (it grows with the text size), type icons, the name, the IV % (22/800, green at 100%) and the IVs with the CP. Opens the Pokémon's page.
-private struct ShowcaseCard: View {
-    let entry: BoxEntry
-    let types: [String]
-    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+/// One special set: its title line, then its strip of copy cards. The title line reads the count as the card did ("14 of 52 species", "6 copies"), with "All N ›" when the set
+/// has Pokémon, a button that opens the set's full list (`CollectionSetSheet`). Shiny and Background show one "Coming soon" card; a set with no Pokémon says so.
+private struct SpecialSetStrip: View {
+    let info: HubCollection.SpecialSet
+    let kind: HubCollection.SetKind
+    let picks: [HubCollection.StripPick]
+    let gm: GameMaster
+    let open: () -> Void
+    @Environment(\.accent) private var accent
+
+    /// The identifier suffix: the set's name as a word, lower case with hyphens ("ultra-beasts").
+    private var slug: String { kind.name.lowercased().replacingOccurrences(of: " ", with: "-") }
+    private var figure: String { info.note ?? (info.owned.map { n in info.total.map { "\(n) of \($0)" } ?? HubModel.grouped(n) } ?? "") }
+    /// "All 14 ›": the species or copies the card counts.
+    private var allCount: Int { info.owned ?? 0 }
+    private var hasList: Bool { !kind.isComingSoon && allCount > 0 }
 
     var body: some View {
-        let ivs = entry.row.ivs
-        let sum = ivs.map { $0.atk + $0.def + $0.hp } ?? 0
-        let percent = Int((Double(sum) / 45 * 100).rounded())
-        let perfect = sum == 45
-        let spokenIVs = ivs.map { "\($0.atk), \($0.def), \($0.hp) IVs," } ?? ""
-        let line = "\(ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "") · CP \(HubModel.grouped(entry.row.cp))"
-        NavigationLink(value: entry.id) {
-            VStack(alignment: .leading, spacing: 4) {
-                TypeIcons(types: types, size: 18)
-                Text(entry.row.display).font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(2)
-                Text("\(percent)%").font(.figtree(22, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(perfect ? Theme.greenInk : Theme.ink)
-                Text(line).font(.figtree(12, .medium, relativeTo: .caption)).foregroundStyle(Theme.muted)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(info.name).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Text(info.note == nil ? "\(figure) \(info.unitWord)" : (kind.isComingSoon ? figure : "")).font(.figtree(13, .semibold, relativeTo: .footnote)).monospacedDigit().foregroundStyle(Theme.muted)
+                Spacer(minLength: 8)
+                if hasList {
+                    Button(action: open) {
+                        Text("All \(HubModel.grouped(allCount)) ›").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(accent.ink).frame(minHeight: 44)
+                    }
+                    .buttonStyle(PressStyle())
+                    .accessibilityLabel("\(info.name), \(figure) \(info.unitWord)")
+                    .accessibilityHint("Opens the full list")
+                    .accessibilityIdentifier("collection-set-\(slug)")
+                }
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .frame(width: min(150 * scale, 330), alignment: .leading)
-            .frame(maxHeight: .infinity, alignment: .topLeading)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .panelShadow()
-            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .accessibilityElement(children: .contain)
+            if kind.isComingSoon {
+                strip { SetCard(title: nil, headline: "Coming soon", line: "Not scanned yet", rank: nil, types: [], id: "collection-set-coming-soon-\(slug)", entryId: nil) }
+            } else if picks.isEmpty {
+                Text(info.note ?? "No Pokémon in this set yet.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+                    .accessibilityIdentifier("collection-set-empty-\(slug)")
+            } else {
+                strip {
+                    ForEach(picks, id: \.entry.id) { p in
+                        SetCard(title: p.entry.row.display, ivs: p.entry.row.ivs, cp: p.entry.row.cp, rank: p.rank.level == 0 ? nil : p.rank.words,
+                                types: gm.byId[p.entry.row.speciesId]?.types ?? [], id: "collection-strip-card", entryId: p.entry.id)
+                    }
+                }
+                .accessibilityIdentifier("collection-strip-\(slug)")
+            }
         }
-        .buttonStyle(PressStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(entry.row.display), \(percent)% IVs, \(spokenIVs) CP \(HubModel.grouped(entry.row.cp)). \(types.map { $0.capitalized }.joined(separator: " and "))")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("collection-showcase-card")
+    }
+
+    private func strip<Content: View>(@ViewBuilder _ cards: () -> Content) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) { cards() }
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .scrollClipDisabled()
     }
 }
 
-/// A special set: its name, "14 of 52" (or a plain count) and a bar when there is a total; Lucky reads "Not in your scans yet" until a copy is marked.
-/// A button: it opens the list of the Pokémon in the set (`CollectionSetSheet`).
-private struct SpecialSetTile: View {
-    let set: HubCollection.SpecialSet
-    let kind: HubCollection.SetKind
-    let open: () -> Void
+/// A card of a set's strip, laid out as the Showcase card was: 150 pt wide (it grows with the text size), type icons, the name, the IV % (22/800, green at 100%), the IVs with the
+/// CP, and the rank the strip was ordered by ("Raids S"). Opens the Pokémon's page. With no entry it is the "Coming soon" card of Shiny and Background (not a button).
+private struct SetCard: View {
+    var title: String?
+    var headline: String?
+    var line: String?
+    var ivs: IVs?
+    var cp: Int?
+    var rank: String?
+    let types: [String]
+    let id: String
+    let entryId: String?
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
-    /// The tile's identifier suffix: the set's name as a word, lower case with hyphens ("ultra-beasts").
-    private var slug: String { kind.name.lowercased().replacingOccurrences(of: " ", with: "-") }
-
-    var body: some View {
-        Button(action: open) { tile }
-            .buttonStyle(PressStyle())
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(set.note.map { "\(set.name). \($0)" } ?? "\(set.name), \(figure) \(set.unitWord)")
-            .accessibilityHint("Opens the list")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("collection-set-\(slug)")
+    init(title: String?, headline: String? = nil, line: String? = nil, ivs: IVs? = nil, cp: Int? = nil, rank: String?, types: [String], id: String, entryId: String?) {
+        self.title = title; self.headline = headline; self.line = line; self.ivs = ivs; self.cp = cp; self.rank = rank; self.types = types; self.id = id; self.entryId = entryId
     }
 
-    private var figure: String { self.set.note ?? (self.set.owned.map { n in self.set.total.map { "\(n) of \($0)" } ?? HubModel.grouped(n) } ?? "") }
+    private var sum: Int? { ivs.map { $0.atk + $0.def + $0.hp } }
+    private var percent: String { sum.map { "\(Int((Double($0) / 45 * 100).rounded()))%" } ?? "IVs?" }
+    private var detail: String {
+        let iv = ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }
+        let cpText = cp.map { "CP \(HubModel.grouped($0))" }
+        return line ?? [iv, cpText].compactMap { $0 }.joined(separator: " · ")
+    }
+    private var spoken: String {
+        guard let title else { return "Coming soon" }
+        let iv = ivs.map { "\(percent) IVs, \($0.atk), \($0.def), \($0.hp) IVs," } ?? "IVs not read,"
+        return "\(title), \(iv) \(cp.map { "CP \(HubModel.grouped($0))" } ?? ""). " + (rank.map { "\($0). " } ?? "") + types.map { $0.capitalized }.joined(separator: " and ")
+    }
 
-    private var tile: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(set.name).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-            if set.note != nil {
-                Text(figure).font(.figtree(13, .semibold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+    var body: some View {
+        if let entryId {
+            NavigationLink(value: entryId) { card }
+                .buttonStyle(PressStyle())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier(id)
+        } else {
+            card
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(headline ?? ""). \(line ?? "")")
+                .accessibilityIdentifier(id)
+        }
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !types.isEmpty { TypeIcons(types: types, size: 18) }
+            if let title { Text(title).font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).lineLimit(2) }
+            if let headline {
+                Text(headline).font(.figtree(18, .heavy, relativeTo: .headline)).foregroundStyle(Theme.muted)
             } else {
-                Text(figure).font(.figtree(18, .heavy, relativeTo: .headline)).monospacedDigit().foregroundStyle(Theme.ink)
+                Text(percent).font(.figtree(22, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(sum == 45 ? Theme.greenInk : Theme.ink)
             }
-            if let owned = set.owned, let total = set.total { CollectionBar(fraction: total == 0 ? 0 : Double(owned) / Double(total), height: 6) }
+            Text(detail).font(.figtree(12, .medium, relativeTo: .caption)).foregroundStyle(Theme.muted)
+            if let rank { Text(rank).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.faint) }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frame(width: min(150 * scale, 330), alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .panelShadow()
-        .contentShape(Rectangle())
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 
