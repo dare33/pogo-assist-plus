@@ -142,6 +142,10 @@ final class PvPPlacementTests: XCTestCase {
         XCTAssertEqual(HubSquads.SlotStatus.allWords, ["Ready", "Needs work", "To get", "Empty"])
         XCTAssertEqual(SquadWords.otherRoleLine(["Bulky hitter"]), "Its role: Bulky hitter")
         XCTAssertEqual(SquadWords.otherRoleLine([]), "No listed role")
+        XCTAssertEqual(SquadWords.otherRoleLine(["Lead", "Closer"]), "Its role: Lead, Closer", "spoken text never carries the dot separator")
+        var best = HubSquads.BestRow(key: "y", name: "Y", speciesId: "y", tier: "S", roles: [], types: [], availability: "")
+        best.sharedWith = "Z"; best.status = .init(kind: .canGetNow, needsUpgrade: false, detail: "Raid boss now")
+        XCTAssertEqual(best.spokenStatus, "Can get now, Raid boss now, same copy as Z")
     }
 }
 

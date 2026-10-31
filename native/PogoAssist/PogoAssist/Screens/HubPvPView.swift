@@ -207,7 +207,7 @@ private struct PvPSquadView: View {
         // A slot filled from another role says which role the Pokémon is listed for (S1); under Best the row's one status shows.
         let other = f.fallback && !f.chosen && m.candidate != nil ? SquadWords.otherRoleLine(m.roles) : nil
         let shared = m.bestRow?.statusLine
-        let spoken = [head, m.name, other, SquadWords.typeList(m.types), m.mark.spoken, shared, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        let spoken = [head, m.name, other, SquadWords.typeList(m.types), m.mark.spoken, m.bestRow?.spokenStatus, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: m.name, lines: [other, shared].compactMap { $0 }, types: m.types, mark: m.mark, status: status, spoken: spoken, identifier: id)
     }
 
@@ -259,7 +259,7 @@ private struct PvPSquadView: View {
             info: {
                 if mode == .best {
                     SquadExplainer(items: [
-                        ("Ranked from our league table:", "every Pokémon it lists for the league, S then A then B, in the table's order, whether or not you have it. Ones you do not have say when they might be available."),
+                        ("Ranked from our league table:", "every Pokémon it lists for the league, S then A then B, in the table's order, whether or not you have it. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."),
                         ("Roles", "come from our league table's role column: lead, safe swap or switch, closer."),
                         ("Green numbers", "mark a top pick (boxed: score 92 or more, or an IV rank in the top 100) and a good pick (green: score 90 or more, or an IV rank in the top 500)."),
                     ], identifier: "squad-picker-explainer")

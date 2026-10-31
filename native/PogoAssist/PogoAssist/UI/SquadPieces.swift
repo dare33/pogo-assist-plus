@@ -270,8 +270,9 @@ struct SlotCardView: View {
                     .lineLimit(2).multilineTextAlignment(.leading)
                 ForEach(model.lines, id: \.self) { Text($0).font(.figtree(11, .regular, relativeTo: .caption2)).foregroundStyle(Theme.mutedOnTint).lineLimit(4).multilineTextAlignment(.leading) }
                 // The work's cost, as a picker row shows it beside the mark (Greg: the needs-work status and its cost are shown); under the name so it never crowds the role.
-                if case .upgrade(let cost, _) = model.mark, let cost {
-                    Text(cost.words).font(.figtree(11, .bold, relativeTo: .caption2)).foregroundStyle(Theme.orangeInk).lineLimit(2).multilineTextAlignment(.leading)
+                // A step that costs nothing (Mega Evolve alone) reads "Free".
+                if case .upgrade(let cost, _) = model.mark {
+                    Text(cost?.words ?? "Free").font(.figtree(11, .bold, relativeTo: .caption2)).foregroundStyle(Theme.orangeInk).lineLimit(2).multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
                 if !model.types.isEmpty { TypeIcons(types: model.types, size: 18) }
@@ -389,7 +390,8 @@ extension PickerRowModel {
     static func keptPick(id: String, ticked: Bool, screen: SquadScreen, ctx: HubContext) -> PickerRowModel? {
         guard !id.hasPrefix(squadSpeciesPrefix), let e = ctx.entry(id) else { return nil }
         let area = ["raids": "Raids", "max": "Max", "gym": "Gym", "rocket": "Rocket", "pvp": "PvP"][screen.rawValue] ?? ""
-        let build = ctx.advice.builds.first { $0.entryId == id && ($0.areas.contains(area) || (screen == .rocket && $0.areas.contains("Raids"))) }
+        // Only Raids has a Mega slot: every other screen judges a copy on its plain form.
+        let build = ctx.advice.builds.first { $0.entryId == id && ($0.areas.contains(area) || (screen == .rocket && $0.areas.contains("Raids"))) }.map { screen == .raids ? $0 : HubSquads.plainBuilds([$0])[0] }
         let mark = build.map { SquadMark.of($0, screen: screen, ctx: ctx) } ?? .none
         let types = ctx.entryTypes(id)
         let note = build == nil ? "In your box · needs upgrade · no build for this" : nil
@@ -601,7 +603,7 @@ enum SquadWords {
     }
 
     /// The line a slot filled from another role carries (S1): the role the Pokémon is listed for, so the player sees why it sits in this slot.
-    static func otherRoleLine(_ roles: [String]) -> String { roles.isEmpty ? "No listed role" : "Its role: " + roles.joined(separator: " · ") }
+    static func otherRoleLine(_ roles: [String]) -> String { roles.isEmpty ? "No listed role" : "Its role: " + roles.joined(separator: ", ") }
 
     /// "Rock and Dark" for a VoiceOver label.
     static func typeList(_ types: [String]) -> String {

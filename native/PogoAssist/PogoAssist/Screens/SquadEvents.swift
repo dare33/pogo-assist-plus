@@ -306,7 +306,7 @@ struct EventSquadView: View {
         if mode == .best {
             let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
             let options = rows.map { EventOption(build: $0.build, best: $0, name: $0.name, tier: $0.tier, roles: $0.roles, types: $0.types, id: $0.entryId) }
-            return (options, HubSquads.bestSquad(slots: saved.slots, rows: rows))
+            return (options, HubSquads.bestSquad(slots: saved.slots, rows: rows, oneMega: screen == .raids))
         }
         // S1: Available fills every slot from the box, whatever upgrade the Pokémon needs, taking the strongest unused one of another role when a role runs out.
         let placeable = HubSquads.placeable(screen: screen, mode: mode, ctx: ctx)
@@ -390,7 +390,8 @@ struct EventSquadView: View {
         let bestRows = options.compactMap(\.best)
         // A copy sits in one slot however many rows show it (Primal Kyogre and Kyogre): rows are hidden by the copy they stand for.
         let copyOf = HubSquads.copyResolver(rows: bestRows)
-        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: false, copyOf: copyOf)
+        // A raid squad holds one Mega: under Best the picker offers no Mega row while another slot holds one (the slot holding it still lists them).
+        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: false, copyOf: copyOf).union(screen == .raids && mode == .best ? HubSquads.megaExcluded(by: filled, editing: i, rows: bestRows) : [])
         // Available (S1): the slot's own role's options first, then every other unused Pokémon ("Other roles:"); the Mega slot lists Mega candidates only. Best: the
         // table's rows for the role.
         var own: [String]
@@ -442,8 +443,8 @@ struct EventSquadView: View {
         if mode == .best {
             SquadExplainer(items: [
                 ("Ranked from our tables:", screen == .raids
-                 ? "every Pokémon our raid tables list under the boss's weak types, S then A then B, the strongest weak type first. Ones you do not have say when they might be available."
-                 : "every Pokémon our Max tables list for the role, S then A then B, ones that hit the boss first. Ones you do not have say when they might be available."),
+                 ? "every Pokémon our raid tables list under the boss's weak types, S then A then B, the strongest weak type first. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."
+                 : "every Pokémon our Max tables list for the role, S then A then B, ones that hit the boss first. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."),
                 ("Roles:", screen == .raids ? "Mega if it mega evolves; Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise." : "from our Max table: Tank, Healer, or Attacker."),
             ], identifier: "squad-picker-explainer")
         } else if screen == .raids {
@@ -453,7 +454,7 @@ struct EventSquadView: View {
             ], identifier: "squad-picker-explainer")
         } else {
             SquadExplainer(items: [
-                ("Best first:", "the tier our Max tables give it, then a type that hits the boss for more than normal damage."),
+                ("Best first:", "the tier our Max tables give it, then a type that hits the boss for more than normal damage. After the slot's own role comes \"Other roles:\", everything else in your box."),
                 ("Roles:", "from our Max table: Tank, Healer, or Attacker. Only Pokémon marked as Dynamax can take part, so every pick reads Upgrade available until you mark it on its page."),
             ], identifier: "squad-picker-explainer")
         }

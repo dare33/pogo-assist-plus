@@ -141,7 +141,7 @@ private struct GymSquadView: View {
             info: {
                 if mode == .best {
                     SquadExplainer(items: [
-                        ("Ranked from our gym table:", "every defender it lists, S then A then B, in the table's order, whether or not you have it. Ones you do not have say when they might be available."),
+                        ("Ranked from our gym table:", "every defender it lists, S then A then B, in the table's order, whether or not you have it. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."),
                         ("", "Ones you have show your best copy and the work it needs, with its bulk: Defence × HP with its own IVs."),
                     ], identifier: "squad-picker-explainer")
                 } else {

@@ -197,7 +197,7 @@ private struct RocketSquadView: View {
             return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: nil, lines: ["No counter", vs], status: .empty,
                                  spoken: "\(head), \(HubSquads.SlotStatus.empty.spoken). No counter in your box, against \(options(i))", identifier: id)
         }
-        let e = find(f, in: lists[i]) ?? f.entryId.flatMap { entryId in ctx.advice.builds.first { $0.entryId == entryId } }.map {
+        let e = find(f, in: lists[i]) ?? f.entryId.flatMap { entryId in ctx.advice.builds.first { $0.entryId == entryId } }.map { HubSquads.plainBuilds([$0])[0] }.map {
             // A pick the lists no longer offer (it stopped beating the slot): the slot still names it.
             let hits = HubTeams.beaten(by: $0, options: leader.slots[i], gm: ctx.gm, hub: ctx.hub).count
             return Entry(id: $0.entryId, name: $0.targetName, tier: HubSquads.rocketTableTier($0, ctx: ctx), build: $0, best: nil, hits: hits, flags: [], line: HubSquads.slotLine(hits: hits, of: leader.slots[i].count))
@@ -272,7 +272,7 @@ private struct RocketSquadView: View {
             info: {
                 if mode == .best {
                     SquadExplainer(items: [
-                        ("Ranked from our Rocket table:", "every Pokémon it lists that beats at least one of the Pokémon the leader may bring in this slot (a type that hits them for more than normal damage), S then A then B, whether or not you have it. Ones you do not have say when they might be available."),
+                        ("Ranked from our Rocket table:", "every Pokémon it lists that beats at least one of the Pokémon the leader may bring in this slot (a type that hits them for more than normal damage), S then A then B, whether or not you have it. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."),
                         ("Type icons:", "in colour when that type hits one of the slot's Pokémon for more than normal damage, grey when it does not."),
                     ], identifier: "squad-picker-explainer")
                 } else {
