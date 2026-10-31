@@ -198,6 +198,12 @@ struct BoxView: View {
     }
 
     private static let scrollSpace = "my-pokemon-scroll"
+    private static let contentSpace = "my-pokemon-content"
+
+    /// Marks where the list's top part (chips, sort line with its "i", saved panel) ends, so the A-Z index reaches wider only below it.
+    private var chromeEnd: some View {
+        Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.contentSpace)).maxY } action: { scrollActivity.chromeMeasured(height: $0) }
+    }
 
     private var listScroll: some View {
         ScrollViewReader { proxy in
@@ -206,21 +212,28 @@ struct BoxView: View {
                     countLine
                     chips
                     if chip == .toCheck { rescanButton }
-                    sortLine
-                    if let s = savedSummary { savedPanel(s) }
+                    sortLine.background { if savedSummary == nil { chromeEnd } }
+                    if let s = savedSummary { savedPanel(s).background { chromeEnd } }
                     if sections.isEmpty {
                         // An activity chip waits for the advice: until then nothing can be Top or Good, which is not the same as no match. A failed advice says so.
                         let isActivity: Bool = { if case .activity = chip { return true } else { return false } }()
                         Text(isActivity && insight == nil ? (adviceState == .failed ? "Advice could not be worked out" : "Working out advice…") : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
                     }
-                    ForEach(sections) { sectionView($0) }
+                    ForEach(sections) { s in
+                        sectionView(s)
+                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { scrollActivity.sectionMoved(s.id, top: $0) }   // which sections the lazy list has built, for the index's jump
+                            .onDisappear { scrollActivity.sectionGone(s.id) }
+                    }
                 }
                 .padding(.horizontal, Theme.Space.listGutter)
                 .padding(.top, 4)
                 .padding(.bottom, 12)
+                .coordinateSpace(name: Self.contentSpace)   // the list's content from its very top: where its top part ends is measured in this
                 .background {
                     // Where the list's top is: the A-Z index shows while it moves.
                     Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.scrollSpace)).minY } action: { scrollActivity.offsetChanged($0) }
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { scrollActivity.contentMoved(top: $0) }
+                        .background { ScrollViewFinder(activity: scrollActivity) }   // lets the index stop a coasting list before it jumps
                 }
             }
             .coordinateSpace(name: Self.scrollSpace)
@@ -417,7 +430,11 @@ struct BoxView: View {
     private func jumpIndex(_ proxy: ScrollViewProxy) -> some View {
         let labels: [String] = sort == .name ? ((65...90).map { String(UnicodeScalar($0)!) } + (sections.contains { $0.id == "#" } ? ["#"] : [])) : sections.map(\.short)
         let present = Dictionary(sections.map { ($0.short, $0.id) }, uniquingKeysWith: { a, _ in a })
-        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, lettersShown: showsIndex) { id in proxy.scrollTo(id, anchor: .top) }
+        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, lettersShown: showsIndex) { id in
+            scrollActivity.stopCoasting(log: AZIndex.alwaysShown)
+            proxy.scrollTo(id, anchor: .top)
+            scrollActivity.settle(on: id, order: sections.map(\.id)) { proxy.scrollTo($0, anchor: .top) }
+        }
     }
 
     // MARK: saved panel
