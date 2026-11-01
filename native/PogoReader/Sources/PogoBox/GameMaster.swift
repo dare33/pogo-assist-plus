@@ -25,11 +25,16 @@ public struct GameMaster {
         public var eliteMoves: [String] = []
     }
 
-    /// One move: its id as the species lists it, its name and its lowercase type.
+    /// One move: its id as the species lists it, its name and its lowercase type, and its PvP stats (power, energy cost of a charged move, energy gain of a fast move,
+    /// turns it takes; 0 where the file has none). The raid stats are in `PveMoves`.
     public struct Move: Equatable {
         public var id: String
         public var name: String
         public var type: String
+        public var power = 0
+        public var energy = 0
+        public var energyGain = 0
+        public var turns = 1
     }
 
     public enum Failure: Error, LocalizedError {
@@ -48,7 +53,7 @@ public struct GameMaster {
         struct Stats: Decodable { var atk: Int; var def: Int; var hp: Int }
         struct Entry: Decodable { var dex: Int; var speciesId: String; var speciesName: String; var family: Family?; var baseStats: Stats?; var types: [String]?
                        var released: Bool?; var tags: [String]?; var fastMoves: [String]?; var chargedMoves: [String]?; var eliteMoves: [String]? }
-        struct MoveEntry: Decodable { var moveId: String; var name: String; var type: String }
+        struct MoveEntry: Decodable { var moveId: String; var name: String; var type: String; var power: Int?; var energy: Int?; var energyGain: Int?; var turns: Int? }
         struct File: Decodable { var pokemon: [Entry]; var moves: [MoveEntry]? }
         let file: File
         do { file = try JSONDecoder().decode(File.self, from: data) } catch { throw Failure.unreadable("\(error)") }
@@ -61,7 +66,7 @@ public struct GameMaster {
             if names[e.speciesName.lowercased()] == nil { names[e.speciesName.lowercased()] = e.speciesId }
         }
         byId = map; byLowerName = names; ordered = all
-        moves = Dictionary((file.moves ?? []).map { ($0.moveId, Move(id: $0.moveId, name: $0.name, type: $0.type)) }, uniquingKeysWith: { a, _ in a })
+        moves = Dictionary((file.moves ?? []).map { ($0.moveId, Move(id: $0.moveId, name: $0.name, type: $0.type, power: $0.power ?? 0, energy: $0.energy ?? 0, energyGain: $0.energyGain ?? 0, turns: $0.turns ?? 1)) }, uniquingKeysWith: { a, _ in a })
     }
 
     /// The bundled game master. Loaded once per process (a static initialiser is thread-safe).
