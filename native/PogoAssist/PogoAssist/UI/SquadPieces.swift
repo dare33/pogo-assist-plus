@@ -547,9 +547,13 @@ struct SquadPicker<Info: View>: View {
             if bar == nil, let tier { TierChip(tier: tier, type: type) }
             ForEach(Array(row.types.enumerated()), id: \.offset) { _, t in TypeIcon(type: t.type, size: 22, grey: t.grey) }
         }
-        let main = VStack(alignment: .leading, spacing: 4) {
+        // The strength bar and its note sit under the head line and span the whole text column, so every bar of a picker starts and ends at the same x whether or not
+        // its row has a tier chip, a CP line or Gym's and PvP's figures (those sit beside the head line only).
+        let top = VStack(alignment: .leading, spacing: 4) {
             head
             line
+        }
+        let tail = VStack(alignment: .leading, spacing: 4) {
             if let bar { strengthLine(bar, tier: tier) }
             if let v = row.noteView { v } else if let n = row.note { Text(n).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(row.noteAmber ? Theme.orangeInk : Theme.muted).fixedSize(horizontal: false, vertical: true) }
         }
@@ -558,18 +562,25 @@ struct SquadPicker<Info: View>: View {
                 tick(row.ticked)
                 if typeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 6) {
-                        main
+                        top
+                        tail
                         if let s = row.stats { s }
                         if let f = row.figure { f }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    main.frame(maxWidth: .infinity, alignment: .leading)
-                    if let s = row.stats { s }
-                    if let f = row.figure { f }
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .top, spacing: 10) {
+                            top.frame(maxWidth: .infinity, alignment: .leading)
+                            if let s = row.stats { s }
+                            if let f = row.figure { f }
+                        }
+                        tail
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(.vertical, 8).padding(.horizontal, 2)
+        .padding(.vertical, 8).padding(.horizontal, 2)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
@@ -591,7 +602,11 @@ struct SquadPicker<Info: View>: View {
         } else {
             HStack(spacing: 8) {
                 bar
-                if let tier { TierChip(tier: tier, type: type) }
+                // The chip's place is kept when a row has no tier (a hidden chip of the widest letter sizes it), so every bar is as long as the others.
+                ZStack {
+                    TierChip(tier: "M", type: type).hidden()
+                    if let tier { TierChip(tier: tier, type: type) }
+                }
             }
         }
     }
@@ -693,4 +708,21 @@ enum SquadWords {
 extension HubContext {
     /// The types of a copy's own species, for a slot that names a kept pick the current lists no longer offer.
     func entryTypes(_ id: String) -> [String] { entry(id).flatMap { gm.byId[$0.row.speciesId]?.types } ?? [] }
+}
+
+// MARK: rows kept between redraws
+
+/// A picker's rows, built once and kept until what they are built from changes: the box and its advice (compared whole, they are value types), the day, and `key`
+/// (the screen, mode, slot, squad and options). A SwiftUI body runs on every state change; the rows are not worked out again unless one of these differs.
+final class PickerRowsCache<T> {
+    private var last: (advice: BoxAdvice, entries: [BoxEntry], today: String, key: String)?
+    private var value: T?
+
+    func get(ctx: HubContext, key: String, build: () -> T) -> T {
+        if let l = last, let v = value, l.key == key, l.today == ctx.today, l.advice == ctx.advice, l.entries == ctx.entries { return v }
+        let v = build()
+        last = (ctx.advice, ctx.entries, ctx.today, key)
+        value = v
+        return v
+    }
 }
