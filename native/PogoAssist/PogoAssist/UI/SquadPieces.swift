@@ -527,9 +527,14 @@ struct SquadPicker<Info: View>: View {
     // MARK: rows
 
     private func rowView(_ row: PickerRowModel) -> some View {
-        let head = HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(row.name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-            SquadMarkView(mark: row.mark, showsCost: true)
+        // At the accessibility sizes the mark goes under the name: beside it, it squeezes the name until a long one breaks inside a word ("Xurkitr / ee").
+        let name = Text(row.name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+        let head = Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) { name; SquadMarkView(mark: row.mark, showsCost: true) }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 6) { name; SquadMarkView(mark: row.mark, showsCost: true) }
+            }
         }
         // The tier sits at the end of the strength bar when the row has one, else beside the types as before.
         let bar = row.strength
