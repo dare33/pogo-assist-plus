@@ -71,12 +71,12 @@ final class HubGymSquadTests: SquadUITestCase {
         populate(app)
         openTile(app, "gym")
         openPicker(app, "gym", slot: 1)
-        assertPickerFigures(app, figure: "bulk", available: true)
+        assertPickerFigures(app, figure: "percent of the best", available: true)
         XCTAssertTrue(pickerRows(app).firstMatch.label.contains("Defence"), "the existing DEF and HP words stay: \(pickerRows(app).firstMatch.label)")
         closePicker(app)
         selectBest(app)
         openPicker(app, "gym", slot: 1)
-        assertPickerFigures(app, figure: "bulk", available: false)
+        assertPickerFigures(app, figure: "percent of the best", available: false)
         closePicker(app)
     }
 
