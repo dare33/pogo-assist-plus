@@ -385,6 +385,14 @@ struct EventSquadView: View {
 
     // MARK: picker
 
+    /// The screens whose picker rows carry the strength bar so far (P1): raids first, then Max.
+    private var strengthMode: StrengthScale.Mode? { screen == .raids ? .raids : nil }
+
+    private func strengthScale() -> StrengthScale? {
+        guard let mode = strengthMode, let pve = try? PveMoves.bundled() else { return nil }
+        return StrengthScale.shared(mode: mode, bosses: row.bosses, ctx: ctx, pve: pve)
+    }
+
     private func picker(_ i: Int, filled: [FilledSlot], options: [EventOption], byId: [String: EventOption], saved: SquadStore.Saved, mode: SquadMode) -> some View {
         let role = filled[i].role
         let bestRows = options.compactMap(\.best)
@@ -412,17 +420,33 @@ struct EventSquadView: View {
         // The slot's own Pokémon is always listed, ticked, even when this mode's list does not hold it (a copy chosen under the other mode).
         var ownIds = groups.own
         if let tick = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: groups.own + groups.other) { ownIds.insert(tick, at: 0) }
+        // P1: the strength bar's scale, worked out once for the boss when the picker opens.
+        let scale = strengthScale()
         func rows(_ ids: [String]) -> [PickerRowModel] {
             HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf).compactMap { r in
-                guard let o = byId[r.entryId] else { return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: screen, ctx: ctx) }
+                guard let o = byId[r.entryId] else {
+                    let copy = ctx.entry(r.entryId)
+                    return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: screen, ctx: ctx)?.adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false)))
+                }
                 let word = roleWord(o, role: role, mode: mode)
                 let shown = view(o, role: role, mode: mode)
-                guard let build = shown.build, o.best?.hasBuild != false else { return PickerRowModel(best: o.best!, ticked: r.ticked, role: word) }
+                guard let build = shown.build, o.best?.hasBuild != false else {
+                    // A copy no build serves has its own figures; a Pokémon the box lacks has one bar at level 50 with 15/15/15 and no CP line.
+                    let best = o.best!, copy = best.inBox ? (best.copy ?? best.ownedEntryId.flatMap(ctx.entry)) : nil
+                    let lacking = copy == nil ? StrengthScale.Row.Lacking(speciesId: best.speciesId, shadow: best.key.hasSuffix("_shadow"), moves: HubSquads.tableMoves(of: best, area: screen == .raids ? "raids" : "max", ctx: ctx),
+                                                                gigantamax: best.name.range(of: "gigantamax", options: .caseInsensitive) != nil) : nil
+                    return PickerRowModel(best: best, ticked: r.ticked, role: word).adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false, species: lacking)))
+                }
                 let mark = SquadMark.of(build, screen: screen, ctx: ctx)
                 let shared = o.best?.statusLine
                 let spoken = [o.name, word, shown.tier.isEmpty ? nil : "tier \(shown.tier)", SquadWords.typeList(o.types), mark.spoken, o.best?.spokenStatus, r.ticked ? "in this slot" : nil]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+                // The Mega slot judges the copy on its Mega build; every other slot on the plain Pokémon.
+                let megaSlot = screen == .raids && (mode == .best ? build.viaMega : role == PogoRules.RaidRole.mega.rawValue && o.mega != nil)
+                let copy = ctx.entry(build.entryId)
+                let strength = scale?.strength(.init(copy: copy, build: build, built: mark == .fullStrength, megaSlot: megaSlot))
                 return PickerRowModel(id: r.entryId, name: o.name, ticked: r.ticked, mark: mark, role: word, tier: shown.tier, types: o.types.map { PickerType(type: $0) }, note: shared, spoken: spoken)
+                    .adding(copy: copy, strength: strength)
             }
         }
         let shownRows = mode == .available ? PickerRowModel.availableGroups(own: rows(ownIds), other: rows(groups.other)) : rows(ownIds)

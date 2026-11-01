@@ -521,3 +521,10 @@ public final class StrengthScale {
         return s
     }
 }
+
+extension HubSquads {
+    /// The table's move line for a Best row's entry in an area ("raids", "max", ...), for the estimate of a Pokémon the box lacks; nil when the entry names none.
+    public static func tableMoves(of r: BestRow, area: String, ctx: HubContext) -> String? {
+        ctx.table.entries(for: r.speciesId, area: area).first { bestKey($0) == r.key }?.moves
+    }
+}

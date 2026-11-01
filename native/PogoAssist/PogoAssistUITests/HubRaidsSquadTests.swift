@@ -127,6 +127,23 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 1).label.hasPrefix("Slot 1 of 6, Bulky hitter"), slot(app, "raids", 1).label)
     }
 
+    /// P1: every picker row says the copy's CP and IVs and its estimated damage in its one VoiceOver label (the bar itself is hidden from VoiceOver).
+    func testRaidsPickerRowsShowCpIvsAndStrength() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "raids")
+        let card = el(app, "hub-raid-row-1")
+        if card.waitForExistence(timeout: 30) { card.tap() }
+        openPicker(app, "raids", slot: 2)
+        assertPickerFigures(app, figure: "estimated damage", available: true)
+        closePicker(app)
+        // Best: the box's Pokémon say their figures; one the box lacks has no CP line but says its figure at level 50.
+        selectBest(app)
+        openPicker(app, "raids", slot: 2)
+        assertPickerFigures(app, figure: "estimated damage", available: false)
+        closePicker(app)
+    }
+
     func testRaidsScreenshots() throws {
         let setup = launch(reset: true)
         populate(setup)

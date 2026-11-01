@@ -353,10 +353,31 @@ struct PickerRowModel: Identifiable {
     var figure: AnyView? = nil
     /// A heading over this row ("Available upgrades:").
     var sectionHeading: String? = nil
+    /// The copy's CP and IVs as it is now ("CP 3,412 · 15/14/15"); nil for a Pokémon the box lacks (phone run 2, P1).
+    var cpIv: String? = nil
+    /// The strength bar: a solid part for the copy now, a faint one up to after its upgrade. nil draws no bar.
+    var strength: Strength? = nil
     var spoken: String
 }
 
 extension PickerRowModel {
+    /// The CP and IV line and the strength bar of a row (phone run 2, P1), with what VoiceOver adds for them ("CP 3412, IVs 15, 14, 15, estimated damage 62 percent of the best,
+    /// 85 percent after upgrade"). The row's spoken label keeps "in this slot" last. `copy` is nil for a Pokémon the box lacks (no CP line); `ivs: false` leaves the IVs out
+    /// (PvP has its own graded IV line); `speaksStrength: false` leaves the bar's words out where the row already says the figure (PvP's score).
+    func adding(copy: BoxEntry?, ivs: Bool = true, strength: Strength?, speaksStrength: Bool = true) -> PickerRowModel {
+        var m = self
+        let line = copy.map { DamageEstimate.cpIvLine($0, ivs: ivs) }
+        m.cpIv = line?.text
+        m.strength = strength.flatMap { $0.isEmpty ? nil : $0 }
+        let extra = [line?.spoken, speaksStrength ? strength?.spoken : nil].compactMap { $0 }
+        let tail = ", in this slot"
+        let ticked = spoken.hasSuffix(tail)
+        let base = ticked ? String(spoken.dropLast(tail.count)) : spoken
+        // Spoken text uses ", " where the screen writes " · " (a PvP row's "IV rank 552 · 97.6%", "Lead · Safe swap").
+        m.spoken = (([base] + extra).filter { !$0.isEmpty }.joined(separator: ", ") + (ticked ? tail : "")).replacingOccurrences(of: " · ", with: ", ")
+        return m
+    }
+
     static let upgradesHeading = "Available upgrades:"
     static let otherRolesHeading = "Other roles:"
 
@@ -510,16 +531,26 @@ struct SquadPicker<Info: View>: View {
             Text(row.name).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
             SquadMarkView(mark: row.mark, showsCost: true)
         }
+        // The tier sits at the end of the strength bar when the row has one, else beside the types as before.
+        let bar = row.strength
+        let tier = row.tier.flatMap { $0.isEmpty ? nil : $0 }
+        let roleText = row.role.map { role in
+            Text(role).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(SquadPalette.of(role.components(separatedBy: " · ").first ?? role).ink)
+        }
+        // One wrapping line: the role word, the copy's CP and IVs, the types (and the tier when there is no bar to carry it).
         let line = FlowLayout(spacing: 6) {
-            if let role = row.role {
-                Text(role).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(SquadPalette.of(role.components(separatedBy: " · ").first ?? role).ink)
+            if let roleText { roleText }
+            if let cpIv = row.cpIv {
+                Text(cpIv).font(.figtree(12, .semibold, relativeTo: .caption)).monospacedDigit().foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                    .padding(.trailing, 2)
             }
-            if let tier = row.tier, !tier.isEmpty { TierChip(tier: tier, type: type) }
+            if bar == nil, let tier { TierChip(tier: tier, type: type) }
             ForEach(Array(row.types.enumerated()), id: \.offset) { _, t in TypeIcon(type: t.type, size: 22, grey: t.grey) }
         }
         let main = VStack(alignment: .leading, spacing: 4) {
             head
             line
+            if let bar { strengthLine(bar, tier: tier) }
             if let v = row.noteView { v } else if let n = row.note { Text(n).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(row.noteAmber ? Theme.orangeInk : Theme.muted).fixedSize(horizontal: false, vertical: true) }
         }
         return Button { onChoose(row.id) } label: {
@@ -549,6 +580,22 @@ struct SquadPicker<Info: View>: View {
         .accessibilityIdentifier("squad-picker-row")
     }
 
+    /// The strength bar across the text column with the tier chip at its end; at the accessibility sizes the chip goes under the bar.
+    @ViewBuilder private func strengthLine(_ strength: Strength, tier: String?) -> some View {
+        let bar = StrengthBar(strength: strength, ink: type.ink(accent)).frame(maxWidth: .infinity)
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 4) {
+                bar
+                if let tier { TierChip(tier: tier, type: type) }
+            }
+        } else {
+            HStack(spacing: 8) {
+                bar
+                if let tier { TierChip(tier: tier, type: type) }
+            }
+        }
+    }
+
     private func tick(_ on: Bool) -> some View {
         SVGGlyph(data: Glyph.tick)
             .stroke(on ? accent.onSolid : Color.clear, style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
@@ -558,6 +605,34 @@ struct SquadPicker<Info: View>: View {
             .overlay { if !on { Circle().strokeBorder(Theme.line, lineWidth: 2) } }
             .padding(.top, 1)
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: strength bar
+
+/// A picker row's strength bar (phone run 2, P1): 8 pt high, the full width it is given. The solid part is the copy as it is now; the faint part continues it to the figure after
+/// the suggested upgrade, drawn as a pale fill with a dashed outline so it does not rest on colour alone. The solid part is the screen's ink on the `off` track: measured contrast 4.26 or more
+/// in light and 7.03 or more in dark for every screen (Raids 4.26 / 8.31, Gym 4.34 / 8.29, Rocket 10.59 / 7.66, PvP 5.84 / 7.28, Max 4.61 / 7.03), above the 3:1 a graphic needs. Hidden from VoiceOver: the row's label says the figures.
+struct StrengthBar: View {
+    let strength: Strength
+    let ink: Color
+
+    var body: some View {
+        GeometryReader { g in
+            let solid = strength.now == nil ? 0 : max(8, g.size.width * strength.barSolid)
+            // The faint part is at least 6 pt long so a small gain can be seen.
+            let end = min(g.size.width, max(strength.hasFaint ? solid + 6 : solid, g.size.width * strength.barEnd))
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.off)
+                if strength.hasFaint {
+                    Capsule().fill(ink.opacity(0.22)).frame(width: end)
+                    Capsule().strokeBorder(ink, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])).frame(width: end)
+                }
+                if solid > 0 { Capsule().fill(ink).frame(width: solid) }
+            }
+        }
+        .frame(height: 8)
+        .accessibilityHidden(true)
     }
 }
 

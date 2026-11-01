@@ -97,6 +97,41 @@ class SquadUITestCase: XCTestCase {
         return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: p, object: e)], timeout: timeout) == .completed
     }
 
+    /// P1: every row of the open picker says its figure in its one VoiceOver label (`figure`: "estimated damage", "bulk" or "score"); under Available every row is a copy of the
+    /// player's, so it also says its CP and IVs. (The bar itself is hidden from VoiceOver, so the label is what a UI test can read.) Spoken text uses commas, not " · ".
+    func assertPickerFigures(_ app: XCUIApplication, figure: String, available: Bool, file: StaticString = #filePath, line: UInt = #line) {
+        let rows = pickerRows(app)
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), "the picker lists rows", file: file, line: line)
+        XCTAssertGreaterThan(rows.count, 0, file: file, line: line)
+        for i in 0..<min(rows.count, 8) {
+            let label = rows.element(boundBy: i).label
+            XCTAssertTrue(label.contains(figure), "row \(i) says its \(figure): \(label)", file: file, line: line)
+            if available { XCTAssertTrue(label.contains("CP "), "row \(i) says its CP: \(label)", file: file, line: line) }
+            XCTAssertFalse(label.contains(" · "), "spoken text uses commas: \(label)", file: file, line: line)
+        }
+    }
+
+    /// Scrolls back to the top and switches the suggestions to Best.
+    func selectBest(_ app: XCUIApplication) {
+        let best = app.buttons["squad-mode-best"]
+        var n = 0
+        while !(best.exists && best.isHittable) && n < 8 { app.swipeDown(); n += 1 }
+        best.tap()
+        XCTAssertTrue(best.waitForExistence(timeout: 5))
+    }
+
+    /// Scrolls until the open picker's title line (its Done button) is near the top of the screen, so its first rows show.
+    func scrollPickerIntoView(_ app: XCUIApplication) {
+        let done = app.buttons["squad-picker-done"]
+        // Short drags (a fifth of the screen), not swipes: at the largest text size one swipe moves past the whole picker.
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)), to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        var n = 0
+        while n < 40 && !(done.exists && done.isHittable && done.frame.minY < 450) {
+            if done.exists && done.frame.minY < 0 { to.press(forDuration: 0.05, thenDragTo: from) } else { from.press(forDuration: 0.05, thenDragTo: to) }
+            n += 1
+        }
+    }
+
     /// The Best-mode set of a screen: Best on, a slot's picker open, so a Pokémon the box lacks shows on its card and in the list (the box is kept from the first launch).
     func bestSet(_ screen: String, slot n: Int, tile: String? = nil, prepare: @escaping (XCUIApplication) -> Void = { _ in }) {
         screenSet("\(screen)-best", tile: tile ?? screen) { app in
@@ -118,7 +153,9 @@ class SquadUITestCase: XCTestCase {
             prepare(app)
             sleep(1)
             shot("\(screen)-\(scheme)-\(size)")
-            app.swipeUp(); sleep(1)
+            // The open picker's rows, scrolled up under the status bar (at the largest text size the picker is far down the page).
+            if app.buttons["squad-picker-done"].exists { scrollPickerIntoView(app) } else { app.swipeUp() }
+            sleep(1)
             shot("\(screen)-\(scheme)-\(size)-2")
             app.terminate()
         }
