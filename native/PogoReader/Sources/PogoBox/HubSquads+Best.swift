@@ -304,7 +304,7 @@ extension HubSquads {
     /// order. Roles from the table (rule 12). The box's build for an entry is a Max build whose target is that species.
     public static func bestMaxRows(row: HubData.RotationRow, ctx: HubContext) -> [BestRow] {
         let items = ctx.table.entries.enumerated().compactMap { i, e -> (e: TierTable.Entry, index: Int, roles: [String])? in
-            guard e.area == "max", e.name.range(of: "gigantamax|g-max", options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
+            guard e.area == "max", !HubRaidsModel.isGigantamaxName(e.name) else { return nil }
             let roles = PogoRules.maxRoles(e).map(\.rawValue)
             return roles.isEmpty ? nil : (e, i, roles)
         }

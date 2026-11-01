@@ -65,14 +65,30 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertEqual(again.buttons["squad-mode-best"].isSelected, true, "Best is remembered across a relaunch")
     }
 
+    /// P1: a Gym picker row says the copy's CP and IVs and its bulk against the best in the game in its one label.
+    func testGymPickerRowsShowCpIvsAndBulkBar() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "gym")
+        openPicker(app, "gym", slot: 1)
+        assertPickerFigures(app, figure: "percent of the best", available: true)
+        XCTAssertTrue(pickerRows(app).firstMatch.label.contains("Defence"), "the existing DEF and HP words stay: \(pickerRows(app).firstMatch.label)")
+        closePicker(app)
+        selectBest(app)
+        openPicker(app, "gym", slot: 1)
+        assertPickerFigures(app, figure: "percent of the best", available: false)
+        closePicker(app)
+    }
+
     func testGymScreenshots() throws {
         let setup = launch(reset: true)
         populate(setup)
         setup.terminate()
+        // Slot 1: the sample box's one Gym build is offered there, so the picker has an owned row.
         screenSet("gym") { app in
-            let s = self.slot(app, "gym", 2)
+            let s = self.slot(app, "gym", 1)
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
-        bestSet("gym", slot: 2)
+        bestSet("gym", slot: 1)
     }
 }

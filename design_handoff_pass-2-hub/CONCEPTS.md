@@ -294,6 +294,29 @@ Stated so each can be checked against the code.
    <screen> build in your box." alone; when it has options but they are all in the squad's other slots the text is "Everything
    in your box for this slot is already in your squad.".
 
+31. **Picker row: CP and IVs, and the strength bar** (phone run 2 of 1 Nov 2026, P1; Greg: "it should display CP + the counters already there, and
+    potentially IV ... a visual indicator of strength to facilitate quick choice"). Every picker row on all five squad screens, Available and Best,
+    shows the copy's **CP and IVs as it is now**, Attack/Defence/HP ("CP 3,412 · 15/14/15"; "CP not read", "IVs not read"; PvP's row shows them too and keeps its
+    graded IV rank line), on one wrapping line with the role word and the type icons, and a **strength bar** across the text column with the tier chip at its end.
+    The bar informs; it never sorts or filters (Greg: "Keep the order"). **Solid part** = the copy as it is now; **faint part** (dashed outline, at least 6 pt)
+    = after its suggested upgrade. Full strength rows have no faint part. A copy whose level or IVs are not read has no solid part (IVs unread: no bar).
+    - **Estimated damage** (Raids: damage per second against the boss; Max: damage of one Max move, every Max role; Rocket: damage per turn with the PvP move
+      stats, averaged over the slot's possible Pokémon; several bosses: the mean). Level, IVs and Shadow state are the copy's own. **Moves follow the boss**: a
+      copy is judged on its own read moves, else on the best of the table's move lines for its Pokémon against this boss (never the best-tier line); after =
+      the best of the build's target's lines (and the copy's own moves) against this boss, never below now. A line naming no known move is skipped.
+    - **Mega and Primal forms** count only in the raid Mega slot (the better form against the boss, judged on the best of its own lines, the plain Pokémon's lines and the
+      copy's own moves; a Mega Evolve is the faint part). A Mega entry shown under another role's slot (Best, the All chip) is judged as the plain Pokémon. Every other slot, and
+      all of Rocket, Gym and Max, judge the plain form: a Rocket row has no Mega form. A Mega or Primal is never a Shadow.
+    - **Max**: a Gigantamax copy's Max Attack is its G-Max move (its type from the sourced list, base power 350 at level 1); any other copy's takes the type of
+      its fast move (250), except that Crowned Zacian and Zamazenta always use Steel (250), Eternatus Dragon (350) and a Hidden Power fast move gives Normal. The species that can Dynamax or Gigantamax are the two sourced lists in `MaxBattleSpecies` (Pokémon GO Wiki, read 1 Nov 2026).
+    - **Best in the game** (a full bar): the strongest released species against this boss at level 50 with 15/15/15 and its best moves; Megas and Shadows on
+      Raids, Shadows on Rocket, the sourced Max species and G-Max forms on Max. Greg chose "Best in the game".
+    - **Gym** bar = Bulk (now vs after its build) against the best Gym bulk in the game; **PvP** bar = the league Score, one bar (a species the player has no copy
+      of takes PvPoke's score for it in this league; with none, no bar and "score not known"). Greg chose "Bulk and Score".
+    - A Best row the box lacks: one bar for the species at level 50 with 15/15/15 and no CP line; its moves are the best of every line the tables give the species. Max
+      Best lists no Gigantamax entry (rule 12), so no Best row uses a G-Max move today; the estimate takes a Gigantamax flag for a row that would. VoiceOver reads the row as
+      one element ("CP 3412, IVs 15, 14, 15, estimated damage 62 percent of the best, 85 percent after upgrade"); the bar is hidden from it.
+
 ### Squad status
 
 29. **Slot status**: **ready** (green) when the slot holds a Pokémon the player has, at Full strength, rated S or A in the

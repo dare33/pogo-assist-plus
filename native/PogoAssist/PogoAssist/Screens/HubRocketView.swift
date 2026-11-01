@@ -99,18 +99,13 @@ struct HubRocketView: View {
 
 // MARK: the squad
 
-/// YOUR SQUAD FOR <LEADER> with Change leader, and "Slot by slot": three slot cards, each against one slot of the leader's lineup.
-private struct RocketSquadView: View {
+/// The rows of a Team Rocket picker, built from the box, the leader's lineup and the tables alone (no view state), so a test can read what every picker would show.
+struct RocketPickerBuilder {
     let leader: HubData.Leader
-    let leaders: [HubData.Leader]
     let ctx: HubContext
-    @ObservedObject var keeper: SquadKeeper
-    let onLeader: (String) -> Void
-    @State private var selected: Int?
-    @Environment(\.accent) private var accent
 
     /// What a slot's card or picker row says about a Pokémon for that slot: one of the player's builds or, under Best, a Pokémon the box lacks.
-    private struct Entry {
+    struct Entry {
         var id: String
         var name: String
         var tier: String
@@ -122,7 +117,99 @@ private struct RocketSquadView: View {
         var notWeak = false
     }
 
-    private typealias SlotLists = (rows: [Entry], next: [Entry])
+    typealias SlotLists = (rows: [Entry], next: [Entry])
+
+    /// The picker's rows for a slot (rule 16 under Available, the Rocket table under Best, rule 6) and, when there are none, the Next best rows (rule 18), each with what
+    /// it says for the slot.
+    func entries(for slot: [HubData.Boss], mode: SquadMode) -> SlotLists {
+        func flags(_ b: BoxAdvice.Build) -> [PickerType] {
+            HubTeams.types(of: b, gm: ctx.gm).map { t in PickerType(type: t, grey: !slot.contains { ctx.hub.beats([t], $0.types) }) }
+        }
+        let rows: [Entry]
+        if mode == .best {
+            rows = HubSquads.bestRocketRows(options: slot, ctx: ctx).map {
+                Entry(id: $0.entryId, name: $0.name, tier: $0.tier, build: $0.build, best: $0, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
+            }
+        } else {
+            rows = HubSquads.rocketPicker(options: slot, mode: mode, ctx: ctx).map {
+                Entry(id: $0.entryId, name: $0.build.targetName, tier: HubSquads.rocketTableTier($0.build, ctx: ctx), build: $0.build, best: nil, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
+            }
+        }
+        let next = rows.isEmpty ? HubSquads.rocketNextBest(options: slot, mode: mode, ctx: ctx).map {
+            Entry(id: $0.build.entryId, name: $0.build.targetName, tier: HubSquads.rocketTableTier($0.build, ctx: ctx), build: $0.build, best: nil, hits: 0, flags: flags($0.build), line: $0.notWeak ? "Not weak to this slot" : nil, notWeak: $0.notWeak)
+        } : []
+        return (rows, next)
+    }
+
+    /// What a slot's picker shows: its rows, whether they are the Next best ones, and whether the box has any option for the slot.
+    struct Content { var rows: [PickerRowModel]; var showsNext: Bool; var boxHasOptions: Bool }
+
+    func content(slot i: Int, filled: [FilledSlot], lists: [SlotLists], mode: SquadMode) -> Content {
+        let l = lists[i]
+        let showsNext = l.rows.isEmpty && !l.next.isEmpty
+        let source = showsNext ? l.next : l.rows
+        // Only a Pokémon the player chose in another slot leaves this list (D28): the app's own suggestions stay.
+        let allRows = lists.flatMap { $0.rows + $0.next }.compactMap(\.best)
+        let copyOf = HubSquads.copyResolver(rows: allRows)
+        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: true, copyOf: copyOf)
+        var ids = source.map(\.id)
+        let boxHasOptions = !ids.isEmpty
+        let ticks = HubSquads.tickIds(filled[i], rows: allRows)
+        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
+        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf)
+        let byId = Dictionary(source.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // P1: damage per turn against the slot's possible Pokémon, as a share of the best in the game.
+        let scale = (try? PveMoves.bundled()).map { StrengthScale.shared(mode: .rocket, bosses: leader.slots[i], ctx: ctx, pve: $0) }
+        var rows: [PickerRowModel] = listed.compactMap { r in
+            guard let e = byId[r.entryId] else {
+                let copy = ctx.entry(r.entryId)
+                return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: .rocket, ctx: ctx)?.adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false)))
+            }
+            if e.build == nil || e.best?.hasBuild == false, let best = e.best {
+                let copy = best.inBox ? (best.copy ?? best.ownedEntryId.flatMap(ctx.entry)) : nil
+                let lacking = copy == nil ? StrengthScale.Row.Lacking(speciesId: best.speciesId, shadow: best.key.hasSuffix("_shadow"), moves: HubSquads.tableMoves(of: best, area: "rocket", ctx: ctx)) : nil
+                return PickerRowModel(best: best, ticked: r.ticked, types: e.flags, extraSpoken: {
+                    let hitting = e.flags.filter { !$0.grey }.map(\.type)
+                    return hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot"
+                }()).adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false, species: lacking)))
+            }
+            let mark = SquadMark.of(e.build!, screen: .rocket, ctx: ctx)
+            let types = e.flags
+            let hitting = types.filter { !$0.grey }.map(\.type)
+            let spoken = [e.name, e.line, hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot", mark.spoken, e.best?.spokenStatus, r.ticked ? "in this slot" : nil]
+                .compactMap { $0 }.joined(separator: ", ")
+            let note = [e.line, e.best?.statusLine].compactMap { $0 }.joined(separator: " · ")
+            let copy = ctx.entry(e.build!.entryId)
+            return PickerRowModel(id: r.entryId, name: e.name, ticked: r.ticked, mark: mark, tier: e.tier, types: types, note: note.isEmpty ? nil : note, spoken: spoken)
+                .adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: e.build, built: mark == .fullStrength)))
+        }
+        if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
+        return Content(rows: rows, showsNext: showsNext, boxHasOptions: boxHasOptions)
+    }
+
+    /// Every slot's picker rows for the leader's default squad under `mode` (what a test reads).
+    func allSlotRows(mode: SquadMode) -> [[PickerRowModel]] {
+        let filled = mode == .best ? HubSquads.bestRocketSquad(leader: leader, ctx: ctx) : HubSquads.rocketSquad(leader: leader, mode: mode, ctx: ctx)
+        let lists = leader.slots.map { entries(for: $0, mode: mode) }
+        return filled.indices.map { content(slot: $0, filled: filled, lists: lists, mode: mode).rows }
+    }
+}
+
+
+/// YOUR SQUAD FOR <LEADER> with Change leader, and "Slot by slot": three slot cards, each against one slot of the leader's lineup.
+private struct RocketSquadView: View {
+    let leader: HubData.Leader
+    let leaders: [HubData.Leader]
+    let ctx: HubContext
+    @ObservedObject var keeper: SquadKeeper
+    let onLeader: (String) -> Void
+    @State private var selected: Int?
+    @Environment(\.accent) private var accent
+
+    typealias Entry = RocketPickerBuilder.Entry
+    typealias SlotLists = RocketPickerBuilder.SlotLists
+    private var builder: RocketPickerBuilder { RocketPickerBuilder(leader: leader, ctx: ctx) }
+    @State private var rowsCache = PickerRowsCache<RocketPickerBuilder.Content>()
 
     var body: some View {
         let mode = keeper.store.mode(for: .rocket)
@@ -158,27 +245,7 @@ private struct RocketSquadView: View {
 
     private func options(_ i: Int) -> String { leader.slots[i].map { HubTeams.plain($0.name) }.joined(separator: " / ") }
 
-    /// The picker's rows for a slot (rule 16 under Available, the Rocket table under Best, rule 6) and, when there are none, the Next best rows (rule 18), each with what
-    /// it says for the slot.
-    private func entries(for slot: [HubData.Boss], mode: SquadMode) -> SlotLists {
-        func flags(_ b: BoxAdvice.Build) -> [PickerType] {
-            HubTeams.types(of: b, gm: ctx.gm).map { t in PickerType(type: t, grey: !slot.contains { ctx.hub.beats([t], $0.types) }) }
-        }
-        let rows: [Entry]
-        if mode == .best {
-            rows = HubSquads.bestRocketRows(options: slot, ctx: ctx).map {
-                Entry(id: $0.entryId, name: $0.name, tier: $0.tier, build: $0.build, best: $0, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
-            }
-        } else {
-            rows = HubSquads.rocketPicker(options: slot, mode: mode, ctx: ctx).map {
-                Entry(id: $0.entryId, name: $0.build.targetName, tier: HubSquads.rocketTableTier($0.build, ctx: ctx), build: $0.build, best: nil, hits: $0.hits, flags: $0.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }, line: $0.slotLine)
-            }
-        }
-        let next = rows.isEmpty ? HubSquads.rocketNextBest(options: slot, mode: mode, ctx: ctx).map {
-            Entry(id: $0.build.entryId, name: $0.build.targetName, tier: HubSquads.rocketTableTier($0.build, ctx: ctx), build: $0.build, best: nil, hits: 0, flags: flags($0.build), line: $0.notWeak ? "Not weak to this slot" : nil, notWeak: $0.notWeak)
-        } : []
-        return (rows, next)
-    }
+    private func entries(for slot: [HubData.Boss], mode: SquadMode) -> SlotLists { builder.entries(for: slot, mode: mode) }
 
     private func find(_ f: FilledSlot, in lists: SlotLists) -> Entry? {
         let all = lists.rows + lists.next
@@ -228,36 +295,10 @@ private struct RocketSquadView: View {
     // MARK: picker
 
     private func picker(_ i: Int, filled: [FilledSlot], lists: [SlotLists], mode: SquadMode) -> some View {
-        let l = lists[i]
-        let showsNext = l.rows.isEmpty && !l.next.isEmpty
-        let source = showsNext ? l.next : l.rows
-        // Only a Pokémon the player chose in another slot leaves this list (D28): the app's own suggestions stay.
-        let allRows = lists.flatMap { $0.rows + $0.next }.compactMap(\.best)
-        let copyOf = HubSquads.copyResolver(rows: allRows)
-        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: true, copyOf: copyOf)
-        var ids = source.map(\.id)
-        let boxHasOptions = !ids.isEmpty
-        let ticks = HubSquads.tickIds(filled[i], rows: allRows)
-        if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
-        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf)
-        let byId = Dictionary(source.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        var rows: [PickerRowModel] = listed.compactMap { r in
-            guard let e = byId[r.entryId] else { return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: .rocket, ctx: ctx) }
-            if e.build == nil || e.best?.hasBuild == false, let best = e.best {
-                return PickerRowModel(best: best, ticked: r.ticked, types: e.flags, extraSpoken: {
-                    let hitting = e.flags.filter { !$0.grey }.map(\.type)
-                    return hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot"
-                }())
-            }
-            let mark = SquadMark.of(e.build!, screen: .rocket, ctx: ctx)
-            let types = e.flags
-            let hitting = types.filter { !$0.grey }.map(\.type)
-            let spoken = [e.name, e.line, hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot", mark.spoken, e.best?.spokenStatus, r.ticked ? "in this slot" : nil]
-                .compactMap { $0 }.joined(separator: ", ")
-            let note = [e.line, e.best?.statusLine].compactMap { $0 }.joined(separator: " · ")
-            return PickerRowModel(id: r.entryId, name: e.name, ticked: r.ticked, mark: mark, tier: e.tier, types: types, note: note.isEmpty ? nil : note, spoken: spoken)
-        }
-        if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
+        // The rows are built once and kept until the box, the advice or what the slot sees changes.
+        let key = "\(leader.name)|\(mode.rawValue)|\(i)|" + filled.map { "\($0.pickId ?? "-")/\($0.chosen)/\($0.fallback)" }.joined(separator: ",") + "|" + lists.map { ($0.rows + $0.next).map(\.id).joined(separator: ",") }.joined(separator: ";")
+        let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, lists: lists, mode: mode) }
+        let showsNext = content.showsNext, boxHasOptions = content.boxHasOptions, rows = content.rows
         return SquadPicker(
             title: "Slot \(i + 1) · vs \(options(i))", type: .rocket, heading: showsNext ? "Next best" : nil, rows: rows,
             emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, none: mode == .available ? "Nothing in your box beats this slot." : "Nothing listed beats this slot."),

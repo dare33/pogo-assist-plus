@@ -106,6 +106,23 @@ final class HubMaxSquadTests: SquadUITestCase {
         XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true, "Best is remembered for the Max screen")
     }
 
+    /// P1: a Max picker row says the copy's CP and IVs and its estimated damage (one Max move) in its one label.
+    func testMaxPickerRowsShowCpIvsAndStrength() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "max")
+        let row = el(app, "hub-max-row-0")
+        XCTAssertTrue(row.waitForExistence(timeout: 30))
+        row.tap()
+        openPicker(app, "max", slot: 1)
+        assertPickerFigures(app, figure: "estimated damage", available: true)
+        closePicker(app)
+        selectBest(app)
+        openPicker(app, "max", slot: 1)
+        assertPickerFigures(app, figure: "estimated damage", available: false)
+        closePicker(app)
+    }
+
     func testMaxScreenshots() throws {
         let setup = launch(reset: true)
         populate(setup)
