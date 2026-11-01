@@ -385,8 +385,8 @@ struct EventSquadView: View {
 
     // MARK: picker
 
-    /// The screens whose picker rows carry the strength bar so far (P1): raids first, then Max.
-    private var strengthMode: StrengthScale.Mode? { screen == .raids ? .raids : nil }
+    /// The strength bar's mode (P1): damage per second on Raids, one Max move's damage on Max.
+    private var strengthMode: StrengthScale.Mode? { screen == .raids ? .raids : .max }
 
     private func strengthScale() -> StrengthScale? {
         guard let mode = strengthMode, let pve = try? PveMoves.bundled() else { return nil }
