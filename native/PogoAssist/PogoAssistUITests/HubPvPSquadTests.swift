@@ -87,6 +87,12 @@ final class HubPvPSquadTests: SquadUITestCase {
         selectBest(app)
         openPicker(app, "pvp", slot: 2)
         assertPickerFigures(app, figure: "score", available: false)
+        // A Best row with no copy has no CP line and says a score or "score not known": the words this change added.
+        let rows = pickerRows(app)
+        for i in 0..<min(rows.count, 8) where !rows.element(boundBy: i).label.contains("CP ") {
+            let label = rows.element(boundBy: i).label
+            XCTAssertTrue(label.contains("score not known") || label.range(of: #"score [0-9]+"#, options: .regularExpression) != nil, label)
+        }
         closePicker(app)
     }
 

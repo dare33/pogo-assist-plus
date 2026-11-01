@@ -63,6 +63,7 @@
 		57B6AF68B04AAA54682244C9 /* PokemonPageScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD831CBF024D1289A1E33174 /* PokemonPageScreenshotTests.swift */; };
 		590D6523FF4E5A4A47A05349 /* ReviewToCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6C431800FF0BBA252331DB /* ReviewToCheck.swift */; };
 		5A7CFEDBCAD05B096C12CA05 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
+		6450A172571F22EBC9C8FBB3 /* PickerRowModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22AEC20035CF6716A0888CA1 /* PickerRowModelsTests.swift */; };
 		676B795352FD800C5AC8AD78 /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 16E6951D5A5A38B33745BA2B /* PogoReader */; };
 		685D6AF151E3CD5458FC6093 /* DesignPieces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675959CE1C1C65926303D638 /* DesignPieces.swift */; };
 		68A28061D9146D4EA5A538CC /* GameSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BCAC908D84AE659C1AA2F7E /* GameSearch.swift */; };
@@ -226,6 +227,7 @@
 		20B4F14E89030DE1077EE952 /* BarsAndAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarsAndAccounts.swift; sourceTree = "<group>"; };
 		2174CAD06ADF7ECC068B88FD /* SampleScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleScan.swift; sourceTree = "<group>"; };
 		21BF9B0F9EB523245B2518DC /* PvPPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PvPPlacement.swift; sourceTree = "<group>"; };
+		22AEC20035CF6716A0888CA1 /* PickerRowModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerRowModelsTests.swift; sourceTree = "<group>"; };
 		2525D042EF40B722A34E06D5 /* PokemonActivityTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonActivityTabs.swift; sourceTree = "<group>"; };
 		25480D5F634F1F2F763FAB7D /* HubMaxSquadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubMaxSquadTests.swift; sourceTree = "<group>"; };
 		272C46D0764D4B5A0E23F600 /* HubPvPSquadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubPvPSquadTests.swift; sourceTree = "<group>"; };
@@ -487,6 +489,7 @@
 				15FB3B6EA5DBF0AED88D53BD /* JumpThrottleTests.swift */,
 				2B63A4AC73C349DBA01D3BAF /* MarkEditorTests.swift */,
 				389C937EDB734855BA202EC4 /* PickerRowFiguresTests.swift */,
+				22AEC20035CF6716A0888CA1 /* PickerRowModelsTests.swift */,
 				92C1CAF14271C5019066D125 /* PvPPlacementTests.swift */,
 				D76F4EFCC26E0B2FC6ADEC25 /* SquadKeeperTests.swift */,
 			);
@@ -833,6 +836,7 @@
 				4FD39FFDFE728BA07015D0A7 /* JumpThrottleTests.swift in Sources */,
 				DC26D695B43A1397836CD3F1 /* MarkEditorTests.swift in Sources */,
 				0589202BA84657C16C4F3104 /* PickerRowFiguresTests.swift in Sources */,
+				6450A172571F22EBC9C8FBB3 /* PickerRowModelsTests.swift in Sources */,
 				407469E8DD128DD568177761 /* PvPPlacementTests.swift in Sources */,
 				6C038EA5EB1AC98EBA13BB21 /* SquadKeeperTests.swift in Sources */,
 			);
