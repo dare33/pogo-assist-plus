@@ -110,3 +110,29 @@ Points the last build session flagged, put to Greg in this check:
   S1 carry when a Pokémon is next on, if known; no history of past dates is added.
 
 Read back to Greg at the end of the check (the build list in the pass-2 and pass-3 FEEDBACK entries above, all full review except the Hundo rename alone): Greg: "Agreed, build it".
+
+## Phone run 2, 1 Nov 2026 (build fe6ce9e, test/greg-build)
+
+Greg ran the 16-step walkthrough on his phone. Steps 1-3 (A-Z), 5-9 (squads), 10-15 (Collection) and 16 (Special
+scan): "green". The screenshots page (taken at fe6ce9e): "screenshots look good".
+
+- P1 (step 4, the Available picker). Greg: "green. but ... The pokemon picker that comes up doesn't really tell me
+  enough information to make a choice straight from that screen. At a minimum it should display CP + the counters
+  already there, and potentially IV. I do like the green tick next to the gnames which i believe indicates that this
+  pokemon is a suitable choice? Also space out the information to use the bar more effectively (maybe a visual
+  indicator of strength to faciliate quick choice by the user?)" Answered: the filled circle on the left marks the
+  Pokémon in the slot now; the small green tick after a name is Full strength (built for this job, no work left); the
+  orange arrow and cost mean it needs work. Asked, Greg chose: the strength bar shows "estimated damage on bar, Tier
+  displayed next to it"; IVs as "Attack/Defence/HP"; "All five" squad screens. Decision: each picker row shows the
+  copy's CP and IVs (Attack/Defence/HP), a strength bar of its estimated damage with the tier beside it, and uses the
+  row's width; on all five squad screens. Asked further, Greg chose: the bar shows "Both" (a solid part for the copy as
+  it is now and a faint part up to after its suggested upgrade); a full bar is the "Best in the game" against this
+  boss; Gym and PvP bars show their "Bulk and Score"; the picker "Keep[s] the order" (the bar informs, it does not
+  sort). Manager's calls (in the read-back): raid damage needs raid move stats, which `data/gamemaster.json` (PvP
+  only) lacks, so a new generated file comes from the public PokeMiners game master by a script; Raids estimate damage
+  per second against the boss; Max the damage of one Max move (its fast move's type) against the boss, for every Max
+  role; Rocket damage per turn with the PvP move stats, averaged over the slot's options; "best in the game" is the
+  strongest released species (Megas and Shadows on Raids and Rocket, Dynamax-capable on Max) at level 50 with
+  15/15/15 and its best moves; a copy whose moves were not read uses the moves its build names; CP and IVs are the
+  copy's now ("not read" when unknown); a Best row the box lacks shows one bar at level 50 with 15/15/15. Size: full
+  (new data, a new calculation, new information on five screens).

@@ -37,3 +37,10 @@ Greg checked the changes built from phone run 1, screen by screen.
   when the list is still. Size: full (what a tap does).
 
 Read back to Greg at the end of the check (the build list in the pass-2 and pass-3 FEEDBACK entries above, all full review except the Hundo rename alone): Greg: "Agreed, build it".
+
+## Phone run 2, 1 Nov 2026 (build fe6ce9e, test/greg-build)
+
+Greg ran the walkthrough on his phone: the A-Z steps (letters easy to hit, a letter pressed mid-scroll jumps, a far
+jump lands on the letter), the Collection steps (959 and 54 totals, the Missing card, the set strips and "All N",
+the new sets, "Coming soon", "Hundo", the set sheet staying open over an alert, one build per copy in the species
+cost) and the Special scan step: all "green". The one comment, on the squad picker, is P1 in the pass-2 FEEDBACK.
