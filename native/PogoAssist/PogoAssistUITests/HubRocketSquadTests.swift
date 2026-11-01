@@ -87,6 +87,20 @@ final class HubRocketSquadTests: SquadUITestCase {
         XCTAssertTrue(nextBestRows.allSatisfy { (1...3).contains($0) }, "up to three rows: \(nextBestRows)")
     }
 
+    /// P1: Rocket picker rows say CP, IVs and their damage figure, under Available and Best.
+    func testRocketPickerRowsShowCpIvsAndStrength() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "rocket")
+        openPicker(app, "rocket", slot: 2)
+        assertPickerFigures(app, figure: "estimated damage", available: true)
+        closePicker(app)
+        selectBest(app)
+        openPicker(app, "rocket", slot: 2)
+        assertPickerFigures(app, figure: "estimated damage", available: false)
+        closePicker(app)
+    }
+
     func testRocketScreenshots() throws {
         let setup = launch(reset: true)
         populate(setup)

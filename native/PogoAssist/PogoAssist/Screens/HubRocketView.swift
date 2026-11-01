@@ -241,13 +241,20 @@ private struct RocketSquadView: View {
         if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
         let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf)
         let byId = Dictionary(source.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        // P1: damage per turn against the slot's possible Pokémon, as a share of the best in the game.
+        let scale = (try? PveMoves.bundled()).map { StrengthScale.shared(mode: .rocket, bosses: leader.slots[i], ctx: ctx, pve: $0) }
         var rows: [PickerRowModel] = listed.compactMap { r in
-            guard let e = byId[r.entryId] else { return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: .rocket, ctx: ctx) }
+            guard let e = byId[r.entryId] else {
+                let copy = ctx.entry(r.entryId)
+                return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: .rocket, ctx: ctx)?.adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false)))
+            }
             if e.build == nil || e.best?.hasBuild == false, let best = e.best {
+                let copy = best.inBox ? (best.copy ?? best.ownedEntryId.flatMap(ctx.entry)) : nil
+                let lacking = copy == nil ? StrengthScale.Row.Lacking(speciesId: best.speciesId, shadow: best.key.hasSuffix("_shadow"), moves: HubSquads.tableMoves(of: best, area: "rocket", ctx: ctx)) : nil
                 return PickerRowModel(best: best, ticked: r.ticked, types: e.flags, extraSpoken: {
                     let hitting = e.flags.filter { !$0.grey }.map(\.type)
                     return hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot"
-                }())
+                }()).adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false, species: lacking)))
             }
             let mark = SquadMark.of(e.build!, screen: .rocket, ctx: ctx)
             let types = e.flags
@@ -255,7 +262,9 @@ private struct RocketSquadView: View {
             let spoken = [e.name, e.line, hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot", mark.spoken, e.best?.spokenStatus, r.ticked ? "in this slot" : nil]
                 .compactMap { $0 }.joined(separator: ", ")
             let note = [e.line, e.best?.statusLine].compactMap { $0 }.joined(separator: " · ")
+            let copy = ctx.entry(e.build!.entryId)
             return PickerRowModel(id: r.entryId, name: e.name, ticked: r.ticked, mark: mark, tier: e.tier, types: types, note: note.isEmpty ? nil : note, spoken: spoken)
+                .adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: e.build, built: mark == .fullStrength)))
         }
         if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
         return SquadPicker(
