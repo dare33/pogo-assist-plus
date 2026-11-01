@@ -74,6 +74,22 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertEqual(el(app, "hub-pvp-season").label, "Current Season: GO Battle League: Twilight Trails. Ends 1 December, 2026.")
     }
 
+    /// P1: PvP picker rows say CP, IVs (plus their own graded IV line) and a score, under Available and Best (a Pokémon with no score says "score not known").
+    func testPvPPickerRowsShowCpIvsAndScore() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "pvp")
+        if app.buttons["hub-pvp-league-ul"].waitForExistence(timeout: 30) { app.buttons["hub-pvp-league-ul"].tap() }
+        openPicker(app, "pvp", slot: 2)
+        assertPickerFigures(app, figure: "score", available: true)
+        XCTAssertTrue(pickerRows(app).firstMatch.label.contains("IVs "), "PvP shows IVs like the other screens: \(pickerRows(app).firstMatch.label)")
+        closePicker(app)
+        selectBest(app)
+        openPicker(app, "pvp", slot: 2)
+        assertPickerFigures(app, figure: "score", available: false)
+        closePicker(app)
+    }
+
     func testPvPScreenshots() throws {
         let setup = launch(reset: true)
         populate(setup)

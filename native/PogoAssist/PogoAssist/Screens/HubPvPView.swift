@@ -232,10 +232,11 @@ private struct PvPSquadView: View {
         let speciesRuleOnly = boxHasOptions && listed.isEmpty && listedOther.isEmpty && (ids + groups.other).allSatisfy { !inSquad.contains($0) }
         func model(_ l: HubSquads.PickerRow) -> PickerRowModel? {
             if let r = best.first(where: { $0.entryId == l.entryId }), !r.hasBuild {
-                return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · "))
+                // A copy no league rating serves shows its CP; a Pokémon the box lacks has no copy and no score, so no bar.
+                return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · ")).adding(copy: r.inBox ? (r.copy ?? r.ownedEntryId.flatMap(ctx.entry)) : nil, strength: leagueScore(r.speciesId))
             }
             if let pc = byId[l.entryId] { return row(pc, ticked: l.ticked, status: best.first { $0.ownedEntryId == l.entryId }?.statusLine) }
-            guard let m = member(l.entryId, byId: byId, best: best, pogoAssist: pogoAssist) else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .pvp, ctx: ctx) }
+            guard let m = member(l.entryId, byId: byId, best: best, pogoAssist: pogoAssist) else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .pvp, ctx: ctx)?.adding(copy: ctx.entry(l.entryId), strength: leagueScore(ctx.entry(l.entryId)?.row.speciesId ?? "")) }
             if let r = m.notOwned { return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · ")) }
             return fallbackRow(l.entryId, m, ticked: l.ticked)
         }
@@ -273,6 +274,11 @@ private struct PvPSquadView: View {
             })
     }
 
+    /// The bar of a Pokémon with no league rating of the player's own: PvPoke's score for the species in this league (the same 0 to 100 scale), else no bar and "score not known".
+    private func leagueScore(_ speciesId: String) -> Strength {
+        (try? PvpScores.bundled()).flatMap { $0.score(speciesId: speciesId, league: league) }.map(Strength.score) ?? .scoreNotKnown
+    }
+
     /// A row for a Pokémon that is in a slot but not on the candidate list, read from its own league rating.
     private func fallbackRow(_ id: String, _ m: Member, ticked: Bool) -> PickerRowModel {
         let score = m.option?.strength?.score
@@ -284,7 +290,7 @@ private struct PvPSquadView: View {
         let tier = m.tier
         let spoken = [m.name, roles, tier.isEmpty ? nil : "tier \(tier)", m.mark.spoken, "IV " + iv.replacingOccurrences(of: "#", with: "rank "), "score \(scoreText)", ticked ? "in this slot" : nil]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return PickerRowModel(
+        let model = PickerRowModel(
             id: id, name: m.name, ticked: ticked, mark: m.mark, role: roles.isEmpty ? nil : roles, tier: tier, types: m.types.map { PickerType(type: $0) },
             noteView: AnyView(HStack(spacing: 4) {
                 if !m.copyTitle.isEmpty, m.option?.isSelf == false { Text("From \(m.copyTitle) ·").font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted) }
@@ -295,6 +301,7 @@ private struct PvPSquadView: View {
                 Text("SCORE").font(.figtree(10, .bold, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.muted)
             }.fixedSize()),
             spoken: spoken)
+        return model.adding(copy: ctx.entry(id), strength: score.map(Strength.score) ?? .scoreNotKnown, speaksStrength: false)
     }
 
     private func row(_ pc: HubSquads.PvpCandidate, ticked: Bool, status: String? = nil) -> PickerRowModel {
@@ -307,7 +314,7 @@ private struct PvPSquadView: View {
         let spoken = [c.displayName, roles, tier.isEmpty ? nil : "tier \(tier)", mark.spoken, status?.replacingOccurrences(of: " · ", with: ", "), c.fromText, "IV " + c.subText.replacingOccurrences(of: "#", with: "rank "),
                       "score \(score)" + (scoreGrade.spoken.isEmpty ? "" : ", \(scoreGrade.spoken) pick"), ticked ? "in this slot" : nil]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return PickerRowModel(
+        let model = PickerRowModel(
             id: c.entryId, name: c.displayName, ticked: ticked, mark: mark, role: roles.isEmpty ? nil : roles, tier: tier, types: types.map { PickerType(type: $0) },
             noteView: AnyView(VStack(alignment: .leading, spacing: 2) {
                 if let status { Text(status).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
@@ -318,6 +325,7 @@ private struct PvPSquadView: View {
                 Text("SCORE").font(.figtree(10, .bold, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.muted)
             }.fixedSize()),
             spoken: spoken)
+        return model.adding(copy: ctx.entry(c.entryId), strength: Strength.score(c.score), speaksStrength: false)
     }
 
     /// "From Eevee · #528 · 96.8%", the IV part graded by its rank.
