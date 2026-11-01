@@ -104,22 +104,105 @@ final class DamageEstimateTests: XCTestCase {
     /// Ruling 4: a Gigantamax Best row the box lacks is valued with its G-Max move: the same as an owned level 50, 15/15/15 Gigantamax copy.
     func testAGigantamaxBestRowTheBoxLacksEqualsAnOwnedMaxedCopy() throws {
         let s = scale(.max, boss: P23.boss("snorlax", types: ["normal"]))
-        let lacking = s.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "machamp", shadow: false, moves: nil, gigantamax: true)))
+        let lacking = s.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "machamp", shadow: false, moves: [], gigantamax: true)))
         var owned = P23.entry("m", "machamp", ivs: IVs(atk: 15, def: 15, hp: 15), level: 50)
         owned.row.gigantamax = true
         let have = s.strength(.init(copy: owned, build: nil, built: true))
         XCTAssertEqual(try XCTUnwrap(lacking.now), try XCTUnwrap(have.now), accuracy: 1e-12)
-        let notGiga = s.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "machamp", shadow: false, moves: nil)))
+        let notGiga = s.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "machamp", shadow: false, moves: [])))
         XCTAssertNotEqual(notGiga.now, lacking.now)
     }
 
-    func testTheKeyChangesWithWhatTheBestDependsOn() {
+    /// The scale key is a content hash: it changes with the mode, the boss, the table's move lines, one move's duration, the type chart and a species' stats, and it is
+    /// the same for the same content whatever ran before (no count or sum stands for the data).
+    func testTheKeyChangesWithWhatTheBestDependsOn() throws {
         let a = scale(.raids), b = scale(.rocket), c = scale(.raids, boss: P23.boss("groudon", types: ["ground"]))
         XCTAssertEqual(Set([a.key, b.key, c.key]).count, 3)
-        let stronger = PveMoves(moves: Self.pve.moves, maxAttackPower: Self.pve.maxAttackPower, gmaxPower: Self.pve.gmaxPower + 100)
-        let d = StrengthScale(mode: .raids, bosses: [Self.giratina], ctx: P23.ctx(), pve: stronger)
-        XCTAssertNotEqual(a.key, d.key, "a change to the move stats is a different scale")
+        XCTAssertEqual(a.key, scale(.raids).key)
+        // The table: an empty table is a different scale from the bundled one, and one changed move line is another.
+        let bundled = try TierTable.bundled()
+        let withTable = StrengthScale(mode: .raids, bosses: [Self.giratina], ctx: P23.ctx(table: bundled), pve: Self.pve)
+        XCTAssertNotEqual(a.key, withTable.key)
+        var edited = bundled.entries
+        let i = try XCTUnwrap(edited.firstIndex { $0.moves != nil })
+        edited[i].moves = (edited[i].moves ?? "") + " + Surf"
+        XCTAssertNotEqual(withTable.key, StrengthScale(mode: .raids, bosses: [Self.giratina], ctx: P23.ctx(table: P23.table(edited)), pve: Self.pve).key)
+        // One move's duration, the Max powers.
+        var moves = Self.pve.moves
+        let id = try XCTUnwrap(moves.keys.sorted().first)
+        moves[id]!.durationMs += 1
+        XCTAssertNotEqual(a.key, StrengthScale(mode: .raids, bosses: [Self.giratina], ctx: P23.ctx(), pve: PveMoves(moves: moves, maxAttackPower: Self.pve.maxAttackPower, gmaxPower: Self.pve.gmaxPower)).key)
+        XCTAssertNotEqual(a.key, StrengthScale(mode: .raids, bosses: [Self.giratina], ctx: P23.ctx(), pve: PveMoves(moves: Self.pve.moves, maxAttackPower: Self.pve.maxAttackPower, gmaxPower: Self.pve.gmaxPower + 100)).key)
+        // The type chart and a species' stats.
+        let chart = P23.ctx(edit: { $0.typeChart["fire"]?["water"] = 0.5 })
+        XCTAssertNotEqual(a.key, StrengthScale(mode: .raids, bosses: [Self.giratina], ctx: chart, pve: Self.pve).key)
+        XCTAssertNotEqual(DamageEstimate.fingerprint(gm: P23.gm), DamageEstimate.fingerprint(gm: try GameMaster(data: Data(#"{"pokemon":[{"dex":1,"speciesId":"a","speciesName":"A","baseStats":{"atk":1,"def":1,"hp":1}}],"moves":[]}"#.utf8))))
         XCTAssertTrue(StrengthScale.shared(mode: .raids, bosses: [Self.giratina], ctx: P23.ctx(), pve: Self.pve) === StrengthScale.shared(mode: .raids, bosses: [Self.giratina], ctx: P23.ctx(), pve: Self.pve))
+    }
+
+    /// The best in the game is at least every candidate's value, for one raid boss and one Max boss (the Max candidates being the sourced Dynamax and Gigantamax species).
+    func testTheBestIsAtLeastEveryCandidate() throws {
+        let raid = scale(.raids, boss: Self.giratina), best = raid.bestInGame
+        var n = 0
+        for sp in P23.gm.ordered where DamageEstimate.eligible(sp, megas: true) {
+            for shadow in [false, true] where !shadow || (sp.tags.contains("shadoweligible") && !sp.tags.contains("mega")) {
+                let a = StrengthScale.Attacker(speciesId: sp.id, base: sp.baseStats!, types: sp.types, shadow: shadow, level: 50, ivs: IVs(atk: 15, def: 15, hp: 15))
+                if let v = raid.value(a) { XCTAssertLessThanOrEqual(v, best + 1e-9, sp.id); n += 1 }
+            }
+        }
+        XCTAssertGreaterThan(n, 1000)
+        let max = scale(.max, boss: P23.boss("snorlax", types: ["normal"])), maxBest = max.bestInGame
+        var m = 0
+        for id in MaxBattleSpecies.capable {
+            let a = gmaxAttacker(id)
+            if let v = max.value(a) { XCTAssertLessThanOrEqual(v, maxBest + 1e-9, id); m += 1 }
+            if let g = MaxBattleSpecies.gigantamax[id], let v = max.value(a, gmaxType: g) { XCTAssertLessThanOrEqual(v, maxBest + 1e-9, "\(id) G-Max") }
+        }
+        XCTAssertGreaterThan(m, 100)
+    }
+
+    // MARK: fixed Max moves (ruling 2)
+
+    /// Against Machop (Fighting), Crowned Sword Zacian's Max Attack is Max Behemoth Blade (Steel, 250) whatever its fast move: a Flying fast move does not make it Flying
+    /// (Flying would be double super effective here), so Zacian is not the best in the game on a Flying move.
+    func testZacianUsesBehemothBladeNotItsFastMovesType() throws {
+        let machop = P23.boss("machop", types: ["fighting"])
+        let s = scale(.max, boss: machop)
+        let z = gmaxAttacker("zacian_crowned_sword")
+        let atk = try XCTUnwrap(DamageEstimate.attackStat(base: z.base, ivs: z.ivs, level: 50, shadow: false))
+        let defence = (Double(P23.gm.byId["machop"]!.baseStats!.def) + 15) * (try XCTUnwrap(PogoRules.cpm(40)))
+        let steel = DamageEstimate.damage(power: Self.pve.maxAttackPower, attack: atk, defence: defence, sameType: true, effectiveness: P23.hub.effectiveness("steel", against: ["fighting"]))
+        XCTAssertEqual(try XCTUnwrap(s.value(z)), steel, accuracy: 1e-9)
+        let flying = DamageEstimate.damage(power: Self.pve.maxAttackPower, attack: atk, defence: defence, sameType: false, effectiveness: P23.hub.effectiveness("flying", against: ["fighting"]))
+        XCTAssertNotEqual(steel, flying)
+        XCTAssertNotEqual(s.computeBest().who, "zacian_crowned_sword", "the unfixed rule let a Flying fast move make Zacian the best against a Fighting boss")
+    }
+
+    /// Eternatus's Max Attack is Max Dynamax Cannon: Dragon, at the G-Max power (350).
+    func testEternatusUsesDynamaxCannonAtGMaxPower() throws {
+        let boss = P23.boss("snorlax", types: ["normal"])
+        let s = scale(.max, boss: boss)
+        let e = gmaxAttacker("eternatus")
+        let atk = try XCTUnwrap(DamageEstimate.attackStat(base: e.base, ivs: e.ivs, level: 50, shadow: false))
+        let defence = (Double(P23.gm.byId["snorlax"]!.baseStats!.def) + 15) * (try XCTUnwrap(PogoRules.cpm(40)))
+        let expected = DamageEstimate.damage(power: Self.pve.gmaxPower, attack: atk, defence: defence, sameType: true, effectiveness: P23.hub.effectiveness("dragon", against: ["normal"]))
+        XCTAssertEqual(Self.pve.gmaxPower, 350)
+        XCTAssertEqual(try XCTUnwrap(s.value(e)), expected, accuracy: 1e-9)
+    }
+
+    /// A Hidden Power fast move gives Max Strike (Normal), whatever type Hidden Power was set to.
+    func testHiddenPowerGivesMaxStrike() throws {
+        let boss = P23.boss("machop", types: ["fighting"])
+        let s = scale(.max, boss: boss)
+        let withHP = P23.gm.ordered.first { $0.fastMoves.contains { $0.hasPrefix("HIDDEN_POWER") } && $0.baseStats != nil }
+        let sp = try XCTUnwrap(withHP)
+        let a = StrengthScale.Attacker(speciesId: sp.id, base: sp.baseStats!, types: sp.types, shadow: false, level: 50, ivs: IVs(atk: 15, def: 15, hp: 15))
+        let hp = try XCTUnwrap(sp.fastMoves.first { $0.hasPrefix("HIDDEN_POWER") })
+        let found = try XCTUnwrap(s.found(a, pick: .init(fast: hp)))
+        let atk = try XCTUnwrap(DamageEstimate.attackStat(base: a.base, ivs: a.ivs, level: 50, shadow: false))
+        let defence = (Double(P23.gm.byId["machop"]!.baseStats!.def) + 15) * (try XCTUnwrap(PogoRules.cpm(40)))
+        let normal = DamageEstimate.damage(power: Self.pve.maxAttackPower, attack: atk, defence: defence, sameType: sp.types.contains("normal"), effectiveness: P23.hub.effectiveness("normal", against: ["fighting"]))
+        XCTAssertEqual(found.value, normal, accuracy: 1e-9)
     }
 
     // MARK: the mean over several bosses and over the Rocket slot's options
@@ -205,7 +288,7 @@ final class DamageEstimateTests: XCTestCase {
 
     func testAPokemonTheBoxLacksIsOneBarAtLevel50With15s() throws {
         let s = scale(.raids)
-        let st = s.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "palkia", shadow: false, moves: nil)))
+        let st = s.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "palkia", shadow: false, moves: [])))
         XCTAssertTrue(st.assumed)
         XCTAssertNil(st.after)
         let v = try XCTUnwrap(s.value(palkia(atkIV: 15)))
@@ -261,6 +344,9 @@ final class DamageEstimateTests: XCTestCase {
         XCTAssertEqual(unreadable.picks, [])
         XCTAssertEqual(unreadable.unparsed, 1)
         XCTAssertEqual(DamageEstimate.parseLines(nil, gm: gm).picks, [])
+        // A bracketed group goes wherever it sits, and a comma separates charged moves: "Hydro Cannon (CD), Surf+" keeps Surf.
+        XCTAssertEqual(DamageEstimate.parseLines("Mud Shot / Hydro Cannon (CD), Surf+", gm: gm).picks, [.init(fast: "MUD_SHOT", charged: ["HYDRO_CANNON", "SURF"])])
+        XCTAssertEqual(DamageEstimate.parseLines("Counter / Dynamic Punch (Elite) + Close Combat (CD)", gm: gm).picks, [.init(fast: "COUNTER", charged: ["DYNAMIC_PUNCH", "CLOSE_COMBAT"])])
     }
 
     /// Ruling 8: a name that two ids share resolves by rule (no _PLUS, then the shortest, then the first alphabetically), not by dictionary order.
@@ -326,6 +412,14 @@ final class DamageEstimateTests: XCTestCase {
         XCTAssertNil(scores.score(speciesId: "no_such_species", league: "ul"))
         XCTAssertNil(scores.score(speciesId: id, league: "xx"))
         XCTAssertEqual(Strength.score(score).barSolid, score / 100, accuracy: 1e-12)
+    }
+
+    /// The faint part is drawn only when the spoken after percent is above the spoken now percent.
+    func testFaintPartNeedsAHigherSpokenPercent() {
+        XCTAssertFalse(Strength(kind: .damage, now: 0.600, after: 0.604).hasFaint, "60 percent and 60 percent")
+        XCTAssertFalse(Strength(kind: .damage, now: 0.600, after: 0.6049).hasFaint)
+        XCTAssertTrue(Strength(kind: .damage, now: 0.600, after: 0.615).hasFaint)
+        XCTAssertTrue(Strength(kind: .damage, now: nil, after: 0.5).hasFaint)
     }
 
     func testPvpScoreIsOneBarWithNoFaintPart() {

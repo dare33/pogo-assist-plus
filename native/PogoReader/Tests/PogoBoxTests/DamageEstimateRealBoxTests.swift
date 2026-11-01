@@ -80,6 +80,61 @@ final class DamageEstimateRealBoxTests: XCTestCase {
         XCTAssertTrue([found.fast, found.charged].compactMap { $0 }.contains { P23.gm.moves[$0]?.type == "dragon" }, "judged on a Dragon-type line: \(found)")
     }
 
+    /// Ruling 1 on the real box: a Mega form is judged on the best of its Mega lines, the plain lines and the copy's own moves. Against Palkia, Metagross in the Mega slot is
+    /// worth at least what it is in a plain slot; against Giratina (Origin), Lucario in the Mega slot shows a gain; a Mega Garchomp the box lacks, against Palkia, is
+    /// judged on its Dragon line.
+    func testMegaFormsAreJudgedOnTheirBestLine() throws {
+        let box = Self.realBox
+        let table = try TierTable.bundled(), pve = try PveMoves.bundled()
+        func setup(_ boss: String) throws -> (HubContext, StrengthScale, [HubSquads.RaidCandidate]) {
+            let row = try XCTUnwrap(P23.hub.rotation.first { $0.kind == .fiveStar && $0.bosses.contains { $0.speciesId == boss } })
+            let ctx = HubContext(advice: box.advice, entries: box.entries, gm: P23.gm, hub: P23.hub, table: table, today: row.from)
+            return (ctx, StrengthScale.shared(mode: .raids, bosses: row.bosses, ctx: ctx, pve: pve), HubSquads.raidCandidates(row: row, mode: .available, ctx: ctx))
+        }
+        // Metagross against Palkia.
+        var (ctx, scale, cands) = try setup("palkia")
+        let metagross = try XCTUnwrap(cands.first { ctx.entry($0.entryId)?.row.speciesId == "beldum" && $0.mega != nil })
+        let copy = try XCTUnwrap(ctx.entry(metagross.entryId))
+        let inMegaSlot = scale.strength(.init(copy: copy, build: try XCTUnwrap(metagross.mega).build, built: false, megaSlot: true))
+        let inPlainSlot = scale.strength(.init(copy: copy, build: metagross.build, built: false, megaSlot: false))
+        let megaAfter = try XCTUnwrap(inMegaSlot.after ?? inMegaSlot.now), plainAfter = try XCTUnwrap(inPlainSlot.after ?? inPlainSlot.now)
+        print("P1-MEGA builds: mega \(String(describing: metagross.mega?.build.targetLevel)) \(String(describing: metagross.mega?.build.climbLevel)) plain \(String(describing: metagross.build.targetLevel)) level now \(String(describing: copy.row.level)) steps \(String(describing: metagross.mega?.build.steps?.map(\.kind))) vs \(String(describing: metagross.build.steps?.map(\.kind)))")
+        print("P1-MEGA metagross vs palkia: Mega slot \(megaAfter), plain slot \(plainAfter)")
+        XCTAssertGreaterThanOrEqual(megaAfter, plainAfter)
+        // Lucario against Giratina (Origin).
+        (ctx, scale, cands) = try setup("giratina_origin")
+        let lucario = try XCTUnwrap(cands.first { ctx.entry($0.entryId)?.row.speciesId == "lucario" && $0.mega != nil })
+        let lcopy = try XCTUnwrap(ctx.entry(lucario.entryId))
+        let l = scale.strength(.init(copy: lcopy, build: try XCTUnwrap(lucario.mega).build, built: false, megaSlot: true))
+        print("P1-MEGA lucario builds: mega \(String(describing: lucario.mega?.build.steps?.map(\.kind))) lvl \(String(describing: lucario.mega?.build.targetLevel)) now level \(String(describing: lcopy.row.level)) plain \(String(describing: lucario.build.steps?.map(\.kind))) built \(lucario.built)")
+        print("P1-MEGA lucario vs giratina: now \(String(describing: l.now)) after \(String(describing: l.after))")
+        XCTAssertNotNil(l.after, "Lucario in the Mega slot shows a gain")
+        XCTAssertGreaterThan(try XCTUnwrap(l.after), try XCTUnwrap(l.now))
+        // A Mega Garchomp the box lacks, against Palkia: every line of the species, so the Dragon line is there to be chosen.
+        (ctx, scale, _) = try setup("palkia")
+        let best = HubSquads.BestRow(key: "garchomp_mega", name: "Mega Garchomp", speciesId: "garchomp_mega", tier: "S", roles: [], types: ["dragon", "ground"], availability: "")
+        let lines = HubSquads.tableMoves(of: best, area: "raids", ctx: ctx)
+        XCTAssertGreaterThanOrEqual(lines.count, 2)
+        let g = try XCTUnwrap(scale.attacker("garchomp_mega", shadow: false, level: 50, ivs: IVs(atk: 15, def: 15, hp: 15)))
+        let found = try XCTUnwrap(scale.bestOver(g, lines: lines.flatMap(scale.picks(forText:))))
+        XCTAssertTrue([found.fast, found.charged].compactMap { $0 }.contains { P23.gm.moves[$0]?.type == "dragon" }, "judged on a Dragon line: \(found)")
+        let st = scale.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp_mega", shadow: false, moves: lines)))
+        XCTAssertEqual(try XCTUnwrap(st.now), found.value / scale.bestInGame, accuracy: 1e-12)
+    }
+
+    /// The move lines in the tables that name no move the game master knows, and which of them sit on the raid, Max and Rocket tables a picker reads.
+    func testListUnparsedLinesOfThePickerTables() throws {
+        let table = try TierTable.bundled()
+        var picker = [String](), other = [String]()
+        for e in table.entries {
+            let r = DamageEstimate.parseLines(e.moves, gm: P23.gm)
+            guard r.unparsed > 0 else { continue }
+            let line = "\(e.area) | \(e.name) | \(e.moves ?? "")"
+            if ["raids", "max", "rocket"].contains(e.area) { picker.append(line) } else { other.append(line) }
+        }
+        print("P1-UNPARSED total \(picker.count + other.count); on raid, Max and Rocket tables \(picker.count):\n" + picker.joined(separator: "\n") + "\nelsewhere (PvP leagues, Gym): \(other.count)")
+    }
+
     /// A picker opens without a visible delay: a cold scale (the best in the game worked out) plus every row of the box, for every raid and Max boss on the schedule.
     func testPickerOpenTimeOnTheRealBox() throws {
         let box = Self.realBox

@@ -5,8 +5,8 @@ import Foundation
 ///
 /// Source: Pokemon GO Wiki (pokemongo.fandom.com), read through its MediaWiki API on 1 Nov 2026. Bulbapedia, the source first asked for, answers a script with a Cloudflare
 /// challenge page, so it was not read. Pages and revisions:
-/// - "Template:Data/Dynamax", revision 190794: the wiki's list of released Dynamax species (the entries marked "Yes", 146 names; `darmanitan_standard` stands for
-///   Darmanitan and the two Urshifu styles for Urshifu, which the file names by species alone).
+/// - "Template:Data/Dynamax", revision 190794: the wiki's list of released Dynamax species (the entries marked "Yes": 148 names). `darmanitan_standard` stands for Darmanitan
+///   and the two Urshifu styles for Urshifu, which the file names by species alone, and the three species below are added from "Max Moves": the array holds 152 ids.
 /// - "Max Moves", revision 187269: Crowned Sword Zacian, Crowned Shield Zamazenta and Eternatus have their own Max Moves, so they are added.
 /// - "Gigantamax", revision 190416, section "List of Gigantamax Pokémon": the Gigantamax forms released in Pokémon GO (17); "Max Moves", section "List of G-Max Moves": each
 ///   one's G-Max move and its type. Gigantamax forms the wiki lists as not released (Duraludon, Urshifu) are left out.
@@ -60,6 +60,16 @@ public enum MaxBattleSpecies {
         "inteleon": "water",
         "toxtricity": "electric",
         "grimmsnarl": "dark",
+    ]
+
+    /// Max Moves that are fixed for a species, whatever its fast move ("Max Moves", revision 187269, "Details"): Crowned Sword Zacian has Max Behemoth Blade and Crowned Shield
+    /// Zamazenta Max Behemoth Bash (Steel, the standard Max Attack power), Eternatus Max Dynamax Cannon (Dragon, at the G-Max power). The same page: a Dynamax Pokémon
+    /// that knows Hidden Power as its fast move always gets Max Strike (Normal).
+    public struct FixedMove { public var type: String; public var atGMaxPower: Bool }
+    public static let fixedMaxMove: [String: FixedMove] = [
+        "zacian_crowned_sword": FixedMove(type: "steel", atGMaxPower: false),
+        "zamazenta_crowned_shield": FixedMove(type: "steel", atGMaxPower: false),
+        "eternatus": FixedMove(type: "dragon", atGMaxPower: true),
     ]
 
     /// Every species that can take part: the Dynamax-capable ones and the Gigantamax ones (Meowth, Lapras, Snorlax and Grimmsnarl have no Dynamax form released).

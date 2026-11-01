@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import PogoReader
 
@@ -59,7 +60,12 @@ public struct Strength: Equatable {
     public var barSolid: Double { min(1, max(0, now ?? 0)) }
     public var barEnd: Double { min(1, max(barSolid, after ?? 0)) }
     /// A faint part continues the solid one to the figure after the upgrade.
-    public var hasFaint: Bool { barEnd - barSolid > 0.004 }
+    /// Only when the spoken after figure is above the spoken now figure: a gain that rounds to the same percent draws no faint part.
+    public var hasFaint: Bool {
+        guard barEnd - barSolid > 0.004 else { return false }
+        if let n = now, let a = after { return Self.percent(a) > Self.percent(n) }
+        return true
+    }
     /// Nothing to draw: neither figure could be worked out.
     public var isEmpty: Bool { now == nil && after == nil && score == nil }
 
@@ -113,15 +119,14 @@ public enum DamageEstimate {
 
     /// The table's move lines as game master move ids. A cell may hold several lines (";"), several fast moves ("Fire Spin or Wing Attack") and several charged moves
     /// ("A + B", "A or B"): "Fire Spin or Wing Attack / Dragon Claw + Blast Burn" is two picks. A name the game master does not know (a Max move, "Dynamax Cannon") gives
-    /// nothing for its slot; a trailing "+" (a Mega charged attack) reads as the base move; a bracket ("(Elite)", "(CD)") is dropped. A line that gives no move at all is
+    /// nothing for its slot; a trailing "+" (a Mega charged attack) reads as the base move; a bracketed group ("(Elite)", "(CD)") is dropped and a comma separates charged moves. A line that gives no move at all is
     /// counted in `unparsed` and skipped.
     public static func parseLines(_ text: String?, gm: GameMaster) -> (picks: [Pick], unparsed: Int) {
         guard let text, !text.isEmpty else { return ([], 0) }
         let names = moveIdsByName(gm)
         func resolve(_ part: String) -> String? {
-            var p = part
-            if let open = p.firstIndex(of: "(") { p = String(p[..<open]) }
-            p = p.trimmingCharacters(in: .whitespaces)
+            // Every bracketed group goes ("(CD)", "(Elite)"), wherever it sits, so "Hydro Cannon (CD), Surf+" keeps Surf.
+            var p = part.replacingOccurrences(of: #"\([^)]*\)"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces)
             if p.hasSuffix("+") { p = String(p.dropLast()) }
             return names[normName(p)]
         }
@@ -129,7 +134,7 @@ public enum DamageEstimate {
         for line in text.components(separatedBy: ";") {
             let halves = line.components(separatedBy: " / ")
             let fasts = (halves.first ?? "").components(separatedBy: " or ").compactMap(resolve)
-            let charged = halves.dropFirst().joined(separator: " / ").components(separatedBy: " + ").flatMap { $0.components(separatedBy: " or ") }.compactMap(resolve)
+            let charged = halves.dropFirst().joined(separator: " / ").components(separatedBy: " + ").flatMap { $0.components(separatedBy: " or ") }.flatMap { $0.components(separatedBy: ",") }.compactMap(resolve)
             if fasts.isEmpty && charged.isEmpty { unparsed += 1; continue }
             picks += fasts.isEmpty ? [Pick(fast: nil, charged: charged)] : fasts.map { Pick(fast: $0, charged: charged) }
         }
@@ -169,7 +174,7 @@ public enum DamageEstimate {
 
     /// The best Gym bulk in the game: level 50, 15/15/15, among released species (no Mega, Shadow or duplicate entry), with the formula `PogoRules.bulk` uses.
     public static func bestGymBulk(gm: GameMaster) -> Double {
-        let key = "gym|\(gm.ordered.count)"
+        let key = "gym|" + fingerprint(gm: gm)
         if let v = cached(key) { return v }
         var best = 0.0
         for s in gm.ordered where eligible(s, megas: false) {
@@ -212,6 +217,39 @@ public enum DamageEstimate {
     static func store(_ key: String, _ value: Double) { cache.lock.lock(); cache.values[key] = value; cache.lock.unlock() }
     /// For a test that measures a cold figure.
     static func clearCache() { cache.lock.lock(); cache.values = [:]; cache.lock.unlock() }
+
+    private static func hex(_ f: (inout SHA256) -> Void) -> String {
+        var h = SHA256(); f(&h)
+        return h.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// A hash of the game master's content that a figure depends on: every species with its stats, types, release flags, tags and move lists, and every move's PvP stats.
+    static func fingerprint(gm: GameMaster) -> String {
+        hex { h in
+            for s in gm.ordered {
+                let b = s.baseStats
+                h.update(data: Data("\(s.id)|\(b?.atk ?? -1)|\(b?.def ?? -1)|\(b?.hp ?? -1)|\(s.dex)|\(s.released)|\(s.tags.sorted())|\(s.types)|\(s.fastMoves)|\(s.chargedMoves)|\(s.eliteMoves)\n".utf8))
+            }
+            for id in gm.moves.keys.sorted() {
+                let m = gm.moves[id]!
+                h.update(data: Data("\(id)|\(m.name)|\(m.type)|\(m.power)|\(m.energy)|\(m.energyGain)|\(m.turns)\n".utf8))
+            }
+        }
+    }
+
+    /// A hash of the raid move stats and Max powers, the type chart and the table's move lines: the rest of what a scale's figures read.
+    static func fingerprint(pve: PveMoves, hub: HubData, table: TierTable) -> String {
+        hex { h in
+            h.update(data: Data("max \(pve.maxAttackPower) gmax \(pve.gmaxPower)\n".utf8))
+            for id in pve.moves.keys.sorted() {
+                let m = pve.moves[id]!
+                h.update(data: Data("\(id)|\(m.type)|\(m.power)|\(m.durationMs)|\(m.energyDelta)\n".utf8))
+            }
+            for a in hub.typeChart.keys.sorted() { for d in hub.typeChart[a]!.keys.sorted() { h.update(data: Data("\(a)>\(d)=\(hub.typeChart[a]![d]!)\n".utf8)) } }
+            for e in table.entries { h.update(data: Data("\(e.area)|\(e.speciesId)|\(e.name)|\(e.tier)|\(e.flags.mega)|\(e.flags.shadow)|\(e.moves ?? "-")\n".utf8)) }
+            h.update(data: Data("\(MaxBattleSpecies.capable.sorted())\(MaxBattleSpecies.gigantamax.sorted { $0.key < $1.key })\(MaxBattleSpecies.fixedMaxMove.keys.sorted())".utf8))
+        }
+    }
 }
 
 /// PvPoke's league score for a species (`pvp-rankings.json`, the same scores the advisor and the league tables use), for the PvP bar of a Pokémon the box has no copy of.
@@ -258,14 +296,15 @@ public final class StrengthScale {
     private let ctx: HubContext
     private let pve: PveMoves
     private let targets: [Target]
-    /// Everything the best in the game depends on: the mode, the bosses, and fingerprints of the game master, the raid moves and the type chart.
+    /// Everything the best in the game depends on, as content hashes: the mode, the bosses, the game master, the raid moves, the type chart and the table's move lines.
     public let key: String
     private var best: Double?
     private var lineCache = [String: [DamageEstimate.Pick]]()
     private var memo = [String: Strength]()
     private let lock = NSRecursiveLock()
+    private var unparsed = 0
     /// How many table lines were skipped because they name no move the game master knows (counted as lines are first read).
-    public private(set) var unparsedLines = 0
+    public var unparsedLines: Int { lock.lock(); defer { lock.unlock() }; return unparsed }
 
     /// `bosses` are the raid or Max battle's bosses, or the Rocket slot's possible Pokémon; the figure is the mean over them.
     public init(mode: Mode, bosses: [HubData.Boss], ctx: HubContext, pve: PveMoves) {
@@ -275,10 +314,8 @@ public final class StrengthScale {
             let def = Double(ctx.gm.byId[id]?.baseStats?.def ?? 180)
             return Target(types: b.types, defence: (def + DamageEstimate.defenderIV) * (PogoRules.cpm(DamageEstimate.defenderLevel) ?? 0.79))
         }
-        let gmPrint = "\(ctx.gm.ordered.count)/\(ctx.gm.moves.count)/\(ctx.gm.ordered.reduce(0) { $0 &+ ($1.baseStats?.atk ?? 0) &* 3 &+ ($1.baseStats?.def ?? 0) })"
-        let pvePrint = "\(pve.moves.count)/\(pve.maxAttackPower)/\(pve.gmaxPower)/\(pve.moves.values.reduce(0) { $0 + $1.power })"
-        let chart = "\(ctx.hub.typeChart.values.reduce(0) { $0 + $1.count })/\(ctx.hub.typeChart.values.flatMap(\.values).reduce(0, +))"
-        key = "\(mode.rawValue)|gm \(gmPrint)|pve \(pvePrint)|chart \(chart)|" + targets.map { "\($0.types.joined(separator: "+"))@\(Int($0.defence))" }.joined(separator: ",")
+        key = "\(mode.rawValue)|\(DamageEstimate.fingerprint(gm: ctx.gm))|\(DamageEstimate.fingerprint(pve: pve, hub: ctx.hub, table: ctx.table))|"
+            + targets.map { "\($0.types.joined(separator: "+"))@\($0.defence)" }.joined(separator: ",")
     }
 
     private static let sharedLock = NSLock()
@@ -329,7 +366,13 @@ public final class StrengthScale {
         case .max:
             // A Gigantamax copy's Max Attack is its G-Max move, of the G-Max type; any other copy's takes the type of its fast move.
             if let g = gmaxType { return Found(value: mean { damage(g, power: pve.gmaxPower, a, $0) }, fast: nil, charged: nil) }
-            for fid in fast { if let t = ctx.gm.moves[fid]?.type { offer(mean { damage(t, power: pve.maxAttackPower, a, $0) }, fid, nil) } }
+            // Crowned Zacian and Zamazenta and Eternatus have one Max move each, whatever their fast move.
+            if let fx = MaxBattleSpecies.fixedMaxMove[a.speciesId] {
+                let power = fx.atGMaxPower ? pve.gmaxPower : pve.maxAttackPower
+                return Found(value: mean { damage(fx.type, power: power, a, $0) }, fast: nil, charged: nil)
+            }
+            // A Hidden Power fast move gives Max Strike (Normal) whatever its own type.
+            for fid in fast { if let t = fid.hasPrefix("HIDDEN_POWER") ? "normal" : ctx.gm.moves[fid]?.type { offer(mean { damage(t, power: pve.maxAttackPower, a, $0) }, fid, nil) } }
         case .raids:
             for fid in fast {
                 guard let f = pve.moves[fid], f.energyDelta > 0, f.durationMs > 0 else { continue }
@@ -365,6 +408,7 @@ public final class StrengthScale {
     /// Shadow versions of the Shadow-eligible (Raids, Rocket; never of a Mega or Primal) and Mega forms (Raids); Max only the Dynamax-capable and Gigantamax species
     /// (`MaxBattleSpecies`) and the G-Max versions of those with a G-Max move.
     public var bestInGame: Double {
+        lock.lock(); defer { lock.unlock() }
         if let b = best { return b }
         if let v = DamageEstimate.cached(key) { best = v; return v }
         let top = computeBest().value
@@ -410,9 +454,12 @@ public final class StrengthScale {
         public struct Lacking {
             public var speciesId: String
             public var shadow: Bool
-            public var moves: String?
+            /// Every move line the table gives the species in the area.
+            public var moves: [String]
+            /// Max only: a Gigantamax Best row, valued with its G-Max move. Best lists no Gigantamax entry on Max today (rule 12), so no row reaches the app with it set; the engine
+            /// handles one that would.
             public var gigantamax: Bool
-            public init(speciesId: String, shadow: Bool, moves: String?, gigantamax: Bool = false) { self.speciesId = speciesId; self.shadow = shadow; self.moves = moves; self.gigantamax = gigantamax }
+            public init(speciesId: String, shadow: Bool, moves: [String], gigantamax: Bool = false) { self.speciesId = speciesId; self.shadow = shadow; self.moves = moves; self.gigantamax = gigantamax }
         }
         public init(copy: BoxEntry?, build: BoxAdvice.Build?, built: Bool, megaSlot: Bool = false, species: Lacking? = nil) {
             self.copy = copy; self.build = build; self.built = built; self.megaSlot = megaSlot; self.species = species
@@ -428,7 +475,7 @@ public final class StrengthScale {
             }
             if let b = build { p += [b.id, "\(b.targetLevel ?? -1)", "\(b.viaMega)", (b.steps ?? []).map { "\($0.kind)\($0.toLevel ?? 0)" }.joined(separator: ",")] }
             p += ["\(built)", "\(megaSlot)"]
-            if let s = species { p += [s.speciesId, "\(s.shadow)", s.moves ?? "-", "\(s.gigantamax)"] }
+            if let s = species { p += [s.speciesId, "\(s.shadow)", s.moves.joined(separator: ";"), "\(s.gigantamax)"] }
             return p.joined(separator: "#")
         }
     }
@@ -462,9 +509,10 @@ public final class StrengthScale {
     func lines(_ entries: [TierTable.Entry]) -> [DamageEstimate.Pick] { entries.compactMap(\.moves).flatMap(picks(forText:)) }
 
     func picks(forText text: String) -> [DamageEstimate.Pick] {
+        lock.lock(); defer { lock.unlock() }
         if let c = lineCache[text] { return c }
         let r = DamageEstimate.parseLines(text, gm: ctx.gm)
-        unparsedLines += r.unparsed
+        unparsed += r.unparsed
         lineCache[text] = r.picks
         return r.picks
     }
@@ -485,7 +533,7 @@ public final class StrengthScale {
         if let sp = r.species {
             let a = attacker(sp.speciesId, shadow: sp.shadow, level: DamageEstimate.bestLevel, ivs: DamageEstimate.bestIVs)
             let g = sp.gigantamax && mode == .max ? MaxBattleSpecies.gigantamax[plain(sp.speciesId)] : nil
-            let given = sp.moves.map(picks(forText:)) ?? []
+            let given = sp.moves.flatMap(picks(forText:))
             return Strength(kind: .damage, now: share(a.flatMap { bestOver($0, lines: given, gmaxType: g)?.value }), after: nil, assumed: true)
         }
         guard let copy = r.copy else { return Strength(kind: .damage, now: nil, after: nil) }
@@ -497,7 +545,9 @@ public final class StrengthScale {
 
         // Now: the copy's own species, level, IVs and Shadow state. Its own moves when read; otherwise the best of the table lines for the Pokémon against this boss.
         let nowSpecies = copy.row.speciesId
-        let nowLines = ownRead ? [ownPick] : lines(entries(of: nowSpecies, mega: false, shadow: shadow))
+        // Unread moves: the lines of the current species and of the build's target, only those the current species can learn (`bestOver` skips the rest).
+        let targetLines = r.build.map { lines(entries(of: $0.targetId, mega: false, shadow: shadow)) } ?? []
+        let nowLines = ownRead ? [ownPick] : lines(entries(of: nowSpecies, mega: false, shadow: shadow)) + targetLines
         let now = share(attacker(nowSpecies, shadow: shadow, level: copy.row.level, ivs: copy.row.ivs).flatMap { bestOver($0, lines: nowLines, gmaxType: gmax(nowSpecies))?.value })
 
         // After: the build's target form (its Mega forms only in the Mega slot), the target level, and the best of its table lines (and the copy's own moves).
@@ -507,11 +557,17 @@ public final class StrengthScale {
             let forms = mega ? megaSpecies(of: b.targetId) : []
             let level = b.targetLevel ?? b.climbLevel ?? copy.row.level
             let targets: [String] = forms.isEmpty ? [plain(b.targetId)] : forms
+            let plainLines = lines(entries(of: b.targetId, mega: false, shadow: shadow))
             after = targets.compactMap { t in
-                // A Mega form's own table lines; the plain target's lines for any other.
-                let own = mega && !forms.isEmpty ? entries(of: b.targetId, mega: true, shadow: shadow).filter { plain($0.speciesId) == t } : entries(of: b.targetId, mega: false, shadow: shadow)
-                let given = lines(own) + (ownRead ? [ownPick] : [])
-                return share(attacker(t, shadow: shadow, level: level, ivs: copy.row.ivs).flatMap { bestOver($0, lines: given, gmaxType: gmax(t))?.value })
+                // In the Mega slot a Mega form is judged on the best of its own Mega lines, the plain Pokémon's lines and the copy's own moves, on moves the form can learn.
+                let megaLines = mega && !forms.isEmpty ? lines(entries(of: b.targetId, mega: true, shadow: shadow).filter { plain($0.speciesId) == t }) : []
+                let given = megaLines + plainLines + (ownRead ? [ownPick] : [])
+                return share(attacker(t, shadow: shadow, level: level, ivs: copy.row.ivs).flatMap { a -> Double? in
+                    var best = bestOver(a, lines: given, gmaxType: gmax(t))?.value
+                    // The plain Pokémon with no table line and no read moves is judged on its species' best moves, so its Mega form is too: it is never worth less in the Mega slot.
+                    if mega, plainLines.isEmpty, !ownRead, let v = found(a, gmaxType: gmax(t))?.value { best = max(best ?? 0, v) }
+                    return best
+                })
             }.max()
             // An upgrade is never worse than the copy as it is.
             if let a = after, let n = now, a < n { after = n }
@@ -523,8 +579,8 @@ public final class StrengthScale {
 }
 
 extension HubSquads {
-    /// The table's move line for a Best row's entry in an area ("raids", "max", ...), for the estimate of a Pokémon the box lacks; nil when the entry names none.
-    public static func tableMoves(of r: BestRow, area: String, ctx: HubContext) -> String? {
-        ctx.table.entries(for: r.speciesId, area: area).first { bestKey($0) == r.key }?.moves
+    /// Every move line the table gives a Best row's species in an area ("raids", "max", ...), for the estimate of a Pokémon the box lacks.
+    public static func tableMoves(of r: BestRow, area: String, ctx: HubContext) -> [String] {
+        ctx.table.entries(for: r.speciesId, area: area).filter { bestKey($0) == r.key }.compactMap(\.moves)
     }
 }

@@ -184,8 +184,11 @@ public enum HubRaidsModel {
     /// The Max entries a copy can fill. A Gigantamax entry is only filled by a copy marked Gigantamax (by hand: the box cannot show it), as the
     /// advisor credits it (`src/advise.js`); an ordinary copy gets none: Gengar has no usable entry, Kingler its A entry.
     static func maxEntries(_ speciesId: String, _ table: TierTable, gigantamax: Bool = false) -> [TierTable.Entry] {
-        table.entries(for: speciesId, area: "max").filter { gigantamax || $0.name.range(of: "gigantamax|g-max", options: [.regularExpression, .caseInsensitive]) == nil }
+        table.entries(for: speciesId, area: "max").filter { gigantamax || !isGigantamaxName($0.name) }
     }
+
+    /// A Max table entry or Best row named for a Gigantamax form ("Gigantamax Inteleon", "G-Max ...").
+    public static func isGigantamaxName(_ name: String) -> Bool { name.range(of: "gigantamax|g-max", options: [.regularExpression, .caseInsensitive]) != nil }
 
     /// S before A before B; anything else last. (Compared as strings, "A" would sort before "S".)
     static func tierRank(_ tier: String) -> Int { ["S": 0, "A": 1, "B": 2][tier] ?? 3 }
