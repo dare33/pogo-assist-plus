@@ -113,9 +113,17 @@ private struct GymSquadView: View {
         let ticks = HubSquads.tickIds(filled[i], rows: bestRows)
         if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
         let listed = HubSquads.picker(candidates: ids, excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false, copyOf: copyOf), ownIds: ticks, copyOf: copyOf)
+        // P1: the bar is the Bulk against the best Gym bulk in the game.
+        func bar(_ copy: BoxEntry?, _ row: HubSquads.GymRow?, species: String? = nil) -> Strength { DamageEstimate.gymStrength(copy: copy, row: row, speciesId: species, gm: ctx.gm) }
         var models: [PickerRowModel] = listed.compactMap { l in
-            guard let o = byId[l.entryId] else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .gym, ctx: ctx) }
-            guard let r = o.row, o.best?.hasBuild != false else { return PickerRowModel(best: o.best!, ticked: l.ticked) }
+            guard let o = byId[l.entryId] else {
+                let copy = ctx.entry(l.entryId)
+                return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .gym, ctx: ctx)?.adding(copy: copy, strength: bar(copy, nil))
+            }
+            guard let r = o.row, o.best?.hasBuild != false else {
+                let best = o.best!, copy = best.inBox ? (best.copy ?? best.ownedEntryId.flatMap(ctx.entry)) : nil
+                return PickerRowModel(best: best, ticked: l.ticked).adding(copy: copy, strength: bar(copy, nil, species: best.speciesId))
+            }
             let shared = o.best?.statusLine
             let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
             let stats = GymFigures.stats(r, ctx: ctx)
@@ -130,7 +138,7 @@ private struct GymSquadView: View {
                 note: [stats == nil ? GymFigures.bulkLine(r) : nil, shared].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ").nilIfEmpty,
                 stats: stats.map { AnyView(GymStatsColumn(def: $0.def, hp: $0.hp)) },
                 figure: stats == nil ? nil : AnyView(GymBulkFigure(text: GymFigures.bulkShort(r.bulk))),
-                spoken: spoken.joined(separator: ", "))
+                spoken: spoken.joined(separator: ", ")).adding(copy: ctx.entry(r.build.entryId), strength: bar(ctx.entry(r.build.entryId), r))
         }
         if mode == .available { models = PickerRowModel.availableUpgradesLast(models) }
         return SquadPicker(
