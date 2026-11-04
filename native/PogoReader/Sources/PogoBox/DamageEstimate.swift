@@ -186,8 +186,10 @@ public enum DamageEstimate {
 
     /// Gym: the bar is the Bulk (now at the copy's level, after at the build's target level) as a share of the best Gym bulk in the game. `row` is the existing `GymRow`
     /// (its `bulk` is already the build's, at the target level, or the copy's level when built); `copy` is nil for a species the box lacks (level 50, 15/15/15).
-    public static func gymStrength(copy: BoxEntry?, row: HubSquads.GymRow?, speciesId: String?, gm: GameMaster) -> Strength {
-        let best = bestGymBulk(gm: gm)
+    /// `bestBulk` is the figure `bestGymBulk` gives for `gm`, passed in by a caller that scores many rows (it hashes the whole game master, so it is worked out once per picker build,
+    /// not once per row); nil works it out here.
+    public static func gymStrength(copy: BoxEntry?, row: HubSquads.GymRow?, speciesId: String?, gm: GameMaster, bestBulk: Double? = nil) -> Strength {
+        let best = bestBulk ?? bestGymBulk(gm: gm)
         guard best > 0 else { return Strength(kind: .bulk, now: nil, after: nil) }
         guard let copy else {
             let b = speciesId.flatMap { PogoRules.bulk(target: $0, ivs: bestIVs, level: bestLevel, gm: gm).value }
@@ -582,5 +584,16 @@ extension HubSquads {
     /// Every move line the table gives a Best row's species in an area ("raids", "max", ...), for the estimate of a Pokémon the box lacks.
     public static func tableMoves(of r: BestRow, area: String, ctx: HubContext) -> [String] {
         ctx.table.entries(for: r.speciesId, area: area).filter { bestKey($0) == r.key }.compactMap(\.moves)
+    }
+
+    /// The Pokémon a picker row the box lacks is judged as. A Mega or Primal entry counts as one only in the raid Mega slot (`megaSlot`); in any other slot it is the plain
+    /// Pokémon, on the plain Pokémon's own table lines (none: its species' best moves), as an owned row is judged outside that slot.
+    public static func lacking(of r: BestRow, area: String, megaSlot: Bool, gigantamax: Bool = false, ctx: HubContext) -> StrengthScale.Row.Lacking {
+        let shadow = r.key.hasSuffix("_shadow")
+        guard !megaSlot, let base = BoxMerge.megaBase(r.speciesId, ctx.gm) else {
+            return .init(speciesId: r.speciesId, shadow: shadow, moves: tableMoves(of: r, area: area, ctx: ctx), gigantamax: gigantamax)
+        }
+        let lines = ctx.table.entries(for: base, area: area).filter { !$0.flags.mega && !$0.flags.shadow }.compactMap(\.moves)
+        return .init(speciesId: base, shadow: false, moves: lines, gigantamax: gigantamax)
     }
 }

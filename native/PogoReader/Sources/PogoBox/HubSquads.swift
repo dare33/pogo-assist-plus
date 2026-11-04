@@ -49,6 +49,11 @@ public struct FilledSlot: Equatable {
     public var pickId: String? { entryId ?? species.map { squadSpeciesPrefix + $0 } }
     /// Every id the slot's Pokémon goes by: its copy and its species (a species pick that reads as a copy has both).
     public var ids: Set<String> { Set([entryId, species.map { squadSpeciesPrefix + $0 }].compactMap { $0 }) }
+    /// Everything a picker's rows read from the slot (ticks from the copy and the species, exclusions from the ids, the suggestion flags), as one string for the rows' cache key:
+    /// two slots that show the same copy through different species (Blissey and Chansey rows backed by one Chansey) never share a key.
+    public var cacheKey: String { "\(role)/\(entryId ?? "-")/\(species ?? "-")/\(ids.sorted().joined(separator: "+"))/\(chosen)/\(fallback)" }
+    /// The cache key part for a whole squad.
+    public static func cacheKey(_ filled: [FilledSlot]) -> String { filled.map(\.cacheKey).joined(separator: ",") }
 }
 
 /// A Pokémon a slot may take, with the roles it is listed for. Each screen's candidate type conforms.

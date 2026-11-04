@@ -120,6 +120,21 @@ final class DamageEstimateRealBoxTests: XCTestCase {
         XCTAssertTrue([found.fast, found.charged].compactMap { $0 }.contains { P23.gm.moves[$0]?.type == "dragon" }, "judged on a Dragon line: \(found)")
         let st = scale.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp_mega", shadow: false, moves: lines)))
         XCTAssertEqual(try XCTUnwrap(st.now), found.value / scale.bestInGame, accuracy: 1e-12)
+        // Outside the raid Mega slot the same entry is the plain Pokémon (ruling 9): Garchomp's own base stats and table lines, a lower figure than as a Mega.
+        let lackMega = HubSquads.lacking(of: best, area: "raids", megaSlot: true, ctx: ctx), lackPlain = HubSquads.lacking(of: best, area: "raids", megaSlot: false, ctx: ctx)
+        XCTAssertEqual(lackMega.speciesId, "garchomp_mega")
+        XCTAssertEqual(lackPlain.speciesId, "garchomp")
+        let megaNow = try XCTUnwrap(scale.strength(.init(copy: nil, build: nil, built: false, species: lackMega)).now)
+        let plainNow = try XCTUnwrap(scale.strength(.init(copy: nil, build: nil, built: false, species: lackPlain)).now)
+        print("P1-MEGA lacking Mega Garchomp vs palkia: Mega slot \(megaNow), lackPlain \(plainNow)")
+        XCTAssertLessThan(plainNow, megaNow)
+        let plainBest = HubSquads.BestRow(key: "garchomp", name: "Garchomp", speciesId: "garchomp", tier: "S", roles: [], types: ["dragon", "ground"], availability: "")
+        let plainJudged = scale.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp", shadow: false, moves: HubSquads.tableMoves(of: plainBest, area: "raids", ctx: ctx))))
+        XCTAssertEqual(plainNow, try XCTUnwrap(plainJudged.now), accuracy: 1e-12, "judged exactly as the plain Garchomp row is")
+        // A Primal entry is a Mega-kind form too.
+        let primal = HubSquads.BestRow(key: "kyogre_primal", name: "Primal Kyogre", speciesId: "kyogre_primal", tier: "S", roles: [], types: ["water"], availability: "")
+        XCTAssertEqual(HubSquads.lacking(of: primal, area: "raids", megaSlot: false, ctx: ctx).speciesId, "kyogre")
+        XCTAssertEqual(HubSquads.lacking(of: primal, area: "raids", megaSlot: true, ctx: ctx).speciesId, "kyogre_primal")
     }
 
     /// The move lines in the tables that name no move the game master knows, and which of them sit on the raid, Max and Rocket tables a picker reads.
@@ -153,6 +168,23 @@ final class DamageEstimateRealBoxTests: XCTestCase {
             for b in builds { _ = scale.strength(.init(copy: ctx.entry(b.entryId), build: b, built: false)); rows += 1 }
             worst = max(worst, Date().timeIntervalSince(t0) * 1000)
         }
+        // The Gym picker: the best Gym bulk is hashed once for the picker (cold), then every row of the box is scored.
+        DamageEstimate.clearCache()
+        let gymCtx = HubContext(advice: box.advice, entries: box.entries, gm: P23.gm, hub: P23.hub, table: table, today: P23.hub.rotation.first?.from ?? "2026-10-26")
+        let g0 = Date()
+        let bestBulk = DamageEstimate.bestGymBulk(gm: P23.gm)
+        let gymRows = HubSquads.gymRows(mode: .available, ctx: gymCtx)
+        for r in gymRows {
+            let a = DamageEstimate.gymStrength(copy: gymCtx.entry(r.build.entryId), row: r, speciesId: nil, gm: P23.gm, bestBulk: bestBulk)
+            XCTAssertEqual(a, DamageEstimate.gymStrength(copy: gymCtx.entry(r.build.entryId), row: r, speciesId: nil, gm: P23.gm), "passing the best bulk in changes no figure")
+        }
+        XCTAssertFalse(gymRows.isEmpty)
+        // Time only the passed-in path: a picker's rows (the unpassed calls above are the comparison, not the picker).
+        let g1 = Date()
+        for r in gymRows { _ = DamageEstimate.gymStrength(copy: gymCtx.entry(r.build.entryId), row: r, speciesId: nil, gm: P23.gm, bestBulk: bestBulk) }
+        let gymMs = Date().timeIntervalSince(g1) * 1000
+        print("P1-TIMING Gym picker: best bulk + \(gymRows.count) rows; rows alone \(String(format: "%.0f", gymMs)) ms (whole section \(String(format: "%.0f", Date().timeIntervalSince(g0) * 1000)) ms)")
+        XCTAssertLessThan(gymMs, 100, "no per-row hashing of the game master")
         print("P1-TIMING first cold scale \(String(format: "%.0f", coldMs)) ms; slowest picker (scale + all rows) \(String(format: "%.0f", worst)) ms; \(rows) rows in total")
         XCTAssertLessThan(worst, 500)
     }
