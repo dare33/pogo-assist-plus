@@ -340,7 +340,7 @@ struct PvPSquadView: View {
     private func picker(_ i: Int, filled: [FilledSlot], candidates: [HubSquads.PvpCandidate], byId: [String: HubSquads.PvpCandidate], best: [HubSquads.BestRow], mode: SquadMode, pogoAssist: Bool) -> some View {
         let role = filled[i].role
         // The rows are built once and kept until the box, the advice or what the slot sees changes.
-        let key = "\(league)|\(pogoAssist)|\(mode.rawValue)|\(i)|" + filled.map { "\($0.role)/\($0.pickId ?? "-")/\($0.chosen)/\($0.fallback)" }.joined(separator: ",") + "|" + (mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)).joined(separator: ",")
+        let key = "\(league)|\(pogoAssist)|\(mode.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + (mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)).joined(separator: ",")
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, candidates: candidates, byId: byId, best: best, mode: mode) }
         let rows = content.rows, boxHasOptions = content.boxHasOptions, speciesRuleOnly = content.speciesRuleOnly
         return SquadPicker(

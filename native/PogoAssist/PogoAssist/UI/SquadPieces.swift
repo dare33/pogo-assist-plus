@@ -585,7 +585,7 @@ struct SquadPicker<Info: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-        .padding(.vertical, 8).padding(.horizontal, 2)
+            .padding(.vertical, 8).padding(.horizontal, 2)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }

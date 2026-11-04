@@ -296,7 +296,7 @@ private struct RocketSquadView: View {
 
     private func picker(_ i: Int, filled: [FilledSlot], lists: [SlotLists], mode: SquadMode) -> some View {
         // The rows are built once and kept until the box, the advice or what the slot sees changes.
-        let key = "\(leader.name)|\(mode.rawValue)|\(i)|" + filled.map { "\($0.pickId ?? "-")/\($0.chosen)/\($0.fallback)" }.joined(separator: ",") + "|" + lists.map { ($0.rows + $0.next).map(\.id).joined(separator: ",") }.joined(separator: ";")
+        let key = "\(leader.name)|\(mode.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + lists.map { ($0.rows + $0.next).map(\.id).joined(separator: ",") }.joined(separator: ";")
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, lists: lists, mode: mode) }
         let showsNext = content.showsNext, boxHasOptions = content.boxHasOptions, rows = content.rows
         return SquadPicker(

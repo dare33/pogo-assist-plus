@@ -26,7 +26,8 @@ final class PickerRowModelsTests: XCTestCase {
         for m in rows {
             let reason = m.spoken.contains("not read") || m.spoken.contains("score not known")
             XCTAssertTrue(m.strength != nil || reason, "\(what): \(m.name) has no strength and no reason: \(m.spoken)", file: file, line: line)
-            if m.cpIv == nil { XCTAssertTrue(m.strength?.assumed == true || m.spoken.contains("score") || m.strength == nil, "\(what): \(m.name) lacks a copy", file: file, line: line) }
+            // An owned row (any screen, PvP included) always has its CP and IV line; only a Pokémon the box lacks, whose row id is a species pick, may go without.
+            if m.cpIv == nil { XCTAssertTrue(m.id.hasPrefix(squadSpeciesPrefix), "\(what): \(m.name) is an owned row without its CP and IV line", file: file, line: line) }
             XCTAssertFalse(m.spoken.contains(" · "), "\(what): spoken text uses commas: \(m.spoken)", file: file, line: line)
         }
     }
@@ -73,6 +74,18 @@ final class PickerRowModelsTests: XCTestCase {
         XCTAssertTrue(pvp.allSatisfy { $0.cpIv == nil || $0.cpIv!.contains("/") || $0.cpIv!.contains("IVs not read") }, "PvP rows show IVs too")
     }
 
+    /// The Gym picker opens without a visible delay: the best Gym bulk hashes the whole game master, so the builder works it out once per picker, not once per row.
+    func testGymPickerOpensQuicklyOnTheRealBox() throws {
+        let c = ctx()
+        let b = GymPickerBuilder(ctx: c)
+        let t0 = Date()
+        let slots = b.allSlotRows(mode: .available)
+        let perSlot = Date().timeIntervalSince(t0) * 1000 / Double(max(slots.count, 1))
+        print("P1-TIMING Gym picker content: \(slots.count) slots, \(String(format: "%.0f", perSlot)) ms each, \(slots.first?.count ?? 0) rows")
+        XCTAssertGreaterThan(slots.first?.count ?? 0, 5)
+        XCTAssertLessThan(perSlot, 40, "one game master hash per picker, not one per row")
+    }
+
     /// Ruling 9: a Mega entry is judged as a Mega only in the raid Mega slot. Under Best a Mega row listed under another role's slot (the All chip) is the plain Pokémon.
     func testAMegaIsJudgedAsMegaOnlyInTheMegaSlot() throws {
         let c = ctx()
@@ -91,8 +104,21 @@ final class PickerRowModelsTests: XCTestCase {
         let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let rows = b.content(slot: 0, filled: filled, options: options, byId: byId, mode: .best).rows
         let megaRows = rows.filter { $0.name.hasPrefix("Mega ") && $0.cpIv != nil }
-        guard let m = megaRows.first, let o = options.first(where: { $0.id == m.id }), let build = o.build, let scale = b.strengthScale() else { return }
+        let m = try XCTUnwrap(megaRows.first, "the real box has an owned Mega row under Best")
+        let o = try XCTUnwrap(options.first(where: { $0.id == m.id }))
+        let build = try XCTUnwrap(o.build)
+        let scale = try XCTUnwrap(b.strengthScale())
         let plain = scale.strength(.init(copy: c.entry(build.entryId), build: build, built: m.mark == .fullStrength, megaSlot: false))
         XCTAssertEqual(m.strength, plain, "a Mega row in an All slot is judged on the plain form")
+        // A Mega or Primal entry the box lacks is judged as the plain Pokémon outside the Mega slot too, and as the Mega form in it.
+        let lackingForms = rows.filter { ($0.name.hasPrefix("Mega ") || $0.name.hasPrefix("Primal ")) && $0.cpIv == nil }
+        XCTAssertFalse(lackingForms.isEmpty, "Best lists a Mega or Primal entry the box lacks")
+        for r in lackingForms {
+            let best = try XCTUnwrap(options.compactMap(\.best).first { $0.entryId == r.id }, r.name)
+            let asPlain = HubSquads.lacking(of: best, area: "raids", megaSlot: false, ctx: c)
+            XCTAssertNotEqual(asPlain.speciesId, best.speciesId, "\(r.name) is judged as its base species")
+            let expected = scale.strength(.init(copy: nil, build: nil, built: false, species: asPlain))
+            XCTAssertEqual(r.strength, expected, "\(r.name) in an All slot is judged as the plain Pokémon")
+        }
     }
 }

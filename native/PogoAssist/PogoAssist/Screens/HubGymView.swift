@@ -58,7 +58,9 @@ struct GymPickerBuilder {
         if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
         let listed = HubSquads.picker(candidates: ids, excluded: HubSquads.excluded(by: filled, editing: i, onlyChosen: false, copyOf: copyOf), ownIds: ticks, copyOf: copyOf)
         // P1: the bar is the Bulk against the best Gym bulk in the game.
-        func bar(_ copy: BoxEntry?, _ row: HubSquads.GymRow?, species: String? = nil) -> Strength { DamageEstimate.gymStrength(copy: copy, row: row, speciesId: species, gm: ctx.gm) }
+        // It hashes the whole game master, so it is worked out once for the picker, not once per row.
+        let bestBulk = DamageEstimate.bestGymBulk(gm: ctx.gm)
+        func bar(_ copy: BoxEntry?, _ row: HubSquads.GymRow?, species: String? = nil) -> Strength { DamageEstimate.gymStrength(copy: copy, row: row, speciesId: species, gm: ctx.gm, bestBulk: bestBulk) }
         var models: [PickerRowModel] = listed.compactMap { l in
             guard let o = byId[l.entryId] else {
                 let copy = ctx.entry(l.entryId)
@@ -163,7 +165,7 @@ struct GymSquadView: View {
 
     private func picker(_ i: Int, filled: [FilledSlot], options: [GymOption], byId: [String: GymOption], mode: SquadMode) -> some View {
         // The rows are built once and kept until the box, the advice or what the slot sees changes.
-        let key = "\(mode.rawValue)|\(i)|" + filled.map { "\($0.pickId ?? "-")/\($0.chosen)" }.joined(separator: ",") + "|" + options.map(\.id).joined(separator: ",")
+        let key = "\(mode.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, options: options, byId: byId, mode: mode) }
         let models = content.rows, boxHasOptions = content.boxHasOptions
         return SquadPicker(

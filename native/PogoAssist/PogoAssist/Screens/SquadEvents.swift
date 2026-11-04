@@ -351,9 +351,9 @@ struct EventPickerBuilder {
                     // A copy no build serves has its own figures; a Pokémon the box lacks has one bar at level 50 with 15/15/15 and no CP line.
                     let best = o.best!, copy = best.inBox ? (best.copy ?? best.ownedEntryId.flatMap(ctx.entry)) : nil
                     // Best lists no Gigantamax entry on Max today (rule 12), so the Gigantamax flag is false on every row that reaches here; the engine takes it for a row that would.
-                    let lacking = copy == nil ? StrengthScale.Row.Lacking(speciesId: best.speciesId, shadow: best.key.hasSuffix("_shadow"),
-                                                                moves: HubSquads.tableMoves(of: best, area: screen == .raids ? "raids" : "max", ctx: ctx),
-                                                                gigantamax: HubRaidsModel.isGigantamaxName(best.name)) : nil
+                    // Only the raid Mega slot judges a Mega or Primal entry as one; every other slot judges the plain Pokémon.
+                    let megaSlot = screen == .raids && role == PogoRules.RaidRole.mega.rawValue
+                    let lacking = copy == nil ? HubSquads.lacking(of: best, area: screen == .raids ? "raids" : "max", megaSlot: megaSlot, gigantamax: HubRaidsModel.isGigantamaxName(best.name), ctx: ctx) : nil
                     return PickerRowModel(best: best, ticked: r.ticked, role: word).adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false, species: lacking)))
                 }
                 let mark = SquadMark.of(build, screen: screen, ctx: ctx)
@@ -480,7 +480,7 @@ struct EventSquadView: View {
     private func picker(_ i: Int, filled: [FilledSlot], options: [EventOption], byId: [String: EventOption], saved: SquadStore.Saved, mode: SquadMode) -> some View {
         let role = filled[i].role
         // The rows are built once and kept until the box, the advice or what the slot sees changes (P1: no work on every redraw).
-        let key = "\(screen.rawValue)|\(row.from)|\(row.title)|\(mode.rawValue)|\(i)|" + filled.map { "\($0.role)/\($0.pickId ?? "-")/\($0.chosen)/\($0.fallback)" }.joined(separator: ",") + "|" + options.map(\.id).joined(separator: ",")
+        let key = "\(screen.rawValue)|\(row.from)|\(row.title)|\(mode.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, options: options, byId: byId, mode: mode) }
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: screen == .raids ? .raids : .max, roles: chips, role: role,
