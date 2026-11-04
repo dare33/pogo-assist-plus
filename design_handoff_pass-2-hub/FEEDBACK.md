@@ -144,3 +144,13 @@ Raids Mega slot, Max (fixed Max moves for Crowned Zacian, Crowned Zamazenta and 
 (Score), Best mode on each screen, and how fast each picker opens. Greg: "fantastic all green". No new items. The
 known limits listed in STATUS (the AX5 CP/IV wrap, "Charizard" broken at AX5 on the PvP OTHER CANDIDATES card, the 35
 tier-table move lines that fall back to the species' best moves) were not raised and stay open.
+
+## Rulings after phone run 3, 4-5 Nov 2026
+
+- Review of P1's post-review commits. Greg: "Review them first". Done (paired review, fold, confirmation; STATUS 4 Nov).
+- Not-owned Mega in the raid Mega slot judged on its own Mega line only. Greg: "Fix it, reviewed". Done: judged as an
+  owned copy built to Mega is (STATUS 4 Nov, second entry).
+- A Best row naming one of two Mega forms (Mega Raichu X, Mega Mewtwo X, Mega Charizard Y): the reviewers split (Opus:
+  not a defect; Sol: contradicts "the better form against the boss"). Asked "keep the named form or show the better of X
+  and Y?", Greg: "Keep the named form". Decision: such a row's bar is the form it names; an owned copy built to Mega
+  still takes the better of X and Y against the boss. No code change.
