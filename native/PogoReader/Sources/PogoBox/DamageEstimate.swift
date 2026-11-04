@@ -483,7 +483,7 @@ public final class StrengthScale {
             }
             if let b = build { p += [b.id, "\(b.targetLevel ?? -1)", "\(b.viaMega)", (b.steps ?? []).map { "\($0.kind)\($0.toLevel ?? 0)" }.joined(separator: ",")] }
             p += ["\(built)", "\(megaSlot)"]
-            if let s = species { p += [s.speciesId, "\(s.shadow)", s.moves.joined(separator: ";"), "\(s.gigantamax)", s.plainMoves.map { $0.joined(separator: ";") } ?? "-"] }
+            if let s = species { p += [s.speciesId, "\(s.shadow)", s.moves.joined(separator: ";"), "\(s.gigantamax)", s.plainMoves.map { "[" + $0.joined(separator: "\u{1}") + "]" } ?? "nil"] }
             return p.joined(separator: "#")
         }
     }

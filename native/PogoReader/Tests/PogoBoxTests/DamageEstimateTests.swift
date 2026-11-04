@@ -277,6 +277,11 @@ final class DamageEstimateTests: XCTestCase {
         let speciesBest = try value(s, nil)
         XCTAssertGreaterThan(speciesBest, ground)
         XCTAssertEqual(now, speciesBest, accuracy: 1e-12, "a plain line that reads as no move counts as none")
+        // The row memo keeps no plain lines (nil) apart from a plain line that is literally "-" (which reads as no move, so the species' best moves are tried).
+        let lineOnly = try XCTUnwrap(s.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp_mega", shadow: false, moves: ["Mud Shot / Earthquake"]))).now)
+        let dashLine = try XCTUnwrap(s.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp_mega", shadow: false, moves: ["Mud Shot / Earthquake"], plainMoves: ["-"]))).now)
+        XCTAssertEqual(lineOnly, ground, accuracy: 1e-12)
+        XCTAssertEqual(dashLine, speciesBest, accuracy: 1e-12, "a different plain line is a different memo entry")
     }
 
     func testACopyWithUnreadMovesUsesTheBuildsMoves() throws {
