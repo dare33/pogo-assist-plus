@@ -131,6 +131,14 @@ final class DamageEstimateRealBoxTests: XCTestCase {
         let plainBest = HubSquads.BestRow(key: "garchomp", name: "Garchomp", speciesId: "garchomp", tier: "S", roles: [], types: ["dragon", "ground"], availability: "")
         let plainJudged = scale.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp", shadow: false, moves: HubSquads.tableMoves(of: plainBest, area: "raids", ctx: ctx))))
         XCTAssertEqual(plainNow, try XCTUnwrap(plainJudged.now), accuracy: 1e-12, "judged exactly as the plain Garchomp row is")
+        // In the Mega slot it is judged as an owned copy's Mega is: the best of its Mega line and the plain Pokémon's lines, and, since plain Garchomp has no raid line, its
+        // species' best moves too. Its own Mega line (Outrage) alone gives less than its best moves (Breaking Swipe) against Palkia.
+        XCTAssertTrue(lackMega.speciesBestToo)
+        let megaLineOnly = try XCTUnwrap(scale.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp_mega", shadow: false, moves: HubSquads.tableMoves(of: best, area: "raids", ctx: ctx)))).now)
+        let megaSpeciesBest = try XCTUnwrap(scale.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp_mega", shadow: false, moves: []))).now)
+        print("P1-MEGA lacking Mega Garchomp in the Mega slot: Mega line only \(megaLineOnly), species best \(megaSpeciesBest), judged \(megaNow)")
+        XCTAssertEqual(megaNow, max(megaLineOnly, megaSpeciesBest), accuracy: 1e-12)
+        XCTAssertGreaterThan(megaNow, megaLineOnly, "the species' best moves beat the Mega line here, so the test sees the rule")
         // A Primal entry is a Mega-kind form too.
         let primal = HubSquads.BestRow(key: "kyogre_primal", name: "Primal Kyogre", speciesId: "kyogre_primal", tier: "S", roles: [], types: ["water"], availability: "")
         XCTAssertEqual(HubSquads.lacking(of: primal, area: "raids", megaSlot: false, ctx: ctx).speciesId, "kyogre")

@@ -461,7 +461,12 @@ public final class StrengthScale {
             /// Max only: a Gigantamax Best row, valued with its G-Max move. Best lists no Gigantamax entry on Max today (rule 12), so no row reaches the app with it set; the engine
             /// handles one that would.
             public var gigantamax: Bool
-            public init(speciesId: String, shadow: Bool, moves: [String], gigantamax: Bool = false) { self.speciesId = speciesId; self.shadow = shadow; self.moves = moves; self.gigantamax = gigantamax }
+            /// Also try the species' best moves alongside `moves`, keeping the better (a Mega form in the raid Mega slot whose plain Pokémon has no table line, as an owned
+            /// copy's Mega is judged: never worth less in the Mega slot than on its species' best moves).
+            public var speciesBestToo: Bool
+            public init(speciesId: String, shadow: Bool, moves: [String], gigantamax: Bool = false, speciesBestToo: Bool = false) {
+                self.speciesId = speciesId; self.shadow = shadow; self.moves = moves; self.gigantamax = gigantamax; self.speciesBestToo = speciesBestToo
+            }
         }
         public init(copy: BoxEntry?, build: BoxAdvice.Build?, built: Bool, megaSlot: Bool = false, species: Lacking? = nil) {
             self.copy = copy; self.build = build; self.built = built; self.megaSlot = megaSlot; self.species = species
@@ -477,7 +482,7 @@ public final class StrengthScale {
             }
             if let b = build { p += [b.id, "\(b.targetLevel ?? -1)", "\(b.viaMega)", (b.steps ?? []).map { "\($0.kind)\($0.toLevel ?? 0)" }.joined(separator: ",")] }
             p += ["\(built)", "\(megaSlot)"]
-            if let s = species { p += [s.speciesId, "\(s.shadow)", s.moves.joined(separator: ";"), "\(s.gigantamax)"] }
+            if let s = species { p += [s.speciesId, "\(s.shadow)", s.moves.joined(separator: ";"), "\(s.gigantamax)", "\(s.speciesBestToo)"] }
             return p.joined(separator: "#")
         }
     }
@@ -536,7 +541,11 @@ public final class StrengthScale {
             let a = attacker(sp.speciesId, shadow: sp.shadow, level: DamageEstimate.bestLevel, ivs: DamageEstimate.bestIVs)
             let g = sp.gigantamax && mode == .max ? MaxBattleSpecies.gigantamax[plain(sp.speciesId)] : nil
             let given = sp.moves.flatMap(picks(forText:))
-            return Strength(kind: .damage, now: share(a.flatMap { bestOver($0, lines: given, gmaxType: g)?.value }), after: nil, assumed: true)
+            return Strength(kind: .damage, now: share(a.flatMap { a -> Double? in
+                var best = bestOver(a, lines: given, gmaxType: g)?.value
+                if sp.speciesBestToo, let v = found(a, gmaxType: g)?.value { best = max(best ?? 0, v) }
+                return best
+            }), after: nil, assumed: true)
         }
         guard let copy = r.copy else { return Strength(kind: .damage, now: nil, after: nil) }
         let shadow = HubRaidsModel.isShadow(copy), gigantamax = copy.row.gigantamax == true
@@ -586,14 +595,16 @@ extension HubSquads {
         ctx.table.entries(for: r.speciesId, area: area).filter { bestKey($0) == r.key }.compactMap(\.moves)
     }
 
-    /// The Pokémon a picker row the box lacks is judged as. A Mega or Primal entry counts as one only in the raid Mega slot (`megaSlot`); in any other slot it is the plain
-    /// Pokémon, on the plain Pokémon's own table lines (none: its species' best moves), as an owned row is judged outside that slot.
+    /// The Pokémon a picker row the box lacks is judged as. A Mega or Primal entry counts as one only in the raid Mega slot (`megaSlot`), where it is judged as an owned
+    /// copy's Mega is: on the best of its own Mega lines and the plain Pokémon's lines, and its species' best moves too when the plain Pokémon has no line. In any other slot it
+    /// is the plain Pokémon, on the plain Pokémon's own table lines (none: its species' best moves), as an owned row is judged outside that slot.
     public static func lacking(of r: BestRow, area: String, megaSlot: Bool, gigantamax: Bool = false, ctx: HubContext) -> StrengthScale.Row.Lacking {
         let shadow = r.key.hasSuffix("_shadow")
-        guard !megaSlot, let base = BoxMerge.megaBase(r.speciesId, ctx.gm) else {
+        guard let base = BoxMerge.megaBase(r.speciesId, ctx.gm) else {
             return .init(speciesId: r.speciesId, shadow: shadow, moves: tableMoves(of: r, area: area, ctx: ctx), gigantamax: gigantamax)
         }
-        let lines = ctx.table.entries(for: base, area: area).filter { !$0.flags.mega && !$0.flags.shadow }.compactMap(\.moves)
-        return .init(speciesId: base, shadow: false, moves: lines, gigantamax: gigantamax)
+        let plainLines = ctx.table.entries(for: base, area: area).filter { !$0.flags.mega && !$0.flags.shadow }.compactMap(\.moves)
+        guard megaSlot else { return .init(speciesId: base, shadow: false, moves: plainLines, gigantamax: gigantamax) }
+        return .init(speciesId: r.speciesId, shadow: false, moves: tableMoves(of: r, area: area, ctx: ctx) + plainLines, gigantamax: gigantamax, speciesBestToo: plainLines.isEmpty)
     }
 }
