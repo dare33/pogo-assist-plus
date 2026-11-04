@@ -179,12 +179,16 @@ final class DamageEstimateRealBoxTests: XCTestCase {
             XCTAssertEqual(a, DamageEstimate.gymStrength(copy: gymCtx.entry(r.build.entryId), row: r, speciesId: nil, gm: P23.gm), "passing the best bulk in changes no figure")
         }
         XCTAssertFalse(gymRows.isEmpty)
-        // Time only the passed-in path: a picker's rows (the unpassed calls above are the comparison, not the picker).
+        // The same rows working the best bulk out per call (the hash per row a picker must not pay), timed as the yardstick on this machine.
+        let u0 = Date()
+        for r in gymRows { _ = DamageEstimate.gymStrength(copy: gymCtx.entry(r.build.entryId), row: r, speciesId: nil, gm: P23.gm) }
+        let unpassedMs = Date().timeIntervalSince(u0) * 1000
+        // Time only the passed-in path: a picker's rows.
         let g1 = Date()
         for r in gymRows { _ = DamageEstimate.gymStrength(copy: gymCtx.entry(r.build.entryId), row: r, speciesId: nil, gm: P23.gm, bestBulk: bestBulk) }
         let gymMs = Date().timeIntervalSince(g1) * 1000
-        print("P1-TIMING Gym picker: best bulk + \(gymRows.count) rows; rows alone \(String(format: "%.0f", gymMs)) ms (whole section \(String(format: "%.0f", Date().timeIntervalSince(g0) * 1000)) ms)")
-        XCTAssertLessThan(gymMs, 100, "no per-row hashing of the game master")
+        print("P1-TIMING Gym picker: best bulk + \(gymRows.count) rows; rows alone \(String(format: "%.0f", gymMs)) ms, per-row hashing \(String(format: "%.0f", unpassedMs)) ms (whole section \(String(format: "%.0f", Date().timeIntervalSince(g0) * 1000)) ms)")
+        XCTAssertLessThan(gymMs, unpassedMs / 4, "no per-row hashing of the game master: the picker's rows cost a small part of hashing per row on this machine")
         print("P1-TIMING first cold scale \(String(format: "%.0f", coldMs)) ms; slowest picker (scale + all rows) \(String(format: "%.0f", worst)) ms; \(rows) rows in total")
         XCTAssertLessThan(worst, 500)
     }

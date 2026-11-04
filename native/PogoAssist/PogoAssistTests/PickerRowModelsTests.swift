@@ -21,13 +21,17 @@ final class PickerRowModelsTests: XCTestCase {
 
     private func ctx(today: String = "2026-10-26") -> HubContext { HubContext(advice: Self.box.advice, entries: Self.box.entries, gm: Self.gm, hub: Self.hub, table: Self.table, today: today) }
 
-    /// A row with no strength must say why in its spoken label; one with a copy has the CP and IV line; one without a copy is a Pokémon the box lacks.
-    private func check(_ rows: [PickerRowModel], _ what: String, ivs: Bool = true, file: StaticString = #filePath, line: UInt = #line) {
+    /// A row with no strength must say why in its spoken label; one with a copy has the CP and IV line; one without a copy is a Pokémon the box lacks (`best`: the screen's
+    /// Best rows, which say whether the box has the Pokémon; a species-pick id alone does not, since a Best row whose copy a higher row shows is a species pick too).
+    private func check(_ rows: [PickerRowModel], _ what: String, best: [HubSquads.BestRow], ivs: Bool = true, file: StaticString = #filePath, line: UInt = #line) {
         for m in rows {
             let reason = m.spoken.contains("not read") || m.spoken.contains("score not known")
             XCTAssertTrue(m.strength != nil || reason, "\(what): \(m.name) has no strength and no reason: \(m.spoken)", file: file, line: line)
             // An owned row (any screen, PvP included) always has its CP and IV line; only a Pokémon the box lacks, whose row id is a species pick, may go without.
-            if m.cpIv == nil { XCTAssertTrue(m.id.hasPrefix(squadSpeciesPrefix), "\(what): \(m.name) is an owned row without its CP and IV line", file: file, line: line) }
+            if m.cpIv == nil {
+                let lacking = m.id.hasPrefix(squadSpeciesPrefix) && best.contains { $0.entryId == m.id } && !best.contains { $0.entryId == m.id && $0.inBox }
+                XCTAssertTrue(lacking, "\(what): \(m.name) is an owned row without its CP and IV line", file: file, line: line)
+            }
             XCTAssertFalse(m.spoken.contains(" · "), "\(what): spoken text uses commas: \(m.spoken)", file: file, line: line)
         }
     }
@@ -40,7 +44,8 @@ final class PickerRowModelsTests: XCTestCase {
             for mode in [SquadMode.available, .best] {
                 let slots = EventPickerBuilder(screen: screen, row: row, ctx: c).allSlotRows(mode: mode)
                 XCTAssertFalse(slots.isEmpty)
-                for rows in slots { check(rows, "\(screen) \(row.title) \(mode)"); checked += rows.count }
+                let best = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: c) : HubSquads.bestMaxRows(row: row, ctx: c)
+                for rows in slots { check(rows, "\(screen) \(row.title) \(mode)", best: best); checked += rows.count }
             }
         }
         XCTAssertGreaterThan(checked, 500)
@@ -50,12 +55,12 @@ final class PickerRowModelsTests: XCTestCase {
         let c = ctx()
         var checked = 0
         for mode in [SquadMode.available, .best] {
-            for rows in GymPickerBuilder(ctx: c).allSlotRows(mode: mode) { check(rows, "gym \(mode)"); checked += rows.count }
+            for rows in GymPickerBuilder(ctx: c).allSlotRows(mode: mode) { check(rows, "gym \(mode)", best: HubSquads.bestGymRows(ctx: c)); checked += rows.count }
             for leader in Self.hub.leaders {
-                for rows in RocketPickerBuilder(leader: leader, ctx: c).allSlotRows(mode: mode) { check(rows, "rocket \(leader.name) \(mode)"); checked += rows.count }
+                for rows in RocketPickerBuilder(leader: leader, ctx: c).allSlotRows(mode: mode) { check(rows, "rocket \(leader.name) \(mode)", best: leader.slots.flatMap { HubSquads.bestRocketRows(options: $0, ctx: c) }); checked += rows.count }
             }
             for league in LeaguePanel.keys {
-                for rows in PvPPickerBuilder(league: league, ctx: c, pogoAssist: false).allSlotRows(mode: mode) { check(rows, "pvp \(league) \(mode)"); checked += rows.count }
+                for rows in PvPPickerBuilder(league: league, ctx: c, pogoAssist: false).allSlotRows(mode: mode) { check(rows, "pvp \(league) \(mode)", best: HubSquads.bestPvpRows(league: league, ctx: c)); checked += rows.count }
             }
         }
         XCTAssertGreaterThan(checked, 300)
@@ -120,5 +125,20 @@ final class PickerRowModelsTests: XCTestCase {
             let expected = scale.strength(.init(copy: nil, build: nil, built: false, species: asPlain))
             XCTAssertEqual(r.strength, expected, "\(r.name) in an All slot is judged as the plain Pokémon")
         }
+        // The raid Mega slot itself, built by the picker: the same entries the box lacks are judged as the Mega or Primal form there.
+        let (megaOptions, megaFilled) = b.resolve(slots: [SquadSlot(role: PogoRules.RaidRole.mega.rawValue)], mode: .best)
+        let megaById = Dictionary(megaOptions.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
+        let inMegaSlot = b.content(slot: 0, filled: megaFilled, options: megaOptions, byId: megaById, mode: .best).rows
+            .filter { ($0.name.hasPrefix("Mega ") || $0.name.hasPrefix("Primal ")) && $0.cpIv == nil }
+        XCTAssertFalse(inMegaSlot.isEmpty, "the Mega slot lists a Mega or Primal entry the box lacks")
+        var differs = false
+        for r in inMegaSlot {
+            let best = try XCTUnwrap(megaOptions.compactMap(\.best).first { $0.entryId == r.id }, r.name)
+            let asForm = scale.strength(.init(copy: nil, build: nil, built: false, species: HubSquads.lacking(of: best, area: "raids", megaSlot: true, ctx: c)))
+            let asPlain = scale.strength(.init(copy: nil, build: nil, built: false, species: HubSquads.lacking(of: best, area: "raids", megaSlot: false, ctx: c)))
+            XCTAssertEqual(r.strength, asForm, "\(r.name) in the Mega slot is judged as the Mega or Primal form")
+            if asForm != asPlain { differs = true }
+        }
+        XCTAssertTrue(differs, "at least one Mega entry's figure differs from its plain Pokémon's, so the slot's judgement is tested")
     }
 }
