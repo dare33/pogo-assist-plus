@@ -133,7 +133,7 @@ final class DamageEstimateRealBoxTests: XCTestCase {
         XCTAssertEqual(plainNow, try XCTUnwrap(plainJudged.now), accuracy: 1e-12, "judged exactly as the plain Garchomp row is")
         // In the Mega slot it is judged as an owned copy's Mega is: the best of its Mega line and the plain Pokémon's lines, and, since plain Garchomp has no raid line, its
         // species' best moves too. Its own Mega line (Outrage) alone gives less than its best moves (Breaking Swipe) against Palkia.
-        XCTAssertTrue(lackMega.speciesBestToo)
+        XCTAssertEqual(lackMega.plainMoves, [], "plain Garchomp has no raid line: the plain lines are passed as an empty list, so the species' best moves are tried")
         let megaLineOnly = try XCTUnwrap(scale.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp_mega", shadow: false, moves: HubSquads.tableMoves(of: best, area: "raids", ctx: ctx)))).now)
         let megaSpeciesBest = try XCTUnwrap(scale.strength(.init(copy: nil, build: nil, built: false, species: .init(speciesId: "garchomp_mega", shadow: false, moves: []))).now)
         print("P1-MEGA lacking Mega Garchomp in the Mega slot: Mega line only \(megaLineOnly), species best \(megaSpeciesBest), judged \(megaNow)")
@@ -143,6 +143,25 @@ final class DamageEstimateRealBoxTests: XCTestCase {
         let primal = HubSquads.BestRow(key: "kyogre_primal", name: "Primal Kyogre", speciesId: "kyogre_primal", tier: "S", roles: [], types: ["water"], availability: "")
         XCTAssertEqual(HubSquads.lacking(of: primal, area: "raids", megaSlot: false, ctx: ctx).speciesId, "kyogre")
         XCTAssertEqual(HubSquads.lacking(of: primal, area: "raids", megaSlot: true, ctx: ctx).speciesId, "kyogre_primal")
+    }
+
+    /// A Mega or Primal Best row the box lacks, in the raid Mega slot, reads exactly what an owned copy of its base species reads when built to Mega there: level 49 with
+    /// 15/15/15 and unread moves, Mega Evolving at level 50. (Single-form Megas and a Primal; Mega Garchomp and Primal Kyogre against Palkia.)
+    func testALackingMegaEqualsAnOwnedCopyBuiltToMegaOnTheRealBox() throws {
+        let box = Self.realBox
+        let table = try TierTable.bundled(), pve = try PveMoves.bundled()
+        let row = try XCTUnwrap(P23.hub.rotation.first { $0.kind == .fiveStar && $0.bosses.contains { $0.speciesId == "palkia" } })
+        let ctx = HubContext(advice: box.advice, entries: box.entries, gm: P23.gm, hub: P23.hub, table: table, today: row.from)
+        let scale = StrengthScale.shared(mode: .raids, bosses: row.bosses, ctx: ctx, pve: pve)
+        for (base, form) in [("garchomp", "garchomp_mega"), ("kyogre", "kyogre_primal")] {
+            let best = HubSquads.BestRow(key: form, name: form, speciesId: form, tier: "S", roles: [], types: [], availability: "")
+            let lacking = scale.strength(.init(copy: nil, build: nil, built: false, species: HubSquads.lacking(of: best, area: "raids", megaSlot: true, ctx: ctx)))
+            let copy = P23.entry("parity-\(base)", base, ivs: IVs(atk: 15, def: 15, hp: 15), level: 49)
+            let build = P23.build(copy.id, base, areas: ["Raids"], built: false, viaMega: true, targetLevel: 50, steps: [.init(kind: "megaEvolve")])
+            let owned = scale.strength(.init(copy: copy, build: build, built: false, megaSlot: true))
+            print("P1-MEGA parity \(form): lacking \(String(describing: lacking.now)), owned after \(String(describing: owned.after))")
+            XCTAssertEqual(try XCTUnwrap(lacking.now), try XCTUnwrap(owned.after), accuracy: 1e-9, "\(form) the box lacks reads as an owned \(base) built to Mega")
+        }
     }
 
     /// The move lines in the tables that name no move the game master knows, and which of them sit on the raid, Max and Rocket tables a picker reads.

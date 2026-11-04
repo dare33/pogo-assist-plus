@@ -461,11 +461,12 @@ public final class StrengthScale {
             /// Max only: a Gigantamax Best row, valued with its G-Max move. Best lists no Gigantamax entry on Max today (rule 12), so no row reaches the app with it set; the engine
             /// handles one that would.
             public var gigantamax: Bool
-            /// Also try the species' best moves alongside `moves`, keeping the better (a Mega form in the raid Mega slot whose plain Pokémon has no table line, as an owned
-            /// copy's Mega is judged: never worth less in the Mega slot than on its species' best moves).
-            public var speciesBestToo: Bool
-            public init(speciesId: String, shadow: Bool, moves: [String], gigantamax: Bool = false, speciesBestToo: Bool = false) {
-                self.speciesId = speciesId; self.shadow = shadow; self.moves = moves; self.gigantamax = gigantamax; self.speciesBestToo = speciesBestToo
+            /// Set only for a Mega form in the raid Mega slot: the plain Pokémon's table lines, tried alongside `moves`. When they parse to no move the species' best moves are
+            /// tried too, as for an owned copy's Mega (never worth less in the Mega slot than on its species' best moves). Parsed here, as the owned path parses its plain
+            /// lines, so a line that reads as no move (a date, a note) counts as no line on both paths.
+            public var plainMoves: [String]?
+            public init(speciesId: String, shadow: Bool, moves: [String], gigantamax: Bool = false, plainMoves: [String]? = nil) {
+                self.speciesId = speciesId; self.shadow = shadow; self.moves = moves; self.gigantamax = gigantamax; self.plainMoves = plainMoves
             }
         }
         public init(copy: BoxEntry?, build: BoxAdvice.Build?, built: Bool, megaSlot: Bool = false, species: Lacking? = nil) {
@@ -482,7 +483,7 @@ public final class StrengthScale {
             }
             if let b = build { p += [b.id, "\(b.targetLevel ?? -1)", "\(b.viaMega)", (b.steps ?? []).map { "\($0.kind)\($0.toLevel ?? 0)" }.joined(separator: ",")] }
             p += ["\(built)", "\(megaSlot)"]
-            if let s = species { p += [s.speciesId, "\(s.shadow)", s.moves.joined(separator: ";"), "\(s.gigantamax)", "\(s.speciesBestToo)"] }
+            if let s = species { p += [s.speciesId, "\(s.shadow)", s.moves.joined(separator: ";"), "\(s.gigantamax)", s.plainMoves.map { $0.joined(separator: ";") } ?? "-"] }
             return p.joined(separator: "#")
         }
     }
@@ -540,10 +541,12 @@ public final class StrengthScale {
         if let sp = r.species {
             let a = attacker(sp.speciesId, shadow: sp.shadow, level: DamageEstimate.bestLevel, ivs: DamageEstimate.bestIVs)
             let g = sp.gigantamax && mode == .max ? MaxBattleSpecies.gigantamax[plain(sp.speciesId)] : nil
-            let given = sp.moves.flatMap(picks(forText:))
+            let plainPicks = (sp.plainMoves ?? []).flatMap(picks(forText:))
+            let given = sp.moves.flatMap(picks(forText:)) + plainPicks
+            let speciesBestToo = sp.plainMoves != nil && plainPicks.isEmpty
             return Strength(kind: .damage, now: share(a.flatMap { a -> Double? in
                 var best = bestOver(a, lines: given, gmaxType: g)?.value
-                if sp.speciesBestToo, let v = found(a, gmaxType: g)?.value { best = max(best ?? 0, v) }
+                if speciesBestToo, let v = found(a, gmaxType: g)?.value { best = max(best ?? 0, v) }
                 return best
             }), after: nil, assumed: true)
         }
@@ -605,6 +608,6 @@ extension HubSquads {
         }
         let plainLines = ctx.table.entries(for: base, area: area).filter { !$0.flags.mega && !$0.flags.shadow }.compactMap(\.moves)
         guard megaSlot else { return .init(speciesId: base, shadow: false, moves: plainLines, gigantamax: gigantamax) }
-        return .init(speciesId: r.speciesId, shadow: false, moves: tableMoves(of: r, area: area, ctx: ctx) + plainLines, gigantamax: gigantamax, speciesBestToo: plainLines.isEmpty)
+        return .init(speciesId: r.speciesId, shadow: false, moves: tableMoves(of: r, area: area, ctx: ctx), gigantamax: gigantamax, plainMoves: plainLines)
     }
 }

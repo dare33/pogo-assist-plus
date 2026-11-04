@@ -249,6 +249,36 @@ final class DamageEstimateTests: XCTestCase {
         XCTAssertEqual(Set(s.megaSpecies(of: "charizard")), ["charizard_mega_x", "charizard_mega_y"])
     }
 
+    /// A Mega Garchomp the box lacks, in the raid Mega slot, against Palkia (Water/Dragon). Its own Mega line is Ground (Mud Shot / Earthquake). Where the plain Garchomp has a
+    /// Dragon line (Dragon Tail / Outrage) the figure is that line's, as an owned copy's Mega is; where the plain Garchomp's only line reads as no move (a note with a date),
+    /// it counts as no line on this path as on the owned one, so the species' best moves are tried and beat the Ground line.
+    func testALackingMegaInTheMegaSlotTakesThePlainLinesThenTheSpeciesBest() throws {
+        let boss = P23.boss("palkia", types: ["water", "dragon"])
+        let best = HubSquads.BestRow(key: "garchomp_mega", name: "Mega Garchomp", speciesId: "garchomp_mega", tier: "S", roles: [], types: ["dragon", "ground"], availability: "")
+        func figure(plainLine: String) throws -> (now: Double, s: StrengthScale) {
+            let table = [P23.tierEntry("raids", "Ground", "S", "garchomp_mega", mega: true, moves: "Mud Shot / Earthquake"), P23.tierEntry("raids", "Dragon", "A", "garchomp", moves: plainLine)]
+            let ctx = P23.ctx(table: P23.table(table))
+            let s = StrengthScale(mode: .raids, bosses: [boss], ctx: ctx, pve: Self.pve)
+            let lacking = HubSquads.lacking(of: best, area: "raids", megaSlot: true, ctx: ctx)
+            return (try XCTUnwrap(s.strength(.init(copy: nil, build: nil, built: false, species: lacking)).now), s)
+        }
+        func value(_ s: StrengthScale, _ pick: DamageEstimate.Pick?) throws -> Double {
+            let a = try XCTUnwrap(s.attacker("garchomp_mega", shadow: false, level: 50, ivs: IVs(atk: 15, def: 15, hp: 15)))
+            return try XCTUnwrap(pick.map { s.value(a, pick: $0) } ?? s.found(a)?.value) / s.bestInGame
+        }
+        // The plain Pokémon has a line that beats the Mega's own.
+        var (now, s) = try figure(plainLine: "Dragon Tail / Outrage")
+        let ground = try value(s, .init(fast: "MUD_SHOT", charged: ["EARTHQUAKE"])), dragon = try value(s, .init(fast: "DRAGON_TAIL", charged: ["OUTRAGE"]))
+        XCTAssertGreaterThan(dragon, ground)
+        XCTAssertEqual(now, dragon, accuracy: 1e-12, "the plain Pokémon's line is taken")
+        // The plain Pokémon's only line reads as no move: the species' best moves are tried.
+        XCTAssertTrue(s.picks(forText: "Breaking Swipe, Sep 2026").isEmpty, "this note reads as no move")
+        (now, s) = try figure(plainLine: "Breaking Swipe, Sep 2026")
+        let speciesBest = try value(s, nil)
+        XCTAssertGreaterThan(speciesBest, ground)
+        XCTAssertEqual(now, speciesBest, accuracy: 1e-12, "a plain line that reads as no move counts as none")
+    }
+
     func testACopyWithUnreadMovesUsesTheBuildsMoves() throws {
         let copy = P23.entry("a", "palkia", level: 40)
         let build = P23.build("a", "palkia", areas: ["Raids"], built: true)
