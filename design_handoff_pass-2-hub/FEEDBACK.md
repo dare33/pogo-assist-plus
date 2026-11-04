@@ -136,3 +136,11 @@ scan): "green". The screenshots page (taken at fe6ce9e): "screenshots look good"
   15/15/15 and its best moves; a copy whose moves were not read uses the moves its build names; CP and IVs are the
   copy's now ("not read" when unknown); a Best row the box lacks shows one bar at level 50 with 15/15/15. Size: full
   (new data, a new calculation, new information on five screens).
+
+## Phone run 3, 4 Nov 2026 (build b902a34, test/greg-build)
+
+Greg ran the 8-step P1 walkthrough on his phone after Product > Clean Build Folder: the picker rows on Raids, the
+Raids Mega slot, Max (fixed Max moves for Crowned Zacian, Crowned Zamazenta and Eternatus), Gym (Bulk), Rocket, PvP
+(Score), Best mode on each screen, and how fast each picker opens. Greg: "fantastic all green". No new items. The
+known limits listed in STATUS (the AX5 CP/IV wrap, "Charizard" broken at AX5 on the PvP OTHER CANDIDATES card, the 35
+tier-table move lines that fall back to the species' best moves) were not raised and stay open.
