@@ -144,19 +144,20 @@ struct RocketPickerBuilder {
     /// What a slot's picker shows: its rows, whether they are the Next best ones, and whether the box has any option for the slot.
     struct Content { var rows: [PickerRowModel]; var showsNext: Bool; var boxHasOptions: Bool }
 
-    func content(slot i: Int, filled: [FilledSlot], lists: [SlotLists], mode: SquadMode) -> Content {
+    /// `only` limits the rows to those ids: the squad strength bar needs one slot's own row, not the whole list.
+    func content(slot i: Int, filled: [FilledSlot], lists: [SlotLists], mode: SquadMode, only: Set<String>? = nil) -> Content {
         let l = lists[i]
         let showsNext = l.rows.isEmpty && !l.next.isEmpty
         let source = showsNext ? l.next : l.rows
-        // Only a Pokémon the player chose in another slot leaves this list (D28): the app's own suggestions stay.
+        // A Pokémon in another slot (chosen or suggested: the suggestion is kept at the first change) is listed, marked with its slot: choosing it swaps the two (rule 27).
         let allRows = lists.flatMap { $0.rows + $0.next }.compactMap(\.best)
         let copyOf = HubSquads.copyResolver(rows: allRows)
-        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: true, copyOf: copyOf)
+        let held = HubSquads.slotNumbers(of: filled, editing: i, copyOf: copyOf)
         var ids = source.map(\.id)
         let boxHasOptions = !ids.isEmpty
         let ticks = HubSquads.tickIds(filled[i], rows: allRows)
         if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
-        let listed = HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf)
+        let listed = HubSquads.picker(candidates: only.map { o in ids.filter(o.contains) } ?? ids, excluded: [], ownIds: ticks, copyOf: copyOf)
         let byId = Dictionary(source.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // P1: damage per turn against the slot's possible Pokémon, as a share of the best in the game.
         let scale = (try? PveMoves.bundled()).map { StrengthScale.shared(mode: .rocket, bosses: leader.slots[i], ctx: ctx, pve: $0) }
@@ -184,7 +185,17 @@ struct RocketPickerBuilder {
                 .adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: e.build, built: mark == .fullStrength)))
         }
         if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
-        return Content(rows: rows, showsNext: showsNext, boxHasOptions: boxHasOptions)
+        return Content(rows: PickerRowModel.marking(rows) { held[$0] ?? copyOf($0).flatMap { held[$0] } }, showsNext: showsNext, boxHasOptions: boxHasOptions)
+    }
+
+    /// The squad's strength bar (rule 32): each slot's figure is the one its Pokémon shows as a row in that slot's picker, so it is read from that row (built alone).
+    func squadStrength(filled: [FilledSlot], lists: [SlotLists], mode: SquadMode) -> SquadStrength {
+        let allRows = lists.flatMap { $0.rows + $0.next }.compactMap(\.best)
+        return SquadStrength.of(figures: filled.indices.map { i in
+            guard filled[i].pickId != nil else { return nil }
+            let rows = content(slot: i, filled: filled, lists: lists, mode: mode, only: HubSquads.tickIds(filled[i], rows: allRows)).rows
+            return rows.first(where: \.ticked)?.strength ?? Strength(kind: .damage, now: nil, after: nil)
+        })
     }
 
     /// Every slot's picker rows for the leader's default squad under `mode` (what a test reads).
@@ -210,6 +221,7 @@ private struct RocketSquadView: View {
     typealias SlotLists = RocketPickerBuilder.SlotLists
     private var builder: RocketPickerBuilder { RocketPickerBuilder(leader: leader, ctx: ctx) }
     @State private var rowsCache = PickerRowsCache<RocketPickerBuilder.Content>()
+    @State private var strengthCache = PickerRowsCache<SquadStrength>()
 
     var body: some View {
         let mode = keeper.store.mode(for: .rocket)
@@ -217,6 +229,10 @@ private struct RocketSquadView: View {
         let filled = mode == .best ? HubSquads.bestRocketSquad(leader: leader, slots: saved.slots, ctx: ctx) : HubSquads.rocketSquad(leader: leader, slots: saved.slots, mode: mode, ctx: ctx)
         let lists = leader.slots.map { entries(for: $0, mode: mode) }
         let cards = filled.enumerated().map { card($0.offset, $0.element, lists: lists) }
+        // Worked out once for the squad as drawn and kept until the box, the advice or the squad changes (the picker's rows are kept the same way).
+        let strength = strengthCache.get(ctx: ctx, key: "strength|\(leader.name)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + lists.map { ($0.rows + $0.next).map(\.id).joined(separator: ",") }.joined(separator: ";")) {
+            builder.squadStrength(filled: filled, lists: lists, mode: mode)
+        }
         HubHeaderLine("YOUR SQUAD FOR \(leader.name.uppercased())") {
             Menu {
                 ForEach(leaders, id: \.name) { l in
@@ -232,8 +248,18 @@ private struct RocketSquadView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Slot by slot").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             if let team = HubSquads.teamStatus(cards.map(\.status)) { SquadStatusLine(status: team) }
+            SquadStrengthLine(strength: strength, type: .rocket)
             SlotGrid(slots: cards, selected: selected) { i in
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
+            }
+            if saved.showsBackToSuggested {
+                BackToSuggestedButton {
+                    keeper.update { s in
+                        var back = s.rocketSquad(leader: leader.name)
+                        back.backToSuggested(defaults: HubSquads.defaultRocketSlots())
+                        s.rocket[leader.name] = back
+                    }
+                }
             }
         }
         .padding(14)
@@ -305,7 +331,7 @@ private struct RocketSquadView: View {
             onChoose: { id in
                 keeper.update { s in
                     var saved = s.rocketSquad(leader: leader.name)
-                    saved.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: leader.slots.flatMap { HubSquads.bestRocketRows(options: $0, ctx: ctx) }))
+                    saved.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: leader.slots.flatMap { HubSquads.bestRocketRows(options: $0, ctx: ctx) }), shown: filled)
                     s.rocket[leader.name] = saved
                 }
             },
