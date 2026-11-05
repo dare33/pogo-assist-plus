@@ -141,4 +141,109 @@ final class PickerRowModelsTests: XCTestCase {
         }
         XCTAssertTrue(differs, "at least one Mega entry's figure differs from its plain Pokémon's, so the slot's judgement is tested")
     }
+
+    // MARK: squad strength (CONCEPTS rule 32) and the fixed suggestion (rule 27), on the real box
+
+    private func figures(_ filled: [FilledSlot], rows: (Int) -> [PickerRowModel], empty: Strength) -> [Strength?] {
+        filled.indices.map { i in filled[i].pickId == nil ? nil : (rows(i).first(where: \.ticked)?.strength ?? empty) }
+    }
+
+    /// The squad's bar is the mean of the figures its slots' Pokémon show as rows in their pickers, on every screen, in both modes; the squad measure is printed.
+    func testSquadStrengthIsTheMeanOfTheSlotsPickerRowFigures() throws {
+        let c = ctx()
+        var checked = 0
+        func same(_ a: SquadStrength, _ b: SquadStrength, _ what: String) {
+            XCTAssertEqual(a, b, what)
+            XCTAssertEqual(a.total, b.total, what)
+            checked += 1
+        }
+        var times = [String: Double](), counts = [String: Int]()
+        func timed(_ name: String, _ work: () -> Void) { let t0 = Date(); work(); times[name, default: 0] += Date().timeIntervalSince(t0) * 1000; counts[name, default: 0] += 1 }
+        for mode in [SquadMode.available, .best] {
+            for row in Self.hub.rotation where !row.bosses.isEmpty && [.fiveStar, .mega, .shadow, .maxMonday, .maxEvent].contains(row.kind) {
+                let screen: SquadScreen = [.maxMonday, .maxEvent].contains(row.kind) ? .max : .raids
+                let b = EventPickerBuilder(screen: screen, row: row, ctx: c)
+                let (options, filled) = b.resolve(slots: screen == .raids ? HubSquads.defaultRaidSlots() : HubSquads.defaultMaxSlots(), mode: mode)
+                let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
+                var fast: SquadStrength?
+                timed(screen == .raids ? "raids" : "max") { fast = b.squadStrength(filled: filled, options: options, byId: byId, mode: mode) }
+                let slow = SquadStrength.of(figures: figures(filled, rows: { b.content(slot: $0, filled: filled, options: options, byId: byId, mode: mode).rows }, empty: Strength(kind: .damage, now: nil, after: nil)))
+                same(fast!, slow, "\(screen) \(row.title) \(mode)")
+            }
+            let g = GymPickerBuilder(ctx: c)
+            let r = g.resolve(mode: mode, saved: SquadStore.Saved(slots: HubSquads.defaultGymSlots()))
+            let gById = Dictionary(r.options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
+            var gFast: SquadStrength?
+            timed("gym") { gFast = g.squadStrength(filled: r.filled, options: r.options, byId: gById, mode: mode) }
+            same(gFast!, SquadStrength.of(figures: figures(r.filled, rows: { g.content(slot: $0, filled: r.filled, options: r.options, byId: gById, mode: mode).rows }, empty: Strength(kind: .bulk, now: nil, after: nil)), kind: .bulk), "gym \(mode)")
+            for leader in Self.hub.leaders {
+                let k = RocketPickerBuilder(leader: leader, ctx: c)
+                let filled = mode == .best ? HubSquads.bestRocketSquad(leader: leader, ctx: c) : HubSquads.rocketSquad(leader: leader, mode: mode, ctx: c)
+                let lists = leader.slots.map { k.entries(for: $0, mode: mode) }
+                var kFast: SquadStrength?
+                timed("rocket") { kFast = k.squadStrength(filled: filled, lists: lists, mode: mode) }
+                same(kFast!, SquadStrength.of(figures: figures(filled, rows: { k.content(slot: $0, filled: filled, lists: lists, mode: mode).rows }, empty: Strength(kind: .damage, now: nil, after: nil))), "rocket \(leader.name) \(mode)")
+            }
+            for league in LeaguePanel.keys {
+                let p = PvPPickerBuilder(league: league, ctx: c, pogoAssist: false)
+                let r = p.resolve(mode: mode, slots: HubSquads.defaultPvpSlots())
+                var pFast: SquadStrength?
+                timed("pvp") { pFast = p.squadStrength(filled: r.filled, candidates: r.candidates, byId: r.byId, best: r.best, mode: mode) }
+                same(pFast!, SquadStrength.of(figures: figures(r.filled, rows: { p.content(slot: $0, filled: r.filled, candidates: r.candidates, byId: r.byId, best: r.best, mode: mode).rows }, empty: Strength.scoreNotKnown), kind: .score), "pvp \(league) \(mode)")
+            }
+        }
+        XCTAssertGreaterThan(checked, 20)
+        print("P2-4-TIMING squad strength, summed over every event, leader and league in both modes (ms): " + times.sorted { $0.key < $1.key }.map { "\($0.key) \(String(format: "%.0f", $0.value)) over \(counts[$0.key] ?? 0) squads" }.joined(separator: ", "))
+    }
+
+    /// The same, one squad: opening a Gym or Rocket screen adds one strength computation; Gym's guard is the picker's own 40 ms per slot.
+    func testSquadStrengthDoesNotSlowTheGymScreen() throws {
+        let c = ctx()
+        let g = GymPickerBuilder(ctx: c)
+        let r = g.resolve(mode: .available, saved: SquadStore.Saved(slots: HubSquads.defaultGymSlots()))
+        let byId = Dictionary(r.options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
+        _ = g.squadStrength(filled: r.filled, options: r.options, byId: byId, mode: .available)   // the first call also loads the game master hash
+        let t0 = Date()
+        let s = g.squadStrength(filled: r.filled, options: r.options, byId: byId, mode: .available)
+        let ms = Date().timeIntervalSince(t0) * 1000
+        print("P2-4-TIMING Gym squad strength: \(String(format: "%.0f", ms)) ms, \(s.text), \(s.scoredText ?? "all scored")")
+        XCTAssertLessThan(ms, 150)
+    }
+
+    /// Rule 27 through the Gym builder: the suggestion is kept at the first change; a box change or a mode switch back and forth then moves nothing; Back restores it.
+    func testGymSuggestionIsKeptAtTheFirstChangeAndBackRestoresIt() throws {
+        let c = ctx()
+        let g = GymPickerBuilder(ctx: c)
+        var saved = SquadStore.Saved(slots: HubSquads.defaultGymSlots())
+        let first = g.resolve(mode: .best, saved: saved).filled
+        XCTAssertEqual(first.count, 6)
+        let replacement = try XCTUnwrap(g.resolve(mode: .best, saved: saved).candidates.last?.entryId)
+        XCTAssertFalse(first.contains { $0.pickId == replacement })
+        saved.choose(replacement, at: 0, shown: first)
+        let after = g.resolve(mode: .best, saved: saved).filled
+        XCTAssertEqual(after.map(\.pickId), [replacement] + first.dropFirst().map(\.pickId), "only slot 1 changed; the Pokémon it held did not drop into another slot")
+        // Another change keeps the rest: a swap of slot 2 and slot 3.
+        saved.choose(after[2].pickId, at: 1, shown: after)
+        let swapped = g.resolve(mode: .best, saved: saved).filled
+        XCTAssertEqual(swapped.map(\.pickId), [after[0].pickId, after[2].pickId, after[1].pickId] + after.dropFirst(3).map(\.pickId))
+        saved.backToSuggested(defaults: HubSquads.defaultGymSlots())
+        XCTAssertEqual(g.resolve(mode: .best, saved: saved).filled.map(\.pickId), first.map(\.pickId))
+        XCTAssertFalse(saved.showsBackToSuggested)
+    }
+
+    /// A picker lists the Pokémon of the squad's other slots, marked with their slot, and the slot's own row stays ticked and unmarked (rule 4 as changed with rule 27).
+    func testPickersListOtherSlotsPokemonMarkedForTheSwap() throws {
+        let c = ctx()
+        let g = GymPickerBuilder(ctx: c)
+        let r = g.resolve(mode: .available, saved: SquadStore.Saved(slots: HubSquads.defaultGymSlots()))
+        let byId = Dictionary(r.options.flatMap { o in [(o.id, o)] }, uniquingKeysWith: { a, _ in a })
+        let filled = r.filled
+        let first = try XCTUnwrap(filled[0].pickId)
+        let rows = g.content(slot: 1, filled: filled, options: r.options, byId: byId, mode: .available).rows
+        let held = try XCTUnwrap(rows.first { $0.id == first }, "slot 1's Pokémon is listed in slot 2's picker")
+        XCTAssertEqual(held.swapSlot, 1)
+        XCTAssertTrue(held.spoken.hasSuffix("in slot 1, choosing it swaps the two"), held.spoken)
+        XCTAssertFalse(held.ticked)
+        XCTAssertNil(rows.first(where: \.ticked)?.swapSlot)
+    }
 }

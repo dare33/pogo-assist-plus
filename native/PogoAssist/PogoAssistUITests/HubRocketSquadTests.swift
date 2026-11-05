@@ -111,4 +111,33 @@ final class HubRocketSquadTests: SquadUITestCase {
         }
         bestSet("rocket", slot: 2)
     }
+
+    /// Rule 32 and rule 27: the squad strength line, a change, the Back to suggested squad button and what it restores.
+    func testRocketSquadStrengthChangeAndBack() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "rocket")
+
+        XCTAssertTrue(slot(app, "rocket", 1).waitForExistence(timeout: 60))
+        let strength = el(app, "squad-strength")
+        XCTAssertTrue(reveal(app, strength).exists)
+        XCTAssertTrue(strength.label.hasPrefix("Squad strength"), strength.label)
+        let original = slot(app, "rocket", 1).label + "|" + slot(app, "rocket", 2).label + "|" + slot(app, "rocket", 3).label
+        XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
+        changeTheSquad(app, "rocket")
+        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).waitForExistence(timeout: 5), "a changed squad has the Back button")
+        reveal(app, app.buttons["squad-back-to-suggested"]).tap()
+        XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
+        // Back shows the suggestion again; the mode the change was made in stays, so look at the squad under Available, where it was read.
+        selectAvailable(app)
+        XCTAssertEqual(slot(app, "rocket", 1).label + "|" + slot(app, "rocket", 2).label + "|" + slot(app, "rocket", 3).label, original, "the suggestion is back")
+    }
+
+    /// The squad with its strength bar and, after one change, its Back button: light, dark, default text and AX5.
+    func testRocketSquadStrengthShots() throws {
+        let setup = launch(reset: true)
+        populate(setup)
+        setup.terminate()
+        strengthShots("rocket")
+    }
 }

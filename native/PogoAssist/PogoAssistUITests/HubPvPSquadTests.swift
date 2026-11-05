@@ -43,9 +43,10 @@ final class HubPvPSquadTests: SquadUITestCase {
         // Slot 2's Pokémon came from outside its role's list (nothing is listed for Safe swap): its picker still lists it, ticked, and never says there is no candidate.
         XCTAssertFalse(slot(app, "pvp", 2).label.contains("empty"), slot(app, "pvp", 2).label)
         openPicker(app, "pvp", slot: 2)
-        let own = pickerRows(app).firstMatch
-        XCTAssertTrue(own.waitForExistence(timeout: 5), "the slot's own Pokémon is listed")
-        XCTAssertTrue(own.isSelected, "ticked")
+        // (Other slots' Pokémon are listed too, marked, so it is the ticked row that is looked for, not the first.)
+        XCTAssertTrue(pickerRows(app).firstMatch.waitForExistence(timeout: 5))
+        let own = pickerRows(app).matching(NSPredicate(format: "selected == true")).firstMatch
+        XCTAssertTrue(own.exists, "the slot's own Pokémon is listed, ticked")
         XCTAssertFalse(el(app, "squad-picker-empty").exists)
         closePicker(app)
         // Available suggests copies as they are; Best may suggest an evolution.
@@ -106,5 +107,34 @@ final class HubPvPSquadTests: SquadUITestCase {
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
         bestSet("pvp", slot: 2) { app in if app.buttons["hub-pvp-league-ul"].waitForExistence(timeout: 30) { app.buttons["hub-pvp-league-ul"].tap() } }
+    }
+
+    /// Rule 32 and rule 27: the squad strength line, a change, the Back to suggested squad button and what it restores.
+    func testPvPSquadStrengthChangeAndBack() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "pvp")
+
+        XCTAssertTrue(slot(app, "pvp", 1).waitForExistence(timeout: 60))
+        let strength = el(app, "squad-strength")
+        XCTAssertTrue(reveal(app, strength).exists)
+        XCTAssertTrue(strength.label.hasPrefix("Squad strength"), strength.label)
+        let original = slot(app, "pvp", 1).label + "|" + slot(app, "pvp", 2).label + "|" + slot(app, "pvp", 3).label
+        XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
+        changeTheSquad(app, "pvp")
+        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).waitForExistence(timeout: 5), "a changed squad has the Back button")
+        reveal(app, app.buttons["squad-back-to-suggested"]).tap()
+        XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
+        // Back shows the suggestion again; the mode the change was made in stays, so look at the squad under Available, where it was read.
+        selectAvailable(app)
+        XCTAssertEqual(slot(app, "pvp", 1).label + "|" + slot(app, "pvp", 2).label + "|" + slot(app, "pvp", 3).label, original, "the suggestion is back")
+    }
+
+    /// The squad with its strength bar and, after one change, its Back button: light, dark, default text and AX5.
+    func testPvPSquadStrengthShots() throws {
+        let setup = launch(reset: true)
+        populate(setup)
+        setup.terminate()
+        strengthShots("pvp")
     }
 }
