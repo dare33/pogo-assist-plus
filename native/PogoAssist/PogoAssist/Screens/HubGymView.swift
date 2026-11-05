@@ -120,6 +120,7 @@ struct GymSquadView: View {
     private var builder: GymPickerBuilder { GymPickerBuilder(ctx: ctx) }
     @State private var rowsCache = PickerRowsCache<GymPickerBuilder.Content>()
     @State private var strength: (key: String, value: SquadStrength)?
+    @State private var boxGeneration = 0
 
     var body: some View {
         let mode = keeper.store.mode(for: .gym)
@@ -127,7 +128,7 @@ struct GymSquadView: View {
         let byId = Dictionary(options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId) }
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
-        let strengthKey = "strength|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)"
+        let strengthKey = "strength|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = keeper.store.gym.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
         SuggestionsRow(mode: Binding(get: { mode }, set: { m in keeper.update { $0.setMode(m, for: .gym) } }), noun: "defenders")
         VStack(alignment: .leading, spacing: 10) {
@@ -151,7 +152,8 @@ struct GymSquadView: View {
             if !Task.isCancelled { strength = (strengthKey, value) }
         }
         // A slot of a changed squad that refilled is kept as shown, so it does not change again.
-        .task(id: adoptKey) { if !adoptKey.isEmpty { keeper.update { $0.gym.adoptRefills(filled) } } }
+        .task(id: adoptKey) { if !adoptKey.isEmpty, !Task.isCancelled { keeper.update { $0.gym.adoptRefills(filled) } } }
+        .tracksBox(ctx, generation: $boxGeneration)
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, options: options, byId: byId, mode: mode) }
         builds
         HubGapList(gaps: HubModel.gaps(ctx.advice.gaps, for: .gym), type: .gym)
