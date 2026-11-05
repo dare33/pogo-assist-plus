@@ -317,10 +317,15 @@ struct EventPickerBuilder {
         let bestRows = options.compactMap(\.best)
         // A copy sits in one slot however many rows show it (Primal Kyogre and Kyogre): rows are hidden by the copy they stand for.
         let copyOf = HubSquads.copyResolver(rows: bestRows)
-        // A raid squad holds one Mega: under Best the picker offers no Mega row while another slot holds one (the slot holding it still lists them).
-        // A Pokémon in another slot is listed, marked with its slot: choosing it swaps the two (rule 27).
-        let excluded: Set<String> = screen == .raids && mode == .best ? HubSquads.megaExcluded(by: filled, editing: i, rows: bestRows) : []
-        let held = HubSquads.slotNumbers(of: filled, editing: i, copyOf: copyOf)
+        // A Pokémon in another slot is listed, marked with its slot, only when the swap can happen: the edited slot's Pokémon must fit the other slot's role (Available: be placeable
+        // there, the Mega slot taking Mega candidates only; Best: be listed for the role) and the other slot's Pokémon this slot's (rule 27). An empty slot just moves it.
+        let place = HubSquads.placeable(screen: screen, mode: mode, ctx: ctx)
+        let held = HubSquads.otherSlots(of: filled, editing: i, copyOf: copyOf, canHold: { id, j in
+            mode == .available ? place(id, filled[j].role) : HubSquads.fits(id, role: filled[j].role, in: options)
+        })
+        // A raid squad holds one Mega: under Best the picker offers no other Mega row while another slot holds one; a swap exchanges two Pokémon, so the Mega that slot holds stays listed.
+        let megaHidden: Set<String> = screen == .raids && mode == .best ? HubSquads.megaExcluded(by: filled, editing: i, rows: bestRows).filter { held.swap[$0] == nil && copyOf($0).flatMap { held.swap[$0] } == nil } : []
+        let excluded: Set<String> = megaHidden.union(held.blocked)
         // Available (S1): the slot's own role's options first, then every other unused Pokémon ("Other roles:"); the Mega slot lists Mega candidates only. Best: the
         // table's rows for the role.
         var own: [String]
@@ -371,7 +376,7 @@ struct EventPickerBuilder {
             }
         }
         let shownRows = mode == .available ? PickerRowModel.availableGroups(own: rows(ownIds), other: rows(groups.other)) : rows(ownIds)
-        return Content(rows: PickerRowModel.marking(shownRows) { held[$0] ?? copyOf($0).flatMap { held[$0] } }, boxHasOptions: boxHasOptions)
+        return Content(rows: PickerRowModel.marking(shownRows, moves: held.moves) { held.swap[$0] ?? copyOf($0).flatMap { held.swap[$0] } }, boxHasOptions: boxHasOptions)
     }
 
     /// The squad's strength bar (rule 32): each slot's figure is the one its Pokémon shows as a row in that slot's picker, so it is read from that row (built alone).
@@ -405,7 +410,7 @@ struct EventSquadView: View {
     @State private var selected: Int?
     @State private var infoOpen = false
     @State private var rowsCache = PickerRowsCache<EventPickerBuilder.Content>()
-    @State private var strengthCache = PickerRowsCache<SquadStrength>()
+    @State private var strength: (key: String, value: SquadStrength)?
 
     private var builder: EventPickerBuilder { EventPickerBuilder(screen: screen, row: row, ctx: ctx) }
     private var prefix: String { screen == .raids ? "hub-raids" : "hub-max" }
@@ -418,10 +423,9 @@ struct EventSquadView: View {
         let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId, count: filled.count, mode: mode) }
         let team = HubSquads.teamStatus(cards.map(\.status))
-        // Worked out once for the squad as drawn and kept until the box, the advice or the squad changes (the rows of the pickers are kept the same way).
-        let strength = strengthCache.get(ctx: ctx, key: "strength|\(screen.rawValue)|\(row.from)|\(row.title)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")) {
-            builder.squadStrength(filled: filled, options: options, byId: byId, mode: mode)
-        }
+        // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
+        let strengthKey = "strength|\(screen.rawValue)|\(row.from)|\(row.title)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)"
+        let adoptKey = saved.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 4) {
                 Text(title).font(.figtree(16, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
@@ -435,17 +439,24 @@ struct EventSquadView: View {
             }
             if infoOpen { squadInfo.frame(maxWidth: .infinity, alignment: .leading) }
             if let team { SquadStatusLine(status: team) }
-            SquadStrengthLine(strength: strength, type: screen == .raids ? .raids : .max)
+            SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: screen == .raids ? .raids : .max)
             SlotGrid(slots: cards, selected: selected) { i in withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i } }
             if saved.showsBackToSuggested {
                 BackToSuggestedButton { edit { $0.backToSuggested(defaults: screen == .raids ? HubSquads.defaultRaidSlots() : HubSquads.defaultMaxSlots()) } }
             }
-            SetSquadFooter(isSet: saved.isSet, onSet: { edit { $0.isSet = true } }, onUndo: { edit { $0.isSet = false } })
+            SetSquadFooter(isSet: saved.isSet, onSet: { edit { $0.markSet(shown: filled) } }, onUndo: { edit { $0.isSet = false } })
             if let i = selected, filled.indices.contains(i) {
                 picker(i, filled: filled, options: options, byId: byId, saved: saved, mode: mode)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: strengthKey) {
+            let b = builder
+            let value = await Task.detached(priority: .userInitiated) { b.squadStrength(filled: filled, options: options, byId: byId, mode: mode) }.value
+            if !Task.isCancelled { strength = (strengthKey, value) }
+        }
+        // A slot of a changed squad that refilled (its copy left the box, or a swap emptied it) is kept as shown, so it does not change again.
+        .task(id: adoptKey) { if !adoptKey.isEmpty { edit { $0.adoptRefills(filled) } } }
     }
 
     // MARK: edits

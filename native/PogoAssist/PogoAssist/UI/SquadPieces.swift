@@ -237,44 +237,63 @@ struct SquadStatusLine: View {
 }
 
 /// The squad's strength bar (CONCEPTS rule 32), under the status line: "Squad strength 72%" and "85% after upgrades" over one bar drawn as a picker row's bar is (solid = now, faint
-/// = after the suggested upgrades), and "5 of 6 slots scored" when a slot has no figure. VoiceOver reads the words as one element; the bar is hidden from it.
+/// = after the suggested upgrades), and "5 of 6 slots scored" when a slot has no figure. VoiceOver reads the words as one element; the bar is hidden from it. `strength` is nil
+/// while it is being worked out (off the main thread): the row keeps its height with an empty track, so nothing below it moves. At accessibility text sizes the two labels stack.
 struct SquadStrengthLine: View {
-    let strength: SquadStrength
+    let strength: SquadStrength?
     let type: ContentType
     @Environment(\.accent) private var accent
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(strength.text).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink)
-                if let after = strength.afterText { Text(after).font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.muted) }
+            if let strength {
+                let words = Group {
+                    Text(strength.text).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink)
+                    if let after = strength.afterText { Text(after).font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.muted) }
+                }
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 2) { words }.fixedSize(horizontal: false, vertical: true)
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) { words }.fixedSize(horizontal: false, vertical: true)
+                }
+                if strength.now != nil { StrengthBar(strength: strength.strength, ink: type.ink(accent)).frame(maxWidth: .infinity) }
+                if let scored = strength.scoredText { Text(scored).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted) }
+            } else {
+                Text("Squad strength").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+                Capsule().fill(Theme.off).frame(height: 8)
             }
-            .fixedSize(horizontal: false, vertical: true)
-            if strength.now != nil { StrengthBar(strength: strength.strength, ink: type.ink(accent)).frame(maxWidth: .infinity) }
-            if let scored = strength.scoredText { Text(scored).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted) }
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(strength.spoken)
+        .accessibilityLabel(strength?.spoken ?? "Squad strength, working it out")
         .accessibilityIdentifier("squad-strength")
     }
 }
 
-/// "Back to suggested squad" (CONCEPTS rule 27): shown once the player has changed a squad; forgets every kept Pokémon, the roles and the "Squad set" mark.
+/// "Back to suggested squad" (CONCEPTS rule 27): shown once the player has changed a squad. It asks first, then forgets every kept Pokémon, the roles and the "Squad set" mark.
 struct BackToSuggestedButton: View {
     let action: () -> Void
     @Environment(\.accent) private var accent
+    @State private var asking = false
 
     var body: some View {
         HStack {
-            Button(action: action) {
+            Button { asking = true } label: {
                 Text("Back to suggested squad").font(.figtree(14, .bold, relativeTo: .subheadline)).underline().foregroundStyle(accent.ink)
                     .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(PressStyle())
+            .accessibilityHint("Clears your changes to this squad, after asking")
             .accessibilityIdentifier("squad-back-to-suggested")
             Spacer(minLength: 0)
+        }
+        .confirmationDialog("Back to suggested squad?", isPresented: $asking, titleVisibility: .visible) {
+            Button("Back to suggested squad", role: .destructive, action: action).accessibilityIdentifier("squad-back-confirm")
+            Button("Cancel", role: .cancel) {}.accessibilityIdentifier("squad-back-cancel")
+        } message: {
+            Text("Your changes to this squad are cleared.")
         }
     }
 }
@@ -402,6 +421,8 @@ struct PickerRowModel: Identifiable {
     var strength: Strength? = nil
     /// The Pokémon is in another slot of the squad (1-based): choosing it swaps the two (CONCEPTS rule 27).
     var swapSlot: Int? = nil
+    /// The edited slot is empty: choosing it moves the Pokémon here and its slot refills.
+    var movesHere = false
     var spoken: String
 }
 
@@ -423,14 +444,15 @@ extension PickerRowModel {
         return m
     }
 
-    /// Marks the rows whose Pokémon sits in another slot ("In slot 2 · choosing it swaps the two"). `slotOf` gives that slot for a row's id, nil when it is in none; the slot's own
-    /// (ticked) row is left alone.
-    static func marking(_ rows: [PickerRowModel], slotOf: (String) -> Int?) -> [PickerRowModel] {
+    /// Marks the rows whose Pokémon sits in another slot ("In slot 2 · choosing it swaps the two", or "... moves it here" when the edited slot is empty). `slotOf` gives that
+    /// slot for a row's id, nil when it is in none; the slot's own (ticked) row is left alone.
+    static func marking(_ rows: [PickerRowModel], moves: Bool = false, slotOf: (String) -> Int?) -> [PickerRowModel] {
         rows.map { r in
             guard !r.ticked, let n = slotOf(r.id) else { return r }
             var m = r
             m.swapSlot = n
-            m.spoken += ", in slot \(n), choosing it swaps the two"
+            m.movesHere = moves
+            m.spoken += ", in slot \(n), choosing it \(moves ? "moves it here" : "swaps the two")"
             return m
         }
     }
@@ -617,7 +639,7 @@ struct SquadPicker<Info: View>: View {
         }
         let tail = VStack(alignment: .leading, spacing: 4) {
             if let bar { strengthLine(bar, tier: tier) }
-            if let n = row.swapSlot { Text("In slot \(n) · choosing it swaps the two").font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
+            if let n = row.swapSlot { Text("In slot \(n) · choosing it \(row.movesHere ? "moves it here" : "swaps the two")").font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
             if let v = row.noteView { v } else if let n = row.note { Text(n).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(row.noteAmber ? Theme.orangeInk : Theme.muted).fixedSize(horizontal: false, vertical: true) }
         }
         return Button { onChoose(row.id) } label: {
