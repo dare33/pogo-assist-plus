@@ -310,13 +310,17 @@ struct EventPickerBuilder {
         return mode == .best ? build.viaMega : o.mega != nil
     }
 
-    func content(slot i: Int, filled: [FilledSlot], options: [EventOption], byId: [String: EventOption], mode: SquadMode) -> Content {
+    /// `only` limits the rows to those ids: the squad strength bar needs one slot's own row, not the whole list. `given` is the boss's scale when the caller has worked it out (it hashes
+    /// the game master and the tables, so the strength bar's six slots share one).
+    func content(slot i: Int, filled: [FilledSlot], options: [EventOption], byId: [String: EventOption], mode: SquadMode, only: Set<String>? = nil, scale given: StrengthScale? = nil) -> Content {
         let role = filled[i].role
         let bestRows = options.compactMap(\.best)
         // A copy sits in one slot however many rows show it (Primal Kyogre and Kyogre): rows are hidden by the copy they stand for.
         let copyOf = HubSquads.copyResolver(rows: bestRows)
         // A raid squad holds one Mega: under Best the picker offers no Mega row while another slot holds one (the slot holding it still lists them).
-        let excluded = HubSquads.excluded(by: filled, editing: i, onlyChosen: false, copyOf: copyOf).union(screen == .raids && mode == .best ? HubSquads.megaExcluded(by: filled, editing: i, rows: bestRows) : [])
+        // A Pokémon in another slot is listed, marked with its slot: choosing it swaps the two (rule 27).
+        let excluded: Set<String> = screen == .raids && mode == .best ? HubSquads.megaExcluded(by: filled, editing: i, rows: bestRows) : []
+        let held = HubSquads.slotNumbers(of: filled, editing: i, copyOf: copyOf)
         // Available (S1): the slot's own role's options first, then every other unused Pokémon ("Other roles:"); the Mega slot lists Mega candidates only. Best: the
         // table's rows for the role.
         var own: [String]
@@ -338,9 +342,9 @@ struct EventPickerBuilder {
         var ownIds = groups.own
         if let tick = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: groups.own + groups.other) { ownIds.insert(tick, at: 0) }
         // P1: the strength bar's scale, worked out once for the boss.
-        let scale = strengthScale()
+        let scale = given ?? strengthScale()
         func rows(_ ids: [String]) -> [PickerRowModel] {
-            HubSquads.picker(candidates: ids, excluded: excluded, ownIds: ticks, copyOf: copyOf).compactMap { r in
+            HubSquads.picker(candidates: only.map { o in ids.filter(o.contains) } ?? ids, excluded: excluded, ownIds: ticks, copyOf: copyOf).compactMap { r in
                 guard let o = byId[r.entryId] else {
                     let copy = ctx.entry(r.entryId)
                     return PickerRowModel.keptPick(id: r.entryId, ticked: r.ticked, screen: screen, ctx: ctx)?.adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false)))
@@ -367,7 +371,17 @@ struct EventPickerBuilder {
             }
         }
         let shownRows = mode == .available ? PickerRowModel.availableGroups(own: rows(ownIds), other: rows(groups.other)) : rows(ownIds)
-        return Content(rows: shownRows, boxHasOptions: boxHasOptions)
+        return Content(rows: PickerRowModel.marking(shownRows) { held[$0] ?? copyOf($0).flatMap { held[$0] } }, boxHasOptions: boxHasOptions)
+    }
+
+    /// The squad's strength bar (rule 32): each slot's figure is the one its Pokémon shows as a row in that slot's picker, so it is read from that row (built alone).
+    func squadStrength(filled: [FilledSlot], options: [EventOption], byId: [String: EventOption], mode: SquadMode) -> SquadStrength {
+        let bestRows = options.compactMap(\.best), scale = strengthScale()
+        return SquadStrength.of(figures: filled.indices.map { i in
+            guard filled[i].pickId != nil else { return nil }
+            let rows = content(slot: i, filled: filled, options: options, byId: byId, mode: mode, only: HubSquads.tickIds(filled[i], rows: bestRows), scale: scale).rows
+            return rows.first(where: \.ticked)?.strength ?? Strength(kind: .damage, now: nil, after: nil)
+        })
     }
 
     /// Every slot's picker rows for the default squad under `mode` (what a test reads): the rows of each slot as the picker would list them.
@@ -391,6 +405,7 @@ struct EventSquadView: View {
     @State private var selected: Int?
     @State private var infoOpen = false
     @State private var rowsCache = PickerRowsCache<EventPickerBuilder.Content>()
+    @State private var strengthCache = PickerRowsCache<SquadStrength>()
 
     private var builder: EventPickerBuilder { EventPickerBuilder(screen: screen, row: row, ctx: ctx) }
     private var prefix: String { screen == .raids ? "hub-raids" : "hub-max" }
@@ -403,6 +418,10 @@ struct EventSquadView: View {
         let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId, count: filled.count, mode: mode) }
         let team = HubSquads.teamStatus(cards.map(\.status))
+        // Worked out once for the squad as drawn and kept until the box, the advice or the squad changes (the rows of the pickers are kept the same way).
+        let strength = strengthCache.get(ctx: ctx, key: "strength|\(screen.rawValue)|\(row.from)|\(row.title)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")) {
+            builder.squadStrength(filled: filled, options: options, byId: byId, mode: mode)
+        }
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 4) {
                 Text(title).font(.figtree(16, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
@@ -416,7 +435,11 @@ struct EventSquadView: View {
             }
             if infoOpen { squadInfo.frame(maxWidth: .infinity, alignment: .leading) }
             if let team { SquadStatusLine(status: team) }
+            SquadStrengthLine(strength: strength, type: screen == .raids ? .raids : .max)
             SlotGrid(slots: cards, selected: selected) { i in withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i } }
+            if saved.showsBackToSuggested {
+                BackToSuggestedButton { edit { $0.backToSuggested(defaults: screen == .raids ? HubSquads.defaultRaidSlots() : HubSquads.defaultMaxSlots()) } }
+            }
             SetSquadFooter(isSet: saved.isSet, onSet: { edit { $0.isSet = true } }, onUndo: { edit { $0.isSet = false } })
             if let i = selected, filled.indices.contains(i) {
                 picker(i, filled: filled, options: options, byId: byId, saved: saved, mode: mode)
@@ -484,12 +507,12 @@ struct EventSquadView: View {
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, options: options, byId: byId, mode: mode) }
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: screen == .raids ? .raids : .max, roles: chips, role: role,
-            onRole: { new in edit { $0.changeRole(at: i, to: new) { HubSquads.fits($0, role: new, in: options) } } },
+            onRole: { new in edit { $0.changeRole(at: i, to: new, fits: { HubSquads.fits($0, role: new, in: options) }, shown: filled) } },
             rows: content.rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: content.boxHasOptions, none: mode == .available ? "Nothing in your box for this slot." : "Nothing listed for this role."),
             onChoose: { id in
                 // Under Available there are no Best rows on screen, but a species pick stored under Best may resolve to this copy: read the Best rows to clear it.
                 let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
-                edit { $0.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: rows)) }
+                edit { $0.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: rows), shown: filled) }
             },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
             info: { pickerInfo(mode) })

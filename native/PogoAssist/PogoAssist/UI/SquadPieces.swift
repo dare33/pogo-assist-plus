@@ -236,6 +236,49 @@ struct SquadStatusLine: View {
     }
 }
 
+/// The squad's strength bar (CONCEPTS rule 32), under the status line: "Squad strength 72%" and "85% after upgrades" over one bar drawn as a picker row's bar is (solid = now, faint
+/// = after the suggested upgrades), and "5 of 6 slots scored" when a slot has no figure. VoiceOver reads the words as one element; the bar is hidden from it.
+struct SquadStrengthLine: View {
+    let strength: SquadStrength
+    let type: ContentType
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(strength.text).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink)
+                if let after = strength.afterText { Text(after).font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.muted) }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            if strength.now != nil { StrengthBar(strength: strength.strength, ink: type.ink(accent)).frame(maxWidth: .infinity) }
+            if let scored = strength.scoredText { Text(scored).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted) }
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(strength.spoken)
+        .accessibilityIdentifier("squad-strength")
+    }
+}
+
+/// "Back to suggested squad" (CONCEPTS rule 27): shown once the player has changed a squad; forgets every kept Pokémon, the roles and the "Squad set" mark.
+struct BackToSuggestedButton: View {
+    let action: () -> Void
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        HStack {
+            Button(action: action) {
+                Text("Back to suggested squad").font(.figtree(14, .bold, relativeTo: .subheadline)).underline().foregroundStyle(accent.ink)
+                    .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityIdentifier("squad-back-to-suggested")
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 /// A slot card (pass 2 README, "Slot card"): radius 16, at least 92 pt; the role row in the role colour with the mark at its trailing end; a 30 pt disc; the name 13/700;
 /// the type icons at the foot. The background is the slot's status tint (green ready, amber needs work, red to get or empty; the disc and the role text keep the role
 /// colour); an empty card also keeps a 2 pt inset outline; selected = a 2 pt inset outline in the accent.
@@ -357,6 +400,8 @@ struct PickerRowModel: Identifiable {
     var cpIv: String? = nil
     /// The strength bar: a solid part for the copy now, a faint one up to after its upgrade. nil draws no bar.
     var strength: Strength? = nil
+    /// The Pokémon is in another slot of the squad (1-based): choosing it swaps the two (CONCEPTS rule 27).
+    var swapSlot: Int? = nil
     var spoken: String
 }
 
@@ -376,6 +421,18 @@ extension PickerRowModel {
         // Spoken text uses ", " where the screen writes " · " (a PvP row's "IV rank 552 · 97.6%", "Lead · Safe swap").
         m.spoken = (([base] + extra).filter { !$0.isEmpty }.joined(separator: ", ") + (ticked ? tail : "")).replacingOccurrences(of: " · ", with: ", ")
         return m
+    }
+
+    /// Marks the rows whose Pokémon sits in another slot ("In slot 2 · choosing it swaps the two"). `slotOf` gives that slot for a row's id, nil when it is in none; the slot's own
+    /// (ticked) row is left alone.
+    static func marking(_ rows: [PickerRowModel], slotOf: (String) -> Int?) -> [PickerRowModel] {
+        rows.map { r in
+            guard !r.ticked, let n = slotOf(r.id) else { return r }
+            var m = r
+            m.swapSlot = n
+            m.spoken += ", in slot \(n), choosing it swaps the two"
+            return m
+        }
     }
 
     static let upgradesHeading = "Available upgrades:"
@@ -560,6 +617,7 @@ struct SquadPicker<Info: View>: View {
         }
         let tail = VStack(alignment: .leading, spacing: 4) {
             if let bar { strengthLine(bar, tier: tier) }
+            if let n = row.swapSlot { Text("In slot \(n) · choosing it swaps the two").font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
             if let v = row.noteView { v } else if let n = row.note { Text(n).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(row.noteAmber ? Theme.orangeInk : Theme.muted).fixedSize(horizontal: false, vertical: true) }
         }
         return Button { onChoose(row.id) } label: {
