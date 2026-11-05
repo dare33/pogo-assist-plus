@@ -320,8 +320,10 @@ struct EventPickerBuilder {
         // A Pokémon in another slot is listed, marked with its slot, only when the swap can happen: the edited slot's Pokémon must fit the other slot's role (Available: be placeable
         // there, the Mega slot taking Mega candidates only; Best: be listed for the role) and the other slot's Pokémon this slot's (rule 27). An empty slot just moves it.
         let place = HubSquads.placeable(screen: screen, mode: mode, ctx: ctx)
-        let held = HubSquads.otherSlots(of: filled, editing: i, copyOf: copyOf, canHold: { id, j in
-            mode == .available ? place(id, filled[j].role) : HubSquads.fits(id, role: filled[j].role, in: options)
+        let held = HubSquads.otherSlots(of: filled, editing: i, copyOf: copyOf, canHold: { f, j in
+            // Available: placeable in the slot. Best: the row the player picked (its species row, else its copy's) is listed for the slot's role.
+            mode == .available ? (f.pickId.map { place($0, filled[j].role) } ?? true)
+                : HubSquads.tickIds(f, rows: bestRows).contains { HubSquads.fits($0, role: filled[j].role, in: options) }
         })
         // A raid squad holds one Mega: under Best the picker offers no other Mega row while another slot holds one; a swap exchanges two Pokémon, so the Mega that slot holds stays listed.
         let megaHidden: Set<String> = screen == .raids && mode == .best ? HubSquads.megaExcluded(by: filled, editing: i, rows: bestRows).filter { held.swap[$0] == nil && copyOf($0).flatMap { held.swap[$0] } == nil } : []
@@ -411,6 +413,7 @@ struct EventSquadView: View {
     @State private var infoOpen = false
     @State private var rowsCache = PickerRowsCache<EventPickerBuilder.Content>()
     @State private var strength: (key: String, value: SquadStrength)?
+    @State private var boxGeneration = 0
 
     private var builder: EventPickerBuilder { EventPickerBuilder(screen: screen, row: row, ctx: ctx) }
     private var prefix: String { screen == .raids ? "hub-raids" : "hub-max" }
@@ -424,7 +427,7 @@ struct EventSquadView: View {
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId, count: filled.count, mode: mode) }
         let team = HubSquads.teamStatus(cards.map(\.status))
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
-        let strengthKey = "strength|\(screen.rawValue)|\(row.from)|\(row.title)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)"
+        let strengthKey = "strength|\(screen.rawValue)|\(row.from)|\(row.title)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = saved.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 4) {
@@ -456,7 +459,8 @@ struct EventSquadView: View {
             if !Task.isCancelled { strength = (strengthKey, value) }
         }
         // A slot of a changed squad that refilled (its copy left the box, or a swap emptied it) is kept as shown, so it does not change again.
-        .task(id: adoptKey) { if !adoptKey.isEmpty { edit { $0.adoptRefills(filled) } } }
+        .task(id: adoptKey) { if !adoptKey.isEmpty, !Task.isCancelled { edit { $0.adoptRefills(filled) } } }
+        .tracksBox(ctx, generation: $boxGeneration)
     }
 
     // MARK: edits

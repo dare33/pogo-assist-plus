@@ -245,9 +245,14 @@ struct SquadStrengthLine: View {
     @Environment(\.accent) private var accent
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    /// What the row is laid out with while the figure is worked out: a typical finished row (the words, the "after" words and a bar), drawn as a redacted placeholder, so the
+    /// slots below keep their place at every text size when the figure arrives.
+    private var sample: SquadStrength { SquadStrength(kind: type == .pvp ? .score : .damage, now: 0.5, after: 0.6, scored: 6, total: 6) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if let strength {
+            do {
+                let strength = strength ?? sample
                 let words = Group {
                     Text(strength.text).font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink)
                     if let after = strength.afterText { Text(after).font(.figtree(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.muted) }
@@ -259,17 +264,30 @@ struct SquadStrengthLine: View {
                 }
                 if strength.now != nil { StrengthBar(strength: strength.strength, ink: type.ink(accent)).frame(maxWidth: .infinity) }
                 if let scored = strength.scoredText { Text(scored).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted) }
-            } else {
-                Text("Squad strength").font(.figtree(13, .bold, relativeTo: .footnote)).foregroundStyle(Theme.muted)
-                Capsule().fill(Theme.off).frame(height: 8)
             }
         }
+        .redacted(reason: self.strength == nil ? .placeholder : [])
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(strength?.spoken ?? "Squad strength, working it out")
         .accessibilityIdentifier("squad-strength")
     }
+}
+
+/// Counts a change to the box or its advice, so a figure worked out from them is worked out again (the strength bar's key reads it). Applied to a squad screen with the context it draws from.
+struct TracksBox: ViewModifier {
+    let ctx: HubContext
+    @Binding var generation: Int
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: ctx.advice) { _, _ in generation &+= 1 }
+            .onChange(of: ctx.entries) { _, _ in generation &+= 1 }
+    }
+}
+
+extension View {
+    func tracksBox(_ ctx: HubContext, generation: Binding<Int>) -> some View { modifier(TracksBox(ctx: ctx, generation: generation)) }
 }
 
 /// "Back to suggested squad" (CONCEPTS rule 27): shown once the player has changed a squad. It asks first, then forgets every kept Pokémon, the roles and the "Squad set" mark.
