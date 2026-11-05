@@ -279,7 +279,8 @@ final class PickerRowModelsTests: XCTestCase {
         }
     }
 
-    /// Sol 1: a slot that refills in a changed squad is kept, so a later box change does not move it.
+    /// Sol 1: a slot that refills in a changed squad is kept, so a later change of the box does not move it. (The engine-only version is
+    /// `SquadFixingTests.testARefillInAChangedSquadIsKeptSoALaterBoxChangeDoesNotMoveIt`.)
     func testARefilledSlotIsKeptAcrossALaterBoxChange() throws {
         let c = ctx()
         let g = GymPickerBuilder(ctx: c)
@@ -287,19 +288,24 @@ final class PickerRowModelsTests: XCTestCase {
         let first = g.resolve(mode: .best, saved: saved).filled
         saved.choose(try XCTUnwrap(first[2].pickId), at: 0, shown: first)
         var store = SquadStore(); store.gym = saved
-        // The copy in slot 4 (if any is owned) leaves the box: use a stored pick that is no longer there.
         store.gym.slots[3].pick = "gone-from-box"
         let reconciled = store.reconciled(boxIds: Set(c.entries.map(\.id))).gym
         let drawn = g.resolve(mode: .best, saved: reconciled).filled
         XCTAssertNotNil(drawn[3].pickId, "the slot refills")
         XCTAssertTrue(reconciled.needsAdopting(drawn))
         var adopted = reconciled; adopted.adoptRefills(drawn)
-        XCTAssertEqual(g.resolve(mode: .best, saved: adopted).filled.map(\.pickId), drawn.map(\.pickId))
-        // A later box change would have moved an unkept refill; the kept one stays whatever the ranking does (the stored pick is what is placed).
-        XCTAssertEqual(adopted.slots[3].pickId, drawn[3].pickId)
+        // The box changes later: another copy leaves it and the advice is re-read from the smaller box, so the ranking can differ.
+        let kept = Set(adopted.slots.compactMap(\.pick))
+        let leaving = try XCTUnwrap(c.entries.first { !kept.contains($0.id) })
+        let smaller = HubContext(advice: c.advice, entries: c.entries.filter { $0.id != leaving.id }, gm: c.gm, hub: c.hub, table: c.table, today: c.today)
+        let later = GymPickerBuilder(ctx: smaller).resolve(mode: .best, saved: adopted).filled
+        XCTAssertEqual(later[3].pickId, drawn[3].pickId, "the refilled slot did not move")
+        XCTAssertEqual(later.map(\.pickId), drawn.map(\.pickId))
+        // An unkept refill (the squad never adopted it) is the contrast: it follows the box.
+        XCTAssertNotNil(GymPickerBuilder(ctx: smaller).resolve(mode: .best, saved: reconciled).filled[3].pickId)
     }
 
-    /// A mode switch and back, then an edit: the edit acts on what is shown under the mode being edited, and the Best pick it replaced is not resurrected by the swap.
+    /// A mode switch Best -> Available -> Best, then an edit: the edit acts on what is shown under the mode being edited.
     func testEditingAfterAModeSwitchActsOnWhatIsShown() throws {
         let c = ctx()
         let g = GymPickerBuilder(ctx: c)
@@ -307,32 +313,108 @@ final class PickerRowModelsTests: XCTestCase {
         let best = g.resolve(mode: .best, saved: saved)
         let notOwned = try XCTUnwrap(best.filled.first { $0.species != nil }, "Best shows a Pokémon the box lacks")
         saved.choose(notOwned.pickId, at: 0, shown: best.filled)
+        // Best -> Available: that pick is not placed there, so the slot shows Available's suggestion.
         let avail = g.resolve(mode: .available, saved: saved)
-        XCTAssertNotEqual(avail.filled[0].pickId, notOwned.pickId, "Available does not place it")
-        let shownAvailable = avail.filled.map(\.pickId)
-        let target = try XCTUnwrap(shownAvailable.compactMap { $0 }.first)
-        saved.choose(target, at: 1, shown: avail.filled)
-        XCTAssertEqual(saved.slots.map(\.pickId).filter { $0 != nil }.count, Set(saved.slots.compactMap(\.pickId)).count, "no Pokémon twice")
-        XCTAssertFalse(saved.slots.contains { $0.species == notOwned.species && notOwned.species != nil }, "the unplaced Best pick is replaced by what Available showed")
+        XCTAssertNotEqual(avail.filled[0].pickId, notOwned.pickId)
+        // Available -> Best: the pick returns, nothing was lost by looking.
+        let backInBest = g.resolve(mode: .best, saved: saved)
+        // (Choosing it for slot 1 swapped it with the slot that showed it, so those two exchanged.)
+        var swappedAtOnce = best.filled.map(\.pickId)
+        let from = try XCTUnwrap(swappedAtOnce.firstIndex { $0 == notOwned.pickId })
+        swappedAtOnce.swapAt(0, from)
+        XCTAssertEqual(backInBest.filled.map(\.pickId), swappedAtOnce)
+        // Edit under Best: slot 2 takes slot 1's Pokémon (a swap of the two shown): both exchange, the rest stay.
+        let shown = backInBest.filled
+        saved.choose(shown[0].pickId, at: 1, alsoClearing: [], shown: shown)
+        let after = g.resolve(mode: .best, saved: saved).filled.map(\.pickId)
+        var expected = shown.map(\.pickId); expected[1] = shown[0].pickId; expected[0] = shown[1].pickId
+        XCTAssertEqual(after, expected, "the swap exchanged what Best showed, and no Best pick resurfaced or was lost")
+        // The same edit made under Available acts on what Available shows (the unplaced Best pick is replaced by it).
+        var other = SquadStore.Saved(slots: saved.slots, isSet: false, changed: true)
+        let shownAvailable = g.resolve(mode: .available, saved: other).filled
+        let target = try XCTUnwrap(shownAvailable.compactMap(\.pickId).first)
+        other.choose(target, at: 5, shown: shownAvailable)
+        XCTAssertEqual(Set(other.slots.compactMap(\.pickId)).count, other.slots.compactMap(\.pickId).count, "no Pokémon twice")
     }
 
-    /// Sol 3: Rocket lists the other slots' Pokémon even when they do not beat this slot, marked.
-    func testRocketListsEveryOtherSlotsPokemon() throws {
+    /// G7: a kept suggestion's "listed for <role>" marker survives the species pick reading as a copy.
+    func testResolvingASpeciesPickKeepsTheFallbackMarker() throws {
         let c = ctx()
-        let leader = try XCTUnwrap(Self.hub.leaders.first { $0.name == "Giovanni" } ?? Self.hub.leaders.first)
-        let k = RocketPickerBuilder(leader: leader, ctx: c)
-        for mode in [SquadMode.available, .best] {
-            let filled = mode == .best ? HubSquads.bestRocketSquad(leader: leader, ctx: c) : HubSquads.rocketSquad(leader: leader, mode: mode, ctx: c)
-            let lists = leader.slots.map { k.entries(for: $0, mode: mode) }
-            for i in filled.indices {
-                let rows = k.content(slot: i, filled: filled, lists: lists, mode: mode).rows
-                for (j, f) in filled.enumerated() where j != i {
-                    guard let id = f.pickId else { continue }
-                    let row = try XCTUnwrap(rows.first { $0.id == id }, "\(mode): slot \(j + 1)'s Pokémon is listed in slot \(i + 1)'s picker")
-                    XCTAssertEqual(row.swapSlot, j + 1)
+        let row = try XCTUnwrap(Self.hub.rotation.first { $0.kind == .fiveStar && $0.bosses.contains { $0.speciesId == "palkia" } })
+        let rows = HubSquads.bestRaidRows(row: row, ctx: c)
+        let owned = try XCTUnwrap(rows.first { $0.ownedEntryId != nil })
+        let out = HubSquads.resolvingSpecies([SquadSlot(role: "Heavy hitter", species: owned.key, fallback: true)], rows: rows)
+        XCTAssertEqual(out[0].fallback, true)
+        XCTAssertEqual(out[0].pick, owned.ownedEntryId)
+    }
+
+    /// Sol 3 and fold 2 G1: Rocket lists the other slots' Pokémon even when they do not beat this slot, and each such row SAYS what the slot being edited needs: its type flags,
+    /// "beats n of 3" line and spoken "hits this slot" are worked out against that slot's lineup, as a native row's are.
+    func testRocketListsEveryOtherSlotsPokemonDescribedForTheSlotBeingEdited() throws {
+        let c = ctx()
+        var checked = 0
+        for leader in Self.hub.leaders {
+            let k = RocketPickerBuilder(leader: leader, ctx: c)
+            for mode in [SquadMode.available, .best] {
+                let filled = mode == .best ? HubSquads.bestRocketSquad(leader: leader, ctx: c) : HubSquads.rocketSquad(leader: leader, mode: mode, ctx: c)
+                let lists = leader.slots.map { k.entries(for: $0, mode: mode) }
+                for i in filled.indices {
+                    let slot = leader.slots[i]
+                    let rows = k.content(slot: i, filled: filled, lists: lists, mode: mode).rows
+                    for (j, f) in filled.enumerated() where j != i {
+                        guard let id = f.pickId else { continue }
+                        let row = try XCTUnwrap(rows.first { $0.id == id }, "\(leader.name) \(mode): slot \(j + 1)'s Pokémon is listed in slot \(i + 1)'s picker")
+                        XCTAssertEqual(row.swapSlot, j + 1)
+                    }
+                    // Every row that draws type flags draws them against THIS slot, and says "hits this slot" exactly when one hits.
+                    for row in rows where !row.types.isEmpty && row.cpIv != nil || row.swapSlot != nil && !row.types.isEmpty {
+                        for t in row.types { XCTAssertEqual(t.grey, !slot.contains { c.hub.beats([t.type], $0.types) }, "\(leader.name) slot \(i + 1) \(row.name) \(t.type)") }
+                        let hitting = row.types.filter { !$0.grey }
+                        XCTAssertEqual(row.spoken.contains("hits this slot"), !hitting.isEmpty, "\(row.name): \(row.spoken)")
+                        checked += 1
+                    }
                 }
             }
         }
+        XCTAssertGreaterThan(checked, 30)
+    }
+
+    /// G1, the named cases: Giovanni under Available, Lucario offered in the Zekrom slot does not claim Fighting hits it, and Rayquaza offered in slot 1 does not claim Flying hits it.
+    func testRocketOtherSlotRowsDoNotClaimATypeThatDoesNotHit() throws {
+        let c = ctx()
+        let leader = try XCTUnwrap(Self.hub.leaders.first { $0.name == "Giovanni" })
+        let k = RocketPickerBuilder(leader: leader, ctx: c)
+        let filled = HubSquads.rocketSquad(leader: leader, mode: .available, ctx: c)
+        let lists = leader.slots.map { k.entries(for: $0, mode: .available) }
+        func rowsOf(_ name: String, in i: Int) -> [PickerRowModel] { k.content(slot: i, filled: filled, lists: lists, mode: .available).rows.filter { $0.name.contains(name) && $0.swapSlot != nil } }
+        var seen = 0
+        for (i, slot) in leader.slots.enumerated() {
+            for (name, type) in [("Lucario", "fighting"), ("Rayquaza", "flying")] {
+                for r in rowsOf(name, in: i) {
+                    let hits = slot.contains { c.hub.beats([type], $0.types) }
+                    if let t = r.types.first(where: { $0.type == type }) { XCTAssertEqual(!t.grey, hits, "\(name) in slot \(i + 1): \(type)") }
+                    if !hits && r.types.allSatisfy({ $0.grey }) { XCTAssertFalse(r.spoken.contains("hits this slot"), r.spoken) }
+                    seen += 1
+                }
+            }
+        }
+        XCTAssertGreaterThan(seen, 0, "Giovanni's Available squad offers Lucario or Rayquaza across slots")
+    }
+
+    /// G2: a kept Pokémon that no slot's counter list holds (a copy kept under the other mode) is still offered in the other slots' pickers, marked.
+    func testRocketOffersAKeptPokemonNoCounterListHolds() throws {
+        let c = ctx()
+        let leader = try XCTUnwrap(Self.hub.leaders.first { $0.name == "Giovanni" })
+        let k = RocketPickerBuilder(leader: leader, ctx: c)
+        let lists = leader.slots.map { k.entries(for: $0, mode: .best) }
+        let listed = Set(lists.flatMap { $0.rows + $0.next }.flatMap { [$0.id] + ($0.best?.ids ?? []) })
+        let stray = try XCTUnwrap(c.entries.first { !listed.contains($0.id) }, "a copy in no counter list")
+        var saved = SquadStore.Saved(slots: HubSquads.defaultRocketSlots())
+        saved.choose(stray.id, at: 2, shown: HubSquads.bestRocketSquad(leader: leader, ctx: c))
+        let filled = HubSquads.bestRocketSquad(leader: leader, slots: saved.slots, ctx: c)
+        XCTAssertEqual(filled[2].pickId, stray.id)
+        let rows = k.content(slot: 0, filled: filled, lists: lists, mode: .best).rows
+        XCTAssertEqual(rows.first { $0.id == stray.id }?.swapSlot, 3, "slot 3's kept Pokémon is offered in slot 1")
     }
 
     /// Sol 3 / Opus F8: under Best a raid squad's held Mega stays listed for a swap that cannot raise the Mega count (the other slot can hold the edited slot's Pokémon).

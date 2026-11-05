@@ -291,9 +291,9 @@ Stated so each can be checked against the code.
       lists the Pokémon of the squad's other slots, marked "In slot N · choosing it swaps the two", **only when the swap can happen**: each Pokémon must fit the slot it would go to
       (Available: be placeable there, the Mega slot taking Mega candidates only; Best: be listed for that slot's role; PvP: be rated in the league). Otherwise the row is not listed.
       A raid squad holds one Mega: a swap only exchanges two Pokémon, so a Mega another slot holds stays listed for a swap that can happen, and no further Mega row is offered. Rocket
-      lists every other slot's Pokémon even when it does not beat the edited slot's lineup. PvP still hides another copy of a species the squad holds.
+      lists every other slot's shown Pokémon, even when it does not beat the edited slot's lineup or no counter list holds it, and describes it against the edited slot (its types that hit, "beats n of 3"). PvP still hides another copy of a species the squad holds.
    4. A slot left with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused Pokémon for its role, that slot only, and **that Pokémon is then kept**
-      (stored when the screen shows it), so it does not change again on a later scan. A kept Pokémon the current mode does not place is not overwritten: see the mode rule below.
+      (stored when the screen shows it), so it does not change again on a later scan. An empty slot of a kept squad takes a Pokémon whenever one becomes available (a refill replaces nobody, so it is not a move of anyone's Pokémon). A kept Pokémon the current mode does not place is not overwritten: see the mode rule below.
    5. **Back to suggested squad** (Greg: "Yes, add it"): a button with each squad, shown once the squad has been changed ("Set this squad" counts; a file saved before this rule that
       holds the player's picks shows it too). It asks first ("Back to suggested squad? Your changes to this squad are cleared." with a confirm and a cancel), then forgets every kept
       Pokémon, puts the roles back to the screen's defaults and clears the "Squad set" mark; the squad then shows the suggestion again, as in 1.
