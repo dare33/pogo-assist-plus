@@ -155,13 +155,39 @@ struct RocketPickerBuilder {
         let held = HubSquads.otherSlots(of: filled, editing: i, copyOf: copyOf)
         var ids = source.map(\.id)
         let boxHasOptions = !ids.isEmpty
-        // Every other slot's Pokémon is listed, marked, even when it does not beat this slot's lineup: choosing it is the player's call (rule 27).
-        let others = lists.flatMap { $0.rows + $0.next }
-        for o in lists.enumerated().filter({ $0.offset != i }).flatMap({ $0.element.rows + $0.element.next }) where held.swap[o.id] != nil && !ids.contains(o.id) { ids.append(o.id) }
+        // Every other slot's shown Pokémon is listed, marked, even when it does not beat this slot's lineup or no slot's counter list holds it (a kept pick): choosing it is the
+        // player's call (rule 27). Its row is described against THIS slot (types that hit, "beats n of 3"), as a native row of the slot is, never against the slot it sits in.
+        let slot = leader.slots[i]
+        func described(_ e: Entry) -> Entry {
+            var e = e
+            e.notWeak = false
+            if let b = e.best {
+                let r = HubSquads.rescored(b, for: slot, ctx: ctx)
+                e.best = r; e.hits = r.hits; e.flags = r.typeFlags.map { PickerType(type: $0.type, grey: !$0.hits) }; e.line = r.slotLine
+            } else if let b = e.build {
+                e.flags = HubTeams.types(of: b, gm: ctx.gm).map { t in PickerType(type: t, grey: !slot.contains { ctx.hub.beats([t], $0.types) }) }
+                e.hits = HubTeams.beaten(by: b, options: slot, gm: ctx.gm, hub: ctx.hub).count
+                e.line = HubSquads.slotLine(hits: e.hits, of: slot.count)
+            }
+            return e
+        }
+        let elsewhere = lists.enumerated().filter { $0.offset != i }.flatMap { $0.element.rows + $0.element.next }
+        var foreign = [String: Entry]()
+        for (j, f) in filled.enumerated() where j != i {
+            for id in [f.entryId, f.species.map { squadSpeciesPrefix + $0 }].compactMap({ $0 }) where held.swap[id] != nil && !ids.contains(id) && foreign[id] == nil {
+                ids.append(id)
+                if let e = elsewhere.first(where: { $0.id == id || ($0.best.map { squadSpeciesPrefix + $0.key } == id) }) {
+                    foreign[id] = described(e)
+                } else if let r = leader.slots.flatMap({ HubSquads.bestRocketRows(options: $0, ctx: ctx) }).first(where: { $0.entryId == id || $0.ids.contains(id) }) {
+                    // Kept in no slot's counter list (a pick made under the other mode): its row from the Rocket table, if the table lists it.
+                    foreign[id] = described(Entry(id: id, name: r.name, tier: r.tier, build: r.build, best: r, hits: 0, flags: [], line: nil))
+                }
+            }
+        }
         let ticks = HubSquads.tickIds(filled[i], rows: allRows)
         if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
         let listed = HubSquads.picker(candidates: only.map { o in ids.filter(o.contains) } ?? ids, excluded: held.blocked, ownIds: ticks, copyOf: copyOf)
-        let byId = Dictionary((source + others).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let byId = Dictionary((source.map { ($0.id, $0) }) + foreign.map { ($0.key, $0.value) }, uniquingKeysWith: { a, _ in a })
         // P1: damage per turn against the slot's possible Pokémon, as a share of the best in the game.
         let scale = (try? PveMoves.bundled()).map { StrengthScale.shared(mode: .rocket, bosses: leader.slots[i], ctx: ctx, pve: $0) }
         var rows: [PickerRowModel] = listed.compactMap { r in
@@ -225,6 +251,7 @@ private struct RocketSquadView: View {
     private var builder: RocketPickerBuilder { RocketPickerBuilder(leader: leader, ctx: ctx) }
     @State private var rowsCache = PickerRowsCache<RocketPickerBuilder.Content>()
     @State private var strength: (key: String, value: SquadStrength)?
+    @State private var boxGeneration = 0
 
     var body: some View {
         let mode = keeper.store.mode(for: .rocket)
@@ -233,7 +260,7 @@ private struct RocketSquadView: View {
         let lists = leader.slots.map { entries(for: $0, mode: mode) }
         let cards = filled.enumerated().map { card($0.offset, $0.element, lists: lists) }
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
-        let strengthKey = "strength|\(leader.name)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + lists.map { ($0.rows + $0.next).map(\.id).joined(separator: ",") }.joined(separator: ";") + "|\(ctx.today)"
+        let strengthKey = "strength|\(leader.name)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + lists.map { ($0.rows + $0.next).map(\.id).joined(separator: ",") }.joined(separator: ";") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = saved.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
         HubHeaderLine("YOUR SQUAD FOR \(leader.name.uppercased())") {
             Menu {
@@ -275,8 +302,9 @@ private struct RocketSquadView: View {
         }
         // A slot of a changed squad that refilled is kept as shown, so it does not change again.
         .task(id: adoptKey) {
-            if !adoptKey.isEmpty { keeper.update { s in var q = s.rocketSquad(leader: leader.name); q.adoptRefills(filled); s.rocket[leader.name] = q } }
+            if !adoptKey.isEmpty, !Task.isCancelled { keeper.update { s in var q = s.rocketSquad(leader: leader.name); q.adoptRefills(filled); s.rocket[leader.name] = q } }
         }
+        .tracksBox(ctx, generation: $boxGeneration)
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, lists: lists, mode: mode) }
     }
 
