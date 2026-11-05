@@ -58,8 +58,8 @@ struct GymPickerBuilder {
         let ticks = HubSquads.tickIds(filled[i], rows: bestRows)
         if let own = ticks.first ?? filled[i].pickId, ticks.isDisjoint(with: ids) { ids.insert(own, at: 0) }
         // A defender in another slot is listed, marked with its slot: choosing it swaps the two (rule 27).
-        let held = HubSquads.slotNumbers(of: filled, editing: i, copyOf: copyOf)
-        let listed = HubSquads.picker(candidates: only.map { o in ids.filter(o.contains) } ?? ids, excluded: [], ownIds: ticks, copyOf: copyOf)
+        let held = HubSquads.otherSlots(of: filled, editing: i, copyOf: copyOf)
+        let listed = HubSquads.picker(candidates: only.map { o in ids.filter(o.contains) } ?? ids, excluded: held.blocked, ownIds: ticks, copyOf: copyOf)
         // P1: the bar is the Bulk against the best Gym bulk in the game.
         // It hashes the whole game master, so it is worked out once for the picker, not once per row.
         let bestBulk = bulk ?? DamageEstimate.bestGymBulk(gm: ctx.gm)
@@ -90,7 +90,7 @@ struct GymPickerBuilder {
                 spoken: spoken.joined(separator: ", ")).adding(copy: ctx.entry(r.build.entryId), strength: bar(ctx.entry(r.build.entryId), r))
         }
         if mode == .available { models = PickerRowModel.availableUpgradesLast(models) }
-        return Content(rows: PickerRowModel.marking(models) { held[$0] ?? copyOf($0).flatMap { held[$0] } }, boxHasOptions: boxHasOptions)
+        return Content(rows: PickerRowModel.marking(models, moves: held.moves) { held.swap[$0] ?? copyOf($0).flatMap { held.swap[$0] } }, boxHasOptions: boxHasOptions)
     }
 
     /// The squad's strength bar (rule 32): each slot's figure is the Bulk its Pokémon shows as a row in that slot's picker, so it is read from that row (built alone).
@@ -119,22 +119,21 @@ struct GymSquadView: View {
 
     private var builder: GymPickerBuilder { GymPickerBuilder(ctx: ctx) }
     @State private var rowsCache = PickerRowsCache<GymPickerBuilder.Content>()
-    @State private var strengthCache = PickerRowsCache<SquadStrength>()
+    @State private var strength: (key: String, value: SquadStrength)?
 
     var body: some View {
         let mode = keeper.store.mode(for: .gym)
         let (options, _, filled) = builder.resolve(mode: mode, saved: keeper.store.gym)
         let byId = Dictionary(options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId) }
-        // Worked out once for the squad as drawn and kept until the box, the advice or the squad changes (the picker's rows are kept the same way).
-        let strength = strengthCache.get(ctx: ctx, key: "strength|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")) {
-            builder.squadStrength(filled: filled, options: options, byId: byId, mode: mode)
-        }
+        // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
+        let strengthKey = "strength|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)"
+        let adoptKey = keeper.store.gym.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
         SuggestionsRow(mode: Binding(get: { mode }, set: { m in keeper.update { $0.setMode(m, for: .gym) } }), noun: "defenders")
         VStack(alignment: .leading, spacing: 10) {
             Text("Top defenders").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             if let team = HubSquads.teamStatus(cards.map(\.status)) { SquadStatusLine(status: team) }
-            SquadStrengthLine(strength: strength, type: .gym)
+            SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: .gym)
             SlotGrid(slots: cards, selected: selected) { i in
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
             }
@@ -146,6 +145,13 @@ struct GymSquadView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .panelShadow()
+        .task(id: strengthKey) {
+            let b = builder
+            let value = await Task.detached(priority: .userInitiated) { b.squadStrength(filled: filled, options: options, byId: byId, mode: mode) }.value
+            if !Task.isCancelled { strength = (strengthKey, value) }
+        }
+        // A slot of a changed squad that refilled is kept as shown, so it does not change again.
+        .task(id: adoptKey) { if !adoptKey.isEmpty { keeper.update { $0.gym.adoptRefills(filled) } } }
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, options: options, byId: byId, mode: mode) }
         builds
         HubGapList(gaps: HubModel.gaps(ctx.advice.gaps, for: .gym), type: .gym)
