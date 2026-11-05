@@ -182,7 +182,7 @@ class SquadUITestCase: XCTestCase {
     @discardableResult func chooseAFreshRow(_ app: XCUIApplication) -> String? {
         let rows = pickerRows(app)
         _ = rows.firstMatch.waitForExistence(timeout: 10)
-        let fresh = rows.matching(NSPredicate(format: "selected == false AND NOT (label CONTAINS 'choosing it swaps')")).firstMatch
+        let fresh = rows.matching(NSPredicate(format: "selected == false AND NOT (label CONTAINS 'choosing it')")).firstMatch
         guard fresh.exists else { return nil }
         let name = fresh.label.components(separatedBy: ",").first ?? ""
         fresh.tap()
@@ -197,12 +197,20 @@ class SquadUITestCase: XCTestCase {
                 guard slot(app, screen, n).exists else { continue }
                 openPicker(app, screen, slot: n)
                 if chooseAFreshRow(app) != nil { closePicker(app); return }
-                let held = pickerRows(app).matching(NSPredicate(format: "label CONTAINS 'choosing it swaps'")).firstMatch
+                let held = pickerRows(app).matching(NSPredicate(format: "label CONTAINS 'choosing it'")).firstMatch
                 if held.exists { held.tap(); closePicker(app); return }
                 closePicker(app)
             }
         }
         XCTFail("no slot offered a row to change the squad with")
+    }
+
+    /// Taps "Back to suggested squad" and confirms the question it asks.
+    func tapBackAndConfirm(_ app: XCUIApplication) {
+        reveal(app, app.buttons["squad-back-to-suggested"]).tap()
+        let confirm = app.buttons.matching(identifier: "squad-back-confirm").firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Back asks first")
+        confirm.tap()
     }
 
     /// Scrolls until the squad strength line is near the top, so the bar, the slots and the button under them show.

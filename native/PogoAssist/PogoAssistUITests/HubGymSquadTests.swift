@@ -35,7 +35,7 @@ final class HubGymSquadTests: SquadUITestCase {
         // Available lists only the box: there is no "could get" list.
         openPicker(app, "gym", slot: 2)
         XCTAssertEqual(rows.count, 1, "a Pokémon in another slot is listed, marked")
-        XCTAssertTrue(rows.firstMatch.label.hasSuffix("in slot 1, choosing it swaps the two"), rows.firstMatch.label)
+        XCTAssertTrue(rows.firstMatch.label.hasSuffix("in slot 1, choosing it moves it here"), "slot 2 is empty, so choosing it moves it: " + rows.firstMatch.label)
         XCTAssertFalse(rows.firstMatch.isSelected)
         XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
         shot("gym-picker-empty")
@@ -89,7 +89,8 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "gym", 1).label.contains("empty"), "slot 1 held it, so it is now empty: \(slot(app, "gym", 1).label)")
         let back = reveal(app, app.buttons["squad-back-to-suggested"])
         XCTAssertTrue(back.waitForExistence(timeout: 5), "a changed squad has the Back button")
-        back.tap()
+        // It asks first (tapBackAndConfirm waits for the question); the dialog's Cancel is the system's own and has no element the test can reach in the simulator.
+        tapBackAndConfirm(app)
         XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
         XCTAssertEqual(slot(app, "gym", 1).label, slot1, "the suggestion is back")
         XCTAssertTrue(slot(app, "gym", 2).label.contains("empty"))

@@ -126,7 +126,7 @@ final class HubRocketSquadTests: SquadUITestCase {
         XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
         changeTheSquad(app, "rocket")
         XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).waitForExistence(timeout: 5), "a changed squad has the Back button")
-        reveal(app, app.buttons["squad-back-to-suggested"]).tap()
+        tapBackAndConfirm(app)
         XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
         // Back shows the suggestion again; the mode the change was made in stays, so look at the squad under Available, where it was read.
         selectAvailable(app)

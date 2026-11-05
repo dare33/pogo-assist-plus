@@ -39,6 +39,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         reveal(app, set).tap()
         XCTAssertTrue(el(app, "squad-set-state").waitForExistence(timeout: 5), "✓ Squad set")
         XCTAssertTrue(app.buttons["squad-undo"].exists)
+        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).exists, "Squad set counts as a change: the squad is kept and Back shows")
         XCTAssertTrue(el(app, "hub-raid-row-0").label.contains("squad set"), "the card says so: \(el(app, "hub-raid-row-0").label)")
         app.buttons["squad-undo"].tap()
         XCTAssertTrue(app.buttons["squad-set"].waitForExistence(timeout: 5), "Undo takes the mark back")
@@ -167,8 +168,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         for n in [1, 3, 5, 6] { XCTAssertEqual(slot(app, "raids", n).label, original[n - 1], "slot \(n) did not move") }
 
         // Back to suggested squad.
-        let back = reveal(app, app.buttons["squad-back-to-suggested"])
-        back.tap()
+        tapBackAndConfirm(app)
         XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
         for n in 1...6 { XCTAssertEqual(slot(app, "raids", n).label, original[n - 1], "slot \(n) is back to the suggestion") }
         XCTAssertEqual(reveal(app, el(app, "squad-strength")).label, startStrength)
