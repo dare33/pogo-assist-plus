@@ -226,10 +226,14 @@ struct ReviewLowerSections: View {
     @ViewBuilder private var scanKind: some View {
         Panel(spacing: 10) {
             Text("Scan kind").paText(.rowTitle).foregroundStyle(Theme.ink)
-            KindSegment(selected: review.kind) { k in
+            if let pass = review.plan.pass {
+                // A pass is always a partial scan; the kind is not switchable.
+                Text("\(pass.passName). Saved as a partial scan: nothing is removed from your box.").paText(.secondary).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("review-scan-kind-pass")
+            } else { KindSegment(selected: review.kind) { k in
                 // A full scan the advice refused: say why, and ask first.
                 if k == .full, let why = review.advice, !why.fullIsSound, let reason = why.reason { confirmFull = reason } else { Task { await model.setReviewKind(k) } }
-            }
+            } }
         }
     }
 

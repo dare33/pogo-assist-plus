@@ -57,7 +57,7 @@ extension BoxLibrary {
     /// Save the new read: a new box version (the earlier box plus the re-read scan) and the scan's `lastReread`.
     @discardableResult
     public func commitReread(_ plan: RereadPlan, entries: [BoxEntry], account: String, expectedCurrentSeq: Int?? = nil, now: Date = Date()) throws -> BoxSnapshot {
-        let snap = try commit(account: account, entries: entries, reason: .scan, note: "Read again: \(plan.scan.kind == .full ? "full scan" : "add and update"), \(entries.count) Pokémon",
+        let snap = try commit(account: account, entries: entries, reason: .scan, note: "Read again: \(ScanPass(stored: plan.scan.pass).map { $0.passName.lowercased() } ?? (plan.scan.kind == .full ? "full scan" : "add and update")), \(entries.count) Pokémon",
                               scanId: plan.scan.id, scanKind: plan.scan.kind, scanDate: plan.scan.scanDate, expectedCurrentSeq: expectedCurrentSeq, now: now)
         try store.markReread(account: account, id: plan.scan.id, at: now)
         return snap
@@ -85,7 +85,11 @@ extension BoxLibrary {
                 if now.row.hp != e.row.hp { changes.append("HP \(e.row.hp.map(String.init) ?? "none") to \(now.row.hp.map(String.init) ?? "none")") }
                 if now.row.ivs != e.row.ivs { changes.append("IVs \(e.row.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "none") to \(now.row.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" } ?? "none")") }
                 if now.row.speciesId != e.row.speciesId { changes.append("species \(e.row.speciesId) to \(now.row.speciesId)") }
-                if now.row.dynamax != e.row.dynamax { changes.append("Dynamax \(now.row.dynamax.map { $0 ? "set to Yes" : "set to No" } ?? "cleared")") }
+                if now.row.dynamax != e.row.dynamax { changes.append("Dynamax \(now.row.dynamax == true ? "turned on" : "turned off")") }
+                if now.row.gigantamax != e.row.gigantamax { changes.append("Gigantamax \(now.row.gigantamax == true ? "turned on" : "turned off")") }
+                if now.row.lucky != e.row.lucky { changes.append("Lucky \(now.row.lucky == true ? "turned on" : "turned off")") }
+                if now.row.shadow != e.row.shadow { changes.append(now.row.shadow == 1 ? "marked Shadow" : now.row.shadow == 2 ? "marked Purified" : "Shadow or Purified mark turned off") }
+                if now.row.details != e.row.details { changes.append("details changed") }
                 if !changes.isEmpty { lines.append("Corrected or set by hand: \(e.row.title): \(changes.joined(separator: ", ")).") }
             }
             before = after

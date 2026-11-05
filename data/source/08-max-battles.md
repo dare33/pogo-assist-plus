@@ -26,10 +26,10 @@ Tiers follow Pokémon GO Hub's Max attacker, defender and healer lists._
 | A | Dynamax Excadrill | Max Quake (Ground) | Easy. Drilbur Max Monday Apr 2026; recurs | The must-have Dynamax attacker; still top tier 500+ days on. |
 | A | Dynamax Rhyperior | Max Rockfall / Max Quake | Easy. Dynamax Rhyhorn 14 Sep 2026 | |
 | A | Dynamax Urshifu Rapid Strike | Max Geyser | Hard | |
-| A | Dynamax Inteleon / Kingler | Max Geyser | Easy–Medium | Use until you have the G-Max. |
-| A | Dynamax Ho-Oh / Regice | Max Flare / Max Hailstorm | Medium. Added Mar 2026 | |
-| A | Gigantamax Charizard, Toxtricity, Lapras | G-Max Wildfire / Stun Shock / Resonance | Medium | Were S tier in 2025; still strong. |
-| B | Gigantamax Garbodor / Grimmsnarl / Venusaur / Blastoise / Butterfree / Snorlax / Pikachu / Meowth | | Medium | Type-specific or dex-only. G-Max Pikachu cannot evolve. |
+| A | Dynamax Inteleon / Dynamax Kingler | Max Geyser | Easy–Medium | Use until you have the G-Max. |
+| A | Dynamax Ho-Oh / Dynamax Regice | Max Flare / Max Hailstorm | Medium. Added Mar 2026 | |
+| A | Gigantamax Charizard, Gigantamax Toxtricity, Gigantamax Lapras | G-Max Wildfire / Stun Shock / Resonance | Medium | Were S tier in 2025; still strong. |
+| B | Gigantamax Garbodor / Gigantamax Grimmsnarl / Gigantamax Venusaur / Gigantamax Blastoise / Gigantamax Butterfree / Gigantamax Snorlax / Gigantamax Pikachu / Gigantamax Meowth | | Medium | Type-specific or dex-only. G-Max Pikachu cannot evolve. |
 
 **Type leaders:** Poison G-Max Garbodor then Toxtricity; Ground Excadrill; Water G-Max Inteleon then Kingler; Grass G-Max Rillaboom; Fire G-Max Cinderace or Charizard; Fighting G-Max Machamp; Ghost G-Max Gengar; Steel Crowned Zacian.
 

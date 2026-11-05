@@ -35,7 +35,7 @@ struct HistoryScansView: View {
     private var choiceBinding: Binding<Choice> { Binding(get: { choice }, set: { chosen[tab] = $0 }) }
 
     private func scanRow(_ scan: BoxStore.Summary) -> some View {
-        let kind: String = scan.source == ScreenshotImporter.source ? "Screenshot import" : scan.kind == .full ? "Full scan" : "Add and update"
+        let kind: String = scan.source == ScreenshotImporter.source ? "Screenshot import" : ScanPass(stored: scan.pass).map(\.passName) ?? (scan.kind == .full ? "Full scan" : "Add and update")
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Fmt.date(scan.scanDate)).font(.figtree(16, .semibold, relativeTo: .callout)).foregroundStyle(Theme.ink)

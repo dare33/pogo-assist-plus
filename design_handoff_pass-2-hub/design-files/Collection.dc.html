@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hub: Collection</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+.t-light{--bg:#F3F5F9;--surface:#FFFFFF;--surface2:#F3F5F9;--ink:#15192B;--muted:#6A7085;--faint:#8A90A3;--line:#E6E9F0;--off:#E3E7EF;--acc:#2F6BFF;--acc-ink:#1F4FD1;--acc-tint:#EAF0FF;--green-ink:#1C7A3E;--green-tint:#E6F6EC;--shadow:0 1px 2px rgba(20,30,60,.06);--float:0 2px 6px rgba(20,30,60,.12)}
+.t-dark{--bg:#0E1118;--surface:#181C26;--surface2:#20242F;--ink:#EEF1F8;--muted:#9097AB;--faint:#6D7489;--line:#262B38;--off:#232836;--acc:#5B8CFF;--acc-ink:#8FB0FF;--acc-tint:rgba(91,140,255,.18);--green-ink:#6FD796;--green-tint:rgba(80,200,120,.16);--shadow:none;--float:none}
+.ty-collection{--ty-ink:var(--acc-ink);--ty-tint:var(--acc-tint);--ty-solid:#1F4FD1}
+.board{display:flex;gap:40px;align-items:flex-start;font-family:'Figtree',system-ui,sans-serif;font-variant-numeric:tabular-nums;line-height:1.2}
+.col{display:flex;flex-direction:column;gap:12px;width:402px}
+.mode{font-weight:700;font-size:13px;letter-spacing:.04em;color:#6A7085;height:20px}
+.phone{width:402px;min-height:874px;background:var(--bg);color:var(--ink);border-radius:44px;overflow:hidden;position:relative;box-sizing:border-box;padding-top:54px;box-shadow:0 0 0 1px rgba(20,30,60,.14)}
+.circle{width:40px;height:40px;border-radius:50%;background:var(--surface);box-shadow:var(--float);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.thdr{display:flex;align-items:center;gap:8px;min-height:52px;padding:0 14px}
+.back-hit{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)}
+.ttl{display:flex;flex-direction:column;gap:1px}
+.ttitle{font-weight:800;font-size:20px;color:var(--ink)}
+.tsub{font-weight:500;font-size:13px;color:var(--muted)}
+.tcount{margin-left:auto;font-weight:800;font-size:12px;color:var(--ty-ink);background:var(--ty-tint);border-radius:999px;padding:6px 12px;white-space:nowrap}
+.content{display:flex;flex-direction:column;gap:12px;padding:0 14px 16px}
+.hline{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.htext{font-weight:700;font-size:13px;letter-spacing:.52px;color:var(--muted)}
+.hlink{display:flex;align-items:center;min-height:44px;font-weight:700;font-size:13px;color:var(--acc-ink);text-decoration:none}
+.panel{background:var(--surface);border-radius:24px;box-shadow:var(--shadow)}
+.hero{padding:16px;display:flex;flex-direction:column;gap:8px}
+.hero-top{display:flex;align-items:baseline;gap:8px}
+.hero-fig{font-weight:800;font-size:28px}
+.hero-of{font-weight:700;font-size:15px;color:var(--muted)}
+.hero-line{font-weight:500;font-size:13px;color:var(--muted)}
+.bar{height:8px;border-radius:999px;background:var(--off);overflow:hidden}
+.bar.thin{height:6px}
+.bar span{display:block;height:100%;border-radius:999px;background:var(--acc)}
+.reg{display:flex;flex-direction:column;gap:6px;padding:10px 16px;border-top:1px solid var(--line)}
+.reg.first{border-top:0}
+.reg-top{display:flex;justify-content:space-between;align-items:baseline}
+.reg-name{font-weight:700;font-size:15px}
+.reg-n{font-weight:700;font-size:13px;color:var(--muted)}
+.strip{display:flex;gap:10px;overflow-x:auto;margin:0 -14px;padding:0 14px;scrollbar-width:none}
+.show{flex:none;width:150px;box-sizing:border-box;border-radius:22px;padding:12px 14px;background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:4px}
+.show-types{display:flex;gap:4px;flex-wrap:wrap}
+.show-name{font-weight:800;font-size:15px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.show-iv{font-weight:800;font-size:22px;color:var(--ink)}
+.show-iv.perfect{color:var(--green-ink)}
+.show-sub{font-weight:500;font-size:12px;color:var(--muted)}
+.pt{font-weight:800;font-size:9px;letter-spacing:.4px;padding:2px 6px;border-radius:999px;color:#15192B}
+.pt-normal{background:#9FA19F}.pt-fire{background:#E62829;color:#FFFFFF}.pt-water{background:#2980EF}.pt-electric{background:#FAC000}.pt-grass{background:#3FA129}.pt-ice{background:#3DCEF3}.pt-fighting{background:#FF8000}.pt-poison{background:#9141CB;color:#FFFFFF}.pt-ground{background:#915121;color:#FFFFFF}.pt-flying{background:#81B9EF}.pt-psychic{background:#EF4179}.pt-bug{background:#91A119}.pt-rock{background:#AFA981}.pt-ghost{background:#704170;color:#FFFFFF}.pt-dragon{background:#5060E1;color:#FFFFFF}.pt-dark{background:#624D4E;color:#FFFFFF}.pt-steel{background:#60A1B8}.pt-fairy{background:#EF70EF}
+.ti{flex:none;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#15192B}
+.ti.pt-fire,.ti.pt-poison,.ti.pt-ground,.ti.pt-ghost,.ti.pt-dragon,.ti.pt-dark{color:#FFFFFF}
+.sets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.set{background:var(--surface);border-radius:18px;box-shadow:var(--shadow);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.set-name{font-weight:700;font-size:13px;color:var(--muted)}
+.set-fig{font-weight:800;font-size:18px}
+.set-fig.none{font-weight:600;font-size:13px;color:var(--muted)}
+.miss{display:flex;flex-direction:column;gap:2px;padding:10px 16px;border-top:1px solid var(--line)}
+.miss.first{border-top:0}
+.miss-top{display:flex;align-items:baseline;gap:8px}
+.miss-name{font-weight:700;font-size:15px}
+.miss-dex{font-weight:600;font-size:12px;color:var(--faint)}
+.miss-how{font-weight:400;font-size:12px;color:var(--muted)}
+.miss-head{padding:14px 16px;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--line)}
+.miss-fig{font-weight:800;font-size:17px}
+.cards{display:flex;flex-direction:column;gap:10px}
+.scard{display:flex;align-items:center;gap:12px;padding:14px 16px;text-decoration:none;color:var(--ink)}
+.scard:hover{color:var(--ink)}
+.sc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.sc-kick{font-weight:800;font-size:11px;letter-spacing:.88px;color:var(--ty-ink)}
+.sc-fig{font-weight:800;font-size:20px}
+.sc-line{font-weight:500;font-size:13px;color:var(--muted)}
+.chev{flex:none;color:var(--faint);display:flex}
+</style>
+</helmet>
+<div class="board" style="width: 844px; height: 2400px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="col">
+<div class="mode">{{t.label}}</div>
+<div class="phone ty-collection {{t.cls}}">
+<div class="thdr">
+<a class="back-hit" href="Main.dc.html" aria-label="Back"><span class="circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></span></a>
+<div class="ttl"><div class="ttitle">Collection</div><div class="tsub">{{boxLine}}</div></div>
+<div class="tcount">{{countText}}</div>
+</div>
+<div class="content">
+<div class="panel hero">
+<div class="hero-top"><span class="hero-fig">{{have}}</span><span class="hero-of">of {{total}} species</span></div>
+<div class="bar"><span style="width: {{pct}}"></span></div>
+<div class="hero-line">{{heroLine}}</div>
+</div>
+<div class="htext">DEX BY REGION</div>
+<div class="panel">
+<sc-for list="{{gens}}" as="g" hint-placeholder-count="9">
+<div class="reg {{g.first}}">
+<div class="reg-top"><span class="reg-name">{{g.name}}</span><span class="reg-n">{{g.have}} of {{g.total}}</span></div>
+<div class="bar thin"><span style="width: {{g.pct}}"></span></div>
+</div>
+</sc-for>
+</div>
+<div class="htext">SHOWCASE · YOUR BEST COPIES</div>
+<div class="strip">
+<sc-for list="{{shelf}}" as="s" hint-placeholder-count="4">
+<div class="show">
+<div class="show-types"><sc-for list="{{s.types}}" as="y" hint-placeholder-count="1"><span class="ti {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></div>
+<div class="show-name">{{s.name}}</div>
+<div class="show-iv {{s.perfect}}">{{s.pctText}}</div>
+<div class="show-sub">{{s.sub}}</div>
+</div>
+</sc-for>
+</div>
+<div class="htext">SPECIAL SETS</div>
+<div class="sets">
+<sc-for list="{{sets}}" as="x" hint-placeholder-count="6">
+<div class="set">
+<div class="set-name">{{x.name}}</div>
+<div class="set-fig {{x.figCls}}">{{x.fig}}</div>
+<sc-if value="{{x.hasBar}}" hint-placeholder-val="{{true}}"><div class="bar thin"><span style="width: {{x.pct}}"></span></div></sc-if>
+</div>
+</sc-for>
+</div>
+<div class="hline"><div class="htext">MISSING</div><a class="hlink" href="Collection.dc.html">{{missAll}}</a></div>
+<div class="panel">
+<div class="miss-head"><div class="miss-fig">{{missFig}}</div><div class="miss-how">{{missLine}}</div></div>
+<sc-for list="{{missing}}" as="m" hint-placeholder-count="6">
+<div class="miss {{m.first}}">
+<div class="miss-top"><span class="miss-name">{{m.name}}</span><span class="miss-dex">#{{m.dex}} · {{m.gen}}</span></div>
+<div class="miss-how">{{m.how}}</div>
+</div>
+</sc-for>
+</div>
+<div class="htext">BUILDS AND CLEAN-UP</div>
+<div class="cards">
+<a class="panel scard" href="Everything.dc.html">
+<span class="sc-main"><span class="sc-kick">BUILDS</span><span class="sc-fig">{{buildsFig}}</span><span class="sc-line">{{buildsLine}}</span></span>
+<span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+</a>
+<a class="panel scard" href="Everything.dc.html">
+<span class="sc-main"><span class="sc-kick">GAPS</span><span class="sc-fig">{{gapsFig}}</span><span class="sc-line">{{gapsLine}}</span></span>
+<span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+</a>
+<a class="panel scard" href="Everything.dc.html">
+<span class="sc-main"><span class="sc-kick">DUPLICATES</span><span class="sc-fig">{{dupFig}}</span><span class="sc-line">{{dupLine}}</span></span>
+<span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+</a>
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":2400}}'>
+const BOX_DATA = '/_blob/2599037ead1dfb16b67d31a886cb9968';
+function grouped(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function pct(a, b) { return b ? Math.round(100 * a / b) + '%' : '0%'; }
+const TYPE_PATHS = {
+  normal: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zm0 4.5a4.5 4.5 0 1 1 0 9a4.5 4.5 0 1 1 0-9z',
+  fire: 'M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-6c0 2 1 3 2 3c0-4-1-6 1-9z',
+  water: 'M12 2.5c3 4.5 6 8 6 11.5a6 6 0 0 1-12 0c0-3.5 3-7 6-11.5z',
+  electric: 'M13.5 2L5 13.5h6L9.5 22L19 9.5h-6.5L13.5 2z',
+  grass: 'M19 3C9 3 4.5 9 4.5 15.5c0 1.2.2 2.4.6 3.5L7 17.1C9.6 17.9 19 15 19 3z',
+  ice: 'M11 2h2v7.3l6.3-3.6 1 1.7L14 11l6.3 3.6-1 1.7L13 12.7V22h-2v-9.3l-6.3 3.6-1-1.7L10 11 3.7 7.4l1-1.7L11 9.3z',
+  fighting: 'M6 10a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v5a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5zM7.5 3.5h2.5v3.5H7.5zM11 2.5h2.5v4.5H11zM14.5 3.5H17v3.5h-2.5z',
+  poison: 'M4 14a5 5 0 1 0 10 0a5 5 0 1 0-10 0zM14 7a3 3 0 1 0 6 0a3 3 0 1 0-6 0zM15 17a2 2 0 1 0 4 0a2 2 0 1 0-4 0z',
+  ground: 'M2 19L9 7l4 6 2.5-3.5L22 19z',
+  flying: 'M3 14c4-1 7-4 9-10c1 4 1 7-1 9c3 0 6-1 9-3c-2 5-6 8-11 8c-2 0-4-1-6-4z',
+  psychic: 'M12 6C7 6 3.5 9.5 2 12c1.5 2.5 5 6 10 6s8.5-3.5 10-6c-1.5-2.5-5-6-10-6zm0 3a3 3 0 1 1 0 6a3 3 0 1 1 0-6z',
+  bug: 'M8 4.5l2.2 2.2h3.6L16 4.5l1.2 1.2-2 2.2A5 5 0 0 1 17 11.5v3.5a5 5 0 0 1-10 0v-3.5a5 5 0 0 1 1.8-3.6l-2-2.2z',
+  rock: 'M7 4h9l5 6-3 9H7l-4-8z',
+  ghost: 'M12 3a7 7 0 0 0-7 7v11l2.5-2 2.3 2 2.2-2 2.2 2 2.3-2 2.5 2V10a7 7 0 0 0-7-7zM9.5 9a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3zm5 0a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3z',
+  dragon: 'M4 20c0-8 4.5-14 15-16c-4 3-6 6-6 9c2-1 4.5-1 6.5 0c-4.5 1-7.5 3-8.5 7z',
+  dark: 'M15 3a9 9 0 1 0 6 15.5A7 7 0 0 1 15 3z',
+  steel: 'M12 2l8.7 5v10L12 22l-8.7-5V7zm0 6.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z',
+  fairy: 'M11 2c.8 5 2 7.2 7 8-5 .8-6.2 3-7 8-.8-5-2-7.2-7-8 5-.8 6.2-3 7-8zM18.5 14c.3 2 1 2.7 3 3-2 .3-2.7 1-3 3-.3-2-1-2.7-3-3 2-.3 2.7-1 3-3z',
+};
+function typeChips(types) {
+  return (types || []).map((t) => { const k = t.toLowerCase(); return { cls: 'pt-' + k, name: k.charAt(0).toUpperCase() + k.slice(1), label: k.toUpperCase(), path: TYPE_PATHS[k] || TYPE_PATHS.normal }; });
+}
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { d: null };
+  }
+  componentDidMount() {
+    fetch(BOX_DATA).then((r) => r.json()).then((d) => this.setState({ d })).catch(() => {});
+  }
+  renderVals() {
+    const d = this.state.d;
+    const c = d ? d.collection : { speciesHave: 0, speciesTotal: 0, copies: 0, gens: [], missing: [], shelf: [], sets: [], transfers: 0, dupSpecies: 0, buildDustShort: '' };
+    const evolvable = c.missing.filter((m) => m.evolve);
+    const preview = evolvable.concat(c.missing.filter((m) => !m.evolve)).slice(0, 6);
+    const gaps = d ? d.gaps : [];
+    const s = gaps.filter((g) => g.tier === 'S'), a = gaps.filter((g) => g.tier === 'A');
+    const first = d && d.headlines[0];
+    return {
+      themes: [{ cls: 't-light', label: 'LIGHT' }, { cls: 't-dark', label: 'DARK' }],
+      boxLine: d ? grouped(c.copies) + ' Pokémon in your box' : '',
+      countText: d ? c.speciesHave + ' of ' + c.speciesTotal : '',
+      have: c.speciesHave, total: c.speciesTotal, pct: pct(c.speciesHave, c.speciesTotal),
+      heroLine: d ? pct(c.speciesHave, c.speciesTotal) + ' of the species in Pokémon GO. ' + evolvable.length + ' more you can evolve now.' : '',
+      gens: c.gens.map((g, i) => ({ ...g, first: i === 0 ? 'first' : '', pct: pct(g.have, g.total) })),
+      shelf: c.shelf.map((x) => ({ name: x.name, types: typeChips(x.types), pctText: x.pct + '%', perfect: x.pct === 100 ? 'perfect' : '', sub: x.ivs + ' · CP ' + grouped(x.cp) })),
+      sets: c.sets.map((x) => {
+        const known = x.have != null;
+        return { name: x.name, fig: !known ? 'Not in your scans yet' : x.total != null ? x.have + ' of ' + x.total : String(x.have), figCls: known ? '' : 'none',
+          hasBar: known && x.total != null, pct: pct(x.have || 0, x.total || 0) };
+      }),
+      missFig: d ? grouped(c.missing.length) + ' species missing' : '',
+      missLine: d ? evolvable.length + ' you can evolve from one you have. The rest come from raids, eggs, research or trades.' : '',
+      missAll: d ? 'All ' + grouped(c.missing.length) + ' ›' : '',
+      missing: preview.map((m, i) => ({ ...m, first: i === 0 ? 'first' : '', how: m.how || 'Not in your box' })),
+      buildsFig: d ? d.builds.length + ' builds' : '',
+      buildsLine: d ? (first ? 'Do first: ' + first.build.headline + '. ' : '') + c.buildDustShort + ' dust for all of them.' : '',
+      gapsFig: d ? s.length + ' S tier · ' + a.length + ' A tier' : '',
+      gapsLine: s.length ? 'Top-tier Pokémon nothing in your box can become, such as ' + s[0].name + '.' : '',
+      dupFig: d ? c.dupSpecies + ' species' : '',
+      dupLine: d ? grouped(c.transfers) + ' copies you can transfer.' : '',
+    };
+  }
+}
+</script>
+</body>
+</html>

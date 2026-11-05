@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lesson: good and top numbers</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="lesson" style="height: 860px">
+<div class="lrow"><div class="lcol"><div class="lcap">TODAY (GREEN FROM SCORE 80, IV RANK 500)</div></div><div class="lcol"><div class="lcap">WITH THE LESSON: TOP IN A GREEN BOX, GOOD IN GREEN</div></div></div>
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="lrow">
+<sc-for list="{{sides}}" as="s" hint-placeholder-count="2">
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Tinkatink, CP 167: Ultra League card figures</div>
+<div class="pick" style="cursor: default">
+<div class="ptop"><span class="ptitle">{{card.title}}</span><span class="pchip">PICK</span><span class="worth {{card.worth}}">{{card.worthUpper}}</span></div>
+<div class="figs">
+<div class="fig"><small>SPECIES</small><b class="{{s.cardScoreCls}}"><span class="{{s.cardScoreGrade}}">{{card.score}}</span></b><span>{{card.rank}}</span></div>
+<div class="fig"><small>THIS COPY</small><b class="{{s.cardIvCls}}"><span class="{{s.cardIvGrade}}">{{card.iv}}</span></b><span>{{card.ivRank}}</span></div>
+</div>
+</div>
+<div class="what">Eevee, CP 68: Great League options</div>
+<div class="olist">
+<div class="ohead"><span>OPTION</span><span class="w64">SPECIES</span><span class="w64">THIS COPY</span></div>
+<sc-for list="{{s.rows}}" as="o" hint-placeholder-count="4"><div class="orow"><span class="oname"><b>{{o.name}}</b><span>{{o.sub}}</span></span><span class="ocell w64"><b class="{{o.scoreCls}}"><span class="{{o.scoreGrade}}">{{o.score}}</span></b><span>{{o.rank}}</span></span><span class="ocell w64"><b class="{{o.ivCls}}"><span class="{{o.ivGrade}}">{{o.ivPct}}</span></b><span>{{o.ivRank}}</span></span></div></sc-for>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":860}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { d: null }; }
+  componentDidMount() { const go = () => window.Pogo.load().then((d) => this.setState({ d })).catch(() => {}); if (window.Pogo) go(); else setTimeout(go, 300); }
+  renderVals() {
+    const P = window.Pogo, d = this.state.d;
+    let card = {}, sides = [];
+    if (d && P) {
+      const L = d.copies.e1544.leagues.ul;
+      card = { title: L.title, worth: L.worth, worthUpper: L.worth.toUpperCase(), score: L.score, rank: L.rank, iv: L.iv, ivRank: L.ivRank };
+      const opts = d.copies.e406.leagues.gl.options.slice(0, 4);
+      sides = [false, true].map((lesson) => ({
+        cardScoreCls: !lesson && L.scoreStrong ? 'strong' : '', cardIvCls: !lesson && L.ivStrong ? 'strong' : '',
+        cardScoreGrade: lesson ? P.scoreGrade(L.scoreN) : '', cardIvGrade: lesson ? P.rankGrade(L.ivRankN) : '',
+        rows: opts.map((o) => ({ name: o.name, sub: o.sub, score: o.score, rank: o.rank, ivPct: o.ivPct, ivRank: o.ivRank,
+          scoreCls: !lesson && o.scoreStrong ? 'strong' : '', ivCls: !lesson && o.ivStrong ? 'strong' : '',
+          scoreGrade: lesson ? P.scoreGrade(o.scoreN) : '', ivGrade: lesson ? P.rankGrade(o.ivRankN) : '' })),
+      }));
+    }
+    return { themes: [{ cls: 't-light' }, { cls: 't-dark' }], card, sides };
+  }
+}
+</script>
+</body>
+</html>

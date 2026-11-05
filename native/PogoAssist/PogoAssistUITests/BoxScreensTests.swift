@@ -67,7 +67,7 @@ final class BoxScreensTests: XCTestCase {
         if toCheck.exists { toCheck.tap(); sleep(1); shot("box-03-\(mode)-chip-to-check"); app.buttons["All"].tap() }
 
         // A species list, then select mode with the search built from the picked Pokémon.
-        rows.element(boundBy: 0).tap()
+        app.openSpeciesList(rows.element(boundBy: 0))
         let members = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5))
         sleep(1)
@@ -96,7 +96,7 @@ final class BoxScreensTests: XCTestCase {
         // A detail with a check.
         if toCheck.exists {
             toCheck.tap()
-            rows.element(boundBy: 0).tap()
+            app.openSpeciesList(rows.element(boundBy: 0))
             // The species list is pushed with the To check filter on; its rows appear after the push, so wait for them rather than tapping at once.
             XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 10), "the species list under the To check chip shows its Pokémon")
             members.element(boundBy: 0).tap()
@@ -132,7 +132,7 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(large.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
         sleep(1)
         shot("box-08-large-text-box")
-        large.buttons.matching(identifier: "species-row").element(boundBy: 0).tap()
+        large.openSpeciesList(large.buttons.matching(identifier: "species-row").element(boundBy: 0))
         large.buttons.matching(identifier: "pokemon-row").firstMatch.tap()
         XCTAssertTrue(large.buttons["Fix a value"].waitForExistence(timeout: 5))
         sleep(1)
@@ -162,7 +162,10 @@ final class BoxScreensTests: XCTestCase {
         app.swipeDown(velocity: .fast)
         XCTAssertTrue(app.buttons["Export"].waitForExistence(timeout: 10))
 
+        // Just after a share sheet is swiped away its popover layer can still be up for a moment and swallow the first tap on the header's button (the hierarchy then shows
+        // My Pokémon with no dialog): tap again, as `openSpeciesList` does for a tap lost in a screen transition. Two taps that open nothing still fail.
         app.buttons["Export"].tap()
+        if !app.buttons["CSV"].waitForExistence(timeout: 3) { app.buttons["Export"].tap() }
         XCTAssertTrue(app.buttons["CSV"].waitForExistence(timeout: 5))
         app.buttons["CSV"].tap()
         XCTAssertTrue(sheetFile("csv").waitForExistence(timeout: 30), "the share sheet offers a .csv file")
@@ -171,7 +174,7 @@ final class BoxScreensTests: XCTestCase {
 
         // Select mode's export asks too, and the picked Pokémon go in the file.
         XCTAssertTrue(app.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 10))
-        app.buttons.matching(identifier: "species-row").element(boundBy: 0).tap()
+        app.openSpeciesList(app.buttons.matching(identifier: "species-row").element(boundBy: 0))
         XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5))
         app.buttons["Select"].tap()
         app.buttons.matching(identifier: "pokemon-row").element(boundBy: 0).tap()
@@ -311,7 +314,7 @@ final class BoxScreensTests: XCTestCase {
 
     private func openBlaziken(_ app: XCUIApplication) {
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); XCTAssertTrue(waitHittable(row), "the Blaziken row is tappable"); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); XCTAssertTrue(waitHittable(row), "the Blaziken row is tappable"); app.openSpeciesList(row)
         let one = app.buttons.matching(identifier: "pokemon-row").firstMatch
         // A tap during a screen transition can reach nothing: if the list has not appeared and the species row is still there, tap it once more.
         if !one.waitForExistence(timeout: 3), row.exists { row.tap() }
@@ -333,7 +336,7 @@ final class BoxScreensTests: XCTestCase {
         app.launch()
         populate(app)
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Moltres'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); app.openSpeciesList(row)
         let copies = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(copies.firstMatch.waitForExistence(timeout: 5))
         let n = copies.count
@@ -348,11 +351,13 @@ final class BoxScreensTests: XCTestCase {
             guard c.waitForExistence(timeout: 3) else { break }
             c.tap()
             _ = app.staticTexts["ADVICE"].waitForExistence(timeout: 20)
+            if app.buttons["advice-info"].exists, app.buttons["advice-info"].value as? String == "Collapsed" { app.buttons["advice-info"].tap() }
             if app.otherElements["advice-build-0"].exists || app.staticTexts["advice-build-0"].exists || app.descendants(matching: .any)["advice-build-0"].exists {
                 sawBuilt = true
                 XCTAssertFalse(app.staticTexts["advice-verdict"].exists, "a copy with its own build shows the build and no keep or transfer verdict")
                 scrollToVerdictArea(); shot("with-builds")
                 // The chip beside a league tag is the build's marker: "Advice builds it", or "... as <target>" in the card's spoken label when the target is another species.
+                app.buttons["page-tab-pvp"].tap()
                 for key in ["gl", "ul", "ml"] {
                     let label = app.buttons["league-\(key)-pick"].label
                     if label.contains("Advice builds") { XCTAssertTrue(label.contains("Advice builds it"), label) }
@@ -387,38 +392,50 @@ final class BoxScreensTests: XCTestCase {
         let search = app.textFields["box-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Zamazenta")
         let zam = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Zamazenta'")).firstMatch
-        XCTAssertTrue(zam.waitForExistence(timeout: 5), "Zamazenta is in the sample box"); zam.tap()
+        XCTAssertTrue(zam.waitForExistence(timeout: 5), "Zamazenta is in the sample box"); app.openSpeciesList(zam)
         let built = app.buttons.matching(NSPredicate(format: "identifier == 'pokemon-row' AND label CONTAINS '2661'")).firstMatch
         XCTAssertTrue(built.waitForExistence(timeout: 5), "the Zamazenta with CP 2661"); built.tap()
         _ = app.staticTexts["ADVICE"].waitForExistence(timeout: 20)
+        app.buttons["page-tab-pvp"].tap()
         let ml = app.buttons["league-ml-pick"]
         XCTAssertTrue(ml.waitForExistence(timeout: 10), "the Master League card")
         XCTAssertTrue(ml.label.contains("Advice builds it"), ml.label)
     }
 
-    /// A league view open on the Normal form closes with its panel when the page goes to the Mega form (no Leagues there), the Advice panel is
-    /// on the Mega page, and Normal comes back to the base cards with the Advice panel.
-    func testMegaFormWithALeagueViewOpen() throws {
+    /// A copy with a Mega form that is opened with a league's tile (a TOP PVP copy) opens its normal form on that tile, not the Mega form's "no leagues" note.
+    func testAnInitialLeagueOnAMegaCopyOpensTheNormalFormOnThePvPTab() throws {
+        // The Settings choice starts the page on Mega, so the test fails without the fix that opens the normal form for a league.
+        let app = saveMegaPair(["-appearance", "light", "-uitest-initial-league", "ul", "-megaDefault", "mega"])
+        openBlaziken(app)
+        XCTAssertTrue(app.buttons["form-normal"].isSelected, "the normal form")
+        XCTAssertTrue(app.buttons["page-tab-pvp"].isSelected)
+        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["league-ul-pick"].isSelected)
+        XCTAssertFalse(app.staticTexts["Mega Pokémon cannot battle in GO Battle League. Switch to Normal to see the leagues."].exists)
+    }
+
+    /// The PvP tab on the Normal form closes with its tiles when the page goes to the Mega form (no Leagues there), the Summary keeps its Advice on the Mega
+    /// page, and Normal comes back to the tiles.
+    func testMegaFormWithThePvPTabOpen() throws {
         let app = saveMegaPair(["-appearance", "light"])
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); app.openSpeciesList(row)
         let one = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(one.firstMatch.waitForExistence(timeout: 5)); one.firstMatch.tap()
         XCTAssertTrue(app.buttons["form-mega"].waitForExistence(timeout: 5))
-        let pick = app.buttons["league-ul-pick"]
-        XCTAssertTrue(pick.waitForExistence(timeout: 20), "Blaziken has league ratings once the advice is ready")
         let advice = app.staticTexts["ADVICE"]
-        XCTAssertTrue(advice.exists)
-        pick.tap()
-        XCTAssertTrue(app.buttons["leagues-back"].waitForExistence(timeout: 3))
-        XCTAssertFalse(advice.exists, "no Advice panel in the league view")
+        XCTAssertTrue(advice.waitForExistence(timeout: 20), "the Summary has its Advice panel once the advice is ready")
+        app.buttons["page-tab-pvp"].tap()
+        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 20), "Blaziken has league ratings once the advice is ready")
+        XCTAssertFalse(advice.exists, "no Advice panel on the PvP tab")
         app.buttons["form-mega"].tap()
         XCTAssertTrue(app.staticTexts["CP 3970"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.buttons["leagues-back"].exists, "no Leagues panel on the Mega form")
+        XCTAssertFalse(app.buttons["league-ul-pick"].exists, "no Leagues on the Mega form")
+        app.buttons["page-tab-summary"].tap()
         XCTAssertTrue(advice.waitForExistence(timeout: 3), "the Mega page keeps its Advice panel")
         app.buttons["form-normal"].tap()
-        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 3), "Normal comes back to the base cards, not the stale league view")
-        XCTAssertTrue(advice.exists)
+        app.buttons["page-tab-pvp"].tap()
+        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 3), "Normal comes back to the tiles")
     }
 
     /// The detail's Normal / Mega switch, the row marker, the one-entry count and the Settings choice that sets where the switch starts.
@@ -430,7 +447,7 @@ final class BoxScreensTests: XCTestCase {
         shot("mega-light-01-box")
 
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.exists); row.tap()
+        XCTAssertTrue(row.exists); app.openSpeciesList(row)
         let one = app.buttons.matching(identifier: "pokemon-row")
         XCTAssertTrue(one.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(one.count, 1, "the species list has one Blaziken")
@@ -497,7 +514,7 @@ final class BoxScreensTests: XCTestCase {
         sleep(1)
         shot("mega-dark-01-box")
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); app.openSpeciesList(row)
         XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5))
         sleep(1)
         shot("mega-dark-02-species-row")
@@ -512,7 +529,7 @@ final class BoxScreensTests: XCTestCase {
         let app = saveMegaPair(["-appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])
         sleep(1)
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH 'Blaziken'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); app.openSpeciesList(row)
         XCTAssertTrue(app.buttons.matching(identifier: "pokemon-row").firstMatch.waitForExistence(timeout: 5))
         sleep(1)
         shot("mega-large-01-species-row")
@@ -560,7 +577,7 @@ final class BoxScreensTests: XCTestCase {
         search.tap(); search.typeText(name)
         let row = app.buttons.matching(NSPredicate(format: "identifier == 'species-row' AND label BEGINSWITH %@", "\(name),")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5), "\(name) is in the sample box")
-        row.tap()
+        app.openSpeciesList(row)
         let member = app.buttons.matching(identifier: "pokemon-row").firstMatch
         XCTAssertTrue(member.waitForExistence(timeout: 5))
         member.tap()
@@ -579,106 +596,49 @@ final class BoxScreensTests: XCTestCase {
         while !element.isHittable && n < 8 { app.swipeUp(); n += 1 }
     }
 
-    /// The pick cards the Leagues panel must have for the sample scan's Scyther (CP 2071, 7/13/1, level 29): every family member is over the
-    /// Great League cap (no viable option there), and Ultra League shows Scyther itself with a cost.
+    /// The tiles the PvP tab must have for the sample scan's Scyther (CP 2071, 7/13/1, level 29): every family member is over the Great League cap (no viable
+    /// option there), and Ultra League shows Scyther itself with a cost.
     private func assertScyther(_ app: XCUIApplication) {
+        let pvp = app.buttons["page-tab-pvp"]
+        XCTAssertTrue(pvp.waitForExistence(timeout: 20), "the page has its tabs")
+        pvp.tap()
         let header = app.staticTexts["leagues-panel"]
-        scrollToLeagues(app, header)
-        XCTAssertTrue(header.waitForExistence(timeout: 20), "the Leagues section shows once the advice is ready")
-        XCTAssertEqual(header.label, "LEAGUES")
+        XCTAssertTrue(header.waitForExistence(timeout: 20), "the PvP tab shows once the advice is ready")
+        XCTAssertEqual(header.label, "PVP LEAGUES")
         let gl = app.buttons["league-gl-pick"], ul = app.buttons["league-ul-pick"], ml = app.buttons["league-ml-pick"]
-        for card in [gl, ul, ml] { XCTAssertTrue(card.exists, card.identifier) }
+        for tile in [gl, ul, ml] { XCTAssertTrue(tile.exists, tile.identifier) }
         XCTAssertTrue(gl.label.hasPrefix("Great League, under 1,500 CP. Pick: "), gl.label)
         XCTAssertTrue(gl.label.contains("over cap. No viable option. This copy is already above 1,500 CP as every member of the family."), gl.label)
         XCTAssertTrue(ul.label.hasPrefix("Ultra League, under 2,500 CP. Pick: Scyther."), ul.label)
         XCTAssertTrue(ul.label.contains("This copy 96.2 percent, IV rank 1,766"), ul.label)
         XCTAssertTrue(ul.label.contains("Target level 40, target CP 2,500, 160,000 dust, 190 candy"), ul.label)
         XCTAssertTrue(ml.label.hasPrefix("Master League, no CP cap. Pick: "), ml.label)
-        // The tag: Scyther's Ultra pick (71.8, below the B-tier line; its own build, Scizor for Raids, does not cover Ultra, so no "Advice builds it" marker either) is Weak, and the spoken card says so; a No viable option card has none.
+        // The tag: Scyther's Ultra pick (71.8, below the B-tier line) is Weak, and the spoken tile says so; a No viable option tile has none.
         XCTAssertTrue(ul.label.contains("Pick: Scyther. Weak for Ultra League. Species 71.8"), ul.label)
-        XCTAssertTrue(app.buttons["league-ul-worth"].exists, "the tag is a tap target of its own")
-        XCTAssertFalse(app.buttons["league-gl-worth"].exists || gl.label.contains("for Great League. Species"), "no tag on a No viable option card")
-        XCTAssertTrue(app.staticTexts["Pogo Assist is currently unable to detect Shadow Pokémon."].exists, "a scan does not know the Shadow status")
+        XCTAssertFalse(gl.label.contains("for Great League. Species"), "no tag on a No viable option tile")
+        XCTAssertTrue(gl.isSelected, "the page opens on Great League's tile")
+        XCTAssertEqual(app.descendants(matching: .any)["league-worth-line"].label, "This copy is already above 1,500 CP as every member of the family.")
+        ul.tap()
+        XCTAssertEqual(app.descendants(matching: .any)["league-worth-line"].label, "Species below the B-tier line for Ultra League")
+        // The "i" holds the ranking switch and the Shadow note (a scan does not know the Shadow status).
+        app.buttons["leagues-scoring-info"].tap()
+        XCTAssertTrue(app.staticTexts["Pogo Assist is currently unable to detect Shadow Pokémon."].waitForExistence(timeout: 3))
+        app.buttons["leagues-scoring-info"].tap()
+        for _ in 0..<6 where !app.staticTexts["Removes this copy from the app's box only, not from the game."].exists { app.swipeUp() }
         XCTAssertTrue(app.staticTexts["Removes this copy from the app's box only, not from the game."].exists)
     }
 
-    /// Screenshots of the Leagues panel for the design comparison: dark Berry and light Graphite, then one at the first accessibility text
-    /// size. Only runs with POGO_SCREENS set (it writes there); not a check.
-    func testLeaguesScreenshots() throws {
-        try XCTSkipIf(ProcessInfo.processInfo.environment["POGO_SCREENS"] == nil, "screenshots only with POGO_SCREENS")
-        func session(_ app: XCUIApplication, _ tag: String) {
-            func page(_ species: String, _ name: String, _ steps: (XCUIApplication) -> Void) {
-                openLeagueDetail(app, species: species)
-                sleep(1)
-                shot("\(tag)-\(name)-top")
-                scrollToLeagues(app, app.staticTexts["leagues-panel"])
-                resetRanking(app)
-                app.swipeUp(velocity: .slow)
-                steps(app)
-                closeLeagueDetail(app)
-            }
-            page("Moltres", "base") { _ in sleep(1); self.shot("\(tag)-base-leagues") }
-            page("Scyther", "no-viable") { app in
-                sleep(1); self.shot("\(tag)-no-viable-leagues")
-                if app.buttons["league-ul-worth"].exists { app.buttons["league-ul-worth"].tap(); sleep(1); self.shot("\(tag)-worth-open") }
-            }
-            page("Staraptor", "over-cap") { _ in sleep(1); self.shot("\(tag)-over-cap-leagues") }
-            page("Scyther", "league-view") { app in
-                app.buttons["league-ul-pick"].tap()
-                // The list is open by default in the league view.
-                let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'league-ul-option-' AND NOT identifier ENDSWITH '-detail'")).firstMatch
-                if row.waitForExistence(timeout: 3) { row.tap() }
-                sleep(1); self.shot("\(tag)-league-view-row-open")
-                app.swipeDown(velocity: .slow)
-                sleep(1); self.shot("\(tag)-league-view-row-open-top")
-            }
-            page("Moltres", "explainer") { app in
-                app.buttons["league-gl-pick"].tap()
-                app.buttons["leagues-scoring-info"].tap()
-                sleep(1); self.shot("\(tag)-explainer")
-            }
-        }
-        let dark = XCUIApplication()
-        dark.launchArguments = ["-uitest-reset", "-appearance", "dark", "-accent", "berry"]
-        dark.launch()
-        populate(dark)
-        session(dark, "dark-berry")
-        dark.terminate()
-
-        let light = XCUIApplication()
-        light.launchArguments = ["-appearance", "light", "-accent", "graphite"]
-        light.launch()
-        XCTAssertTrue(light.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
-        session(light, "light-graphite")
-        light.terminate()
-
-        let large = XCUIApplication()
-        large.launchArguments = ["-appearance", "dark", "-accent", "berry", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
-        large.launch()
-        XCTAssertTrue(large.buttons.matching(identifier: "species-row").firstMatch.waitForExistence(timeout: 15))
-        openLeagueDetail(large, species: "Scyther")
-        scrollToLeagues(large, large.staticTexts["leagues-panel"])
-        resetRanking(large)
-        large.swipeUp(velocity: .slow)
-        large.swipeDown(velocity: .slow)
-        sleep(1); shot("ax1-header")
-        large.buttons["league-ul-pick"].tap()
-        let row = large.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'league-ul-option-' AND NOT identifier ENDSWITH '-detail'")).firstMatch
-        if row.waitForExistence(timeout: 3) { row.tap() }
-        large.swipeUp(velocity: .slow)
-        sleep(1); shot("ax1-option-list")
-    }
-
-    /// Makes sure the ranking switch (a persisted preference) starts on Classic.
+    /// Makes sure the ranking switch (a persisted preference, inside the PvP tab's "i") starts on Classic.
     private func resetRanking(_ app: XCUIApplication) {
         let control = app.descendants(matching: .any)["leagues-scoring"]
+        if !control.exists { app.buttons["leagues-scoring-info"].tap() }
         XCTAssertTrue(control.waitForExistence(timeout: 10))
         if control.value as? String != "Classic" { control.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap() }
         XCTAssertEqual(control.value as? String, "Classic")
     }
 
-    /// Base cards, the worth tag, then a card opens the league view with its option table, and a row opens.
-    func testLeagueCardOpensLeagueViewAndOptionRowExpands() throws {
+    /// The tiles, the worth line, then the family and details fold opens with its option table, and a row opens.
+    func testTilesWorthLineAndTheFamilyFold() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
         app.launch()
@@ -687,29 +647,15 @@ final class BoxScreensTests: XCTestCase {
         assertScyther(app)
         resetRanking(app)
         XCTAssertTrue(app.buttons["league-ul-pick"].label.contains("Pick: Scyther"))
-        for key in ["gl", "ul", "ml"] { XCTAssertTrue(app.descendants(matching: .any)["league-\(key)"].exists, key) }
-        XCTAssertFalse(app.descendants(matching: .any)["leagues-back"].exists, "the base state has no back circle")
-
-        let advice = app.staticTexts["ADVICE"]
-        XCTAssertTrue(advice.exists, "the base page has the Advice panel")
-        // The tag opens its one line without opening the league view, and closes it again.
-        let tag = app.buttons["league-ul-worth"]
-        XCTAssertEqual(tag.value as? String, "Collapsed")
-        tag.tap()
-        // The line sits inside the card's one accessibility element, so the tag's value carries it.
-        // Weak because the species (71.8) is below the B-tier line; the tag is worth alone now, so it says why rather than "not a strong pick".
-        XCTAssertEqual(tag.value as? String, "Species below the B-tier line for Ultra League")
-        XCTAssertFalse(app.buttons["leagues-back"].exists, "tapping the tag does not open the league view")
-        shot("worth-tag-open")
-        tag.tap()
-        XCTAssertEqual(tag.value as? String, "Collapsed")
-        app.buttons["league-ul-pick"].tap()
-        let back = app.buttons["leagues-back"]
-        XCTAssertTrue(back.waitForExistence(timeout: 3), "the league view has its back circle")
-        XCTAssertFalse(advice.exists, "the league view has no Advice panel")
-        XCTAssertTrue(app.descendants(matching: .any)["leagues-control"].exists)
-        // No Show more / Show less: the option table is always there.
-        XCTAssertFalse(app.buttons["league-ul-more"].exists)
+        for key in ["gl", "ul", "ml"] { XCTAssertTrue(app.descendants(matching: .any)["league-\(key)-pick"].exists, key) }
+        // The family is folded at first, and its row says how many more there are.
+        let toggle = app.buttons["league-family-toggle"]
+        XCTAssertTrue(toggle.exists)
+        XCTAssertTrue(toggle.label.hasPrefix("Ultra League family and details ("), toggle.label)
+        XCTAssertEqual(toggle.value as? String, "Collapsed")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'league-ul-option-'")).firstMatch.exists)
+        toggle.tap()
+        XCTAssertEqual(toggle.value as? String, "Expanded")
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'league-ul-option-' AND NOT identifier ENDSWITH '-detail'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 3), "the other family members are listed")
         XCTAssertEqual(row.value as? String, "Collapsed")
@@ -717,46 +663,39 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertEqual(row.value as? String, "Expanded")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Best level' OR label BEGINSWITH 'IVs not read' OR label BEGINSWITH 'Already above'")).firstMatch.exists, "the expanded row says its best level")
         sleep(1)
-        shot("league-view-row-open")
-        back.tap()
-        XCTAssertTrue(app.buttons["league-gl-pick"].waitForExistence(timeout: 3), "back returns to the three cards")
-        XCTAssertTrue(advice.waitForExistence(timeout: 3), "and the Advice panel comes back with them")
+        shot("league-family-row-open")
+        toggle.tap()
+        XCTAssertFalse(row.waitForExistence(timeout: 2), "the fold closes")
     }
 
     /// The ranking switch changes the pick, not only the chip: the sample Scyther's Ultra League pick is Scyther itself under Classic and
-    /// Scizor under Pogo Assist (the engine's `pick` and `experimental` differ), and the IVs panel's Ultra figure follows.
+    /// Scizor under Pogo Assist (the engine's `pick` and `experimental` differ).
     func testRankingSwitchChangesThePick() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
         app.launch()
         populate(app)
         openLeagueDetail(app, species: "Scyther")
-        scrollToLeagues(app, app.staticTexts["leagues-panel"])
+        XCTAssertTrue(app.buttons["page-tab-pvp"].waitForExistence(timeout: 20))
+        app.buttons["page-tab-pvp"].tap()
         XCTAssertTrue(app.staticTexts["leagues-panel"].waitForExistence(timeout: 20))
         resetRanking(app)
         let ul = app.buttons["league-ul-pick"]
         XCTAssertTrue(ul.label.contains("Pick: Scyther."), ul.label)
         XCTAssertFalse(ul.label.contains("Pogo Assist pick"))
-        let figure = app.descendants(matching: .any)["iv-figure-ul"]
-        XCTAssertEqual(figure.value as? String, "96.2 percent", "the Ultra figure is Scyther's IV % under Classic")
         let control = app.descendants(matching: .any)["leagues-scoring"]
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
         XCTAssertEqual(control.value as? String, "Pogo Assist")
         XCTAssertTrue(ul.label.contains("Pogo Assist pick: Scizor."), ul.label)
         XCTAssertTrue(ul.label.contains("This copy 95.3 percent, IV rank 2,379"), ul.label)
-        XCTAssertEqual(figure.value as? String, "95.3 percent", "the IVs panel follows the ranking")
-        let info = app.buttons["leagues-scoring-info"]
-        info.tap()
         let explainer = app.descendants(matching: .any)["leagues-scoring-explainer"]
-        XCTAssertTrue(explainer.waitForExistence(timeout: 3), "the explainer opens under the header")
+        XCTAssertTrue(explainer.exists, "the explainer is open under the header")
         XCTAssertTrue(explainer.label.contains("starts from the strongest species"), explainer.label)
         resetRanking(app)
         XCTAssertTrue(ul.label.contains("Pick: Scyther."))
-        XCTAssertEqual(figure.value as? String, "96.2 percent")
         // The option rows carry the species id: under Classic the other Ultra League members are Scizor and Kleavor.
-        // Scrolled into the middle first: at the screen's edge a tap lands on the card's top row, where the worth tag is.
-        app.swipeUp(velocity: .slow)
         ul.tap()
+        app.buttons["league-family-toggle"].tap()
         let row = app.buttons["league-ul-option-scizor"]
         XCTAssertTrue(row.waitForExistence(timeout: 3), "league-ul-option-<speciesId>")
         XCTAssertTrue(app.buttons["league-ul-option-kleavor"].exists)
@@ -764,8 +703,8 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertEqual(row.value as? String, "Expanded")
     }
 
-    /// The search chip beside the CP line copies and toasts; the Settings circle opens Settings.
-    func testSearchChipAndSettingsCircle() throws {
+    /// The orange search circle in the header copies the game search and toasts.
+    func testSearchCircleCopiesTheGameSearch() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
         app.launch()
@@ -773,12 +712,10 @@ final class BoxScreensTests: XCTestCase {
         openLeagueDetail(app, species: "Scyther")
         let chip = app.buttons["search-chip"]
         XCTAssertTrue(chip.exists)
+        XCTAssertEqual(chip.label, "Copy search")
         XCTAssertTrue((chip.value as? String ?? "").hasPrefix("scyther&cp2071"))
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == 'Copy search'")).element(boundBy: 1).exists, "the full-width strip is gone")
         chip.tap()
         XCTAssertTrue(app.staticTexts["Copied"].waitForExistence(timeout: 3))
-        app.buttons["Settings"].tap()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5) || app.staticTexts["Settings"].waitForExistence(timeout: 5))
     }
 
     /// The Leagues section, light and dark, then large text: the sample scan's Scyther with the exact sentences, and a screenshot of each with the section in view.
@@ -814,21 +751,20 @@ final class BoxScreensTests: XCTestCase {
         shot("league-detail-large-text")
     }
 
-    /// The section waits while the page shows the Mega form (no Mega in GO Battle League) and comes back on Normal.
+    /// The tiles wait while the page shows the Mega form (no Mega in GO Battle League) and come back on Normal.
     func testLeaguesSectionIsHiddenOnTheMegaForm() throws {
         let app = saveMegaPair(["-appearance", "light"])
         openBlaziken(app)
-        XCTAssertTrue(app.staticTexts["leagues-panel"].waitForExistence(timeout: 20), "the section shows on the Normal form")
-        XCTAssertTrue(app.descendants(matching: .any)["iv-figure-gl"].exists, "the IVs panel's PvP figures show on the Normal form")
+        XCTAssertTrue(app.buttons["page-tab-pvp"].waitForExistence(timeout: 20))
+        app.buttons["page-tab-pvp"].tap()
+        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 20), "the tiles show on the Normal form")
         app.buttons["form-mega"].tap()
         XCTAssertTrue(app.staticTexts["CP 3970"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.descendants(matching: .any)["iv-figure-gl"].exists, "the PvP figures wait with the Leagues panel on the Mega form")
+        XCTAssertFalse(app.buttons["league-ul-pick"].exists, "no league tiles on the Mega form")
         XCTAssertFalse(app.staticTexts["leagues-panel"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["league-gl"].exists)
-        app.swipeUp()
-        XCTAssertFalse(app.staticTexts["leagues-panel"].exists)
+        XCTAssertTrue(app.staticTexts["Mega Pokémon cannot battle in GO Battle League. Switch to Normal to see the leagues."].exists)
         app.buttons["form-normal"].tap()
-        XCTAssertTrue(app.staticTexts["leagues-panel"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["league-ul-pick"].waitForExistence(timeout: 3))
     }
 
     /// Settings > About says where the league data comes from.
@@ -849,8 +785,8 @@ final class BoxScreensTests: XCTestCase {
         shot("league-about")
     }
 
-    /// The Dynamax switch in the facts panel: it starts at Not set, Yes sticks after leaving the page and coming back.
-    func testDynamaxSwitchOnThePokemonPage() throws {
+    /// The Dynamax mark on the details card: it starts Off, On sticks after leaving the page and coming back.
+    func testDynamaxMarkOnThePokemonPage() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest-reset", "-appearance", "light"]
         app.launch()
@@ -858,34 +794,26 @@ final class BoxScreensTests: XCTestCase {
         let members = app.buttons.matching(identifier: "pokemon-row")
         func openFirstPokemon() {
             let species = app.buttons.matching(identifier: "species-row").firstMatch
-            XCTAssertTrue(species.waitForExistence(timeout: 10)); species.tap()
+            XCTAssertTrue(species.waitForExistence(timeout: 10)); app.openSpeciesList(species)
             XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5)); members.firstMatch.tap()
             XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
         }
-        func dynamaxSwitch() -> XCUIElement {
-            let control = app.descendants(matching: .any).matching(identifier: "dynamax-switch").firstMatch
-            var swipes = 0
-            while !(control.exists && control.isHittable) && swipes < 10 { app.swipeUp(); swipes += 1 }
-            XCTAssertTrue(control.isHittable, "the Dynamax switch is on the page")
-            return control
-        }
         openFirstPokemon()
-        var control = dynamaxSwitch()
-        XCTAssertEqual(control.value as? String, "Not set")
-        XCTAssertTrue(app.staticTexts["Only Pokémon caught as Dynamax can join Max battles. The app cannot read this from the game."].exists)
-        // The middle segment is Yes (Not set | Yes | No); the switch is one adjustable element, so it is tapped by position.
-        control.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5)).tap()
-        let yes = NSPredicate(format: "value == 'Yes'")
-        expectation(for: yes, evaluatedWith: control)
+        var mark = app.buttons["mark-dynamax"]
+        XCTAssertTrue(mark.waitForExistence(timeout: 10))
+        XCTAssertEqual(mark.value as? String, "Off")
+        mark.tap()
+        expectation(for: NSPredicate(format: "value == 'On'"), evaluatedWith: mark)
         waitForExpectations(timeout: 10)
-        shot("dynamax-switch-light")
+        shot("dynamax-mark-light")
 
         // Back to the list and reopen the same Pokémon (the first row again): the flag was saved with the box.
         app.buttons["Back"].tap()
         XCTAssertTrue(members.firstMatch.waitForExistence(timeout: 5))
         members.firstMatch.tap()
         XCTAssertTrue(app.buttons["Fix a value"].waitForExistence(timeout: 5))
-        control = dynamaxSwitch()
-        XCTAssertEqual(control.value as? String, "Yes")
+        mark = app.buttons["mark-dynamax"]
+        XCTAssertTrue(mark.waitForExistence(timeout: 10))
+        XCTAssertEqual(mark.value as? String, "On")
     }
 }

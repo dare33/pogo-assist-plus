@@ -317,7 +317,11 @@ public struct BoxAdvice: Codable, Equatable {
     /// Versions 10 and 11 were written by dev builds of a branch that carried interim payload fields (since removed), so they are taken: the next real
     /// bump must be 12 or higher, or such a cache would pass for the new shape (`loadAdvice` keeps any version at or above this one).
     /// 12 since each Pokémon carries `fit` (a Strong / OK / Weak tag per Raids, Gym, Rocket and Max, in the compact form the bridge sends) and `bestOf` (the areas it is its species' best copy for).
-    public static let currentVersion = 12
+    /// 14 since the Gigantamax Max rows kept their prefix (a Dynamax copy is no longer credited with a Gigantamax entry); 13 was reserved by the
+    /// design stack, so any later merge must go above 14.
+    /// 15 since the old Dynamax "No" no longer removes Max credit (a stored No reads as not marked) and a Gigantamax Max entry is credited to a copy marked Gigantamax
+    /// (before, to none); the hand-set Lucky and Shadow / Purified marks also reach the advisor.
+    public static let currentVersion = 15
     public var version: Int = BoxAdvice.currentVersion
     public var builds: [Build]
     public var gaps: [Gap]
@@ -389,6 +393,8 @@ public struct BoxAdvice: Codable, Equatable {
         /// That build's target name and cost; nil unless `build`.
         public var buildAs: String?
         public var buildCost: BuildCost?
+        /// The copy is marked Dynamax or Gigantamax by hand, so its Max line does not say it needs a Dynamax copy.
+        public var dynamaxMarked = false
 
         public var line: String {
             let label = BoxAdvice.areaLabel[area] ?? area
@@ -396,7 +402,7 @@ public struct BoxAdvice: Codable, Equatable {
             case .strong, .ok:
                 let tierPart = tier.map { " \($0)" } ?? ""
                 let asPart = asName.map { " as \($0)" } ?? ""
-                return "\(label)\(tierPart)\(asPart)\(area == "max" ? " (needs a Dynamax copy)" : "")"
+                return "\(label)\(tierPart)\(asPart)\(area == "max" && !dynamaxMarked ? " (needs a Dynamax copy)" : "")"
             case .weak:
                 // A reason code this build does not know must not read as "no table entry": say only that the copy is weak here.
                 guard let reason else { return "Weak for \(label)" }
@@ -525,7 +531,7 @@ public struct BoxAdvice: Codable, Equatable {
             var fits = [String: Fit]()
             if case .object(let areas)? = e["fit"] {
                 for (area, v) in areas {
-                    if let f = Fit.decode(area: area, v, ivPercent: ivPercent) { fits[area] = f }
+                    if var f = Fit.decode(area: area, v, ivPercent: ivPercent) { f.dynamaxMarked = row.dynamax == true || row.gigantamax == true; fits[area] = f }
                 }
             }
             if !fits.isEmpty { out.fit[eid] = fits }

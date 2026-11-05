@@ -47,6 +47,8 @@ public struct BoxInsight {
         public var fitIVPct: [Double] = []
         public var asNames: [String?] = []
         public var cp: Int = 0
+        /// Marked Dynamax or Gigantamax by hand: its Max tag does not say it needs a Dynamax copy.
+        public var dynamaxMarked = false
 
         public struct BestTag: Equatable {
             public var area: String
@@ -119,7 +121,7 @@ public struct BoxInsight {
             return "best: \(slot.member)" + (slot.pct.map { " " + LeaguePanel.percent($0) } ?? "")
         }
         guard let b = copies[id]?.best.first(where: { $0.area == a.rawValue }) else { return nil }
-        if a == .max { return "best (needs a Dynamax copy)" }
+        if a == .max { return copies[id]?.dynamaxMarked == true ? "best" : "best (needs a Dynamax copy)" }
         return "best" + (b.asName.map { " as " + $0 } ?? "")
     }
 
@@ -176,7 +178,8 @@ public struct BoxInsight {
                                     fitTier: areas.map { a in fits[a].flatMap { $0.tag == .weak ? nil : $0.tier.flatMap { tierWeight[$0] } } ?? 0 },
                                     fitIVPct: areas.map { fits[$0]?.ivPercent ?? 0 },
                                     asNames: areas.map { fits[$0]?.asNameLabel(shadow: e.row.shadow == 1) },
-                                    cp: e.row.cp)
+                                    cp: e.row.cp,
+                                    dynamaxMarked: e.row.dynamax == true || e.row.gigantamax == true)
             seen[e.row.title, default: []].append(e.id)
 
             let title = e.row.title

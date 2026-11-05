@@ -2,9 +2,9 @@ import SwiftUI
 
 enum AppTab: String { case box, next }
 
-/// The floating tab bar (design handoff component 10): a Box pill, the 96 pt scan button (the scan mark, with an
+/// The floating tab bar (design handoff component 10): a My Pokémon pill, the 96 pt scan button (the scan mark, with an
 /// 8 pt accent-tint halo) and a Pogo Hub pill (the `.next` case), over a gradient that fades the screen into the background.
-/// The accessibility labels are "Pokémon" (the Box tab, named as in the design; its identifier stays "tab-box"), "Scan" and "Pogo Hub" (identifier "tab-next").
+/// The accessibility labels are "My Pokémon" (the Box tab, renamed in design pass 3, D9; its identifier stays "tab-box"), "Scan" and "Pogo Hub" (identifier "tab-next").
 struct FloatingTabBar: View {
     @Binding var selection: AppTab
     var scanDisabled = false
@@ -22,7 +22,7 @@ struct FloatingTabBar: View {
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
             HStack {
-                pill("Pokémon", "square.grid.2x2", .box, identifier: "tab-box")
+                pill("My Pokémon", "square.grid.2x2", .box, identifier: "tab-box")
                 Spacer(minLength: 8)
                 scanButton
                 Spacer(minLength: 8)

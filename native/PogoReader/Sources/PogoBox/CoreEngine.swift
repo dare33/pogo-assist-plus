@@ -83,12 +83,14 @@ public final class CoreEngine {
     /// Advise on a scan's rows by the same route as the CLI: through the Poke Genie CSV.
     public func advise(rows: [ScanRow], scanDate: Date = Date()) throws -> JSONValue {
         let box = try importPokeGenie(csv: try csv(rows: rows, scanDate: scanDate))
-        // The CSV has no Dynamax column (and must not get one), so the hand-set flag goes in beside the imported records by Index.
-        guard rows.contains(where: { $0.dynamax != nil }), case .array(var records) = box else { return try advise(box: box) }
-        let flags = Dictionary(rows.compactMap { r in r.dynamax.map { (r.index, $0) } }, uniquingKeysWith: { a, _ in a })
+        // The CSV has no Dynamax or Gigantamax column (and must not get one), so the hand-set flags go in beside the imported records by Index.
+        guard rows.contains(where: { $0.dynamax != nil || $0.gigantamax != nil }), case .array(var records) = box else { return try advise(box: box) }
+        let flags = Dictionary(rows.map { ($0.index, ($0.dynamax, $0.gigantamax)) }, uniquingKeysWith: { a, _ in a })
         for i in records.indices {
             guard case .object(var o) = records[i], case .number(let n)? = o["index"], let flag = flags[Int(n)] else { continue }
-            o["dynamax"] = .bool(flag); records[i] = .object(o)
+            if let d = flag.0 { o["dynamax"] = .bool(d) }
+            if let g = flag.1 { o["gigantamax"] = .bool(g) }
+            records[i] = .object(o)
         }
         return try advise(box: .array(records))
     }

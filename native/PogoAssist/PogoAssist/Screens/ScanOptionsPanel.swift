@@ -9,6 +9,7 @@ struct ScanOptionsSummary: View {
     @Environment(\.accent) private var accent
 
     private var text: String {
+        if let pass = model.scanPass { return PassWording.summary(pass) }
         if model.scanKind == .partial { return "Add and update" }
         if let n = model.storageCount { return "Full scan · \(n.formatted()) in storage" }
         return "Full scan · no count typed"
@@ -80,8 +81,15 @@ struct ScanOptionsEditor: View {
 
     private var partialSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Scan part of your storage. Nothing is removed from your box." + (model.pagedByHand ? "" : " The voice command you say sets how many."))
-                .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            if let pass = model.scanPass {
+                PassPicker()
+                CopySearchRow(pass: pass)
+                Text(PassWording.optionsLine(pass) + (model.pagedByHand ? "" : " The voice command you say sets how many."))
+                    .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("pass-options-line")
+            } else {
+                Text("Scan part of your storage. Nothing is removed from your box." + (model.pagedByHand ? "" : " The voice command you say sets how many."))
+                    .font(.secondary).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            }
             // Paging by hand has no command to size, so the number is asked for only when a voice command will be said.
             if !model.pagedByHand, let shown = model.rescanShown, model.rescanCount != nil {
                 // A re-scan from the Box: the number is not the remembered one but what the search shows, so it is said as that and not offered as a field that would name another size.
@@ -107,15 +115,16 @@ struct ScanOptionsEditor: View {
 
     private var kindPicker: some View {
         HStack(spacing: 0) {
-            kindButton("Full scan", .full)
-            kindButton("Add and update", .partial)
+            kindButton("Full scan", on: model.scanKind == .full) { model.scanKind = .full }
+            kindButton("Add and update", on: model.scanKind == .partial && model.scanPass == nil) { model.scanPass = nil; model.scanKind = .partial }
+            // One option for the filtered passes; the kind (Shadow, Purified, Dynamax, Gigantamax; Lucky, Shiny and Background are listed as coming soon) is chosen inside it, and each kind is its own run and its own save.
+            kindButton("Special scan", on: model.scanPass != nil, id: "scan-kind-special") { if model.scanPass == nil { model.scanPass = .shadow } }
         }
         .padding(4).background(Theme.off, in: Capsule())
     }
 
-    private func kindButton(_ title: String, _ kind: BoxStore.Kind) -> some View {
-        let on = model.scanKind == kind
-        return Button { model.scanKind = kind } label: {
+    private func kindButton(_ title: String, on: Bool, id: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Text(title).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(on ? accent.onSolid : Theme.muted)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, minHeight: 40)
@@ -124,6 +133,7 @@ struct ScanOptionsEditor: View {
         }
         .buttonStyle(PressStyle())
         .accessibilityAddTraits(on ? .isSelected : [])
+        .modifier(OptionalIdentifier(id: id))
     }
 
     private func field(_ title: String, prompt: String, text: Binding<String>, focus: FocusState<Bool>.Binding) -> some View {
@@ -141,4 +151,10 @@ struct ScanOptionsEditor: View {
         .contentShape(Rectangle())
         .onTapGesture { focus.wrappedValue = true }
     }
+}
+
+/// An accessibility identifier only where one is given: the older kind buttons are found by their labels and keep none.
+private struct OptionalIdentifier: ViewModifier {
+    let id: String?
+    func body(content: Content) -> some View { if let id { content.accessibilityIdentifier(id) } else { content } }
 }

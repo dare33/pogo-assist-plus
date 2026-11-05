@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pokémon page</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+</style>
+</helmet>
+<div class="board" style="width: 844px; height: 2000px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="col">
+<div class="mode">{{t.label}}</div>
+<div class="phone long {{t.cls}}">
+<div class="hdr">
+<a class="hit" href="{{backHref}}" aria-label="Back"><span class="circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></span></a>
+<span class="spring"></span>
+<button class="hit" aria-label="Settings"><span class="circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span></button>
+<a class="hit" href="FixValue.dc.html" aria-label="Fix a value"><span class="circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 3.5l4 4L8 20H4v-4z"></path><path d="M14 6l4 4"></path></svg></span></a>
+</div>
+<sc-if value="{{loading}}" hint-placeholder-val="{{false}}"><div class="page"><div class="count-when">Loading your box…</div></div></sc-if>
+<sc-if value="{{ready}}" hint-placeholder-val="{{true}}">
+<div class="page">
+<div class="heading">
+<div class="pname">{{p.title}}<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><span class="types"><sc-for list="{{p.types}}" as="y" hint-placeholder-count="1"><span class="ti {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></sc-if></div>
+<div class="cpwrap">
+<div class="cpline"><span class="cp">CP {{p.cp}}</span><span class="meta">{{p.meta}}</span></div>
+<button class="schip" aria-label="Copy search"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5L21 21"></path></svg>{{p.search}}<em>· Copy</em></button>
+</div>
+</div>
+
+<div class="panel">
+<div class="ivhead"><span class="plabel">IVs</span><span class="ivfigs"><sc-for list="{{p.ivFigs}}" as="f" hint-placeholder-count="3"><span class="ivfig {{f.cls}}" aria-label="{{f.label}}"><b>{{f.pct}}</b><small>{{f.short}}</small></span></sc-for></span></div>
+<div class="bars"><sc-for list="{{p.bars}}" as="b" hint-placeholder-count="3"><div class="bar"><span class="bl">{{b.label}}</span><span class="bt"><i style="width: {{b.w}}"></i></span><span class="bv">{{b.v}}</span></div></sc-for></div>
+</div>
+
+<div class="panel" style="gap: 14px">
+<div class="lhead">
+<span class="lhead-l"><sc-if value="{{inLeague}}" hint-placeholder-val="{{false}}"><button class="backmini" aria-label="All leagues" onClick="{{closeLeague}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button></sc-if><span class="plabel">LEAGUES</span></span>
+<span class="rk"><span class="seg" role="group" aria-label="Ranking"><button class="{{rkClassic}}" onClick="{{pickClassic}}">Classic</button><button class="{{rkPogo}}" onClick="{{pickPogo}}">Pogo Assist</button></span><button class="info-hit" aria-label="About ranking" onClick="{{toggleInfo}}"><span class="info {{infoCls}}">i</span></button></span>
+</div>
+<sc-if value="{{infoOpen}}" hint-placeholder-val="{{false}}">
+<div class="explain">
+<div><b>Classic</b> takes the family member this copy's IVs suit best under the CP cap. In Master League, or when the IVs are not known, it takes the strongest species.</div>
+<div><b>Pogo Assist</b> starts from the strongest species and moves to a weaker one only when it is within 3 PvPoke points and this copy's IVs rank higher for it.</div>
+<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><div>Pogo Assist cannot detect Shadow Pokémon yet, so a Shadow copy is rated as a normal one.</div></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{pogoNote}}" hint-placeholder-val="{{false}}"><div class="lnote">The prototype shows Classic picks only; Pogo Assist picks are not in the exported data.</div></sc-if>
+
+<sc-if value="{{inLeague}}" hint-placeholder-val="{{false}}">
+<div class="seg wide" role="group" aria-label="League"><sc-for list="{{leagueTabs}}" as="g" hint-placeholder-count="3"><button class="{{g.on}}" style="color: {{g.ink}}" onClick="{{g.pick}}"><span class="dot" style="background: {{g.dot}}"></span>{{g.short}}</button></sc-for></div>
+</sc-if>
+
+<div class="blocks">
+<sc-for list="{{cards}}" as="c" hint-placeholder-count="3">
+<div class="lblock">
+<sc-if value="{{c.showHead}}" hint-placeholder-val="{{true}}"><div class="lbhead {{c.lcls}}"><span class="ldot" style="background: {{c.dot}}"></span><span class="lname">{{c.name}}</span><span class="lcap">{{c.cap}}</span></div></sc-if>
+<div class="pick" aria-label="{{c.spoken}}">
+<div class="ptop">
+<span class="ptitle">{{c.title}}</span>
+<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><span class="types"><sc-for list="{{c.types}}" as="y" hint-placeholder-count="1"><span class="ti sm {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></sc-if>
+<span class="pchip">PICK</span>
+<sc-if value="{{c.hasWorth}}" hint-placeholder-val="{{true}}"><button class="worth {{c.worth}}" onClick="{{c.toggleWorth}}">{{c.worthUpper}}</button></sc-if>
+<sc-if value="{{c.hasOver}}" hint-placeholder-val="{{false}}"><span class="overcap">▲ {{c.overCap}} over cap</span></sc-if>
+</div>
+<sc-if value="{{c.worthOpen}}" hint-placeholder-val="{{false}}"><div class="pnote">{{c.worthLine}}</div></sc-if>
+<sc-if value="{{c.showBest}}" hint-placeholder-val="{{false}}"><div class="pnote">{{c.bestNote}}</div></sc-if>
+<sc-if value="{{c.noViable}}" hint-placeholder-val="{{false}}"><div class="noviable">No viable option</div><div class="lnote">{{c.blocked}}</div></sc-if>
+<sc-if value="{{c.viable}}" hint-placeholder-val="{{true}}">
+<div class="figs">
+<div class="fig"><small>SPECIES</small><b class="{{c.scoreCls}}"><span class="{{c.scoreGrade}}">{{c.score}}</span></b><span>{{c.rank}}</span></div>
+<div class="fig"><small>THIS COPY</small><b class="{{c.ivCls}}"><span class="{{c.ivGrade}}">{{c.iv}}</span></b><span>{{c.ivRank}}</span></div>
+</div>
+<sc-if value="{{c.plainCosts}}" hint-placeholder-val="{{true}}"><div class="costs"><sc-for list="{{c.costItems}}" as="k" hint-placeholder-count="4"><span>{{k.label}}<b>{{k.value}}</b></span></sc-for></div></sc-if>
+<sc-if value="{{c.newCosts}}" hint-placeholder-val="{{false}}">
+<div class="costs" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+<span class="up" role="img" aria-label="Upgrade available" title="Upgrade available"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span>
+<sc-if value="{{c.nc.dust}}" hint-placeholder-val="{{true}}"><span class="upcost"><span class="cost">{{c.nc.dust}}</span><svg class="cicon dust" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="stardust"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill="currentColor"></path></svg></span></sc-if>
+<sc-if value="{{c.nc.candy}}" hint-placeholder-val="{{true}}"><span class="upcost"><span class="cost">{{c.nc.candy}}</span><svg class="cicon candy" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="candy"><path d="M8.5 8.5a5 5 0 1 1 7 7a5 5 0 1 1-7-7zM2.5 3l5 1.5.5 3.5zM21.5 21l-5-1.5-.5-3.5z" fill="currentColor"></path></svg></span></sc-if>
+<sc-if value="{{c.nc.xl}}" hint-placeholder-val="{{false}}"><span class="upcost"><span class="cost">{{c.nc.xl}}</span><span class="cost" style="color: var(--muted)">XL</span></span></sc-if>
+<span style="font-size: 13px">to L{{c.nc.level}}, CP {{c.nc.cp}}</span>
+</div>
+</sc-if>
+<sc-if value="{{c.doneCost}}" hint-placeholder-val="{{false}}"><div class="costs" style="display: flex; align-items: center; gap: 6px"><span class="done" role="img" aria-label="Full strength" title="Full strength"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span><span style="font-size: 13px">{{c.doneText}}</span></div></sc-if>
+<sc-if value="{{c.hasNote}}" hint-placeholder-val="{{false}}"><div class="cnote">{{c.costNote}}</div></sc-if>
+</sc-if>
+<sc-if value="{{c.hasMoves}}" hint-placeholder-val="{{true}}"><div class="moves"><sc-for list="{{c.moves}}" as="m" hint-placeholder-count="3"><span class="mv {{m.cls}}">{{m.text}}</span></sc-for></div></sc-if>
+<sc-if value="{{c.tappable}}" hint-placeholder-val="{{true}}"><button class="pick" style="position: absolute; inset: 0; background: transparent; padding: 0" aria-label="Open {{c.name}}" onClick="{{c.open}}"></button><span class="pchev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span></sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+
+<sc-if value="{{inLeague}}" hint-placeholder-val="{{false}}">
+<sc-if value="{{hasOptions}}" hint-placeholder-val="{{true}}">
+<div class="olist">
+<div class="ohead"><span>OPTION</span><span class="w64">SPECIES</span><span class="w64">THIS COPY</span><span class="w78">DUST</span></div>
+<sc-for list="{{options}}" as="o" hint-placeholder-count="6">
+<button class="orow {{o.openCls}}" onClick="{{o.toggle}}" aria-label="{{o.name}}">
+<span class="oname"><b class="{{o.nameCls}}">{{o.name}}<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><span class="types"><sc-for list="{{o.types}}" as="y" hint-placeholder-count="1"><span class="ti xs {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></sc-if></b><sc-if value="{{o.hasSub}}" hint-placeholder-val="{{true}}"><span>{{o.sub}}</span></sc-if></span>
+<sc-if value="{{o.isBlocked}}" hint-placeholder-val="{{false}}"><span class="oblock">{{o.blocked}}</span></sc-if>
+<sc-if value="{{o.figures}}" hint-placeholder-val="{{true}}">
+<span class="ocell w64"><b class="{{o.scoreCls}}"><span class="{{o.scoreGrade}}">{{o.score}}</span></b><span>{{o.rank}}</span></span>
+<span class="ocell w64"><b class="{{o.ivCls}}"><span class="{{o.ivGrade}}">{{o.ivPct}}</span></b><span>{{o.ivRank}}</span></span>
+<span class="ocell w78"><b class="{{o.dustCls}}">{{o.dust}}</b><span>{{o.candy}}</span></span>
+</sc-if>
+</button>
+<sc-if value="{{o.open}}" hint-placeholder-val="{{false}}"><div class="odetail"><div>{{o.detailLevel}}</div><sc-if value="{{o.hasCost}}" hint-placeholder-val="{{true}}"><div>{{o.detailCost}}</div></sc-if><sc-if value="{{o.hasMoves}}" hint-placeholder-val="{{true}}"><div>{{o.detailMoves}}</div></sc-if></div></sc-if>
+</sc-for>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{plain}}" hint-placeholder-val="{{true}}"><div class="lnote">Pogo Assist is currently unable to detect Shadow Pokémon.</div></sc-if>
+</div>
+
+<sc-if value="{{showAdvice}}" hint-placeholder-val="{{true}}">
+<div class="panel tint-acc" style="gap: 8px">
+<span class="plabel acc">ADVICE</span>
+<sc-if value="{{p.noAdvice}}" hint-placeholder-val="{{false}}"><div class="adv-line">The advisor has nothing for this Pokémon.</div></sc-if>
+<sc-for list="{{p.builds}}" as="b" hint-placeholder-count="2">
+<sc-if value="{{b.sep}}" hint-placeholder-val="{{false}}"><div class="adv-sep"></div></sc-if>
+<div class="adv-build">
+<sc-if value="{{plain}}" hint-placeholder-val="{{true}}">
+<div class="adv-act">{{b.action}}</div>
+<div class="tags"><sc-for list="{{b.tags}}" as="g" hint-placeholder-count="2"><span class="tag">{{g}}</span></sc-for></div>
+<div class="adv-line">{{b.costLine}}</div>
+</sc-if>
+<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><span class="adv-act">{{b.target}}</span><span class="types"><sc-for list="{{b.types}}" as="y" hint-placeholder-count="1"><span class="ti {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span>
+<span class="spring" style="flex: 1"></span>
+<sc-if value="{{b.up}}" hint-placeholder-val="{{true}}"><span class="upcost" title="{{b.upTitle}}"><span class="up" role="img" aria-label="{{b.upTitle}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span><sc-if value="{{b.dust}}" hint-placeholder-val="{{true}}"><span class="cost">{{b.dust}}</span><svg class="cicon dust" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="stardust"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill="currentColor"></path></svg></sc-if><sc-if value="{{b.candy}}" hint-placeholder-val="{{true}}"><span class="cost" style="margin-left: 3px">{{b.candy}}</span><svg class="cicon candy" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="candy"><path d="M8.5 8.5a5 5 0 1 1 7 7a5 5 0 1 1-7-7zM2.5 3l5 1.5.5 3.5zM21.5 21l-5-1.5-.5-3.5z" fill="currentColor"></path></svg></sc-if><sc-if value="{{b.xl}}" hint-placeholder-val="{{false}}"><span class="cost" style="margin-left: 3px">{{b.xl}} XL</span></sc-if></span></sc-if>
+<sc-if value="{{b.done}}" hint-placeholder-val="{{false}}"><span class="done big" role="img" aria-label="Full strength" title="Full strength"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></sc-if>
+</div>
+<div class="tags"><sc-for list="{{b.tags}}" as="g" hint-placeholder-count="2"><span class="tag">{{g}}</span></sc-for></div>
+<div class="adv-line" style="font-size: 14px; color: var(--muted)">{{b.steps}}</div>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{plain}}" hint-placeholder-val="{{true}}">
+<sc-if value="{{p.hasSpare}}" hint-placeholder-val="{{true}}"><div class="adv-line">{{p.spare}}</div></sc-if>
+<sc-if value="{{p.hasVerdict}}" hint-placeholder-val="{{false}}"><div class="adv-line">{{p.verdictPre}}<b>{{p.verdictBold}}</b>{{p.verdictPost}}</div></sc-if>
+</sc-if>
+<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}">
+<sc-if value="{{p.hasShortNotes}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: center; gap: 8px"><div class="tags" style="flex: 1"><sc-for list="{{p.shortNotes}}" as="g" hint-placeholder-count="1"><span class="tag">{{g}}</span></sc-for></div><button class="info-hit" aria-label="Why" onClick="{{toggleWhy}}"><span class="info sm {{whyCls}}">i</span></button></div>
+<sc-if value="{{whyOpen}}" hint-placeholder-val="{{false}}"><div class="explain" style="background: var(--surface)"><sc-if value="{{p.hasSpare}}" hint-placeholder-val="{{true}}"><div>{{p.spare}}</div></sc-if><sc-if value="{{p.hasVerdict}}" hint-placeholder-val="{{false}}"><div>{{p.verdictPre}}<b>{{p.verdictBold}}</b>{{p.verdictPost}}</div></sc-if></div></sc-if>
+</sc-if>
+</sc-if>
+</div>
+</sc-if>
+
+<div class="panel flush">
+<div class="fact"><span class="fl">Power-up dust</span><span class="fv" style="display: flex; align-items: center; gap: 4px">{{p.dust}}<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><svg class="cicon dust" width="13" height="13" viewBox="0 0 24 24" role="img" aria-label="stardust"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill="currentColor"></path></svg></sc-if></span></div>
+<sc-if value="{{p.hasSpares}}" hint-placeholder-val="{{true}}"><div class="fact"><span class="fl">Spare copies</span><span class="fv">{{p.spares}}</span></div></sc-if>
+<div class="fact"><span class="fl">First seen · last seen</span><span class="fv">[date] · [date]</span></div>
+<div class="dyn">
+<div class="dyn-row"><span class="fl">Dynamax</span><sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><button class="info-hit" aria-label="About Dynamax" onClick="{{toggleDyn}}"><span class="info sm {{dynCls}}">i</span></button></sc-if><span class="seg"><button class="on">Not set</button><button>Yes</button><button>No</button></span></div>
+<sc-if value="{{dynNote}}" hint-placeholder-val="{{true}}"><div class="fnote">Only Pokémon caught as Dynamax can join Max battles. The app cannot read this from the game.</div></sc-if>
+</div>
+</div>
+
+<div class="del"><button>Delete from box</button><sc-if value="{{plain}}" hint-placeholder-val="{{true}}"><span>Removes this copy from the app's box only, not from the game.</span></sc-if></div>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"copy":{"editor":"text","default":"e209"},"lessons":{"editor":"boolean","default":false},"openLeague":{"editor":"enum","options":["none","gl","ul","ml"],"default":"none"},"$preview":{"width":844,"height":2000}}'>
+const INK = { gl: 'var(--gl-ink)', ul: 'var(--ul-ink)', ml: 'var(--ml-ink)' };
+const DOT = { gl: 'var(--gl-dot)', ul: 'var(--ul-dot)', ml: 'var(--ml-dot)' };
+function num(s, re) { const m = re.exec(s || ''); return m ? m[1] : ''; }
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const ol = props.openLeague && props.openLeague !== 'none' ? props.openLeague : null;
+    this.state = { d: null, mode: ol, worth: {}, expanded: {}, info: false, rank: 'classic', why: false, dyn: false };
+  }
+  componentDidMount() {
+    const go = () => window.Pogo.load().then((d) => this.setState({ d })).catch(() => {});
+    if (window.Pogo) go(); else setTimeout(go, 300);
+  }
+  card(key, L, lessons) {
+    const P = window.Pogo, meta = P.LEAGUES.find((x) => x.key === key), st = this.state;
+    const viable = L.status !== 'noViable';
+    let nc = null, doneCost = false, doneText = '';
+    if (lessons && viable && L.costItems.length) {
+      const all = L.costItems.map((k) => k[0] + k[1]).join(' ');
+      const dust = num(all, /([\d,]+) dust/), candy = num(all, /([\d,]+) candy/), xl = num(all, /([\d,]+) XL/);
+      nc = { dust: dust ? P.short(parseInt(dust.replace(/,/g, ''), 10)) : '', candy, xl, level: num(all, /Target level: ([\d.]+)/), cp: num(all, /Target CP: ([\d,]+)/) };
+    }
+    if (lessons && viable && /^Already at level/.test(L.costNote)) {
+      const candy = num(L.costNote, /([\d,]+) candy/);
+      if (candy) nc = { dust: '', candy, xl: '', level: num(L.costNote, /level ([\d.]+)/), cp: L.cpAt != null ? P.fmt(L.cpAt) : '' };
+      else { doneCost = true; doneText = L.costNote.replace('Already at level ', 'Level '); }
+    }
+    const worthOpen = !!st.worth[key];
+    return {
+      key, name: meta.name, cap: meta.cap, lcls: 'lg-' + key, dot: DOT[key], showHead: !st.mode,
+      title: L.title, types: P.types(L.types), hasWorth: !!L.worth, worth: L.worth, worthUpper: (L.worth || '').toUpperCase(),
+      toggleWorth: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState({ worth: Object.assign({}, st.worth, { [key]: !worthOpen }) }); },
+      worthOpen, worthLine: L.worthLine, hasOver: L.overCap > 0, overCap: L.overCap,
+      bestNote: L.bestNote, showBest: !!L.bestNote && (!lessons || worthOpen),
+      noViable: !viable, viable, blocked: L.blocked,
+      score: L.score, rank: L.rank, iv: L.iv, ivRank: L.ivRank,
+      scoreCls: L.score === '—' ? 'dim' : (!lessons && L.scoreStrong ? 'strong' : ''), ivCls: L.iv === '—' ? 'dim' : (!lessons && L.ivStrong ? 'strong' : ''),
+      scoreGrade: lessons ? P.scoreGrade(L.scoreN) : '', ivGrade: lessons && L.iv !== '—' ? P.rankGrade(L.ivRankN) : '',
+      plainCosts: !lessons && L.costItems.length > 0, costItems: L.costItems.map((k) => ({ label: k[0], value: k[1] })),
+      newCosts: !!nc, nc: nc || {}, doneCost, doneText,
+      hasNote: !!L.costNote && !doneCost && !nc, costNote: L.costNote,
+      hasMoves: L.moves.length > 0, moves: L.moves.map((m) => ({ text: m.text, cls: m.missing ? 'miss' : '' })),
+      tappable: !st.mode, open: () => this.setState({ mode: key }),
+      spoken: meta.name + ', pick: ' + L.title,
+    };
+  }
+  renderVals() {
+    const P = window.Pogo, d = this.state.d, st = this.state, lessons = !!this.props.lessons;
+    const c = d && P ? P.copy(d, this.props.copy ?? 'e209') : null;
+    let p = {}, cards = [], options = [], leagueTabs = [];
+    if (c) {
+      const lv = c.level != null ? 'Level ' + P.lvl(c.level) : 'Level not known';
+      const verdict = c.verdict || '';
+      const vm = /^(.*?)\*\*(.*?)\*\*(.*)$/.exec(verdict);
+      const shortNotes = P.shortNotes(c);
+      p = {
+        title: c.title, types: P.types(c.types), cp: c.cp, meta: lv + ' · ' + (c.hp != null ? 'HP ' + c.hp : 'HP not read'), search: c.search,
+        ivFigs: P.LEAGUES.map((g) => { const L = c.leagues[g.key]; const v = L && L.ivPct != null ? L.ivPct.toFixed(1) + '%' : '—'; return { pct: v, short: lessons ? g.abbr : g.short.toUpperCase(), cls: 'lg-' + g.key, label: g.name + ' IVs ' + v }; }),
+        bars: (c.ivs || [0, 0, 0]).map((v, i) => ({ label: ['Attack', 'Defence', 'HP'][i], v, w: (v / 15 * 100) + '%' })),
+        noAdvice: !c.builds.length && !c.spare && !c.verdict,
+        builds: c.builds.map((b, i) => {
+          const m = P.mark({ builds: [b] });
+          const steps = b.action.replace(/\s*\(.*?\)\s*/g, ' ').trim().split(' + ').map((s, j) => j === 0 ? s : s.charAt(0).toLowerCase() + s.slice(1)).join(', ').replace(/^Evolve to [^,]+/, 'Evolve').replace(/Power up to level/, 'power up to');
+          return { sep: i > 0, action: b.action + (b.pvp ? ' (' + b.pvp + ')' : ''), tags: b.areas.concat(b.tier ? ['Tier ' + b.tier] : []), costLine: b.costLine,
+            target: b.target, types: P.types(b.targetTypes), up: m.up, done: m.done, upTitle: m.upTitle,
+            dust: b.dust > 0 ? P.short(b.dust) : '', candy: b.candy > 0 ? P.fmt(b.candy) : '', xl: b.xl > 0 ? P.fmt(b.xl) : '',
+            steps: steps + (/Dynamax/.test(b.action) ? ' · needs a Dynamax copy' : '') + (b.pvp ? ' · ' + b.pvp : '') + (b.leaves ? ' · ' + b.leaves : '') };
+        }),
+        hasSpare: !!c.spare, spare: c.spare, hasVerdict: !!vm, verdictPre: vm ? vm[1] : '', verdictBold: vm ? vm[2] : '', verdictPost: vm ? vm[3] : '',
+        shortNotes, hasShortNotes: shortNotes.length > 0,
+        dust: c.dust != null ? P.fmt(c.dust) : 'not known', hasSpares: c.spares > 0, spares: P.fmt(c.spares),
+      };
+      const keys = st.mode ? [st.mode] : P.LEAGUES.map((g) => g.key);
+      cards = keys.filter((k) => c.leagues[k]).map((k) => this.card(k, c.leagues[k], lessons));
+      if (st.mode && c.leagues[st.mode]) {
+        const k = st.mode;
+        options = c.leagues[k].options.map((o) => {
+          const open = st.expanded[k] === o.name;
+          const sub = lessons ? (o.blocked ? '' : o.sub.replace('itself, no evolving', 'itself')) : o.sub;
+          return { name: o.name, types: P.types(o.types), sub, hasSub: !!sub, nameCls: o.blocked ? 'blk' : '',
+            isBlocked: !!o.blocked, blocked: lessons ? o.blocked.replace(/ as .*$/, '') : o.blocked, figures: !o.blocked,
+            score: o.score, rank: o.rank, ivPct: o.ivPct, ivRank: o.ivRank, dust: o.dust, candy: o.candy,
+            scoreCls: o.score === '—' ? 'dim' : (!lessons && o.scoreStrong ? 'strong' : ''), ivCls: o.ivPct === '—' ? 'dim' : (!lessons && o.ivStrong ? 'strong' : ''),
+            scoreGrade: lessons ? P.scoreGrade(o.scoreN) : '', ivGrade: lessons && o.ivPct !== '—' ? P.rankGrade(o.ivRankN) : '', dustCls: o.dustMuted ? 'muted' : '',
+            open, openCls: open ? 'open' : '', toggle: () => this.setState({ expanded: Object.assign({}, st.expanded, { [k]: open ? null : o.name }) }),
+            detailLevel: o.detailLevel, detailCost: o.detailCost, hasCost: !!o.detailCost, detailMoves: o.detailMoves, hasMoves: !!o.detailMoves };
+        });
+        leagueTabs = P.LEAGUES.map((g) => ({ short: lessons ? g.abbr : g.short, on: g.key === k ? 'on' : '', ink: g.key === k ? INK[g.key] : 'var(--ink)', dot: DOT[g.key], pick: () => this.setState({ mode: g.key }) }));
+      }
+    }
+    return {
+      themes: [{ cls: 't-light', label: 'LIGHT' }, { cls: 't-dark', label: 'DARK' }],
+      loading: !c, ready: !!c, p, cards, options, hasOptions: options.length > 0, leagueTabs,
+      inLeague: !!st.mode, showAdvice: !st.mode, closeLeague: () => this.setState({ mode: null }),
+      lessons, plain: !lessons, backHref: lessons ? 'SpeciesNew.dc.html' : 'Species.dc.html',
+      rkClassic: st.rank === 'classic' ? 'on' : '', rkPogo: st.rank === 'pogo' ? 'on' : '', pogoNote: st.rank === 'pogo',
+      pickClassic: () => this.setState({ rank: 'classic' }), pickPogo: () => this.setState({ rank: 'pogo' }),
+      infoOpen: st.info, infoCls: st.info ? 'on' : '', toggleInfo: () => this.setState({ info: !st.info }),
+      whyOpen: st.why, whyCls: st.why ? 'on' : '', toggleWhy: () => this.setState({ why: !st.why }),
+      dynNote: !lessons || st.dyn, dynCls: st.dyn ? 'on' : '', toggleDyn: () => this.setState({ dyn: !st.dyn }),
+    };
+  }
+}
+</script>
+</body>
+</html>

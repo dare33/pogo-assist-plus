@@ -1,26 +1,33 @@
 import SwiftUI
 import PogoBox
 
-/// The Everything screen (design handoff section 5, screenshot 09): three headline cards, the stardust card, the builds that fit the
-/// stardust, and `SHOW ALL`, which opens the whole list with the gaps and duplicates the old Next list ended with.
-struct HubEverythingView: View {
+/// The Collection lists screen (pass 2 README "Collection lists", board `Everything.dc.html`; was Everything): a Builds | Gaps | Duplicates switch with the title following it.
+/// Builds holds the three headline cards, the stardust card, the builds that fit the stardust and the whole build list (no SHOW ALL); Gaps and Duplicates are as before.
+struct HubCollectionListsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
-    @State private var showAll = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var tab: CollectionTab
     @State private var asking = false
     @State private var entry = ""
     /// The last entry was rejected; cleared by the next valid one.
     @State private var rejected = false
 
+    init(tab: CollectionTab = .builds) { _tab = State(initialValue: tab) }
+
     var body: some View {
-        var count: String?
-        if case .ready(let a) = model.advice { count = buildsText(a.builds.count) }
-        return HubTypeScreen(type: .everything, count: count) {
+        HubTypeScreen(type: .everything, title: tab.label, count: chip) {
+            SegmentedSwitch(
+                segments: CollectionTab.allCases.map { .init(value: $0, title: $0.label, identifier: "collection-tab-\($0.rawValue)") },
+                selection: $tab, label: "List", identifier: "collection-lists-switch")
             if case .ready(let advice) = model.advice {
-                ready(advice)
+                switch tab {
+                case .builds: builds(advice)
+                case .gaps: HubGapList(gaps: advice.gaps, type: .everything, alwaysShowsHeader: true)
+                case .duplicates: duplicates(advice)
+                }
             } else {
-                stardustCard(builds: [])
-                problemLine
+                if tab == .builds { stardustCard(builds: []); problemLine }
                 HubAdviceGate { _ in EmptyView() }
             }
         }
@@ -31,9 +38,19 @@ struct HubEverythingView: View {
         } message: { Text("How much stardust you have in the game. Leave it empty to clear it.") }
     }
 
-    // MARK: ready
+    /// The chip follows the tab: builds, gaps (S and A together) or species with duplicates.
+    private var chip: String? {
+        guard case .ready(let a) = model.advice else { return nil }
+        switch tab {
+        case .builds: return buildsText(a.builds.count)
+        case .gaps: return "\(a.gaps.filter { $0.tier == "S" || $0.tier == "A" }.count) gaps"
+        case .duplicates: return "\(a.duplicates.count) species"
+        }
+    }
 
-    @ViewBuilder private func ready(_ a: BoxAdvice) -> some View {
+    // MARK: builds
+
+    @ViewBuilder private func builds(_ a: BoxAdvice) -> some View {
         let stardust = model.stardust
         let heads = HubModel.headlines(a.builds, stardust: stardust)
         if heads.doFirst != nil { headlineStrip(heads) }
@@ -52,21 +69,8 @@ struct HubEverythingView: View {
             }
         }
         if !a.builds.isEmpty {
-            Button { withAnimation(.easeOut(duration: 0.15)) { showAll.toggle() } } label: {
-                Text(showAll ? "SHOW FEWER" : "SHOW ALL \(a.builds.count) ›").font(.figtree(15, .bold, relativeTo: .subheadline)).tracking(0.04 * 15)
-                    .foregroundStyle(accent.ink).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
-            }
-            .buttonStyle(PressStyle())
-            .accessibilityIdentifier("hub-show-all")
-            .accessibilityAddTraits(showAll ? .isSelected : [])
-        }
-        if showAll {
             HubHeaderLine("ALL \(a.builds.count) BUILDS")
             HubBuildList(builds: a.builds, type: .everything, highlightFirst: fit == nil)
-        }
-        if showAll || a.builds.isEmpty {
-            HubGapList(gaps: a.gaps, type: .everything, alwaysShowsHeader: true)
-            duplicates(a)
         }
     }
 
@@ -98,21 +102,27 @@ struct HubEverythingView: View {
 
     private func stardustCard(builds: [BoxAdvice.Build], used: Int? = nil, left: Int? = nil) -> some View {
         let stardust = model.stardust
-        return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "sparkle").font(.figtree(20, .bold)).foregroundStyle(ContentType.max.ink(accent))
-                .frame(width: 44, height: 44).background(Circle().fill(Theme.surface2)).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 8) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) { figure(stardust); Spacer(minLength: 8); change }
-                    VStack(alignment: .leading, spacing: 0) { figure(stardust); change }
-                }
-                if let stardust, stardust > 0, !builds.isEmpty {
-                    StardustBar(builds: builds, stardust: stardust).frame(height: 8).accessibilityHidden(true)
-                }
-                Text(stardust != nil && used != nil && left != nil
-                     ? "The builds below fit: \(HubModel.dustShort(used ?? 0)) of it, \(HubModel.dustShort(left ?? 0)) left over."
-                     : "Enter your stardust to see which builds fit.")
-                    .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+        let icon = Image(systemName: "sparkle").font(.figtree(20, .bold)).foregroundStyle(ContentType.max.ink(accent))
+            .frame(width: 44, height: 44).background(Circle().fill(Theme.surface2)).accessibilityHidden(true)
+        let details = VStack(alignment: .leading, spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) { figure(stardust); Spacer(minLength: 8); change }
+                VStack(alignment: .leading, spacing: 0) { figure(stardust); change }
+            }
+            if let stardust, stardust > 0, !builds.isEmpty {
+                StardustBar(builds: builds, stardust: stardust).frame(height: 8).accessibilityHidden(true)
+            }
+            Text(stardust != nil && used != nil && left != nil
+                 ? "The builds below fit: \(HubModel.dustShort(used ?? 0)) of it, \(HubModel.dustShort(left ?? 0)) left over."
+                 : "Enter your stardust to see which builds fit.")
+                .font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
+        }
+        // At accessibility text sizes the icon sits above the words instead of taking a column from them.
+        return Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) { icon; details }
+            } else {
+                HStack(alignment: .top, spacing: 12) { icon; details }
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
@@ -124,15 +134,27 @@ struct HubEverythingView: View {
     }
 
     private func figure(_ stardust: Int?) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        ViewThatFits(in: .horizontal) {
+            figureLine(stardust, stacked: false)
+            figureLine(stardust, stacked: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private func figureLine(_ stardust: Int?, stacked: Bool) -> some View {
+        let value = Group {
             if let stardust {
                 Text(HubModel.grouped(stardust)).font(.figtree(22, .heavy, relativeTo: .title2)).monospacedDigit().foregroundStyle(Theme.ink)
             } else {
                 Text("Not set").font(.figtree(17, .bold, relativeTo: .headline)).foregroundStyle(Theme.muted)
             }
-            Text("STARDUST").font(.figtree(12, .bold, relativeTo: .caption)).tracking(0.05 * 12).foregroundStyle(Theme.muted)
         }
-        .accessibilityElement(children: .combine)
+        let label = Text("STARDUST").font(.figtree(12, .bold, relativeTo: .caption)).tracking(0.05 * 12).foregroundStyle(Theme.muted)
+        if stacked {
+            VStack(alignment: .leading, spacing: 0) { value; label }
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 8) { value; label }
+        }
     }
 
     private var change: some View {

@@ -1,0 +1,28 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-25T07:28:17Z"},
+  "title": "Pogo Hub — design pass 2",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 844, "h": 906, "title": "Hub tab", "is_interactive": true},
+    "Collection.dc.html": {"x": 924, "y": 0, "w": 844, "h": 2400, "title": "Collection (was Everything)", "is_interactive": true},
+    "Everything.dc.html": {"x": 1848, "y": 0, "w": 844, "h": 1800, "title": "Collection lists: builds, gaps, duplicates", "is_interactive": true},
+    "Raids.dc.html": {"x": 2772, "y": 0, "w": 844, "h": 2300, "title": "Raids (Now, a raid opened)", "is_interactive": true},
+    "RaidsComingUp.dc.html": {"x": 3696, "y": 0, "w": 844, "h": 1500, "title": "Raids (Coming up)", "is_interactive": true},
+    "Gym.dc.html": {"x": 4620, "y": 0, "w": 844, "h": 2500, "title": "Gym battles", "is_interactive": true},
+    "Rocket.dc.html": {"x": 5544, "y": 0, "w": 844, "h": 2500, "title": "Team Rocket", "is_interactive": true},
+    "PvP.dc.html": {"x": 6468, "y": 0, "w": 844, "h": 2000, "title": "PvP leagues", "is_interactive": true},
+    "Max.dc.html": {"x": 7392, "y": 0, "w": 844, "h": 1700, "title": "Max battles", "is_interactive": true}
+  },
+  "order": ["Main.dc.html", "Collection.dc.html", "Everything.dc.html", "Raids.dc.html", "RaidsComingUp.dc.html", "Gym.dc.html", "Rocket.dc.html", "PvP.dc.html", "Max.dc.html"],
+  "notes": {
+    "rowtitle": {"x": 0, "y": -300, "text": "Pogo Hub, design pass 2, on your own box (2,125 Pokémon, export of 22 Oct)", "kind": "title1", "maxW": 8236},
+    "howto": {"x": 0, "y": 1000, "w": 420, "text": "Each board shows the screen in light (left) and dark (right). The numbers and names come from your box, worked out by the app's own Hub code, as on 25 Oct. Press Play on a board to use its switches: open a raid, tap a slot, pick a role. Edit anything directly, or leave a comment.", "fill": "blue"},
+    "round2": {"x": 0, "y": 1400, "w": 420, "text": "Round 2 (your 14 comments): Collection replaces Everything; team planners with roles on Raids, Max, Gym, Rocket and PvP; Max notes trimmed; grunt list redrawn. The role lists and orders are new rules worked out for the prototype; each will be written down for you to confirm.", "fill": "green"},
+    "maxflags": {"x": 7392, "y": 1780, "w": 420, "text": "Your export has no Dynamax marks (the CSV never carries them), so every Max row reads 0 counters and every Max pick reads To build. On your phone it uses the copies you have marked.", "fill": "orange"},
+    "maxbug": {"x": 7852, "y": 1780, "w": 380, "text": "Known data bug, being fixed separately: split \"Gigantamax A / B\" rows lose the Gigantamax prefix, so some Max figures (Toxtricity, Lapras, Grimmsnarl...) are wrong today. The 26 Oct Sableye team's Grimmsnarl may be one of them.", "fill": "red"},
+    "scans": {"x": 924, "y": 2480, "w": 420, "text": "Lucky, Shadow and favourite marks are not in your scans, so Showcase ranks by IVs only and Lucky reads \"Not in your scans yet\".", "fill": "gray"}
+  },
+  "designSystems": []
+}

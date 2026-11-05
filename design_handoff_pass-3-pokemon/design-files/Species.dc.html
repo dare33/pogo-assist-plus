@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Species list</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+</style>
+</helmet>
+<div class="board" style="width: 844px; height: 906px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="col">
+<div class="mode">{{t.label}}</div>
+<div class="phone {{t.cls}}">
+<div class="hdr" style="gap: 8px">
+<a class="hit" href="{{backHref}}" aria-label="Back"><span class="circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></span></a>
+<span class="htitle" style="display: flex; align-items: center; justify-content: center; gap: 6px">{{title}}<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><span class="types"><sc-for list="{{types}}" as="y" hint-placeholder-count="1"><span class="ti sm {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></sc-if></span>
+<button class="tbtn">Select</button>
+</div>
+<div class="scroll">
+<div class="content">
+<div class="sortnote"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16M5 13l7 7 7-7"></path></svg>Best IVs first</div>
+<sc-if value="{{loading}}" hint-placeholder-val="{{false}}"><div class="count-when">Loading your box…</div></sc-if>
+<div class="panel-list">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+<a class="crow" href="{{pageHref}}" aria-label="{{r.label}}">
+<span class="smain">
+<span class="stitle">{{r.title}}<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}">
+<sc-if value="{{r.m.up}}" hint-placeholder-val="{{false}}"><span class="upcost" title="{{r.m.upTitle}}"><span class="up" role="img" aria-label="{{r.m.upTitle}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span><sc-if value="{{r.m.hasCost}}" hint-placeholder-val="{{true}}"><span class="cost">{{r.m.costValue}}</span><sc-if value="{{r.m.isDust}}" hint-placeholder-val="{{true}}"><svg class="cicon dust" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="stardust"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill="currentColor"></path></svg></sc-if><sc-if value="{{r.m.isCandy}}" hint-placeholder-val="{{false}}"><svg class="cicon candy" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="candy"><path d="M8.5 8.5a5 5 0 1 1 7 7a5 5 0 1 1-7-7zM2.5 3l5 1.5.5 3.5zM21.5 21l-5-1.5-.5-3.5z" fill="currentColor"></path></svg></sc-if></sc-if></span></sc-if>
+<sc-if value="{{r.m.done}}" hint-placeholder-val="{{false}}"><span class="done" role="img" aria-label="Full strength" title="Full strength"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></sc-if>
+</sc-if></span>
+<sc-if value="{{plain}}" hint-placeholder-val="{{true}}"><span class="ssub">{{r.ivs}}</span></sc-if>
+<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><span class="ssub">{{r.ivTriple}}<span class="{{r.pctCls}}">{{r.pctText}}</span></span></sc-if>
+</span>
+<span class="cpfig"><small>CP</small><b>{{r.cp}}</b></span>
+</a>
+</sc-for>
+</div>
+<div style="height: 24px"></div>
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"species":{"editor":"text","default":"Eevee"},"lessons":{"editor":"boolean","default":false},"$preview":{"width":844,"height":906}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { d: null };
+  }
+  componentDidMount() {
+    const go = () => window.Pogo.load().then((d) => this.setState({ d })).catch(() => {});
+    if (window.Pogo) go(); else setTimeout(go, 300);
+  }
+  renderVals() {
+    const P = window.Pogo, d = this.state.d, lessons = !!this.props.lessons;
+    const name = this.props.species ?? 'Eevee';
+    const ms = d && P ? P.members(d, name) : [];
+    const rows = ms.map((c) => ({
+      title: c.title, cp: c.cp > 0 ? String(c.cp) : '—', ivs: P.ivLine(c), label: c.title + ', CP ' + c.cp + ', ' + P.ivLine(c),
+      ivTriple: c.ivs ? c.ivs.join('/') + ' · ' : '', pctText: c.ivs ? c.pct + '%' : 'IVs not read', pctCls: P.pctGrade(c.ivs ? c.pct : null), m: P.mark(c),
+    }));
+    return {
+      themes: [{ cls: 't-light', label: 'LIGHT' }, { cls: 't-dark', label: 'DARK' }],
+      title: name + ' · ' + (d ? ms.length : ''), types: ms.length && P ? P.types(ms[0].types) : [], rows, loading: !d, lessons, plain: !lessons,
+      backHref: lessons ? 'BoxNew.dc.html' : 'Main.dc.html', pageHref: lessons ? 'PokemonNew.dc.html' : 'Pokemon.dc.html',
+    };
+  }
+}
+</script>
+</body>
+</html>

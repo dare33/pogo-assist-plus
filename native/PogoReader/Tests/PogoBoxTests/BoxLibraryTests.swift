@@ -205,7 +205,7 @@ final class BoxLibraryTests: XCTestCase {
         XCTAssertNil(l["ml"])
         XCTAssertEqual(advice.leagues(for: "nobody"), [:])
         XCTAssertEqual(advice.version, BoxAdvice.currentVersion)
-        XCTAssertEqual(BoxAdvice.currentVersion, 12)
+        XCTAssertEqual(BoxAdvice.currentVersion, 15)
 
         // The options list decodes in order; the experimental member is a different index.
         let gl = try XCTUnwrap(l["gl"])
@@ -221,7 +221,7 @@ final class BoxLibraryTests: XCTestCase {
         try lib.saveAdvice(advice, account: "a", seq: 1)
         XCTAssertEqual(lib.loadAdvice(account: "a", seq: 1), advice)
         // Versions 2 (leagues only) and 3 (the first options shape, the old pick rule) are recomputed too.
-        for v in [1, 2, 3, 4, 5, 6, 7] {
+        for v in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] {
             var old = advice; old.version = v
             try lib.saveAdvice(old, account: "a", seq: 1)
             XCTAssertNil(lib.loadAdvice(account: "a", seq: 1), "version \(v)")
@@ -364,10 +364,11 @@ final class BoxLibraryTests: XCTestCase {
         let xurk = try build(0, "xurkitree"), squirtle = try build(1, "blastoise"), cram = try build(2, "cramorant")
         XCTAssertEqual(xurk.steps, [])
         XCTAssertEqual(xurk.action, "Already built")
-        // Ultra League's best level (49.5) is not what the Raids cost pays for, so there is no power-up step; Dynamax is Max's alone.
-        XCTAssertEqual(squirtle.steps?.map(\.kind), ["evolve", "megaEvolve", "needsDynamaxCopy"])
+        // Ultra League's best level (49.5) is not what the Raids cost pays for, so there is no power-up step. The Max table lists Blastoise only
+        // as Gigantamax, which the advisor never credits to an ordinary Dynamax copy, so there is no Dynamax step either.
+        XCTAssertEqual(squirtle.steps?.map(\.kind), ["evolve", "megaEvolve"])
         XCTAssertEqual(squirtle.steps?.first { $0.kind == "evolve" }?.candy, 125)
-        XCTAssertEqual(squirtle.action, "Evolve to Blastoise + Mega evolve (Max needs a Dynamax copy)")
+        XCTAssertEqual(squirtle.action, "Evolve to Blastoise + Mega evolve")
         let climbing = try build(3, "annihilape")
         XCTAssertEqual(climbing.steps?.last, .init(kind: "powerUp", toLevel: 16, areas: ["gl"]))
         XCTAssertEqual(climbing.action, "Evolve to Annihilape + Power up to level 16 (GL)")

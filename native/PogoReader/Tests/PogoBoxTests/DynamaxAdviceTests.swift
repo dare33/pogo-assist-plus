@@ -23,6 +23,87 @@ final class DynamaxAdviceTests: XCTestCase {
         XCTAssertTrue(hasStep(unset)); XCTAssertTrue(hasMax(unset))
         let yes = try XCTUnwrap(blissey(true))
         XCTAssertFalse(hasStep(yes)); XCTAssertTrue(hasMax(yes))
-        if let no = try blissey(false) { XCTAssertFalse(hasStep(no)); XCTAssertFalse(hasMax(no)) }
+        // A stored No (false) is gone: it is as if not marked.
+        let no = try XCTUnwrap(blissey(false))
+        XCTAssertTrue(hasStep(no)); XCTAssertTrue(hasMax(no))
     }
+
+    private func charmander(gigantamax: Bool?, dynamax: Bool? = nil, lucky: Bool? = nil, shadow: Int? = nil) -> ScanRow {
+        ScanRow(index: 1, name: "Charmander", display: "Charmander", form: "", speciesId: "charmander", dex: 4, cp: 400, hp: 60, ivs: IVs(atk: 15, def: 15, hp: 15), ivsRead: IVs(atk: 15, def: 15, hp: 15),
+                ivsGuess: nil, level: 15, levelMax: 15, dust: 1000, solveStatus: "exact", flags: [], frames: [], shadow: shadow, dynamax: dynamax, gigantamax: gigantamax, lucky: lucky)
+    }
+    private func gmaxHits(_ row: ScanRow) throws -> [JSONValue] {
+        let report = try sharedEngine.advise(rows: [row])
+        let b = try XCTUnwrap(try XCTUnwrap(report["builds"]?.arrayValue).first { $0["targetId"] == .string("charizard") })
+        return (b["hits"]?.arrayValue ?? []).filter { $0["area"] == .string("max") && ($0["name"]?.stringValue ?? "").lowercased().contains("gigantamax") }
+    }
+
+    /// Known limit: a Gigantamax-marked copy that is a spare beside a better unmarked copy gets no G-Max credit; a marked carrier does.
+    /// (Snorlax also has plain Max entries, so the unmarked copy outscores the marked one and carries the build.)
+    func testAGigantamaxMarkedSpareGetsNoCreditButACarrierDoes() throws {
+        func snorlax(_ index: Int, atk: Int, gigantamax: Bool?) -> ScanRow {
+            let iv = IVs(atk: atk, def: atk, hp: atk)
+            return ScanRow(index: index, name: "Snorlax", display: "Snorlax", form: "", speciesId: "snorlax", dex: 143, cp: 2000, hp: 200, ivs: iv, ivsRead: iv,
+                           ivsGuess: nil, level: 20, levelMax: 20, dust: 2500, solveStatus: "exact", flags: [], frames: [], dynamax: gigantamax, gigantamax: gigantamax)
+        }
+        func builds(_ rows: [ScanRow]) throws -> [JSONValue] {
+            try XCTUnwrap(sharedEngine.advise(rows: rows)["builds"]?.arrayValue).filter { $0["targetId"] == .string("snorlax") }
+        }
+        func gmax(_ b: JSONValue) -> Bool { (b["hits"]?.arrayValue ?? []).contains { ($0["name"]?.stringValue ?? "").lowercased().contains("gigantamax") } }
+        let both = try builds([snorlax(1, atk: 15, gigantamax: nil), snorlax(2, atk: 1, gigantamax: true)])
+        XCTAssertEqual(both.count, 1); XCTAssertEqual(both[0]["pokemon"]?["index"], .number(1))
+        XCTAssertFalse(gmax(both[0]))
+        let alone = try builds([snorlax(1, atk: 1, gigantamax: true)])
+        XCTAssertTrue(gmax(alone[0])); XCTAssertEqual(alone[0]["needsDynamax"], .bool(false))
+    }
+
+    func testBestTextForAMarkedCopyDropsTheDynamaxNeed() throws {
+        var advice = BoxAdvice(); advice.bestOf["x"] = ["max"]
+        func text(_ dynamax: Bool?, _ gigantamax: Bool?) -> String? {
+            var row = charmander(gigantamax: gigantamax, dynamax: dynamax); row.dynamax = dynamax
+            let e = BoxEntry(id: "x", row: row, firstSeen: Date(), lastSeen: Date())
+            return BoxInsight.make(advice: advice, entries: [e]).bestText(of: "x", title: "Charmander", .max, pogoAssist: false)
+        }
+        XCTAssertEqual(text(nil, nil), "best (needs a Dynamax copy)")
+        XCTAssertEqual(text(true, nil), "best")
+        XCTAssertEqual(text(true, true), "best")
+    }
+
+    func testTheMaxFitLineDropsTheDynamaxNeedForAMarkedCopy() throws {
+        let f = BoxAdvice.Fit(area: "max", tag: .ok, asName: "Snorlax", tier: "A", reason: nil, species: nil, ivPercent: nil)
+        XCTAssertEqual(f.line, "Max A as Snorlax (needs a Dynamax copy)")
+        var marked = f; marked.dynamaxMarked = true
+        XCTAssertEqual(marked.line, "Max A as Snorlax")
+        var other = f; other.dynamaxMarked = true
+        let raids = BoxAdvice.Fit(area: "raids", tag: .ok, asName: "X", tier: "A", reason: nil, species: nil, ivPercent: nil)
+        XCTAssertFalse(raids.line.contains("Dynamax")); _ = other
+    }
+
+    func testCoreEnginePassesGigantamaxToTheAdvisor() throws {
+        XCTAssertTrue(try gmaxHits(charmander(gigantamax: nil)).isEmpty)
+        XCTAssertTrue(try gmaxHits(charmander(gigantamax: nil, dynamax: true)).isEmpty, "a Dynamax copy is not a Gigantamax one")
+        let g = try gmaxHits(charmander(gigantamax: true, dynamax: true))
+        XCTAssertFalse(g.isEmpty)
+        XCTAssertTrue(g.allSatisfy { $0["needsDynamax"] == .bool(false) })
+    }
+
+    func testLuckyAndAHandShadowMarkReachTheAdvisor() throws {
+        func dust(_ r: ScanRow) throws -> Double {
+            let report = try sharedEngine.advise(rows: [r])
+            let b = try XCTUnwrap(try XCTUnwrap(report["builds"]?.arrayValue).first { $0["targetId"] == .string("charizard") })
+            return try XCTUnwrap(b["cost"]?["dust"]?.numberValue)
+        }
+        XCTAssertLessThan(try dust(charmander(gigantamax: nil, lucky: true)), try dust(charmander(gigantamax: nil)))
+        func species(_ r: ScanRow) throws -> [String] {
+            try XCTUnwrap(sharedEngine.advise(rows: [r])["builds"]?.arrayValue).compactMap { $0["speciesId"]?.stringValue }
+        }
+        XCTAssertTrue(try species(charmander(gigantamax: nil, shadow: 1)).allSatisfy { $0.hasSuffix("_shadow") })
+        XCTAssertTrue(try species(charmander(gigantamax: nil, shadow: 0)).allSatisfy { !$0.hasSuffix("_shadow") })
+        XCTAssertTrue(try species(charmander(gigantamax: nil, shadow: 2)).allSatisfy { !$0.hasSuffix("_shadow") })
+    }
+}
+
+private extension JSONValue {
+    var stringValue: String? { if case .string(let s) = self { return s } else { return nil } }
+    var numberValue: Double? { if case .number(let n) = self { return n } else { return nil } }
 }
