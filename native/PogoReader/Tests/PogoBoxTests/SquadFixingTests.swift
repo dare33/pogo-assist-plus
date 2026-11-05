@@ -129,4 +129,14 @@ final class SquadFixingTests: XCTestCase {
         avail.fixing(shown(avail, ranked: ["c0", "c1"]))
         XCTAssertEqual(shown(avail, ranked: ["q", "c0", "c1"]).map(\.entryId), ["c0", "c1"])
     }
+
+    func testSlotNumbersNameTheOtherSlotsPokemonUnderEveryIdTheyGoBy() {
+        let filled = HubSquads.fill(slots: [SquadSlot(role: "X", pick: "a"), SquadSlot(role: "X", species: "chansey"), SquadSlot(role: "X", pick: "c")],
+                                    pool: { _, _ in .init(preferred: []) })
+        XCTAssertEqual(HubSquads.slotNumbers(of: filled, editing: 1), ["a": 1, "c": 3])
+        XCTAssertEqual(HubSquads.slotNumbers(of: filled, editing: 0), ["species:chansey": 2, "c": 3])
+        // A species id that reads as a copy is also held under the copy.
+        XCTAssertEqual(HubSquads.slotNumbers(of: filled, editing: 0, copyOf: { $0 == "species:chansey" ? "c9" : nil })["c9"], 2)
+        XCTAssertEqual(HubSquads.slotNumbers(of: filled, editing: 9).count, 3, "an index outside the squad edits no slot")
+    }
 }

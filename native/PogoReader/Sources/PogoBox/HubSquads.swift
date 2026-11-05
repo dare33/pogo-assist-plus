@@ -224,6 +224,16 @@ public enum HubSquads {
         return out
     }
 
+    /// The slot each Pokémon of the squad's other slots sits in (1-based; the first slot holding it), under every id it goes by and the copy it stands for. A picker lists
+    /// these Pokémon, marked "In slot N", and choosing one swaps it with the edited slot's own (`SquadStore.Saved.choose`); `excluded` is the older rule that hid them.
+    public static func slotNumbers(of filled: [FilledSlot], editing: Int, copyOf: (String) -> String? = { _ in nil }) -> [String: Int] {
+        var out = [String: Int]()
+        for (i, s) in filled.enumerated() where i != editing {
+            for id in s.ids { for k in [id, copyOf(id)].compactMap({ $0 }) where out[k] == nil { out[k] = i + 1 } }
+        }
+        return out
+    }
+
     public struct PickerRow: Equatable {
         public var entryId: String
         /// The edited slot's own Pokémon is listed, ticked.
