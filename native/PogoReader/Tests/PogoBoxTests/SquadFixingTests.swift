@@ -214,14 +214,15 @@ final class SquadFixingTests: XCTestCase {
     func testOtherSlotsOffersOnlyASwapThatCanHappen() {
         let filled = HubSquads.fill(slots: [SquadSlot(role: "A", pick: "p"), SquadSlot(role: "B", pick: "q"), SquadSlot(role: "C", pick: "r")], pool: { _, _ in .init(preferred: []) })
         // Editing slot 0 (holding p): slot 1 can hold p, slot 2 cannot.
-        let o = HubSquads.otherSlots(of: filled, editing: 0, canHold: { id, j in j == 1 })
+        let o = HubSquads.otherSlots(of: filled, editing: 0, canHold: { _, j in j != 2 })
         XCTAssertEqual(o.swap, ["q": 2])
         XCTAssertEqual(o.blocked, ["r"])
         XCTAssertFalse(o.moves)
         // An empty edited slot moves the Pokémon whatever the other slot is: the other slot refills.
         let empty = HubSquads.fill(slots: [SquadSlot(role: "A"), SquadSlot(role: "B", pick: "q")], pool: { _, _ in .init(preferred: []) })
-        let m = HubSquads.otherSlots(of: empty, editing: 0, canHold: { _, _ in false })
+        let m = HubSquads.otherSlots(of: empty, editing: 0, canHold: { _, j in j != 7 })
         XCTAssertEqual(m.swap, ["q": 2])
         XCTAssertTrue(m.moves && m.blocked.isEmpty)
+        XCTAssertEqual(HubSquads.otherSlots(of: empty, editing: 0, canHold: { _, _ in false }).blocked, ["q"], "the Pokémon must fit the edited slot too")
     }
 }

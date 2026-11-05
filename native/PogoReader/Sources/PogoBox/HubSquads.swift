@@ -243,14 +243,14 @@ public enum HubSquads {
 
     /// Where the Pokémon of the squad's other slots can go from a picker (rule 27): `swap` maps every id such a Pokémon goes by (and the copy it stands for) to its slot (1-based, the
     /// first slot holding it), for the rows the picker lists marked; `blocked` holds the ids of Pokémon whose swap cannot happen, which the picker does not list. A swap puts the edited
-    /// slot's own Pokémon in the other slot, so it can happen only when `canHold(that Pokémon, other slot's index)`; an empty edited slot just moves the Pokémon (`moves`), and the other
-    /// slot refills.
+    /// slot's own Pokémon in the other slot and the other slot's Pokémon in the edited one, so it can happen only when `canHold` says each fits the slot it would go to (`canHold(Pokémon, slot index)`);
+    /// an empty edited slot just moves the Pokémon (`moves`), which must still fit the edited slot, and the other slot refills.
     public static func otherSlots(of filled: [FilledSlot], editing: Int, copyOf: (String) -> String? = { _ in nil }, canHold: (String, Int) -> Bool = { _, _ in true })
         -> (swap: [String: Int], blocked: Set<String>, moves: Bool) {
         let own = filled.indices.contains(editing) ? filled[editing].pickId : nil
         var swap = [String: Int](), blocked = Set<String>()
         for (j, s) in filled.enumerated() where j != editing {
-            let ok = own.map { canHold($0, j) } ?? true
+            let ok = (own.map { canHold($0, j) } ?? true) && (s.pickId.map { canHold($0, editing) } ?? true)
             for id in s.ids { for k in [id, copyOf(id)].compactMap({ $0 }) {
                 if ok { if swap[k] == nil { swap[k] = j + 1 } } else { blocked.insert(k) }
             } }
