@@ -61,6 +61,14 @@ final class SquadStrengthTests: XCTestCase {
         XCTAssertEqual(s.spoken, "Squad strength, score 80, 2 of 3 slots scored")
     }
 
+    func testTheAfterWordsShowExactlyWhenTheBarDrawsAFaintPart() {
+        // 70.0% to 70.5%: the percents round the same, and 0.005 is above the bar's 0.004 floor but the words must follow the bar's own test.
+        for (n, a) in [(0.700, 0.704), (0.700, 0.7049), (0.699, 0.705), (0.700, 0.710), (0.5, 0.5), (0.994, 1.0)] {
+            let s = SquadStrength.of(figures: [d(n, a)])
+            XCTAssertEqual(s.afterText != nil, s.strength.hasFaint, "\(n) to \(a)")
+        }
+    }
+
     func testAnUpgradeNeverLowersASlot() {
         let s = SquadStrength.of(figures: [d(0.6, 0.2)])
         XCTAssertEqual(s.after, 0.6)

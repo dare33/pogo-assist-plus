@@ -5,8 +5,8 @@ import Foundation
 ///
 /// What is kept is the player's own choices: each slot's role and the Pokémon they picked (a copy, or under Best a species the box may not have: `SquadSlot.species`,
 /// which a copy leaving the box does not touch). A squad the player has never changed keeps nothing and shows the suggestion, refilled whenever it is drawn.
-/// The first change (a Pokémon chosen for a slot, or a slot's role changed) makes the shown squad the player's own (`Saved.fixing`): every slot's Pokémon is kept as
-/// shown, and from then on no slot changes on its own. A slot with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused one for its
+/// Every change (a Pokémon chosen for a slot, a slot's role changed, "Squad set") first keeps the squad exactly as shown (`Saved.fixing`), so an edit acts on what the player
+/// sees; a slot that refills in a changed squad is kept too (`adoptRefills`), so no slot changes on its own afterwards, except one whose kept Pokémon the current mode does not place. A slot with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused one for its
 /// role, that slot only (`reconciled`, `HubSquads.fill`). "Back to suggested squad" (`Saved.backToSuggested`) forgets it all. Copies are keyed by the box entry id,
 /// which the app keeps through power-ups, evolutions, hand corrections and re-scans (`BoxEntry.id`), so a re-scan keeps every pick whose Pokémon is still in the box.
 public struct SquadStore: Codable, Equatable {
@@ -33,20 +33,42 @@ public struct SquadStore: Codable, Equatable {
         /// Whether the squad's "Back to suggested squad" button shows: the player has changed it, or an older file holds picks of theirs.
         public var showsBackToSuggested: Bool { changed || slots.contains { $0.pickId != nil } }
 
-        /// The squad as it is drawn becomes the player's: every slot keeps the Pokémon it shows (a copy as `pick`, a species row as `species`, nothing for an empty slot).
-        /// Done once, at the first change; a squad already changed is left alone, as are the roles and the set mark.
+        /// The squad as it is drawn becomes the player's: every slot keeps the Pokémon it shows (a copy as `pick`, a species row as `species`, nothing for an empty slot), and a
+        /// suggestion listed for another role keeps saying so (`SquadSlot.fallback`). Runs before EVERY change (a choice, a role change, "Squad set"), so an edit always acts on
+        /// what the player sees, never on picks they cannot see (a Best pick viewed under Available is replaced by what Available shows). The roles and the set mark are left alone.
         public mutating func fixing(_ shown: [FilledSlot]) {
-            guard !changed else { return }
             for i in slots.indices where shown.indices.contains(i) {
                 // A species pick that reads as a copy has both ids: the species is the row the player chose, so it is what is kept.
                 if let key = shown[i].species { slots[i].pick = nil; slots[i].species = key }
                 else { slots[i].pick = shown[i].entryId; slots[i].species = nil }
+                slots[i].fallback = shown[i].fallback && !shown[i].chosen && shown[i].pickId != nil ? true : nil
             }
             changed = true
         }
 
+        /// Whether a slot of a changed squad has no kept Pokémon but the screen shows one (a copy left the box, or a swap emptied the slot): `adoptRefills` keeps it.
+        public func needsAdopting(_ shown: [FilledSlot]) -> Bool {
+            changed && slots.indices.contains { i in shown.indices.contains(i) && slots[i].pickId == nil && shown[i].pickId != nil }
+        }
+
+        /// Keeps what a changed squad shows in a slot with no kept Pokémon, so it does not change again on a later scan or box change. A slot with a kept Pokémon that the mode
+        /// does not place is left alone (it returns under its mode).
+        public mutating func adoptRefills(_ shown: [FilledSlot]) {
+            guard changed else { return }
+            for i in slots.indices where shown.indices.contains(i) && slots[i].pickId == nil && shown[i].pickId != nil {
+                if let key = shown[i].species { slots[i].species = key } else { slots[i].pick = shown[i].entryId }
+                slots[i].fallback = shown[i].fallback && !shown[i].chosen ? true : nil
+            }
+        }
+
+        /// "Set this squad": a change like any other, so the squad is kept as shown first (the mark itself is `isSet`).
+        public mutating func markSet(shown: [FilledSlot]) {
+            fixing(shown)
+            isSet = true
+        }
+
         /// Puts the Pokémon of `pickId` form (`pick`, `species`) into a slot.
-        private mutating func put(_ pick: String?, _ species: String?, at i: Int) { slots[i].pick = pick; slots[i].species = species }
+        private mutating func put(_ pick: String?, _ species: String?, at i: Int) { slots[i].pick = pick; slots[i].species = species; slots[i].fallback = nil }
 
         /// Choosing a Pokémon for a slot. `id` is a copy's entry id, or `squadSpeciesPrefix` + a species key for a Best pick of a Pokémon the box does not have (kept as
         /// `SquadSlot.species`); nil clears the slot's pick. `alsoClearing` are the other ids that stand for the same Pokémon (its copy and its species:
@@ -58,6 +80,7 @@ public struct SquadStore: Codable, Equatable {
             if let shown { fixing(shown) }
             changed = true
             let previous = (pick: slots[index].pick, species: slots[index].species)
+            defer { for i in slots.indices where slots[i].pickId == nil { slots[i].fallback = nil } }
             if let id {
                 let same = Set([id] + alsoClearing)
                 // What this slot held goes to the first slot holding the chosen Pokémon, unless it is the same Pokémon (a species pick of the chosen copy); any further slot
@@ -80,6 +103,7 @@ public struct SquadStore: Codable, Equatable {
             if let shown { fixing(shown) }
             changed = true
             HubSquads.changeRole(&slots, at: index, to: role, fits: fits)
+            slots[index].fallback = nil
         }
 
         /// "Back to suggested squad": forgets every kept Pokémon, puts the roles back to the screen's defaults (`defaults`: its `HubSquads.default...Slots()`) and clears the

@@ -139,4 +139,89 @@ final class SquadFixingTests: XCTestCase {
         XCTAssertEqual(HubSquads.slotNumbers(of: filled, editing: 0, copyOf: { $0 == "species:chansey" ? "c9" : nil })["c9"], 2)
         XCTAssertEqual(HubSquads.slotNumbers(of: filled, editing: 9).count, 3, "an index outside the squad edits no slot")
     }
+
+    // MARK: fold round 1 (review of b7071d8)
+
+    func testEveryChangeKeepsTheSquadAsShownNotOnlyTheFirst() {
+        // A kept species pick under Available is not placed, so slot 0 shows "c0"; the next edit keeps what is shown (R1), and the swap exchanges the two shown occupants.
+        var saved = SquadStore.Saved(slots: [SquadSlot(role: "X", species: "medicham", fallback: nil), SquadSlot(role: "X", pick: "c1")], changed: true)
+        let available: (String, String) -> Bool = { id, _ in !id.hasPrefix(squadSpeciesPrefix) }
+        let shownNow = shown(saved, placeable: available, ranked: ["c0", "c1", "c2"])
+        XCTAssertEqual(shownNow.map(\.entryId), ["c0", "c1"])
+        saved.choose("c1", at: 0, shown: shownNow)
+        XCTAssertEqual(saved.slots.map(\.pick), ["c1", "c0"], "the swap exchanged what the player saw: nothing lost, no slot emptied")
+        XCTAssertNil(saved.slots[0].species)
+        // Choosing a marked Pokémon twice in a row loses nothing either.
+        saved.choose("c0", at: 0, shown: shown(saved, placeable: available, ranked: ["c0", "c1", "c2"]))
+        saved.choose("c1", at: 0, shown: shown(saved, placeable: available, ranked: ["c0", "c1", "c2"]))
+        XCTAssertEqual(Set(saved.slots.compactMap(\.pick)), ["c0", "c1"])
+        XCTAssertEqual(saved.slots.compactMap(\.pick).count, 2)
+    }
+
+    func testARefillInAChangedSquadIsKeptSoALaterBoxChangeDoesNotMoveIt() {
+        var s = SquadStore.Saved(slots: [SquadSlot(role: "X"), SquadSlot(role: "X"), SquadSlot(role: "X")])
+        s.choose("a", at: 0, shown: shown(s))
+        XCTAssertEqual(s.slots.map(\.pick), ["a", "b", "c"])
+        var store = SquadStore(); store.gym = s
+        store.gym.slots[1].pick = "gone"
+        let afterScan = store.reconciled(boxIds: ["a", "c", "d"]).gym
+        XCTAssertNil(afterScan.slots[1].pick)
+        let drawn = shown(afterScan, ranked: ["a", "d", "c", "e"])
+        XCTAssertEqual(drawn.map(\.entryId), ["a", "d", "c"])
+        XCTAssertTrue(afterScan.needsAdopting(drawn))
+        var adopted = afterScan
+        adopted.adoptRefills(drawn)
+        XCTAssertEqual(adopted.slots.map(\.pick), ["a", "d", "c"])
+        XCTAssertFalse(adopted.needsAdopting(drawn))
+        XCTAssertEqual(shown(adopted, ranked: ["a", "z", "c", "d"]).map(\.entryId), ["a", "d", "c"], "a later box change does not move it")
+        var never = SquadStore.Saved(slots: [SquadSlot(role: "X")])
+        XCTAssertFalse(never.needsAdopting(shown(never)), "an unchanged squad keeps nothing")
+        never.adoptRefills(shown(never))
+        XCTAssertNil(never.slots[0].pick)
+        // A kept pick the mode does not place is not overwritten.
+        var kept = SquadStore.Saved(slots: [SquadSlot(role: "X", species: "medicham")], changed: true)
+        let drawnAvailable = shown(kept, placeable: { id, _ in !id.hasPrefix(squadSpeciesPrefix) })
+        XCTAssertFalse(kept.needsAdopting(drawnAvailable))
+        kept.adoptRefills(drawnAvailable)
+        XCTAssertEqual(kept.slots[0].species, "medicham")
+    }
+
+    func testSquadSetIsAChangeAndKeepsTheSquad() {
+        var saved = SquadStore.Saved(slots: [SquadSlot(role: "X"), SquadSlot(role: "X")])
+        saved.markSet(shown: shown(saved))
+        XCTAssertTrue(saved.isSet && saved.changed && saved.showsBackToSuggested)
+        XCTAssertEqual(saved.slots.map(\.pick), ["a", "b"])
+        XCTAssertEqual(shown(saved, ranked: ["z", "a", "b"]).map(\.entryId), ["a", "b"])
+    }
+
+    func testASuggestionListedForAnotherRoleKeepsSayingSoAfterItIsKept() {
+        var saved = SquadStore.Saved(slots: [SquadSlot(role: "Tank"), SquadSlot(role: "Healer")])
+        let filled = HubSquads.fill(slots: saved.slots, pool: { _, role in role == "Tank" ? .init(preferred: ["a"]) : .init(preferred: [], fallback: ["b"]) })
+        XCTAssertEqual(filled.map(\.fallback), [false, true])
+        saved.choose("a", at: 0, shown: filled)
+        XCTAssertEqual(saved.slots[1].fallback, true)
+        let drawn = HubSquads.fill(slots: saved.slots, pool: { _, _ in .init(preferred: []) })
+        XCTAssertEqual(drawn.map(\.fallback), [false, true])
+        XCTAssertEqual(drawn.map(\.chosen), [true, false], "the player's own pick is chosen; the kept suggestion is not")
+        // Choosing something else for that slot ends it.
+        saved.choose("q", at: 1)
+        XCTAssertNil(saved.slots[1].fallback)
+        // An old file has no marker.
+        let old = try? JSONDecoder().decode(SquadSlot.self, from: Data(#"{"role":"Tank","pick":"a"}"#.utf8))
+        XCTAssertEqual(old, SquadSlot(role: "Tank", pick: "a"))
+    }
+
+    func testOtherSlotsOffersOnlyASwapThatCanHappen() {
+        let filled = HubSquads.fill(slots: [SquadSlot(role: "A", pick: "p"), SquadSlot(role: "B", pick: "q"), SquadSlot(role: "C", pick: "r")], pool: { _, _ in .init(preferred: []) })
+        // Editing slot 0 (holding p): slot 1 can hold p, slot 2 cannot.
+        let o = HubSquads.otherSlots(of: filled, editing: 0, canHold: { id, j in j == 1 })
+        XCTAssertEqual(o.swap, ["q": 2])
+        XCTAssertEqual(o.blocked, ["r"])
+        XCTAssertFalse(o.moves)
+        // An empty edited slot moves the Pokémon whatever the other slot is: the other slot refills.
+        let empty = HubSquads.fill(slots: [SquadSlot(role: "A"), SquadSlot(role: "B", pick: "q")], pool: { _, _ in .init(preferred: []) })
+        let m = HubSquads.otherSlots(of: empty, editing: 0, canHold: { _, _ in false })
+        XCTAssertEqual(m.swap, ["q": 2])
+        XCTAssertTrue(m.moves && m.blocked.isEmpty)
+    }
 }

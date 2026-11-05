@@ -29,7 +29,10 @@ public struct SquadSlot: Codable, Equatable {
     public var role: String
     public var pick: String?
     public var species: String?
-    public init(role: String, pick: String? = nil, species: String? = nil) { self.role = role; self.pick = pick; self.species = species }
+    /// True when the kept Pokémon was a suggestion listed for another role (the slot said "listed for <role>" before the squad was kept); it keeps that line. nil for a pick the
+    /// player chose and for a file saved before this existed.
+    public var fallback: Bool?
+    public init(role: String, pick: String? = nil, species: String? = nil, fallback: Bool? = nil) { self.role = role; self.pick = pick; self.species = species; self.fallback = fallback }
 
     /// The pick as one id: the copy's entry id, else `squadSpeciesPrefix` + the species key.
     public var pickId: String? { pick ?? species.map { squadSpeciesPrefix + $0 } }
@@ -183,7 +186,11 @@ public enum HubSquads {
         func free(_ id: String) -> Bool { !used.contains(id) && !(copyOf(id).map(used.contains) ?? false) }
         func take(_ id: String) { used.insert(id); if let c = copyOf(id) { used.insert(c) } }
         for (i, s) in slots.enumerated() {
-            if let p = s.pickId, placeable(p, s.role), free(p), allows(p, i, out) { take(p); put(p, at: i); out[i].chosen = true }
+            if let p = s.pickId, placeable(p, s.role), free(p), allows(p, i, out) {
+                take(p); put(p, at: i)
+                // A kept suggestion that was listed for another role is still that (its slot keeps saying so); anything else is the player's.
+                out[i].chosen = s.fallback != true; out[i].fallback = s.fallback == true
+            }
         }
         // Each role's own slots are filled across the whole squad first, then the slots still empty take another role's Pokémon (S1: fill with any role), so a
         // fallback never takes the Pokémon a later slot of that role would have had.
@@ -232,6 +239,23 @@ public enum HubSquads {
             for id in s.ids { for k in [id, copyOf(id)].compactMap({ $0 }) where out[k] == nil { out[k] = i + 1 } }
         }
         return out
+    }
+
+    /// Where the Pokémon of the squad's other slots can go from a picker (rule 27): `swap` maps every id such a Pokémon goes by (and the copy it stands for) to its slot (1-based, the
+    /// first slot holding it), for the rows the picker lists marked; `blocked` holds the ids of Pokémon whose swap cannot happen, which the picker does not list. A swap puts the edited
+    /// slot's own Pokémon in the other slot, so it can happen only when `canHold(that Pokémon, other slot's index)`; an empty edited slot just moves the Pokémon (`moves`), and the other
+    /// slot refills.
+    public static func otherSlots(of filled: [FilledSlot], editing: Int, copyOf: (String) -> String? = { _ in nil }, canHold: (String, Int) -> Bool = { _, _ in true })
+        -> (swap: [String: Int], blocked: Set<String>, moves: Bool) {
+        let own = filled.indices.contains(editing) ? filled[editing].pickId : nil
+        var swap = [String: Int](), blocked = Set<String>()
+        for (j, s) in filled.enumerated() where j != editing {
+            let ok = own.map { canHold($0, j) } ?? true
+            for id in s.ids { for k in [id, copyOf(id)].compactMap({ $0 }) {
+                if ok { if swap[k] == nil { swap[k] = j + 1 } } else { blocked.insert(k) }
+            } }
+        }
+        return (swap, blocked.subtracting(swap.keys), own == nil)
     }
 
     public struct PickerRow: Equatable {

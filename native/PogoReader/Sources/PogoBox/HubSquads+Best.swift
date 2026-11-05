@@ -405,7 +405,7 @@ extension HubSquads {
     /// show the same copy.
     private static func keepingSpecies(_ filled: [FilledSlot], _ slots: [SquadSlot], rows: [BestRow]) -> [FilledSlot] {
         var out = filled
-        for i in out.indices where i < slots.count && slots[i].pick == nil && out[i].entryId != nil && out[i].chosen {
+        for i in out.indices where i < slots.count && slots[i].pick == nil && out[i].entryId != nil && (out[i].chosen || out[i].fallback) {
             if let key = slots[i].species, rows.contains(where: { $0.key == key }) { out[i].species = key }
         }
         return out

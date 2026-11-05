@@ -51,13 +51,10 @@ public struct SquadStrength: Equatable {
     public static func of(figures: [Strength?], kind: Strength.Kind = .damage) -> SquadStrength { of(figures.map(Slot.of), kind: kind) }
 
     /// The bar's figures, in the picker row bar's own type, so the one drawing serves both. Nothing to draw when no slot counts.
-    public var strength: Strength { Strength(kind: kind, now: now, after: hasAfter ? after : nil) }
+    public var strength: Strength { Strength(kind: kind, now: now, after: after.map { max($0, now ?? 0) }) }
 
-    /// A faint part: the after figure rounds to more than the now figure.
-    public var hasAfter: Bool {
-        guard let n = now, let a = after else { return false }
-        return Strength.percent(a) > Strength.percent(n)
-    }
+    /// A faint part is drawn: the bar's own test (`Strength.hasFaint`), so the "after upgrades" words show exactly when the bar shows the part.
+    public var hasAfter: Bool { strength.hasFaint }
 
     /// "Squad strength 72%"; PvP reads its mean Score as the screen already shows Scores ("Squad strength: score 72"). "Squad strength not read" when no slot counts.
     public var text: String {
