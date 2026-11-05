@@ -154,3 +154,25 @@ tier-table move lines that fall back to the species' best moves) were not raised
   not a defect; Sol: contradicts "the better form against the boss"). Asked "keep the named form or show the better of X
   and Y?", Greg: "Keep the named form". Decision: such a row's bar is the form it names; an owned copy built to Mega
   still takes the better of X and Y against the boss. No code change.
+
+## Phone run 4, 5 Nov 2026 (build 8de8855, test/greg-build)
+
+Five checks of the changes since phone run 3, after Clean Build Folder. Greg's words:
+
+1. Raids, Mega slot, not-owned Mega and Primal rows: "green". Questions: "is the damage taking into account
+   counters/effectiveness already or separate to that?" and, of the Mega Sableye raid in Best (screenshot not received
+   in the session): "is this right that when selected to best for mega sableye raid that theres only 2 best pokemon? No
+   other suitable megas with comparable effective dmg?"
+2. Raids, other slots, not-owned Mega rows judged as plain: "green".
+3. Max: "couldnt check".
+4. Gym, picker speed and the tick: "green but swapping out blissey makes my blissey go to the next raid slot. it seems
+   like thers some sort of auto pick best pokemon calculation happening after every user switch. can we make it so that
+   the best suggest is calculated once, and then the user changes from there"
+5. Rocket and PvP: "green".
+
+New request in the same message: "i'd like to include an indicator of overall team strenght for each activity - can
+you suggest the indicator most suitable?"
+
+Cause of item 4 (manager): rule 27 keeps only the player's own picks; every slot without a pick is filled again from
+the ranked list each time the squad is drawn (`HubSquads.fill`), so a Pokémon replaced in one slot drops into the next
+slot that has no pick. Working as rule 27 says; Greg's request changes the rule.
