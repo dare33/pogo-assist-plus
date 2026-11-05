@@ -225,4 +225,11 @@ final class SquadFixingTests: XCTestCase {
         XCTAssertTrue(m.moves && m.blocked.isEmpty)
         XCTAssertEqual(HubSquads.otherSlots(of: empty, editing: 0, canHold: { _, _ in false }).blocked, ["q"], "the Pokémon must fit the edited slot too")
     }
+
+    func testOtherSlotsHandsCanHoldTheWholeSlotSoASpeciesRowCanBeRead() {
+        let filled = HubSquads.fill(slots: [SquadSlot(role: "A", pick: "p"), SquadSlot(role: "B", species: "chansey")], pool: { _, _ in .init(preferred: []) })
+        var seen = [String]()
+        _ = HubSquads.otherSlots(of: filled, editing: 0, canHold: { f, j in seen.append("\(f.species ?? "-")/\(f.entryId ?? "-")>\(j)"); return true })
+        XCTAssertEqual(Set(seen), ["-/p>1", "chansey/-" + ">0"])
+    }
 }
