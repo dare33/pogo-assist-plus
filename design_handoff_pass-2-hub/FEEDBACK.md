@@ -176,3 +176,11 @@ you suggest the indicator most suitable?"
 Cause of item 4 (manager): rule 27 keeps only the player's own picks; every slot without a pick is filled again from
 the ranked list each time the squad is drawn (`HubSquads.fill`), so a Pokémon replaced in one slot drops into the next
 slot that has no pick. Working as rule 27 says; Greg's request changes the rule.
+
+Greg's choices, 5 Nov 2026 (one-click answers to the manager's questions):
+- A Pokémon put into a slot that is already in another slot: "Swap (Recommended)".
+- A "Back to suggested squad" button on each squad: "Yes, add it (Recommended)".
+- Where the fixed suggestion applies: "All five screens (Recommended)".
+- Squad strength indicator: "Squad bar, avg (Recommended)": one bar per squad, the mean of the slot bars, with the
+  now and after-upgrade parts, beside the Ready line.
+Built on design/pass-2-4 (stacked on design/pass-2-3, so PR #25 can merge first), full paired review.
