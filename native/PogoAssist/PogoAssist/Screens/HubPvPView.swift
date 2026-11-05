@@ -140,8 +140,8 @@ struct PvPPickerBuilder {
         let allIds = mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)
         // A Pokémon in another slot is listed, marked with its slot: choosing it swaps the two (rule 27). Another copy of a species the squad holds is still not offered.
         // Only a swap that can happen: each Pokémon must fit the slot it goes to (Available: be rated in the league; Best: be listed for the role).
-        let held = HubSquads.otherSlots(of: filled, editing: i, canHold: { id, j in
-            mode == .best ? HubSquads.fits(id, role: filled[j].role, in: best) : ctx.advice.leagues[id]?[league] != nil
+        let held = HubSquads.otherSlots(of: filled, editing: i, canHold: { f, j in
+            mode == .best ? HubSquads.tickIds(f, rows: best).contains { HubSquads.fits($0, role: filled[j].role, in: best) } : f.pickId.map { ctx.advice.leagues[$0]?[league] != nil } ?? true
         })
         let excluded = PvPPlacement.excluded(by: filled, editing: i, ids: allIds, species: { speciesId($0) }).subtracting(held.swap.keys).union(held.blocked)
         func limited(_ list: [String]) -> [String] { only.map { o in list.filter(o.contains) } ?? list }
@@ -283,6 +283,7 @@ struct PvPSquadView: View {
     private var builder: PvPPickerBuilder { PvPPickerBuilder(league: league, ctx: ctx, pogoAssist: rankingRaw == Ranking.pogoAssist.rawValue) }
     @State private var rowsCache = PickerRowsCache<PvPPickerBuilder.Content>()
     @State private var strength: (key: String, value: SquadStrength)?
+    @State private var boxGeneration = 0
 
     private func types(_ speciesId: String) -> [String] { builder.types(speciesId) }
     private func member(_ id: String, byId: [String: HubSquads.PvpCandidate], best: [HubSquads.BestRow], pogoAssist: Bool) -> Member? { builder.member(id, byId: byId, best: best) }
@@ -298,7 +299,7 @@ struct PvPSquadView: View {
         let named = members.compactMap { $0 }
         let rest = candidates.filter { c in !filled.contains { $0.entryId == c.entryId } }.map(\.candidate)
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
-        let strengthKey = "strength|\(league)|\(pogoAssist)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + (mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)).joined(separator: ",") + "|\(ctx.today)"
+        let strengthKey = "strength|\(league)|\(pogoAssist)|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + (mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = saved.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
@@ -339,9 +340,10 @@ struct PvPSquadView: View {
                 let value = await Task.detached(priority: .userInitiated) { b.squadStrength(filled: filled, candidates: candidates, byId: byId, best: best, mode: mode) }.value
                 if !Task.isCancelled { strength = (strengthKey, value) }
             }
+            .tracksBox(ctx, generation: $boxGeneration)
             // A slot of a changed squad that refilled is kept as shown, so it does not change again.
             .task(id: adoptKey) {
-                if !adoptKey.isEmpty { keeper.update { s in var q = s.pvpSquad(league: league); q.adoptRefills(filled); s.pvp[league] = q } }
+                if !adoptKey.isEmpty, !Task.isCancelled { keeper.update { s in var q = s.pvpSquad(league: league); q.adoptRefills(filled); s.pvp[league] = q } }
             }
             let note = weakness(named, rest: rest)
             if !note.isEmpty {
