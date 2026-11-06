@@ -351,7 +351,7 @@ private struct RocketSquadView: View {
         }
         // A slot of a changed squad that refilled is kept as shown, so it does not change again.
         .task(id: adoptKey) {
-            if !adoptKey.isEmpty, !Task.isCancelled { workspace.edit(surface, keeper: keeper) { $0.adoptRefills(filled) } }
+            if !adoptKey.isEmpty, !Task.isCancelled { workspace.adopt(surface, keeper: keeper, filled: filled) }
         }
         .tracksBox(ctx, generation: $boxGeneration)
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, lists: lists, surface: surface, builder: builder) }

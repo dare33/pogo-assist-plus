@@ -367,7 +367,7 @@ struct PvPSquadView: View {
             .tracksBox(ctx, generation: $boxGeneration)
             // A slot of a changed squad that refilled is kept as shown, so it does not change again.
             .task(id: adoptKey) {
-                if !adoptKey.isEmpty, !Task.isCancelled { workspace.edit(surface, keeper: keeper) { $0.adoptRefills(filled) } }
+                if !adoptKey.isEmpty, !Task.isCancelled { workspace.adopt(surface, keeper: keeper, filled: filled) }
             }
             let note = weakness(named, rest: rest)
             if !note.isEmpty {

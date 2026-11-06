@@ -528,7 +528,7 @@ struct EventSquadView: View {
             if !Task.isCancelled { strength = (strengthKey, value) }
         }
         // A slot of a changed squad that refilled (its copy left the box, or a swap emptied it) is kept as shown, so it does not change again.
-        .task(id: adoptKey) { if !adoptKey.isEmpty, !Task.isCancelled { workspace.edit(surface, keeper: keeper) { $0.adoptRefills(filled) } } }
+        .task(id: adoptKey) { if !adoptKey.isEmpty, !Task.isCancelled { workspace.adopt(surface, keeper: keeper, filled: filled) } }
         .tracksBox(ctx, generation: $boxGeneration)
     }
 

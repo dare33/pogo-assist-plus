@@ -95,10 +95,13 @@ extension View {
 @MainActor
 final class SquadWorkspace: ObservableObject {
     @Published private(set) var state = SquadDrafts()
+    /// The box the screen last attached to (nil while it is not loaded): what a refill may be adopted from.
+    private var boxIds: Set<String>?
 
     /// The screen is showing `account`'s squads over a box of `boxIds` (nil while the box is not loaded): another account's drafts are dropped (H1), and a draft pick whose copy left
     /// the box is emptied, as the store's are (H2; the screen then keeps the refill in the draft).
     func attach(account: String?, boxIds: Set<String>?) {
+        self.boxIds = boxIds
         update { d in
             d.switchAccount(account)
             if let boxIds { d = d.reconciled(boxIds: boxIds) }
@@ -126,6 +129,8 @@ final class SquadWorkspace: ObservableObject {
 
     /// A change to the squad on the tab it is on: Current is stored at once, a draft is held here. It never changes the tab.
     func edit(_ s: SquadSurface, keeper: SquadKeeper, _ change: (inout SquadStore.Saved) -> Void) {
+        // Like every write: only a surface drawn for the account the keeper and the drafts are on now.
+        guard s.account == keeper.account, s.account == state.account else { return }
         if s.tab == .current {
             keeper.update { store in
                 var q = store.current(s.ref) ?? SquadStore.Saved(slots: s.defaults)
@@ -139,6 +144,18 @@ final class SquadWorkspace: ObservableObject {
                 d.setDraft(q, s.key, s.tab)
             }
         }
+    }
+
+    /// Keeps what a changed squad shows in a slot that refilled (rule 27.6). Run later from a task, so it reads the live account and box, not the ones the surface was drawn under:
+    /// another account's surface writes nothing, and only a copy in the box now is adopted (a species pick is not a copy and is adopted as shown).
+    func adopt(_ s: SquadSurface, keeper: SquadKeeper, filled: [FilledSlot]) {
+        guard s.account == keeper.account, s.account == state.account else { return }
+        let inBox = filled.map { f -> FilledSlot in
+            var f = f
+            if let e = f.entryId, let ids = boxIds, !ids.contains(e) { f.entryId = nil }
+            return f
+        }
+        edit(s, keeper: keeper) { $0.adoptRefills(inBox) }
     }
 
     /// Save to Current (and, from "Set this squad", the mark): the squad as shown on Available or Best becomes the squad's Current. The player stays on the tab.

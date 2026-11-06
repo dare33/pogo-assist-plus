@@ -245,7 +245,8 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertNil(SquadKeeper.load(other).current(.gym))
     }
 
-    /// H2: a draft follows the box: a pick whose copy left is emptied and the refill is kept in the draft (through the workspace).
+    /// H2 and J3: a draft follows the box: a pick whose copy left is emptied, that slot alone refills with a copy that is in the attached box, and the exact adopted id is kept;
+    /// an id that is not in the box is refused (J1).
     func testADraftPickWhoseCopyLeftTheBoxIsEmptiedAndTheRefillIsKept() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])
@@ -253,13 +254,47 @@ final class SquadKeeperTests: XCTestCase {
         let defaults = HubSquads.defaultGymSlots()
         var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
-        ws.attach(account: account, boxIds: ["a", "b", "c"])
+        let before = ws.surface(.gym, store: keeper.store, defaults: defaults).squad.slots.map(\.pick)
+        ws.attach(account: account, boxIds: ["a", "b", "c", "e"])
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         XCTAssertNil(s.squad.slots[0].pick, "no ghost id")
+        XCTAssertEqual(Array(s.squad.slots.map(\.pick).dropFirst()), Array(before.dropFirst()), "no other slot changed")
+        // A refill with an id that is not in the box is refused.
+        let ghost = shown(s.squad, ["a", "b", "c", "z"])
+        XCTAssertTrue(s.squad.needsAdopting(ghost))
+        ws.adopt(s, keeper: keeper, filled: ghost)
+        XCTAssertNil(ws.surface(.gym, store: keeper.store, defaults: defaults).squad.slots[0].pick, "an id that is not in the box adopts nothing")
+        // A refill with the copy that is in the box is adopted, exactly.
         let filled = shown(s.squad, ["a", "b", "c", "e"])
-        XCTAssertTrue(s.squad.needsAdopting(filled), "that slot alone refills")
-        ws.edit(s, keeper: keeper) { $0.adoptRefills(filled) }
-        XCTAssertNotNil(ws.surface(.gym, store: keeper.store, defaults: defaults).squad.slots[0].pick, "and the refill is kept in the draft")
+        XCTAssertTrue(s.squad.needsAdopting(filled))
+        ws.adopt(s, keeper: keeper, filled: filled)
+        XCTAssertEqual(ws.surface(.gym, store: keeper.store, defaults: defaults).squad.slots[0].pick, "e", "and the refill is kept in the draft")
+    }
+
+    /// J1: every write is guarded by the account: an edit or an adopt captured under one account and run after attaching another writes nothing, to Current or to a draft.
+    func testAnEditOrAdoptCapturedUnderAnotherAccountWritesNothing() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        ws.attach(account: account, boxIds: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: false)
+        ws.select(.current, ref: .gym, keeper: keeper)
+        let draftSurface = ws.surface(.gym, store: keeper.store, defaults: defaults)    // on Current, drawn for account A
+        ws.select(.available, ref: .gym, keeper: keeper)
+        let availableSurface = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        attach(keeper, other, ids: ["a", "b", "c", "d"])
+        ws.attach(account: other, boxIds: ["a", "b", "c", "d"])
+        let storeB = keeper.store
+        ws.edit(draftSurface, keeper: keeper) { $0.choose("c", at: 1, shown: self.shown($0)) }
+        ws.edit(availableSurface, keeper: keeper) { $0.choose("c", at: 1, shown: self.shown($0)) }
+        var empty = availableSurface.squad; empty.slots[0].pick = nil
+        ws.adopt(availableSurface, keeper: keeper, filled: shown(empty, ["x"]))
+        XCTAssertEqual(keeper.store, storeB, "the second account's store is untouched")
+        XCTAssertNil(ws.surface(.gym, store: keeper.store, defaults: defaults).draft, "and so are its drafts")
+        XCTAssertNil(SquadKeeper.load(other).current(.gym))
     }
 
     /// H4: an old file's squad becomes a durable Current: after its copy leaves the box it remains, and the migration is written back.
