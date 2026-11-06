@@ -284,7 +284,8 @@ class SquadUITestCase: XCTestCase {
         // At the accessibility sizes only a chip or two fits: the strip scrolls sideways to the one wanted.
         var n = 0
         while !(target.isHittable && editing.exists) && n < 10 { let drag = editing.isHittable ? editing : strip; if chip > open { drag.swipeLeft() } else { drag.swipeRight() }; n += 1 }
-        // (A chip fully inside the strip can report itself not hittable while the strip is the pinned inset; its frame is the check.)
+        // (H18: a chip can report itself not hittable although it is on screen and a tap on it works: the screen's own scroll view's frame starts at the strip's top, under the strip
+        // that the safe-area inset draws over it, and the test framework's hit test sees that frame. The check is the chip's frame inside the strip, then a coordinate tap.)
         XCTAssertTrue(target.isHittable || (target.frame.midX > 0 && target.frame.midX < app.frame.width && target.frame.intersects(strip.frame)), "the chip for slot \(chip) can be reached: \(target.frame)")
         XCTAssertTrue(editing.isSelected, "the slot being edited is highlighted: \(editing.label)")
         XCTAssertTrue(editing.label.hasSuffix("editing"), editing.label)

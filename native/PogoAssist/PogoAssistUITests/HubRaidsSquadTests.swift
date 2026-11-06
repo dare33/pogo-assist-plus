@@ -215,8 +215,10 @@ final class HubRaidsSquadTests: SquadUITestCase {
         changeTheSquad(app, "raids")
         saveToCurrent(app)
         XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5))
-        // And a draft that the style change drops.
-        changeTheSquad(app, "raids")
+        // And a draft that the style change drops (a role change always differs from the suggestion).
+        openPicker(app, "raids", slot: 3)
+        app.buttons["squad-role-Bulky hitter"].tap()
+        closePicker(app)
         XCTAssertTrue(reveal(app, app.buttons["squad-reset-draft"]).exists)
 
         maxDamage.tap()
@@ -278,13 +280,21 @@ final class HubRaidsSquadTests: SquadUITestCase {
         let saved = (1...6).map { slot(app, "raids", $0).label }
         // A fresh edit on Available, then Save to Current: it asks. Cancel leaves Current as saved.
         selectAvailable(app)
-        changeTheSquad(app, "raids")
+        openPicker(app, "raids", slot: 3)
+        app.buttons["squad-role-Bulky hitter"].tap()
+        closePicker(app)
+        let draft = (1...6).map { slot(app, "raids", $0).label }
         reveal(app, app.buttons["squad-save-current"]).tap()
         XCTAssertTrue(app.buttons.matching(identifier: "squad-save-current-confirm").firstMatch.waitForExistence(timeout: 5))
         shot("raids-save-replace-dialog")
         answer(app, asked: "squad-save-current", confirm: false)
         selectTab(app, "current")
         XCTAssertEqual((1...6).map { slot(app, "raids", $0).label }, saved, "Cancel left Current as it was")
+        // Replace makes the draft the Current squad.
+        selectAvailable(app)
+        saveToCurrent(app, replacing: true)
+        selectTab(app, "current")
+        XCTAssertEqual((1...6).map { slot(app, "raids", $0).label }, draft, "Replace stored the draft as Current")
         // Edits on Current save at once.
         changeTheSquad(app, "raids")
         let edited = (1...6).map { slot(app, "raids", $0).label }
@@ -296,6 +306,26 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
         XCTAssertTrue(tab(app, "current").isSelected, "a squad with a Current opens on it")
         XCTAssertEqual((1...6).map { slot(app, "raids", $0).label }, edited, "the edit was saved straight away")
+    }
+
+    /// Rule 27.3 and 32: "Set this squad" on the unedited Best tab saves it to Current and sets the mark, but the tab stays unedited: no Save to Current, no Reset, 100% "the best squad",
+    /// and it says Saved to Current.
+    func testRaidsSetOnAnUneditedBestTabLeavesItUnedited() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "raids")
+        let card = el(app, "hub-raid-row-1")
+        XCTAssertTrue(card.waitForExistence(timeout: 60))
+        card.tap()
+        XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
+        selectBest(app)
+        reveal(app, app.buttons["squad-set"]).tap()
+        XCTAssertTrue(el(app, "squad-set-state").waitForExistence(timeout: 5))
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "the squad was saved")
+        XCTAssertTrue(tab(app, "best").isSelected)
+        XCTAssertTrue(el(app, "squad-saved-note").waitForExistence(timeout: 5), "and says so")
+        XCTAssertFalse(app.buttons["squad-save-current"].exists || app.buttons["squad-reset-draft"].exists, "the tab is unedited")
+        XCTAssertTrue(reveal(app, el(app, "squad-strength")).label.contains("the best squad"), el(app, "squad-strength").label)
     }
 
     /// Rule 34: the pinned strip at the default text size and at AX5 (where the chips keep whole words and the strip scrolls sideways).
@@ -316,6 +346,10 @@ final class HubRaidsSquadTests: SquadUITestCase {
         let big = launch(ax5: true)
         openTile(big, "raids")
         palkia(big)
+        // The tab and style rows at AX5: whole words, one size, stacked.
+        XCTAssertTrue(reveal(big, big.buttons["squad-style-max-damage"]).exists)
+        XCTAssertTrue(big.buttons["squad-style-max-damage"].label == "Max damage" && big.buttons["squad-tab-available"].exists)
+        shot("raids-tabs-style-ax5")
         assertStripPinsTheSquad(big, "raids", open: 2, chip: 3, shotName: "raids-strip-scrolled-ax5")
         big.terminate()
     }

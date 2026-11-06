@@ -7,9 +7,9 @@ import Foundation
 /// by the screen (`SquadDrafts`) until the player saves it to Current. Everything below describes a Current squad.
 ///
 /// What is kept is the player's own choices: each slot's role and the Pokémon they picked (a copy, or under Best a species the box may not have: `SquadSlot.species`,
-/// which a copy leaving the box does not touch). A squad the player has never changed keeps nothing and shows the suggestion, refilled whenever it is drawn.
+/// which a copy leaving the box does not touch). A squad with nothing kept has no Current and shows the suggestions, refilled whenever drawn.
 /// Every change (a Pokémon chosen for a slot, a slot's role changed, "Squad set") first keeps the squad exactly as shown (`Saved.fixing`), so an edit acts on what the player
-/// sees; a slot that refills in a changed squad is kept too (`adoptRefills`), so no slot changes on its own afterwards, except one whose kept Pokémon the current mode does not place. A slot with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused one for its
+/// sees; a slot that refills in a changed squad is kept too (`adoptRefills`), so no slot changes on its own afterwards. A Current squad is drawn as kept: no mode placement rule hides a kept pick. A slot with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused one for its
 /// role, that slot only (`reconciled`, `HubSquads.fill`). "Delete current squad" (`SquadStore.deleteCurrent`) forgets it all. Copies are keyed by the box entry id,
 /// which the app keeps through power-ups, evolutions, hand corrections and re-scans (`BoxEntry.id`), so a re-scan keeps every pick whose Pokémon is still in the box.
 public struct SquadStore: Codable, Equatable {

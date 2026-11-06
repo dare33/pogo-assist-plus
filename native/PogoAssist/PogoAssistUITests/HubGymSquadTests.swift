@@ -114,19 +114,19 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertEqual(el(app, "squad-saved-note").label, "Saved to Current")
         XCTAssertFalse(app.buttons["squad-save-current"].exists, "a saved draft has nothing left to save")
 
-        // A further edit (Blissey back to slot 1) and Save to Current again: the squad has a Current now, so it asks. Cancel leaves Current as it was.
-        openPicker(app, "gym", slot: 1)
+        // A further edit (Blissey on to slot 3) and Save to Current again: it would replace a different squad, so it asks. Cancel leaves Current as it was.
+        openPicker(app, "gym", slot: 3)
         pickerRows(app).firstMatch.tap()
         closePicker(app)
-        XCTAssertTrue(slot(app, "gym", 1).label.contains("Blissey"))
+        XCTAssertTrue(slot(app, "gym", 3).label.contains("Blissey"))
         XCTAssertFalse(el(app, "squad-saved-note").exists, "a changed draft is no longer the saved one")
         saveToCurrent(app, replacing: false)
         selectTab(app, "current")
-        XCTAssertTrue(slot(app, "gym", 2).label.contains("Blissey") && slot(app, "gym", 1).label.contains("empty"), "Cancel left Current as it was: \(slot(app, "gym", 2).label)")
+        XCTAssertTrue(slot(app, "gym", 2).label.contains("Blissey") && slot(app, "gym", 3).label.contains("empty"), "Cancel left Current as it was: \(slot(app, "gym", 2).label)")
         selectTab(app, "available")
         saveToCurrent(app, replacing: true)
         selectTab(app, "current")
-        XCTAssertTrue(slot(app, "gym", 1).label.contains("Blissey"), "Replace made the draft the Current squad: \(slot(app, "gym", 1).label)")
+        XCTAssertTrue(slot(app, "gym", 3).label.contains("Blissey"), "Replace made the draft the Current squad: \(slot(app, "gym", 3).label)")
 
         // Delete current squad asks first; Cancel keeps it, the confirmation removes it and shows Available (the remembered tab), whose draft is as it was.
         deleteCurrent(app, confirm: false)
@@ -134,7 +134,25 @@ final class HubGymSquadTests: SquadUITestCase {
         deleteCurrent(app, confirm: true)
         XCTAssertTrue(waitGone(tab(app, "current")), "the Current tab goes")
         XCTAssertTrue(tab(app, "available").isSelected, "and Available shows")
-        XCTAssertTrue(slot(app, "gym", 1).label.contains("Blissey"), "Available and Best are not changed: \(slot(app, "gym", 1).label)")
+        XCTAssertTrue(slot(app, "gym", 3).label.contains("Blissey"), "Available and Best are not changed: \(slot(app, "gym", 3).label)")
+        // The draft was saved and Current is gone: Save shows again, and the squad no longer says it is saved.
+        XCTAssertTrue(reveal(app, app.buttons["squad-save-current"]).exists, "Save to Current shows again for that draft")
+        XCTAssertFalse(el(app, "squad-saved-note").exists, "and it does not say Saved to Current")
+    }
+
+    /// Rule 27.3: a draft drawn as the suggestion is not an edit. Re-choosing the ticked Pokémon leaves the squad with no Save to Current and no Reset.
+    func testGymRechoosingTheTickedPokemonIsNotAnEdit() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "gym")
+        XCTAssertTrue(slot(app, "gym", 1).waitForExistence(timeout: 60))
+        openPicker(app, "gym", slot: 1)
+        XCTAssertTrue(pickerRows(app).firstMatch.isSelected)
+        pickerRows(app).firstMatch.tap()
+        closePicker(app)
+        sleep(1)
+        XCTAssertFalse(app.buttons["squad-save-current"].exists || app.buttons["squad-reset-draft"].exists, "nothing differs from the suggestion")
+        XCTAssertFalse(tab(app, "current").exists)
     }
 
     /// Rule 27: Available and Best edits last until the player leaves the screen; Current is kept, and the screen opens on it.
