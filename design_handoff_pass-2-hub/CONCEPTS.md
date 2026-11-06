@@ -47,6 +47,15 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Full strength**: a Pokémon with nothing left to do in its build; shown by a green tick badge (D33).
 - **Upgrade available**: a Pokémon whose build still has something to do; shown by an orange up-arrow, with the cost
   (dust or candy) beside it in pickers (D24, D30).
+- **Current | Available | Best** (pass 2-5, Greg, phone run 5: "instead of the button as it is can we exapnd the picker so its Current, Available, Best. Where available and
+  Best always show the suggested squad"): the three tabs over each squad. **Current** is the squad the player saved; it shows only for a squad that has one, and the squad opens on it.
+  **Available** and **Best** (defined next) are the suggestions, always started from the suggestion. Edits to them are drafts until the player saves them to Current (rule 27).
+- **Current**: the squad the player saved: its picks, species picks, roles, the "listed for <role>" marker and the "Squad set" mark. Edits on it are saved at once. Drawn as kept:
+  no mode placement rule hides a kept pick.
+- **Save to Current**: the button under an edited Available or Best squad that stores it as the squad's Current (asking first when the squad already has one). **Reset** drops the
+  edits at once. **Saved to Current** is the status text after saving. **Delete current squad** removes the Current squad after asking.
+- **Balanced | Max damage** (Raids only, rule 33): the style of the Raids suggestions. **Balanced** is a Mega, three Heavy hitters and two Bulky hitters; **Max damage** is a Mega
+  and five Heavy hitters.
 - **Suggestions: Available | Best**: the switch that decides which Pokémon the suggested squads and pickers list. Redefined
   after Greg's phone run of 30 Oct 2026 ("setting a team is confusing right now. available toggle should show available
   pokemon the user has. and best should show a list of pokemon they should aim for including unavailable + available
@@ -81,8 +90,9 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   says it in a word and an icon, so colour is never the only sign. The disc and the role text keep the role colour (rule 29).
 - **Squad status line**: one line over the slots, "Ready", "Nearly ready: 2 need work" or "Not ready: 2 to get, 1 empty",
   with a dot in the same colour (rule 30).
-- **Squad strength**: one bar under the status line for the whole squad: the mean of its slots' strength figures (rule 32), "Squad strength 72%", with "85% after upgrades" when the suggested upgrades add to it.
-- **Back to suggested squad**: the button on a changed squad that forgets the player's choices (kept Pokémon, roles, the Squad set mark) and shows the suggestion again (rule 27).
+- **Squad strength**: one bar under the status line for the whole squad: the squad's slot figures added up over the Best squad's, "Squad strength 78% of best", with "92% after upgrades"
+  when the suggested upgrades add to it, and "Matches the best squad" at or over it (rule 32).
+- **Pinned squad strip**: the row of one chip per slot that stays at the top of the screen while a slot's picker is open (rule 34).
 - **Tier chip** (S, A, B): the tier our research tables give a Pokémon for the area.
 - **"i"**: the round info button; every explanation of a weight or a rule sits behind one (D17).
 
@@ -94,9 +104,10 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Bring**: up to four attacking types that hit the boss for more than normal damage.
 - **Your squad – Boss**: the squad planned for one raid or Max battle (D45, D49).
 - **Set this squad / Squad set**: the player's own mark that the squad for that raid is ready; a set raid card is filled
-  in the accent, a set row is tinted in it (D26, D42, D46, D55).
+  in the accent, a set row is tinted in it (D26, D42, D46, D55). The mark belongs to the Current squad: "Set this squad" on Available or Best saves the shown squad to Current first
+  (asking when the squad has one) and sets the mark there (rule 27).
 - **Raid roles**: **Mega** (one per lobby, boosts everyone's damage), **Heavy hitter** (most damage, faints sooner),
-  **Bulky hitter** (stays in longer). Suggested mix 1 + 3 + 2 (D5).
+  **Bulky hitter** (stays in longer). Suggested mix 1 + 3 + 2 (D5); Max damage style 1 + 5 (rule 33).
 - **Max roles**: **Tank**, **Healer**, **Attacker**; suggested one of each (D6).
 
 **Gym**
@@ -156,7 +167,7 @@ Stated so each can be checked against the code.
    raid candidate**: one the tables do not list against the boss is unlisted (tier ""), taken only after every listed one. **Fill with any role** (Greg's choice): each role's own slots are
    filled across the whole squad first, strongest first, among the candidates the tables list against the boss; then a slot still empty takes the strongest unused listed Pokémon of
    another role and shows that role ("Its role: Bulky hitter"); only after that the unlisted ones, the slot's own role's first (manager call, rule 10). The Mega slot never takes a non-Mega. A slot is empty only when the box has nothing left for it; an empty Mega slot says why ("No Mega-capable Pokémon
-   in your box", or "... left" when they are all used) and counts as empty: there is no "Not counted" state. Tapping a slot
+   in your box", or, when the squad already holds its one Mega, "You can only have 1 Mega slot": Greg's words, phone run 5, in place of "No Mega-capable Pokémon left") and counts as empty: there is no "Not counted" state. Tapping a slot
    lists the alternatives from the box (rule 28). Under Available the picker lists the slot's own role first, then every other unused Pokémon under "Other roles:",
    each with its role, in the order the squad is filled in; the Mega slot lists Mega candidates only. Available never lists a Pokémon the box lacks, and no "could get" list
    is shown under it (a pick of a Pokémon the box lacks is not placed here; it stays stored and returns under Best). A
@@ -279,30 +290,49 @@ Stated so each can be checked against the code.
 
 ### Keeping squads
 
-27. **Where squads and picks are kept** (D58; fixed suggestion, 5 Nov 2026, folded after review 6 Nov): per account, on the phone, surviving re-scans. A raid or Max squad is
-   dropped when its event ends. Available | Best is remembered per screen. **The suggestion is worked out once, then the player edits from there**
-   (Greg, phone run 4: "can we make it so that the best suggest is calculated once, and then the user changes from there"; all five screens, Available and Best):
-   1. A squad the player has never changed shows the suggestion, refilled whenever it is drawn (a box change, a mode switch).
-   2. **Every change keeps the squad exactly as shown, then applies the change** (a Pokémon chosen for a slot, a slot's role changed, or "Set this squad"): each slot's shown
-      Pokémon becomes its kept pick (a copy as its entry id, a Best row the box lacks as a species key), an empty shown slot is kept empty, and a suggestion listed for another
-      role keeps saying "listed for <role>". So an edit always acts on what the player sees: a Best pick that Available does not place is replaced by what Available shows.
-   3. **Swap** (Greg: "Swap"): choosing for a slot a Pokémon that already sits in another slot (the same copy or the same species, through every Best row that shows the copy)
+27. **Where squads and picks are kept: Current, Available and Best** (D58; fixed suggestion, 5 Nov 2026; rewritten for pass 2-5, 6 Nov 2026, after Greg's phone run 5): per account,
+   on the phone, surviving re-scans. Greg: "instead of the button as it is can we exapnd the picker so its Current, Available, Best. Where available and Best always show the
+   suggested squad. And then as you make changes to it those changes poulate what is shown on current", then "when changes are made to best or available. the user has the option
+   to 'save' it to current. So it doesnt auto swap/swtich." What is stored is each squad's **Current** squad (a raid or Max squad is dropped when its event ends). Available | Best is
+   remembered per screen (the tab a squad with no Current opens on). The suggestion is worked out once and the player edits from there (phone run 4: "can we make it so that the best
+   suggest is calculated once, and then the user changes from there").
+   1. **Tabs.** Each squad has **Current | Available | Best** (identifiers `squad-tab-current|available|best`) on all five screens. Current shows only for a squad that has a saved
+      Current, and a squad with one opens on it; otherwise the screen opens on the remembered Available or Best. **Available and Best always start from the suggestion**, refilled
+      whenever drawn (a box change, a Raids style change, a tab switch).
+   2. **Drafts.** Available and Best are editable in place with every rule below (fixing what is shown before each change, swap, "moves it here", one Mega, Rocket rows describing the
+      edited slot, the role line). The edited squad is a **draft**: held by the screen, never stored, kept while the player stays on the screen (switching tabs, and on Rocket and
+      Raids switching leader or card, keep it) and dropped when they leave the screen (Greg: "Until you leave"). Editing a draft never switches tabs.
+   3. **Save to Current and Reset.** Once a draft has been edited, the squad shows **Save to Current** (`squad-save-current`) and a **Reset** link (`squad-reset-draft`). Reset drops
+      the draft at once, with no question. Save to Current stores the draft as the squad's Current; when the squad already has one it asks first (Greg: "Ask, then replace"): "Replace
+      your current squad? Your saved changes are replaced by this squad." (`squad-save-current-confirm|cancel`). After saving, the player stays on the tab they are on, the squad says
+      **Saved to Current** (`squad-saved-note`, also announced to VoiceOver) until the draft changes again, and the Current tab appears. A draft counts as edited once any change was
+      made to it (choosing, swapping or changing a role), even one that ends where it began.
+   4. **Current** is the stored squad: its picks (a copy as its entry id, a Best row the box lacks as a species key), roles, the "listed for <role>" marker and the "Squad set" mark.
+      **Edits on Current are saved straight away.** Every change keeps the squad exactly as shown, then applies the change (a Pokémon chosen for a slot, a role changed, "Set this
+      squad"): each slot's shown Pokémon becomes its kept pick, an empty shown slot is kept empty. **Current is drawn as kept**: no mode placement rule hides a kept pick on it (the pass 2-4
+      "a mode switch shows that mode's suggestion" limit is gone for Current), and a species pick the box lacks shows as the not-owned Best slot it is (rule 6). Its picker lists the
+      player's own box as Available's does.
+   5. **Swap** (Greg: "Swap"): choosing for a slot a Pokémon that already sits in another slot (the same copy or the same species, through every Best row that shows the copy)
       puts the slot's previous Pokémon in that other slot. If the slot was empty the Pokémon moves and the other slot refills with the next best unused ("moves it here"). A picker
       lists the Pokémon of the squad's other slots, marked "In slot N · choosing it swaps the two", **only when the swap can happen**: each Pokémon must fit the slot it would go to
-      (Available: be placeable there, the Mega slot taking Mega candidates only; Best: be listed for that slot's role; PvP: be rated in the league). Otherwise the row is not listed.
-      A raid squad holds one Mega: a swap only exchanges two Pokémon, so a Mega another slot holds stays listed for a swap that can happen, and no further Mega row is offered. Rocket
-      lists every other slot's shown Pokémon, even when it does not beat the edited slot's lineup or no counter list holds it, and describes it against the edited slot (its types that hit, "beats n of 3"). PvP still hides another copy of a species the squad holds.
-   4. A slot left with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused Pokémon for its role, that slot only, and **that Pokémon is then kept**
-      (stored when the screen shows it), so it does not change again on a later scan. An empty slot of a kept squad takes a Pokémon whenever one becomes available (a refill replaces nobody, so it is not a move of anyone's Pokémon). A kept Pokémon the current mode does not place is not overwritten: see the mode rule below.
-   5. **Back to suggested squad** (Greg: "Yes, add it"): a button with each squad, shown once the squad has been changed ("Set this squad" counts; a file saved before this rule that
-      holds the player's picks shows it too). It asks first ("Back to suggested squad? Your changes to this squad are cleared." with a confirm and a cancel), then forgets every kept
-      Pokémon, puts the roles back to the screen's defaults and clears the "Squad set" mark; the squad then shows the suggestion again, as in 1.
+      (Available: be placeable there, the Mega slot taking Mega candidates only; Best: be listed for that slot's role; PvP: be rated in the league; Current: any kept Pokémon). Otherwise
+      the row is not listed. A raid squad holds one Mega: a swap only exchanges two Pokémon, so a Mega another slot holds stays listed for a swap that can happen, and no further Mega
+      row is offered. Rocket lists every other slot's shown Pokémon, even when it does not beat the edited slot's lineup or no counter list holds it, and describes it against the
+      edited slot (its types that hit, "beats n of 3"). PvP still hides another copy of a species the squad holds.
+   6. A slot left with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused Pokémon for its role, that slot only, and **that Pokémon is then kept**
+      (stored on Current, held in the draft otherwise, when the screen shows it), so it does not change again on a later scan. An empty slot of a kept squad takes a Pokémon whenever
+      one becomes available (a refill replaces nobody, so it is not a move of anyone's Pokémon).
+   7. **Delete current squad** (`squad-delete-current`), a link on Current, asks first ("Delete current squad? Available and Best are not changed." with a confirm and a cancel,
+      `squad-delete-current-confirm|cancel`), then removes the Current squad (its picks, roles and "Squad set" mark) and shows Available, or the remembered tab. Greg: "Delete in
+      Current, asks".
+   8. **Set this squad** (Raids and Max). On Current it sets the mark as before. On Available or Best it saves the shown squad to Current (asking as in 3 when the squad has one) and
+      sets the mark there; the player stays on the tab. "✓ Squad set" shows on Available or Best only while the squad just saved is what is shown.
+   9. **Old files.** A squad saved by an earlier build becomes that squad's Current when it has `changed` set, holds any pick of the player's, or carries the "Squad set" mark (so the
+      mark is not lost); a squad with nothing kept has no Current. Files that predate the `changed` flag, species picks, or the Raids style still decode.
+   "Back to suggested squad" (pass 2-4) is gone: its button, question and identifiers are replaced by Reset, Delete current squad and the tabs.
    A slot holds either a copy (its entry id) or, for a Best pick of a Pokémon the box lacks, a species key; a species pick is not touched when copies leave the box. A species pick
    that reads as a copy ticks only the row the player picked. A Max row's rotation line reads the Max battles only. A copy picked under one mode that the other mode's list does not
-   hold still shows in that mode's picker, ticked, with its own status. **Mode rule:** a kept pick that does not fit a mode (a species pick under Available; a copy with no build for
-   the area under Available) is not placed there, so that slot shows that mode's suggestion until the player edits under that mode (the edit keeps what is shown, as in 2) or switches
-   back; the pick stays kept and returns under its mode. A file saved before species picks existed reads as it did; a file saved before this rule reads as never changed until the
-   player's next change.
+   hold still shows in that mode's picker, ticked, with its own status.
 
 28. **Available upgrades** (phone feedback item 10; S1: "provides alternative options for each slot when clicked on"): tapping a slot
    under Available lists the alternatives from the box, the player's own Pokémon with those at Full
@@ -353,14 +383,31 @@ Stated so each can be checked against the code.
    only) and "N empty", in that order, joined by a comma. The dot beside it is green, amber or red as the squad is ready,
    nearly ready or not ready. It sits under the squad's heading, above the slots, on all five screens.
 
-32. **Squad strength** (phone run 4, 5 Nov 2026; Greg: "Squad bar, avg"; identifier `squad-strength`): one bar for the squad under the status line (rule 30), on all five squad
-    screens, drawn as a picker row's bar is (rule 31): 100% = every scored slot holds the best in the game for its role (an unscored slot is left out, an empty slot counts 0); **solid part** = the squad now, **faint part** = after the
-    suggested upgrades. The value is the **mean of the slots' figures**, each exactly the figure that slot's Pokémon shows as a row in that slot's picker (the same scale, the Mega-slot
-    rule on Raids, Bulk on Gym, league Score on PvP, Max move damage on Max, the slot's possible Pokémon on Rocket; a Pokémon the box lacks uses the row's own figure at level 50 with
-    15/15/15). An **empty slot counts 0**. A slot whose Pokémon has no figure (IVs or level not read, "score not known") is **left out** of the mean, and the line then says how many
-    slots were scored ("5 of 6 slots scored"). Words: "Squad strength 72%" and, when the figure after upgrades rounds to a higher whole percent, "85% after upgrades"; VoiceOver reads the
-    same words. PvP reads its mean Score as the screen reads Scores ("Squad strength: score 72", no "after": a Score is already of the built option). With no scored slot the line says
-    "Squad strength not read" and draws no bar. It follows the squad as drawn, so a swap, a role change and a mode switch move it. "After upgrades" shows only when the bar draws its faint part. It is worked out off the main thread: the row keeps its place with an empty track until the figure is ready. At accessibility text sizes the two labels stack.
+32. **Squad strength** (phone run 4, 5 Nov 2026, rewritten for pass 2-5, 6 Nov 2026; Greg: "Squad bar, avg", then, phone run 5, "shouldnt the best squad be a fully maxed bar and then the other squads go down in relative value from there?"; identifier `squad-strength`): one bar for the squad under the status line (rule 30), on all five squad
+    screens, drawn as a picker row's bar is (rule 31), **measured against the squad's Best squad** (Greg: "Total squad damage"). Picker row bars do not change: they stay against the best Pokémon in the game ("Keep vs best in game").
+    - **Reference** = the squad's Best suggestion, unedited (on Raids in the chosen style, rule 33), each slot taken at its **full build**: that slot's Pokémon at level 50 with 15/15/15 and
+      its best moves, exactly the figure a not-owned Best row gets (rule 31's last bullet), whether or not the box holds a copy. Gym: the Bulk of that Pokémon at full build. PvP: its league Score.
+      Rocket: damage against the slot's lineup as rule 31. Max: the Max squad's Best of three.
+    - **Value** for a squad on any tab = the sum of its slots' figures (each exactly the figure that slot's Pokémon shows as a row in that slot's picker: now, and after the suggested
+      upgrade) over the sum of the reference's slot figures, as a whole percent, **capped at 100%**. A squad at or over the reference reads **"Matches the best squad"**. PvP: the mean Score
+      over the reference's mean Score, with no "after" part.
+    - An **empty slot counts 0** against its reference slot. A slot whose Pokémon has no figure (IVs or level not read, "score not known") is **left out together with the reference's slot at
+      the same index**, and the line says "N of M slots scored". A reference slot with no figure leaves that index out of both sides. With no reference figure at all, or no scored slot, the
+      line says "Squad strength not read" and draws no bar.
+    - Words: "Squad strength 78% of best" and, when the figure after upgrades rounds to a higher whole percent, "92% after upgrades" (only when the bar draws its faint part); at or over the
+      reference "Squad strength 100% · Matches the best squad". **The unedited Best tab reads 100%** ("Squad strength 100% · the best squad"); an edited Best draft shows its own value against
+      the unedited Best. VoiceOver reads the same words. Current's bar compares with the Best of the style now chosen.
+    - It follows the squad as drawn, so a swap, a role change, a tab switch and a style change move it. It is worked out off the main thread, keyed by the box generation, the advice, today, the squad, the tab and the style: the row keeps its place with an empty track until the figure is ready. At accessibility text sizes the two labels stack.
+
+33. **Raids style: Balanced | Max damage** (pass 2-5; Greg, phone run 5: "can we bring in a another toggle/selector. Max damage = prioritises and builds glass cannon with 1 mega. Balanced = the current strcuture we have."; Max battles keep their Tank, Healer and Attacker: "Raids only"). A second control on Raids (identifiers `squad-style-balanced|max-damage`), default Balanced, remembered per account like the tab choice.
+    **Balanced** is 1 Mega + 3 Heavy hitter + 2 Bulky hitter (rule 10); **Max damage** is 1 Mega + 5 Heavy hitter. The style sets the default roles of the Available and Best suggestions, and so the
+    strength reference (rule 32). When Heavy hitters run out, the fill rule of rule 10 applies (other roles' listed counters, "listed for <role>", and so on). Changing the style drops the
+    Available and Best drafts (they were edits of the other suggestion) and leaves Current untouched. Max battles, Gym, Rocket and PvP have no style. The squad's (i) explains the two styles:
+    "Balanced: a Mega, three heavy hitters and two bulky hitters that stay in longer." "Max damage: a Mega and five heavy hitters; faster, with more relobbies."
+
+34. **Pinned squad strip** (pass 2-5; Greg, phone run 5: "when scrolling down on the team/squad selector screens the squad currenlty chosen should remain visible as i scroll down currently it hides and i can only see th elist of pokmeon"; his choice: "Compact strip"). While a slot's picker is open, a compact strip stays pinned at the top of the screen's scroll area (`squad-strip`) as the player scrolls the
+    Pokémon list: one chip per slot (identifier `squad-strip-chip-N`) showing the slot number, the Pokémon's name or "Empty" and the role colour, the slot being edited highlighted (and kept in view); tapping a chip opens that slot's picker. It is hidden when no picker is open.
+    At accessibility text sizes the chips keep whole words and the strip scrolls sideways; the list is inset below it, never pushed off screen. Each chip is one VoiceOver button ("Slot 2, Moltres, Heavy hitter, editing"). On all five squad screens.
 
 ## Word check
 
