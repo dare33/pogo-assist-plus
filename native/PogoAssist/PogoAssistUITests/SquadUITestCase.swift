@@ -111,6 +111,15 @@ class SquadUITestCase: XCTestCase {
         }
     }
 
+    /// Scrolls back to the top and switches the suggestions to Available.
+    func selectAvailable(_ app: XCUIApplication) {
+        let available = app.buttons["squad-mode-available"]
+        var n = 0
+        while !(available.exists && available.isHittable) && n < 8 { app.swipeDown(); n += 1 }
+        if !available.isSelected { available.tap() }
+        XCTAssertTrue(available.waitForExistence(timeout: 5))
+    }
+
     /// Scrolls back to the top and switches the suggestions to Best.
     func selectBest(_ app: XCUIApplication) {
         let best = app.buttons["squad-mode-best"]
@@ -157,6 +166,78 @@ class SquadUITestCase: XCTestCase {
             if app.buttons["squad-picker-done"].exists { scrollPickerIntoView(app) } else { app.swipeUp() }
             sleep(1)
             shot("\(screen)-\(scheme)-\(size)-2")
+            app.terminate()
+        }
+    }
+
+    // MARK: the fixed suggestion and the squad strength bar (CONCEPTS rules 27 and 32)
+
+    /// A slot card's Pokémon: its label reads "Slot 2 of 6, Heavy hitter, Name, ..." on Raids, Max and PvP and "Slot 2 of 6, Name, ..." on Gym and Rocket.
+    func slotName(_ app: XCUIApplication, _ screen: String, _ n: Int) -> String {
+        let parts = slot(app, screen, n).label.components(separatedBy: ", ")
+        return parts.count > (["raids", "max", "pvp"].contains(screen) ? 2 : 1) ? parts[["raids", "max", "pvp"].contains(screen) ? 2 : 1] : ""
+    }
+
+    /// Picks the first row of the open picker that is not the slot's own and not in another slot; returns its name, or nil when there is none.
+    @discardableResult func chooseAFreshRow(_ app: XCUIApplication) -> String? {
+        let rows = pickerRows(app)
+        _ = rows.firstMatch.waitForExistence(timeout: 10)
+        let fresh = rows.matching(NSPredicate(format: "selected == false AND NOT (label CONTAINS 'choosing it')")).firstMatch
+        guard fresh.exists else { return nil }
+        let name = fresh.label.components(separatedBy: ",").first ?? ""
+        fresh.tap()
+        return name
+    }
+
+    /// Changes the squad once: a fresh row in slot 2, else (nothing fresh in the box) a swap with another slot's Pokémon; under Best when Available has nothing to offer.
+    func changeTheSquad(_ app: XCUIApplication, _ screen: String) {
+        for best in [false, true] {
+            if best { selectBest(app) }
+            for n in [2, 1, 3] {
+                guard slot(app, screen, n).exists else { continue }
+                openPicker(app, screen, slot: n)
+                if chooseAFreshRow(app) != nil { closePicker(app); return }
+                let held = pickerRows(app).matching(NSPredicate(format: "label CONTAINS 'choosing it'")).firstMatch
+                if held.exists { held.tap(); closePicker(app); return }
+                closePicker(app)
+            }
+        }
+        XCTFail("no slot offered a row to change the squad with")
+    }
+
+    /// Taps "Back to suggested squad" and confirms the question it asks.
+    func tapBackAndConfirm(_ app: XCUIApplication) {
+        reveal(app, app.buttons["squad-back-to-suggested"]).tap()
+        let confirm = app.buttons.matching(identifier: "squad-back-confirm").firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Back asks first")
+        confirm.tap()
+    }
+
+    /// Scrolls until the squad strength line is near the top, so the bar, the slots and the button under them show.
+    func scrollToStrength(_ app: XCUIApplication) {
+        let line = el(app, "squad-strength")
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)), to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        var n = 0
+        while n < 40 && !(line.exists && line.isHittable && line.frame.minY < 380 && line.frame.minY > 60) {
+            if line.exists && line.frame.minY < 60 { to.press(forDuration: 0.05, thenDragTo: from) } else { from.press(forDuration: 0.05, thenDragTo: to) }
+            n += 1
+        }
+    }
+
+    /// The screenshots of a squad with its strength bar and, after one change, its Back to suggested squad button: light and dark at the default text size and at AX5
+    /// (the box is kept from the first launch), named <screen>-<light|dark>-<default|ax5>.
+    func strengthShots(_ screen: String, tile: String? = nil, prepare: (XCUIApplication) -> Void = { _ in }) {
+        for (scheme, size) in [("light", "default"), ("dark", "default"), ("light", "ax5"), ("dark", "ax5")] {
+            let app = launch(dark: scheme == "dark", ax5: size == "ax5")
+            openTile(app, tile ?? screen)
+            prepare(app)
+            XCTAssertTrue(slot(app, screen, 1).waitForExistence(timeout: 60))
+            changeTheSquad(app, screen)
+            let back = app.buttons["squad-back-to-suggested"]
+            XCTAssertTrue(back.waitForExistence(timeout: 10), "a changed squad has its Back to suggested squad button")
+            scrollToStrength(app)
+            sleep(1)
+            shot("\(screen)-\(scheme)-\(size)")
             app.terminate()
         }
     }

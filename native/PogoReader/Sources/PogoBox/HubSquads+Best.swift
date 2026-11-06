@@ -351,11 +351,18 @@ extension HubSquads {
         let byKey = keyedBuilds(plainBuilds(ctx.advice.builds).filter(isRocketArea), shadowServesPlain: true, ctx: ctx)
         return ranked(items).map { r in
             var out = bestRow(r.e, roles: r.roles, owner: owner(r.e, builds: byKey[bestKey(r.e)] ?? [], screen: .rocket, copies: copies, claims: &claims, ctx: ctx), screen: .rocket, ctx: ctx)
-            out.hits = options.filter { ctx.hub.beats(out.types, $0.types) }.count
-            out.typeFlags = out.types.map { t in TypeFlag(type: t, hits: options.contains { ctx.hub.beats([t], $0.types) }) }
-            out.slotLine = slotLine(hits: out.hits, of: options.count)
-            return out
+            return rescored(out, for: options, ctx: ctx)
         }
+    }
+
+    /// A Rocket row as it reads for one slot of the lineup: how many of the slot's options its types hit, which of its types hit, and the "beats n of 3" line. A Pokémon in another
+    /// slot of the squad is offered in a slot's picker described against THAT slot, never against the slot it sits in.
+    public static func rescored(_ r: BestRow, for options: [HubData.Boss], ctx: HubContext) -> BestRow {
+        var out = r
+        out.hits = options.filter { ctx.hub.beats(out.types, $0.types) }.count
+        out.typeFlags = out.types.map { t in TypeFlag(type: t, hits: options.contains { ctx.hub.beats([t], $0.types) }) }
+        out.slotLine = slotLine(hits: out.hits, of: options.count)
+        return out
     }
 
     /// The Rocket table's tier for a build's target (a Shadow copy reads the Shadow entry first); "" when the table does not list it.
@@ -397,7 +404,7 @@ extension HubSquads {
     public static func resolvingSpecies(_ slots: [SquadSlot], rows: [BestRow]) -> [SquadSlot] {
         slots.map { s in
             guard s.pick == nil, let key = s.species, let own = rows.first(where: { $0.key == key })?.ownedEntryId else { return s }
-            return SquadSlot(role: s.role, pick: own)
+            return SquadSlot(role: s.role, pick: own, fallback: s.fallback)
         }
     }
 
@@ -405,7 +412,7 @@ extension HubSquads {
     /// show the same copy.
     private static func keepingSpecies(_ filled: [FilledSlot], _ slots: [SquadSlot], rows: [BestRow]) -> [FilledSlot] {
         var out = filled
-        for i in out.indices where i < slots.count && slots[i].pick == nil && out[i].entryId != nil && out[i].chosen {
+        for i in out.indices where i < slots.count && slots[i].pick == nil && out[i].entryId != nil && (out[i].chosen || out[i].fallback) {
             if let key = slots[i].species, rows.contains(where: { $0.key == key }) { out[i].species = key }
         }
         return out

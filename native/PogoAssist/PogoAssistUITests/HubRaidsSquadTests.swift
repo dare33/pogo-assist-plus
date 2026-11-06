@@ -39,6 +39,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         reveal(app, set).tap()
         XCTAssertTrue(el(app, "squad-set-state").waitForExistence(timeout: 5), "✓ Squad set")
         XCTAssertTrue(app.buttons["squad-undo"].exists)
+        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).exists, "Squad set counts as a change: the squad is kept and Back shows")
         XCTAssertTrue(el(app, "hub-raid-row-0").label.contains("squad set"), "the card says so: \(el(app, "hub-raid-row-0").label)")
         app.buttons["squad-undo"].tap()
         XCTAssertTrue(app.buttons["squad-set"].waitForExistence(timeout: 5), "Undo takes the mark back")
@@ -127,6 +128,52 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 1).label.hasPrefix("Slot 1 of 6, Bulky hitter"), slot(app, "raids", 1).label)
     }
 
+    /// Rule 27: replacing a Pokémon in one slot moves nothing else, choosing one that sits in another slot swaps the two, and Back to suggested squad restores the suggestion.
+    /// Rule 32: the squad strength line follows. Under Best, where the tables give many rows.
+    func testRaidsReplaceSwapAndBackToSuggestedSquad() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "raids")
+        let card = el(app, "hub-raid-row-1")
+        XCTAssertTrue(card.waitForExistence(timeout: 60))
+        card.tap()
+        XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
+        selectBest(app)
+        let strength = el(app, "squad-strength")
+        XCTAssertTrue(reveal(app, strength).exists)
+        XCTAssertTrue(strength.label.hasPrefix("Squad strength "), strength.label)
+        let startStrength = strength.label
+        XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
+        let original = (1...6).map { slot(app, "raids", $0).label }
+        let names = (1...6).map { slotName(app, "raids", $0) }
+
+        // Replace slot 4: its Pokémon does not drop into another slot, and no other slot changes.
+        openPicker(app, "raids", slot: 4)
+        let fresh = try XCTUnwrap(chooseAFreshRow(app), "the table lists another Pokémon for a Heavy hitter slot")
+        closePicker(app)
+        XCTAssertTrue(slot(app, "raids", 4).label.contains(fresh), "slot 4 shows the choice: \(slot(app, "raids", 4).label)")
+        for n in [1, 2, 3, 5, 6] { XCTAssertEqual(slot(app, "raids", n).label, original[n - 1], "slot \(n) did not move") }
+        XCTAssertFalse([1, 2, 3, 5, 6].contains { slot(app, "raids", $0).label.contains(names[3]) }, "the replaced Pokémon is not in another slot")
+        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).exists, "a changed squad has the Back button")
+
+        // Swap: slot 4's picker lists slot 2's Pokémon, marked; choosing it exchanges the two.
+        openPicker(app, "raids", slot: 4)
+        let held = pickerRows(app).matching(NSPredicate(format: "label CONTAINS 'in slot 2, choosing it swaps the two'")).firstMatch
+        XCTAssertTrue(held.waitForExistence(timeout: 10), "slot 2's Pokémon is listed in slot 4's picker, marked")
+        XCTAssertTrue(held.label.hasPrefix(names[1]), held.label)
+        held.tap()
+        closePicker(app)
+        XCTAssertTrue(slot(app, "raids", 4).label.contains(names[1]), "slot 4 took slot 2's Pokémon: \(slot(app, "raids", 4).label)")
+        XCTAssertTrue(slot(app, "raids", 2).label.contains(fresh), "slot 2 took slot 4's: \(slot(app, "raids", 2).label)")
+        for n in [1, 3, 5, 6] { XCTAssertEqual(slot(app, "raids", n).label, original[n - 1], "slot \(n) did not move") }
+
+        // Back to suggested squad.
+        tapBackAndConfirm(app)
+        XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
+        for n in 1...6 { XCTAssertEqual(slot(app, "raids", n).label, original[n - 1], "slot \(n) is back to the suggestion") }
+        XCTAssertEqual(reveal(app, el(app, "squad-strength")).label, startStrength)
+    }
+
     /// P1: every picker row says the copy's CP and IVs and its estimated damage in its one VoiceOver label (the bar itself is hidden from VoiceOver).
     func testRaidsPickerRowsShowCpIvsAndStrength() throws {
         let app = launch(reset: true)
@@ -171,5 +218,16 @@ final class HubRaidsSquadTests: SquadUITestCase {
         _ = reveal(app, other)
         shot("raids-other-roles-picker")
         app.terminate()
+    }
+
+    /// The squad with its strength bar and, after one change, its Back button: light, dark, default text and AX5.
+    func testRaidsSquadStrengthShots() throws {
+        let setup = launch(reset: true)
+        populate(setup)
+        setup.terminate()
+        strengthShots("raids") { app in
+            let card = self.el(app, "hub-raid-row-1")
+            if card.waitForExistence(timeout: 30) { card.tap() }
+        }
     }
 }

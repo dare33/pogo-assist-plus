@@ -184,3 +184,18 @@ Greg's choices, 5 Nov 2026 (one-click answers to the manager's questions):
 - Squad strength indicator: "Squad bar, avg (Recommended)": one bar per squad, the mean of the slot bars, with the
   now and after-upgrade parts, beside the Ready line.
 Built on design/pass-2-4 (stacked on design/pass-2-3, so PR #25 can merge first), full paired review.
+
+## Phone run 5, 6 Nov 2026 (build 747c10b, test/greg-build)
+
+Greg's words, per check of the manager's walkthrough:
+
+1. Gym, the Blissey swap: "green".
+2. One change, nothing else moves: "green".
+3. Back to suggested squad: "green but i kinda want to cahnge this funcitonality. instead of the button as it is can we exapnd the picker so its Current, Available, Best. Where available and Best always show the suggested squad. And then as you make changes to it those changes poulate what is shown on current."
+4. Squad strength bar: "im cnofused by the bar - when i go to raids, and toggle on best. shouldnt the best squad be a fully maxed bar and then the other squads go down in relative value from there? Why isnt the hypothetical best squad maxed out?"
+5. Raids swaps and the Mega slot: "green but change wording from 'no mega-capable pokemon left' to 'You can only have 1 mega slot'".
+6. Max: "green". 7. Rocket: "green". 8. PvP: "green". 9. Available/Best switch: "green".
+
+New note: "when scrolling down on the team/squad selector screens the squad currenlty chosen should remain visible as i scroll down currently it hides and i can only see th elist of pokmeon"
+
+Manager's note on 4: 100% is the single strongest released Pokémon in the game against the boss (level 50, 15/15/15, best moves; rule 31), so a slot can reach 100% only by holding that one Pokémon. A raid squad holds one Mega, the other slots are judged as plain forms, and Bulky hitter slots are chosen for survival rather than damage, so even the Best squad sits well below 100%.
