@@ -167,7 +167,7 @@ Stated so each can be checked against the code.
    raid candidate**: one the tables do not list against the boss is unlisted (tier ""), taken only after every listed one. **Fill with any role** (Greg's choice): each role's own slots are
    filled across the whole squad first, strongest first, among the candidates the tables list against the boss; then a slot still empty takes the strongest unused listed Pokémon of
    another role and shows that role ("Its role: Bulky hitter"); only after that the unlisted ones, the slot's own role's first (manager call, rule 10). The Mega slot never takes a non-Mega. A slot is empty only when the box has nothing left for it; an empty Mega slot says why ("No Mega-capable Pokémon
-   in your box", or, when the box has Mega-capable Pokémon but none can go in the Mega slot here (the squad's one Mega is already placed), "You can only have 1 Mega slot": Greg's words, phone run 5, in place of "No Mega-capable Pokémon left") and counts as empty: there is no "Not counted" state. Tapping a slot
+   in your box", or, when the box has at least one Mega candidate (a Pokémon with a Mega view, whether or not it is already in the squad) but the slot is empty (the squad's one Mega sits in another Mega slot), "You can only have 1 Mega slot": Greg's words, phone run 5, in place of "No Mega-capable Pokémon left") and counts as empty: there is no "Not counted" state. Tapping a slot
    lists the alternatives from the box (rule 28). Under Available the picker lists the slot's own role first, then every other unused Pokémon under "Other roles:",
    each with its role, in the order the squad is filled in; the Mega slot lists Mega candidates only. Available never lists a Pokémon the box lacks, and no "could get" list
    is shown under it (a pick of a Pokémon the box lacks is not placed here; it stays stored and returns under Best). A
@@ -323,7 +323,7 @@ Stated so each can be checked against the code.
       row is offered. Rocket lists every other slot's shown Pokémon, even when it does not beat the edited slot's lineup or no counter list holds it, and describes it against the
       edited slot (its types that hit, "beats n of 3"). PvP still hides another copy of a species the squad holds.
    6. A slot left with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused Pokémon for its role, that slot only, and **that Pokémon is then kept**
-      (stored on Current, held in the draft otherwise, when the screen shows it), so it does not change again on a later scan. A kept species pick and an owned copy of that species are the same Pokémon:
+      (stored on Current, held in the draft otherwise, when the screen shows it), so it does not change again on a later scan. A kept species pick and an owned copy of that species are the same Pokémon (a role change reads the pick through its copy, so an owned species listed for the new role is kept):
       while the pick holds it, no other slot refills with that copy (Raids, Max, Gym, Rocket), so it is never shown, or counted in the strength, twice. An empty slot of a kept squad takes a Pokémon whenever
       one becomes available (a refill replaces nobody, so it is not a move of anyone's Pokémon).
    7. **Delete current squad** (`squad-delete-current`), a link on Current, asks first ("Delete current squad? Available and Best are not changed." with a confirm and a cancel,
