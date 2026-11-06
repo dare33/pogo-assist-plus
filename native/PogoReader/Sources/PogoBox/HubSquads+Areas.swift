@@ -365,9 +365,10 @@ extension HubSquads {
     /// stays empty (its Next best list is for the player to choose from). Only chosen picks leave another slot's picker (`excluded(..., onlyChosen: true)`).
     public static func defaultRocketSlots() -> [SquadSlot] { Array(repeating: SquadSlot(role: rocketSlotRole), count: 3) }
 
-    public static func rocketSquad(leader: HubData.Leader, slots: [SquadSlot] = defaultRocketSlots(), mode: SquadMode, ctx: HubContext) -> [FilledSlot] {
+    /// `kept` draws a Current squad (pass 2-5): no mode placement rule hides a kept pick.
+    public static func rocketSquad(leader: HubData.Leader, slots: [SquadSlot] = defaultRocketSlots(), mode: SquadMode, kept: Bool = false, ctx: HubContext) -> [FilledSlot] {
         let pickers = leader.slots.map { rocketPicker(options: $0, mode: mode, ctx: ctx).map(\.entryId) }
-        return fill(slots: slots, pool: { i, _ in Pool(preferred: pickers.indices.contains(i) ? pickers[i] : []) }, placeable: placeable(screen: .rocket, mode: mode, ctx: ctx))
+        return fill(slots: slots, pool: { i, _ in Pool(preferred: pickers.indices.contains(i) ? pickers[i] : []) }, placeable: kept ? { _, _ in true } : placeable(screen: .rocket, mode: mode, ctx: ctx))
     }
 
     /// Rule 19: the box's counters for a grunt type: up to eight, one per species, built first, then `HubTeams.gruntCounter`'s order (Rocket area, tier,

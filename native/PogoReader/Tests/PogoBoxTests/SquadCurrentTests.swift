@@ -152,6 +152,25 @@ final class SquadCurrentTests: XCTestCase {
         XCTAssertFalse(d.justSaved("a", .best))
     }
 
+    func testAChangeOfRaidStyleDropsEveryRaidDraftAndNothingElse() {
+        var d = SquadDrafts()
+        let raid = SquadRef.event(row: row(), screen: .raids).key, max = SquadRef.event(row: row(), screen: .max).key
+        for k in [raid, max, SquadRef.gym.key] { d.setDraft(picked(), k, .available); d.setDraft(picked(), k, .best) }
+        d.didSave(picked(), raid, .best)
+        d.resetAll(keyPrefix: "raids|")
+        XCTAssertNil(d.draft(raid, .available)); XCTAssertNil(d.draft(raid, .best))
+        XCTAssertFalse(d.justSaved(raid, .best))
+        XCTAssertNotNil(d.draft(max, .available), "Max has no style")
+        XCTAssertNotNil(d.draft(SquadRef.gym.key, .best))
+    }
+
+    func testTheRefOfASquadNamesItsScreen() {
+        XCTAssertEqual(SquadRef.event(row: row(), screen: .max).screen, .max)
+        XCTAssertEqual(SquadRef.gym.screen, .gym)
+        XCTAssertEqual(SquadRef.rocket(leader: "Arlo").screen, .rocket)
+        XCTAssertEqual(SquadRef.pvp(league: "gl").screen, .pvp)
+    }
+
     func testTheKeyNamesTheSquad() {
         XCTAssertNotEqual(SquadRef.event(row: row(), screen: .raids).key, SquadRef.event(row: row(), screen: .max).key)
         XCTAssertNotEqual(SquadRef.event(row: row(), screen: .raids).key, SquadRef.event(row: row("Dialga"), screen: .raids).key)

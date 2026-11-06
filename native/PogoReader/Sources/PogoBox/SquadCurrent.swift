@@ -18,6 +18,15 @@ public enum SquadRef {
     case rocket(leader: String)
     case pvp(league: String)
 
+    public var screen: SquadScreen {
+        switch self {
+        case let .event(_, screen): return screen
+        case .gym: return .gym
+        case .rocket: return .rocket
+        case .pvp: return .pvp
+        }
+    }
+
     /// The key the screen's view state (`SquadDrafts`) holds the squad under.
     public var key: String {
         switch self {
@@ -100,6 +109,12 @@ public struct SquadDrafts: Equatable {
         savedAs[Self.slot(key, tab)] = nil
     }
     public mutating func resetAll(_ key: String) { for t in [SquadTab.available, .best] { reset(key, t) } }
+
+    /// A change of Raids style: every Available and Best draft whose squad key starts with `prefix` was an edit of the other suggestion, so it goes; Current is untouched.
+    public mutating func resetAll(keyPrefix prefix: String) {
+        for k in drafts.keys where k.hasPrefix(prefix) { drafts[k] = nil }
+        for k in savedAs.keys where k.hasPrefix(prefix) { savedAs[k] = nil }
+    }
 
     /// The draft was saved to Current: the player stays on the tab, which says "Saved to Current" until the draft changes again.
     public mutating func didSave(_ squad: SquadStore.Saved, _ key: String, _ tab: SquadTab) {
