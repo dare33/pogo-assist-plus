@@ -152,7 +152,9 @@ extension HubSquads {
     /// candidate of its own role that the tables list against this boss; one of any other role that they list, strongest first (`fallback`, on its plain form); one of its
     /// own role they do not list (tier ""); one of any role they do not list. A role has run out when it has no listed candidate left (manager call, 31 Oct 2026). The Mega
     /// slot never falls back, and a squad holds only one Mega: a later slot given the Mega role stays empty.
-    public static func raidSquad(slots: [SquadSlot] = defaultRaidSlots(), candidates: [RaidCandidate], fillAnyRole: Bool = false, placeable: (String, String) -> Bool) -> [FilledSlot] {
+    /// `copyOf` (a Current squad, pass 2-5) names the copy a kept species pick stands for, so no other slot refills with that copy while the pick holds it.
+    public static func raidSquad(slots: [SquadSlot] = defaultRaidSlots(), candidates: [RaidCandidate], fillAnyRole: Bool = false, placeable: (String, String) -> Bool,
+                                 copyOf: (String) -> String? = { _ in nil }) -> [FilledSlot] {
         let listedIds = Set(candidates.filter { !$0.tier.isEmpty }.map(\.entryId))
         var out = fill(slots: slots, pool: { _, role in
             let own = raidPool(role: role, in: candidates)
@@ -160,7 +162,7 @@ extension HubSquads {
             let all = candidates.map(\.entryId)
             return Pool(preferred: own.filter(listedIds.contains), fallback: all.filter(listedIds.contains),
                         deferred: own.filter { !listedIds.contains($0) }, deferredFallback: all.filter { !listedIds.contains($0) })
-        }, placeable: placeable)
+        }, placeable: placeable, copyOf: copyOf)
         if fillAnyRole, let first = slots.firstIndex(where: { $0.role == PogoRules.RaidRole.mega.rawValue }) {
             for i in slots.indices where i != first && slots[i].role == PogoRules.RaidRole.mega.rawValue { out[i].entryId = nil; out[i].species = nil; out[i].chosen = false }
         }
@@ -212,8 +214,9 @@ extension HubSquads {
     /// Suggested Max squad: the first Tank, the first Healer, the first Attacker that hits the boss (else the first Attacker). Until a copy is marked
     /// Dynamax every Max pick reads Upgrade available (`isFullStrength` on .max), as the read-back's Q7 says. With `fillAnyRole` (Available) a slot with no unused
     /// candidate of its role takes the strongest unused one of another role (`fallback`).
-    public static func maxSquad(slots: [SquadSlot] = defaultMaxSlots(), candidates: [MaxCandidate], fillAnyRole: Bool = false, placeable: (String, String) -> Bool) -> [FilledSlot] {
-        fill(slots: slots, pool: { _, role in Pool(preferred: maxPool(role: role, in: candidates), fallback: fillAnyRole ? candidates.map(\.entryId) : []) }, placeable: placeable)
+    public static func maxSquad(slots: [SquadSlot] = defaultMaxSlots(), candidates: [MaxCandidate], fillAnyRole: Bool = false, placeable: (String, String) -> Bool,
+                                copyOf: (String) -> String? = { _ in nil }) -> [FilledSlot] {
+        fill(slots: slots, pool: { _, role in Pool(preferred: maxPool(role: role, in: candidates), fallback: fillAnyRole ? candidates.map(\.entryId) : []) }, placeable: placeable, copyOf: copyOf)
     }
 
     // MARK: Gym (rules 13 and 14)
@@ -269,8 +272,8 @@ extension HubSquads {
     public static func defaultGymSlots() -> [SquadSlot] { Array(repeating: SquadSlot(role: gymSlotRole), count: 6) }
 
     /// The six suggested defenders: the first rows of the order not already chosen elsewhere in the squad.
-    public static func gymSquad(slots: [SquadSlot] = defaultGymSlots(), rows: [GymRow], placeable: (String, String) -> Bool) -> [FilledSlot] {
-        fill(slots: slots, pool: { _, _ in Pool(preferred: rows.map { $0.build.entryId }) }, placeable: placeable)
+    public static func gymSquad(slots: [SquadSlot] = defaultGymSlots(), rows: [GymRow], placeable: (String, String) -> Bool, copyOf: (String) -> String? = { _ in nil }) -> [FilledSlot] {
+        fill(slots: slots, pool: { _, _ in Pool(preferred: rows.map { $0.build.entryId }) }, placeable: placeable, copyOf: copyOf)
     }
 
     // MARK: Team Rocket (rules 16 to 21)
@@ -366,9 +369,10 @@ extension HubSquads {
     public static func defaultRocketSlots() -> [SquadSlot] { Array(repeating: SquadSlot(role: rocketSlotRole), count: 3) }
 
     /// `kept` draws a Current squad (pass 2-5): no mode placement rule hides a kept pick.
-    public static func rocketSquad(leader: HubData.Leader, slots: [SquadSlot] = defaultRocketSlots(), mode: SquadMode, kept: Bool = false, ctx: HubContext) -> [FilledSlot] {
+    public static func rocketSquad(leader: HubData.Leader, slots: [SquadSlot] = defaultRocketSlots(), mode: SquadMode, kept: Bool = false, copyOf: (String) -> String? = { _ in nil },
+                                   ctx: HubContext) -> [FilledSlot] {
         let pickers = leader.slots.map { rocketPicker(options: $0, mode: mode, ctx: ctx).map(\.entryId) }
-        return fill(slots: slots, pool: { i, _ in Pool(preferred: pickers.indices.contains(i) ? pickers[i] : []) }, placeable: kept ? { _, _ in true } : placeable(screen: .rocket, mode: mode, ctx: ctx))
+        return fill(slots: slots, pool: { i, _ in Pool(preferred: pickers.indices.contains(i) ? pickers[i] : []) }, placeable: kept ? { _, _ in true } : placeable(screen: .rocket, mode: mode, ctx: ctx), copyOf: copyOf)
     }
 
     /// Rule 19: the box's counters for a grunt type: up to eight, one per species, built first, then `HubTeams.gruntCounter`'s order (Rocket area, tier,

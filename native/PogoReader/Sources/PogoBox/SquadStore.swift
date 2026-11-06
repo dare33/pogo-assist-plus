@@ -37,6 +37,9 @@ public struct SquadStore: Codable, Equatable {
         /// kept has no Current and shows the suggestions.
         public var hasCurrent: Bool { changed || isSet || slots.contains { $0.pickId != nil } }
 
+        /// The squads of two saved values are the same squad: the same slots (roles, picks, species picks, the "listed for" marker). The set mark is not part of it.
+        public func sameSquad(as other: Saved) -> Bool { slots == other.slots }
+
         /// The squad as it is drawn becomes the player's: every slot keeps the Pokémon it shows (a copy as `pick`, a species row as `species`, nothing for an empty slot), and a
         /// suggestion listed for another role keeps saying so (`SquadSlot.fallback`). Runs before EVERY change (a choice, a role change, "Squad set"), so an edit always acts on
         /// what the player sees, never on picks they cannot see (a Best pick viewed under Available is replaced by what Available shows). The roles and the set mark are left alone.
@@ -208,6 +211,19 @@ public struct SquadStore: Codable, Equatable {
         return s
     }
 
+    /// Old files, migrated for good (pass 2-5, rule 27.9): every squad that counts as a Current (`hasCurrent`) is marked `changed`, so a later box change refills its slots instead
+    /// of dropping Current. The screens write the result back.
+    public func migrated() -> SquadStore {
+        func mark(_ s: Saved) -> Saved { var s = s; if s.hasCurrent { s.changed = true }; return s }
+        var out = self
+        out.raids = raids.mapValues { EventSquad(squad: mark($0.squad), endsOn: $0.endsOn) }
+        out.max = max.mapValues { EventSquad(squad: mark($0.squad), endsOn: $0.endsOn) }
+        out.gym = mark(gym)
+        out.rocket = rocket.mapValues(mark)
+        out.pvp = pvp.mapValues(mark)
+        return out
+    }
+
     /// Empties every slot whose chosen copy is no longer in the box (`boxIds`: the box's entry ids), so the slot shows the suggestion again. Picks of
     /// copies still in the box, the roles, the set marks and the modes are kept: a re-scan that keeps the entry ids loses nothing.
     public func reconciled(boxIds: Set<String>) -> SquadStore {
@@ -227,6 +243,6 @@ public struct SquadStore: Codable, Equatable {
 
     /// Both rules, as the app applies them when it opens a screen or finishes a scan.
     public func refreshed(today: String, rotation: [HubData.RotationRow], boxIds: Set<String>) -> SquadStore {
-        pruned(today: today, rotation: rotation).reconciled(boxIds: boxIds)
+        migrated().pruned(today: today, rotation: rotation).reconciled(boxIds: boxIds)
     }
 }

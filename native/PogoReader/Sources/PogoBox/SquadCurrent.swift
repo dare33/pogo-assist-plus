@@ -79,12 +79,32 @@ extension SquadStore {
 /// What a squad screen holds while the player is on it and drops when they leave (pass 2-5, rule 27): the tab each squad is on, the drafts (edits of Available and Best), and which
 /// draft was just saved to Current. Never stored. Keyed by `SquadRef.key`. Pure, so the rules can be tested.
 public struct SquadDrafts: Equatable {
+    /// The account the drafts belong to (nil before the screen has attached to one).
+    public private(set) var account: String?
     private var chosen: [String: SquadTab] = [:]
     private var drafts: [String: SquadStore.Saved] = [:]
     private var savedAs: [String: SquadStore.Saved] = [:]
     public init() {}
 
     private static func slot(_ key: String, _ tab: SquadTab) -> String { key + "|" + tab.rawValue }
+
+    /// The screen is showing `account`'s squads. Another account's drafts, tab choices and saved notes are dropped, so a draft can never be saved into the wrong account's store.
+    public mutating func switchAccount(_ new: String?) {
+        guard new != account else { return }
+        self = SquadDrafts()
+        account = new
+    }
+
+    /// Drafts follow the box as the store does (rule 27): a draft pick whose copy left it is emptied (that slot alone then refills from the suggestion, and the screen keeps the
+    /// refill in the draft). Species picks, roles and the rest are left alone.
+    public func reconciled(boxIds: Set<String>) -> SquadDrafts {
+        var out = self
+        for (k, var d) in drafts {
+            for i in d.slots.indices { if let p = d.slots[i].pick, !boxIds.contains(p) { d.slots[i].pick = nil; d.slots[i].fallback = nil } }
+            out.drafts[k] = d
+        }
+        return out
+    }
 
     /// The tab a squad shows: the one the player chose on this screen, else Current when the squad has one, else the remembered Available/Best choice.
     public func tab(_ key: String, hasCurrent: Bool, mode: SquadMode) -> SquadTab {
@@ -123,9 +143,13 @@ public struct SquadDrafts: Equatable {
         savedAs[Self.slot(key, tab)] = squad
     }
 
-    /// "Saved to Current": the tab's draft is exactly what was last saved.
-    public func justSaved(_ key: String, _ tab: SquadTab) -> Bool {
-        guard let s = savedAs[Self.slot(key, tab)] else { return false }
-        return drafts[Self.slot(key, tab)] == s
+    /// "Saved to Current": the tab's draft is exactly what was last saved from it AND the stored Current is that squad still (slots, roles, species picks; the set mark is ignored).
+    /// Deleting Current, replacing it from another tab or editing it all end it.
+    public func justSaved(_ key: String, _ tab: SquadTab, current: SquadStore.Saved?) -> Bool {
+        guard let s = savedAs[Self.slot(key, tab)], drafts[Self.slot(key, tab)] == s, let current else { return false }
+        return current.slots == s.slots
     }
+
+    /// The squad's saved notes are dropped (Delete current squad).
+    public mutating func clearSaved(_ key: String) { for t in [SquadTab.available, .best] { savedAs[Self.slot(key, t)] = nil } }
 }

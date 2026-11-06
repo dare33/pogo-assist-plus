@@ -210,6 +210,11 @@ public enum HubSquads {
         return out
     }
 
+    /// Two drawn squads are the same squad: each slot holds the same Pokémon (or species) in the same role. An edited Available or Best squad is one that is not the suggestion by this test.
+    public static func sameSquad(_ a: [FilledSlot], _ b: [FilledSlot]) -> Bool {
+        a.count == b.count && zip(a, b).allSatisfy { $0.role == $1.role && $0.pickId == $1.pickId }
+    }
+
     /// The candidates listed for a role, in their order; role "All" allows any.
     public static func pool<C: SquadCandidate>(role: String, in candidates: [C]) -> [String] {
         candidates.filter { role == squadRoleAll || $0.roleNames.contains(role) }.map(\.entryId)

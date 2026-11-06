@@ -136,20 +136,103 @@ final class SquadCurrentTests: XCTestCase {
         XCTAssertNil(d.draft("a", .best))
     }
 
-    func testSavingKeepsTheTabAndSaysSavedUntilTheDraftChanges() {
+    func testSavingKeepsTheTabAndSaysSavedWhileTheStoredCurrentIsThatSquad() {
         var d = SquadDrafts()
         let s = picked()
         d.setDraft(s, "a", .best)
-        XCTAssertFalse(d.justSaved("a", .best))
+        XCTAssertFalse(d.justSaved("a", .best, current: s))
         d.didSave(s, "a", .best)
+        var store = SquadStore(); store.setCurrent(s, .gym)
+        let current = store.current(.gym)
         XCTAssertEqual(d.tab("a", hasCurrent: true, mode: .available), .best, "the player stays where they are")
-        XCTAssertTrue(d.justSaved("a", .best))
+        XCTAssertTrue(d.justSaved("a", .best, current: current))
+        var withMark = s; withMark.isSet = true
+        XCTAssertTrue(d.justSaved("a", .best, current: withMark), "the set mark is not part of the squad")
         var more = s
         more.choose("c2", at: 1)
         d.setDraft(more, "a", .best)
-        XCTAssertFalse(d.justSaved("a", .best), "a further edit is not saved")
+        XCTAssertFalse(d.justSaved("a", .best, current: current), "a further edit is not saved")
         d.reset("a", .best)
-        XCTAssertFalse(d.justSaved("a", .best))
+        XCTAssertFalse(d.justSaved("a", .best, current: current))
+    }
+
+    /// H5: Delete, a replacement from another tab and an edit of Current all end "Saved to Current", and Save shows again for that draft.
+    func testSavedToCurrentEndsWhenTheStoredCurrentStopsBeingThatSquad() {
+        var d = SquadDrafts()
+        let s = picked()
+        d.didSave(s, "a", .available)
+        XCTAssertFalse(d.justSaved("a", .available, current: nil), "Current was deleted")
+        d.clearSaved("a")
+        XCTAssertFalse(d.justSaved("a", .available, current: s), "clearSaved forgets the save (Delete current squad)")
+        d.didSave(s, "a", .available)
+        var other = s; other.choose("z", at: 1)
+        XCTAssertFalse(d.justSaved("a", .available, current: other), "another squad replaced Current")
+        var edited = s; edited.changeRole(at: 0, to: "Y", fits: { _ in true })
+        XCTAssertFalse(d.justSaved("a", .available, current: edited), "Current was edited")
+        XCTAssertTrue(d.justSaved("a", .available, current: s))
+    }
+
+    /// H1: another account's drafts, tabs and notes are dropped.
+    func testAnotherAccountStartsWithNothing() {
+        var d = SquadDrafts()
+        d.switchAccount("A")
+        d.setDraft(picked(), "a", .available); d.select(.best, for: "a"); d.didSave(picked(), "b", .best)
+        d.switchAccount("A")
+        XCTAssertNotNil(d.draft("a", .available), "the same account keeps its drafts")
+        d.switchAccount("B")
+        XCTAssertEqual(d.account, "B")
+        XCTAssertNil(d.draft("a", .available)); XCTAssertNil(d.draft("b", .best))
+        XCTAssertEqual(d.tab("a", hasCurrent: false, mode: .available), .available)
+        XCTAssertFalse(d.justSaved("b", .best, current: picked()))
+    }
+
+    /// H2: a draft pick whose copy left the box is emptied; species picks, other slots and roles stay.
+    func testADraftFollowsTheBoxLikeTheStore() {
+        var d = SquadDrafts()
+        var s = SquadStore.Saved(slots: [SquadSlot(role: "X", pick: "gone"), SquadSlot(role: "Y", pick: "here"), SquadSlot(role: "Z", species: "medicham"), SquadSlot(role: "W", pick: "gone2", fallback: true)], changed: true)
+        s.changed = true
+        d.setDraft(s, "k", .best)
+        let r = d.reconciled(boxIds: ["here"])
+        let slots = r.draft("k", .best)!.slots
+        XCTAssertEqual(slots.map(\.pick), [nil, "here", nil, nil])
+        XCTAssertEqual(slots[2].species, "medicham")
+        XCTAssertEqual(slots.map(\.role), ["X", "Y", "Z", "W"])
+        XCTAssertNil(slots[3].fallback)
+        XCTAssertEqual(r.draft("k", .best)?.changed, true, "still an edited draft")
+    }
+
+    // MARK: old files, migrated for good (H4)
+
+    func testAnOldFilesCurrentSurvivesTheCopyLeavingTheBox() throws {
+        let json = #"{"version":1,"gym":{"slots":[{"role":"Defender","pick":"gone"},{"role":"Defender"}],"isSet":false}}"#
+        let old = try JSONDecoder().decode(SquadStore.self, from: Data(json.utf8))
+        XCTAssertFalse(old.gym.changed)
+        let refreshed = old.refreshed(today: "2026-11-06", rotation: [], boxIds: ["other"])
+        XCTAssertTrue(refreshed.gym.changed, "migrated: the squad is marked changed")
+        XCTAssertNil(refreshed.gym.slots[0].pick, "the copy left")
+        XCTAssertNotNil(refreshed.current(.gym), "Current remains")
+        XCTAssertTrue(refreshed.gym.needsAdopting(HubSquads.fill(slots: refreshed.gym.slots, pool: { _, _ in .init(preferred: ["x"]) })), "so the slot refills and the refill is kept")
+        // A squad with nothing kept is not migrated into a Current.
+        let none = try JSONDecoder().decode(SquadStore.self, from: Data(#"{"version":1,"gym":{"slots":[{"role":"Defender"}],"isSet":false}}"#.utf8))
+        XCTAssertNil(none.migrated().current(.gym))
+        XCTAssertFalse(none.migrated().gym.changed)
+    }
+
+    func testSameSquadComparesSlotsAndIgnoresTheSetMark() {
+        var a = picked(), b = picked()
+        XCTAssertTrue(a.sameSquad(as: b))
+        b.isSet = true
+        XCTAssertTrue(a.sameSquad(as: b))
+        a.changeRole(at: 1, to: "Q", fits: { _ in true })
+        XCTAssertFalse(a.sameSquad(as: b))
+    }
+
+    /// H6: the drawn squads are compared slot by slot.
+    func testDrawnSquadsAreTheSameWhenEverySlotHoldsTheSamePokemonInTheSameRole() {
+        func drawn(_ roles: [String], _ ranked: [String]) -> [FilledSlot] { HubSquads.fill(slots: roles.map { SquadSlot(role: $0) }, pool: { _, _ in .init(preferred: ranked) }) }
+        XCTAssertTrue(HubSquads.sameSquad(drawn(["A", "B"], ["x", "y"]), drawn(["A", "B"], ["x", "y"])))
+        XCTAssertFalse(HubSquads.sameSquad(drawn(["A", "B"], ["x", "y"]), drawn(["A", "B"], ["y", "x"])))
+        XCTAssertFalse(HubSquads.sameSquad(drawn(["A", "B"], ["x", "y"]), drawn(["A", "C"], ["x", "y"])), "a role differs")
     }
 
     func testAChangeOfRaidStyleDropsEveryRaidDraftAndNothingElse() {
@@ -159,7 +242,7 @@ final class SquadCurrentTests: XCTestCase {
         d.didSave(picked(), raid, .best)
         d.resetAll(keyPrefix: "raids|")
         XCTAssertNil(d.draft(raid, .available)); XCTAssertNil(d.draft(raid, .best))
-        XCTAssertFalse(d.justSaved(raid, .best))
+        XCTAssertFalse(d.justSaved(raid, .best, current: picked()))
         XCTAssertNotNil(d.draft(max, .available), "Max has no style")
         XCTAssertNotNil(d.draft(SquadRef.gym.key, .best))
     }

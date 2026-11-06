@@ -9,7 +9,7 @@ final class SquadStrengthTests: XCTestCase {
     func testTheValueIsTheSumOfTheSlotsOverTheSumOfTheReference() {
         let s = against([d(0.5), d(0.3), d(0.9)], [1, 0.8, 0.9])
         XCTAssertEqual(s.now!, (0.5 + 0.3 + 0.9) / (1 + 0.8 + 0.9), accuracy: 1e-9, "a sum over a sum, not a mean of ratios")
-        XCTAssertEqual(s.text, "Squad strength 63% of best")
+        XCTAssertEqual(s.text, "Squad strength 62% of best")
         XCTAssertFalse(s.matchesBest)
         XCTAssertNil(s.scoredText)
     }
@@ -43,7 +43,7 @@ final class SquadStrengthTests: XCTestCase {
     }
 
     func testTheUneditedBestTabIsTheBestSquad() {
-        let s = SquadStrength.bestSquad(total: 6)
+        let s = SquadStrength.bestSquad(reference: Array(repeating: 0.8, count: 6))
         XCTAssertEqual(s.now, 1)
         XCTAssertEqual(s.text, "Squad strength 100% · the best squad")
         XCTAssertEqual(s.spoken, "Squad strength 100 percent, the best squad")
@@ -108,5 +108,40 @@ final class SquadStrengthTests: XCTestCase {
             let s = against([d(n, a)], [1])
             XCTAssertEqual(s.afterText != nil, s.strength.hasFaint, "\(n) to \(a)")
         }
+    }
+
+    /// H7: the unedited Best tab goes through the same safeguards.
+    func testTheUneditedBestTabLeavesOutAReferenceSlotWithNoFigureAndDrawsNoBarWithoutOne() {
+        let some = SquadStrength.bestSquad(reference: [0.9, nil, 0.7, 0.8, nil, 0.6])
+        XCTAssertEqual(some.now, 1)
+        XCTAssertEqual(some.scored, 4)
+        XCTAssertEqual(some.scoredText, "4 of 6 slots scored")
+        XCTAssertEqual(some.text, "Squad strength 100% · the best squad")
+        let none = SquadStrength.bestSquad(reference: [nil, nil, nil])
+        XCTAssertNil(none.now)
+        XCTAssertEqual(none.text, "Squad strength not read")
+        XCTAssertNil(none.strength.now, "no bar")
+        XCTAssertEqual(none.scoredText, "0 of 3 slots scored")
+    }
+
+    /// H9: the percent is rounded down; 100% reads only at or over the reference.
+    func testThePercentIsRoundedDownAndOneHundredNeedsTheReference() {
+        let s = against([d(0.998)], [1])
+        XCTAssertEqual(s.text, "Squad strength 99% of best", "99.8% is not 100%")
+        XCTAssertFalse(s.matchesBest)
+        XCTAssertEqual(against([d(0.789)], [1]).text, "Squad strength 78% of best")
+        XCTAssertEqual(against([d(0.70)], [1]).text, "Squad strength 70% of best", "no floating point loss at a whole percent")
+        XCTAssertEqual(against([d(0.5, 0.998)], [1]).afterText, "99% after upgrades")
+        XCTAssertNil(against([d(0.504, 0.509)], [1]).afterText, "the same whole percent after rounding down shows no after words")
+        XCTAssertEqual(against([d(1.0)], [1]).text, "Squad strength 100% · Matches the best squad")
+    }
+
+    /// H17: owned figures below the reference (not the reference fed back in): the value is the owned sum over the reference sum.
+    func testOwnedFiguresBelowTheReferenceReadBelowIt() {
+        let s = against([d(0.6, 0.7), d(0.5), d(0.4, 0.9)], [0.9, 0.9, 0.9])
+        XCTAssertEqual(s.now!, 1.5 / 2.7, accuracy: 1e-9)
+        XCTAssertEqual(s.text, "Squad strength 55% of best")
+        XCTAssertEqual(s.afterText, "77% after upgrades")
+        XCTAssertFalse(s.matchesBest)
     }
 }
