@@ -82,3 +82,92 @@ extension View {
     /// Keeps `keeper` in step with the selected account's saved squads.
     func keepsSquads(_ keeper: SquadKeeper) -> some View { modifier(SquadAttach(keeper: keeper)) }
 }
+
+// MARK: Current, Available and Best (pass 2-5, rule 27)
+
+/// What one squad screen holds while the player is on it and drops when they leave: the tab each squad is on and the drafts (edits of Available and Best), never stored
+/// (`SquadDrafts`). Each squad screen owns one (`@StateObject`) next to its keeper.
+@MainActor
+final class SquadWorkspace: ObservableObject {
+    @Published private(set) var state = SquadDrafts()
+
+    func update(_ change: (inout SquadDrafts) -> Void) {
+        var s = state
+        change(&s)
+        if s != state { state = s }
+    }
+
+    /// The squad as the screen draws and edits it right now.
+    func surface(_ ref: SquadRef, store: SquadStore, defaults: [SquadSlot]) -> SquadSurface {
+        let current = store.current(ref)
+        let tab = state.tab(ref.key, hasCurrent: current != nil, mode: store.mode(for: ref.screen))
+        return SquadSurface(ref: ref, tab: tab, current: current, draft: tab == .current ? nil : state.draft(ref.key, tab), defaults: defaults, justSaved: tab != .current && state.justSaved(ref.key, tab))
+    }
+
+    /// The player chose a tab. Available and Best are remembered for the screen (the tab a squad with no Current opens on), as before.
+    func select(_ tab: SquadTab, ref: SquadRef, keeper: SquadKeeper) {
+        update { $0.select(tab, for: ref.key) }
+        if tab != .current { keeper.update { $0.setMode(tab.mode, for: ref.screen) } }
+    }
+
+    /// A change to the squad on the tab it is on: Current is stored at once, a draft is held here. It never changes the tab.
+    func edit(_ s: SquadSurface, keeper: SquadKeeper, _ change: (inout SquadStore.Saved) -> Void) {
+        if s.tab == .current {
+            keeper.update { store in
+                var q = store.current(s.ref) ?? SquadStore.Saved(slots: s.defaults)
+                change(&q)
+                store.setCurrent(q, s.ref)
+            }
+        } else {
+            update { d in
+                var q = d.draft(s.key, s.tab) ?? SquadStore.Saved(slots: s.defaults)
+                change(&q)
+                d.setDraft(q, s.key, s.tab)
+            }
+        }
+    }
+
+    /// Save to Current (and, from "Set this squad", the mark): the squad as shown on Available or Best becomes the squad's Current. The player stays on the tab.
+    func saveToCurrent(_ s: SquadSurface, keeper: SquadKeeper, filled: [FilledSlot], setMark: Bool) {
+        var shown = s.squad
+        shown.fixing(filled)
+        shown.isSet = false
+        var current = shown
+        current.isSet = setMark
+        keeper.update { $0.setCurrent(current, s.ref) }
+        update { $0.didSave(shown, s.key, s.tab) }
+    }
+
+    func reset(_ s: SquadSurface) { update { $0.reset(s.key, s.tab) } }
+
+    /// Delete current squad: the squad shows Available (or the remembered tab) again; the drafts are left as they are.
+    func deleteCurrent(_ s: SquadSurface, keeper: SquadKeeper) {
+        keeper.update { $0.deleteCurrent(s.ref) }
+        update { $0.clearTab(for: s.key) }
+    }
+}
+
+/// One squad on its tab: what is drawn (`squad`), where an edit goes, and what the controls under the slots show.
+struct SquadSurface {
+    let ref: SquadRef
+    let tab: SquadTab
+    /// The stored Current squad; nil when the player has kept nothing.
+    let current: SquadStore.Saved?
+    /// The edited Available or Best squad; nil while it is unedited.
+    let draft: SquadStore.Saved?
+    /// The suggestion's slots: the roles an unedited Available or Best squad is made of.
+    let defaults: [SquadSlot]
+    /// The draft was just saved to Current and has not changed since.
+    let justSaved: Bool
+
+    var key: String { ref.key }
+    var hasCurrent: Bool { current != nil }
+    /// The squad to draw: the stored Current, the draft, or the unedited suggestion.
+    var squad: SquadStore.Saved { tab == .current ? (current ?? SquadStore.Saved(slots: defaults)) : (draft ?? SquadStore.Saved(slots: defaults)) }
+    var mode: SquadMode { tab.mode }
+    /// Current is drawn as kept: no mode placement rule hides a kept pick.
+    var kept: Bool { tab == .current }
+    var differs: Bool { draft?.changed == true }
+    /// The unedited Best tab, which is the squad strength's reference and reads 100%.
+    var isBestSuggestion: Bool { tab == .best && !differs }
+}

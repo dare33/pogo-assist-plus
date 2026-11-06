@@ -17,6 +17,8 @@ struct HubTypeScreen<Content: View>: View {
     @Environment(\.accent) private var accent
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// A squad screen's pinned strip of slots, while one of its pickers is open (`View.squadStrip`).
+    @State private var strip: SquadStripModel?
 
     var body: some View {
         // At accessibility text sizes the header is tall (the title and sub line wrap under the back circle), so it scrolls with the page rather than
@@ -33,6 +35,9 @@ struct HubTypeScreen<Content: View>: View {
                 .padding(.horizontal, Theme.Space.screen)
                 .padding(.bottom, 16)
             }
+            // Pinned over the top of the scroll area, so the squad stays in view as the Pokémon list scrolls; the list is inset below it, never pushed off screen.
+            .safeAreaInset(edge: .top, spacing: 0) { if let strip { SquadStripView(model: strip) } }
+            .onPreferenceChange(SquadStripKey.self) { strip = $0 }
         }
         .background(Theme.bg.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
