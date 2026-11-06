@@ -615,7 +615,10 @@ final class PickerRowModelsTests: XCTestCase {
     /// (Raids, Max, Gym and Rocket), so the squad never shows it twice and its strength never counts it twice.
     func testAKeptSpeciesPickHoldsItsOwnedCopyOnRaidsMaxGymAndRocket() throws {
         let c = ctx()
-        func others(_ filled: [FilledSlot], except i: Int, copy: String) -> Bool { filled.enumerated().allSatisfy { $0.offset == i || ($0.element.entryId != copy && $0.element.species.map { _ in false } != true) } }
+        // No other slot holds the copy, nor the species the pick holds.
+        func others(_ filled: [FilledSlot], except i: Int, copy: String, species: String) -> Bool {
+            filled.enumerated().allSatisfy { $0.offset == i || ($0.element.entryId != copy && $0.element.species != species) }
+        }
         // Raids and Max: the first event of each kind.
         for screen in [SquadScreen.raids, .max] {
             let row = try XCTUnwrap(Self.hub.rotation.first { !$0.bosses.isEmpty && (screen == .raids ? [.fiveStar, .mega, .shadow] : [.maxMonday, .maxEvent]).contains($0.kind) })
@@ -626,7 +629,7 @@ final class PickerRowModelsTests: XCTestCase {
             slots[1].species = owned.key
             let filled = b.resolve(slots: slots, mode: .available).filled
             XCTAssertEqual(filled[1].species, owned.key, "\(screen): the species pick is kept")
-            XCTAssertTrue(others(filled, except: 1, copy: owned.ownedEntryId!), "\(screen): no other slot refills with the copy the pick holds")
+            XCTAssertTrue(others(filled, except: 1, copy: owned.ownedEntryId!, species: owned.key), "\(screen): no other slot refills with the copy the pick holds")
         }
         // Gym.
         var g = GymPickerBuilder(ctx: c); g.kept = true
@@ -634,7 +637,7 @@ final class PickerRowModelsTests: XCTestCase {
         var gs = SquadStore.Saved(slots: HubSquads.defaultGymSlots()); gs.slots[2].species = gRow.key
         let gFilled = g.resolve(mode: .available, saved: gs).filled
         XCTAssertEqual(gFilled[2].species, gRow.key)
-        XCTAssertTrue(others(gFilled, except: 2, copy: gRow.ownedEntryId!), "gym")
+        XCTAssertTrue(others(gFilled, except: 2, copy: gRow.ownedEntryId!, species: gRow.key), "gym")
         // Rocket.
         for leader in Self.hub.leaders {
             var k = RocketPickerBuilder(leader: leader, ctx: c); k.kept = true
@@ -642,9 +645,52 @@ final class PickerRowModelsTests: XCTestCase {
             var slots = HubSquads.defaultRocketSlots(); slots[r.0].species = r.1.key
             let filled = HubSquads.rocketSquad(leader: leader, slots: slots, mode: .available, kept: true, copyOf: k.keptCopyOf(slots: slots), ctx: c)
             XCTAssertEqual(filled[r.0].species, r.1.key, "rocket \(leader.name)")
-            XCTAssertTrue(others(filled, except: r.0, copy: r.1.ownedEntryId!), "rocket \(leader.name)")
+            XCTAssertTrue(others(filled, except: r.0, copy: r.1.ownedEntryId!, species: r.1.key), "rocket \(leader.name)")
             return
         }
         XCTFail("no Rocket leader slot lists a Pokémon the box has")
+    }
+
+    /// J4: an unowned Best row that fills a slot from another role (Max damage under Best runs out of Heavy hitters) says so on its card, visibly and spoken, as an owned one does.
+    func testAnUnownedBestFallbackRowSaysWhichRoleItIsListedFor() throws {
+        let c = ctx()
+        let row = try XCTUnwrap(Self.hub.rotation.first { [.fiveStar, .mega, .shadow].contains($0.kind) && $0.bosses.contains { $0.speciesId.hasPrefix("giratina") } })
+        let b = EventPickerBuilder(screen: .raids, row: row, ctx: c)
+        let (options, filled) = b.resolve(slots: HubSquads.defaultRaidSlots(style: .maxDamage), mode: .best)
+        let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
+        // The first slot that holds a Pokémon the box lacks, marked as a fallback (the test box may not run out of Heavy hitters by itself).
+        let i = try XCTUnwrap(filled.indices.first { idx in filled[idx].role != "Mega" && (filled[idx].pickId.flatMap { byId[$0] }?.best.map { !$0.inBox } ?? false) })
+        var f = filled[i]; f.fallback = true; f.chosen = false
+        let card = b.card(i, f, byId: byId, count: filled.count, mode: .best)
+        let line = SquadWords.otherRoleLine([b.roleWord(try XCTUnwrap(byId[f.pickId!]), role: f.role, mode: .best)])
+        XCTAssertTrue(card.lines.contains(line), "visible: \(card.lines)")
+        XCTAssertTrue(card.spoken.contains(line), "and spoken: \(card.spoken)")
+        f.fallback = false; f.chosen = true
+        XCTAssertFalse(b.card(i, f, byId: byId, count: filled.count, mode: .best).lines.contains(line), "a slot that took its own role's row says nothing")
+    }
+
+    /// J5: a kept species pick of a Pokémon the box owns fits a role through the copy that stands for it (Raids and PvP).
+    func testAKeptSpeciesPickOfAnOwnedPokemonFitsItsRolesThroughItsCopy() throws {
+        let c = ctx()
+        // Raids.
+        let row = try XCTUnwrap(Self.hub.rotation.first { [.fiveStar, .mega, .shadow].contains($0.kind) && $0.bosses.contains { $0.speciesId.hasPrefix("giratina") } })
+        var b = EventPickerBuilder(screen: .raids, row: row, ctx: c); b.kept = true
+        let owned = try XCTUnwrap(HubSquads.bestRaidRows(row: row, ctx: c).first { $0.ownedEntryId != nil && !$0.roles.contains("Mega") })
+        var slots = HubSquads.defaultRaidSlots(); slots[1].species = owned.key
+        let r = b.resolve(slots: slots, mode: .available)
+        let rows = r.options.compactMap(\.best)
+        let role = try XCTUnwrap(r.options.first { $0.best?.key == owned.key }?.roles.first)
+        XCTAssertTrue(HubSquads.fitsThrough(squadSpeciesPrefix + owned.key, role: role, in: r.options, rows: rows), "the species id is read through its copy")
+        XCTAssertFalse(HubSquads.fits(squadSpeciesPrefix + owned.key, role: role, in: r.options), "which the species id alone cannot be")
+        XCTAssertFalse(HubSquads.fitsThrough(squadSpeciesPrefix + owned.key, role: "No such role", in: r.options, rows: rows))
+        // PvP, the first league whose table lists a Pokémon the box owns.
+        let box = c
+        let owned2 = ["gl", "ul", "ml"].compactMap { l in HubSquads.bestPvpRows(league: l, ctx: c).first(where: { $0.inBox && !$0.roles.isEmpty }).map { (l, $0) } }.first
+        let (league, pRow) = try XCTUnwrap(owned2, "the box has an owned Pokémon the PvP tables list for a role")
+        var pvp = PvPPickerBuilder(league: league, ctx: box, pogoAssist: false)
+        var pSlots = HubSquads.defaultPvpSlots(); pSlots[0].species = pRow.key
+        pvp.kept = true
+        let p = pvp.resolve(mode: .available, slots: pSlots)
+        XCTAssertTrue(HubSquads.fitsThrough(squadSpeciesPrefix + pRow.key, role: pRow.roles[0], in: p.best, rows: p.best), "pvp: the owned species is listed for its role through its copy")
     }
 }

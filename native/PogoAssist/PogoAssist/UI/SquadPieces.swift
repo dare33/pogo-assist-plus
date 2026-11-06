@@ -806,15 +806,15 @@ struct SquadTabsRow: View {
         let all: [SquadTab] = hasCurrent ? [.current, .available, .best] : [.available, .best]
         return SegmentedSwitch(
             segments: all.map { .init(value: $0, title: $0.title, identifier: "squad-tab-\($0.rawValue)") },
-            selection: $tab, metrics: .compact, label: "Suggestions", identifier: "squad-mode", singleLine: singleLine)
+            selection: $tab, metrics: .compact, label: "Squad", identifier: "squad-mode", singleLine: singleLine)
     }
 
     private var stacked: some View {
         let all: [SquadTab] = hasCurrent ? [.current, .available, .best] : [.available, .best]
-        return StackedChoice(options: all.map { .init(value: $0, title: $0.title, identifier: "squad-tab-\($0.rawValue)") }, selection: $tab, label: "Suggestions", identifier: "squad-mode")
+        return StackedChoice(options: all.map { .init(value: $0, title: $0.title, identifier: "squad-tab-\($0.rawValue)") }, selection: $tab, label: "Squad", identifier: "squad-mode")
     }
 
-    private var info: some View { InfoButton(isOpen: $infoOpen, label: "About suggestions", identifier: "squad-mode-info") }
+    private var info: some View { InfoButton(isOpen: $infoOpen, label: "About the squad", identifier: "squad-mode-info") }
 }
 
 /// A choice between a few options drawn as a column of full-width buttons: what a segmented switch becomes when its titles cannot fit on one line at the accessibility text sizes

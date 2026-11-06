@@ -415,7 +415,8 @@ struct PvPSquadView: View {
             onRole: { new in workspace.edit(surface, keeper: keeper) {
                 $0.changeRole(at: i, to: new, fits: {
                     // A kept species pick (Current) fits when the league's Best lists it for the new role, as on the other screens; `best` holds only those rows under Current.
-                    mode == .best ? HubSquads.fits($0, role: new, in: best) : HubSquads.fits($0, role: new, in: candidates) || HubSquads.fits($0, role: new, in: best)
+                    mode == .best ? HubSquads.fitsThrough($0, role: new, in: best, rows: best)
+                        : HubSquads.fitsThrough($0, role: new, in: candidates, rows: best) || HubSquads.fitsThrough($0, role: new, in: best, rows: best)
                 }, shown: filled)
             } },
             rows: rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, speciesRuleOnly: speciesRuleOnly, none: mode == .available ? "No candidate in your box for this role." : "No Pokémon listed for this role."),

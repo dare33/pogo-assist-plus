@@ -284,6 +284,13 @@ public enum HubSquads {
         candidates.filter { !excluded.contains($0) || $0 == own }.map { PickerRow(entryId: $0, ticked: $0 == own) }
     }
 
+    /// Whether the Pokémon a slot holds under pick id `id` fits `role` among `candidates`, reading `id` through every id that stands for it in `rows` (the Best rows): a kept species pick
+    /// of a Pokémon the box now owns is listed under its copy's id, so the species id alone would never be found.
+    public static func fitsThrough<C: SquadCandidate>(_ id: String, role: String, in candidates: [C], rows: [BestRow]) -> Bool {
+        let ids = [id] + rows.filter { $0.ids.contains(id) }.flatMap(\.ids)
+        return ids.contains { fits($0, role: role, in: candidates) }
+    }
+
     /// Rule 5: relabel the slot; keep the player's pick when it fits the new role, else drop it so the slot refills with the best unused one.
     public static func changeRole(_ slots: inout [SquadSlot], at index: Int, to role: String, fits: (String) -> Bool) {
         guard slots.indices.contains(index) else { return }
