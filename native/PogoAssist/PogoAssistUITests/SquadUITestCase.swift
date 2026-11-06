@@ -88,7 +88,15 @@ class SquadUITestCase: XCTestCase {
 
     func closePicker(_ app: XCUIApplication) {
         let done = app.buttons["squad-picker-done"]
-        reveal(app, done).tap()
+        reveal(app, done)
+        // The pinned strip is drawn over the top of the scroll area: a Done button scrolled under it is not tapped until it is dragged below it (the largest text sizes make the strip tall).
+        let strip = el(app, "squad-strip")
+        var n = 0
+        while strip.exists && done.exists && done.frame.minY < strip.frame.maxY + 4 && n < 10 {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.62)))
+            n += 1
+        }
+        done.tap()
         XCTAssertTrue(waitGone(el(app, "squad-picker")), "Done closes the picker")
     }
 
