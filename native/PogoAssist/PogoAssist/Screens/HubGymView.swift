@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-/// Gym battles (design pass 2): SUGGESTIONS · Available | Best, the six Top defenders as slot cards that each open a picker, then GYM BUILDS and the Gym gaps. The
+/// Gym battles (design pass 2): SQUAD · Current | Available | Best, the six Top defenders as slot cards that each open a picker, then GYM BUILDS and the Gym gaps. The
 /// defenders the player picked are kept per account (`SquadKeeper`); a slot with no pick shows the suggestion.
 struct HubGymView: View {
     @EnvironmentObject var model: AppModel
@@ -18,7 +18,7 @@ struct HubGymView: View {
                 HubAdviceGate { _ in EmptyView() }
             }
         }
-        .keepsSquads(keeper)
+        .keepsSquads(keeper, workspace)
     }
 }
 
@@ -48,16 +48,15 @@ struct GymPickerBuilder {
             return (options, rows, HubSquads.bestSquad(slots: saved.slots, rows: rows))
         }
         let rows = HubSquads.gymRows(mode: mode, ctx: ctx)
+        // Current: the Best rows of the squad's kept species picks. A kept species pick and an owned copy of it are the same Pokémon (no other slot refills with that copy).
+        let keptSpecies = kept ? Set(saved.slots.compactMap(\.species)) : []
+        let keptRows = keptSpecies.isEmpty ? [] : HubSquads.bestGymRows(ctx: ctx).filter { keptSpecies.contains($0.key) }
         var options = rows.map { GymOption(id: $0.build.entryId, name: $0.build.targetName, tier: HubSquads.gymTableTier($0.build, ctx: ctx), types: ctx.gm.byId[$0.build.targetId]?.types ?? [], row: $0, best: nil) }
-        if kept {
-            let species = Set(saved.slots.compactMap(\.species))
-            if !species.isEmpty {
-                options += HubSquads.bestGymRows(ctx: ctx).filter { species.contains($0.key) }.map { r in
-                    GymOption(id: r.entryId, name: r.name, tier: r.tier, types: r.types, row: r.build.map { HubSquads.gymRow($0, ctx: ctx) }, best: r, extra: true)
-                }
-            }
+        options += keptRows.map { r in
+            GymOption(id: r.entryId, name: r.name, tier: r.tier, types: r.types, row: r.build.map { HubSquads.gymRow($0, ctx: ctx) }, best: r, extra: true)
         }
-        return (options, [], HubSquads.gymSquad(slots: saved.slots, rows: rows, placeable: kept ? { _, _ in true } : HubSquads.placeable(screen: .gym, mode: mode, ctx: ctx)))
+        return (options, [], HubSquads.gymSquad(slots: saved.slots, rows: rows, placeable: kept ? { _, _ in true } : HubSquads.placeable(screen: .gym, mode: mode, ctx: ctx),
+                                                copyOf: HubSquads.copyResolver(rows: keptRows)))
     }
 
     struct Content { var rows: [PickerRowModel]; var boxHasOptions: Bool }
@@ -148,10 +147,11 @@ struct GymSquadView: View {
     @State private var boxGeneration = 0
 
     var body: some View {
-        let surface = workspace.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots())
-        let mode = surface.mode
-        let builder = builder(kept: surface.kept)
-        let (options, _, filled) = builder.resolve(mode: mode, saved: surface.squad)
+        let base = workspace.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots())
+        let mode = base.mode
+        let builder = builder(kept: base.kept)
+        let (options, _, filled) = builder.resolve(mode: mode, saved: base.squad)
+        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { builder.resolve(mode: mode, saved: SquadStore.Saved(slots: HubSquads.defaultGymSlots())).filled }))
         let byId = Dictionary(options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId) }
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
@@ -168,7 +168,7 @@ struct GymSquadView: View {
             if surface.tab == .current {
                 DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
             } else {
-                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, hasCurrent: surface.hasCurrent,
+                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, replaces: surface.replaces(filled: filled),
                               onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
             }
         }
@@ -181,7 +181,7 @@ struct GymSquadView: View {
             let b = builder
             let bestUnedited = surface.isBestSuggestion
             let value = await Task.detached(priority: .userInitiated) {
-                bestUnedited ? SquadStrength.bestSquad(kind: .bulk, total: filled.count) : b.squadStrength(filled: filled, options: options, byId: byId, mode: mode)
+                bestUnedited ? SquadStrength.bestSquad(reference: b.reference(), kind: .bulk) : b.squadStrength(filled: filled, options: options, byId: byId, mode: mode)
             }.value
             if !Task.isCancelled { strength = (strengthKey, value) }
         }

@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-/// PvP leagues (design pass 2): a league switch, SUGGESTIONS · Available | Best, a Suggested squad of three by role (Lead, Safe swap, Closer) with the types it covers,
+/// PvP leagues (design pass 2): a league switch, SQUAD · Current | Available | Best, a Suggested squad of three by role (Lead, Safe swap, Closer) with the types it covers,
 /// the weakness line, a picker with role chips, the other candidates and the season. The picks and roles for each league are kept per account (`SquadKeeper`).
 struct HubPvPView: View {
     @EnvironmentObject var model: AppModel
@@ -36,7 +36,7 @@ struct HubPvPView: View {
                 Text("The type chart could not be read.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
             }
         }
-        .keepsSquads(keeper)
+        .keepsSquads(keeper, workspace)
     }
 
     // MARK: season
@@ -283,11 +283,12 @@ struct PvPSquadView: View {
 
     var body: some View {
         let ref = SquadRef.pvp(league: league)
-        let surface = workspace.surface(ref, store: keeper.store, defaults: HubSquads.defaultPvpSlots())
-        let mode = surface.mode
+        let base = workspace.surface(ref, store: keeper.store, defaults: HubSquads.defaultPvpSlots())
+        let mode = base.mode
         let pogoAssist = rankingRaw == Ranking.pogoAssist.rawValue
-        let builder = builder(kept: surface.kept)
-        let (candidates, best, filled, byId) = builder.resolve(mode: mode, slots: surface.squad.slots)
+        let builder = builder(kept: base.kept)
+        let (candidates, best, filled, byId) = builder.resolve(mode: mode, slots: base.squad.slots)
+        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { builder.resolve(mode: mode, slots: HubSquads.defaultPvpSlots()).filled }))
         SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: ref, keeper: keeper) }), hasCurrent: surface.hasCurrent, noun: "squads")
         if candidates.isEmpty && mode == .available {
             // The squad still shows, with its empty slots.
@@ -346,7 +347,7 @@ struct PvPSquadView: View {
                 if surface.tab == .current {
                     DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
                 } else {
-                    SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, hasCurrent: surface.hasCurrent,
+                    SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, replaces: surface.replaces(filled: filled),
                                   onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
                 }
             }
@@ -359,7 +360,7 @@ struct PvPSquadView: View {
                 let b = builder
                 let bestUnedited = surface.isBestSuggestion
                 let value = await Task.detached(priority: .userInitiated) {
-                    bestUnedited ? SquadStrength.bestSquad(kind: .score, total: filled.count) : b.squadStrength(filled: filled, candidates: candidates, byId: byId, best: best, mode: mode)
+                    bestUnedited ? SquadStrength.bestSquad(reference: b.reference(), kind: .score) : b.squadStrength(filled: filled, candidates: candidates, byId: byId, best: best, mode: mode)
                 }.value
                 if !Task.isCancelled { strength = (strengthKey, value) }
             }
@@ -412,7 +413,10 @@ struct PvPSquadView: View {
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: .pvp, roles: chips, role: role,
             onRole: { new in workspace.edit(surface, keeper: keeper) {
-                $0.changeRole(at: i, to: new, fits: { mode == .best ? HubSquads.fits($0, role: new, in: best) : HubSquads.fits($0, role: new, in: candidates) }, shown: filled)
+                $0.changeRole(at: i, to: new, fits: {
+                    // A kept species pick (Current) fits when the league's Best lists it for the new role, as on the other screens; `best` holds only those rows under Current.
+                    mode == .best ? HubSquads.fits($0, role: new, in: best) : HubSquads.fits($0, role: new, in: candidates) || HubSquads.fits($0, role: new, in: best)
+                }, shown: filled)
             } },
             rows: rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, speciesRuleOnly: speciesRuleOnly, none: mode == .available ? "No candidate in your box for this role." : "No Pokémon listed for this role."),
             onChoose: { id in workspace.edit(surface, keeper: keeper) {

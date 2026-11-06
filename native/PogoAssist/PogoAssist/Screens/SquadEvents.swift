@@ -270,15 +270,20 @@ struct EventPickerBuilder {
         if mode == .best {
             let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
             let options = rows.map { EventOption(build: $0.build, best: $0, name: $0.name, tier: $0.tier, roles: $0.roles, types: $0.types, id: $0.entryId) }
-            return (options, HubSquads.bestSquad(slots: slots, rows: rows, oneMega: screen == .raids))
+            // Raids Best fills a slot whose role has run out as Available does (another role's listed row), so Max damage never leaves a slot empty while rows remain.
+            return (options, HubSquads.bestSquad(slots: slots, rows: rows, fallback: screen == .raids, oneMega: screen == .raids))
         }
         // S1: Available fills every slot from the box, whatever upgrade the Pokémon needs, taking the strongest unused one of another role when a role runs out.
         let placeable: (String, String) -> Bool = kept ? { _, _ in true } : HubSquads.placeable(screen: screen, mode: mode, ctx: ctx)
         // A kept species pick (a Pokémon the box lacked when it was picked) is drawn as its Best row; the row is not offered by any picker.
         let keptSpecies = Set(slots.compactMap(\.species))
+        let keptRows: [HubSquads.BestRow] = kept && !keptSpecies.isEmpty
+            ? (screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)).filter { keptSpecies.contains($0.key) } : []
+        // A kept species pick and an owned copy of it are the same Pokémon: no other slot refills with that copy while the pick holds it.
+        let copyOf = HubSquads.copyResolver(rows: keptRows)
         func extras(_ rows: [HubSquads.BestRow]) -> [EventOption] {
             guard kept, !keptSpecies.isEmpty else { return [] }
-            return rows.filter { keptSpecies.contains($0.key) }.map { r in
+            return rows.map { r in
                 var o = EventOption(build: r.build, best: r, name: r.name, tier: r.tier, roles: r.roles, types: r.types, id: r.entryId)
                 o.extra = true
                 return o
@@ -289,12 +294,12 @@ struct EventPickerBuilder {
         }
         if screen == .raids {
             let c = HubSquads.raidCandidates(row: row, mode: mode, ctx: ctx)
-            return (c.map { var o = option($0.build, $0.tier, $0.roleNames); o.mega = $0.mega; return o } + extras(kept && !keptSpecies.isEmpty ? HubSquads.bestRaidRows(row: row, ctx: ctx) : []),
-                    HubSquads.raidSquad(slots: slots, candidates: c, fillAnyRole: true, placeable: placeable))
+            return (c.map { var o = option($0.build, $0.tier, $0.roleNames); o.mega = $0.mega; return o } + extras(keptRows),
+                    HubSquads.raidSquad(slots: slots, candidates: c, fillAnyRole: true, placeable: placeable, copyOf: copyOf))
         }
         let c = HubSquads.maxCandidates(row: row, mode: mode, ctx: ctx)
-        return (c.map { option($0.build, $0.tier, $0.roleNames, hits: $0.hitsBoss) } + extras(kept && !keptSpecies.isEmpty ? HubSquads.bestMaxRows(row: row, ctx: ctx) : []),
-                HubSquads.maxSquad(slots: slots, candidates: c, fillAnyRole: true, placeable: placeable))
+        return (c.map { option($0.build, $0.tier, $0.roleNames, hits: $0.hitsBoss) } + extras(keptRows),
+                HubSquads.maxSquad(slots: slots, candidates: c, fillAnyRole: true, placeable: placeable, copyOf: copyOf))
     }
 
     /// The build and tier a slot of this role judges a Pokémon on: the Mega view in the Mega slot under Available, the plain Pokémon everywhere else (S1).
@@ -414,7 +419,7 @@ struct EventPickerBuilder {
     /// (rule 32). nil for a slot the Best squad leaves empty or whose figure cannot be worked out.
     func reference(style: RaidStyle) -> [Double?] {
         let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
-        let best = HubSquads.bestSquad(slots: screen == .raids ? HubSquads.defaultRaidSlots(style: style) : HubSquads.defaultMaxSlots(), rows: rows, oneMega: screen == .raids)
+        let best = HubSquads.bestSquad(slots: screen == .raids ? HubSquads.defaultRaidSlots(style: style) : HubSquads.defaultMaxSlots(), rows: rows, fallback: screen == .raids, oneMega: screen == .raids)
         guard let scale = strengthScale() else { return best.map { _ in nil } }
         return best.map { f in
             guard let id = f.pickId, let r = rows.first(where: { $0.entryId == id || $0.ids.contains(id) }) else { return nil }
@@ -458,10 +463,13 @@ struct EventSquadView: View {
     var body: some View {
         let style = keeper.store.raidStyle
         let ref = SquadRef.event(row: row, screen: screen)
-        let surface = workspace.surface(ref, store: keeper.store, defaults: screen == .raids ? HubSquads.defaultRaidSlots(style: style) : HubSquads.defaultMaxSlots())
-        let mode = surface.mode
-        let builder = builder(kept: surface.kept)
-        let (options, filled) = builder.resolve(slots: surface.squad.slots, mode: mode)
+        let defaults = screen == .raids ? HubSquads.defaultRaidSlots(style: style) : HubSquads.defaultMaxSlots()
+        let base = workspace.surface(ref, store: keeper.store, defaults: defaults)
+        let mode = base.mode
+        let builder = builder(kept: base.kept)
+        let (options, filled) = builder.resolve(slots: base.squad.slots, mode: mode)
+        // Edited means the squad as drawn differs from the suggestion as drawn (rule 27.3); only worked out while a draft exists.
+        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { builder.resolve(slots: defaults, mode: mode).filled }))
         let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId, count: filled.count, mode: mode) }
         let team = HubSquads.teamStatus(cards.map(\.status))
@@ -494,13 +502,13 @@ struct EventSquadView: View {
             if surface.tab == .current {
                 DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
             } else {
-                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, hasCurrent: surface.hasCurrent,
+                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, replaces: surface.replaces(filled: filled),
                               onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
             }
             SetSquadFooter(isSet: isSet(surface, ref: ref), hint: surface.tab == .current ? nil : "Saves this squad as your current squad and marks it set, after asking when you have one",
                            onSet: {
                                if surface.tab == .current { workspace.edit(surface, keeper: keeper) { $0.markSet(shown: filled) } }
-                               else if surface.hasCurrent { replacingForSet = true }
+                               else if surface.replaces(filled: filled) { replacingForSet = true }
                                else { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: true) }
                            },
                            onUndo: { keeper.update { store in if var q = store.current(ref) { q.isSet = false; store.setCurrent(q, ref) } } })
@@ -515,7 +523,7 @@ struct EventSquadView: View {
             let b = builder
             let bestUnedited = surface.isBestSuggestion
             let value = await Task.detached(priority: .userInitiated) {
-                bestUnedited ? SquadStrength.bestSquad(total: filled.count) : b.squadStrength(filled: filled, options: options, byId: byId, mode: mode, reference: b.reference(style: style))
+                bestUnedited ? SquadStrength.bestSquad(reference: b.reference(style: style)) : b.squadStrength(filled: filled, options: options, byId: byId, mode: mode, reference: b.reference(style: style))
             }.value
             if !Task.isCancelled { strength = (strengthKey, value) }
         }

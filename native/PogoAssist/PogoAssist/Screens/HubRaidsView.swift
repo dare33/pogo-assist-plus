@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-/// The Raids screen (design pass 2): a `Now | Coming up` switch, SUGGESTIONS · Available | Best, the raids on now as a sideways strip of cards (the first chosen on
+/// The Raids screen (design pass 2): a `Now | Coming up` switch, SQUAD · Current | Available | Best, the raids on now as a sideways strip of cards (the first chosen on
 /// opening; tapping the chosen card closes its squad) or the coming ones as a list, the chosen raid's squad with its picker, then the builds that would close the
 /// gaps and a link to the full schedule.
 struct HubRaidsView: View {
@@ -32,7 +32,7 @@ struct HubScheduleLink: View {
     }
 }
 
-/// The timeline both the Raids and the Max screen show: the `Now | Coming up` switch, SUGGESTIONS, the cards or the list with the squads, and, for Raids, the builds
+/// The timeline both the Raids and the Max screen show: the `Now | Coming up` switch, the cards or the list with the squads, and, for Raids, the builds
 /// that close the gaps of the rows on show.
 struct HubTimeline: View {
     let screen: HubRaidsModel.Screen
@@ -63,7 +63,7 @@ struct HubTimeline: View {
                 Text("The Hub's schedule could not be read.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
             }
         }
-        .keepsSquads(keeper)
+        .keepsSquads(keeper, workspace)
     }
 
     @ViewBuilder private func content(hub: HubData, gm: GameMaster) -> some View {

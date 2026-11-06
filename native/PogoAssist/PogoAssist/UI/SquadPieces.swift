@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-// The pieces the five squad screens (Raids, Max, Gym, Rocket, PvP) share, from the pass 2 handoff's "Shared components": the SUGGESTIONS row, the slot card, the
+// The pieces the five squad screens (Raids, Max, Gym, Rocket, PvP) share, from the pass 2 handoff's "Shared components": the SQUAD tabs, the slot card, the
 // picker with its role chips and rows, the squad status line and the status colour of a card. They draw what the screens hand them; the rules (who is listed, in what order, what a role
 // allows) are PogoBox's `HubSquads`. Every colour is a Theme token, so light and dark follow.
 
@@ -195,7 +195,7 @@ struct SquadStatusLine: View {
     }
 }
 
-/// The squad's strength bar (CONCEPTS rule 32), under the status line: "Squad strength 72%" and "85% after upgrades" over one bar drawn as a picker row's bar is (solid = now, faint
+/// The squad's strength bar (CONCEPTS rule 32), under the status line: "Squad strength 78% of best" (the squad's slot figures over the Best squad's; "Matches the best squad" at or over it) and "92% after upgrades" over one bar drawn as a picker row's bar is (solid = now, faint
 /// = after the suggested upgrades), and "5 of 6 slots scored" when a slot has no figure. VoiceOver reads the words as one element; the bar is hidden from it. `strength` is nil
 /// while it is being worked out (off the main thread): the row keeps its height with an empty track, so nothing below it moves. At accessibility text sizes the two labels stack.
 struct SquadStrengthLine: View {
@@ -766,7 +766,7 @@ final class PickerRowsCache<T> {
     }
 }
 
-// MARK: SUGGESTIONS · Current | Available | Best · (i)  (pass 2-5, rule 27)
+// MARK: SQUAD · Current | Available | Best · (i)  (pass 2-5, rule 27)
 
 /// The row every squad screen carries over its squad: the caption, the compact Current | Available | Best switch and the "i". Current shows only for a squad that has one. Available
 /// and Best are the suggestions (edits to them are drafts); the choice between them is remembered per account (`SquadStore.modes`).
@@ -779,9 +779,11 @@ struct SquadTabsRow: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
+            // The three labels always render at one size (never shrunk one by one): on one line when they fit, else under the caption, else stacked, one to a line.
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) { caption; control(singleLine: true); info }.fixedSize(horizontal: true, vertical: false)
-                VStack(alignment: .trailing, spacing: 0) { caption; HStack(spacing: 8) { control(singleLine: false); info } }
+                VStack(alignment: .trailing, spacing: 0) { caption; HStack(spacing: 8) { control(singleLine: true); info } }.fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .trailing, spacing: 4) { HStack(spacing: 8) { caption; Spacer(minLength: 0); info }; stacked }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             if infoOpen {
@@ -797,7 +799,7 @@ struct SquadTabsRow: View {
     }
 
     private var caption: some View {
-        Text("SUGGESTIONS").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityHidden(true)
+        Text("SQUAD").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityHidden(true)
     }
 
     private func control(singleLine: Bool) -> some View {
@@ -807,7 +809,49 @@ struct SquadTabsRow: View {
             selection: $tab, metrics: .compact, label: "Suggestions", identifier: "squad-mode", singleLine: singleLine)
     }
 
+    private var stacked: some View {
+        let all: [SquadTab] = hasCurrent ? [.current, .available, .best] : [.available, .best]
+        return StackedChoice(options: all.map { .init(value: $0, title: $0.title, identifier: "squad-tab-\($0.rawValue)") }, selection: $tab, label: "Suggestions", identifier: "squad-mode")
+    }
+
     private var info: some View { InfoButton(isOpen: $infoOpen, label: "About suggestions", identifier: "squad-mode-info") }
+}
+
+/// A choice between a few options drawn as a column of full-width buttons: what a segmented switch becomes when its titles cannot fit on one line at the accessibility text sizes
+/// (the titles keep whole words and one size). The same identifiers, labels and selected trait as the switch.
+struct StackedChoice<Value: Hashable>: View {
+    struct Option: Identifiable {
+        let value: Value
+        let title: String
+        var identifier: String
+        var id: Value { value }
+    }
+    let options: [Option]
+    @Binding var selection: Value
+    let label: String
+    var identifier: String = ""
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ForEach(options) { o in
+                let on = o.value == selection
+                Button { selection = o.value } label: {
+                    Text(o.title).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(on ? Theme.surface : Color.clear, in: Capsule()).contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(o.title)
+                .accessibilityAddTraits(on ? .isSelected : [])
+                .accessibilityIdentifier(o.identifier)
+            }
+        }
+        .padding(4)
+        .background(Theme.off, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
+    }
 }
 
 /// "Replace your current squad?": asked before a draft is saved over a squad that already has a Current.
@@ -822,19 +866,21 @@ extension View {
     }
 }
 
-/// Under the slots of an edited Available or Best squad: Save to Current and Reset, or "Saved to Current" once it is saved. Shown only once the draft differs from the suggestion.
-/// Save asks first when the squad already has a Current. Reset drops the draft at once.
+/// Under the slots of an edited Available or Best squad: Save to Current and Reset, or "Saved to Current" once it is saved. Shown once the squad as drawn differs from the suggestion
+/// (the status also while an unedited squad has just been saved by "Set this squad"). Save asks first only when it would replace a Current that is a different squad (`replaces`).
+/// Reset drops the draft at once. The save itself says "Saved to Current" to VoiceOver (`SquadWorkspace.saveToCurrent`).
 struct SquadDraftBar: View {
     let differs: Bool
     let justSaved: Bool
-    let hasCurrent: Bool
+    /// Saving would replace a Current that is a different squad.
+    let replaces: Bool
     let onSave: () -> Void
     let onReset: () -> Void
     @Environment(\.accent) private var accent
     @State private var asking = false
 
     var body: some View {
-        if differs {
+        if differs || justSaved {
             VStack(alignment: .leading, spacing: 2) {
                 if justSaved {
                     Text("Saved to Current").font(.figtree(13, .heavy, relativeTo: .footnote)).foregroundStyle(accent.ink).padding(.horizontal, 4)
@@ -842,25 +888,24 @@ struct SquadDraftBar: View {
                 }
                 FlowLayout(spacing: 12) {
                     if !justSaved {
-                        Button { if hasCurrent { asking = true } else { onSave() } } label: {
+                        Button { if replaces { asking = true } else { onSave() } } label: {
                             Text("Save to Current").font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(accent.onSolid)
                                 .padding(.horizontal, 16).frame(minHeight: 44).background(accent.solid, in: Capsule()).contentShape(Capsule())
                         }
                         .buttonStyle(PressStyle())
-                        .accessibilityHint("Saves this squad as your current squad, after asking when you have one")
+                        .accessibilityHint("Saves this squad as your current squad, asking first if it would replace a different one")
                         .accessibilityIdentifier("squad-save-current")
                     }
-                    Button(action: onReset) {
+                    if differs { Button(action: onReset) {
                         Text("Reset").font(.figtree(14, .bold, relativeTo: .subheadline)).underline().foregroundStyle(accent.ink)
                             .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
                     }
                     .buttonStyle(PressStyle())
                     .accessibilityHint("Drops your changes to this squad and shows the suggestion again")
-                    .accessibilityIdentifier("squad-reset-draft")
+                    .accessibilityIdentifier("squad-reset-draft") }
                 }
             }
             .replaceCurrentDialog(isPresented: $asking, onReplace: onSave)
-            .onChange(of: justSaved) { _, saved in if saved { AccessibilityNotification.Announcement("Saved to Current").post() } }
         }
     }
 }
@@ -895,14 +940,24 @@ struct DeleteCurrentButton: View {
 struct RaidStyleRow: View {
     @Binding var style: RaidStyle
 
+    private func id(_ s: RaidStyle) -> String { "squad-style-\(s == .balanced ? "balanced" : "max-damage")" }
+    private var caption: some View { Text("STYLE").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityHidden(true) }
+
+    /// Never truncated: on one line beside its caption when it fits, else under it, else stacked (the titles keep whole words).
     var body: some View {
-        HStack(spacing: 8) {
-            Text("STYLE").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityHidden(true)
-            Spacer(minLength: 4)
-            SegmentedSwitch(
-                segments: RaidStyle.allCases.map { .init(value: $0, title: $0.title, identifier: "squad-style-\($0 == .balanced ? "balanced" : "max-damage")") },
-                selection: $style, metrics: .compact, label: "Raids style", identifier: "squad-style")
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { caption; Spacer(minLength: 4); control }.fixedSize(horizontal: true, vertical: false).frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 0) { caption; control }.fixedSize(horizontal: true, vertical: false).frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 4) {
+                caption
+                StackedChoice(options: RaidStyle.allCases.map { .init(value: $0, title: $0.title, identifier: id($0)) }, selection: $style, label: "Raids style", identifier: "squad-style")
+            }
         }
+    }
+
+    private var control: some View {
+        SegmentedSwitch(segments: RaidStyle.allCases.map { .init(value: $0, title: $0.title, identifier: id($0)) },
+                        selection: $style, metrics: .compact, label: "Raids style", identifier: "squad-style", singleLine: true)
     }
 }
 
@@ -956,6 +1011,8 @@ extension View {
 struct SquadStripView: View {
     let model: SquadStripModel
     @Environment(\.accent) private var accent
+    /// The slot-number disc grows with the text, so the digit is never clipped at the accessibility sizes.
+    @ScaledMetric(relativeTo: .footnote) private var disc: CGFloat = 20
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -983,7 +1040,7 @@ struct SquadStripView: View {
         return Button { model.open(c.id) } label: {
             HStack(spacing: 6) {
                 Text("\(c.id + 1)").font(.figtree(12, .heavy, relativeTo: .caption)).foregroundStyle(Theme.surface)
-                    .frame(minWidth: 20, minHeight: 20).background(Circle().fill(ink)).accessibilityHidden(true)
+                    .frame(minWidth: disc, minHeight: disc).background(Circle().fill(ink)).accessibilityHidden(true)
                 Text(c.name).font(.figtree(13, c.editing ? .heavy : .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink).lineLimit(1).fixedSize()
             }
             .padding(.horizontal, 10).padding(.vertical, 5)

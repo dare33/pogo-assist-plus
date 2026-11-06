@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-/// Team Rocket (design pass 2): the leader cards, SUGGESTIONS · Available | Best, YOUR SQUAD FOR <LEADER> as three slot cards that each open a picker, and a row for
+/// Team Rocket (design pass 2): the leader cards, SQUAD · Current | Available | Best, YOUR SQUAD FOR <LEADER> as three slot cards that each open a picker, and a row for
 /// every grunt with the box's counters in a sideways strip. The three picks for each leader are kept per account (`SquadKeeper`).
 struct HubRocketView: View {
     @EnvironmentObject var model: AppModel
@@ -36,7 +36,7 @@ struct HubRocketView: View {
                 Text("The Rocket lineups could not be read.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
             }
         }
-        .keepsSquads(keeper)
+        .keepsSquads(keeper, workspace)
     }
 
     // MARK: leaders
@@ -251,6 +251,13 @@ struct RocketPickerBuilder {
         }
     }
 
+    /// The copy each kept species pick of `slots` stands for (Current): a species pick and an owned copy of it are one Pokémon, so no other slot refills with that copy.
+    func keptCopyOf(slots: [SquadSlot]) -> (String) -> String? {
+        let keys = kept ? Set(slots.compactMap(\.species)) : []
+        guard !keys.isEmpty else { return { _ in nil } }
+        return HubSquads.copyResolver(rows: leader.slots.flatMap { HubSquads.bestRocketRows(options: $0, ctx: ctx) }.filter { keys.contains($0.key) })
+    }
+
     /// A kept species pick of slot `i` as the Best row it is, described against that slot (Current only).
     func keptEntry(_ f: FilledSlot, slot i: Int) -> Entry? {
         guard kept, let key = f.species, let r = leader.slots.flatMap({ HubSquads.bestRocketRows(options: $0, ctx: ctx) }).first(where: { $0.key == key }) else { return nil }
@@ -287,11 +294,15 @@ private struct RocketSquadView: View {
 
     var body: some View {
         let ref = SquadRef.rocket(leader: leader.name)
-        let surface = workspace.surface(ref, store: keeper.store, defaults: HubSquads.defaultRocketSlots())
-        let mode = surface.mode
-        let builder = builder(kept: surface.kept)
-        let saved = surface.squad
-        let filled = mode == .best ? HubSquads.bestRocketSquad(leader: leader, slots: saved.slots, ctx: ctx) : HubSquads.rocketSquad(leader: leader, slots: saved.slots, mode: mode, kept: surface.kept, ctx: ctx)
+        let base = workspace.surface(ref, store: keeper.store, defaults: HubSquads.defaultRocketSlots())
+        let mode = base.mode
+        let builder = builder(kept: base.kept)
+        let saved = base.squad
+        let filled = mode == .best ? HubSquads.bestRocketSquad(leader: leader, slots: saved.slots, ctx: ctx)
+            : HubSquads.rocketSquad(leader: leader, slots: saved.slots, mode: mode, kept: base.kept, copyOf: builder.keptCopyOf(slots: saved.slots), ctx: ctx)
+        let surface = base.with(edited: base.isEdited(filled: filled, suggested: {
+            mode == .best ? HubSquads.bestRocketSquad(leader: leader, slots: HubSquads.defaultRocketSlots(), ctx: ctx) : HubSquads.rocketSquad(leader: leader, slots: HubSquads.defaultRocketSlots(), mode: mode, ctx: ctx)
+        }))
         let lists = leader.slots.map { entries(for: $0, mode: mode) }
         let keptEntries = Dictionary(uniqueKeysWithValues: filled.enumerated().compactMap { i, f in builder.keptEntry(f, slot: i).map { (i, $0) } })
         let cards = filled.enumerated().map { card($0.offset, $0.element, lists: lists, kept: keptEntries[$0.offset]) }
@@ -321,7 +332,7 @@ private struct RocketSquadView: View {
             if surface.tab == .current {
                 DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
             } else {
-                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, hasCurrent: surface.hasCurrent,
+                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, replaces: surface.replaces(filled: filled),
                               onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
             }
         }
@@ -334,7 +345,7 @@ private struct RocketSquadView: View {
             let b = builder
             let bestUnedited = surface.isBestSuggestion
             let value = await Task.detached(priority: .userInitiated) {
-                bestUnedited ? SquadStrength.bestSquad(total: filled.count) : b.squadStrength(filled: filled, lists: lists, mode: mode)
+                bestUnedited ? SquadStrength.bestSquad(reference: b.reference()) : b.squadStrength(filled: filled, lists: lists, mode: mode)
             }.value
             if !Task.isCancelled { strength = (strengthKey, value) }
         }

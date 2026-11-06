@@ -610,4 +610,41 @@ final class PickerRowModelsTests: XCTestCase {
         XCTAssertEqual(pRows.filter { $0.id == pRow.entryId }.count, 1)
         XCTAssertNotNil(pvp.squadStrength(filled: p.filled, candidates: p.candidates, byId: p.byId, best: p.best, mode: .available).now)
     }
+
+    /// H3: a kept species pick and an owned copy of that species are the same Pokémon. While the pick holds the species, no other slot of the kept squad refills with that copy
+    /// (Raids, Max, Gym and Rocket), so the squad never shows it twice and its strength never counts it twice.
+    func testAKeptSpeciesPickHoldsItsOwnedCopyOnRaidsMaxGymAndRocket() throws {
+        let c = ctx()
+        func others(_ filled: [FilledSlot], except i: Int, copy: String) -> Bool { filled.enumerated().allSatisfy { $0.offset == i || ($0.element.entryId != copy && $0.element.species.map { _ in false } != true) } }
+        // Raids and Max: the first event of each kind.
+        for screen in [SquadScreen.raids, .max] {
+            let row = try XCTUnwrap(Self.hub.rotation.first { !$0.bosses.isEmpty && (screen == .raids ? [.fiveStar, .mega, .shadow] : [.maxMonday, .maxEvent]).contains($0.kind) })
+            var b = EventPickerBuilder(screen: screen, row: row, ctx: c); b.kept = true
+            let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: c) : HubSquads.bestMaxRows(row: row, ctx: c)
+            let owned = try XCTUnwrap(rows.first { $0.ownedEntryId != nil && !$0.roles.contains("Mega") }, "\(screen): the table lists a Pokémon the box has")
+            var slots = screen == .raids ? HubSquads.defaultRaidSlots() : HubSquads.defaultMaxSlots()
+            slots[1].species = owned.key
+            let filled = b.resolve(slots: slots, mode: .available).filled
+            XCTAssertEqual(filled[1].species, owned.key, "\(screen): the species pick is kept")
+            XCTAssertTrue(others(filled, except: 1, copy: owned.ownedEntryId!), "\(screen): no other slot refills with the copy the pick holds")
+        }
+        // Gym.
+        var g = GymPickerBuilder(ctx: c); g.kept = true
+        let gRow = try XCTUnwrap(HubSquads.bestGymRows(ctx: c).first { $0.ownedEntryId != nil })
+        var gs = SquadStore.Saved(slots: HubSquads.defaultGymSlots()); gs.slots[2].species = gRow.key
+        let gFilled = g.resolve(mode: .available, saved: gs).filled
+        XCTAssertEqual(gFilled[2].species, gRow.key)
+        XCTAssertTrue(others(gFilled, except: 2, copy: gRow.ownedEntryId!), "gym")
+        // Rocket.
+        for leader in Self.hub.leaders {
+            var k = RocketPickerBuilder(leader: leader, ctx: c); k.kept = true
+            guard let r = leader.slots.indices.lazy.compactMap({ i in HubSquads.bestRocketRows(options: leader.slots[i], ctx: c).first { $0.ownedEntryId != nil }.map { (i, $0) } }).first else { continue }
+            var slots = HubSquads.defaultRocketSlots(); slots[r.0].species = r.1.key
+            let filled = HubSquads.rocketSquad(leader: leader, slots: slots, mode: .available, kept: true, copyOf: k.keptCopyOf(slots: slots), ctx: c)
+            XCTAssertEqual(filled[r.0].species, r.1.key, "rocket \(leader.name)")
+            XCTAssertTrue(others(filled, except: r.0, copy: r.1.ownedEntryId!), "rocket \(leader.name)")
+            return
+        }
+        XCTFail("no Rocket leader slot lists a Pokémon the box has")
+    }
 }
