@@ -1,7 +1,7 @@
 import XCTest
 @testable import PogoBox
 
-/// Rule 27 (5 Nov 2026): the suggestion is worked out once and the player edits from there; swap; Back to suggested squad.
+/// Rule 27 (5 Nov 2026): the suggestion is worked out once and the player edits from there; swap.
 final class SquadFixingTests: XCTestCase {
     private let ranked = ["a", "b", "c", "d", "e"]
     private func shown(_ saved: SquadStore.Saved, placeable: @escaping (String, String) -> Bool = { _, _ in true }, ranked: [String]? = nil) -> [FilledSlot] {
@@ -14,7 +14,7 @@ final class SquadFixingTests: XCTestCase {
         XCTAssertEqual(shown(saved).map(\.entryId), ["a", "b", "c"])
         XCTAssertEqual(shown(saved, ranked: ["z"] + ranked).map(\.entryId), ["z", "a", "b"], "a box change moves every slot")
         XCTAssertFalse(saved.changed)
-        XCTAssertFalse(saved.showsBackToSuggested)
+        XCTAssertFalse(saved.hasCurrent)
     }
 
     func testTheFirstChangeKeepsEverySlotAsShownThenNothingMovesOnItsOwn() {
@@ -83,22 +83,11 @@ final class SquadFixingTests: XCTestCase {
         XCTAssertEqual(out.prefix(3).map(\.entryId), ["z", "b", "c"], "only the emptied slot refills, with the next best unused")
     }
 
-    func testBackToSuggestedSquadForgetsPicksRolesAndTheSetMark() {
-        var saved = SquadStore.Saved(slots: HubSquads.defaultMaxSlots(), isSet: true)
-        saved.changeRole(at: 0, to: "Attacker", fits: { _ in true }, shown: shown(saved))
-        saved.choose("d", at: 1)
-        XCTAssertTrue(saved.showsBackToSuggested)
-        saved.backToSuggested(defaults: HubSquads.defaultMaxSlots())
-        XCTAssertEqual(saved, SquadStore.Saved(slots: HubSquads.defaultMaxSlots()))
-        XCTAssertFalse(saved.showsBackToSuggested)
-        XCTAssertEqual(shown(saved).map(\.entryId), ["a", "b", "c"], "the suggestion again")
-    }
-
     func testOldFilesLoadAsUnchangedAndKeepTheirPicksUntilTheNextChange() throws {
         let old = #"{"slots":[{"role":"Defender","pick":"keep-me"},{"role":"Defender"}],"isSet":false}"#
         var saved = try JSONDecoder().decode(SquadStore.Saved.self, from: Data(old.utf8))
         XCTAssertFalse(saved.changed)
-        XCTAssertTrue(saved.showsBackToSuggested, "it holds a pick of the player's")
+        XCTAssertTrue(saved.hasCurrent, "it holds a pick of the player's, so it is that squad's Current")
         // Their pick is kept as shown; the next change keeps the rest.
         saved.choose("e", at: 1, shown: shown(saved, ranked: ["keep-me", "a", "e"]))
         XCTAssertEqual(saved.slots.map(\.pick), ["keep-me", "e"])

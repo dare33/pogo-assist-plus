@@ -3,11 +3,14 @@ import Foundation
 /// Design pass 2, rule 27 (D58): what the squad screens keep, per account, on the phone. This is the model and its rules only; where the value is
 /// written (one file per account next to the account's box, say) is the app's job. One `SquadStore` is one account's.
 ///
+/// What a stored `Saved` is, from pass 2-5: the squad's CURRENT squad (`SquadStore.current`). The suggestions (Available, Best) are never stored; an edit of one is a draft held
+/// by the screen (`SquadDrafts`) until the player saves it to Current. Everything below describes a Current squad.
+///
 /// What is kept is the player's own choices: each slot's role and the Pokémon they picked (a copy, or under Best a species the box may not have: `SquadSlot.species`,
 /// which a copy leaving the box does not touch). A squad the player has never changed keeps nothing and shows the suggestion, refilled whenever it is drawn.
 /// Every change (a Pokémon chosen for a slot, a slot's role changed, "Squad set") first keeps the squad exactly as shown (`Saved.fixing`), so an edit acts on what the player
 /// sees; a slot that refills in a changed squad is kept too (`adoptRefills`), so no slot changes on its own afterwards, except one whose kept Pokémon the current mode does not place. A slot with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused one for its
-/// role, that slot only (`reconciled`, `HubSquads.fill`). "Back to suggested squad" (`Saved.backToSuggested`) forgets it all. Copies are keyed by the box entry id,
+/// role, that slot only (`reconciled`, `HubSquads.fill`). "Delete current squad" (`SquadStore.deleteCurrent`) forgets it all. Copies are keyed by the box entry id,
 /// which the app keeps through power-ups, evolutions, hand corrections and re-scans (`BoxEntry.id`), so a re-scan keeps every pick whose Pokémon is still in the box.
 public struct SquadStore: Codable, Equatable {
     /// One squad as the player left it.
@@ -30,8 +33,9 @@ public struct SquadStore: Codable, Equatable {
             changed = try c.decodeIfPresent(Bool.self, forKey: .changed) ?? false
         }
 
-        /// Whether the squad's "Back to suggested squad" button shows: the player has changed it, or an older file holds picks of theirs.
-        public var showsBackToSuggested: Bool { changed || slots.contains { $0.pickId != nil } }
+        /// Whether this is a Current squad (pass 2-5, rule 27): the player has changed it, or an older file holds picks of theirs or its "Squad set" mark. A squad with nothing
+        /// kept has no Current and shows the suggestions.
+        public var hasCurrent: Bool { changed || isSet || slots.contains { $0.pickId != nil } }
 
         /// The squad as it is drawn becomes the player's: every slot keeps the Pokémon it shows (a copy as `pick`, a species row as `species`, nothing for an empty slot), and a
         /// suggestion listed for another role keeps saying so (`SquadSlot.fallback`). Runs before EVERY change (a choice, a role change, "Squad set"), so an edit always acts on
@@ -106,13 +110,9 @@ public struct SquadStore: Codable, Equatable {
             slots[index].fallback = nil
         }
 
-        /// "Back to suggested squad": forgets every kept Pokémon, puts the roles back to the screen's defaults (`defaults`: its `HubSquads.default...Slots()`) and clears the
-        /// "Squad set" mark. The squad then shows the suggestion again, as one never changed does.
-        public mutating func backToSuggested(defaults: [SquadSlot]) {
-            slots = defaults
-            isSet = false
-            changed = false
-        }
+        // TEMPORARY (pass 2-5): the two members the screens not yet converted still read. Removed by the last screen's commit.
+        public var showsBackToSuggested: Bool { hasCurrent }
+        public mutating func backToSuggested(defaults: [SquadSlot]) { slots = defaults; isSet = false; changed = false }
     }
 
     /// A raid or Max squad with the last day of its event, which is when it is dropped.
@@ -133,12 +133,14 @@ public struct SquadStore: Codable, Equatable {
     public var rocket: [String: Saved] = [:]
     /// PvP: three per league (`gl`, `ul`, `ml`), with roles.
     public var pvp: [String: Saved] = [:]
-    /// Available | Best, per screen (`SquadScreen.rawValue`); a screen with no entry reads Available.
+    /// Available | Best, per screen (`SquadScreen.rawValue`); a screen with no entry reads Available. The tab a squad with no Current opens on.
     public var modes: [String: SquadMode] = [:]
+    /// Raids only (pass 2-5, rule 33): Balanced | Max damage, the roles the Available and Best suggestions are made of. Current squads keep their own roles.
+    public var raidStyle: RaidStyle = .balanced
 
     public init() {}
 
-    private enum CodingKeys: String, CodingKey { case version, raids, max, gym, rocket, pvp, modes }
+    private enum CodingKeys: String, CodingKey { case version, raids, max, gym, rocket, pvp, modes, raidStyle }
 
     /// Tolerant: a key missing from an older file reads as empty, so adding a section later does not lose the saved squads.
     public init(from decoder: Decoder) throws {
@@ -150,6 +152,7 @@ public struct SquadStore: Codable, Equatable {
         rocket = try c.decodeIfPresent([String: Saved].self, forKey: .rocket) ?? [:]
         pvp = try c.decodeIfPresent([String: Saved].self, forKey: .pvp) ?? [:]
         modes = try c.decodeIfPresent([String: SquadMode].self, forKey: .modes) ?? [:]
+        raidStyle = try c.decodeIfPresent(RaidStyle.self, forKey: .raidStyle) ?? .balanced
     }
 
     // MARK: keys

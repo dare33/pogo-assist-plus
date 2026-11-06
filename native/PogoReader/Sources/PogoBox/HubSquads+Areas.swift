@@ -439,3 +439,26 @@ extension HubSquads {
     }
 
 }
+
+// MARK: Raids style (pass 2-5, rule 33)
+
+/// Raids only: the roles the Available and Best suggestions are made of. Balanced is the default structure; Max damage trades the two Bulky hitters for Heavy hitters.
+public enum RaidStyle: String, Codable, CaseIterable {
+    case balanced, maxDamage
+
+    public var title: String { self == .balanced ? "Balanced" : "Max damage" }
+    /// One sentence for the (i): what the style puts in the squad.
+    public var explanation: String {
+        self == .balanced ? "a Mega, three heavy hitters and two bulky hitters that stay in longer."
+                          : "a Mega and five heavy hitters; faster, with more relobbies."
+    }
+    /// The suggested squad's roles.
+    public var roles: [PogoRules.RaidRole] {
+        self == .balanced ? PogoRules.RaidRole.suggested : [.mega, .heavy, .heavy, .heavy, .heavy, .heavy]
+    }
+}
+
+extension HubSquads {
+    /// The suggested raid squad's slots under a style (Balanced: Mega, Heavy hitter ×3, Bulky hitter ×2; Max damage: Mega, Heavy hitter ×5).
+    public static func defaultRaidSlots(style: RaidStyle) -> [SquadSlot] { style.roles.map { SquadSlot(role: $0.rawValue) } }
+}
