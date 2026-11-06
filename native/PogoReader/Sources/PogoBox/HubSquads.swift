@@ -210,9 +210,12 @@ public enum HubSquads {
         return out
     }
 
-    /// Two drawn squads are the same squad: each slot holds the same Pokémon (or species) in the same role. An edited Available or Best squad is one that is not the suggestion by this test.
+    /// Two drawn squads are the same squad: each slot draws the same row in the same role. The row drawn is the species row when the slot holds a species (the Chansey row backed by the
+    /// player's one Chansey copy is not the Blissey row that shows the same copy), else the copy. A species pick that reads as a copy draws as its species row, as the suggestion's
+    /// shared row does. An edited Available or Best squad is one that is not the suggestion by this test.
     public static func sameSquad(_ a: [FilledSlot], _ b: [FilledSlot]) -> Bool {
-        a.count == b.count && zip(a, b).allSatisfy { $0.role == $1.role && $0.pickId == $1.pickId }
+        func drawn(_ f: FilledSlot) -> String? { f.species.map { squadSpeciesPrefix + $0 } ?? f.entryId }
+        return a.count == b.count && zip(a, b).allSatisfy { $0.role == $1.role && drawn($0) == drawn($1) }
     }
 
     /// The candidates listed for a role, in their order; role "All" allows any.

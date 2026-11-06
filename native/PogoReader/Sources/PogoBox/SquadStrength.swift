@@ -45,7 +45,7 @@ public struct SquadStrength: Equatable {
     public static func against(_ slots: [Slot], reference: [Double?], kind: Strength.Kind = .damage) -> SquadStrength {
         var sumNow = 0.0, sumAfter = 0.0, sumRef = 0.0, counted = 0
         for (i, s) in slots.enumerated() {
-            guard i < reference.count, let ref = reference[i] else { continue }
+            guard i < reference.count, let ref = reference[i], ref > 0 else { continue }   // one rule for "has a figure" (as in `bestSquad`)
             switch s {
             case .unscored: continue
             case .empty: sumRef += ref; counted += 1

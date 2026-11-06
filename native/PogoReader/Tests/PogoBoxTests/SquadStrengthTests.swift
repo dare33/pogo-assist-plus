@@ -144,4 +144,14 @@ final class SquadStrengthTests: XCTestCase {
         XCTAssertEqual(s.afterText, "77% after upgrades")
         XCTAssertFalse(s.matchesBest)
     }
+
+    /// J7: one rule for "has a figure": a reference slot of 0 is left out by both `against` and `bestSquad`.
+    func testAZeroReferenceSlotCountsTheSameWayInBothPaths() {
+        let ref: [Double?] = [0.8, 0, nil, 0.6]
+        let best = SquadStrength.bestSquad(reference: ref)
+        let sq = against([d(0.8), d(0.5), d(0.5), d(0.6)], ref)
+        XCTAssertEqual(best.scored, 2)
+        XCTAssertEqual(sq.scored, best.scored)
+        XCTAssertEqual(sq.scoredText, best.scoredText)
+    }
 }
