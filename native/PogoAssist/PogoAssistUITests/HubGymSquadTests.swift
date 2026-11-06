@@ -45,8 +45,8 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(reveal(app, app.staticTexts["GYM BUILDS"]).exists)
         XCTAssertFalse(app.staticTexts["TOP AVAILABLE"].exists)
         app.swipeDown(); app.swipeDown()
-        app.buttons["squad-mode-best"].tap()
-        XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true)
+        app.buttons["squad-tab-best"].tap()
+        XCTAssertEqual(app.buttons["squad-tab-best"].isSelected, true)
         // Best fills the six slots from the Gym table whether or not the box has them: the ones it lacks are red, in the squad line and on their cards.
         XCTAssertTrue(el(app, "squad-status").label.hasPrefix("Not ready: ") && el(app, "squad-status").label.contains("to get"), el(app, "squad-status").label)
         XCTAssertTrue((2...6).contains { slot(app, "gym", $0).label.contains("not in your box, to get") }, "a not-owned Pokémon is drawn as such: \(slot(app, "gym", 2).label)")
@@ -64,11 +64,12 @@ final class HubGymSquadTests: SquadUITestCase {
         openTile(again, "gym")
         XCTAssertTrue(slot(again, "gym", 1).waitForExistence(timeout: 60))
         XCTAssertTrue(slot(again, "gym", 1).label.contains("Blissey"), slot(again, "gym", 1).label)
-        XCTAssertEqual(again.buttons["squad-mode-best"].isSelected, true, "Best is remembered across a relaunch")
+        XCTAssertEqual(again.buttons["squad-tab-best"].isSelected, true, "Best is remembered across a relaunch")
     }
 
-    /// Rule 27: choosing the Pokémon of another slot swaps the two, a changed squad shows Back to suggested squad, and Back restores the suggestion; rule 32: the strength line.
-    func testGymSwapAndBackToSuggestedSquad() throws {
+    /// Rule 27 (pass 2-5): an edit of Available is a draft that never switches tabs; Reset drops it; Save to Current stores it (the first save asks nothing, a second asks
+    /// "Replace your current squad?"); Current edits save at once; Delete current squad asks first and leaves Available and Best as they were. Rule 32: the strength line.
+    func testGymDraftResetSaveReplaceAndDelete() throws {
         let app = launch(reset: true)
         populate(app)
         openTile(app, "gym")
@@ -77,24 +78,106 @@ final class HubGymSquadTests: SquadUITestCase {
         let strength = el(app, "squad-strength")
         XCTAssertTrue(strength.waitForExistence(timeout: 10))
         XCTAssertTrue(strength.label.hasPrefix("Squad strength "), strength.label)
-        XCTAssertTrue(strength.label.contains("percent"), "the squad is one scored defender in six: \(strength.label)")
+        XCTAssertTrue(strength.label.contains("percent") && strength.label.contains("of best"), "the squad is one scored defender in six, against the best squad: \(strength.label)")
         let before = strength.label
-        XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
+        XCTAssertFalse(tab(app, "current").exists, "a squad with nothing saved has no Current tab")
+        XCTAssertFalse(app.buttons["squad-save-current"].exists || app.buttons["squad-reset-draft"].exists, "an unedited suggestion has no Save to Current and no Reset")
         let slot1 = slot(app, "gym", 1).label
 
+        // An edit: Blissey moves to slot 2. It stays on Available (no tab switch), and Save to Current and Reset appear.
         openPicker(app, "gym", slot: 2)
         pickerRows(app).firstMatch.tap()
         closePicker(app)
         XCTAssertTrue(slot(app, "gym", 2).label.contains("Blissey"), "slot 2 took it: \(slot(app, "gym", 2).label)")
         XCTAssertTrue(slot(app, "gym", 1).label.contains("empty"), "slot 1 held it, so it is now empty: \(slot(app, "gym", 1).label)")
-        let back = reveal(app, app.buttons["squad-back-to-suggested"])
-        XCTAssertTrue(back.waitForExistence(timeout: 5), "a changed squad has the Back button")
-        // It asks first (tapBackAndConfirm waits for the question); the dialog's Cancel is the system's own and has no element the test can reach in the simulator.
-        tapBackAndConfirm(app)
-        XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
+        XCTAssertTrue(tab(app, "available").isSelected, "editing never switches tabs")
+        XCTAssertFalse(tab(app, "current").exists, "and nothing is saved")
+        XCTAssertTrue(reveal(app, app.buttons["squad-save-current"]).waitForExistence(timeout: 5), "an edited suggestion offers Save to Current")
+        XCTAssertTrue(app.buttons["squad-reset-draft"].exists)
+        XCTAssertTrue(el(app, "squad-strength").label.contains("of best"), el(app, "squad-strength").label)
+
+        // Reset drops the draft at once, with no question.
+        app.buttons["squad-reset-draft"].tap()
+        XCTAssertTrue(waitGone(app.buttons["squad-reset-draft"]), "Reset clears the controls")
         XCTAssertEqual(slot(app, "gym", 1).label, slot1, "the suggestion is back")
         XCTAssertTrue(slot(app, "gym", 2).label.contains("empty"))
-        XCTAssertEqual(el(app, "squad-strength").label, before)
+        XCTAssertEqual(reveal(app, el(app, "squad-strength")).label, before)
+
+        // Edit again and save: nothing to replace, so no question; the player stays on Available, which says so, and the Current tab appears.
+        openPicker(app, "gym", slot: 2)
+        pickerRows(app).firstMatch.tap()
+        closePicker(app)
+        saveToCurrent(app)
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "the Current tab appears")
+        XCTAssertTrue(tab(app, "available").isSelected, "and the player stays where they were")
+        XCTAssertTrue(el(app, "squad-saved-note").waitForExistence(timeout: 5), "the squad says Saved to Current")
+        XCTAssertEqual(el(app, "squad-saved-note").label, "Saved to Current")
+        XCTAssertFalse(app.buttons["squad-save-current"].exists, "a saved draft has nothing left to save")
+
+        // A further edit (Blissey back to slot 1) and Save to Current again: the squad has a Current now, so it asks. Cancel leaves Current as it was.
+        openPicker(app, "gym", slot: 1)
+        pickerRows(app).firstMatch.tap()
+        closePicker(app)
+        XCTAssertTrue(slot(app, "gym", 1).label.contains("Blissey"))
+        XCTAssertFalse(el(app, "squad-saved-note").exists, "a changed draft is no longer the saved one")
+        saveToCurrent(app, replacing: false)
+        selectTab(app, "current")
+        XCTAssertTrue(slot(app, "gym", 2).label.contains("Blissey") && slot(app, "gym", 1).label.contains("empty"), "Cancel left Current as it was: \(slot(app, "gym", 2).label)")
+        selectTab(app, "available")
+        saveToCurrent(app, replacing: true)
+        selectTab(app, "current")
+        XCTAssertTrue(slot(app, "gym", 1).label.contains("Blissey"), "Replace made the draft the Current squad: \(slot(app, "gym", 1).label)")
+
+        // Delete current squad asks first; Cancel keeps it, the confirmation removes it and shows Available (the remembered tab), whose draft is as it was.
+        deleteCurrent(app, confirm: false)
+        XCTAssertTrue(tab(app, "current").exists, "Cancel keeps the Current squad")
+        deleteCurrent(app, confirm: true)
+        XCTAssertTrue(waitGone(tab(app, "current")), "the Current tab goes")
+        XCTAssertTrue(tab(app, "available").isSelected, "and Available shows")
+        XCTAssertTrue(slot(app, "gym", 1).label.contains("Blissey"), "Available and Best are not changed: \(slot(app, "gym", 1).label)")
+    }
+
+    /// Rule 27: Available and Best edits last until the player leaves the screen; Current is kept, and the screen opens on it.
+    func testGymLeavingTheScreenDropsTheDraftButKeepsCurrent() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "gym")
+        XCTAssertTrue(slot(app, "gym", 1).waitForExistence(timeout: 60))
+        let slot1 = slot(app, "gym", 1).label
+        openPicker(app, "gym", slot: 2)
+        pickerRows(app).firstMatch.tap()
+        closePicker(app)
+        XCTAssertTrue(slot(app, "gym", 2).label.contains("Blissey"))
+        // Another tab and back keeps the draft.
+        selectBest(app)
+        selectAvailable(app)
+        XCTAssertTrue(slot(app, "gym", 2).label.contains("Blissey"), "switching tabs keeps the draft")
+        back(app, toTile: "gym")
+        app.buttons["hub-tile-gym"].tap()
+        XCTAssertTrue(slot(app, "gym", 1).waitForExistence(timeout: 30))
+        XCTAssertEqual(slot(app, "gym", 1).label, slot1, "leaving the screen dropped the draft")
+        XCTAssertFalse(app.buttons["squad-reset-draft"].exists)
+        // Saved, the squad survives, and the screen opens on Current.
+        openPicker(app, "gym", slot: 2)
+        pickerRows(app).firstMatch.tap()
+        closePicker(app)
+        saveToCurrent(app)
+        back(app, toTile: "gym")
+        app.buttons["hub-tile-gym"].tap()
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 30))
+        XCTAssertTrue(tab(app, "current").isSelected, "a squad with a Current opens on it")
+        XCTAssertTrue(slot(app, "gym", 2).label.contains("Blissey"), slot(app, "gym", 2).label)
+        selectAvailable(app)
+        XCTAssertEqual(slot(app, "gym", 1).label, slot1, "Available starts from the suggestion again")
+    }
+
+    /// Rule 34: with a picker open and the page scrolled down the list, the strip of the six slots stays at the top; a chip opens that slot's picker.
+    func testGymPinnedStripFollowsTheList() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "gym")
+        XCTAssertTrue(slot(app, "gym", 1).waitForExistence(timeout: 60))
+        assertStripPinsTheSquad(app, "gym", open: 1, chip: 4, shotName: "gym-strip-scrolled")
     }
 
     /// P1: a Gym picker row says the copy's CP and IVs and its bulk against the best in the game in its one label.
@@ -124,7 +207,7 @@ final class HubGymSquadTests: SquadUITestCase {
         bestSet("gym", slot: 1)
     }
 
-    /// The squad with its strength bar and, after one change, its Back button: light, dark, default text and AX5.
+    /// The squad on Current after one saved edit, with its strength bar and links: light, dark, default text and AX5.
     func testGymSquadStrengthShots() throws {
         let setup = launch(reset: true)
         populate(setup)

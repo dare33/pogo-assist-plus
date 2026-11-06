@@ -112,22 +112,10 @@ class SquadUITestCase: XCTestCase {
     }
 
     /// Scrolls back to the top and switches the suggestions to Available.
-    func selectAvailable(_ app: XCUIApplication) {
-        let available = app.buttons["squad-mode-available"]
-        var n = 0
-        while !(available.exists && available.isHittable) && n < 8 { app.swipeDown(); n += 1 }
-        if !available.isSelected { available.tap() }
-        XCTAssertTrue(available.waitForExistence(timeout: 5))
-    }
+    func selectAvailable(_ app: XCUIApplication) { selectTab(app, "available") }
 
     /// Scrolls back to the top and switches the suggestions to Best.
-    func selectBest(_ app: XCUIApplication) {
-        let best = app.buttons["squad-mode-best"]
-        var n = 0
-        while !(best.exists && best.isHittable) && n < 8 { app.swipeDown(); n += 1 }
-        best.tap()
-        XCTAssertTrue(best.waitForExistence(timeout: 5))
-    }
+    func selectBest(_ app: XCUIApplication) { selectTab(app, "best") }
 
     /// Scrolls until the open picker's title line (its Done button) is near the top of the screen, so its first rows show.
     func scrollPickerIntoView(_ app: XCUIApplication) {
@@ -145,7 +133,7 @@ class SquadUITestCase: XCTestCase {
     func bestSet(_ screen: String, slot n: Int, tile: String? = nil, prepare: @escaping (XCUIApplication) -> Void = { _ in }) {
         screenSet("\(screen)-best", tile: tile ?? screen) { app in
             prepare(app)
-            let best = app.buttons["squad-mode-best"]
+            let best = app.buttons["squad-tab-best"]
             if best.waitForExistence(timeout: 30) { best.tap() }
             let s = self.slot(app, screen, n)
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
@@ -205,12 +193,46 @@ class SquadUITestCase: XCTestCase {
         XCTFail("no slot offered a row to change the squad with")
     }
 
-    /// Taps "Back to suggested squad" and confirms the question it asks.
-    func tapBackAndConfirm(_ app: XCUIApplication) {
-        reveal(app, app.buttons["squad-back-to-suggested"]).tap()
-        let confirm = app.buttons.matching(identifier: "squad-back-confirm").firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Back asks first")
-        confirm.tap()
+    /// A tab of the squad's Current | Available | Best switch.
+    func tab(_ app: XCUIApplication, _ name: String) -> XCUIElement { app.buttons["squad-tab-\(name)"] }
+
+    /// Scrolls back to the top and chooses a tab (`current`, `available` or `best`).
+    func selectTab(_ app: XCUIApplication, _ name: String) {
+        let t = tab(app, name)
+        var n = 0
+        while !(t.exists && t.isHittable) && n < 8 { app.swipeDown(); n += 1 }
+        XCTAssertTrue(t.exists, "the \(name) tab exists")
+        if !t.isSelected { t.tap() }
+        XCTAssertTrue(waitSelected(t), "the \(name) tab is selected")
+    }
+
+    func waitSelected(_ e: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: e)], timeout: timeout) == .completed
+    }
+
+    /// Taps Save to Current on Available or Best. `replacing` is nil when the squad has no Current (no question is asked); otherwise the question "Replace your current squad?"
+    /// is answered with Replace (true) or Cancel (false).
+    func saveToCurrent(_ app: XCUIApplication, replacing: Bool? = nil) {
+        reveal(app, app.buttons["squad-save-current"]).tap()
+        guard let replacing else { return }
+        answer(app, asked: "squad-save-current", confirm: replacing)
+    }
+
+    /// Answers a confirmation dialog whose buttons are `<asked>-confirm` and `<asked>-cancel`.
+    func answer(_ app: XCUIApplication, asked: String, confirm: Bool) {
+        let ok = app.buttons.matching(identifier: "\(asked)-confirm").firstMatch
+        XCTAssertTrue(ok.waitForExistence(timeout: 5), "\(asked) asks first")
+        if confirm { ok.tap(); return }
+        // On the simulator the question is a popover with no Cancel button of its own: tapping outside it (its dismiss region) is Cancel.
+        let byId = app.buttons.matching(identifier: "\(asked)-cancel").firstMatch
+        let outside = app.otherElements["PopoverDismissRegion"]
+        if byId.exists { byId.tap() } else if outside.exists { outside.tap() } else { app.buttons["Cancel"].tap() }
+        XCTAssertTrue(waitGone(ok), "Cancel closes the question")
+    }
+
+    func deleteCurrent(_ app: XCUIApplication, confirm: Bool) {
+        reveal(app, app.buttons["squad-delete-current"]).tap()
+        answer(app, asked: "squad-delete-current", confirm: confirm)
     }
 
     /// Scrolls until the squad strength line is near the top, so the bar, the slots and the button under them show.
@@ -224,7 +246,7 @@ class SquadUITestCase: XCTestCase {
         }
     }
 
-    /// The screenshots of a squad with its strength bar and, after one change, its Back to suggested squad button: light and dark at the default text size and at AX5
+    /// The screenshots of a squad on Current after one saved edit, so the tabs, the strength bar and the links show: light and dark at the default text size and at AX5
     /// (the box is kept from the first launch), named <screen>-<light|dark>-<default|ax5>.
     func strengthShots(_ screen: String, tile: String? = nil, prepare: (XCUIApplication) -> Void = { _ in }) {
         for (scheme, size) in [("light", "default"), ("dark", "default"), ("light", "ax5"), ("dark", "ax5")] {
@@ -232,13 +254,47 @@ class SquadUITestCase: XCTestCase {
             openTile(app, tile ?? screen)
             prepare(app)
             XCTAssertTrue(slot(app, screen, 1).waitForExistence(timeout: 60))
-            changeTheSquad(app, screen)
-            let back = app.buttons["squad-back-to-suggested"]
-            XCTAssertTrue(back.waitForExistence(timeout: 10), "a changed squad has its Back to suggested squad button")
+            if !tab(app, "current").exists {
+                changeTheSquad(app, screen)
+                saveToCurrent(app)
+                XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 10), "saving adds the Current tab")
+            }
+            selectTab(app, "current")
+            XCTAssertTrue(reveal(app, app.buttons["squad-delete-current"]).exists, "Current has its Delete current squad link")
             scrollToStrength(app)
             sleep(1)
             shot("\(screen)-\(scheme)-\(size)")
             app.terminate()
         }
+    }
+
+    // MARK: the pinned squad strip (rule 34)
+
+    /// With a slot's picker open and the page scrolled well down the Pokémon list, the strip of the squad's slots stays at the top; tapping another slot's chip opens that slot's
+    /// picker; Done hides the strip. `titlePrefix` is the start of the opened picker's title ("Slot 3 ·").
+    func assertStripPinsTheSquad(_ app: XCUIApplication, _ screen: String, open: Int = 1, chip: Int = 3, shotName: String? = nil) {
+        XCTAssertFalse(el(app, "squad-strip").exists, "no strip while no picker is open")
+        openPicker(app, screen, slot: open)
+        let strip = el(app, "squad-strip")
+        XCTAssertTrue(strip.waitForExistence(timeout: 5), "an open picker pins the squad strip")
+        for _ in 0..<4 { app.swipeUp() }
+        XCTAssertTrue(strip.exists && strip.isHittable, "the strip is still on screen after scrolling down the list")
+        let target = app.buttons["squad-strip-chip-\(chip)"], editing = app.buttons["squad-strip-chip-\(open)"]
+        XCTAssertTrue(target.exists && editing.exists, "every slot has a chip")
+        // At the accessibility sizes only a chip or two fits: the strip scrolls sideways to the one wanted.
+        var n = 0
+        while !(target.isHittable && editing.exists) && n < 10 { if chip > open { strip.swipeLeft() } else { strip.swipeRight() }; n += 1 }
+        XCTAssertTrue(target.isHittable, "the chip for slot \(chip) can be reached")
+        XCTAssertTrue(editing.isSelected, "the slot being edited is highlighted: \(editing.label)")
+        XCTAssertTrue(editing.label.hasSuffix("editing"), editing.label)
+        XCTAssertTrue(target.label.hasPrefix("Slot \(chip)"), target.label)
+        if let shotName { shot(shotName) }
+        target.tap()
+        let title = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Slot \(chip) ·")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "tapping a chip opens that slot's picker")
+        XCTAssertTrue(waitSelected(app.buttons["squad-strip-chip-\(chip)"]), "and highlights it")
+        XCTAssertTrue(app.buttons["squad-strip-chip-\(chip)"].label.hasSuffix("editing"))
+        closePicker(app)
+        XCTAssertTrue(waitGone(el(app, "squad-strip")), "Done hides the strip")
     }
 }

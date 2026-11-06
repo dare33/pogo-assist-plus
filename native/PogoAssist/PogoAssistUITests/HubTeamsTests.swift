@@ -80,7 +80,7 @@ final class HubTeamsTests: XCTestCase {
         XCTAssertTrue(app.buttons["hub-leader-Giovanni"].waitForExistence(timeout: 10), "a leader card")
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR GIOVANNI"].exists)
         // Best fills the slots from the Rocket table, whether or not the box has the Pokémon (Available only what the box has, whatever upgrade it needs).
-        app.buttons["squad-mode-best"].tap()
+        app.buttons["squad-tab-best"].tap()
         sleep(1)
         shot("rocket-01-light")
         // Slot 2 of Giovanni's team and slot 1 are read now, so the change of leader can be seen in them.
@@ -140,7 +140,7 @@ final class HubTeamsTests: XCTestCase {
         for i in 1...3 { XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-\(i)"].label.contains("empty"), app.descendants(matching: .any)["hub-pvp-slot-\(i)"].label) }
         app.buttons["hub-pvp-league-ml"].tap()
         XCTAssertTrue(app.staticTexts["Suggested squad"].waitForExistence(timeout: 5), "Master League shows a squad")
-        app.buttons["squad-mode-best"].tap()
+        app.buttons["squad-tab-best"].tap()
         // All three cards always exist: Best fills every slot from the league table, and a Pokémon the box lacks says so.
         XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-2"].label.hasPrefix("Slot 2 of 3, Safe swap") && !app.descendants(matching: .any)["hub-pvp-slot-2"].label.contains("empty"), app.descendants(matching: .any)["hub-pvp-slot-2"].label)
         XCTAssertTrue(app.descendants(matching: .any)["hub-pvp-slot-3"].label.hasPrefix("Slot 3 of 3, Closer") && !app.descendants(matching: .any)["hub-pvp-slot-3"].label.contains("empty"), app.descendants(matching: .any)["hub-pvp-slot-3"].label)

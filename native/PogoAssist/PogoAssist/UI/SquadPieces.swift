@@ -958,14 +958,23 @@ struct SquadStripView: View {
     @Environment(\.accent) private var accent
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) { ForEach(model.chips) { chip($0) } }
-                .padding(.horizontal, Theme.Space.screen).padding(.vertical, 6)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { ForEach(model.chips) { chip($0) } }
+                    .padding(.horizontal, Theme.Space.screen).padding(.vertical, 6)
+            }
+            // The slot being edited is kept in view (at the accessibility sizes only a chip or two fits).
+            .onAppear { scrollToEditing(proxy) }
+            .onChange(of: model.chips.first { $0.editing }?.id) { _, _ in scrollToEditing(proxy) }
         }
         .background(Theme.bg)
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("squad-strip")
+    }
+
+    private func scrollToEditing(_ proxy: ScrollViewProxy) {
+        if let id = model.chips.first(where: \.editing)?.id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
     }
 
     private func chip(_ c: SquadStripChip) -> some View {
@@ -988,5 +997,6 @@ struct SquadStripView: View {
         .accessibilityLabel(c.spoken)
         .accessibilityAddTraits(c.editing ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("squad-strip-chip-\(c.id + 1)")
+        .id(c.id)
     }
 }

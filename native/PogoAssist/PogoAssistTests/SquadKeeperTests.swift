@@ -115,4 +115,110 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertEqual(SquadKeeper.load(renamed).gym.slots[2].pick, "a")
         XCTAssertNil(UserDefaults.standard.data(forKey: SquadKeeper.key(account)), "the old name keeps nothing")
     }
+
+    // MARK: Current | Available | Best (pass 2-5, rule 27): the workspace routes an edit to Current or to a draft
+
+    /// A squad of three slots filled the way a screen fills it, for the workspace tests.
+    private func shown(_ saved: SquadStore.Saved, _ ranked: [String] = ["a", "b", "c", "d"]) -> [FilledSlot] {
+        HubSquads.fill(slots: saved.slots, pool: { _, _ in .init(preferred: ranked) })
+    }
+
+    func testAnEditOnAvailableOrBestIsADraftNeverStoredAndNeverSwitchesTheTab() {
+        let keeper = SquadKeeper(), ws = SquadWorkspace()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultRocketSlots(), ref = SquadRef.rocket(leader: "Arlo")
+        var s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        XCTAssertEqual(s.tab, .available)
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        XCTAssertEqual(s.tab, .available, "editing never switches tabs")
+        XCTAssertTrue(s.differs)
+        XCTAssertEqual(s.squad.slots[0].pick, "d")
+        XCTAssertNil(keeper.store.current(ref), "nothing is stored")
+        XCTAssertNil(SquadKeeper.load(account).current(ref), "and nothing is written")
+        // Switching tabs keeps the draft; the other tab starts from the suggestion.
+        ws.select(.best, ref: ref, keeper: keeper)
+        s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        XCTAssertEqual(s.tab, .best)
+        XCTAssertFalse(s.differs, "Best starts from the suggestion")
+        XCTAssertTrue(s.isBestSuggestion)
+        ws.select(.available, ref: ref, keeper: keeper)
+        XCTAssertEqual(ws.surface(ref, store: keeper.store, defaults: defaults).squad.slots[0].pick, "d", "the Available draft is still there")
+        XCTAssertEqual(keeper.store.mode(for: .rocket), .available, "Available and Best are remembered per screen")
+        // Reset drops the draft at once.
+        ws.reset(ws.surface(ref, store: keeper.store, defaults: defaults))
+        XCTAssertNil(ws.surface(ref, store: keeper.store, defaults: defaults).draft)
+    }
+
+    func testAnotherScreenInstanceStartsFromTheSuggestionAgain() {
+        // Leaving the screen drops its workspace: a new one holds no draft.
+        let keeper = SquadKeeper()
+        attach(keeper, account, ids: ["a", "b", "c"])
+        let first = SquadWorkspace()
+        let s = first.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots())
+        first.edit(s, keeper: keeper) { $0.choose("c", at: 0, shown: self.shown($0)) }
+        XCTAssertTrue(first.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots()).differs)
+        let later = SquadWorkspace()
+        XCTAssertFalse(later.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots()).differs)
+    }
+
+    func testSaveToCurrentStoresTheDraftKeepsTheTabAndReplacesAnExistingCurrent() {
+        let keeper = SquadKeeper(), ws = SquadWorkspace()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultRocketSlots(), ref = SquadRef.rocket(leader: "Arlo")
+        var s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 1, shown: self.shown($0)) }
+        s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: false)
+        s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        XCTAssertEqual(s.tab, .available, "the player stays on the tab they are on")
+        XCTAssertTrue(s.hasCurrent, "and the Current tab appears")
+        XCTAssertTrue(s.justSaved, "the squad says Saved to Current")
+        XCTAssertEqual(keeper.store.current(ref)?.slots.map(\.pick), ["a", "d", "c"].map { Optional($0) }, "the draft as shown, every slot kept")
+        XCTAssertEqual(SquadKeeper.load(account).current(ref)?.slots[1].pick, "d", "written at once")
+        // A further edit of the draft is not saved; saving again replaces Current.
+        ws.edit(s, keeper: keeper) { $0.choose("b", at: 2, shown: self.shown($0, ["a", "d", "c", "b"])) }
+        s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        XCTAssertFalse(s.justSaved)
+        XCTAssertEqual(keeper.store.current(ref)?.slots[2].pick, "c", "Current is unchanged until saved")
+        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad, ["a", "d", "c", "b"]), setMark: false)
+        XCTAssertEqual(keeper.store.current(ref)?.slots[2].pick, "b")
+    }
+
+    func testAnEditOnCurrentIsStoredAtOnceAndLeavesTheDraftsAlone() {
+        let keeper = SquadKeeper(), ws = SquadWorkspace()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultPvpSlots(), ref = SquadRef.pvp(league: "gl")
+        var s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        ws.edit(s, keeper: keeper) { $0.choose("c", at: 0, shown: self.shown($0)) }
+        ws.saveToCurrent(ws.surface(ref, store: keeper.store, defaults: defaults), keeper: keeper, filled: shown(ws.surface(ref, store: keeper.store, defaults: defaults).squad), setMark: false)
+        ws.select(.current, ref: ref, keeper: keeper)
+        s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        XCTAssertEqual(s.tab, .current)
+        XCTAssertTrue(s.kept)
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 2, shown: self.shown($0, ["c", "a", "b", "d"])) }
+        XCTAssertEqual(keeper.store.current(ref)?.slots[2].pick, "d", "Current saves straight away")
+        XCTAssertEqual(SquadKeeper.load(account).current(ref)?.slots[2].pick, "d")
+        XCTAssertEqual(ws.surface(ref, store: keeper.store, defaults: defaults).tab, .current, "and stays on Current")
+        XCTAssertEqual(keeper.store.mode(for: .pvp), .available, "choosing Current does not change the remembered Available | Best")
+    }
+
+    func testDeleteCurrentSquadRemovesItAndShowsTheRememberedTab() {
+        let keeper = SquadKeeper(), ws = SquadWorkspace()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        ws.select(.best, ref: .gym, keeper: keeper)
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: true)
+        ws.select(.current, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertEqual(s.current?.isSet, true, "Set this squad on Best saved it and set the mark")
+        ws.deleteCurrent(s, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertNil(keeper.store.current(.gym))
+        XCTAssertEqual(s.tab, .best, "back to the remembered tab")
+        XCTAssertTrue(s.draft != nil, "Available and Best are not changed")
+    }
 }
