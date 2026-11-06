@@ -199,3 +199,20 @@ Greg's words, per check of the manager's walkthrough:
 New note: "when scrolling down on the team/squad selector screens the squad currenlty chosen should remain visible as i scroll down currently it hides and i can only see th elist of pokmeon"
 
 Manager's note on 4: 100% is the single strongest released Pokémon in the game against the boss (level 50, 15/15/15, best moves; rule 31), so a slot can reach 100% only by holding that one Pokémon. A raid squad holds one Mega, the other slots are judged as plain forms, and Bulky hitter slots are chosen for survival rather than damage, so even the Best squad sits well below 100%.
+
+## Greg's choices after phone run 5, 6 Nov 2026
+
+Built on `design/pass-2-5` (stacked on `design/pass-2-4`, so PR #26 can merge first), full paired review.
+
+- **Current | Available | Best** replaces the Back to suggested squad button, on all five squad screens. Greg: "instead of the button as it is can we exapnd the picker so its Current, Available, Best. Where available and Best always show the suggested squad." Then: "when changes are made to best or available. the user has the option to 'save' it to current. So it doesnt auto swap/swtich."
+  - Edits made on Available or Best last until the player leaves the screen ("Until you leave"); a Reset link undoes them.
+  - Saving over an existing Current squad asks first ("Ask, then replace").
+  - Current has a Delete current squad link that asks first ("Delete in Current, asks").
+- **Squad strength is measured against the Best squad.** Greg: "Best = the BEST you can get in the game (if unavailable its marked as unavaialble to get right now, but still shows)"; "Available = the BEST that you can put together with the pokemon in your box (with the upgrade/potential showing as it is now) this should be ranked againts the BEST squad you can get in the game (regardless of availability)". "Best squad bar should show the strenght of the current best tab so default is full."
+  - Comparison: total squad damage against the Best squad's ("Total squad damage").
+  - Picker row bars stay against the best Pokémon in the game ("Keep vs best in game").
+- **Raids style selector** (Raids only): Greg: "can we bring in a another toggle/selector. Max damage = prioritises and builds glass cannon with 1 mega. Balanced = the current strcuture we have." Max battles keep their Tank, Healer and Attacker ("Raids only").
+- **Pinned squad strip** while the picker is open ("Compact strip").
+- **Wording:** "No Mega-capable Pokémon left" becomes "You can only have 1 Mega slot".
+
+Manager's calls in the plan Greg answered (not his rulings): a squad that beats Best reads 100%, "Matches the best squad"; "Set this squad" on Available or Best saves to Current; the screen opens on Current when the squad has one; the style choice is remembered.
