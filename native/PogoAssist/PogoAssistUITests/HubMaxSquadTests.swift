@@ -111,8 +111,12 @@ final class HubMaxSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "max", 1).label.hasPrefix("Slot 1 of 3, Tank, Blissey"), slot(app, "max", 1).label)
         back(app, toTile: "max")
         app.buttons["hub-tile-max"].tap()
-        XCTAssertTrue(app.buttons["squad-tab-best"].waitForExistence(timeout: 30))
-        XCTAssertEqual(app.buttons["squad-tab-best"].isSelected, true, "Best is remembered for the Max screen")
+        el(app, "hub-max-row-0").tap()
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 30))
+        // Deleting Current shows the remembered tab: Best.
+        deleteCurrent(app, confirm: true)
+        XCTAssertTrue(waitGone(tab(app, "current")))
+        XCTAssertTrue(tab(app, "best").isSelected, "Best is remembered for the Max screen")
     }
 
     /// P1: a Max picker row says the copy's CP and IVs and its estimated damage (one Max move) in its one label.

@@ -552,4 +552,62 @@ final class PickerRowModelsTests: XCTestCase {
             XCTAssertTrue(s.text.hasSuffix("of best") || s.matchesBest, "\(mode): \(s.text)")
         }
     }
+
+    /// Rule 27.4 on Gym, Rocket and PvP: Current is drawn as kept. A species pick the box lacks is placed, shown as its Best row with its own ticked picker row and a strength figure;
+    /// drawn as Available (a draft) the same pick is not placed.
+    func testCurrentDrawsAKeptSpeciesPickOnGymRocketAndPvP() throws {
+        let c = ctx()
+        // Gym.
+        let gym = GymPickerBuilder(ctx: c)
+        let gymRow = try XCTUnwrap(HubSquads.bestGymRows(ctx: c).first { !$0.inBox })
+        var gSaved = SquadStore.Saved(slots: HubSquads.defaultGymSlots())
+        gSaved.slots[1].species = gymRow.key
+        XCTAssertNotEqual(gym.resolve(mode: .available, saved: gSaved).filled[1].species, gymRow.key, "Available does not place a species pick")
+        var gymKept = gym; gymKept.kept = true
+        let g = gymKept.resolve(mode: .available, saved: gSaved)
+        XCTAssertEqual(g.filled[1].species, gymRow.key)
+        XCTAssertTrue(g.options.contains { $0.extra && $0.best?.key == gymRow.key })
+        let gById = Dictionary(g.options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
+        for i in g.filled.indices {
+            let rows = gymKept.content(slot: i, filled: g.filled, options: g.options, byId: gById, mode: .available).rows
+            XCTAssertEqual(rows.filter { $0.id == gymRow.entryId }.count, i == 1 ? 1 : 0, "gym slot \(i + 1)")
+        }
+        let gStrength = gymKept.squadStrength(filled: g.filled, options: g.options, byId: gById, mode: .available)
+        XCTAssertNotNil(gStrength.now)
+        XCTAssertGreaterThanOrEqual(gStrength.scored, 1)
+
+        // Rocket.
+        let leader = try XCTUnwrap(Self.hub.leaders.first)
+        var rocket = RocketPickerBuilder(leader: leader, ctx: c)
+        let rRow = try XCTUnwrap(HubSquads.bestRocketRows(options: leader.slots[1], ctx: c).first { !$0.inBox })
+        var rSlots = HubSquads.defaultRocketSlots()
+        rSlots[1].species = rRow.key
+        XCTAssertNotEqual(HubSquads.rocketSquad(leader: leader, slots: rSlots, mode: .available, ctx: c)[1].species, rRow.key)
+        let rFilled = HubSquads.rocketSquad(leader: leader, slots: rSlots, mode: .available, kept: true, ctx: c)
+        XCTAssertEqual(rFilled[1].species, rRow.key)
+        rocket.kept = true
+        let lists = leader.slots.map { rocket.entries(for: $0, mode: .available) }
+        let ownRows = rocket.content(slot: 1, filled: rFilled, lists: lists, mode: .available).rows
+        let ticked = try XCTUnwrap(ownRows.first(where: \.ticked), "the kept species pick is listed, ticked, in its own slot")
+        XCTAssertEqual(ticked.id, rRow.entryId)
+        XCTAssertNotNil(ticked.strength)
+        XCTAssertNotNil(rocket.keptEntry(rFilled[1], slot: 1)?.best)
+        XCTAssertNil(RocketPickerBuilder(leader: leader, ctx: c).keptEntry(rFilled[1], slot: 1), "a draft draws no kept entry")
+        XCTAssertNotNil(rocket.squadStrength(filled: rFilled, lists: lists, mode: .available).now)
+
+        // PvP, Master League (the box has no Great League candidates).
+        var pvp = PvPPickerBuilder(league: "ml", ctx: c, pogoAssist: false)
+        let pRow = try XCTUnwrap(HubSquads.bestPvpRows(league: "ml", ctx: c).first { !$0.inBox })
+        var pSlots = HubSquads.defaultPvpSlots()
+        pSlots[0].species = pRow.key
+        XCTAssertNotEqual(pvp.resolve(mode: .available, slots: pSlots).filled[0].species, pRow.key)
+        pvp.kept = true
+        let p = pvp.resolve(mode: .available, slots: pSlots)
+        XCTAssertEqual(p.filled[0].species, pRow.key)
+        XCTAssertEqual(p.best.map(\.key), [pRow.key], "only the kept species' Best row is read under Current")
+        let pRows = pvp.content(slot: 0, filled: p.filled, candidates: p.candidates, byId: p.byId, best: p.best, mode: .available).rows
+        XCTAssertEqual(pRows.first(where: \.ticked)?.id, pRow.entryId)
+        XCTAssertEqual(pRows.filter { $0.id == pRow.entryId }.count, 1)
+        XCTAssertNotNil(pvp.squadStrength(filled: p.filled, candidates: p.candidates, byId: p.byId, best: p.best, mode: .available).now)
+    }
 }
