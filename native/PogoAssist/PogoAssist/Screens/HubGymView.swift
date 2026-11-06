@@ -6,13 +6,14 @@ import PogoBox
 struct HubGymView: View {
     @EnvironmentObject var model: AppModel
     @StateObject private var keeper = SquadKeeper()
+    @StateObject private var workspace = SquadWorkspace()
 
     var body: some View {
         var count: String?
         if case .ready(let a) = model.advice { count = buildsText(HubModel.count(a.builds, for: .gym)) }
         return HubTypeScreen(type: .gym, count: count) {
             if let ctx = model.squadContext() {
-                GymSquadView(ctx: ctx, keeper: keeper)
+                GymSquadView(ctx: ctx, keeper: keeper, workspace: workspace)
             } else {
                 HubAdviceGate { _ in EmptyView() }
             }
@@ -29,11 +30,15 @@ struct GymOption {
     let types: [String]
     let row: HubSquads.GymRow?
     let best: HubSquads.BestRow?
+    /// Current only: a Best row listed because a kept slot holds that species (so the slot is drawn as the Best row it is). Never offered by the picker.
+    var extra = false
 }
 
 /// The rows of a Gym picker, built from the box and the tables alone (no view state), so a test can read what every picker would show.
 struct GymPickerBuilder {
     let ctx: HubContext
+    /// Drawing a Current squad (pass 2-5): no mode placement rule hides a kept pick, and a kept species pick is drawn as the Best row it is.
+    var kept = false
 
     /// The defenders the screen may use under `mode` (Available: the player's own Gym builds; Best: the Gym table, owned or not) and the six slots filled from them.
     func resolve(mode: SquadMode, saved: SquadStore.Saved) -> (options: [GymOption], candidates: [HubSquads.BestRow], filled: [FilledSlot]) {
@@ -43,15 +48,23 @@ struct GymPickerBuilder {
             return (options, rows, HubSquads.bestSquad(slots: saved.slots, rows: rows))
         }
         let rows = HubSquads.gymRows(mode: mode, ctx: ctx)
-        let options = rows.map { GymOption(id: $0.build.entryId, name: $0.build.targetName, tier: HubSquads.gymTableTier($0.build, ctx: ctx), types: ctx.gm.byId[$0.build.targetId]?.types ?? [], row: $0, best: nil) }
-        return (options, [], HubSquads.gymSquad(slots: saved.slots, rows: rows, placeable: HubSquads.placeable(screen: .gym, mode: mode, ctx: ctx)))
+        var options = rows.map { GymOption(id: $0.build.entryId, name: $0.build.targetName, tier: HubSquads.gymTableTier($0.build, ctx: ctx), types: ctx.gm.byId[$0.build.targetId]?.types ?? [], row: $0, best: nil) }
+        if kept {
+            let species = Set(saved.slots.compactMap(\.species))
+            if !species.isEmpty {
+                options += HubSquads.bestGymRows(ctx: ctx).filter { species.contains($0.key) }.map { r in
+                    GymOption(id: r.entryId, name: r.name, tier: r.tier, types: r.types, row: r.build.map { HubSquads.gymRow($0, ctx: ctx) }, best: r, extra: true)
+                }
+            }
+        }
+        return (options, [], HubSquads.gymSquad(slots: saved.slots, rows: rows, placeable: kept ? { _, _ in true } : HubSquads.placeable(screen: .gym, mode: mode, ctx: ctx)))
     }
 
     struct Content { var rows: [PickerRowModel]; var boxHasOptions: Bool }
 
     /// `only` limits the rows to those ids and `bulk` is the best Gym bulk when the caller has worked it out: the squad strength bar needs one slot's own row, and its six slots share one hash.
     func content(slot i: Int, filled: [FilledSlot], options: [GymOption], byId: [String: GymOption], mode: SquadMode, only: Set<String>? = nil, bulk: Double? = nil) -> Content {
-        var ids = options.map(\.id)
+        var ids = options.filter { !$0.extra }.map(\.id)
         let boxHasOptions = !ids.isEmpty
         let bestRows = options.compactMap(\.best)
         let copyOf = HubSquads.copyResolver(rows: bestRows)
@@ -93,14 +106,25 @@ struct GymPickerBuilder {
         return Content(rows: PickerRowModel.marking(models, moves: held.moves) { held.swap[$0] ?? copyOf($0).flatMap { held.swap[$0] } }, boxHasOptions: boxHasOptions)
     }
 
-    /// The squad's strength bar (rule 32): each slot's figure is the Bulk its Pokémon shows as a row in that slot's picker, so it is read from that row (built alone).
+    /// The squad's strength bar (rule 32): each slot's figure is the Bulk its Pokémon shows as a row in that slot's picker, so it is read from that row (built alone), over the
+    /// Best squad's full-build Bulk (`reference`).
     func squadStrength(filled: [FilledSlot], options: [GymOption], byId: [String: GymOption], mode: SquadMode) -> SquadStrength {
         let bestRows = options.compactMap(\.best), bulk = DamageEstimate.bestGymBulk(gm: ctx.gm)
-        return SquadStrength.of(figures: filled.indices.map { i in
+        return SquadStrength.against(figures: filled.indices.map { i in
             guard filled[i].pickId != nil else { return nil }
             let rows = content(slot: i, filled: filled, options: options, byId: byId, mode: mode, only: HubSquads.tickIds(filled[i], rows: bestRows), bulk: bulk).rows
             return rows.first(where: \.ticked)?.strength ?? Strength(kind: .bulk, now: nil, after: nil)
-        }, kind: .bulk)
+        }, reference: reference(bulk: bulk), kind: .bulk)
+    }
+
+    /// The Gym's Best squad (unedited) with each slot at its full build: the Bulk of that Pokémon at level 50 with 15/15/15, whether or not the box holds a copy.
+    func reference(bulk: Double? = nil) -> [Double?] {
+        let rows = HubSquads.bestGymRows(ctx: ctx), best = HubSquads.bestSquad(slots: HubSquads.defaultGymSlots(), rows: rows)
+        let bestBulk = bulk ?? DamageEstimate.bestGymBulk(gm: ctx.gm)
+        return best.map { f in
+            guard let id = f.pickId, let r = rows.first(where: { $0.entryId == id || $0.ids.contains(id) }) else { return nil }
+            return DamageEstimate.gymStrength(copy: nil, row: nil, speciesId: r.speciesId, gm: ctx.gm, bestBulk: bestBulk).now
+        }
     }
 
     /// Every slot's picker rows for the default squad under `mode` (what a test reads).
@@ -114,23 +138,26 @@ struct GymPickerBuilder {
 struct GymSquadView: View {
     let ctx: HubContext
     @ObservedObject var keeper: SquadKeeper
+    @ObservedObject var workspace: SquadWorkspace
     @State private var selected: Int?
     @Environment(\.accent) private var accent
 
-    private var builder: GymPickerBuilder { GymPickerBuilder(ctx: ctx) }
+    private func builder(kept: Bool) -> GymPickerBuilder { GymPickerBuilder(ctx: ctx, kept: kept) }
     @State private var rowsCache = PickerRowsCache<GymPickerBuilder.Content>()
     @State private var strength: (key: String, value: SquadStrength)?
     @State private var boxGeneration = 0
 
     var body: some View {
-        let mode = keeper.store.mode(for: .gym)
-        let (options, _, filled) = builder.resolve(mode: mode, saved: keeper.store.gym)
+        let surface = workspace.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots())
+        let mode = surface.mode
+        let builder = builder(kept: surface.kept)
+        let (options, _, filled) = builder.resolve(mode: mode, saved: surface.squad)
         let byId = Dictionary(options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId) }
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
-        let strengthKey = "strength|\(mode.rawValue)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
-        let adoptKey = keeper.store.gym.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
-        SuggestionsRow(mode: Binding(get: { mode }, set: { m in keeper.update { $0.setMode(m, for: .gym) } }), noun: "defenders")
+        let strengthKey = "strength|\(surface.tab.rawValue)|\(surface.isBestSuggestion)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
+        let adoptKey = surface.squad.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
+        SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: .gym, keeper: keeper) }), hasCurrent: surface.hasCurrent, noun: "defenders")
         VStack(alignment: .leading, spacing: 10) {
             Text("Top defenders").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
             if let team = HubSquads.teamStatus(cards.map(\.status)) { SquadStatusLine(status: team) }
@@ -138,23 +165,30 @@ struct GymSquadView: View {
             SlotGrid(slots: cards, selected: selected) { i in
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
             }
-            if keeper.store.gym.showsBackToSuggested {
-                BackToSuggestedButton { keeper.update { $0.gym.backToSuggested(defaults: HubSquads.defaultGymSlots()) } }
+            if surface.tab == .current {
+                DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
+            } else {
+                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, hasCurrent: surface.hasCurrent,
+                              onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .panelShadow()
+        .squadStrip(cards: cards, selected: selected, ink: ContentType.gym.ink(accent), tint: ContentType.gym.tint(accent)) { i in withAnimation(.easeOut(duration: 0.15)) { selected = i } }
         .task(id: strengthKey) {
             let b = builder
-            let value = await Task.detached(priority: .userInitiated) { b.squadStrength(filled: filled, options: options, byId: byId, mode: mode) }.value
+            let bestUnedited = surface.isBestSuggestion
+            let value = await Task.detached(priority: .userInitiated) {
+                bestUnedited ? SquadStrength.bestSquad(kind: .bulk, total: filled.count) : b.squadStrength(filled: filled, options: options, byId: byId, mode: mode)
+            }.value
             if !Task.isCancelled { strength = (strengthKey, value) }
         }
         // A slot of a changed squad that refilled is kept as shown, so it does not change again.
-        .task(id: adoptKey) { if !adoptKey.isEmpty, !Task.isCancelled { keeper.update { $0.gym.adoptRefills(filled) } } }
+        .task(id: adoptKey) { if !adoptKey.isEmpty, !Task.isCancelled { workspace.edit(surface, keeper: keeper) { $0.adoptRefills(filled) } } }
         .tracksBox(ctx, generation: $boxGeneration)
-        if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, options: options, byId: byId, mode: mode) }
+        if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, options: options, byId: byId, surface: surface, builder: builder) }
         builds
         HubGapList(gaps: HubModel.gaps(ctx.advice.gaps, for: .gym), type: .gym)
     }
@@ -193,15 +227,16 @@ struct GymSquadView: View {
 
     // MARK: picker
 
-    private func picker(_ i: Int, filled: [FilledSlot], options: [GymOption], byId: [String: GymOption], mode: SquadMode) -> some View {
+    private func picker(_ i: Int, filled: [FilledSlot], options: [GymOption], byId: [String: GymOption], surface: SquadSurface, builder: GymPickerBuilder) -> some View {
+        let mode = surface.mode
         // The rows are built once and kept until the box, the advice or what the slot sees changes.
-        let key = "\(mode.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
+        let key = "\(surface.tab.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, options: options, byId: byId, mode: mode) }
         let models = content.rows, boxHasOptions = content.boxHasOptions
         return SquadPicker(
             title: "Slot \(i + 1) · \(HubSquads.gymSlotRole)", type: .gym, rows: models,
             emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: boxHasOptions, none: mode == .available ? "No Gym build in your box." : "No Gym defender listed."),
-            onChoose: { id in keeper.update { $0.gym.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: HubSquads.bestGymRows(ctx: ctx)), shown: filled) } },
+            onChoose: { id in workspace.edit(surface, keeper: keeper) { $0.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: HubSquads.bestGymRows(ctx: ctx)), shown: filled) } },
             onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
             info: {
                 if mode == .best {
