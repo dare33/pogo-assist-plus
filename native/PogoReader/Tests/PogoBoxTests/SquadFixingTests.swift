@@ -178,7 +178,7 @@ final class SquadFixingTests: XCTestCase {
     func testSquadSetIsAChangeAndKeepsTheSquad() {
         var saved = SquadStore.Saved(slots: [SquadSlot(role: "X"), SquadSlot(role: "X")])
         saved.markSet(shown: shown(saved))
-        XCTAssertTrue(saved.isSet && saved.changed && saved.showsBackToSuggested)
+        XCTAssertTrue(saved.isSet && saved.changed && saved.hasCurrent)
         XCTAssertEqual(saved.slots.map(\.pick), ["a", "b"])
         XCTAssertEqual(shown(saved, ranked: ["z", "a", "b"]).map(\.entryId), ["a", "b"])
     }

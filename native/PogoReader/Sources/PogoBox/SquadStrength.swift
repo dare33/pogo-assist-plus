@@ -33,11 +33,6 @@ public struct SquadStrength: Equatable {
     public var total: Int
     /// The squad reached the reference (before the cap): "Matches the best squad".
     public var matchesBest = false
-    // TEMPORARY (pass 2-5): read by the screens not yet converted; measures against the best in the game. Removed by the last screen's commit.
-    public static func of(figures: [Strength?], kind: Strength.Kind = .damage) -> SquadStrength {
-        against(figures: figures, reference: Array(repeating: 1, count: figures.count), kind: kind)
-    }
-
     /// The unedited Best tab: the reference itself, 100% by definition.
     public var isBestSquad = false
 

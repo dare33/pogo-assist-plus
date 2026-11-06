@@ -109,10 +109,6 @@ public struct SquadStore: Codable, Equatable {
             HubSquads.changeRole(&slots, at: index, to: role, fits: fits)
             slots[index].fallback = nil
         }
-
-        // TEMPORARY (pass 2-5): the two members the screens not yet converted still read. Removed by the last screen's commit.
-        public var showsBackToSuggested: Bool { hasCurrent }
-        public mutating func backToSuggested(defaults: [SquadSlot]) { slots = defaults; isSet = false; changed = false }
     }
 
     /// A raid or Max squad with the last day of its event, which is when it is dropped.

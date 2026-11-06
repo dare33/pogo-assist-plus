@@ -104,47 +104,6 @@ struct SquadExplainer: View {
     }
 }
 
-// MARK: SUGGESTIONS · Available | Best · (i)
-
-/// The right-aligned row every squad screen carries (rule 3, D18): the caption, the compact Available | Best switch and the "i". One setting per screen, kept per
-/// account (`SquadStore.modes`). The explanation opens under the row as a card.
-struct SuggestionsRow: View {
-    @Binding var mode: SquadMode
-    /// What Available and Best mean on this screen ("counters", "defenders", "a squad").
-    let noun: String
-    @State private var infoOpen = false
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { caption; control(singleLine: true); info }.fixedSize(horizontal: true, vertical: false)
-                VStack(alignment: .trailing, spacing: 0) { caption; HStack(spacing: 8) { control(singleLine: false); info } }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            if infoOpen {
-                SquadExplainer(items: [
-                    ("Available", "picks \(noun) from the Pokémon in your box right now: the strongest you own for each slot, even if it still needs a power up, an evolution or a Mega Evolution first. Tap a slot for other choices from your box."),
-                    ("Best", "lists the best Pokémon in the game for each slot, whether or not you have them. Each says if it is in your box, can be got now, or is not available now."),
-                ], identifier: "squad-mode-explainer")
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    private var caption: some View {
-        Text("SUGGESTIONS").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityHidden(true)
-    }
-
-    private func control(singleLine: Bool) -> some View {
-        SegmentedSwitch(
-            segments: [.init(value: SquadMode.available, title: "Available", identifier: "squad-mode-available"),
-                       .init(value: SquadMode.best, title: "Best", identifier: "squad-mode-best")],
-            selection: $mode, metrics: .compact, label: "Suggestions", identifier: "squad-mode", singleLine: singleLine)
-    }
-
-    private var info: some View { InfoButton(isOpen: $infoOpen, label: "About suggestions", identifier: "squad-mode-info") }
-}
-
 // MARK: slot cards
 
 extension HubSquads.BestRow {
@@ -288,32 +247,6 @@ struct TracksBox: ViewModifier {
 
 extension View {
     func tracksBox(_ ctx: HubContext, generation: Binding<Int>) -> some View { modifier(TracksBox(ctx: ctx, generation: generation)) }
-}
-
-/// "Back to suggested squad" (CONCEPTS rule 27): shown once the player has changed a squad. It asks first, then forgets every kept Pokémon, the roles and the "Squad set" mark.
-struct BackToSuggestedButton: View {
-    let action: () -> Void
-    @Environment(\.accent) private var accent
-    @State private var asking = false
-
-    var body: some View {
-        HStack {
-            Button { asking = true } label: {
-                Text("Back to suggested squad").font(.figtree(14, .bold, relativeTo: .subheadline)).underline().foregroundStyle(accent.ink)
-                    .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
-            }
-            .buttonStyle(PressStyle())
-            .accessibilityHint("Clears your changes to this squad, after asking")
-            .accessibilityIdentifier("squad-back-to-suggested")
-            Spacer(minLength: 0)
-        }
-        .confirmationDialog("Back to suggested squad?", isPresented: $asking, titleVisibility: .visible) {
-            Button("Back to suggested squad", role: .destructive, action: action).accessibilityIdentifier("squad-back-confirm")
-            Button("Cancel", role: .cancel) {}.accessibilityIdentifier("squad-back-cancel")
-        } message: {
-            Text("Your changes to this squad are cleared.")
-        }
-    }
 }
 
 /// A slot card (pass 2 README, "Slot card"): radius 16, at least 92 pt; the role row in the role colour with the mark at its trailing end; a 30 pt disc; the name 13/700;
