@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-/// The Max battles screen (design pass 2): the `Now | Coming up` lists of Max Mondays and Dynamax Trails, as Raids' Coming up is, with SUGGESTIONS · Available | Best.
+/// The Max battles screen (design pass 2): the `Now | Coming up` lists of Max Mondays and Dynamax Trails, as Raids' Coming up is, with SQUAD · Current | Available | Best.
 /// A row opens into BRING and the squad of three (Tank, Healer, Attacker) with its picker. The roster of Dynamax copies, its tiles and its two notes are gone (D8).
 struct HubMaxView: View {
     @EnvironmentObject var model: AppModel

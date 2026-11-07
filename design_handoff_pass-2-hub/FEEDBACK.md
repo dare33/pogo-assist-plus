@@ -199,3 +199,37 @@ Greg's words, per check of the manager's walkthrough:
 New note: "when scrolling down on the team/squad selector screens the squad currenlty chosen should remain visible as i scroll down currently it hides and i can only see th elist of pokmeon"
 
 Manager's note on 4: 100% is the single strongest released Pokémon in the game against the boss (level 50, 15/15/15, best moves; rule 31), so a slot can reach 100% only by holding that one Pokémon. A raid squad holds one Mega, the other slots are judged as plain forms, and Bulky hitter slots are chosen for survival rather than damage, so even the Best squad sits well below 100%.
+
+## Greg's choices after phone run 5, 6 Nov 2026
+
+Built on `design/pass-2-5` (stacked on `design/pass-2-4`, so PR #26 can merge first), full paired review.
+
+- **Current | Available | Best** replaces the Back to suggested squad button, on all five squad screens. Greg: "instead of the button as it is can we exapnd the picker so its Current, Available, Best. Where available and Best always show the suggested squad." Then: "when changes are made to best or available. the user has the option to 'save' it to current. So it doesnt auto swap/swtich."
+  - Edits made on Available or Best last until the player leaves the screen ("Until you leave"); a Reset link undoes them.
+  - Saving over an existing Current squad asks first ("Ask, then replace").
+  - Current has a Delete current squad link that asks first ("Delete in Current, asks").
+- **Squad strength is measured against the Best squad.** Greg: "Best = the BEST you can get in the game (if unavailable its marked as unavaialble to get right now, but still shows)"; "Available = the BEST that you can put together with the pokemon in your box (with the upgrade/potential showing as it is now) this should be ranked againts the BEST squad you can get in the game (regardless of availability)". "Best squad bar should show the strenght of the current best tab so default is full."
+  - Comparison: total squad damage against the Best squad's ("Total squad damage").
+  - Picker row bars stay against the best Pokémon in the game ("Keep vs best in game").
+- **Raids style selector** (Raids only): Greg: "can we bring in a another toggle/selector. Max damage = prioritises and builds glass cannon with 1 mega. Balanced = the current strcuture we have." Max battles keep their Tank, Healer and Attacker ("Raids only").
+- **Pinned squad strip** while the picker is open ("Compact strip").
+- **Wording:** "No Mega-capable Pokémon left" becomes "You can only have 1 Mega slot".
+
+Manager's calls in the plan Greg answered (not his rulings): a squad that beats Best reads 100%, "Matches the best squad"; "Set this squad" on Available or Best saves to Current; the screen opens on Current when the squad has one; the style choice is remembered.
+
+## Phone run 6, 7 Nov 2026 (build de5d3f2, test/greg-build)
+
+Greg's words, with his three screenshots kept outside the repo (manager's scratchpad, `phone-run-6/1.png`–`3.png`).
+
+1. Opening a squad: "green. but see attach 1 in downloads - can we make the style/squad/notready/setthissquad be more space efficient? currently they are all on seaprate lines + set this squad i think should be up top"
+2. Drafts: "green. However see attach 2- the save to current and set this squad button seem to be duplicates of the same function? Is this right, or is there a slight different between the two buttons. Either way. It feels unncessary tohave both - let me know waht you think. EDIT: I think i understand this better now. The se this squad is for the individual avaialbel/best pages and current butotn affects current direftly (however oplease note that both buttons override current squad currently). What I want this to actually be - changes made on best/available auto save. The button overrides the current squad only based on whats last saved/selected on the current best/available page."
+3. Replacing a Current: "green". 4. Editing and deleting Current: "green".
+5. Strength bar: "green. a couple of ntes though a) why are the options so limited, e.g. mega sableye raid, heavy hitter slot 6, only 5 heavy hitters, 2 bulky hitters and 1 mega listed for best. is this really all there is available for us?"
+6. Raids style: "green".
+7. Pinned strip: "attach 3 - the pinned strip is not useful as we cant see all fo the squad at once. Make it two levels 3 per level for raids."
+8. Mega wording: "green. But can we hae the list also not show up the pokemon but instead the same message"
+9. Other screens: "green". 10. Speed: "no all good". 11. VoiceOver and AX5: "skipping for now".
+
+Manager's answer to 5a (for the design panel): Best for a raid lists only the hand-written Raids table (`data/source/01-general-pve-by-type.md`) under the boss's bring types. Mega Sableye's only weakness is Fairy, and that table's Fairy section has nine Pokémon (Mega Gardevoir; Xerneas; Crowned Sword Zacian and Mega Diancie; Shadow Gardevoir, Tapu Koko, Togekiss, Granbull, Primarina), so that is all Best can choose from. It is the table, not the game: other Fairy attackers exist, and against a boss with one weakness strong neutral attackers can out-damage weak super-effective ones. Two ways to widen it are for Greg: add rows to the table, or rank Best from the game master's own damage estimate (the one the picker bars already use).
+
+How Greg wants the next work run (his words): "For the next lot of works i want to do it slightly differently. First output should be a design panel in session that I can give comments on directly to tweak some design elements that we've added new. Once I confirm changes on that we then build".

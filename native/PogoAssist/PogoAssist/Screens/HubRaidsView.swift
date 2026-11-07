@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-/// The Raids screen (design pass 2): a `Now | Coming up` switch, SUGGESTIONS · Available | Best, the raids on now as a sideways strip of cards (the first chosen on
+/// The Raids screen (design pass 2): a `Now | Coming up` switch, SQUAD · Current | Available | Best, the raids on now as a sideways strip of cards (the first chosen on
 /// opening; tapping the chosen card closes its squad) or the coming ones as a list, the chosen raid's squad with its picker, then the builds that would close the
 /// gaps and a link to the full schedule.
 struct HubRaidsView: View {
@@ -32,7 +32,7 @@ struct HubScheduleLink: View {
     }
 }
 
-/// The timeline both the Raids and the Max screen show: the `Now | Coming up` switch, SUGGESTIONS, the cards or the list with the squads, and, for Raids, the builds
+/// The timeline both the Raids and the Max screen show: the `Now | Coming up` switch, the cards or the list with the squads, and, for Raids, the builds
 /// that close the gaps of the rows on show.
 struct HubTimeline: View {
     let screen: HubRaidsModel.Screen
@@ -41,6 +41,7 @@ struct HubTimeline: View {
     var squads = true
     @EnvironmentObject private var model: AppModel
     @StateObject private var keeper = SquadKeeper()
+    @StateObject private var workspace = SquadWorkspace()
     @Environment(\.accent) private var accent
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var choice: Segment?
@@ -56,17 +57,13 @@ struct HubTimeline: View {
     private var squadScreen: SquadScreen { screen == .raids ? .raids : .max }
     private var prefix: String { screen == .raids ? "raids" : "max" }
 
-    private var mode: Binding<SquadMode> {
-        Binding(get: { keeper.store.mode(for: squadScreen) }, set: { m in keeper.update { $0.setMode(m, for: squadScreen) } })
-    }
-
     var body: some View {
         Group {
             if let hub = try? HubData.bundled(), let gm = try? GameMaster.bundled() { content(hub: hub, gm: gm) } else {
                 Text("The Hub's schedule could not be read.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
             }
         }
-        .keepsSquads(keeper)
+        .keepsSquads(keeper, workspace)
     }
 
     @ViewBuilder private func content(hub: HubData, gm: GameMaster) -> some View {
@@ -79,7 +76,6 @@ struct HubTimeline: View {
         SegmentedSwitch(
             segments: [.init(value: Segment.now, title: "Now"), .init(value: Segment.comingUp, title: "Coming up")],
             selection: Binding(get: { segment }, set: { choice = $0; chosenKey = nil; cardsClosed = false; openKey = nil }), label: "Timeline", identifier: "hub-\(prefix)-segment")
-        if squads, ctx != nil { SuggestionsRow(mode: mode, noun: "squads") }
         if shown.isEmpty {
             Text("Nothing listed.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
                 .accessibilityIdentifier("hub-\(prefix)-empty")
@@ -91,7 +87,8 @@ struct HubTimeline: View {
         if closers, let advice { gapClosers(rows: shown.map(\.row), advice: advice, hub: hub, gm: gm) }
     }
 
-    private func isSet(_ s: EventSummary) -> Bool { squads && keeper.store.eventSquad(s.entry.row, screen: squadScreen).isSet }
+    /// The card says "squad set" for a Current squad the player marked.
+    private func isSet(_ s: EventSummary) -> Bool { squads && keeper.store.current(.event(row: s.entry.row, screen: squadScreen))?.isSet == true }
 
     // MARK: Raids › Now
 
@@ -115,7 +112,7 @@ struct HubTimeline: View {
             .scrollClipDisabled()
         }
         if let chosen, squads, let ctx, chosen.hasSquad {
-            EventSquadView(screen: .raids, row: chosen.entry.row, title: "Your squad – \(chosen.name)", advice: chosen.todo, ctx: ctx, keeper: keeper)
+            EventSquadView(screen: .raids, row: chosen.entry.row, title: "Your squad – \(chosen.name)", advice: chosen.todo, ctx: ctx, keeper: keeper, workspace: workspace)
                 .id(chosen.key)
         } else if let chosen, !chosen.todo.isEmpty, !chosen.hasSquad {
             Text(chosen.todo).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted)
@@ -135,7 +132,7 @@ struct HubTimeline: View {
                     VStack(alignment: .leading, spacing: 10) {
                         BringLine(types: s.bring).padding(.leading, typeSize.isAccessibilitySize ? 0 : 66)
                         if s.hasSquad, let ctx {
-                            EventSquadView(screen: squadScreen, row: s.entry.row, title: "Your squad – \(s.name)", advice: s.todo, ctx: ctx, keeper: keeper)
+                            EventSquadView(screen: squadScreen, row: s.entry.row, title: "Your squad – \(s.name)", advice: s.todo, ctx: ctx, keeper: keeper, workspace: workspace)
                         } else if !s.todo.isEmpty {
                             Text(s.todo).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted)
                         }

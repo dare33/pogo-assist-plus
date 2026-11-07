@@ -22,7 +22,7 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
         closePicker(app)
         // Best lists the league's table whether or not the box has them: the same slots hold Pokémon the box lacks, red, and the picker says when they might be had.
-        app.buttons["squad-mode-best"].tap()
+        app.buttons["squad-tab-best"].tap()
         XCTAssertTrue(slot(app, "pvp", 1).waitForExistence(timeout: 10))
         XCTAssertTrue((1...3).allSatisfy { slot(app, "pvp", $0).label.hasSuffix("not in your box, to get") }, (1...3).map { slot(app, "pvp", $0).label }.joined(separator: " | "))
         XCTAssertEqual(el(app, "squad-status").label, "Not ready: 3 to get")
@@ -31,7 +31,7 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertTrue(pickerRows(app).firstMatch.label.contains("Not available now") || pickerRows(app).firstMatch.label.contains("Can get now"), pickerRows(app).firstMatch.label)
         shot("pvp-picker-best")
         closePicker(app)
-        app.buttons["squad-mode-available"].tap()
+        app.buttons["squad-tab-available"].tap()
         XCTAssertTrue(waitGone(el(app, "squad-picker")))
         app.buttons["hub-pvp-league-ul"].tap()
         XCTAssertTrue(app.staticTexts["Suggested squad"].waitForExistence(timeout: 30), "Ultra League shows a squad")
@@ -50,7 +50,7 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertFalse(el(app, "squad-picker-empty").exists)
         closePicker(app)
         // Available suggests copies as they are; Best may suggest an evolution.
-        XCTAssertEqual(app.buttons["squad-mode-available"].isSelected, true)
+        XCTAssertEqual(app.buttons["squad-tab-available"].isSelected, true)
         shot("pvp-ultra-available")
 
         openPicker(app, "pvp", slot: 1)
@@ -66,7 +66,7 @@ final class HubPvPSquadTests: SquadUITestCase {
         app.buttons["hub-tile-pvp"].tap()
         app.buttons["hub-pvp-league-ul"].tap()
         XCTAssertTrue(slot(app, "pvp", 1).waitForExistence(timeout: 30))
-        XCTAssertTrue(slot(app, "pvp", 1).label.hasPrefix("Slot 1 of 3, All"), "the role is kept for the league: \(slot(app, "pvp", 1).label)")
+        XCTAssertTrue(slot(app, "pvp", 1).label.hasPrefix("Slot 1 of 3, Lead"), "the role change was a draft, dropped on leaving the screen: \(slot(app, "pvp", 1).label)")
 
         // OTHER CANDIDATES opens a Pokémon's page; the season line closes the screen.
         let others = app.buttons.matching(identifier: "hub-pvp-candidate").firstMatch
@@ -109,8 +109,8 @@ final class HubPvPSquadTests: SquadUITestCase {
         bestSet("pvp", slot: 2) { app in if app.buttons["hub-pvp-league-ul"].waitForExistence(timeout: 30) { app.buttons["hub-pvp-league-ul"].tap() } }
     }
 
-    /// Rule 32 and rule 27: the squad strength line, a change, the Back to suggested squad button and what it restores.
-    func testPvPSquadStrengthChangeAndBack() throws {
+    /// Rule 32 and rule 27: the squad strength line, a change, Reset and what it restores.
+    func testPvPSquadStrengthChangeAndReset() throws {
         let app = launch(reset: true)
         populate(app)
         openTile(app, "pvp")
@@ -120,17 +120,27 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertTrue(reveal(app, strength).exists)
         XCTAssertTrue(strength.label.hasPrefix("Squad strength"), strength.label)
         let original = slot(app, "pvp", 1).label + "|" + slot(app, "pvp", 2).label + "|" + slot(app, "pvp", 3).label
-        XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
+        XCTAssertFalse(app.buttons["squad-reset-draft"].exists, "an unchanged squad has no Reset")
         changeTheSquad(app, "pvp")
-        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).waitForExistence(timeout: 5), "a changed squad has the Back button")
-        tapBackAndConfirm(app)
-        XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
-        // Back shows the suggestion again; the mode the change was made in stays, so look at the squad under Available, where it was read.
+        XCTAssertTrue(reveal(app, app.buttons["squad-reset-draft"]).waitForExistence(timeout: 5), "a changed squad has Reset")
+        app.buttons["squad-reset-draft"].tap()
+        XCTAssertTrue(waitGone(app.buttons["squad-reset-draft"]), "Reset clears the control")
+        // Reset shows the suggestion again; the change may have been made under Best, so look at the squad under Available, where it was read.
         selectAvailable(app)
         XCTAssertEqual(slot(app, "pvp", 1).label + "|" + slot(app, "pvp", 2).label + "|" + slot(app, "pvp", 3).label, original, "the suggestion is back")
     }
 
-    /// The squad with its strength bar and, after one change, its Back button: light, dark, default text and AX5.
+    /// Rule 34: the pinned strip of the three slots while a picker is open and scrolled. The Ultra League has candidates in this box, so Available lists rows.
+    func testPvPPinnedStripFollowsTheList() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "pvp")
+        if app.buttons["hub-pvp-league-ul"].waitForExistence(timeout: 30) { app.buttons["hub-pvp-league-ul"].tap() }
+        XCTAssertTrue(slot(app, "pvp", 1).waitForExistence(timeout: 30))
+        assertStripPinsTheSquad(app, "pvp", open: 1, chip: 3, shotName: "pvp-strip-scrolled")
+    }
+
+    /// The squad on Current after one saved edit, with its strength bar and links: light, dark, default text and AX5.
     func testPvPSquadStrengthShots() throws {
         let setup = launch(reset: true)
         populate(setup)

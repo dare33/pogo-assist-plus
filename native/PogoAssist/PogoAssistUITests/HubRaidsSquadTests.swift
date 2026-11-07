@@ -16,7 +16,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 1).label.hasPrefix("Slot 1 of 6, Mega, ") && !slot(app, "raids", 1).label.contains("empty"), slot(app, "raids", 1).label)
         XCTAssertTrue(slot(app, "raids", 1).label.contains("Upgrade available: mega evolve"), "the Mega slot never reads Ready: Mega Evolve is still to do: \(slot(app, "raids", 1).label)")
         XCTAssertEqual(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Heavy hitter"), true)
-        XCTAssertEqual(app.buttons["squad-mode-available"].isSelected, true)
+        XCTAssertEqual(app.buttons["squad-tab-available"].isSelected, true)
         XCTAssertEqual(el(app, "squad-status").label, "Nearly ready: 6 need work")
 
         // The picker of a slot: role chips, and an empty list says so (Available lists only the box: no Could get now list).
@@ -28,21 +28,38 @@ final class HubRaidsSquadTests: SquadUITestCase {
         shot("raids-picker")
         closePicker(app)
 
-        // The role change was kept: leave and come back.
+        // The role change is a draft on Available: it never switches tabs, nothing is saved, and leaving the screen drops it.
+        XCTAssertTrue(tab(app, "available").isSelected)
+        XCTAssertFalse(tab(app, "current").exists)
         back(app, toTile: "raids")
         app.buttons["hub-tile-raids"].tap()
         XCTAssertTrue(slot(app, "raids", 2).waitForExistence(timeout: 30))
-        XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Bulky hitter"), "the role survives leaving the screen: \(slot(app, "raids", 2).label)")
+        XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Heavy hitter"), "the draft does not survive leaving the screen: \(slot(app, "raids", 2).label)")
 
-        // Set and Undo.
+        // Set this squad on Available saves the shown squad to Current (nothing to replace, so no question) and sets the mark there.
+        openPicker(app, "raids", slot: 2)
+        app.buttons["squad-role-Bulky hitter"].tap()
+        closePicker(app)
         let set = app.buttons["squad-set"]
         reveal(app, set).tap()
         XCTAssertTrue(el(app, "squad-set-state").waitForExistence(timeout: 5), "✓ Squad set")
         XCTAssertTrue(app.buttons["squad-undo"].exists)
-        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).exists, "Squad set counts as a change: the squad is kept and Back shows")
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "Set this squad saved the squad: the Current tab appears")
+        XCTAssertTrue(tab(app, "available").isSelected, "and the player stays on the tab they are on")
         XCTAssertTrue(el(app, "hub-raid-row-0").label.contains("squad set"), "the card says so: \(el(app, "hub-raid-row-0").label)")
+        // Leave and come back: the screen opens on Current, with the role, the mark and Undo.
+        back(app, toTile: "raids")
+        app.buttons["hub-tile-raids"].tap()
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 30))
+        XCTAssertTrue(tab(app, "current").isSelected, "a squad with a Current opens on it")
+        XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Bulky hitter"), "the role was saved to Current: \(slot(app, "raids", 2).label)")
+        XCTAssertTrue(el(app, "squad-set-state").waitForExistence(timeout: 5))
         app.buttons["squad-undo"].tap()
         XCTAssertTrue(app.buttons["squad-set"].waitForExistence(timeout: 5), "Undo takes the mark back")
+        // "Set this squad" on Current sets the mark as it always did.
+        app.buttons["squad-set"].tap()
+        XCTAssertTrue(el(app, "squad-set-state").waitForExistence(timeout: 5))
+        app.buttons["squad-undo"].tap()
 
         // Tapping the chosen card closes its squad.
         app.swipeDown(); app.swipeDown()
@@ -73,8 +90,8 @@ final class HubRaidsSquadTests: SquadUITestCase {
         let available = (1...6).map { slot(app, "raids", $0).label }
         XCTAssertTrue(available[0].hasPrefix("Slot 1 of 6, Mega") && !available[0].contains("empty") && available[0].contains("Upgrade available"), available[0])
         XCTAssertFalse(available.contains { $0.contains("not in your box") }, "Available never puts a Pokémon the box lacks in a slot: \(available)")
-        app.buttons["squad-mode-best"].tap()
-        XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true)
+        app.buttons["squad-tab-best"].tap()
+        XCTAssertEqual(app.buttons["squad-tab-best"].isSelected, true)
         let best = (1...6).map { slot(app, "raids", $0).label }
         shot("raids-palkia-best")
         XCTAssertNotEqual(available.joined(), best.joined(), "switching to Best changes the suggestions: \(best)")
@@ -117,20 +134,21 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 2).label.contains(megaName), "the slot shows the choice: \(slot(app, "raids", 2).label)")
         closePicker(app)
 
-        // The pick and the setting are remembered for the screen.
+        // Edits of Best are a draft: leaving the screen drops them, and the Available | Best choice is remembered.
         back(app, toTile: "raids")
         app.buttons["hub-tile-raids"].tap()
-        XCTAssertTrue(app.buttons["squad-mode-best"].waitForExistence(timeout: 30))
-        XCTAssertEqual(app.buttons["squad-mode-best"].isSelected, true, "Best is remembered")
+        XCTAssertTrue(app.buttons["squad-tab-best"].waitForExistence(timeout: 30))
+        XCTAssertEqual(app.buttons["squad-tab-best"].isSelected, true, "Best is remembered")
         el(app, "hub-raid-row-1").tap()
         XCTAssertTrue(slot(app, "raids", 2).waitForExistence(timeout: 10))
-        XCTAssertTrue(slot(app, "raids", 2).label.contains(megaName) && slot(app, "raids", 2).label.contains("All"), "the exact pick and its role survive leaving the screen: \(slot(app, "raids", 2).label)")
-        XCTAssertTrue(slot(app, "raids", 1).label.hasPrefix("Slot 1 of 6, Bulky hitter"), slot(app, "raids", 1).label)
+        XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Heavy hitter") && !slot(app, "raids", 2).label.contains(megaName), "the drafted pick and role are gone: \(slot(app, "raids", 2).label)")
+        XCTAssertTrue(slot(app, "raids", 1).label.hasPrefix("Slot 1 of 6, Mega"), slot(app, "raids", 1).label)
+        XCTAssertFalse(tab(app, "current").exists, "nothing was saved")
     }
 
-    /// Rule 27: replacing a Pokémon in one slot moves nothing else, choosing one that sits in another slot swaps the two, and Back to suggested squad restores the suggestion.
-    /// Rule 32: the squad strength line follows. Under Best, where the tables give many rows.
-    func testRaidsReplaceSwapAndBackToSuggestedSquad() throws {
+    /// Rule 27: replacing a Pokémon in one slot moves nothing else, choosing one that sits in another slot swaps the two, and Reset restores the suggestion.
+    /// Rule 32: the squad strength line reads 100% on the unedited Best tab and falls once the squad is edited. Under Best, where the tables give many rows.
+    func testRaidsReplaceSwapAndReset() throws {
         let app = launch(reset: true)
         populate(app)
         openTile(app, "raids")
@@ -141,9 +159,9 @@ final class HubRaidsSquadTests: SquadUITestCase {
         selectBest(app)
         let strength = el(app, "squad-strength")
         XCTAssertTrue(reveal(app, strength).exists)
-        XCTAssertTrue(strength.label.hasPrefix("Squad strength "), strength.label)
+        XCTAssertTrue(strength.label.hasPrefix("Squad strength 100 percent") && strength.label.contains("the best squad"), "the unedited Best squad is the reference: \(strength.label)")
         let startStrength = strength.label
-        XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
+        XCTAssertFalse(app.buttons["squad-reset-draft"].exists, "an unchanged squad has no Reset")
         let original = (1...6).map { slot(app, "raids", $0).label }
         let names = (1...6).map { slotName(app, "raids", $0) }
 
@@ -154,7 +172,10 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 4).label.contains(fresh), "slot 4 shows the choice: \(slot(app, "raids", 4).label)")
         for n in [1, 2, 3, 5, 6] { XCTAssertEqual(slot(app, "raids", n).label, original[n - 1], "slot \(n) did not move") }
         XCTAssertFalse([1, 2, 3, 5, 6].contains { slot(app, "raids", $0).label.contains(names[3]) }, "the replaced Pokémon is not in another slot")
-        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).exists, "a changed squad has the Back button")
+        XCTAssertTrue(reveal(app, app.buttons["squad-reset-draft"]).exists, "an edited squad has Reset")
+        XCTAssertTrue(tab(app, "best").isSelected, "and stays on Best")
+        let edited = reveal(app, el(app, "squad-strength")).label
+        XCTAssertTrue(edited.hasPrefix("Squad strength ") && !edited.contains("the best squad"), "an edited Best squad has its own value against the unedited one: \(edited)")
 
         // Swap: slot 4's picker lists slot 2's Pokémon, marked; choosing it exchanges the two.
         openPicker(app, "raids", slot: 4)
@@ -167,11 +188,170 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 2).label.contains(fresh), "slot 2 took slot 4's: \(slot(app, "raids", 2).label)")
         for n in [1, 3, 5, 6] { XCTAssertEqual(slot(app, "raids", n).label, original[n - 1], "slot \(n) did not move") }
 
-        // Back to suggested squad.
-        tapBackAndConfirm(app)
-        XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
+        // Reset drops the draft at once.
+        reveal(app, app.buttons["squad-reset-draft"]).tap()
+        XCTAssertTrue(waitGone(app.buttons["squad-reset-draft"]), "Reset clears the control")
         for n in 1...6 { XCTAssertEqual(slot(app, "raids", n).label, original[n - 1], "slot \(n) is back to the suggestion") }
         XCTAssertEqual(reveal(app, el(app, "squad-strength")).label, startStrength)
+    }
+
+    /// Rule 33: Max damage is a Mega and five Heavy hitters; Balanced the Mega, three Heavy and two Bulky hitters. The choice is remembered, drops the Available and Best drafts and
+    /// leaves Current as it was.
+    func testRaidsMaxDamageGivesFiveHeavyHitterSlots() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "raids")
+        let card = el(app, "hub-raid-row-1")
+        XCTAssertTrue(card.waitForExistence(timeout: 60))
+        card.tap()
+        XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
+        let balanced = app.buttons["squad-style-balanced"], maxDamage = app.buttons["squad-style-max-damage"]
+        XCTAssertTrue(reveal(app, balanced).exists)
+        XCTAssertTrue(balanced.isSelected, "Balanced is the default")
+        for (n, role) in [(1, "Mega"), (2, "Heavy hitter"), (3, "Heavy hitter"), (4, "Heavy hitter"), (5, "Bulky hitter"), (6, "Bulky hitter")] {
+            XCTAssertTrue(slot(app, "raids", n).label.hasPrefix("Slot \(n) of 6, \(role)"), slot(app, "raids", n).label)
+        }
+        // A Current squad under Balanced, to see it left alone.
+        changeTheSquad(app, "raids")
+        saveToCurrent(app)
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5))
+        // And a draft that the style change drops (a role change always differs from the suggestion).
+        openPicker(app, "raids", slot: 3)
+        app.buttons["squad-role-Bulky hitter"].tap()
+        closePicker(app)
+        XCTAssertTrue(reveal(app, app.buttons["squad-reset-draft"]).exists)
+
+        maxDamage.tap()
+        XCTAssertTrue(waitSelected(maxDamage), "Max damage is chosen")
+        XCTAssertTrue(slot(app, "raids", 1).label.hasPrefix("Slot 1 of 6, Mega"), slot(app, "raids", 1).label)
+        for n in 2...6 { XCTAssertTrue(slot(app, "raids", n).label.hasPrefix("Slot \(n) of 6, Heavy hitter"), "Max damage: five Heavy hitter slots: \(slot(app, "raids", n).label)") }
+        XCTAssertTrue(waitGone(app.buttons["squad-reset-draft"]), "a change of style drops the Available draft")
+        shot("raids-max-damage")
+        selectBest(app)
+        for n in 2...6 { XCTAssertTrue(slot(app, "raids", n).label.hasPrefix("Slot \(n) of 6, Heavy hitter"), "and Best: \(slot(app, "raids", n).label)") }
+        XCTAssertTrue(el(app, "squad-strength").label.contains("the best squad"), "the Best squad of this style is the reference: \(el(app, "squad-strength").label)")
+        shot("raids-best")
+        // Current keeps the roles it was saved with.
+        selectTab(app, "current")
+        XCTAssertTrue(slot(app, "raids", 5).label.hasPrefix("Slot 5 of 6, Bulky hitter"), "Current is untouched by the style: \(slot(app, "raids", 5).label)")
+
+        // The style is remembered per account.
+        back(app, toTile: "raids")
+        app.buttons["hub-tile-raids"].tap()
+        XCTAssertTrue(app.buttons["squad-style-max-damage"].waitForExistence(timeout: 30))
+        card.tap()
+        XCTAssertTrue(reveal(app, app.buttons["squad-style-max-damage"]).isSelected, "Max damage is remembered")
+        // The explainer says what each style is.
+        app.buttons["squad-info"].tap()
+        let explainer = el(app, "squad-explainer")
+        XCTAssertTrue(explainer.waitForExistence(timeout: 5))
+        XCTAssertTrue(explainer.label.contains("Balanced: a Mega, three heavy hitters and two bulky hitters that stay in longer.") && explainer.label.contains("Max damage: a Mega and five heavy hitters; faster, with more relobbies."), explainer.label)
+    }
+
+    /// Rule 27 and Greg's wording: a squad holds one Mega, and the second Mega slot says so.
+    func testRaidsASecondMegaSlotSaysYouCanOnlyHaveOne() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "raids")
+        let card = el(app, "hub-raid-row-1")
+        XCTAssertTrue(card.waitForExistence(timeout: 60))
+        card.tap()
+        XCTAssertTrue(slot(app, "raids", 2).waitForExistence(timeout: 30))
+        openPicker(app, "raids", slot: 2)
+        app.buttons["squad-role-Mega"].tap()
+        closePicker(app)
+        XCTAssertTrue(slot(app, "raids", 2).label.contains("You can only have 1 Mega slot"), slot(app, "raids", 2).label)
+        XCTAssertFalse(slot(app, "raids", 2).label.contains("No Mega-capable Pokémon left"), "the old words are gone")
+    }
+
+    /// Rule 27: saving over a Current squad asks first; Cancel and Replace both work; edits on Current save at once and survive leaving the screen.
+    func testRaidsSaveReplaceDialogAndCurrentEdits() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "raids")
+        let card = el(app, "hub-raid-row-1")
+        XCTAssertTrue(card.waitForExistence(timeout: 60))
+        card.tap()
+        XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
+        changeTheSquad(app, "raids")
+        saveToCurrent(app)
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5))
+        selectTab(app, "current")
+        let saved = (1...6).map { slot(app, "raids", $0).label }
+        // A fresh edit on Available, then Save to Current: it asks. Cancel leaves Current as saved.
+        selectAvailable(app)
+        openPicker(app, "raids", slot: 3)
+        app.buttons["squad-role-Bulky hitter"].tap()
+        closePicker(app)
+        let draft = (1...6).map { slot(app, "raids", $0).label }
+        reveal(app, app.buttons["squad-save-current"]).tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "squad-save-current-confirm").firstMatch.waitForExistence(timeout: 5))
+        shot("raids-save-replace-dialog")
+        answer(app, asked: "squad-save-current", confirm: false)
+        selectTab(app, "current")
+        XCTAssertEqual((1...6).map { slot(app, "raids", $0).label }, saved, "Cancel left Current as it was")
+        // Replace makes the draft the Current squad.
+        selectAvailable(app)
+        saveToCurrent(app, replacing: true)
+        selectTab(app, "current")
+        XCTAssertEqual((1...6).map { slot(app, "raids", $0).label }, draft, "Replace stored the draft as Current")
+        // Edits on Current save at once.
+        changeTheSquad(app, "raids")
+        let edited = (1...6).map { slot(app, "raids", $0).label }
+        XCTAssertNotEqual(edited, saved, "an edit on Current changed it")
+        XCTAssertTrue(tab(app, "current").isSelected)
+        back(app, toTile: "raids")
+        app.buttons["hub-tile-raids"].tap()
+        card.tap()
+        XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
+        XCTAssertTrue(tab(app, "current").isSelected, "a squad with a Current opens on it")
+        XCTAssertEqual((1...6).map { slot(app, "raids", $0).label }, edited, "the edit was saved straight away")
+    }
+
+    /// Rule 27.3 and 32: "Set this squad" on the unedited Best tab saves it to Current and sets the mark, but the tab stays unedited: no Save to Current, no Reset, 100% "the best squad",
+    /// and it says Saved to Current.
+    func testRaidsSetOnAnUneditedBestTabLeavesItUnedited() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "raids")
+        let card = el(app, "hub-raid-row-1")
+        XCTAssertTrue(card.waitForExistence(timeout: 60))
+        card.tap()
+        XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
+        selectBest(app)
+        reveal(app, app.buttons["squad-set"]).tap()
+        XCTAssertTrue(el(app, "squad-set-state").waitForExistence(timeout: 5))
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "the squad was saved")
+        XCTAssertTrue(tab(app, "best").isSelected)
+        XCTAssertTrue(el(app, "squad-saved-note").waitForExistence(timeout: 5), "and says so")
+        XCTAssertFalse(app.buttons["squad-save-current"].exists || app.buttons["squad-reset-draft"].exists, "the tab is unedited")
+        XCTAssertTrue(reveal(app, el(app, "squad-strength")).label.contains("the best squad"), el(app, "squad-strength").label)
+    }
+
+    /// Rule 34: the pinned strip at the default text size and at AX5 (where the chips keep whole words and the strip scrolls sideways).
+    func testRaidsPinnedStripFollowsTheList() throws {
+        let setup = launch(reset: true)
+        populate(setup)
+        setup.terminate()
+        let palkia = { (app: XCUIApplication) in
+            let card = self.el(app, "hub-raid-row-1")
+            if card.waitForExistence(timeout: 30) { card.tap() }
+            XCTAssertTrue(self.slot(app, "raids", 1).waitForExistence(timeout: 30))
+        }
+        let app = launch()
+        openTile(app, "raids")
+        palkia(app)
+        assertStripPinsTheSquad(app, "raids", open: 2, chip: 4, shotName: "raids-strip-scrolled")
+        app.terminate()
+        let big = launch(ax5: true)
+        openTile(big, "raids")
+        palkia(big)
+        // The tab and style rows at AX5: whole words, one size, stacked.
+        XCTAssertTrue(reveal(big, big.buttons["squad-style-max-damage"]).exists)
+        XCTAssertTrue(big.buttons["squad-style-max-damage"].label == "Max damage" && big.buttons["squad-tab-available"].exists)
+        shot("raids-tabs-style-ax5")
+        assertStripPinsTheSquad(big, "raids", open: 2, chip: 3, shotName: "raids-strip-scrolled-ax5")
+        big.terminate()
     }
 
     /// P1: every picker row says the copy's CP and IVs and its estimated damage in its one VoiceOver label (the bar itself is hidden from VoiceOver).
@@ -210,7 +390,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         let app = launch()
         openTile(app, "raids")
         palkia(app)
-        let available = app.buttons["squad-mode-available"]
+        let available = app.buttons["squad-tab-available"]
         if available.waitForExistence(timeout: 30) { available.tap() }
         openPicker(app, "raids", slot: 5)
         let other = el(app, "squad-picker-other-roles")
@@ -220,7 +400,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         app.terminate()
     }
 
-    /// The squad with its strength bar and, after one change, its Back button: light, dark, default text and AX5.
+    /// The squad on Current after one saved edit, with its strength bar and links: light, dark, default text and AX5.
     func testRaidsSquadStrengthShots() throws {
         let setup = launch(reset: true)
         populate(setup)

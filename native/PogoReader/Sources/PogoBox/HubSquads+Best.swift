@@ -461,7 +461,8 @@ extension HubSquads {
                 let hits = Set(rows.filter(\.hitsBoss).map(\.entryId))
                 listed = listed.filter(hits.contains) + listed.filter { !hits.contains($0) }
             }
-            return Pool(preferred: listed, fallback: fallback ? rows.map(\.entryId) : [])
+            // With `fallback` (raids, as under Available) a slot whose role has run out takes the best unused row of another role; the Mega slot never does.
+            return Pool(preferred: listed, fallback: fallback && role != PogoRules.RaidRole.mega.rawValue ? rows.map(\.entryId) : [])
         }, copyOf: copyResolver(rows: rows), allows: { id, _, out in megaIds.isEmpty || !megaIds.contains(id) || !out.contains { $0.pickId.map(megaIds.contains) ?? false } }), slots, rows: rows)
     }
 

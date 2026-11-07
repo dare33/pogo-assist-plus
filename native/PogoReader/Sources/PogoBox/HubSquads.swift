@@ -210,6 +210,14 @@ public enum HubSquads {
         return out
     }
 
+    /// Two drawn squads are the same squad: each slot draws the same row in the same role. The row drawn is the species row when the slot holds a species (the Chansey row backed by the
+    /// player's one Chansey copy is not the Blissey row that shows the same copy), else the copy. A species pick that reads as a copy draws as its species row, as the suggestion's
+    /// shared row does. An edited Available or Best squad is one that is not the suggestion by this test.
+    public static func sameSquad(_ a: [FilledSlot], _ b: [FilledSlot]) -> Bool {
+        func drawn(_ f: FilledSlot) -> String? { f.species.map { squadSpeciesPrefix + $0 } ?? f.entryId }
+        return a.count == b.count && zip(a, b).allSatisfy { $0.role == $1.role && drawn($0) == drawn($1) }
+    }
+
     /// The candidates listed for a role, in their order; role "All" allows any.
     public static func pool<C: SquadCandidate>(role: String, in candidates: [C]) -> [String] {
         candidates.filter { role == squadRoleAll || $0.roleNames.contains(role) }.map(\.entryId)
@@ -274,6 +282,13 @@ public enum HubSquads {
 
     public static func picker(candidates: [String], excluded: Set<String>, own: String?) -> [PickerRow] {
         candidates.filter { !excluded.contains($0) || $0 == own }.map { PickerRow(entryId: $0, ticked: $0 == own) }
+    }
+
+    /// Whether the Pokémon a slot holds under pick id `id` fits `role` among `candidates`, reading `id` through every id that stands for it in `rows` (the Best rows): a kept species pick
+    /// of a Pokémon the box now owns is listed under its copy's id, so the species id alone would never be found.
+    public static func fitsThrough<C: SquadCandidate>(_ id: String, role: String, in candidates: [C], rows: [BestRow]) -> Bool {
+        let ids = [id] + rows.filter { $0.ids.contains(id) }.flatMap(\.ids)
+        return ids.contains { fits($0, role: role, in: candidates) }
     }
 
     /// Rule 5: relabel the slot; keep the player's pick when it fits the new role, else drop it so the slot refills with the best unused one.

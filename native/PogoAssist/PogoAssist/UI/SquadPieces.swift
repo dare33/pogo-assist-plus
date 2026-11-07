@@ -1,7 +1,7 @@
 import SwiftUI
 import PogoBox
 
-// The pieces the five squad screens (Raids, Max, Gym, Rocket, PvP) share, from the pass 2 handoff's "Shared components": the SUGGESTIONS row, the slot card, the
+// The pieces the five squad screens (Raids, Max, Gym, Rocket, PvP) share, from the pass 2 handoff's "Shared components": the SQUAD tabs, the slot card, the
 // picker with its role chips and rows, the squad status line and the status colour of a card. They draw what the screens hand them; the rules (who is listed, in what order, what a role
 // allows) are PogoBox's `HubSquads`. Every colour is a Theme token, so light and dark follow.
 
@@ -104,47 +104,6 @@ struct SquadExplainer: View {
     }
 }
 
-// MARK: SUGGESTIONS · Available | Best · (i)
-
-/// The right-aligned row every squad screen carries (rule 3, D18): the caption, the compact Available | Best switch and the "i". One setting per screen, kept per
-/// account (`SquadStore.modes`). The explanation opens under the row as a card.
-struct SuggestionsRow: View {
-    @Binding var mode: SquadMode
-    /// What Available and Best mean on this screen ("counters", "defenders", "a squad").
-    let noun: String
-    @State private var infoOpen = false
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { caption; control(singleLine: true); info }.fixedSize(horizontal: true, vertical: false)
-                VStack(alignment: .trailing, spacing: 0) { caption; HStack(spacing: 8) { control(singleLine: false); info } }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            if infoOpen {
-                SquadExplainer(items: [
-                    ("Available", "picks \(noun) from the Pokémon in your box right now: the strongest you own for each slot, even if it still needs a power up, an evolution or a Mega Evolution first. Tap a slot for other choices from your box."),
-                    ("Best", "lists the best Pokémon in the game for each slot, whether or not you have them. Each says if it is in your box, can be got now, or is not available now."),
-                ], identifier: "squad-mode-explainer")
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    private var caption: some View {
-        Text("SUGGESTIONS").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityHidden(true)
-    }
-
-    private func control(singleLine: Bool) -> some View {
-        SegmentedSwitch(
-            segments: [.init(value: SquadMode.available, title: "Available", identifier: "squad-mode-available"),
-                       .init(value: SquadMode.best, title: "Best", identifier: "squad-mode-best")],
-            selection: $mode, metrics: .compact, label: "Suggestions", identifier: "squad-mode", singleLine: singleLine)
-    }
-
-    private var info: some View { InfoButton(isOpen: $infoOpen, label: "About suggestions", identifier: "squad-mode-info") }
-}
-
 // MARK: slot cards
 
 extension HubSquads.BestRow {
@@ -236,7 +195,7 @@ struct SquadStatusLine: View {
     }
 }
 
-/// The squad's strength bar (CONCEPTS rule 32), under the status line: "Squad strength 72%" and "85% after upgrades" over one bar drawn as a picker row's bar is (solid = now, faint
+/// The squad's strength bar (CONCEPTS rule 32), under the status line: "Squad strength 78% of best" (the squad's slot figures over the Best squad's; "Matches the best squad" at or over it) and "92% after upgrades" over one bar drawn as a picker row's bar is (solid = now, faint
 /// = after the suggested upgrades), and "5 of 6 slots scored" when a slot has no figure. VoiceOver reads the words as one element; the bar is hidden from it. `strength` is nil
 /// while it is being worked out (off the main thread): the row keeps its height with an empty track, so nothing below it moves. At accessibility text sizes the two labels stack.
 struct SquadStrengthLine: View {
@@ -288,32 +247,6 @@ struct TracksBox: ViewModifier {
 
 extension View {
     func tracksBox(_ ctx: HubContext, generation: Binding<Int>) -> some View { modifier(TracksBox(ctx: ctx, generation: generation)) }
-}
-
-/// "Back to suggested squad" (CONCEPTS rule 27): shown once the player has changed a squad. It asks first, then forgets every kept Pokémon, the roles and the "Squad set" mark.
-struct BackToSuggestedButton: View {
-    let action: () -> Void
-    @Environment(\.accent) private var accent
-    @State private var asking = false
-
-    var body: some View {
-        HStack {
-            Button { asking = true } label: {
-                Text("Back to suggested squad").font(.figtree(14, .bold, relativeTo: .subheadline)).underline().foregroundStyle(accent.ink)
-                    .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
-            }
-            .buttonStyle(PressStyle())
-            .accessibilityHint("Clears your changes to this squad, after asking")
-            .accessibilityIdentifier("squad-back-to-suggested")
-            Spacer(minLength: 0)
-        }
-        .confirmationDialog("Back to suggested squad?", isPresented: $asking, titleVisibility: .visible) {
-            Button("Back to suggested squad", role: .destructive, action: action).accessibilityIdentifier("squad-back-confirm")
-            Button("Cancel", role: .cancel) {}.accessibilityIdentifier("squad-back-cancel")
-        } message: {
-            Text("Your changes to this squad are cleared.")
-        }
-    }
 }
 
 /// A slot card (pass 2 README, "Slot card"): radius 16, at least 92 pt; the role row in the role colour with the mark at its trailing end; a 30 pt disc; the name 13/700;
@@ -759,6 +692,8 @@ struct StrengthBar: View {
 /// "Set this squad" (accent button) or "✓ Squad set" with an underlined Undo (D26, D42, D55): the player's own mark that the raid or Max squad is ready.
 struct SetSquadFooter: View {
     let isSet: Bool
+    /// What "Set this squad" does when it is not just the mark (on Available and Best it saves the squad to Current first).
+    var hint: String? = nil
     let onSet: () -> Void
     let onUndo: () -> Void
     @Environment(\.accent) private var accent
@@ -782,6 +717,7 @@ struct SetSquadFooter: View {
                         .background(accent.solid, in: Capsule()).contentShape(Capsule())
                 }
                 .buttonStyle(PressStyle())
+                .accessibilityHint(hint ?? "Marks this squad as ready")
                 .accessibilityIdentifier("squad-set")
             }
         }
@@ -827,5 +763,297 @@ final class PickerRowsCache<T> {
         last = (ctx.advice, ctx.entries, ctx.today, key)
         value = v
         return v
+    }
+}
+
+// MARK: SQUAD · Current | Available | Best · (i)  (pass 2-5, rule 27)
+
+/// The row every squad screen carries over its squad: the caption, the compact Current | Available | Best switch and the "i". Current shows only for a squad that has one. Available
+/// and Best are the suggestions (edits to them are drafts); the choice between them is remembered per account (`SquadStore.modes`).
+struct SquadTabsRow: View {
+    @Binding var tab: SquadTab
+    let hasCurrent: Bool
+    /// What Available and Best mean on this screen ("counters", "defenders", "a squad").
+    let noun: String
+    @State private var infoOpen = false
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            // The three labels always render at one size (never shrunk one by one): on one line when they fit, else under the caption, else stacked, one to a line.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { caption; control(singleLine: true); info }.fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .trailing, spacing: 0) { caption; HStack(spacing: 8) { control(singleLine: true); info } }.fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .trailing, spacing: 4) { HStack(spacing: 8) { caption; Spacer(minLength: 0); info }; stacked }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            if infoOpen {
+                SquadExplainer(items: [
+                    ("Current", "is the squad you saved. Changes to it are kept straight away."),
+                    ("Available", "picks \(noun) from the Pokémon in your box right now: the strongest you own for each slot, even if it still needs a power up, an evolution or a Mega Evolution first. Tap a slot for other choices from your box."),
+                    ("Best", "lists the best Pokémon in the game for each slot, whether or not you have them. Each says if it is in your box, can be got now, or is not available now."),
+                    ("", "Available and Best always start from the suggestion. Changes you make to them last until you leave this screen; Save to Current keeps them."),
+                ], identifier: "squad-mode-explainer")
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var caption: some View {
+        Text("SQUAD").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityHidden(true)
+    }
+
+    private func control(singleLine: Bool) -> some View {
+        let all: [SquadTab] = hasCurrent ? [.current, .available, .best] : [.available, .best]
+        return SegmentedSwitch(
+            segments: all.map { .init(value: $0, title: $0.title, identifier: "squad-tab-\($0.rawValue)") },
+            selection: $tab, metrics: .compact, label: "Squad", identifier: "squad-mode", singleLine: singleLine)
+    }
+
+    private var stacked: some View {
+        let all: [SquadTab] = hasCurrent ? [.current, .available, .best] : [.available, .best]
+        return StackedChoice(options: all.map { .init(value: $0, title: $0.title, identifier: "squad-tab-\($0.rawValue)") }, selection: $tab, label: "Squad", identifier: "squad-mode")
+    }
+
+    private var info: some View { InfoButton(isOpen: $infoOpen, label: "About the squad", identifier: "squad-mode-info") }
+}
+
+/// A choice between a few options drawn as a column of full-width buttons: what a segmented switch becomes when its titles cannot fit on one line at the accessibility text sizes
+/// (the titles keep whole words and one size). The same identifiers, labels and selected trait as the switch.
+struct StackedChoice<Value: Hashable>: View {
+    struct Option: Identifiable {
+        let value: Value
+        let title: String
+        var identifier: String
+        var id: Value { value }
+    }
+    let options: [Option]
+    @Binding var selection: Value
+    let label: String
+    var identifier: String = ""
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ForEach(options) { o in
+                let on = o.value == selection
+                Button { selection = o.value } label: {
+                    Text(o.title).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(on ? Theme.surface : Color.clear, in: Capsule()).contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(o.title)
+                .accessibilityAddTraits(on ? .isSelected : [])
+                .accessibilityIdentifier(o.identifier)
+            }
+        }
+        .padding(4)
+        .background(Theme.off, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// "Replace your current squad?": asked before a draft is saved over a squad that already has a Current.
+extension View {
+    func replaceCurrentDialog(isPresented: Binding<Bool>, onReplace: @escaping () -> Void) -> some View {
+        confirmationDialog("Replace your current squad?", isPresented: isPresented, titleVisibility: .visible) {
+            Button("Replace", role: .destructive, action: onReplace).accessibilityIdentifier("squad-save-current-confirm")
+            Button("Cancel", role: .cancel) {}.accessibilityIdentifier("squad-save-current-cancel")
+        } message: {
+            Text("Your saved changes are replaced by this squad.")
+        }
+    }
+}
+
+/// Under the slots of an edited Available or Best squad: Save to Current and Reset, or "Saved to Current" once it is saved. Shown once the squad as drawn differs from the suggestion
+/// (the status also while an unedited squad has just been saved by "Set this squad"). Save asks first only when it would replace a Current that is a different squad (`replaces`).
+/// Reset drops the draft at once. The save itself says "Saved to Current" to VoiceOver (`SquadWorkspace.saveToCurrent`).
+struct SquadDraftBar: View {
+    let differs: Bool
+    let justSaved: Bool
+    /// Saving would replace a Current that is a different squad.
+    let replaces: Bool
+    let onSave: () -> Void
+    let onReset: () -> Void
+    @Environment(\.accent) private var accent
+    @State private var asking = false
+
+    var body: some View {
+        if differs || justSaved {
+            VStack(alignment: .leading, spacing: 2) {
+                if justSaved {
+                    Text("Saved to Current").font(.figtree(13, .heavy, relativeTo: .footnote)).foregroundStyle(accent.ink).padding(.horizontal, 4)
+                        .accessibilityIdentifier("squad-saved-note")
+                }
+                FlowLayout(spacing: 12) {
+                    if !justSaved {
+                        Button { if replaces { asking = true } else { onSave() } } label: {
+                            Text("Save to Current").font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(accent.onSolid)
+                                .padding(.horizontal, 16).frame(minHeight: 44).background(accent.solid, in: Capsule()).contentShape(Capsule())
+                        }
+                        .buttonStyle(PressStyle())
+                        .accessibilityHint("Saves this squad as your current squad, asking first if it would replace a different one")
+                        .accessibilityIdentifier("squad-save-current")
+                    }
+                    if differs { Button(action: onReset) {
+                        Text("Reset").font(.figtree(14, .bold, relativeTo: .subheadline)).underline().foregroundStyle(accent.ink)
+                            .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressStyle())
+                    .accessibilityHint("Drops your changes to this squad and shows the suggestion again")
+                    .accessibilityIdentifier("squad-reset-draft") }
+                }
+            }
+            .replaceCurrentDialog(isPresented: $asking, onReplace: onSave)
+        }
+    }
+}
+
+/// "Delete current squad" on the Current tab: asks first, then removes the Current squad. Available and Best are not changed.
+struct DeleteCurrentButton: View {
+    let action: () -> Void
+    @Environment(\.accent) private var accent
+    @State private var asking = false
+
+    var body: some View {
+        HStack {
+            Button { asking = true } label: {
+                Text("Delete current squad").font(.figtree(14, .bold, relativeTo: .subheadline)).underline().foregroundStyle(accent.ink)
+                    .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityHint("Deletes your current squad, after asking")
+            .accessibilityIdentifier("squad-delete-current")
+            Spacer(minLength: 0)
+        }
+        .confirmationDialog("Delete current squad?", isPresented: $asking, titleVisibility: .visible) {
+            Button("Delete current squad", role: .destructive, action: action).accessibilityIdentifier("squad-delete-current-confirm")
+            Button("Cancel", role: .cancel) {}.accessibilityIdentifier("squad-delete-current-cancel")
+        } message: {
+            Text("Available and Best are not changed.")
+        }
+    }
+}
+
+/// The Raids style control (rule 33): Balanced | Max damage, remembered per account. It sets the roles of the Available and Best suggestions; the (i) of the squad explains the two.
+struct RaidStyleRow: View {
+    @Binding var style: RaidStyle
+
+    private func id(_ s: RaidStyle) -> String { "squad-style-\(s == .balanced ? "balanced" : "max-damage")" }
+    private var caption: some View { Text("STYLE").font(.figtree(10, .heavy, relativeTo: .caption2)).tracking(0.06 * 10).foregroundStyle(Theme.faint).accessibilityHidden(true) }
+
+    /// Never truncated: on one line beside its caption when it fits, else under it, else stacked (the titles keep whole words).
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { caption; Spacer(minLength: 4); control }.fixedSize(horizontal: true, vertical: false).frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 0) { caption; control }.fixedSize(horizontal: true, vertical: false).frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 4) {
+                caption
+                StackedChoice(options: RaidStyle.allCases.map { .init(value: $0, title: $0.title, identifier: id($0)) }, selection: $style, label: "Raids style", identifier: "squad-style")
+            }
+        }
+    }
+
+    private var control: some View {
+        SegmentedSwitch(segments: RaidStyle.allCases.map { .init(value: $0, title: $0.title, identifier: id($0)) },
+                        selection: $style, metrics: .compact, label: "Raids style", identifier: "squad-style", singleLine: true)
+    }
+}
+
+// MARK: the pinned squad strip (rule 34)
+
+/// One chip of the pinned strip: a slot's number, the Pokémon's name (or "Empty") and the role colour.
+struct SquadStripChip: Equatable, Identifiable {
+    var id: Int
+    var name: String
+    var palette: SquadPaletteValue
+    var editing: Bool
+    var spoken: String
+}
+
+/// `SquadPalette` is not Equatable (Color); the strip compares the role it came from.
+struct SquadPaletteValue: Equatable {
+    var role: String?
+    var palette: SquadPalette { role.map(SquadPalette.of) ?? SquadPalette.grey }
+}
+
+struct SquadStripModel: Equatable {
+    var chips: [SquadStripChip]
+    /// The slot number's palette comes from the card: Gym and Rocket have no role, so their chips use the screen's own palette.
+    var ink: Color? = nil
+    var tint: Color? = nil
+    var open: (Int) -> Void = { _ in }
+    static func == (l: SquadStripModel, r: SquadStripModel) -> Bool { l.chips == r.chips }
+}
+
+struct SquadStripKey: PreferenceKey {
+    static var defaultValue: SquadStripModel? { nil }
+    static func reduce(value: inout SquadStripModel?, nextValue: () -> SquadStripModel?) { if let n = nextValue() { value = n } }
+}
+
+extension View {
+    /// While a slot's picker is open (`selected`), asks the screen to pin a strip of the squad's slots at the top of its scroll area; tapping a chip opens that slot's picker.
+    func squadStrip(cards: [SlotCardModel], selected: Int?, ink: Color? = nil, tint: Color? = nil, open: @escaping (Int) -> Void) -> some View {
+        let model: SquadStripModel? = selected.map { sel in
+            SquadStripModel(chips: cards.map { c in
+                let name = c.name ?? "Empty"
+                let editing = c.id == sel
+                return SquadStripChip(id: c.id, name: name, palette: SquadPaletteValue(role: c.role), editing: editing,
+                                      spoken: (["Slot \(c.id + 1)", name, c.role].compactMap { $0 } + (editing ? ["editing"] : [])).joined(separator: ", "))
+            }, ink: ink, tint: tint, open: open)
+        }
+        return preference(key: SquadStripKey.self, value: model)
+    }
+}
+
+/// The strip itself: one line of chips, scrolling sideways when they do not fit, so at the accessibility sizes the chips keep whole words and the strip stays one line tall.
+struct SquadStripView: View {
+    let model: SquadStripModel
+    @Environment(\.accent) private var accent
+    /// The slot-number disc grows with the text, so the digit is never clipped at the accessibility sizes.
+    @ScaledMetric(relativeTo: .footnote) private var disc: CGFloat = 20
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { ForEach(model.chips) { chip($0) } }
+                    .padding(.horizontal, Theme.Space.screen).padding(.vertical, 6)
+            }
+            // The slot being edited is kept in view (at the accessibility sizes only a chip or two fits).
+            .onAppear { scrollToEditing(proxy) }
+            .onChange(of: model.chips.first { $0.editing }?.id) { _, _ in scrollToEditing(proxy) }
+        }
+        .background(Theme.bg)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("squad-strip")
+    }
+
+    private func scrollToEditing(_ proxy: ScrollViewProxy) {
+        if let id = model.chips.first(where: \.editing)?.id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
+    }
+
+    private func chip(_ c: SquadStripChip) -> some View {
+        let p = c.palette.palette
+        let ink = model.ink ?? p.ink, tint = model.tint ?? p.tint
+        return Button { model.open(c.id) } label: {
+            HStack(spacing: 6) {
+                Text("\(c.id + 1)").font(.figtree(12, .heavy, relativeTo: .caption)).foregroundStyle(Theme.surface)
+                    .frame(minWidth: disc, minHeight: disc).background(Circle().fill(ink)).accessibilityHidden(true)
+                Text(c.name).font(.figtree(13, c.editing ? .heavy : .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink).lineLimit(1).fixedSize()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .frame(minHeight: 44)
+            .background(tint, in: Capsule())
+            .overlay { if c.editing { Capsule().strokeBorder(accent.solid, lineWidth: 2.5) } }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(c.spoken)
+        .accessibilityAddTraits(c.editing ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("squad-strip-chip-\(c.id + 1)")
+        .id(c.id)
     }
 }
