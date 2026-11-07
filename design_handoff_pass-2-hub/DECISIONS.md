@@ -474,3 +474,79 @@ Not asked of Greg. These are the manager's calls and stand unless he objects:
 
 **Confirmation of the amendments.** Greg: "I confirm the amended CONCEPTS.md, including the manager's calls on Q5 to Q7."
 Changed: CONCEPTS.md status reads confirmed; Q5 to Q7 now stand as confirmed by Greg.
+
+## Pass 2-6: the design panel (7 Nov 2026)
+
+After phone run 6 Greg ruled: "First output should be a design panel in session that I can give comments on directly to
+tweak some design elements that we've added new. Once I confirm changes on that we then build". The manager published a
+private page of mockups (kept as `design-files/pass-2-6-panel.html`, its final round) and Greg commented on it over four
+rounds; the decisions below are his words from those comments. The read-back is `READBACK-pass-2-6.md`.
+
+**D59. Compact header (A).** Greg: "A1 is good. However, Balanced/Max is off screen so tweak this to fit all visible";
+"Ensure that when Current is not showing - there is minimal movement. Maybe we should make Current show up (slightly
+accented) on the right hand side"; then "i think alternative is the way to go. But keep that accent, just have it
+highlighting whichever segment best/avail/current the user has selected"; "yes app wide please" (the accent on every
+switch); captions dropped ("yes"); one (i) ("agreed"); "remove this including the dot. the 100% speaks for itself" (the
+"the best squad" words).
+Changed: tabs Available | Best with Current appearing on the right; the chosen segment of every switch on the accent
+tint; no captions; one (i); "Squad strength 100%".
+
+**D60. One pill (A).** Greg: "Can we make Squad Set / Undo button look more like the 'set squad' button? Maybe we dont
+have both showing?"; tapping the set pill unsets: "green".
+Changed: "Set this squad" and "✓ Squad set" are one pill in one place; tapping the set state unsets with an Undo toast.
+
+**D61. Auto-save and one button (B).** Greg (phone run 6): "changes made on best/available auto save. The button
+overrides the current squad only based on whats last saved/selected on the current best/available page." Then: edits
+survive leaving ("yes"); Reset stays ("yes"); ask before replacing a different Current: "no"; the button on Current:
+"hide"; re-scan follows the box ("agreed"); edits kept per style ("agreed"); no mark on the tab ("agreed").
+Changed: CONCEPTS rule 27.2, 27.3 and 27.8 rewritten (drafts stored; Save to Current, "Saved to Current" and the
+replace question gone; the pill hidden on Current).
+
+**D62. Set means has a Current (B).** Greg on the merge: "agreed".
+Changed: the "Squad set" mark is no longer separate from the Current; unset moves the Current to the history.
+
+**D63. History of earlier Current squads (B).** Greg: "the current screen. Can we have it so that under it it shows a
+historical log of previously selected 'current' squads for that activity"; "just add the historical log please. I think
+it will benefit as as we've removing the override for a smoother user experience. if they make an error they can just
+see an old build and make it the current build again"; "the extra text ('from best 100% of best etc) i dont need that.
+make current button make it a pill style button accented renamed to 'Set squad'. possible to include some way to
+indicate which pokemon were in that? or maybe a squad strength indicator too?"; "maybe a small indicator to show that it
+has a pokemon included the user no longer has"; H1 ("h1"); one initial per disc ("accept"); last 10, pruned with the
+event ("agreed"); Set squad asks nothing ("agreed").
+Changed: a new rule; the Current tab lists up to ten earlier Current squads as date, discs, strength and a Set squad
+pill.
+
+**D64. Dialogs keep the bold line (B).** Greg: "lets remove the extra wording explainer text (your current...) i think
+the bolder text is sufficient"; "ideally applied everywhere please".
+Changed: every confirmation dialog in the app loses its message line.
+
+**D65. Best ranked by the damage estimate (C).** Greg (phone run 6): "why are the options so limited ... is this really
+all there is available for us?"; "agree c2 for raids"; tier chip where the table has it ("agreed"); "Agreed top 12"; Max:
+"ok ensure its logged for future action"; "yes fine. if the user wants damage focus they can toggle to damage".
+Changed: Raids Best rows come from the damage estimate over every species, top 12 per role; Max logged for later.
+
+**D66. Pinned strip as two rows of three (D).** Greg (phone run 6): "Make it two levels 3 per level for raids"; Gym too
+("yes"); D2 chips ("d2 looks fine to me logic wise"); large text as recommended ("good as is"); "is there an indicator
+that it's unowned?" then "green as is" (hollow number, dashed edge); Empty unchanged ("agreed").
+Changed: CONCEPTS rule 34 rewritten.
+
+**D67. The Mega message in the picker (E).** Greg (phone run 6): "can we have the list also not show up the pokemon but
+instead the same message"; E1 ("E1"); "bold line only and reduce the size of the box to suit"; chip tappable, All
+unchanged, both tabs, no-Mega case unchanged ("yes").
+Changed: CONCEPTS rule 10 gains the picker case.
+
+**D68. Status chips (F).** Greg: "can you spin me up an alternative view where all those ancillary/explainer text (e.g.
+can get now / in your box / needs upgrade / easy /not available now/ etc) are easily identifiable by symbols/colors w/ a
+legend?"; "f1"; slot cards too ("agreed"); role word only under All ("agreed"); legend "not required going f1"; scope the
+five squad screens ("ok"); the (i) explains the signs ("yes"); "the chips of upgrade costs look awkward here. numbers
+outside of pill background" (a slip on the panel page, fixed).
+Changed: the status sentences on slot cards and picker rows become chips with a sign, a colour and one word.
+
+**D69. Readability flags.** No comment on the three remaining flags; the recommendations stand: the strength line in
+one tone, "Gardevoir (Shadow)" naming on the squad screens, the tier chip unchanged.
+
+**D70. Pass 2-5 manager calls.** Greg: "yes" / "ok" on all four (an old file with only the mark becomes a Current; the
+tabs and style sit on each squad and Rocket's grunt list follows the remembered mode; percentages round down; "Its role:
+<role>").
+
+**Confirmation.** Greg, 7 Nov 2026: "Confirmed, write READBACK".
