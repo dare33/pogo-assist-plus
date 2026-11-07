@@ -211,6 +211,8 @@ Answer each with yes, or say what to change. A yes on the whole section is enoug
 3.15 Order to the phone. Recommended: one test build after all of A–F land and pass review, not screen by screen,
     since A, B and F touch the same views.
 
-## 4. Greg's answers
+## 4. Greg's answers (7 Nov 2026)
 
-(To be written in when given.)
+Greg, on the read-back page's section 3: "Yes, all stand". Every recommendation in 3.1 to 3.15 is his answer, and the
+statements of section 1 are what the build is checked against. The design panel's decisions (DECISIONS.md D59 to D70)
+were confirmed the same day: "Confirmed, write READBACK".
