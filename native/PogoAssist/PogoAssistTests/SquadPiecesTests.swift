@@ -65,12 +65,16 @@ final class SquadPiecesTests: XCTestCase {
         XCTAssertEqual(SquadWords.spokenBox("Slot 2 of 6, Heavy hitter, Shadow Reshiram, Dark and Fire"), "Slot 2 of 6, Heavy hitter, Reshiram (Shadow), Dark and Fire")
     }
 
-    func testTheStripChipDropsTheBracketedFormButKeepsAMega() {
+    /// J14 (H3): the chip drops only the "(Shadow)" bracket; every other form stays, so two forms of one species never both read the same.
+    func testTheStripChipDropsOnlyTheShadowBracketAndKeepsEveryOtherForm() {
         // The names the app produces: the game master's, through `boxName`, then the chip's own cut.
         func chip(_ gameMasterName: String) -> String { SquadStripChip.shortName(SquadWords.boxName(gameMasterName)) }
         XCTAssertEqual(chip("Gardevoir (Shadow)"), "Gardevoir")
         XCTAssertEqual(chip("Shadow Gardevoir"), "Gardevoir")
-        XCTAssertEqual(chip("Zamazenta (Crowned Shield)"), "Zamazenta")
+        XCTAssertEqual(chip("Zamazenta (Crowned Shield)"), "Zamazenta (Crowned Shield)")
+        XCTAssertEqual(chip("Giratina (Origin)"), "Giratina (Origin)")
+        XCTAssertEqual(chip("Giratina (Altered)"), "Giratina (Altered)")
+        XCTAssertNotEqual(chip("Giratina (Origin)"), chip("Giratina (Altered)"), "two forms of one species stay apart")
         XCTAssertEqual(chip("Rayquaza (Mega)"), "Mega Rayquaza")
         XCTAssertEqual(chip("Groudon (Primal)"), "Primal Groudon")
         XCTAssertEqual(chip("Charizard (Mega X)"), "Mega Charizard X")

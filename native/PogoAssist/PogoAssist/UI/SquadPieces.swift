@@ -1191,7 +1191,7 @@ private struct HistoryDiscView: View {
 /// One chip of the pinned strip: a slot's number, the Pokémon's name (or "Empty") and the role colour.
 struct SquadStripChip: Equatable, Identifiable {
     var id: Int
-    /// The Pokémon's name without a bracketed form ("Gardevoir (Shadow)" is "Gardevoir"), or "Empty".
+    /// The Pokémon's name without a trailing "(Shadow)" ("Gardevoir (Shadow)" is "Gardevoir"), or "Empty".
     var name: String
     var palette: SquadPaletteValue
     var editing: Bool
@@ -1201,10 +1201,10 @@ struct SquadStripChip: Equatable, Identifiable {
     var empty = false
     var spoken: String
 
-    /// Only a bracketed form is dropped, off a name as `SquadWords.boxName` gives it: "Zamazenta (Crowned Shield)" is "Zamazenta", "Gardevoir (Shadow)" is "Gardevoir"; "Mega Charizard X" and
-    /// "Mega Charizard Y" stay, so the two never both read "Charizard".
+    /// Only a trailing " (Shadow)" is dropped (D69: the chip is narrow, and the Shadow is not what tells two chips apart), off a name as `SquadWords.boxName` gives it: "Gardevoir (Shadow)" is
+    /// "Gardevoir". Every other bracket stays ("Giratina (Origin)", "Zamazenta (Crowned Shield)"), as does a Mega or Primal in front ("Mega Charizard X"), so two forms never both read the same.
     static func shortName(_ name: String) -> String {
-        name.replacingOccurrences(of: #" \([^)]*\)$"#, with: "", options: .regularExpression)
+        name.hasSuffix(" (Shadow)") ? String(name.dropLast(" (Shadow)".count)) : name
     }
 }
 
@@ -1291,7 +1291,7 @@ struct SquadStripView: View {
                     .background { if c.notInBox { Circle().strokeBorder(ink, lineWidth: 2) } else { Circle().fill(ink) } }
                     .accessibilityHidden(true)
                 Text(c.name).font(.figtree(13, c.editing ? .heavy : .bold, relativeTo: .footnote)).foregroundStyle(Theme.ink)
-                    .lineLimit(typeSize.isAccessibilitySize ? 2 : 1).truncationMode(.tail).minimumScaleFactor(typeSize.isAccessibilitySize ? 0.6 : 1)
+                    .lineLimit(2).truncationMode(.tail).minimumScaleFactor(typeSize.isAccessibilitySize ? 0.6 : 1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8).padding(.vertical, 5)

@@ -271,11 +271,16 @@ class SquadUITestCase: XCTestCase {
         return t.waitForExistence(timeout: timeout) ? t.label : nil
     }
 
-    /// Taps the Undo of the toast: the button sits at the toast's trailing end (it is hidden from VoiceOver, which has the custom action instead), so it is tapped by coordinate.
+    /// Taps the Undo of the toast. The toast is one accessibility element (the button inside it is not an element of its own: VoiceOver has the custom action), so the button is not reachable
+    /// by identifier or label; it is tapped by a fixed offset from the toast's trailing edge instead: the button is 44 pt wide inside 16 pt of padding, so its middle is 16 + 22 pt in (J8).
+    /// (A descendant button is tried first, in case the toast ever exposes it.)
     func tapToastUndo(_ app: XCUIApplication) {
         let t = toast(app)
         XCTAssertTrue(t.waitForExistence(timeout: 5), "the toast offers Undo")
-        t.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        let button = t.descendants(matching: .button).matching(identifier: "Undo").firstMatch
+        if button.exists && button.isHittable { NSLog("tapToastUndo: by button"); button.tap(); return }
+        NSLog("tapToastUndo: by offset")
+        t.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: t.frame.width - 16 - 22, dy: 0)).tap()
     }
 
     /// The row of the Earlier current squads list, n from 1 (the newest).
