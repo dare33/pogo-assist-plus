@@ -203,7 +203,7 @@ final class HubSquadsAvailableTests: XCTestCase {
     func testABestSquadHoldsOneMegaAndItsPickerOffersNoSecond() {
         let tbl = P23.table([P23.tierEntry("raids", "Ice", "S", "abomasnow_mega", mega: true), P23.tierEntry("raids", "Ghost", "S", "gengar_mega", mega: true),
                              P23.tierEntry("raids", "Dragon", "A", "garchomp")])
-        let rows = HubSquads.bestRaidRows(row: giratina, ctx: P23.ctx(table: tbl))
+        let rows = HubSquads.tableRaidRows(row: giratina, ctx: P23.ctx(table: tbl))
         let megas = HubSquads.megaRowIds(rows)
         XCTAssertEqual(rows.filter { $0.roles.contains("Mega") }.count, 2)
         let slots = [SquadSlot(role: "Mega"), SquadSlot(role: "All"), SquadSlot(role: "All")]
@@ -223,7 +223,7 @@ final class HubSquadsAvailableTests: XCTestCase {
     /// H8: Best fills a slot whose role has run out with the best unused row of another role (Max damage has five Heavy slots and the table lists one Heavy hitter); the Mega slot never falls back.
     func testBestFallsBackToAnotherRolesRowWhenARoleRunsOut() {
         let tbl = P23.table([P23.tierEntry("raids", "Ice", "S", "abomasnow_mega", mega: true), P23.tierEntry("raids", "Dragon", "A", "garchomp"), P23.tierEntry("raids", "Ice", "B", "lapras")])
-        let rows = HubSquads.bestRaidRows(row: giratina, ctx: P23.ctx(table: tbl))
+        let rows = HubSquads.tableRaidRows(row: giratina, ctx: P23.ctx(table: tbl))
         XCTAssertEqual(rows.first { $0.speciesId == "garchomp" }?.roles, ["Heavy hitter"])
         XCTAssertEqual(rows.first { $0.speciesId == "lapras" }?.roles, ["Bulky hitter"])
         for style in RaidStyle.allCases {
@@ -323,7 +323,7 @@ final class HubSquadsAvailableTests: XCTestCase {
         let rotation = [fire, P23.row("2026-10-20", "2026-10-30", bosses: [P23.boss("palkia", types: ["water", "dragon"])]),
                         P23.row("2026-11-09", "2026-11-15", bosses: [P23.boss("darkrai", types: ["dark"])])]
         let builds = [P23.build("a", "vaporeon", areas: ["Raids"]), P23.build("b", "kingler", areas: ["Raids"], built: false)]
-        let rows = HubSquads.bestRaidRows(row: fire, ctx: P23.ctx(builds: builds, entries: [P23.entry("a", "vaporeon"), P23.entry("b", "kingler")], table: tbl, today: "2026-10-25", rotation: rotation))
+        let rows = HubSquads.tableRaidRows(row: fire, ctx: P23.ctx(builds: builds, entries: [P23.entry("a", "vaporeon"), P23.entry("b", "kingler")], table: tbl, today: "2026-10-25", rotation: rotation))
         XCTAssertEqual(rows.map(\.key), ["vaporeon", "kingler", "palkia", "excadrill", "darkrai", "mewtwo", "heatran", "machop", "slaking", "slowbro", "lapras", "swampert_mega"])
         let none = "Not available now · not on the schedule"
         XCTAssertEqual(rows.map(\.status.text), ["In your box", "In your box · needs upgrade", "Can get now · Raid boss now", "Can get now · Medium. T5 raids",

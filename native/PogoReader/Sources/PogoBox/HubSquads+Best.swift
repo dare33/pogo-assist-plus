@@ -166,13 +166,17 @@ extension HubSquads {
     }
 
     private static func owner(_ e: TierTable.Entry, builds: [BoxAdvice.Build], screen: SquadScreen, copies: [String: [BoxEntry]], claims: inout [String: String], ctx: HubContext) -> Owner {
-        let name = displayName(e)
+        owner(key: bestKey(e), name: displayName(e), builds: builds, screen: screen, copies: copies, claims: &claims, ctx: ctx)
+    }
+
+    /// `owner(_:...)` for a row that has no table entry (a species ranked by the damage estimate): the same rules, asked by the row's key and name.
+    private static func owner(key: String, name: String, builds: [BoxAdvice.Build], screen: SquadScreen, copies: [String: [BoxEntry]], claims: inout [String: String], ctx: HubContext) -> Owner {
         if !builds.isEmpty {
             if let b = bestBuild(builds.filter { claims[$0.entryId] == nil }, screen: screen, ctx: ctx) { claims[b.entryId] = name; return Owner(build: b) }
             let b = bestBuild(builds, screen: screen, ctx: ctx)!
             return Owner(build: b, sharedWith: claims[b.entryId])
         }
-        let mine = copies[bestKey(e)] ?? []
+        let mine = copies[key] ?? []
         if let c = mine.first(where: { claims[$0.id] == nil }) { claims[c.id] = name; return Owner(copy: c) }
         if let c = mine.first { return Owner(copy: c, sharedWith: claims[c.id]) }
         return Owner()
@@ -181,9 +185,16 @@ extension HubSquads {
     private static func displayName(_ e: TierTable.Entry) -> String { e.name.hasPrefix("Dynamax ") ? String(e.name.dropFirst("Dynamax ".count)) : e.name }
 
     private static func bestRow(_ e: TierTable.Entry, roles: [String], owner o: Owner = Owner(), pvp: PvpCandidate? = nil, kinds: [HubData.Kind]? = nil, screen: SquadScreen, ctx: HubContext) -> BestRow {
+        bestRow(key: bestKey(e), name: displayName(e), speciesId: e.speciesId, tier: e.tier, availabilityOf: e, roles: roles, owner: o, pvp: pvp, kinds: kinds, screen: screen, ctx: ctx)
+    }
+
+    /// A row from its parts. `availabilityOf` is the table entry the availability reads (or one made for a species the table does not list); `offSchedule` is the reason a
+    /// Pokémon neither in the box nor on the schedule is not available now (nil: none is given).
+    private static func bestRow(key: String, name: String, speciesId: String, tier: String, availabilityOf e: TierTable.Entry, roles: [String], owner o: Owner = Owner(), pvp: PvpCandidate? = nil,
+                                kinds: [HubData.Kind]? = nil, offSchedule: String? = BestStatus.notOnSchedule, screen: SquadScreen, ctx: HubContext) -> BestRow {
         let owned = o.build != nil || o.copy != nil || pvp != nil
         let parts = availabilityParts(of: e, kinds: kinds, ctx: ctx)
-        var row = BestRow(key: bestKey(e), name: displayName(e), speciesId: e.speciesId, tier: e.tier, roles: roles, types: speciesTypes(e.speciesId, ctx: ctx), build: o.build, pvp: pvp,
+        var row = BestRow(key: key, name: name, speciesId: speciesId, tier: tier, roles: roles, types: speciesTypes(speciesId, ctx: ctx), build: o.build, pvp: pvp,
                           copy: o.copy, sharedWith: o.sharedWith, availability: owned ? "" : parts.text, rotationLine: owned ? nil : parts.rotation)
         // Rule 6, S1: exactly one status per row. A copy with a build needs an upgrade unless that build is at Full strength; a copy no build serves always does.
         if owned {
@@ -192,7 +203,7 @@ extension HubSquads {
         } else if parts.canGetNow {
             row.status = BestStatus(kind: .canGetNow, needsUpgrade: false, detail: parts.text)
         } else {
-            row.status = BestStatus(kind: .notAvailableNow, needsUpgrade: false, detail: parts.rotation ?? BestStatus.notOnSchedule)
+            row.status = BestStatus(kind: .notAvailableNow, needsUpgrade: false, detail: parts.rotation ?? offSchedule)
         }
         return row
     }
@@ -276,10 +287,123 @@ extension HubSquads {
 
     // MARK: Raids
 
-    /// Best for a raid: the Raids table's entries listed under one of the boss's bring types, best tier first, then the bring type that hits hardest, then the table's
-    /// order. The role is the one `raidRole` gives the entry (a Mega or Primal is a Mega). The box's build for an entry is any Raids build whose target fills it
-    /// (`HubRaidsModel.raidEntries`: the species itself, or the Mega it evolves to).
+    /// The roles a raid Best list is made of, in the order the list holds them (the Mega slot first).
+    private static let raidRoleOrder: [PogoRules.RaidRole] = [.mega, .heavy, .bulky]
+    /// How many rows each role keeps (Greg, D65: "Agreed top 12").
+    static let raidRowsPerRole = 12
+
+    /// One species (or its Shadow) ranked for a boss.
+    private struct RaidPick {
+        var species: String
+        var shadow: Bool
+        var role: PogoRules.RaidRole
+        var key: String
+    }
+
+    /// The ranking of a boss, kept: it depends on the boss, the game master, the raid moves and the table, never on the box or the day, so the box-dependent part (owners,
+    /// availability, status) is worked out afresh each call. A ranking looks up about 2,000 figures, which took longer than a screen should wait on each draw (measured:
+    /// `HubSquadsBestDamageTests.testTheCostOfAListIsMeasured`). The key is cheap to make (building a `StrengthScale` hashes the whole game master, so a kept ranking skips it): the
+    /// boss's types and defence species, the table's Raids rows with their sections, tiers and move lines, and a checksum of the game master's species and moves.
+    private final class RankCache { let lock = NSLock(); var values = [String: [RaidPick]]() }
+    private static let rankCache = RankCache()
+    /// For a test that measures a cold ranking.
+    static func clearRaidRankCache() { rankCache.lock.lock(); rankCache.values = [:]; rankCache.lock.unlock() }
+
+    private static func gmChecksum(_ gm: GameMaster) -> Int {
+        var h = Hasher()
+        for s in gm.ordered { h.combine(s.id); h.combine(s.baseStats?.atk); h.combine(s.baseStats?.def); h.combine(s.baseStats?.hp); h.combine(s.released); h.combine(s.types); h.combine(s.tags); h.combine(s.fastMoves); h.combine(s.chargedMoves) }
+        h.combine(gm.moves.count)
+        return h.finalize()
+    }
+
+    /// The top `raidRowsPerRole` of each role for the boss, in list order (see `bestRaidRows`).
+    private static func rankedRaidPicks(row: HubData.RotationRow, bring: [String], listed: [String: [TierTable.Entry]], ctx: HubContext) -> [RaidPick] {
+        let tables = listed.keys.sorted().map { k in k + "=" + listed[k]!.map { "\($0.speciesId):\($0.tier):\($0.section):\($0.moves ?? "-")" }.joined(separator: ",") }.joined(separator: ";")
+        let bosses = row.bosses.map { "\($0.speciesId):\($0.types.joined(separator: "+"))" }.joined(separator: ",")
+        let cacheKey = "\(gmChecksum(ctx.gm))|\(bosses)|\(bring.joined(separator: ","))|\(tables)"
+        rankCache.lock.lock()
+        if let have = rankCache.values[cacheKey] { rankCache.lock.unlock(); return have }
+        rankCache.lock.unlock()
+        guard let pve = try? PveMoves.bundled() else { return [] }
+        let scale = StrengthScale.shared(mode: .raids, bosses: row.bosses, ctx: ctx, pve: pve)
+
+        func tierRank(_ key: String) -> Int {
+            (listed[key] ?? []).filter { bring.contains($0.section.lowercased()) }.map { PogoRules.tierRank($0.tier) }.min() ?? Int.max
+        }
+        var scored = [(pick: RaidPick, damage: Double, order: Int, tier: Int)](), seen = Set<String>()
+        for (order, s) in ctx.gm.ordered.enumerated() where DamageEstimate.eligible(s, megas: true) && seen.insert(s.id).inserted {
+            let mega = s.tags.contains("mega")
+            for shadow in (s.tags.contains("shadoweligible") && !mega) ? [false, true] : [false] {
+                let key = shadow ? s.id + "_shadow" : s.id
+                let role = PogoRules.raidRole(targetId: s.id, viaMega: false, shadow: shadow, gm: ctx.gm)
+                let speciesId = (listed[key] ?? []).first?.speciesId ?? key
+                let skeleton = BestRow(key: key, name: s.name, speciesId: speciesId, tier: "", roles: [role.rawValue], types: s.types, availability: "")
+                let lacking = HubSquads.lacking(of: skeleton, area: "raids", megaSlot: role == .mega, ctx: ctx)
+                guard let damage = scale.strength(.init(copy: nil, build: nil, built: false, species: lacking)).now else { continue }
+                scored.append((RaidPick(species: s.id, shadow: shadow, role: role, key: key), damage, order, tierRank(key)))
+            }
+        }
+        let top = raidRoleOrder.flatMap { role in
+            scored.filter { $0.pick.role == role }
+                .sorted { l, r in l.damage != r.damage ? l.damage > r.damage : l.tier != r.tier ? l.tier < r.tier : l.order < r.order }
+                .prefix(raidRowsPerRole).map(\.pick)
+        }
+        rankCache.lock.lock(); rankCache.values[cacheKey] = top; rankCache.lock.unlock()
+        return top
+    }
+
+    /// Best for a raid (pass 2-6, Greg D65: "agree c2 for raids", "Agreed top 12"): every released species is judged at full build against this boss (level 50, 15/15/15, its
+    /// best moves: the figure a Pokémon the box lacks gets, `StrengthScale`), a Shadow-eligible one that is not a Mega also as a Shadow, and each role (`raidRole`) keeps its 12 highest
+    /// figures, ties broken by the table's tier then the game master's order. The list is in role order (Mega, Heavy hitter, Bulky hitter), each role in damage order. The Raids
+    /// table adds its tier to the rows it lists under one of the boss's bring types, and its obtain text for availability; it no longer decides which rows there are. The box's
+    /// build for a row is a Raids build whose target is that species with the Shadow state agreeing (a Shadow copy serves the plain row too), else a copy of it.
+    /// Without the raid move data (it is bundled, so only a broken install) the old table-only list is returned.
     public static func bestRaidRows(row: HubData.RotationRow, ctx: HubContext) -> [BestRow] {
+        guard (try? PveMoves.bundled()) != nil else { return tableRaidRows(row: row, ctx: ctx) }
+        let bring = HubRaidsModel.bring(row: row, hub: ctx.hub)
+        // The table's entries by row key: the best tier under a bring type is the row's tier; any entry gives obtain text and move lines.
+        var listed = [String: [TierTable.Entry]]()
+        for e in ctx.table.entries where e.area == "raids" { listed[bestKey(e), default: []].append(e) }
+        func tierRank(_ e: TierTable.Entry) -> Int { PogoRules.tierRank(e.tier) }
+        func bringEntry(_ key: String) -> TierTable.Entry? { (listed[key] ?? []).filter { bring.contains($0.section.lowercased()) }.min { tierRank($0) < tierRank($1) } }
+
+        let top = rankedRaidPicks(row: row, bring: bring, listed: listed, ctx: ctx)
+
+        // Which Raids builds fill which row key.
+        var megaForms = [String: [String]]()   // a species' Mega and Primal forms, by the species
+        for s in ctx.gm.ordered where s.tags.contains("mega") {
+            if let r = s.id.range(of: "_mega") ?? s.id.range(of: "_primal") { megaForms[String(s.id[..<r.lowerBound]), default: []].append(s.id) }
+        }
+        var fills = [String: [BoxAdvice.Build]]()
+        for b in ctx.advice.builds where b.areas.contains("Raids") {
+            var keys = buildKeys(b, shadowServesPlain: true, ctx: ctx)
+            if b.viaMega {
+                let plain = b.targetId.hasSuffix("_shadow") ? String(b.targetId.dropLast("_shadow".count)) : b.targetId
+                keys += megaForms[plain] ?? []
+            }
+            for k in keys { fills[k, default: []].append(b) }
+        }
+        let copies = copyIndex(shadowServesPlain: true, ctx: ctx)
+        var claims = [String: String]()
+        return top.map { p in
+            let mega = p.role == .mega
+            let base = ctx.gm.byId[p.species]?.name ?? p.species
+            let name = p.shadow ? base + " (Shadow)" : base
+            let entries = listed[p.key] ?? []
+            let tableEntry = bringEntry(p.key)
+            let o = owner(key: p.key, name: name, builds: fills[p.key] ?? [], screen: .raids, copies: copies, claims: &claims, ctx: ctx)
+            // The entry the availability reads: the table's (its obtain text), else one made for the species so the rotation is still read.
+            let avail = tableEntry ?? entries.min { tierRank($0) < tierRank($1) }
+                ?? TierTable.Entry(area: "raids", kind: "pve-by-type", section: "", tier: "", rank: nil, name: name, speciesId: p.key,
+                                   flags: .init(shadow: p.shadow, mega: mega, max: false), role: nil, obtain: nil, moves: nil)
+            return bestRow(key: p.key, name: name, speciesId: entries.first?.speciesId ?? p.key, tier: tableEntry?.tier ?? "", availabilityOf: avail, roles: [p.role.rawValue], owner: o,
+                           offSchedule: entries.isEmpty ? nil : BestStatus.notOnSchedule, screen: .raids, ctx: ctx)
+        }
+    }
+
+    /// The Raids table's entries listed under one of the boss's bring types, best tier first, then the bring type that hits hardest, then the table's order: the list Best was
+    /// before pass 2-6 (D65). Kept for an install without the raid move data, and for the tests that pin Best's mechanics (ownership, status, squads) on a small hand-made table.
+    static func tableRaidRows(row: HubData.RotationRow, ctx: HubContext) -> [BestRow] {
         let bring = HubRaidsModel.bring(row: row, hub: ctx.hub)
         let items = ctx.table.entries.enumerated().compactMap { i, e -> (e: TierTable.Entry, index: Int, roles: [String])? in
             guard e.area == "raids", bring.contains(e.section.lowercased()) else { return nil }

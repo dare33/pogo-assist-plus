@@ -69,7 +69,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
   **Available** (the default, D29) is the app's suggested squad from the box as it is now: every slot filled with the strongest
   Pokémon the player owns for it, whatever upgrade it needs, with the needs-work status and its cost shown (rule 3).
   **Best** lists the best Pokémon in the game for the slot from our research tier tables, in the tables' order, owned or
-  not (on Raids, a slot whose role has run out takes the best unused row of another role, as Available does; the Mega slot never does), each with one of three statuses (rule 6).
+  not (**on Raids, from pass 2-6, Best ranks every species by the damage estimate against the boss, top 12 per role, the table's tier shown where it lists the Pokémon**: Greg, D65, "agree c2 for raids", "Agreed top 12", "yes fine. if the user wants damage focus they can toggle to damage"; on Raids, a slot whose role has run out takes the best unused row of another role, as Available does; the Mega slot never does), each with one of three statuses (rule 6).
 - **Slot**: one place in a squad; it has a **role** (Raids, Max, PvP) or a leader slot (Rocket) or a defender place (Gym).
 - **Role**: the job a slot's Pokémon does; each screen has its own set (below) plus **All**, which allows any Pokémon
   (D16).
@@ -184,9 +184,8 @@ Stated so each can be checked against the code.
 6. **Best** (replaces Could get now, 30 Oct 2026; S1, 31 Oct 2026, Greg: "if the user wanted to go out of their way to get
    the best pokemon for this activity what would that be and include the availability of that pokemon (aka not
    available, or attainable right now, or its in your box you just need to upgrade it)"): for a slot, the research tier tables' rows for the area, one per Pokémon,
-   ranked by tier (S, A, B), then the table's order (the # in the PvP tables). Which rows: Raids, the Raids table entries
-   listed under one of the boss's bring types (the strongest bring type first within a tier), with the role `raidRole`
-   gives the entry; Max, the Max table's entries with the table's roles (rule 12; Gigantamax entries never), a type that
+   ranked by tier (S, A, B), then the table's order (the # in the PvP tables). Which rows: Raids (pass 2-6, D65: not the table; see rule 10: every species ranked by the damage estimate, top 12 per role, the table's tier on the rows it lists under one of the boss's bring types), with the role `raidRole`
+   gives the Pokémon; Max, the Max table's entries with the table's roles (rule 12; Gigantamax entries never), a type that
    hits the boss first within a tier; Gym, the Gym table; Rocket, per leader slot, the Rocket table's entries that hit at
    least one of the slot's options for more than normal damage; PvP, the league's table with the roles of rule 22. Every
    row of the table for the slot is listed (S, A and B). **Owned** means the box has a copy of that species (a Shadow row needs a
@@ -217,6 +216,14 @@ Stated so each can be checked against the code.
    (`HubRaidsModel.typesCounted`); ordered by the best tier the Raids table gives the target under a bring type, then
    built first, then how many bring types it covers, then the advisor's order; one entry per copy.
 10. **Suggested squad**: slots Mega, Heavy, Heavy, Heavy, Bulky, Bulky, each taking the first unused candidate of its role.
+   **Best for a raid ranks every species by the damage estimate against the boss (top 12 per role), the table's tier shown where it lists the Pokémon** (pass 2-6; Greg, D65:
+   "why are the options so limited ... is this really all there is available for us?", "agree c2 for raids", "Agreed top 12", and, for those who want damage first, "if the user wants damage
+   focus they can toggle to damage"). Every released species (and its Mega or Primal forms) is judged at full build against this boss (level 50, 15/15/15, its best moves: the figure a Pokémon the
+   box lacks gets, rule 31); a Shadow-eligible species that is not a Mega is a second row as a Shadow; the role is `raidRole` (Mega or Primal: Mega; Shadow, or base Attack ≥ 1.3 × Defence: Heavy
+   hitter; else Bulky hitter). Each role keeps its 12 highest figures (ties: the table's tier, S before A before B before none, then the game master's order), listed Mega, Heavy hitter, Bulky
+   hitter, each in damage order, so the suggested squad fills as before (the Mega slot takes Mega rows only). The tier chip shows only where the Raids table lists that Pokémon (that Shadow or
+   not) under one of the boss's bring types; otherwise there is no chip. Availability: in the box; a boss now or coming (the rotation line); else the table's obtain text where it lists the
+   Pokémon; else "Not available now" with no reason. Max, Gym, Rocket and PvP Best are unchanged (Max: logged for later, D65).
    Under Available (S1) every build is a candidate whatever upgrade it needs, the Mega slot takes a Mega-capable copy (rule 3), and a
    slot with no unused candidate of its role takes the strongest unused one of another role (fill with any role); the Mega
    slot never takes a copy that cannot Mega Evolve. **Manager call, 31 Oct 2026** (on Greg's "the users best available pokemon for that position"
@@ -449,3 +456,5 @@ Greg's read-back answers (D54, D55); item 6 he kept (D56).
 11. **"Raids now" (where tag) vs "Now" (segment)**: same meaning (on now). No clash.
 12. **"Gaps" (Collection) vs "gap: …" (old Rocket slot text)**: the Rocket slot no longer says "gap:" except for a slot
    with no counter in the box; same meaning. No clash.
+13. **"Gardevoir (Shadow)" vs the tables' "Shadow Gardevoir"** (pass 2-6, D65): a Shadow row of a raid Best list is named as the box names a Shadow, the Pokémon's name and "(Shadow)"; the tables'
+   own "Shadow Gardevoir" is not shown there. A Mega or Primal keeps the game master's name ("Mega Gardevoir", "Primal Groudon"). Same meaning. No clash.
