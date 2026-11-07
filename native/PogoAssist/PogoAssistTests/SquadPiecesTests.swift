@@ -57,15 +57,25 @@ final class SquadPiecesTests: XCTestCase {
     func testAShadowIsNamedAsTheBoxNamesItEverywhere() {
         XCTAssertEqual(SquadWords.boxName("Shadow Gardevoir"), "Gardevoir (Shadow)")
         XCTAssertEqual(SquadWords.boxName("Gardevoir (Shadow)"), "Gardevoir (Shadow)")
-        XCTAssertEqual(SquadWords.boxName("Mega Gardevoir"), "Mega Gardevoir", "a Mega keeps the game's name")
+        XCTAssertEqual(SquadWords.boxName("Mega Gardevoir"), "Mega Gardevoir", "a name already in front stays")
+        XCTAssertEqual(SquadWords.boxName("Rayquaza (Mega)"), "Mega Rayquaza", "the game master's bracket goes in front (H3)")
+        XCTAssertEqual(SquadWords.boxName("Charizard (Mega X)"), "Mega Charizard X")
+        XCTAssertEqual(SquadWords.boxName("Groudon (Primal)"), "Primal Groudon")
         XCTAssertEqual(SquadWords.boxName("Shadowy Thing"), "Shadowy Thing")
         XCTAssertEqual(SquadWords.spokenBox("Slot 2 of 6, Heavy hitter, Shadow Reshiram, Dark and Fire"), "Slot 2 of 6, Heavy hitter, Reshiram (Shadow), Dark and Fire")
     }
 
     func testTheStripChipDropsTheBracketedFormButKeepsAMega() {
-        XCTAssertEqual(SquadStripChip.shortName("Gardevoir (Shadow)"), "Gardevoir")
-        XCTAssertEqual(SquadStripChip.shortName("Zamazenta (Crowned Shield)"), "Zamazenta")
-        XCTAssertEqual(SquadStripChip.shortName("Mega Gardevoir"), "Mega Gardevoir")
+        // The names the app produces: the game master's, through `boxName`, then the chip's own cut.
+        func chip(_ gameMasterName: String) -> String { SquadStripChip.shortName(SquadWords.boxName(gameMasterName)) }
+        XCTAssertEqual(chip("Gardevoir (Shadow)"), "Gardevoir")
+        XCTAssertEqual(chip("Shadow Gardevoir"), "Gardevoir")
+        XCTAssertEqual(chip("Zamazenta (Crowned Shield)"), "Zamazenta")
+        XCTAssertEqual(chip("Rayquaza (Mega)"), "Mega Rayquaza")
+        XCTAssertEqual(chip("Groudon (Primal)"), "Primal Groudon")
+        XCTAssertEqual(chip("Charizard (Mega X)"), "Mega Charizard X")
+        XCTAssertEqual(chip("Charizard (Mega Y)"), "Mega Charizard Y")
+        XCTAssertNotEqual(chip("Charizard (Mega X)"), chip("Charizard (Mega Y)"), "Mega X and Mega Y never both read Charizard")
         XCTAssertEqual(SquadStripChip.shortName("Empty"), "Empty")
     }
 

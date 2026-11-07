@@ -392,7 +392,8 @@ extension HubSquads {
         return top.map { p in
             let mega = p.role == .mega
             let base = ctx.gm.byId[p.species]?.name ?? p.species
-            let name = p.shadow ? base + " (Shadow)" : base
+            // A Mega or Primal is named as the game names it ("Mega Rayquaza"), a Shadow as the box does ("Palkia (Shadow)").
+            let name = p.shadow ? base + " (Shadow)" : SquadNames.display(base)
             let entries = listed[p.key] ?? []
             let tableEntry = bringEntry(p.key)
             let o = owner(key: p.key, name: name, builds: fills[p.key] ?? [], screen: .raids, copies: copies, claims: &claims, ctx: ctx)

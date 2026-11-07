@@ -99,7 +99,8 @@ final class HubSquadsBestDamageTests: XCTestCase {
         XCTAssertEqual([mega.tier, plain.tier], ["S", "A"])
         XCTAssertEqual([mega.ownedEntryId, plain.ownedEntryId], ["e2", "e2"])
         XCTAssertEqual(plain.sharedWith, mega.name)
-        XCTAssertEqual(mega.name, P23.gm.byId["swampert_mega"]!.name, "a Mega keeps the game master's name")
+        XCTAssertEqual(mega.name, SquadNames.display(P23.gm.byId["swampert_mega"]!.name), "a Mega is named as the game names it: in front (H3)")
+        XCTAssertEqual(mega.name, "Mega Swampert")
         XCTAssertEqual(mega.status.kind, .inBox)
         // A Shadow copy fills its Shadow row and the plain row; the Shadow row is named as the box names it and the table lists no Shadow Rhyperior.
         let shadow = try row("rhyperior_shadow"), rhy = try row("rhyperior")

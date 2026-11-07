@@ -36,7 +36,7 @@ struct HubRocketView: View {
                 Text("The Rocket lineups could not be read.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
             }
         }
-        .keepsSquads(keeper, workspace)
+        .keepsSquads(keeper, workspace, screen: .rocket)
     }
 
     // MARK: leaders

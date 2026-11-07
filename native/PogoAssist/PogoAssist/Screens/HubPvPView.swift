@@ -36,7 +36,7 @@ struct HubPvPView: View {
                 Text("The type chart could not be read.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
             }
         }
-        .keepsSquads(keeper, workspace)
+        .keepsSquads(keeper, workspace, screen: .pvp)
     }
 
     // MARK: season

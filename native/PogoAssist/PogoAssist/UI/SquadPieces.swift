@@ -802,10 +802,11 @@ enum SquadWords {
     /// The line a slot filled from another role carries (S1): the role the Pokémon is listed for, so the player sees why it sits in this slot.
     static func otherRoleLine(_ roles: [String]) -> String { roles.isEmpty ? "No listed role" : "Its role: " + roles.joined(separator: ", ") }
 
-    /// Pass 2-6, rule 14 / word check: a Shadow Pokémon is named as the box names it, "Gardevoir (Shadow)", on every squad screen. The Raids table (and so every Best row but the Raids
-    /// damage-ranked ones) names it "Shadow Gardevoir": a leading "Shadow " becomes the " (Shadow)" suffix. "Mega Gardevoir" and every other name stay as they are.
+    /// Pass 2-6, rule 14 / word check (D69, H3): a Shadow Pokémon is named as the box names it, "Gardevoir (Shadow)", on every squad screen. The Raids table (and so every Best row but
+    /// the Raids damage-ranked ones) names it "Shadow Gardevoir": a leading "Shadow " becomes the " (Shadow)" suffix. A Mega or Primal the game master writes as a bracket is written
+    /// in front, as the game does (`SquadNames.display`: "Rayquaza (Mega)" is "Mega Rayquaza", "Charizard (Mega X)" is "Mega Charizard X"). Every other name stays as it is.
     static func boxName(_ name: String) -> String {
-        guard name.hasPrefix("Shadow "), !name.hasSuffix("(Shadow)") else { return name }
+        guard name.hasPrefix("Shadow "), !name.hasSuffix("(Shadow)") else { return SquadNames.display(name) }
         return String(name.dropFirst("Shadow ".count)) + " (Shadow)"
     }
 
@@ -1187,7 +1188,8 @@ struct SquadStripChip: Equatable, Identifiable {
     var notInBox = false
     var spoken: String
 
-    /// "Zamazenta (Crowned Shield)" is "Zamazenta"; "Mega Gardevoir" stays.
+    /// Only a bracketed form is dropped, off a name as `SquadWords.boxName` gives it: "Zamazenta (Crowned Shield)" is "Zamazenta", "Gardevoir (Shadow)" is "Gardevoir"; "Mega Charizard X" and
+    /// "Mega Charizard Y" stay, so the two never both read "Charizard".
     static func shortName(_ name: String) -> String {
         name.replacingOccurrences(of: #" \([^)]*\)$"#, with: "", options: .regularExpression)
     }
@@ -1316,25 +1318,25 @@ enum SquadInfo {
 }
 
 extension HubContext {
-    /// A species pick's name ("Gardevoir (Shadow)" for `gardevoir_shadow`).
+    /// A species pick's name ("Gardevoir (Shadow)" for `gardevoir_shadow`, "Mega Rayquaza" for `rayquaza_mega`).
     func speciesName(_ key: String) -> String {
-        if let n = gm.byId[key]?.name { return n }
+        if let n = gm.byId[key]?.name { return SquadNames.display(n) }
         if key.hasSuffix("_shadow"), let n = gm.byId[String(key.dropLast("_shadow".count))]?.name { return n + " (Shadow)" }
         return "Pokémon"
     }
 
-    /// The name a squad screen gives a copy: its build's target, as a slot card names it, else the box title.
-    func pickName(_ id: String) -> String? {
-        advice.builds.first { $0.entryId == id }?.targetName ?? entry(id)?.row.title
+    /// The name a squad screen gives a copy: the target of its build for THIS screen's area, as the slot card names it, else the box title (H3: a disc's letter matches the slot card).
+    func pickName(_ id: String, screen: SquadScreen) -> String? {
+        squadPickName(id, entries: entries, builds: advice.builds, screen: screen)
     }
 }
 
 extension SquadStore {
     /// One slot of a history row. A copy still in the box is named as a slot card names it; one that left is named from what the store remembered while it was there and drawn hollow; a
     /// species pick counts as present; an empty slot is grey.
-    func historyDisc(_ slot: SquadSlot, ctx: HubContext, palette: SquadPalette) -> HistoryDisc {
+    func historyDisc(_ slot: SquadSlot, ctx: HubContext, palette: SquadPalette, screen: SquadScreen) -> HistoryDisc {
         if let p = slot.pick {
-            if ctx.entry(p) != nil { return HistoryDisc(name: ctx.pickName(p), palette: palette) }
+            if ctx.entry(p) != nil { return HistoryDisc(name: ctx.pickName(p, screen: screen), palette: palette) }
             return HistoryDisc(name: pickNames[p], palette: palette, present: false)
         }
         if let key = slot.species { return HistoryDisc(name: ctx.speciesName(key), palette: palette) }
@@ -1343,6 +1345,6 @@ extension SquadStore {
 
     /// The history rows of a squad for the Current tab.
     func historyRows(_ ref: SquadRef, ctx: HubContext, now: Date = Date(), palette: @escaping (SquadSlot) -> SquadPalette) -> [HistoryRowModel] {
-        HistoryRowModel.rows(history[ref.key] ?? [], now: now) { historyDisc($0, ctx: ctx, palette: palette($0)) }
+        HistoryRowModel.rows(history[ref.key] ?? [], now: now) { historyDisc($0, ctx: ctx, palette: palette($0), screen: ref.screen) }
     }
 }

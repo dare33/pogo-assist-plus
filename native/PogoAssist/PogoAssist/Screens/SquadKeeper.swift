@@ -69,12 +69,34 @@ extension AppModel {
     }
 }
 
-/// The name a squad screen gives each copy of the box, by entry id: its build's target (as a slot card names it), else the box title. A history row keeps naming a copy after it leaves.
-func squadPickNames(entries: [BoxEntry], builds: [BoxAdvice.Build]) -> [String: String] {
+extension SquadScreen {
+    /// The `BoxAdvice.Build.areas` labels whose builds a screen's slots are made of (Rocket also takes Raids builds, as `HubSquads.isRocketArea` does).
+    var buildAreas: [String] {
+        switch self {
+        case .raids: return ["Raids"]
+        case .max: return ["Max"]
+        case .gym: return ["Gym"]
+        case .rocket: return ["Rocket", "Raids"]
+        case .pvp: return ["GL", "UL", "ML"]
+        }
+    }
+}
+
+/// The name a squad screen gives a copy: the target of the first build of the screen's OWN area (as a slot card names it), else the box title; nil when the copy is not in the box.
+func squadPickName(_ id: String, entries: [BoxEntry], builds: [BoxAdvice.Build], screen: SquadScreen) -> String? {
+    guard let e = entries.first(where: { $0.id == id }) else { return nil }
+    let areas = Set(screen.buildAreas)
+    let name = builds.first { $0.entryId == id && !areas.isDisjoint(with: $0.areas) }?.targetName ?? e.row.title
+    return SquadWords.boxName(name)
+}
+
+/// The name a squad screen gives each copy of the box, by entry id (`squadPickName`). A history row keeps naming a copy after it leaves.
+func squadPickNames(entries: [BoxEntry], builds: [BoxAdvice.Build], screen: SquadScreen) -> [String: String] {
+    var firstBuild = [String: String]()
+    let areas = Set(screen.buildAreas)
+    for b in builds where !areas.isDisjoint(with: b.areas) && firstBuild[b.entryId] == nil { firstBuild[b.entryId] = b.targetName }
     var out = [String: String]()
-    for e in entries { out[e.id] = e.row.title }
-    var named = Set<String>()
-    for b in builds where out[b.entryId] != nil && named.insert(b.entryId).inserted { out[b.entryId] = b.targetName }
+    for e in entries { out[e.id] = SquadWords.boxName(firstBuild[e.id] ?? e.row.title) }
     return out
 }
 
@@ -86,6 +108,8 @@ struct SquadAttach: ViewModifier {
     @ObservedObject var keeper: SquadKeeper
     /// The screen's tab choices, which follow the same account (nil on a screen with none).
     var workspace: SquadWorkspace? = nil
+    /// The screen the keeper serves: the names it remembers are those a slot card of this screen shows.
+    let screen: SquadScreen
 
     func body(content: Content) -> some View {
         content
@@ -102,14 +126,14 @@ struct SquadAttach: ViewModifier {
         let loaded = model.boxLoaded && model.boxProblem == nil
         let boxIds: Set<String>? = loaded ? Set(model.entries.map(\.id)) : nil
         keeper.attach(account: model.account, today: HubModel.today(), rotation: (try? HubData.bundled())?.rotation ?? [], boxIds: boxIds,
-                      names: loaded ? squadPickNames(entries: model.entries, builds: model.hubAdvice?.builds ?? []) : nil)
+                      names: loaded ? squadPickNames(entries: model.entries, builds: model.hubAdvice?.builds ?? [], screen: screen) : nil)
         workspace?.attach(account: model.account, boxIds: boxIds)
     }
 }
 
 extension View {
     /// Keeps `keeper` in step with the selected account's saved squads.
-    func keepsSquads(_ keeper: SquadKeeper, _ workspace: SquadWorkspace? = nil) -> some View { modifier(SquadAttach(keeper: keeper, workspace: workspace)) }
+    func keepsSquads(_ keeper: SquadKeeper, _ workspace: SquadWorkspace? = nil, screen: SquadScreen) -> some View { modifier(SquadAttach(keeper: keeper, workspace: workspace, screen: screen)) }
 }
 
 // MARK: Available, Best and Current (pass 2-6, rule 27)

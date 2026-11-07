@@ -18,7 +18,7 @@ struct HubGymView: View {
                 HubAdviceGate { _ in EmptyView() }
             }
         }
-        .keepsSquads(keeper, workspace)
+        .keepsSquads(keeper, workspace, screen: .gym)
     }
 }
 

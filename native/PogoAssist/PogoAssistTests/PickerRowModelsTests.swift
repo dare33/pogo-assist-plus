@@ -91,6 +91,21 @@ final class PickerRowModelsTests: XCTestCase {
         XCTAssertLessThan(perSlot, 40, "one game master hash per picker, not one per row")
     }
 
+    /// H3: the name a store remembers, and a history disc shows, is the build of the screen's own area, so a disc's letter matches the slot card.
+    func testARememberedNameTakesTheBuildOfTheScreensOwnArea() throws {
+        let c = ctx()
+        let b = try XCTUnwrap(c.advice.builds.first { $0.areas.contains("Raids") })
+        var gym = b; gym.targetName = "Gym Target"; gym.areas = ["Gym"]
+        var raids = b; raids.targetName = "Raids Target"; raids.areas = ["Raids"]
+        let builds = [gym, raids]
+        XCTAssertEqual(squadPickNames(entries: c.entries, builds: builds, screen: .raids)[b.entryId], "Raids Target")
+        XCTAssertEqual(squadPickNames(entries: c.entries, builds: builds, screen: .gym)[b.entryId], "Gym Target")
+        XCTAssertEqual(squadPickName(b.entryId, entries: c.entries, builds: builds, screen: .raids), "Raids Target")
+        let title = try XCTUnwrap(c.entry(b.entryId)).row.title
+        XCTAssertEqual(squadPickNames(entries: c.entries, builds: [gym], screen: .max)[b.entryId], SquadWords.boxName(title), "no build of the area: the box title")
+        XCTAssertNil(squadPickName("not-in-the-box", entries: c.entries, builds: builds, screen: .raids))
+    }
+
     /// Ruling 9: a Mega entry is judged as a Mega only in the raid Mega slot. Under Best a Mega row listed under another role's slot (the All chip) is the plain Pokémon.
     func testAMegaIsJudgedAsMegaOnlyInTheMegaSlot() throws {
         let c = ctx()
@@ -108,7 +123,7 @@ final class PickerRowModelsTests: XCTestCase {
         let (options, filled) = b.resolve(slots: slots, mode: .best)
         let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let rows = b.content(slot: 0, filled: filled, options: options, byId: byId, mode: .best).rows
-        // (Slice 1 ranks by species from the game master, which names a Mega "Rayquaza (Mega)", a Primal "Groudon (Primal)"; the tables' "Mega Rayquaza" form is gone from Raids Best rows.)
+        // (Slice 1 ranks by species from the game master, which names a Mega "Rayquaza (Mega)", a Primal "Groudon (Primal)"; the rows write them in front, "Mega Rayquaza" (H3).)
         func isMega(_ name: String) -> Bool { name.hasPrefix("Mega ") || name.hasSuffix("(Mega)") || name.hasSuffix("(Mega X)") || name.hasSuffix("(Mega Y)") }
         func isMegaOrPrimal(_ name: String) -> Bool { isMega(name) || name.hasPrefix("Primal ") || name.hasSuffix("(Primal)") }
         let megaRows = rows.filter { isMega($0.name) && $0.cpIv != nil }
