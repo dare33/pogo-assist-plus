@@ -503,8 +503,7 @@ struct EventSquadView: View {
     @State private var boxGeneration = 0
     /// The slot whose picker was asked for the Mega chip while another slot holds the squad's Mega: it shows the one-Mega message and keeps its role.
     @State private var megaMessageSlot: Int?
-    @Environment(\.showActionToast) private var showActionToast
-    @Environment(\.showToast) private var showToast
+    @Environment(\.showOwnedToast) private var showOwnedToast
 
     private func builder(kept: Bool, rows: [HubSquads.BestRow]?) -> EventPickerBuilder { EventPickerBuilder(screen: screen, row: row, ctx: ctx, kept: kept, raidRows: rows) }
     private var prefix: String { screen == .raids ? "hub-raids" : "hub-max" }
@@ -618,9 +617,9 @@ struct EventSquadView: View {
         toast("Current squad deleted", surface)
     }
 
-    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone.
+    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone; either goes with the screen (J6).
     private func toast(_ text: String, _ surface: SquadSurface) {
-        if let undo = workspace.undoAction(surface, keeper: keeper) { showActionToast(text, undo) } else { showToast(text) }
+        showOwnedToast(text, ObjectIdentifier(keeper), workspace.undoAction(surface, keeper: keeper))
     }
 
     // MARK: picker

@@ -279,8 +279,7 @@ struct PvPSquadView: View {
     @State private var selected: Int?
     @State private var showAll = false
     @State private var squadInfo = false
-    @Environment(\.showActionToast) private var showActionToast
-    @Environment(\.showToast) private var showToast
+    @Environment(\.showOwnedToast) private var showOwnedToast
 
     /// The other candidates listed before "All N" is tapped.
     private let preview = 5
@@ -414,9 +413,9 @@ struct PvPSquadView: View {
         toast("Current squad deleted", surface)
     }
 
-    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone.
+    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone; either goes with the screen (J6).
     private func toast(_ text: String, _ surface: SquadSurface) {
-        if let undo = workspace.undoAction(surface, keeper: keeper) { showActionToast(text, undo) } else { showToast(text) }
+        showOwnedToast(text, ObjectIdentifier(keeper), workspace.undoAction(surface, keeper: keeper))
     }
 
     /// The weakness line over the members the squad shows (the set the coverage uses). When every member is a candidate the engine's note, with its swap suggestion,

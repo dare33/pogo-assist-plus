@@ -142,8 +142,7 @@ struct GymSquadView: View {
     @State private var selected: Int?
     @State private var infoOpen = false
     @Environment(\.accent) private var accent
-    @Environment(\.showActionToast) private var showActionToast
-    @Environment(\.showToast) private var showToast
+    @Environment(\.showOwnedToast) private var showOwnedToast
 
     private func builder(kept: Bool) -> GymPickerBuilder { GymPickerBuilder(ctx: ctx, kept: kept) }
     @State private var rowsCache = PickerRowsCache<GymPickerBuilder.Content>()
@@ -238,9 +237,9 @@ struct GymSquadView: View {
         toast("Current squad deleted", surface)
     }
 
-    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone.
+    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone; either goes with the screen (J6).
     private func toast(_ text: String, _ surface: SquadSurface) {
-        if let undo = workspace.undoAction(surface, keeper: keeper) { showActionToast(text, undo) } else { showToast(text) }
+        showOwnedToast(text, ObjectIdentifier(keeper), workspace.undoAction(surface, keeper: keeper))
     }
 
     // MARK: slots

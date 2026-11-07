@@ -350,7 +350,7 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertEqual(history(), ["c", "b"])
         let action = ws.undoAction(surface(), keeper: keeper)
         XCTAssertNotNil(action)
-        action?.perform()
+        XCTAssertEqual(action?.perform(), true, "Undo reports that it undid something")
         XCTAssertEqual(keeper.store.current(.gym)?.slots[0].pick, "c")
         XCTAssertEqual(history(), ["b", "a"], "Undo gives back Current C and history [B, A]")
         XCTAssertNil(ws.undoAction(surface(), keeper: keeper), "the record is cleared: the toast carries no Undo")

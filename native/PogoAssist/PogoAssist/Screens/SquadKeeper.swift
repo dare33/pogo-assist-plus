@@ -335,9 +335,9 @@ final class SquadWorkspace: ObservableObject {
     func undoAction(_ s: SquadSurface, keeper: SquadKeeper) -> ToastAction? {
         guard keeper.store.canUndo(s.ref) else { return nil }
         return ToastAction(label: "Undo", perform: { [weak self, weak keeper] in
-            guard let self, let keeper else { return }
-            self.undo(s, keeper: keeper)
-        }, owner: ObjectIdentifier(keeper))
+            guard let self, let keeper else { return false }
+            return self.undo(s, keeper: keeper)
+        })
     }
 }
 

@@ -113,20 +113,46 @@ final class SquadPiecesTests: XCTestCase {
         XCTAssertEqual(noBuild.pickerChips.map(\.text), ["↑ No build"])
     }
 
-    /// H10: a toast with an action goes when the screen that showed it disappears; another screen's toast stays.
+    /// H10, J6: a toast goes when the screen that showed it disappears, a plain message as well as one with an Undo; another screen's toast stays; "Undone" belongs to the screen of the
+    /// action it undid.
     @MainActor
-    func testAToastWithAnActionGoesWithItsScreen() {
+    func testAToastGoesWithItsScreen() {
         final class Owner {}
         let mine = Owner(), other = Owner()
         let presenter = ToastPresenter()
         var undone = 0
-        presenter.show("Current squad replaced", action: ToastAction(label: "Undo", perform: { undone += 1 }, owner: ObjectIdentifier(mine)))
+        presenter.show("Current squad replaced", owner: ObjectIdentifier(mine), action: ToastAction(label: "Undo", perform: { undone += 1; return true }))
         presenter.dismiss(owner: ObjectIdentifier(other))
         XCTAssertEqual(presenter.message, "Current squad replaced", "another screen's disappearing leaves it")
         presenter.dismiss(owner: ObjectIdentifier(mine))
         XCTAssertNil(presenter.message); XCTAssertNil(presenter.action, "its own screen's takes it away, Undo and all")
         presenter.perform()
         XCTAssertEqual(undone, 0, "and its Undo can no longer run")
+        // A plain message with an owner goes too (the skipped-duplicate message).
+        presenter.show("Squad unset", owner: ObjectIdentifier(mine))
+        presenter.dismiss(owner: ObjectIdentifier(other))
+        XCTAssertEqual(presenter.message, "Squad unset")
+        presenter.dismiss(owner: ObjectIdentifier(mine))
+        XCTAssertNil(presenter.message)
+        // Undo: "Undone" inherits the owner, so it leaves with the screen as well.
+        presenter.show("Current squad replaced", owner: ObjectIdentifier(mine), action: ToastAction(label: "Undo", perform: { undone += 1; return true }))
+        presenter.perform()
+        XCTAssertEqual(undone, 1)
+        XCTAssertEqual(presenter.message, "Undone")
+        presenter.dismiss(owner: ObjectIdentifier(other))
+        XCTAssertEqual(presenter.message, "Undone", "another screen leaves it")
+        presenter.dismiss(owner: ObjectIdentifier(mine))
+        XCTAssertNil(presenter.message, "the screen's own takes the Undone toast away too")
+    }
+
+    /// J9: an Undo that undid nothing says nothing: the toast just goes.
+    @MainActor
+    func testAFailedUndoSaysNothing() {
+        let presenter = ToastPresenter()
+        presenter.show("Current squad replaced", action: ToastAction(label: "Undo", perform: { false }))
+        presenter.perform()
+        XCTAssertNil(presenter.message, "no \"Undone\" when nothing was undone")
+        XCTAssertNil(presenter.action)
     }
 
     /// H11: the title's (i) says where the earlier squads are shown and promises no way back after a Delete.

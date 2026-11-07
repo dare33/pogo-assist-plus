@@ -6,63 +6,66 @@ import SwiftUI
 /// What a toast offers besides its message (pass 2-6, rule 27.8): one action, "Undo", for five seconds.
 struct ToastAction {
     let label: String
-    let perform: @MainActor () -> Void
-    /// The screen that showed the toast (its keeper's identity): the toast goes when that screen disappears, so its Undo never acts on a closed screen's keeper (H10).
-    var owner: ObjectIdentifier? = nil
+    /// Runs the action; true when it did something (an Undo that found nothing to undo returns false, and the toast then says nothing more).
+    let perform: @MainActor () -> Bool
 }
 
 @MainActor
 final class ToastPresenter: ObservableObject {
     @Published private(set) var message: String?
     @Published private(set) var action: ToastAction?
+    /// The screen that showed the toast (its keeper's identity), whatever the toast is: it goes when that screen disappears, so its Undo never acts on a closed screen's keeper (H10, J6).
+    private(set) var owner: ObjectIdentifier?
     private var hide: Task<Void, Never>?
 
     /// A plain message for 1.5 s, or, with an `action`, for 5 s. The words are announced to VoiceOver either way.
-    func show(_ text: String, action: ToastAction? = nil) {
+    func show(_ text: String, owner: ObjectIdentifier? = nil, action: ToastAction? = nil) {
         hide?.cancel()
         message = text
         self.action = action
+        self.owner = owner
         AccessibilityNotification.Announcement(text).post()
         let seconds = action == nil ? 1.5 : 5.0
         hide = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            if !Task.isCancelled { self?.message = nil; self?.action = nil }
+            if !Task.isCancelled { self?.clear() }
         }
     }
 
-    /// The screen `owner` disappeared: its toast with an action goes at once (another screen's toast stays).
+    private func clear() { message = nil; action = nil; owner = nil }
+
+    /// The screen `owner` disappeared: any toast it showed goes at once, a plain message as well as one with an action (another screen's toast stays).
     func dismiss(owner: ObjectIdentifier) {
-        guard action?.owner == owner else { return }
+        guard self.owner == owner else { return }
         hide?.cancel()
-        message = nil
-        action = nil
+        clear()
     }
 
-    /// The action was tapped: it runs, and the toast says "Undone".
+    /// The action was tapped: it runs, and the toast says "Undone" (for the same screen) when it did something; when it did not, the toast just goes (J9).
     func perform() {
         guard let action else { return }
-        action.perform()
-        show("Undone")
+        let owner = self.owner
+        if action.perform() { show("Undone", owner: owner) } else { hide?.cancel(); clear() }
     }
 }
 
 private struct ShowToastKey: EnvironmentKey { static let defaultValue: @MainActor (String) -> Void = { _ in } }
 private struct DismissToastKey: EnvironmentKey { static let defaultValue: @MainActor (ObjectIdentifier) -> Void = { _ in } }
-private struct ShowToastActionKey: EnvironmentKey { static let defaultValue: @MainActor (String, ToastAction) -> Void = { _, _ in } }
+private struct ShowOwnedToastKey: EnvironmentKey { static let defaultValue: @MainActor (String, ObjectIdentifier, ToastAction?) -> Void = { _, _, _ in } }
 extension EnvironmentValues {
     var showToast: @MainActor (String) -> Void {
         get { self[ShowToastKey.self] }
         set { self[ShowToastKey.self] = newValue }
     }
-    /// Drops the toast a screen showed with an action, when that screen disappears.
+    /// Drops the toast a screen showed (a plain message or one with an action), when that screen disappears.
     var dismissToast: @MainActor (ObjectIdentifier) -> Void {
         get { self[DismissToastKey.self] }
         set { self[DismissToastKey.self] = newValue }
     }
-    /// A toast with an Undo (or other) action that stays five seconds.
-    var showActionToast: @MainActor (String, ToastAction) -> Void {
-        get { self[ShowToastActionKey.self] }
-        set { self[ShowToastActionKey.self] = newValue }
+    /// A toast a screen owns (it goes when the screen does): with an Undo (or other) action it stays five seconds, without one 1.5.
+    var showOwnedToast: @MainActor (String, ObjectIdentifier, ToastAction?) -> Void {
+        get { self[ShowOwnedToastKey.self] }
+        set { self[ShowOwnedToastKey.self] = newValue }
     }
 }
 
@@ -73,7 +76,7 @@ struct ToastHost: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.showToast) { [presenter] in presenter.show($0) }
-            .environment(\.showActionToast) { [presenter] in presenter.show($0, action: $1) }
+            .environment(\.showOwnedToast) { [presenter] in presenter.show($0, owner: $1, action: $2) }
             .environment(\.dismissToast) { [presenter] in presenter.dismiss(owner: $0) }
             .overlay(alignment: .bottom) {
                 if let text = presenter.message {
