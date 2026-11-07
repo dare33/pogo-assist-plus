@@ -267,20 +267,49 @@ final class SquadEditsHistoryTests: XCTestCase {
     func testNamesOfCopiesAreRememberedWhileTheyAreInTheBoxAndKeptAfterTheyLeave() throws {
         var store = SquadStore()
         store.replaceCurrent(with: squad(["a", "b"]), .gym, source: .available, edited: false, strength: nil, date: at(1))
-        store.remember(names: ["a": "Zacian", "b": "Granbull", "z": "Unrelated"])
-        XCTAssertEqual(store.pickNames, ["a": "Zacian", "b": "Granbull"], "only copies a squad names")
+        store.remember(names: ["a": "Zacian", "b": "Granbull", "z": "Unrelated"], area: "gym")
+        XCTAssertEqual(store.pickNames, ["gym|a": "Zacian", "gym|b": "Granbull"], "only copies a squad of the screen names, under the screen's key")
         store.replaceCurrent(with: squad(["c", "b"]), .gym, source: .available, edited: false, strength: nil, date: at(2))
-        store.remember(names: ["c": "Xerneas", "b": "Granbull"])   // a has left the box; the history entry still names it
-        XCTAssertEqual(store.pickNames["a"], "Zacian")
-        XCTAssertEqual(store.pickNames["c"], "Xerneas")
+        store.remember(names: ["c": "Xerneas", "b": "Granbull"], area: "gym")   // a has left the box; the history entry still names it
+        XCTAssertEqual(store.pickName(for: "a", area: "gym"), "Zacian")
+        XCTAssertEqual(store.pickName(for: "c", area: "gym"), "Xerneas")
         let back = try JSONDecoder().decode(SquadStore.self, from: JSONEncoder().encode(store))
         XCTAssertEqual(back.pickNames, store.pickNames)
         store.history["gym"] = []
-        store.remember(names: [:])
-        XCTAssertEqual(store.pickNames["a"], "Zacian", "the last undo record still names it (Undo can bring it back)")
+        store.remember(names: [:], area: "gym")
+        XCTAssertEqual(store.pickName(for: "a", area: "gym"), "Zacian", "the last undo record still names it (Undo can bring it back)")
         store.undoRecords = [:]
-        store.remember(names: [:])
-        XCTAssertNil(store.pickNames["a"], "no squad names it any more")
+        store.remember(names: [:], area: "gym")
+        XCTAssertNil(store.pickName(for: "a", area: "gym"), "no squad names it any more")
+    }
+
+    /// J4: a copy's remembered name is per screen. Remembering for one screen never touches another's, and a screen forgets only its own.
+    func testARememberedNameIsPerScreenAndCopy() {
+        var store = SquadStore()
+        store.replaceCurrent(with: squad(["a"]), .gym, source: .available, edited: false, strength: nil, date: at(1))
+        store.replaceCurrent(with: squad(["a"]), .pvp(league: "GL"), source: .available, edited: false, strength: nil, date: at(1))
+        store.remember(names: ["a": "Gym name"], area: "gym")
+        store.remember(names: ["a": "League name"], area: "pvp")
+        XCTAssertEqual(store.pickName(for: "a", area: "gym"), "Gym name")
+        XCTAssertEqual(store.pickName(for: "a", area: "pvp"), "League name", "the other screen's attach did not overwrite it")
+        store.remember(names: [:], area: "gym")
+        XCTAssertEqual(store.pickName(for: "a", area: "pvp"), "League name", "and a screen run with the copy gone keeps the other's name")
+        store.pvp = [:]
+        store.remember(names: [:], area: "pvp")
+        XCTAssertNil(store.pickNames["pvp|a"], "a screen forgets a name only its own squads stopped naming")
+        XCTAssertEqual(store.pickName(for: "a", area: "gym"), "Gym name")
+    }
+
+    /// J4: a file written before names were per screen holds bare entry ids; they are still read, and move to the screen's key once it remembers them.
+    func testABareIdNameFromAnOldFileIsStillRead() throws {
+        var store = SquadStore()
+        store.replaceCurrent(with: squad(["a"]), .gym, source: .available, edited: false, strength: nil, date: at(1))
+        let old = try JSONDecoder().decode(SquadStore.self, from: Data(#"{"pickNames":{"a":"Old name"}}"#.utf8))
+        store.pickNames = old.pickNames
+        XCTAssertEqual(store.pickName(for: "a", area: "gym"), "Old name")
+        XCTAssertEqual(store.pickName(for: "a", area: "raids"), "Old name", "the bare name is the fallback on every screen")
+        store.remember(names: [:], area: "gym")
+        XCTAssertEqual(store.pickNames, ["gym|a": "Old name"], "the screen takes it over; the bare key goes once its copy is named under a screen")
     }
 
     func testThePercentIsTheLabelsWholePercent() {

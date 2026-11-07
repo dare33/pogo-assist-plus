@@ -534,17 +534,17 @@ final class SquadKeeperTests: XCTestCase {
     /// Names are remembered while a copy is in the box, so a history row can name one that left (CONCEPTS rule 27.10).
     func testTheKeeperRemembersTheNamesOfCopiesASquadHoldsAndKeepsThemAfterTheCopyLeaves() {
         let keeper = SquadKeeper(), ws = makeWS()
-        keeper.attach(account: account, today: "2026-10-26", rotation: [], boxIds: ["a", "b", "c"], names: ["a": "Alpha", "b": "Beta", "c": "Gamma"])
+        keeper.attach(account: account, today: "2026-10-26", rotation: [], boxIds: ["a", "b", "c"], names: ["a": "Alpha", "b": "Beta", "c": "Gamma"], screen: .gym)
         let defaults = HubSquads.defaultGymSlots()
         var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: nil, date: t0)
-        XCTAssertEqual(keeper.store.pickNames["a"], "Alpha")
+        XCTAssertEqual(keeper.store.pickName(for: "a", area: "gym"), "Alpha")
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         ws.unsetCurrent(s, keeper: keeper, date: t0.addingTimeInterval(1))
         // A re-scan: copy a is gone from the box.
-        keeper.attach(account: account, today: "2026-10-26", rotation: [], boxIds: ["b", "c"], names: ["b": "Beta", "c": "Gamma"])
-        XCTAssertEqual(keeper.store.pickNames["a"], "Alpha", "the history entry still names it")
-        XCTAssertEqual(SquadKeeper.load(account).pickNames["a"], "Alpha")
+        keeper.attach(account: account, today: "2026-10-26", rotation: [], boxIds: ["b", "c"], names: ["b": "Beta", "c": "Gamma"], screen: .gym)
+        XCTAssertEqual(keeper.store.pickName(for: "a", area: "gym"), "Alpha", "the history entry still names it")
+        XCTAssertEqual(SquadKeeper.load(account).pickName(for: "a", area: "gym"), "Alpha")
     }
 
     // MARK: the history rows

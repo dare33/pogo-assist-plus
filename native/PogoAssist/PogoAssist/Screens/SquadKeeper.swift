@@ -12,8 +12,10 @@ final class SquadKeeper: ObservableObject {
     @Published private(set) var store = SquadStore()
     /// The account the store belongs to (nil before the first attach).
     private(set) var account: String?
-    /// The box's names by entry id (`squadPickNames`), so a write remembers the names of the copies a squad holds while they are still in the box (`SquadStore.remember`).
+    /// The box's names by entry id (`squadPickNames`) as the screen `nameArea` gives them, so a write remembers the names of the copies a squad holds while they are still in the box
+    /// (`SquadStore.remember`). A copy's name is per screen (J4): this keeper's screen writes only its own.
     private var boxNames: [String: String] = [:]
+    private var nameArea: String?
     /// The Raids Best rows worked out so far, by `raidRowsKey` (pass 2-6, H4): a ranking takes about 0.2 s cold, so it is computed in a background task, never in a view body, and a view only
     /// looks it up. Cleared whenever the box or its advice changes (`boxChanged`), which also changes the key.
     @Published private(set) var raidRows: [String: [HubSquads.BestRow]] = [:]
@@ -31,15 +33,15 @@ final class SquadKeeper: ObservableObject {
 
     /// Reads the account's store and applies the keeping rules (`SquadStore.refreshed`) for today's date, the rotation and the box's ids. `boxIds` is nil while the
     /// box is not loaded yet: the picks are then left alone. A loaded box with no copies is an empty set, and every pick is dropped (the last copy was deleted).
-    func attach(account: String?, today: String, rotation: [HubData.RotationRow], boxIds: Set<String>?, names: [String: String]? = nil) {
+    func attach(account: String?, today: String, rotation: [HubData.RotationRow], boxIds: Set<String>?, names: [String: String]? = nil, screen: SquadScreen? = nil) {
         let changedAccount = account != self.account
         self.account = account
-        guard let account else { store = SquadStore(); boxNames = [:]; self.boxIds = nil; return }
+        guard let account else { store = SquadStore(); boxNames = [:]; nameArea = nil; self.boxIds = nil; return }
         self.boxIds = boxIds
         var s = changedAccount || store == SquadStore() ? Self.load(account) : store
-        if let names, boxIds != nil { boxNames = names }
+        if let names, boxIds != nil { boxNames = names; nameArea = screen?.rawValue }
         // Names are remembered before the rules run: a copy that left the box is emptied from the squads, but a history row still names it.
-        if boxIds != nil { s.remember(names: boxNames) }
+        if boxIds != nil, let nameArea { s.remember(names: boxNames, area: nameArea) }
         if let boxIds { s = s.refreshed(today: today, rotation: rotation, boxIds: boxIds) }
         if s != store { store = s }
         if boxIds != nil { Self.save(s, for: account) }
@@ -51,7 +53,7 @@ final class SquadKeeper: ObservableObject {
         var s = store
         change(&s)
         if reconciling, let boxIds { s = s.reconciled(boxIds: boxIds) }
-        if !boxNames.isEmpty { s.remember(names: boxNames) }
+        if !boxNames.isEmpty, let nameArea { s.remember(names: boxNames, area: nameArea) }
         guard s != store else { return }
         store = s
         if let account { Self.save(s, for: account) }
@@ -181,7 +183,7 @@ struct SquadAttach: ViewModifier {
         let loaded = model.boxLoaded && model.boxProblem == nil
         let boxIds: Set<String>? = loaded ? Set(model.entries.map(\.id)) : nil
         keeper.attach(account: model.account, today: HubModel.today(), rotation: (try? HubData.bundled())?.rotation ?? [], boxIds: boxIds,
-                      names: loaded ? squadPickNames(entries: model.entries, builds: model.hubAdvice?.builds ?? [], screen: screen) : nil)
+                      names: loaded ? squadPickNames(entries: model.entries, builds: model.hubAdvice?.builds ?? [], screen: screen) : nil, screen: screen)
         workspace?.attach(account: model.account, boxIds: boxIds)
     }
 }

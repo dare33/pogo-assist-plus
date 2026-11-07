@@ -143,6 +143,38 @@ final class PickerRowModelsTests: XCTestCase {
         XCTAssertNil(squadPickName("not-in-the-box", entries: c.entries, builds: builds, screen: .raids))
     }
 
+    /// J4: a copy's remembered name is per screen. Attaching Raids and then Gym keeps both names, and each screen reads its own (a departed copy's history disc included).
+    @MainActor
+    func testARememberedNameIsKeptPerScreen() throws {
+        let c = ctx()
+        let row = try XCTUnwrap(Self.hub.rotation.first { $0.kind == .fiveStar })
+        let b = try XCTUnwrap(c.advice.builds.first { $0.areas.contains("Raids") })
+        var gym = b; gym.targetName = "Gym Target"; gym.areas = ["Gym"]
+        var raids = b; raids.targetName = "Raids Target"; raids.areas = ["Raids"]
+        let builds = [gym, raids]
+        let account = "Picker Row Test Names"
+        defer { UserDefaults.standard.removeObject(forKey: SquadKeeper.key(account)) }
+        let ids = Set(c.entries.map(\.id))
+        let keeper = SquadKeeper()
+        func attach(_ screen: SquadScreen) {
+            keeper.attach(account: account, today: row.from, rotation: [row], boxIds: ids, names: squadPickNames(entries: c.entries, builds: builds, screen: screen), screen: screen)
+        }
+        attach(.raids)
+        keeper.update { s in
+            var r = s.eventSquad(row, screen: .raids); r.choose(b.entryId, at: 0); r.isSet = true; s.saveEventSquad(r, row: row, screen: .raids)
+            s.gym.choose(b.entryId, at: 0)
+        }
+        attach(.raids)
+        attach(.gym)
+        XCTAssertEqual(keeper.store.pickName(for: b.entryId, area: "raids"), SquadWords.boxName("Raids Target"), "opening Gym did not replace the Raids name")
+        XCTAssertEqual(keeper.store.pickName(for: b.entryId, area: "gym"), SquadWords.boxName("Gym Target"))
+        // The copy leaves the box: each screen's history disc names it as that screen did.
+        XCTAssertEqual(keeper.store.pickNames.count, 2)
+        let back = SquadKeeper.load(account)
+        XCTAssertEqual(back.pickName(for: b.entryId, area: "raids"), SquadWords.boxName("Raids Target"))
+        XCTAssertEqual(back.pickName(for: b.entryId, area: "gym"), SquadWords.boxName("Gym Target"))
+    }
+
     /// Ruling 9: a Mega entry is judged as a Mega only in the raid Mega slot. Under Best a Mega row listed under another role's slot (the All chip) is the plain Pokémon.
     func testAMegaIsJudgedAsMegaOnlyInTheMegaSlot() throws {
         let c = ctx()

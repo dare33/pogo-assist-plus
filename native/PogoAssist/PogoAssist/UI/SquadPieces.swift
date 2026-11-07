@@ -1351,7 +1351,7 @@ extension SquadStore {
     func historyDisc(_ slot: SquadSlot, ctx: HubContext, palette: SquadPalette, screen: SquadScreen) -> HistoryDisc {
         if let p = slot.pick {
             if ctx.entry(p) != nil { return HistoryDisc(name: ctx.pickName(p, screen: screen), palette: palette) }
-            return HistoryDisc(name: pickNames[p], palette: palette, present: false)
+            return HistoryDisc(name: pickName(for: p, area: screen.rawValue), palette: palette, present: false)
         }
         if let key = slot.species { return HistoryDisc(name: ctx.speciesName(key), palette: palette) }
         return HistoryDisc(name: nil, palette: palette)

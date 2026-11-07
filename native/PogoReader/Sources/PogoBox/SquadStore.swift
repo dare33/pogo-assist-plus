@@ -150,8 +150,9 @@ public struct SquadStore: Codable, Equatable {
     /// `raids`/`max` cannot say when it ends).
     public var eventEnds: [String: String] = [:]
 
-    /// The names of the copies the Current squads, edits and history hold, by entry id, remembered while the copy is in the box (`remember`), so a history row can still name a Pokémon
-    /// that has left it ("Zacian, not in your box"). Holds only ids some squad still names.
+    /// The names of the copies the Current squads, edits and history hold, remembered while the copy is in the box (`remember`), so a history row can still name a Pokémon that has left it
+    /// ("Zacian, not in your box"). Keyed by screen and copy, `"<screen>|<entry id>"`, since a copy has a different build target on each screen; a file written before that has bare entry
+    /// ids, which `pickName(for:area:)` still reads. Holds only copies some squad still names.
     public var pickNames: [String: String] = [:]
 
     /// Pass 2-6, H1: what Undo reverses, per squad (`SquadRef.key`): the last Set this squad, Set squad or Delete. In memory only; never written (not a coding key).
@@ -293,26 +294,42 @@ public struct SquadStore: Codable, Equatable {
         return out
     }
 
-    /// Every copy id some squad names: a Current, a kept edit or a history entry.
-    private var namedIds: Set<String> {
+    /// Every copy id the squads of one screen name: a Current, a kept edit, a history entry or an undo record. `area` is the screen key (`SquadScreen.rawValue`); nil takes every screen.
+    private func namedIds(area: String?) -> Set<String> {
         var ids = Set<String>()
         func add(_ s: Saved) { for slot in s.slots { if let p = slot.pick { ids.insert(p) } } }
-        for e in raids.values { add(e.squad) }
-        for e in max.values { add(e.squad) }
-        add(gym)
-        for s in rocket.values { add(s) }
-        for s in pvp.values { add(s) }
-        for s in edits.values { add(s) }
-        for l in history.values { for e in l { for slot in e.slots { if let p = slot.pick { ids.insert(p) } } } }
-        for r in undoRecords.values { if let c = r.current { add(c) }; for e in r.history ?? [] { for slot in e.slots { if let p = slot.pick { ids.insert(p) } } } }
+        func addEntries(_ list: [HistoryEntry]) { for e in list { for slot in e.slots { if let p = slot.pick { ids.insert(p) } } } }
+        // Edits, history and undo records are keyed by `SquadRef.key`, which starts with the screen key ("raids|...", "gym").
+        func inArea(_ key: String) -> Bool { area.map { key == $0 || key.hasPrefix($0 + "|") } ?? true }
+        func wants(_ screen: SquadScreen) -> Bool { area == nil || area == screen.rawValue }
+        if wants(.raids) { for e in raids.values { add(e.squad) } }
+        if wants(.max) { for e in max.values { add(e.squad) } }
+        if wants(.gym) { add(gym) }
+        if wants(.rocket) { for s in rocket.values { add(s) } }
+        if wants(.pvp) { for s in pvp.values { add(s) } }
+        for (k, s) in edits where inArea(k) { add(s) }
+        for (k, l) in history where inArea(k) { addEntries(l) }
+        for (k, r) in undoRecords where inArea(k) { if let c = r.current { add(c) }; addEntries(r.history ?? []) }
         return ids
     }
 
-    /// Keeps the name of every copy a squad names that `names` (the box's, by entry id) has; a name already kept stays until the copy is named again, and one no squad names any more
-    /// goes. The app runs it on every write and every attach, while the copy is still in the box.
-    public mutating func remember(names: [String: String]) {
-        var out = [String: String]()
-        for id in namedIds { if let n = names[id] ?? pickNames[id] { out[id] = n } }
+    /// The key a remembered name is kept under: the copy's name is per screen (a different build target on each), so one screen never overwrites another's.
+    private static func nameKey(_ id: String, area: String) -> String { "\(area)|\(id)" }
+
+    /// The name remembered for a copy on a screen: the screen's own, else the bare id of a file written before names were per screen.
+    public func pickName(for id: String, area: String) -> String? { pickNames[Self.nameKey(id, area: area)] ?? pickNames[id] }
+
+    /// Keeps the name of every copy a squad of `area` names that `names` (the box's names as that screen gives them, by entry id) has; a name already kept stays until the copy is named
+    /// again, and one no squad of the area names any more goes. Other screens' names are not touched. A bare-id name from an older file is read as a fallback and moves to the area's
+    /// key; it goes once every screen that names the copy has its own. The app runs it on every write and every attach, while the copy is still in the box.
+    public mutating func remember(names: [String: String], area: String) {
+        var out = pickNames.filter { !$0.key.hasPrefix(area + "|") }
+        for id in namedIds(area: area) { if let n = names[id] ?? pickName(for: id, area: area) { out[Self.nameKey(id, area: area)] = n } }
+        // A bare-id name stays only while a screen that names the copy has no name of its own for it.
+        let named = Dictionary(uniqueKeysWithValues: SquadScreen.allCases.map { ($0.rawValue, namedIds(area: $0.rawValue)) })
+        for k in Array(out.keys) where !SquadScreen.allCases.contains(where: { k.hasPrefix($0.rawValue + "|") }) {
+            if !named.contains(where: { $0.value.contains(k) && out[Self.nameKey(k, area: $0.key)] == nil }) { out[k] = nil }
+        }
         pickNames = out
     }
 
