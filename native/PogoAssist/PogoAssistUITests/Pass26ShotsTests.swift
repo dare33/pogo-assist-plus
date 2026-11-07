@@ -37,7 +37,7 @@ final class Pass26ShotsTests: SquadUITestCase {
                 selectAvailable(app)
                 // A change can land on the Current itself (a swap back), when the pill already reads Squad set.
                 if reveal(app, pill(app)).label == "Set this squad" { setThisSquad(app) }
-                if app.buttons["toast-action"].exists { sleep(1) }
+                if toast(app).exists { sleep(1) }
             }
             selectTab(app, "current")
             _ = reveal(app, historyRow(app, 2))

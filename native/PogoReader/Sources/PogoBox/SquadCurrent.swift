@@ -96,50 +96,70 @@ extension SquadStore {
 
     /// "Set this squad": `squad` becomes the Current and is marked set, remembering `source` (the tab it was set from), `edited` (it differed from that tab's suggestion) and `strength`
     /// (the bar's whole percent now). A different Current it replaces goes to the history first, recorded from that Current's OWN stored source, edited and strength (an older file's
-    /// Current reads as set from Current, unedited, no figure).
+    /// Current reads as set from Current, unedited, no figure). Leaves an undo record when the history changed (`undoReplace`).
     public mutating func replaceCurrent(with squad: Saved, _ ref: SquadRef, source: SquadTab, edited: Bool, strength: Int?, date: Date) {
-        if let old = current(ref), old.slots != squad.slots { pushHistory(old, ref, source: old.source ?? .current, edited: old.edited ?? false, strength: old.strength, date: date) }
+        let before = (current: current(ref), history: history[ref.key])
+        if let old = before.current, old.slots != squad.slots { pushHistory(old, ref, source: old.source ?? .current, edited: old.edited ?? false, strength: old.strength, date: date) }
         var new = squad
         new.isSet = true
         new.source = source; new.edited = edited; new.strength = strength
         setCurrent(new, ref)
         noteEnd(ref)
+        recordUndo(ref, current: before.current, history: before.history)
     }
 
-    /// "✓ Squad set" tapped, or Delete current squad: the Current goes to the history and the squad keeps nothing again. `strength` is the bar's figure for the Current being unset
-    /// (the screen is showing it); without one the entry keeps the figure the Current was set with.
-    public mutating func unsetCurrent(_ ref: SquadRef, strength: Int?, date: Date) {
-        if let old = current(ref) { pushHistory(old, ref, source: old.source ?? .current, edited: old.edited ?? false, strength: strength ?? old.strength, date: date) }
+    /// "✓ Squad set" tapped, or Delete current squad: the Current goes to the history and the squad keeps nothing again. The entry keeps the figure the stored Current holds (the screen
+    /// writes the bar's figure back to it, `SquadWorkspace.record`); a Current with none reads "—". Leaves an undo record when the history changed (`undoReplace`).
+    public mutating func unsetCurrent(_ ref: SquadRef, date: Date) {
+        let before = (current: current(ref), history: history[ref.key])
+        if let old = before.current { pushHistory(old, ref, source: old.source ?? .current, edited: old.edited ?? false, strength: old.strength, date: date) }
         removeCurrent(ref)
+        recordUndo(ref, current: before.current, history: before.history)
     }
 
     /// "Set squad" on a history row: entry `index` becomes the Current (marked set, picks as the entry kept them; the app's reconcile empties any copy that left the box), the
-    /// Current it replaces goes to the top of the history, and the entry leaves the list. Returns the Current it replaced, for the screen; nil when there was none or `index` is out
-    /// of range. `strength` is the bar's figure for the Current being replaced.
+    /// Current it replaces goes to the top of the history (with the figure it holds), and the entry leaves the list. Returns the Current it replaced, for the screen; nil when there was
+    /// none or `index` is out of range. Leaves an undo record (`undoReplace`).
     @discardableResult
-    public mutating func restoreFromHistory(_ ref: SquadRef, index: Int, strength: Int?, date: Date) -> Saved? {
+    public mutating func restoreFromHistory(_ ref: SquadRef, index: Int, date: Date) -> Saved? {
         guard let list = history[ref.key], list.indices.contains(index) else { return nil }
         let entry = list[index], previous = current(ref)
         var rest = list
         rest.remove(at: index)
         history[ref.key] = rest
-        if let previous, previous.slots != entry.slots { pushHistory(previous, ref, source: previous.source ?? .current, edited: previous.edited ?? false, strength: strength ?? previous.strength, date: date) }
+        if let previous, previous.slots != entry.slots { pushHistory(previous, ref, source: previous.source ?? .current, edited: previous.edited ?? false, strength: previous.strength, date: date) }
         setCurrent(Saved(slots: entry.slots, isSet: true, changed: true, source: entry.source, edited: entry.edited, strength: entry.strength), ref)
         noteEnd(ref)
+        recordUndo(ref, current: previous, history: list)
         return previous
     }
 
-    /// Undo of a replace or an unset: history entry 0 goes back as the Current WITHOUT pushing the Current it replaces (the squad that was just set is dropped), and the entry leaves
-    /// the list. false when there is no entry.
+    /// What the last Set this squad, Set squad (history) or Delete changed on this squad, kept in memory only: the Current as it was and the history as it was. A change that left the
+    /// history as it was (a skipped duplicate push) leaves none.
+    private mutating func recordUndo(_ ref: SquadRef, current: Saved?, history before: [HistoryEntry]?) {
+        undoRecords[ref.key] = history[ref.key] == before ? nil : UndoRecord(current: current, history: before)
+    }
+
+    /// Whether Undo has something to reverse for the squad (the toast then carries an Undo).
+    public func canUndo(_ ref: SquadRef) -> Bool { undoRecords[ref.key] != nil }
+
+    /// Undo of the last Set this squad, Set squad or Delete: the Current and the history go back exactly as they were (the entry a Set squad took out returns to its place; the one a Set
+    /// pushed goes), and the record is cleared. false, changing nothing, when there is no record.
     @discardableResult
     public mutating func undoReplace(_ ref: SquadRef) -> Bool {
-        guard var list = history[ref.key], let entry = list.first else { return false }
-        list.removeFirst()
-        history[ref.key] = list
-        setCurrent(Saved(slots: entry.slots, isSet: true, changed: true, source: entry.source, edited: entry.edited, strength: entry.strength), ref)
+        guard let record = undoRecords[ref.key] else { return false }
+        history[ref.key] = record.history
+        if let c = record.current { setCurrent(c, ref) } else { removeCurrent(ref) }
+        undoRecords[ref.key] = nil
         noteEnd(ref)
         return true
     }
+}
+
+/// What Undo needs to reverse one change of a squad: its Current and its history as they were before it.
+public struct UndoRecord: Equatable {
+    public var current: SquadStore.Saved?
+    public var history: [HistoryEntry]?
 }
 
 extension SquadStore {
@@ -179,8 +199,8 @@ extension SquadStore {
         }
     }
 
-    /// "Delete current squad": the same as `unsetCurrent` (the Current goes to the history), with no figure for the entry.
-    public mutating func deleteCurrent(_ ref: SquadRef) { unsetCurrent(ref, strength: nil, date: Date()) }
+    /// "Delete current squad": the same as `unsetCurrent` (the Current goes to the history).
+    public mutating func deleteCurrent(_ ref: SquadRef) { unsetCurrent(ref, date: Date()) }
 }
 
 /// What a squad screen holds while the player is on it and drops when they leave: the tab each squad is on. Never stored (the kept edits are `SquadStore.edits`; pass 2-6 removed the

@@ -1299,7 +1299,7 @@ struct SquadStripView: View {
 /// Raids, the style) between them.
 enum SquadInfo {
     static func tabs(noun: String) -> [(term: String, text: String)] {
-        [("Current", "is the squad you have set. Changes to it are kept straight away. Delete current squad moves it to Earlier current squads, where Set squad brings it back."),
+        [("Current", "is the squad you have set. Changes to it are kept straight away. While the squad has one, the earlier current squads are listed under it, and Set squad on one makes it the current squad again."),
          ("Available", "picks \(noun) from the Pokémon in your box right now: the strongest you own for each slot, even if it still needs a power up, an evolution or a Mega Evolution first. Tap a slot for other choices from your box."),
          ("Best", "lists the best Pokémon in the game for each slot, whether or not you have them. Each says if it is in your box, can be got now, or is not available now.")]
     }

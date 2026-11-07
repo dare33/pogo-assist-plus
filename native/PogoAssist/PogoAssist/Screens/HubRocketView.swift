@@ -287,6 +287,7 @@ private struct RocketSquadView: View {
     @State private var infoOpen = false
     @Environment(\.accent) private var accent
     @Environment(\.showActionToast) private var showActionToast
+    @Environment(\.showToast) private var showToast
 
     typealias Entry = RocketPickerBuilder.Entry
     typealias SlotLists = RocketPickerBuilder.SlotLists
@@ -312,6 +313,8 @@ private struct RocketSquadView: View {
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
         let strengthKey = "strength|\(leader.name)|\(surface.tab.rawValue)|\(surface.isBestSuggestion)|" + FilledSlot.cacheKey(filled) + "|" + lists.map { ($0.rows + $0.next).map(\.id).joined(separator: ",") }.joined(separator: ";") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = saved.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
+        // An edit stored but drawn as the suggestion is not an edit (rule 27.2): it is dropped, so the tab follows the box again.
+        let staleKey = surface.editIsStale ? FilledSlot.cacheKey(filled) : ""
         let percent = strength?.key == strengthKey ? strength?.value.percent : nil
         SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: ref, keeper: keeper) }), hasCurrent: surface.hasCurrent)
         HubHeaderLine("YOUR SQUAD FOR \(leader.name.uppercased())") {
@@ -338,16 +341,16 @@ private struct RocketSquadView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             SquadStatusRow(team: HubSquads.teamStatus(cards.map(\.status)), pill: surface.tab == .current ? nil : SetSquadPill(
-                isSet: surface.isCurrent(filled: filled),
-                onSet: { setSquad(surface, filled: filled, percent: percent) }, onUnset: { unsetSquad(surface, percent: percent) }))
+                isSet: surface.isCurrent(filled: filled, currentFilled: { let slots = surface.current?.slots ?? HubSquads.defaultRocketSlots(); return HubSquads.rocketSquad(leader: leader, slots: slots, mode: .available, kept: true, copyOf: self.builder(kept: true).keptCopyOf(slots: slots), ctx: ctx) }),
+                onSet: { setSquad(surface, filled: filled, percent: percent) }, onUnset: { unsetSquad(surface) }))
             SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: .rocket)
             SlotGrid(slots: cards, selected: selected) { i in
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
             }
             if surface.tab == .current {
-                DeleteCurrentButton { workspace.unsetCurrent(surface, keeper: keeper, strength: percent) }
+                DeleteCurrentButton { deleteSquad(surface) }
                 SquadHistoryList(rows: keeper.store.historyRows(ref, ctx: ctx) { _ in SquadPalette(ink: ContentType.rocket.ink(accent), tint: ContentType.rocket.tint(accent)) }) { index in
-                    if workspace.restore(surface, keeper: keeper, index: index, strength: percent) { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+                    if workspace.restore(surface, keeper: keeper, index: index) { toast("Current squad replaced", surface) }
                 }
             } else if surface.differs {
                 SquadResetLink { workspace.reset(surface, keeper: keeper) }
@@ -364,12 +367,17 @@ private struct RocketSquadView: View {
             let value = await Task.detached(priority: .userInitiated) {
                 bestUnedited ? SquadStrength.bestSquad(reference: b.reference()) : b.squadStrength(filled: filled, lists: lists, mode: mode)
             }.value
-            if !Task.isCancelled { strength = (strengthKey, value) }
+            if !Task.isCancelled {
+                strength = (strengthKey, value)
+                // The Current's figure is written back to the stored Current, so a history row later records it (H6).
+                workspace.record(surface, keeper: keeper, strength: value.percent)
+            }
         }
         // A slot of a changed squad that refilled is kept as shown, so it does not change again.
         .task(id: adoptKey) {
             if !adoptKey.isEmpty, !Task.isCancelled { workspace.adopt(surface, keeper: keeper, filled: filled) }
         }
+        .task(id: staleKey) { if !staleKey.isEmpty, !Task.isCancelled { workspace.dropUneditedEdit(surface, keeper: keeper) } }
         .tracksBox(ctx, generation: $boxGeneration)
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, lists: lists, surface: surface, builder: builder) }
     }
@@ -377,14 +385,25 @@ private struct RocketSquadView: View {
     /// "Set this squad": the squad as drawn becomes the Current with no question; replacing a different one offers Undo.
     private func setSquad(_ surface: SquadSurface, filled: [FilledSlot], percent: Int?) {
         let replaced = workspace.setCurrent(surface, keeper: keeper, filled: filled, strength: percent)
-        if replaced { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+        if replaced { toast("Current squad replaced", surface) }
         else { AccessibilityNotification.Announcement("Squad set").post() }
     }
 
     /// "✓ Squad set" tapped: the Current moves to the history.
-    private func unsetSquad(_ surface: SquadSurface, percent: Int?) {
-        workspace.unsetCurrent(surface, keeper: keeper, strength: percent)
-        showActionToast("Squad unset", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) })
+    private func unsetSquad(_ surface: SquadSurface) {
+        workspace.unsetCurrent(surface, keeper: keeper)
+        toast("Squad unset", surface)
+    }
+
+    /// "Delete current squad" confirmed: the Current moves to the history, and the toast offers Undo.
+    private func deleteSquad(_ surface: SquadSurface) {
+        workspace.unsetCurrent(surface, keeper: keeper)
+        toast("Current squad deleted", surface)
+    }
+
+    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone.
+    private func toast(_ text: String, _ surface: SquadSurface) {
+        if let undo = workspace.undoAction(surface, keeper: keeper) { showActionToast(text, undo) } else { showToast(text) }
     }
 
     private func options(_ i: Int) -> String { leader.slots[i].map { HubTeams.plain($0.name) }.joined(separator: " / ") }

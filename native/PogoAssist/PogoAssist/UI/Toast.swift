@@ -7,6 +7,8 @@ import SwiftUI
 struct ToastAction {
     let label: String
     let perform: @MainActor () -> Void
+    /// The screen that showed the toast (its keeper's identity): the toast goes when that screen disappears, so its Undo never acts on a closed screen's keeper (H10).
+    var owner: ObjectIdentifier? = nil
 }
 
 @MainActor
@@ -28,6 +30,14 @@ final class ToastPresenter: ObservableObject {
         }
     }
 
+    /// The screen `owner` disappeared: its toast with an action goes at once (another screen's toast stays).
+    func dismiss(owner: ObjectIdentifier) {
+        guard action?.owner == owner else { return }
+        hide?.cancel()
+        message = nil
+        action = nil
+    }
+
     /// The action was tapped: it runs, and the toast says "Undone".
     func perform() {
         guard let action else { return }
@@ -37,11 +47,17 @@ final class ToastPresenter: ObservableObject {
 }
 
 private struct ShowToastKey: EnvironmentKey { static let defaultValue: @MainActor (String) -> Void = { _ in } }
+private struct DismissToastKey: EnvironmentKey { static let defaultValue: @MainActor (ObjectIdentifier) -> Void = { _ in } }
 private struct ShowToastActionKey: EnvironmentKey { static let defaultValue: @MainActor (String, ToastAction) -> Void = { _, _ in } }
 extension EnvironmentValues {
     var showToast: @MainActor (String) -> Void {
         get { self[ShowToastKey.self] }
         set { self[ShowToastKey.self] = newValue }
+    }
+    /// Drops the toast a screen showed with an action, when that screen disappears.
+    var dismissToast: @MainActor (ObjectIdentifier) -> Void {
+        get { self[DismissToastKey.self] }
+        set { self[DismissToastKey.self] = newValue }
     }
     /// A toast with an Undo (or other) action that stays five seconds.
     var showActionToast: @MainActor (String, ToastAction) -> Void {
@@ -58,6 +74,7 @@ struct ToastHost: ViewModifier {
         content
             .environment(\.showToast) { [presenter] in presenter.show($0) }
             .environment(\.showActionToast) { [presenter] in presenter.show($0, action: $1) }
+            .environment(\.dismissToast) { [presenter] in presenter.dismiss(owner: $0) }
             .overlay(alignment: .bottom) {
                 if let text = presenter.message {
                     ToastView(text: text, actionLabel: presenter.action?.label, onAction: { presenter.perform() })
@@ -80,20 +97,32 @@ struct ToastView: View {
     var actionLabel: String? = nil
     var onAction: () -> Void = {}
     var body: some View {
+        // VoiceOver reads the toast as one element, the message, with Undo as a custom action (the message is announced when it appears). The button stays for a sighted tap.
         HStack(spacing: 8) {
             Image(systemName: "checkmark.circle").font(.figtree(16, .bold)).accessibilityHidden(true)
-            Text(text).font(.figtree(14, .bold, relativeTo: .subheadline)).lineLimit(2).accessibilityIdentifier("toast-text")
+            Text(text).font(.figtree(14, .bold, relativeTo: .subheadline)).lineLimit(2)
             if let actionLabel {
                 Button(action: onAction) {
                     Text(actionLabel).font(.figtree(14, .heavy, relativeTo: .subheadline)).underline().frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("toast-action")
             }
         }
         .foregroundStyle(Theme.bg)
         .padding(.horizontal, 16).padding(.vertical, actionLabel == nil ? 10 : 0)
         .background(Theme.ink, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .accessibilityElement(children: actionLabel == nil ? .combine : .contain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+        .accessibilityIdentifier("toast")
+        .modifier(ToastUndoAction(label: actionLabel, perform: onAction))
+    }
+}
+
+/// The custom action of a toast that has an action ("Undo"); nothing for a plain message.
+private struct ToastUndoAction: ViewModifier {
+    let label: String?
+    let perform: () -> Void
+    func body(content: Content) -> some View {
+        if let label { content.accessibilityAction(named: label, perform) } else { content }
     }
 }

@@ -10,13 +10,13 @@ import Foundation
 /// which a copy leaving the box does not touch). A squad with nothing kept has no Current and shows the suggestions, refilled whenever drawn.
 /// Every change (a Pokémon chosen for a slot, a slot's role changed) first keeps the squad exactly as shown (`Saved.fixing`), so an edit acts on what the player
 /// sees; a slot that refills in a changed squad is kept too (`adoptRefills`), so no slot changes on its own afterwards. A Current squad is drawn as kept: no mode placement rule hides a kept pick. A slot with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused one for its
-/// role, that slot only (`reconciled`, `HubSquads.fill`). "Delete current squad" (`SquadStore.deleteCurrent`) forgets it all. Copies are keyed by the box entry id,
+/// role, that slot only (`reconciled`, `HubSquads.fill`). "Delete current squad" (`SquadStore.deleteCurrent`) takes the Current away and puts it in the squad's history. Copies are keyed by the box entry id,
 /// which the app keeps through power-ups, evolutions, hand corrections and re-scans (`BoxEntry.id`), so a re-scan keeps every pick whose Pokémon is still in the box.
 public struct SquadStore: Codable, Equatable {
     /// One squad as the player left it.
     public struct Saved: Codable, Equatable {
         public var slots: [SquadSlot]
-        /// "Set this squad / Squad set" (raids and Max): the player's own mark that the squad is ready. Kept as it is when a pick leaves the box.
+        /// Set by `replaceCurrent` and `restoreFromHistory`. "Set" and "has a Current" are one thing (`SquadStore.isSet`); the flag stays so an older file's mark still counts (`hasCurrent`). Kept as it is when a pick leaves the box.
         public var isSet: Bool
         /// True once the player has changed the squad (rule 27): `fixing` has kept the shown squad. A file saved before this existed reads false, so a squad saved with some
         /// picks counts as changed only from its next change.
@@ -154,6 +154,9 @@ public struct SquadStore: Codable, Equatable {
     /// that has left it ("Zacian, not in your box"). Holds only ids some squad still names.
     public var pickNames: [String: String] = [:]
 
+    /// Pass 2-6, H1: what Undo reverses, per squad (`SquadRef.key`): the last Set this squad, Set squad or Delete. In memory only; never written (not a coding key).
+    public var undoRecords: [String: UndoRecord] = [:]
+
     public static let historyLimit = 10
 
     public init() {}
@@ -249,6 +252,7 @@ public struct SquadStore: Codable, Equatable {
         }
         s.edits = edits.filter { alive($0.key) }
         s.history = history.filter { alive($0.key) }
+        s.undoRecords = undoRecords.filter { alive($0.key) }
         var ends = [String: String]()
         for key in Array(s.edits.keys) + Array(s.history.keys) {
             if let o = owner(key), let end = rotationEnds[o] ?? eventEnds[o] { ends[o] = end }
@@ -300,6 +304,7 @@ public struct SquadStore: Codable, Equatable {
         for s in pvp.values { add(s) }
         for s in edits.values { add(s) }
         for l in history.values { for e in l { for slot in e.slots { if let p = slot.pick { ids.insert(p) } } } }
+        for r in undoRecords.values { if let c = r.current { add(c) }; for e in r.history ?? [] { for slot in e.slots { if let p = slot.pick { ids.insert(p) } } } }
         return ids
     }
 

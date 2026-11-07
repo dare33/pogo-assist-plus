@@ -235,17 +235,20 @@ class SquadUITestCase: XCTestCase {
         XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Squad set' AND selected == true"), object: pill(app))], timeout: timeout) == .completed
     }
 
+    /// The toast: one accessibility element whose label is the message (a toast with an action carries Undo as a custom action and its button is not an element of its own).
+    func toast(_ app: XCUIApplication) -> XCUIElement { app.descendants(matching: .any).matching(identifier: "toast").firstMatch }
+
     /// The toast's words, once it is up (nil if it never shows).
     func toastText(_ app: XCUIApplication, timeout: TimeInterval = 5) -> String? {
-        // (A toast without an action is one combined element that repeats its text's identifier, so the first match is taken.)
-        let t = app.staticTexts.matching(identifier: "toast-text").firstMatch
+        let t = toast(app)
         return t.waitForExistence(timeout: timeout) ? t.label : nil
     }
 
+    /// Taps the Undo of the toast: the button sits at the toast's trailing end (it is hidden from VoiceOver, which has the custom action instead), so it is tapped by coordinate.
     func tapToastUndo(_ app: XCUIApplication) {
-        let undo = app.buttons["toast-action"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 5), "the toast offers Undo")
-        undo.tap()
+        let t = toast(app)
+        XCTAssertTrue(t.waitForExistence(timeout: 5), "the toast offers Undo")
+        t.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
     }
 
     /// The row of the Earlier current squads list, n from 1 (the newest).

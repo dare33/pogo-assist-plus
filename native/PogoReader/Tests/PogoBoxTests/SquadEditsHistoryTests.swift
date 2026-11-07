@@ -133,16 +133,16 @@ final class SquadEditsHistoryTests: XCTestCase {
         store.replaceCurrent(with: squad(["b"]), .gym, source: .available, edited: false, strength: 2, date: at(2))
         store.replaceCurrent(with: squad(["c"]), .gym, source: .available, edited: false, strength: 3, date: at(3))
         XCTAssertEqual(store.history["gym"]?.map { $0.slots.first?.pick }, ["b", "a"])
-        let previous = store.restoreFromHistory(.gym, index: 1, strength: 77, date: at(4))
+        let previous = store.restoreFromHistory(.gym, index: 1, date: at(4))
         XCTAssertEqual(previous?.slots.first?.pick, "c", "the Current it replaced, for Undo")
         XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a")
         XCTAssertEqual(store.current(.gym)?.isSet, true)
         XCTAssertEqual(store.history["gym"]?.map { $0.slots.first?.pick }, ["c", "b"], "the entry left the list and the old Current is on top")
-        XCTAssertEqual(store.history["gym"]?.first?.strength, 77)
+        XCTAssertEqual(store.history["gym"]?.first?.strength, 3, "the old Current is recorded with the figure it holds")
         XCTAssertEqual(store.history["gym"]?.first?.source, .available, "the old Current goes back as it was set")
         XCTAssertEqual(store.current(.gym)?.source, .available, "the restored entry is the Current with its own source")
         XCTAssertEqual(store.current(.gym)?.strength, 1)
-        XCTAssertNil(store.restoreFromHistory(.gym, index: 9, strength: nil, date: at(5)), "out of range changes nothing")
+        XCTAssertNil(store.restoreFromHistory(.gym, index: 9, date: at(5)), "out of range changes nothing")
         XCTAssertEqual(store.history["gym"]?.count, 2)
     }
 
@@ -155,16 +155,68 @@ final class SquadEditsHistoryTests: XCTestCase {
         XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a", "the replaced squad is the Current again")
         XCTAssertEqual(store.current(.gym)?.isSet, true)
         XCTAssertEqual(store.current(.gym)?.source, .best); XCTAssertEqual(store.current(.gym)?.edited, true); XCTAssertEqual(store.current(.gym)?.strength, 33)
-        XCTAssertEqual(store.history["gym"]?.count, 0, "b was dropped, not pushed")
+        XCTAssertEqual(store.history["gym"] ?? [], [], "b was dropped, not pushed")
         XCTAssertFalse(store.undoReplace(.gym), "no entry, nothing to undo")
         XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a")
         // An unset's Undo is the same call.
-        store.unsetCurrent(.gym, strength: 50, date: at(3))
+        store.unsetCurrent(.gym, date: at(3))
         XCTAssertNil(store.current(.gym))
         XCTAssertTrue(store.undoReplace(.gym))
         XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a")
-        XCTAssertEqual(store.current(.gym)?.strength, 50, "the figure the unset recorded comes back with it")
-        XCTAssertEqual(store.history["gym"]?.count, 0)
+        XCTAssertEqual(store.current(.gym)?.strength, 33, "the Current comes back as it was, figure included")
+        XCTAssertEqual(store.history["gym"] ?? [], [])
+    }
+
+    /// H1: Undo reverses the last change exactly. History [B, A], Current C; Set squad on A gives Current A, history [C, B]; Undo gives Current C, history [B, A].
+    func testUndoAfterSetSquadOnAHistoryRowPutsTheRowBackWhereItWas() {
+        var store = SquadStore()
+        store.replaceCurrent(with: squad(["a"]), .gym, source: .available, edited: false, strength: 1, date: at(1))
+        store.replaceCurrent(with: squad(["b"]), .gym, source: .available, edited: false, strength: 2, date: at(2))
+        store.replaceCurrent(with: squad(["c"]), .gym, source: .available, edited: false, strength: 3, date: at(3))
+        let before = store
+        func picks() -> [String?] { (store.history["gym"] ?? []).map { $0.slots.first?.pick } }
+        XCTAssertEqual(picks(), ["b", "a"])
+        _ = store.restoreFromHistory(.gym, index: 1, date: at(4))
+        XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a")
+        XCTAssertEqual(picks(), ["c", "b"])
+        XCTAssertTrue(store.canUndo(.gym))
+        XCTAssertTrue(store.undoReplace(.gym))
+        XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "c")
+        XCTAssertEqual(store.current(.gym)?.strength, 3)
+        XCTAssertEqual(picks(), ["b", "a"], "A is back at its place, C's pushed entry is gone")
+        XCTAssertEqual(store.history, before.history)
+        XCTAssertFalse(store.canUndo(.gym))
+        XCTAssertFalse(store.undoReplace(.gym), "the record is cleared: a second Undo does nothing")
+        XCTAssertEqual(picks(), ["b", "a"])
+    }
+
+    func testUndoOfASetAndOfADeleteReverseThemExactlyAndASkippedPushLeavesNoRecord() {
+        var store = SquadStore()
+        store.replaceCurrent(with: squad(["a"]), .gym, source: .available, edited: false, strength: 1, date: at(1))
+        XCTAssertFalse(store.canUndo(.gym), "nothing was pushed or removed: no record, no Undo")
+        store.replaceCurrent(with: squad(["b"]), .gym, source: .best, edited: true, strength: 2, date: at(2))
+        store.replaceCurrent(with: squad(["c"]), .gym, source: .best, edited: true, strength: 3, date: at(3))
+        XCTAssertEqual(store.history["gym"]?.map { $0.slots.first?.pick }, ["b", "a"])
+        // Delete then Undo.
+        let beforeDelete = store
+        store.unsetCurrent(.gym, date: at(4))
+        XCTAssertNil(store.current(.gym))
+        XCTAssertTrue(store.undoReplace(.gym))
+        XCTAssertEqual(store.current(.gym), beforeDelete.current(.gym))
+        XCTAssertEqual(store.history, beforeDelete.history, "the older rows are not consumed")
+        // A Set whose pushed entry would repeat the newest row: skipped, so no record (and the earlier record is cleared).
+        store.history["gym"] = [HistoryEntry(date: at(0), slots: squad(["c"]).slots, source: .best, edited: true, strength: 9)]
+        store.replaceCurrent(with: squad(["d"]), .gym, source: .best, edited: false, strength: 4, date: at(5))
+        XCTAssertEqual(store.history["gym"]?.count, 1, "the duplicate push was skipped")
+        XCTAssertFalse(store.canUndo(.gym))
+        XCTAssertFalse(store.undoReplace(.gym), "with no record Undo does nothing and says so")
+        XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "d")
+        // The record is never written.
+        store.replaceCurrent(with: squad(["e"]), .gym, source: .best, edited: false, strength: 4, date: at(6))
+        XCTAssertTrue(store.canUndo(.gym))
+        let back = try? JSONDecoder().decode(SquadStore.self, from: JSONEncoder().encode(store))
+        XCTAssertEqual(back?.canUndo(.gym), false)
+        XCTAssertEqual(back?.current(.gym), store.current(.gym))
     }
 
     func testSourceEditedAndStrengthAreStoredWithTheCurrentAndAnOldFileReadsAsNone() throws {
@@ -185,7 +237,7 @@ final class SquadEditsHistoryTests: XCTestCase {
     func testRestoreWithNoCurrentJustSetsIt() {
         var store = SquadStore()
         store.pushHistory(squad(["a"]), .gym, source: .best, edited: false, strength: 5, date: at(1))
-        XCTAssertNil(store.restoreFromHistory(.gym, index: 0, strength: nil, date: at(2)))
+        XCTAssertNil(store.restoreFromHistory(.gym, index: 0, date: at(2)))
         XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a")
         XCTAssertEqual(store.history["gym"]?.count, 0)
     }
@@ -194,14 +246,14 @@ final class SquadEditsHistoryTests: XCTestCase {
         var store = SquadStore()
         let ref = SquadRef.rocket(leader: "Arlo")
         XCTAssertFalse(store.isSet(ref))
-        store.replaceCurrent(with: squad(["a"]), ref, source: .available, edited: false, strength: nil, date: at(1))
+        store.replaceCurrent(with: squad(["a"]), ref, source: .available, edited: false, strength: 42, date: at(1))
         XCTAssertTrue(store.isSet(ref))
-        store.unsetCurrent(ref, strength: 42, date: at(2))
+        store.unsetCurrent(ref, date: at(2))
         XCTAssertFalse(store.isSet(ref))
         XCTAssertNil(store.current(ref))
         XCTAssertEqual(store.history[ref.key]?.first?.slots.first?.pick, "a")
         XCTAssertEqual(store.history[ref.key]?.first?.strength, 42)
-        store.unsetCurrent(ref, strength: nil, date: at(3))
+        store.unsetCurrent(ref, date: at(3))
         XCTAssertEqual(store.history[ref.key]?.count, 1, "unsetting nothing adds nothing")
         // A Current with the mark cleared but picks kept is still set.
         var s = squad(["z"]); s.isSet = false
@@ -224,6 +276,9 @@ final class SquadEditsHistoryTests: XCTestCase {
         let back = try JSONDecoder().decode(SquadStore.self, from: JSONEncoder().encode(store))
         XCTAssertEqual(back.pickNames, store.pickNames)
         store.history["gym"] = []
+        store.remember(names: [:])
+        XCTAssertEqual(store.pickNames["a"], "Zacian", "the last undo record still names it (Undo can bring it back)")
+        store.undoRecords = [:]
         store.remember(names: [:])
         XCTAssertNil(store.pickNames["a"], "no squad names it any more")
     }

@@ -362,6 +362,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         let row = reveal(app, historyRow(app, 1))
         XCTAssertTrue(row.exists, "the replaced squad is the newest earlier current squad")
         XCTAssertTrue(row.label.contains("Today"), row.label)
+        let rowBefore = row.label
         shot("raids-current-history")
         // Set squad brings it back; Undo puts the other back again.
         setHistorySquad(app, 1)
@@ -370,6 +371,9 @@ final class HubRaidsSquadTests: SquadUITestCase {
         tapToastUndo(app)
         XCTAssertEqual(toastText(app), "Undone")
         XCTAssertEqual((1...6).map { slot(app, "raids", $0).label }, second, "Undo restored the squad the history row replaced")
+        // H1: the history is as it was before Set squad: the same one row, nothing consumed, nothing left over.
+        XCTAssertEqual(reveal(app, historyRow(app, 1)).label, rowBefore, "the earlier current squad is back where it was")
+        XCTAssertFalse(historyRow(app, 2).exists, "and no other row appeared")
         // Edits on Current save at once.
         changeTheSquad(app, "raids")
         let edited = (1...6).map { slot(app, "raids", $0).label }

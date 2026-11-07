@@ -280,6 +280,7 @@ struct PvPSquadView: View {
     @State private var showAll = false
     @State private var squadInfo = false
     @Environment(\.showActionToast) private var showActionToast
+    @Environment(\.showToast) private var showToast
 
     /// The other candidates listed before "All N" is tapped.
     private let preview = 5
@@ -329,6 +330,8 @@ struct PvPSquadView: View {
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
         let strengthKey = "strength|\(league)|\(pogoAssist)|\(surface.tab.rawValue)|\(surface.isBestSuggestion)|" + FilledSlot.cacheKey(filled) + "|" + (mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = surface.squad.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
+        // An edit stored but drawn as the suggestion is not an edit (rule 27.2): it is dropped, so the tab follows the box again.
+        let staleKey = surface.editIsStale ? FilledSlot.cacheKey(filled) : ""
         let percent = strength?.key == strengthKey ? strength?.value.percent : nil
         let ref = SquadRef.pvp(league: league)
         VStack(alignment: .leading, spacing: 10) {
@@ -347,16 +350,16 @@ struct PvPSquadView: View {
                     ] + SquadInfo.signs, identifier: "squad-explainer")
                 }
                 SquadStatusRow(team: HubSquads.teamStatus(cards.map(\.status)), pill: surface.tab == .current ? nil : SetSquadPill(
-                    isSet: surface.isCurrent(filled: filled),
-                    onSet: { setSquad(surface, filled: filled, percent: percent) }, onUnset: { unsetSquad(surface, percent: percent) }))
+                    isSet: surface.isCurrent(filled: filled, currentFilled: { self.builder(kept: true).resolve(mode: .available, slots: surface.current?.slots ?? HubSquads.defaultPvpSlots()).filled }),
+                    onSet: { setSquad(surface, filled: filled, percent: percent) }, onUnset: { unsetSquad(surface) }))
                 SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: .pvp)
                 SlotGrid(slots: cards, selected: selected) { i in
                     withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
                 }
                 if surface.tab == .current {
-                    DeleteCurrentButton { workspace.unsetCurrent(surface, keeper: keeper, strength: percent) }
+                    DeleteCurrentButton { deleteSquad(surface) }
                     SquadHistoryList(rows: keeper.store.historyRows(ref, ctx: ctx) { SquadPalette.of($0.role) }) { index in
-                        if workspace.restore(surface, keeper: keeper, index: index, strength: percent) { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+                        if workspace.restore(surface, keeper: keeper, index: index) { toast("Current squad replaced", surface) }
                     }
                 } else if surface.differs {
                     SquadResetLink { workspace.reset(surface, keeper: keeper) }
@@ -373,13 +376,18 @@ struct PvPSquadView: View {
                 let value = await Task.detached(priority: .userInitiated) {
                     bestUnedited ? SquadStrength.bestSquad(reference: b.reference(), kind: .score) : b.squadStrength(filled: filled, candidates: candidates, byId: byId, best: best, mode: mode)
                 }.value
-                if !Task.isCancelled { strength = (strengthKey, value) }
+                if !Task.isCancelled {
+                strength = (strengthKey, value)
+                // The Current's figure is written back to the stored Current, so a history row later records it (H6).
+                workspace.record(surface, keeper: keeper, strength: value.percent)
+            }
             }
             .tracksBox(ctx, generation: $boxGeneration)
             // A slot of a changed squad that refilled is kept as shown, so it does not change again.
             .task(id: adoptKey) {
                 if !adoptKey.isEmpty, !Task.isCancelled { workspace.adopt(surface, keeper: keeper, filled: filled) }
             }
+            .task(id: staleKey) { if !staleKey.isEmpty, !Task.isCancelled { workspace.dropUneditedEdit(surface, keeper: keeper) } }
             let note = weakness(named, rest: rest)
             if !note.isEmpty {
                 Text(note).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).padding(.horizontal, 4).accessibilityIdentifier("hub-pvp-weakness")
@@ -390,14 +398,25 @@ struct PvPSquadView: View {
     /// "Set this squad": the squad as drawn becomes the Current with no question; replacing a different one offers Undo.
     private func setSquad(_ surface: SquadSurface, filled: [FilledSlot], percent: Int?) {
         let replaced = workspace.setCurrent(surface, keeper: keeper, filled: filled, strength: percent)
-        if replaced { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+        if replaced { toast("Current squad replaced", surface) }
         else { AccessibilityNotification.Announcement("Squad set").post() }
     }
 
     /// "✓ Squad set" tapped: the Current moves to the history.
-    private func unsetSquad(_ surface: SquadSurface, percent: Int?) {
-        workspace.unsetCurrent(surface, keeper: keeper, strength: percent)
-        showActionToast("Squad unset", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) })
+    private func unsetSquad(_ surface: SquadSurface) {
+        workspace.unsetCurrent(surface, keeper: keeper)
+        toast("Squad unset", surface)
+    }
+
+    /// "Delete current squad" confirmed: the Current moves to the history, and the toast offers Undo.
+    private func deleteSquad(_ surface: SquadSurface) {
+        workspace.unsetCurrent(surface, keeper: keeper)
+        toast("Current squad deleted", surface)
+    }
+
+    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone.
+    private func toast(_ text: String, _ surface: SquadSurface) {
+        if let undo = workspace.undoAction(surface, keeper: keeper) { showActionToast(text, undo) } else { showToast(text) }
     }
 
     /// The weakness line over the members the squad shows (the set the coverage uses). When every member is a candidate the engine's note, with its swap suggestion,

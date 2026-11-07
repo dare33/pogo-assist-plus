@@ -117,7 +117,7 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "the Current tab appears")
         XCTAssertGreaterThan(tab(app, "current").frame.minX, tab(app, "best").frame.minX, "on the right of Best")
         XCTAssertTrue(tab(app, "available").isSelected, "and the player stays where they were")
-        XCTAssertFalse(app.staticTexts.matching(identifier: "toast-text").firstMatch.exists, "nothing was replaced, so no toast")
+        XCTAssertFalse(toast(app).exists, "nothing was replaced, so no toast")
 
         // A further edit (Blissey on to slot 3) is a different squad: the pill reads Set this squad again; setting replaces Current with no question, a toast and Undo.
         openPicker(app, "gym", slot: 3)
@@ -160,8 +160,13 @@ final class HubGymSquadTests: SquadUITestCase {
         answer(app, asked: "squad-delete-current", confirm: false)
         XCTAssertTrue(tab(app, "current").exists, "Cancel keeps the Current squad")
         deleteCurrent(app, confirm: true)
+        XCTAssertEqual(toastText(app), "Current squad deleted", "Delete's toast offers Undo (H11)")
         XCTAssertTrue(waitGone(tab(app, "current")), "the Current tab goes")
         XCTAssertTrue(tab(app, "available").isSelected, "and Available shows")
+        tapToastUndo(app)
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "Undo of a Delete brings the Current back")
+        deleteCurrent(app, confirm: true)
+        XCTAssertTrue(waitGone(tab(app, "current")), "deleted again")
 
         // Squad set unsets: set it again, then tap the set pill.
         setThisSquad(app)
