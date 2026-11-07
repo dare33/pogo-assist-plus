@@ -266,10 +266,15 @@ struct EventPickerBuilder {
     /// The Raids Best rows for the boss, worked out off the main thread and kept (`SquadKeeper.raidRows`, H4). The screen always gives them; nil only where the rows may be worked out on
     /// the spot (a test, a background task that has no cache).
     var raidRows: [HubSquads.BestRow]? = nil
+    /// Whether a Raids builder with no rows may rank the boss itself (about 0.2 s cold). True for tests and background callers; the builder the view makes sets it false, so a view body can
+    /// never reach the ranking (J1): with no rows it lists none.
+    var rowsOnTheSpot = true
+    /// What ranks a Raids boss on the spot (replaceable, so a test can count the calls).
+    var rank: @Sendable (HubData.RotationRow, HubContext) -> [HubSquads.BestRow] = { HubSquads.bestRaidRows(row: $0, ctx: $1) }
 
     /// The boss's Best rows: Raids from `raidRows`, Max from its table.
     func bestRows() -> [HubSquads.BestRow] {
-        screen == .raids ? (raidRows ?? HubSquads.bestRaidRows(row: row, ctx: ctx)) : HubSquads.bestMaxRows(row: row, ctx: ctx)
+        screen == .raids ? (raidRows ?? (rowsOnTheSpot ? rank(row, ctx) : [])) : HubSquads.bestMaxRows(row: row, ctx: ctx)
     }
 
     /// The Pokémon the slots may take under `mode`, and the slots filled from the player's picks and the suggestions (rules 3, 4, 6, 10, 12). Available: the player's own
@@ -501,11 +506,24 @@ struct EventSquadView: View {
     @State private var rowsCache = PickerRowsCache<EventPickerBuilder.Content>()
     @State private var strength: (key: String, value: SquadStrength)?
     @State private var boxGeneration = 0
+    /// The picker tap that is waiting for the Best rows (J10): cancelled when the screen goes, so it never writes through a closed screen's keeper.
+    @State private var choosing: Task<Void, Never>?
     /// The slot whose picker was asked for the Mega chip while another slot holds the squad's Mega: it shows the one-Mega message and keeps its role.
     @State private var megaMessageSlot: Int?
     @Environment(\.showOwnedToast) private var showOwnedToast
 
-    private func builder(kept: Bool, rows: [HubSquads.BestRow]?) -> EventPickerBuilder { EventPickerBuilder(screen: screen, row: row, ctx: ctx, kept: kept, raidRows: rows) }
+    /// Never ranks on the spot (J1): the rows come from the keeper's cache, or the squad waits for them (`needsRaidRows`).
+    private func builder(kept: Bool, rows: [HubSquads.BestRow]?) -> EventPickerBuilder {
+        var b = EventPickerBuilder(screen: screen, row: row, ctx: ctx, kept: kept, raidRows: rows)
+        b.rowsOnTheSpot = false
+        return b
+    }
+
+    /// Whether the body needs the Raids Best rows: under Best, or when any squad it resolves holds a species pick, which is drawn as the Best row it is. That is the shown tab's slots and the
+    /// Current's (the pill draws it to compare); the suggestion `isEdited` draws holds none.
+    static func needsRaidRows(mode: SquadMode, shown: [SquadSlot], current: [SquadSlot]?) -> Bool {
+        mode == .best || shown.contains { $0.species != nil } || (current ?? []).contains { $0.species != nil }
+    }
     private var prefix: String { screen == .raids ? "hub-raids" : "hub-max" }
     private var chips: [String] { (screen == .raids ? PogoRules.RaidRole.allCases.map(\.rawValue) : PogoRules.MaxRole.allCases.map(\.rawValue)) + [squadRoleAll] }
 
@@ -518,7 +536,7 @@ struct EventSquadView: View {
         // H4: the Raids Best rows are read from the keeper's cache, never worked out here. Under Best, or where a kept species pick is drawn as its Best row, the squad waits for them.
         let rowsKey = keeper.raidRowsKey(row, style: style, today: ctx.today)
         let rows = screen == .raids ? keeper.cachedRaidRows(rowsKey) : nil
-        let needsRows = screen == .raids && (mode == .best || base.squad.slots.contains { $0.species != nil })
+        let needsRows = screen == .raids && Self.needsRaidRows(mode: mode, shown: base.squad.slots, current: base.current?.slots)
         let pending = needsRows && rows == nil
         let builder = builder(kept: base.kept, rows: rows)
         let (options, filled) = pending ? ([], []) : builder.resolve(slots: base.squad.slots, mode: mode)
@@ -574,7 +592,10 @@ struct EventSquadView: View {
         .squadStrip(cards: cards, selected: selected) { i in withAnimation(.easeOut(duration: 0.15)) { selected = i } }
         .task(id: strengthKey) {
             guard !strengthKey.isEmpty else { return }
-            let b = builder
+            // The reference is the Best squad's, so it needs the boss's rows even under Available: from the keeper's cache, else ranked once off the main thread and cached (J12).
+            let reference = screen == .raids ? await keeper.raidRowsNow(row, style: style, ctx: ctx) : nil
+            guard !Task.isCancelled else { return }
+            let b = self.builder(kept: surface.kept, rows: reference)
             let bestUnedited = surface.isBestSuggestion
             let value = await Task.detached(priority: .userInitiated) {
                 bestUnedited ? SquadStrength.bestSquad(reference: b.reference(style: style)) : b.squadStrength(filled: filled, options: options, byId: byId, mode: mode, reference: b.reference(style: style))
@@ -582,7 +603,7 @@ struct EventSquadView: View {
             if !Task.isCancelled {
                 strength = (strengthKey, value)
                 // The Current's figure is written back to the stored Current, so a history row later records it (H6).
-                workspace.record(surface, keeper: keeper, strength: value.percent)
+                workspace.record(surface, keeper: keeper, strength: value.percent, for: surface.squad.slots)
             }
         }
         // A slot of a changed squad that refilled (its copy left the box, or a swap emptied it) is kept as shown, so it does not change again.
@@ -591,6 +612,8 @@ struct EventSquadView: View {
         // The boss's Best rows are worked out in the background once the screen is up (and again after a box change), so the switch to Best is normally instant.
         .task(id: rowsKey) { if screen == .raids { keeper.prefetchRaidRows([row], style: style, ctx: ctx) } }
         .tracksBox(ctx, generation: $boxGeneration)
+        // A picker tap still waiting for the ranking does not outlive the screen (J10).
+        .onDisappear { choosing?.cancel() }
         // The one-Mega message belongs to the tap that asked for it: another slot or another tab does not inherit it.
         .onChange(of: selected) { _, _ in megaMessageSlot = nil }
         .onChange(of: workspace.state) { _, _ in megaMessageSlot = nil }
@@ -659,9 +682,13 @@ struct EventSquadView: View {
                 megaMessageSlot = nil
                 // Under Available there are no Best rows on screen, but a species pick stored under Best may resolve to this copy: read the Best rows to clear it (from the cache; if the
                 // prefetch has not got there, they are worked out off the main thread first).
-                let style = keeper.store.raidStyle
-                Task {
+                // The tap is applied only to the box it was drawn for: if the account or the box changed while it waited (a re-scan, a transferred copy), the screen has already redrawn and
+                // writing the captured squad back would undo that, so the tap is dropped (J2). So is a tap whose screen has gone (J10).
+                let style = keeper.store.raidStyle, account = keeper.account, generation = keeper.boxGeneration
+                choosing?.cancel()
+                choosing = Task {
                     let best = screen == .raids ? await keeper.raidRowsNow(row, style: style, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
+                    guard !Task.isCancelled, keeper.account == account, keeper.boxGeneration == generation else { return }
                     workspace.edit(surface, keeper: keeper) { $0.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: best), shown: filled) }
                 }
             },

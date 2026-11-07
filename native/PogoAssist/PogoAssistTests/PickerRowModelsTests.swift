@@ -128,6 +128,58 @@ final class PickerRowModelsTests: XCTestCase {
         XCTAssertNil(keeper.cachedRaidRows(key))
     }
 
+    /// J1: the Raids Best rows are needed (and the squad waits for the cache) whenever the body resolves a squad that holds a species pick, the Current included, never otherwise under Available.
+    func testTheBodyNeedsTheRaidRowsForAnySquadItResolvesWithASpeciesPick() {
+        let plain = [SquadSlot(role: "Mega", pick: "a"), SquadSlot(role: "Heavy hitter")]
+        let species = [SquadSlot(role: "Mega"), SquadSlot(role: "Heavy hitter", species: "palkia")]
+        XCTAssertTrue(EventSquadView.needsRaidRows(mode: .available, shown: plain, current: species), "the pill draws the Current, which holds a species pick")
+        XCTAssertFalse(EventSquadView.needsRaidRows(mode: .available, shown: plain, current: plain), "no species picks under Available: nothing to wait for")
+        XCTAssertFalse(EventSquadView.needsRaidRows(mode: .available, shown: plain, current: nil))
+        XCTAssertTrue(EventSquadView.needsRaidRows(mode: .available, shown: species, current: nil), "the shown tab's own species pick")
+        XCTAssertTrue(EventSquadView.needsRaidRows(mode: .best, shown: plain, current: nil), "Best always")
+    }
+
+    /// J1: the builder the view makes never ranks. With no rows it lists none and the ranking is not entered; the default (tests, background callers) still ranks on the spot.
+    func testABuilderThatMayNotRankOnTheSpotListsNoRowsAndDoesNotRank() throws {
+        let c = ctx()
+        let row = try XCTUnwrap(Self.hub.rotation.first { $0.kind == .fiveStar && $0.bosses.contains { $0.speciesId == "palkia" } })
+        final class Counter: @unchecked Sendable { private let lock = NSLock(); private var n = 0; func hit() { lock.lock(); n += 1; lock.unlock() }; var count: Int { lock.lock(); defer { lock.unlock() }; return n } }
+        let counter = Counter()
+        var b = EventPickerBuilder(screen: .raids, row: row, ctx: c)
+        b.rank = { r, context in counter.hit(); return HubSquads.bestRaidRows(row: r, ctx: context) }
+        b.rowsOnTheSpot = false
+        XCTAssertTrue(b.bestRows().isEmpty)
+        XCTAssertTrue(b.resolve(slots: HubSquads.defaultRaidSlots(), mode: .best).options.isEmpty)
+        XCTAssertEqual(b.reference(style: .balanced).compactMap { $0 }.count, 0, "and the strength reference works nothing out")
+        XCTAssertEqual(counter.count, 0, "the ranking was never called")
+        b.rowsOnTheSpot = true
+        XCTAssertFalse(b.bestRows().isEmpty, "a builder that may rank still does")
+        XCTAssertEqual(counter.count, 1)
+        // Max has a table, not a ranking: the flag does not touch it.
+        var max = EventPickerBuilder(screen: .max, row: row, ctx: c)
+        max.rowsOnTheSpot = false
+        XCTAssertEqual(max.bestRows().count, EventPickerBuilder(screen: .max, row: row, ctx: c).bestRows().count)
+    }
+
+    /// J2: a tap that waits for the Best rows can tell the box moved: the keeper's generation changes with the box, and the ranking finished for the old box is not stored.
+    @MainActor
+    func testABoxChangeDuringARankingMovesTheGenerationAndTheOldResultIsNotStored() async throws {
+        let row = try XCTUnwrap(Self.hub.rotation.first { !$0.bosses.isEmpty })
+        let c = ctx(today: row.from)
+        let keeper = SquadKeeper()
+        let before = keeper.boxGeneration
+        let key = keeper.raidRowsKey(row, style: .balanced, today: c.today)
+        keeper.computeRaidRows = { _, _ in
+            // The box changes while the ranking is being worked out (the main actor is free: the caller is suspended).
+            DispatchQueue.main.sync { MainActor.assumeIsolated { keeper.boxChanged() } }
+            return []
+        }
+        _ = await keeper.raidRowsNow(row, style: .balanced, ctx: c)
+        XCTAssertNotEqual(keeper.boxGeneration, before, "the caller sees that the box moved")
+        XCTAssertNil(keeper.cachedRaidRows(key), "the result for the old box is not stored")
+        XCTAssertNil(keeper.cachedRaidRows(keeper.raidRowsKey(row, style: .balanced, today: c.today)))
+    }
+
     /// H3: the name a store remembers, and a history disc shows, is the build of the screen's own area, so a disc's letter matches the slot card.
     func testARememberedNameTakesTheBuildOfTheScreensOwnArea() throws {
         let c = ctx()

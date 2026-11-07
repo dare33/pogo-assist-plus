@@ -19,7 +19,8 @@ final class SquadKeeper: ObservableObject {
     /// The Raids Best rows worked out so far, by `raidRowsKey` (pass 2-6, H4): a ranking takes about 0.2 s cold, so it is computed in a background task, never in a view body, and a view only
     /// looks it up. Cleared whenever the box or its advice changes (`boxChanged`), which also changes the key.
     @Published private(set) var raidRows: [String: [HubSquads.BestRow]] = [:]
-    @Published private(set) var raidRowsStamp = 0
+    /// Bumped whenever the box or its advice changes (`boxChanged`): it keys the rows above, and a tap that waited for a ranking is dropped if it moved on (J2).
+    @Published private(set) var boxGeneration = 0
     private var raidRowsPending = Set<String>()
     /// What ranks a boss (replaceable, so a test can see where it runs).
     var computeRaidRows: @Sendable (HubData.RotationRow, HubContext) -> [HubSquads.BestRow] = { HubSquads.bestRaidRows(row: $0, ctx: $1) }
@@ -62,21 +63,21 @@ final class SquadKeeper: ObservableObject {
     // MARK: Raids Best rows (H4)
 
     /// The cache key of a boss's rows: boss, style, day and the box generation (`boxChanged`), never a hash of the game master.
-    func raidRowsKey(_ row: HubData.RotationRow, style: RaidStyle, today: String) -> String { "raids|\(row.from)|\(row.title)|\(style.rawValue)|\(today)|\(raidRowsStamp)" }
+    func raidRowsKey(_ row: HubData.RotationRow, style: RaidStyle, today: String) -> String { "raids|\(row.from)|\(row.title)|\(style.rawValue)|\(today)|\(boxGeneration)" }
 
     /// A dictionary lookup; nil until the rows are worked out.
     func cachedRaidRows(_ key: String) -> [HubSquads.BestRow]? { raidRows[key] }
 
     /// The box or its advice changed: what was worked out is dropped and a result still being worked out is ignored.
     func boxChanged() {
-        raidRowsStamp &+= 1
+        boxGeneration &+= 1
         raidRowsPending = []
         if !raidRows.isEmpty { raidRows = [:] }
     }
 
     private func storeRaidRows(_ key: String, _ rows: [HubSquads.BestRow]) {
         raidRowsPending.remove(key)
-        guard key.hasSuffix("|\(raidRowsStamp)") else { return }
+        guard key.hasSuffix("|\(boxGeneration)") else { return }
         raidRows[key] = rows
     }
 
@@ -239,8 +240,11 @@ final class SquadWorkspace: ObservableObject {
         guard s.account == keeper.account, s.account == state.account else { return }
         if s.tab == .current {
             keeper.update { store in
-                var q = store.current(s.ref) ?? SquadStore.Saved(slots: s.defaults)
+                let was = store.current(s.ref) ?? SquadStore.Saved(slots: s.defaults)
+                var q = was
                 change(&q)
+                // A change that leaves the slots as they were (choosing the Pokémon already there) is no edit: it neither marks the squad edited nor clears its figure (J3).
+                if playerEdit && q.slots == was.slots { return }
                 // A player's edit: edited since it was set, and the figure it was set with no longer describes it. An automatic refill (`adopt`) is neither.
                 if playerEdit { q.edited = true; q.strength = nil }
                 store.setCurrent(q, s.ref)
@@ -268,10 +272,11 @@ final class SquadWorkspace: ObservableObject {
     }
 
     /// The strength task worked out the Current's figure: it is written back to the stored Current (edited stays as it is), so the figure is never lost for good and a history row
-    /// records it. Nothing is written on another tab, for another account, or when the figure is already there.
-    func record(_ s: SquadSurface, keeper: SquadKeeper, strength: Int?) {
+    /// records it. `slots` are the squad's slots the figure was computed for: a late result is dropped when the stored Current is no longer that squad (a history Set squad
+    /// restored another one meanwhile, J11). Nothing is written on another tab, for another account, or when the figure is already there.
+    func record(_ s: SquadSurface, keeper: SquadKeeper, strength: Int?, for slots: [SquadSlot]) {
         guard s.tab == .current, let strength, s.account == keeper.account, s.account == state.account,
-              var q = keeper.store.current(s.ref), q.strength != strength else { return }
+              var q = keeper.store.current(s.ref), q.slots == slots, q.strength != strength else { return }
         q.strength = strength
         keeper.update { $0.setCurrent(q, s.ref) }
     }

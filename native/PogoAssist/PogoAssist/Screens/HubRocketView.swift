@@ -369,7 +369,7 @@ private struct RocketSquadView: View {
             if !Task.isCancelled {
                 strength = (strengthKey, value)
                 // The Current's figure is written back to the stored Current, so a history row later records it (H6).
-                workspace.record(surface, keeper: keeper, strength: value.percent)
+                workspace.record(surface, keeper: keeper, strength: value.percent, for: surface.squad.slots)
             }
         }
         // A slot of a changed squad that refilled is kept as shown, so it does not change again.

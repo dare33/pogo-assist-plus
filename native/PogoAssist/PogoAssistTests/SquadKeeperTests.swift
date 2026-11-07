@@ -310,13 +310,13 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertNil(keeper.store.current(.gym)?.strength)
         XCTAssertEqual(keeper.store.current(.gym)?.edited, true)
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.record(s, keeper: keeper, strength: 64)
+        ws.record(s, keeper: keeper, strength: 64, for: s.squad.slots)
         XCTAssertEqual(keeper.store.current(.gym)?.strength, 64)
         XCTAssertEqual(keeper.store.current(.gym)?.edited, true)
         // Replacing it now records that figure, not "—".
         ws.select(.available, ref: .gym, keeper: keeper)
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.record(s, keeper: keeper, strength: 99)
+        ws.record(s, keeper: keeper, strength: 99, for: s.squad.slots)
         XCTAssertEqual(keeper.store.current(.gym)?.strength, 64, "only the Current tab writes the Current's figure")
         ws.edit(s, keeper: keeper) { $0.choose("c", at: 0, shown: self.shown($0)) }
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
@@ -325,6 +325,48 @@ final class SquadKeeperTests: XCTestCase {
         // Delete records the same way.
         ws.unsetCurrent(ws.surface(.gym, store: keeper.store, defaults: defaults), keeper: keeper, date: t0.addingTimeInterval(120))
         XCTAssertEqual(keeper.store.history["gym"]?.first?.strength, 70)
+    }
+
+    /// J3: an edit of the Current that leaves its slots as they were (choosing the Pokémon already in the slot) is no edit: the figure and `edited` are untouched, so the next Set or Delete
+    /// still records the figure.
+    func testAnEditThatChangesNothingKeepsTheCurrentsFigure() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 55, date: t0)
+        ws.select(.current, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        let before = keeper.store.current(.gym)
+        let pick = before?.slots[0].pick
+        XCTAssertNotNil(pick)
+        ws.edit(s, keeper: keeper) { $0.choose(pick!, at: 0, shown: self.shown($0)) }
+        XCTAssertEqual(keeper.store.current(.gym), before, "the same Pokémon in the same slot writes nothing")
+        XCTAssertEqual(keeper.store.current(.gym)?.strength, 55)
+        XCTAssertNotEqual(keeper.store.current(.gym)?.edited, true)
+        // A real change still clears it.
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        XCTAssertNil(keeper.store.current(.gym)?.strength)
+        XCTAssertEqual(keeper.store.current(.gym)?.edited, true)
+    }
+
+    /// J11: a late figure is written only to the Current it was computed for. After a history Set squad put another squad there, it is dropped.
+    func testALateFigureIsNotWrittenToARestoredSquad() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: nil, date: t0)
+        ws.select(.current, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        let computedFor = s.squad.slots
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        let after = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertNotEqual(after.squad.slots, computedFor)
+        ws.record(s, keeper: keeper, strength: 77, for: computedFor)
+        XCTAssertNil(keeper.store.current(.gym)?.strength, "a figure for slots the Current no longer holds is dropped")
+        ws.record(after, keeper: keeper, strength: 66, for: after.squad.slots)
+        XCTAssertEqual(keeper.store.current(.gym)?.strength, 66)
     }
 
     /// H1: through the workspace, Undo reverses the last change exactly and a change that left nothing to undo gives a toast with no Undo.
