@@ -14,6 +14,13 @@ final class SquadKeeper: ObservableObject {
     private(set) var account: String?
     /// The box's names by entry id (`squadPickNames`), so a write remembers the names of the copies a squad holds while they are still in the box (`SquadStore.remember`).
     private var boxNames: [String: String] = [:]
+    /// The Raids Best rows worked out so far, by `raidRowsKey` (pass 2-6, H4): a ranking takes about 0.2 s cold, so it is computed in a background task, never in a view body, and a view only
+    /// looks it up. Cleared whenever the box or its advice changes (`boxChanged`), which also changes the key.
+    @Published private(set) var raidRows: [String: [HubSquads.BestRow]] = [:]
+    @Published private(set) var raidRowsStamp = 0
+    private var raidRowsPending = Set<String>()
+    /// What ranks a boss (replaceable, so a test can see where it runs).
+    var computeRaidRows: @Sendable (HubData.RotationRow, HubContext) -> [HubSquads.BestRow] = { HubSquads.bestRaidRows(row: $0, ctx: $1) }
     /// The box's entry ids at the last attach (nil while the box was not loaded): what a restored or undone squad is reconciled against (H8).
     private var boxIds: Set<String>?
 
@@ -48,6 +55,51 @@ final class SquadKeeper: ObservableObject {
         guard s != store else { return }
         store = s
         if let account { Self.save(s, for: account) }
+    }
+
+    // MARK: Raids Best rows (H4)
+
+    /// The cache key of a boss's rows: boss, style, day and the box generation (`boxChanged`), never a hash of the game master.
+    func raidRowsKey(_ row: HubData.RotationRow, style: RaidStyle, today: String) -> String { "raids|\(row.from)|\(row.title)|\(style.rawValue)|\(today)|\(raidRowsStamp)" }
+
+    /// A dictionary lookup; nil until the rows are worked out.
+    func cachedRaidRows(_ key: String) -> [HubSquads.BestRow]? { raidRows[key] }
+
+    /// The box or its advice changed: what was worked out is dropped and a result still being worked out is ignored.
+    func boxChanged() {
+        raidRowsStamp &+= 1
+        raidRowsPending = []
+        if !raidRows.isEmpty { raidRows = [:] }
+    }
+
+    private func storeRaidRows(_ key: String, _ rows: [HubSquads.BestRow]) {
+        raidRowsPending.remove(key)
+        guard key.hasSuffix("|\(raidRowsStamp)") else { return }
+        raidRows[key] = rows
+    }
+
+    /// Works out the rows of each boss not yet cached, one after another, in a background task at the lowest priority (after the strength bar's), so the switch to Best is normally instant.
+    func prefetchRaidRows(_ rows: [HubData.RotationRow], style: RaidStyle, ctx: HubContext) {
+        let todo = rows.map { ($0, raidRowsKey($0, style: style, today: ctx.today)) }.filter { raidRows[$0.1] == nil && !raidRowsPending.contains($0.1) }
+        guard !todo.isEmpty else { return }
+        for (_, key) in todo { raidRowsPending.insert(key) }
+        let compute = computeRaidRows
+        Task.detached(priority: .background) { [weak self] in
+            for (row, key) in todo {
+                let out = compute(row, ctx)
+                await self?.storeRaidRows(key, out)
+            }
+        }
+    }
+
+    /// The rows of one boss, from the cache or worked out off the main thread now (a tap that needs them before the prefetch got there).
+    func raidRowsNow(_ row: HubData.RotationRow, style: RaidStyle, ctx: HubContext) async -> [HubSquads.BestRow] {
+        let key = raidRowsKey(row, style: style, today: ctx.today)
+        if let have = raidRows[key] { return have }
+        let compute = computeRaidRows
+        let out = await Task.detached(priority: .userInitiated) { compute(row, ctx) }.value
+        storeRaidRows(key, out)
+        return out
     }
 
     nonisolated static func load(_ account: String) -> SquadStore {
@@ -120,6 +172,9 @@ struct SquadAttach: ViewModifier {
             .onChange(of: model.snapshot?.seq) { _, _ in attach() }
             .onChange(of: model.boxLoaded) { _, _ in attach() }
             .onChange(of: model.hubAdvice != nil) { _, _ in attach() }
+            // What was ranked for the old box is dropped (H4).
+            .onChange(of: model.hubAdvice) { _, _ in keeper.boxChanged() }
+            .onChange(of: model.entries) { _, _ in keeper.boxChanged() }
     }
 
     private func attach() {

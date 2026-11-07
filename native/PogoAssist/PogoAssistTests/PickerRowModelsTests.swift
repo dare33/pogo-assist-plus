@@ -91,6 +91,43 @@ final class PickerRowModelsTests: XCTestCase {
         XCTAssertLessThan(perSlot, 40, "one game master hash per picker, not one per row")
     }
 
+    /// H4: Raids Best rows are worked out in a background task and cached; the view only looks them up. The ranking never runs on the main thread, a read is not a computation, and a box
+    /// change drops what was ranked.
+    @MainActor
+    func testRaidsBestRowsAreRankedOffTheMainThreadAndOnlyReadFromTheCache() async throws {
+        final class Probe: @unchecked Sendable {
+            private let lock = NSLock()
+            private var onMain = 0, total = 0
+            func hit() { lock.lock(); total += 1; if Thread.isMainThread { onMain += 1 }; lock.unlock() }
+            var counts: (onMain: Int, total: Int) { lock.lock(); defer { lock.unlock() }; return (onMain, total) }
+        }
+        let c = ctx()
+        let row = try XCTUnwrap(Self.hub.rotation.first { $0.kind == .fiveStar && $0.bosses.contains { $0.speciesId == "palkia" } })
+        let keeper = SquadKeeper(), probe = Probe()
+        keeper.computeRaidRows = { r, context in probe.hit(); return HubSquads.bestRaidRows(row: r, ctx: context) }
+        let key = keeper.raidRowsKey(row, style: .balanced, today: c.today)
+        XCTAssertNil(keeper.cachedRaidRows(key), "nothing is ranked until asked")
+        XCTAssertEqual(probe.counts.total, 0, "a read is a lookup")
+        keeper.prefetchRaidRows([row], style: .balanced, ctx: c)
+        var waited = 0
+        while keeper.cachedRaidRows(key) == nil && waited < 600 { try await Task.sleep(nanoseconds: 100_000_000); waited += 1 }
+        let rows = try XCTUnwrap(keeper.cachedRaidRows(key), "the ranking arrives")
+        XCTAssertFalse(rows.isEmpty)
+        XCTAssertEqual(probe.counts.onMain, 0, "the ranking was never entered on the main thread")
+        XCTAssertEqual(probe.counts.total, 1)
+        for _ in 0..<5 { _ = keeper.cachedRaidRows(key) }
+        keeper.prefetchRaidRows([row], style: .balanced, ctx: c)
+        XCTAssertEqual(probe.counts.total, 1, "reading the cache, and asking again, rank nothing more")
+        // The screen's builder reads the rows it is given and does not rank (given none it would list the whole ranking).
+        let given = EventPickerBuilder(screen: .raids, row: row, ctx: c, raidRows: [])
+        XCTAssertTrue(given.resolve(slots: HubSquads.defaultRaidSlots(), mode: .best).options.isEmpty, "the injected rows are the Best list")
+        XCTAssertFalse(EventPickerBuilder(screen: .raids, row: row, ctx: c, raidRows: rows).resolve(slots: HubSquads.defaultRaidSlots(), mode: .best).options.isEmpty)
+        // A change to the box or its advice drops what was ranked.
+        keeper.boxChanged()
+        XCTAssertNil(keeper.cachedRaidRows(keeper.raidRowsKey(row, style: .balanced, today: c.today)))
+        XCTAssertNil(keeper.cachedRaidRows(key))
+    }
+
     /// H3: the name a store remembers, and a history disc shows, is the build of the screen's own area, so a disc's letter matches the slot card.
     func testARememberedNameTakesTheBuildOfTheScreensOwnArea() throws {
         let c = ctx()
