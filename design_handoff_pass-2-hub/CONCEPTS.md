@@ -91,7 +91,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Squad status line**: one line over the slots, "Ready", "Nearly ready: 2 need work" or "Not ready: 2 to get, 1 empty",
   with a dot in the same colour (rule 30).
 - **Squad strength**: one bar under the status line for the whole squad: the squad's slot figures added up over the Best squad's, "Squad strength 78% of best", with "92% after upgrades"
-  when the suggested upgrades add to it, and "Matches the best squad" at or over it (rule 32).
+  when the suggested upgrades add to it, and "Squad strength 100%" at or over it (rule 32).
 - **Pinned squad strip**: the row of one chip per slot that stays at the top of the screen while a slot's picker is open (rule 34).
 - **Tier chip** (S, A, B): the tier our research tables give a Pokémon for the area.
 - **"i"**: the round info button; every explanation of a weight or a rule sits behind one (D17).
@@ -316,7 +316,7 @@ Stated so each can be checked against the code.
       your current squad? Your saved changes are replaced by this squad." (`squad-save-current-confirm|cancel`); a squad that is the Current already is saved without a question. After saving, the player stays on the tab they are on, the squad says
       **Saved to Current** (`squad-saved-note`) for as long as the stored Current is that saved squad, and the Current tab appears. The note ends when the draft changes, when Current is deleted, replaced from
       another tab or edited. Every save, "Set this squad" from an unedited tab included, is announced to VoiceOver. Re-choosing the ticked Pokémon, flipping a role back, or "Set this squad" on an unedited
-      tab leaves the tab unedited: no Save and no Reset, and an unedited Best still reads "the best squad" (rule 32).
+      tab leaves the tab unedited: no Save and no Reset, and an unedited Best still reads "Squad strength 100%" (rule 32).
    4. **Current** is the stored squad: its picks (a copy as its entry id, a Best row the box lacks as a species key), roles, the "listed for <role>" marker and the "Squad set" mark.
       **Edits on Current are saved straight away.** Every change keeps the squad exactly as shown, then applies the change (a Pokémon chosen for a slot, a role changed, "Set this
       squad"): each slot's shown Pokémon becomes its kept pick, an empty shown slot is kept empty. **Current is drawn as kept**: no mode placement rule hides a kept pick on it (the pass 2-4
@@ -409,13 +409,13 @@ Stated so each can be checked against the code.
       its best moves, exactly the figure a not-owned Best row gets (rule 31's last bullet), whether or not the box holds a copy. Gym: the Bulk of that Pokémon at full build. PvP: its league Score.
       Rocket: damage against the slot's lineup as rule 31. Max: the Max squad's Best of three.
     - **Value** for a squad on any tab = the sum of its slots' figures (each exactly the figure that slot's Pokémon shows as a row in that slot's picker: now, and after the suggested
-      upgrade) over the sum of the reference's slot figures, as a whole percent **rounded down**, **capped at 100%** (100% reads only when the squad matches or beats the reference). A squad at or over the reference reads **"Matches the best squad"**. PvP: the mean Score
+      upgrade) over the sum of the reference's slot figures, as a whole percent **rounded down**, **capped at 100%** (100% reads only when the squad matches or beats the reference). A squad at or over the reference reads **"Squad strength 100%"** (pass 2-6; Greg, READBACK 1.7: no "Matches the best squad"). PvP: the mean Score
       over the reference's mean Score, with no "after" part.
     - An **empty slot counts 0** against its reference slot. A slot whose Pokémon has no figure (IVs or level not read, "score not known") is **left out together with the reference's slot at
       the same index**, and the line says "N of M slots scored". A reference slot with no figure leaves that index out of both sides. With no reference figure at all, or no scored slot, the
       line says "Squad strength not read" and draws no bar.
     - Words: "Squad strength 78% of best" and, when the figure after upgrades rounds to a higher whole percent, "92% after upgrades" (only when the bar draws its faint part); at or over the
-      reference "Squad strength 100% · Matches the best squad". **The unedited Best tab reads 100%** ("Squad strength 100% · the best squad"), through the same safeguards (a reference slot with no figure is left out and the line says "N of M slots scored"; with no reference figure there is no bar); an edited Best draft shows its own value against
+      reference "Squad strength 100%". **The unedited Best tab reads 100%** ("Squad strength 100%"; no "the best squad", no "Matches the best squad", no dot: the screen draws the line and "87% after upgrades" in one tone, with the figures bold), through the same safeguards (a reference slot with no figure is left out and the line says "N of M slots scored"; with no reference figure there is no bar); an edited Best draft shows its own value against
       the unedited Best. VoiceOver reads the same words. Current's bar compares with the Best of the style now chosen.
     - It follows the squad as drawn, so a swap, a role change, a tab switch and a style change move it. It is worked out off the main thread, keyed by the box generation, the advice, today, the squad, the tab and the style: the row keeps its place with an empty track until the figure is ready. At accessibility text sizes the two labels stack.
 

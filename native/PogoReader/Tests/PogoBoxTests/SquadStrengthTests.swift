@@ -28,25 +28,35 @@ final class SquadStrengthTests: XCTestCase {
         XCTAssertEqual(against([d(0.6, 0.2)], [1]).after, 0.6)
     }
 
-    func testAtOrOverTheReferenceReadsMatchesTheBestSquadAndIsCapped() {
+    func testAtOrOverTheReferenceReadsOneHundredPercentAndIsCapped() {
         let over = against([d(1), d(0.9)], [0.8, 0.8])
         XCTAssertEqual(over.now, 1)
         XCTAssertTrue(over.matchesBest)
-        XCTAssertEqual(over.text, "Squad strength 100% · Matches the best squad")
+        XCTAssertEqual(over.text, "Squad strength 100%")
         XCTAssertNil(over.afterText, "nothing to gain above the reference")
         XCTAssertFalse(over.strength.hasFaint)
         let equal = against([d(0.8)], [0.8])
         XCTAssertTrue(equal.matchesBest)
-        XCTAssertEqual(equal.spoken, "Squad strength 100 percent, Matches the best squad")
+        XCTAssertEqual(equal.spoken, "Squad strength 100 percent")
         // Just under does not match.
         XCTAssertFalse(against([d(0.79)], [0.8]).matchesBest)
+    }
+
+    /// Pass 2-6 (Greg, READBACK 1.7): the words carry no "the best squad", no "Matches the best squad" and no dot, spoken or drawn.
+    func testNoWordOfTheBestSquadIsLeftInAnyLine() {
+        let lines = [against([d(1), d(0.9)], [0.8, 0.8]), against([d(0.8)], [0.8]), against([d(0.5, 0.7)], [1]), SquadStrength.bestSquad(reference: [0.9, nil, 0.7])]
+        for l in lines { for t in [l.text, l.spoken] { XCTAssertFalse(t.contains("best squad") || t.contains("·") || t.contains("Matches"), t) } }
+        XCTAssertEqual(lines[2].text, "Squad strength 50% of best")
+        XCTAssertEqual(lines[2].afterText, "70% after upgrades")
+        XCTAssertEqual(lines[2].spoken, "Squad strength 50 percent of best, 70 percent after upgrades")
+        XCTAssertEqual(lines[3].spoken, "Squad strength 100 percent, 2 of 3 slots scored")
     }
 
     func testTheUneditedBestTabIsTheBestSquad() {
         let s = SquadStrength.bestSquad(reference: Array(repeating: 0.8, count: 6))
         XCTAssertEqual(s.now, 1)
-        XCTAssertEqual(s.text, "Squad strength 100% · the best squad")
-        XCTAssertEqual(s.spoken, "Squad strength 100 percent, the best squad")
+        XCTAssertEqual(s.text, "Squad strength 100%")
+        XCTAssertEqual(s.spoken, "Squad strength 100 percent")
         XCTAssertNil(s.afterText)
         XCTAssertNil(s.scoredText)
     }
@@ -116,7 +126,7 @@ final class SquadStrengthTests: XCTestCase {
         XCTAssertEqual(some.now, 1)
         XCTAssertEqual(some.scored, 4)
         XCTAssertEqual(some.scoredText, "4 of 6 slots scored")
-        XCTAssertEqual(some.text, "Squad strength 100% · the best squad")
+        XCTAssertEqual(some.text, "Squad strength 100%")
         let none = SquadStrength.bestSquad(reference: [nil, nil, nil])
         XCTAssertNil(none.now)
         XCTAssertEqual(none.text, "Squad strength not read")
@@ -133,7 +143,7 @@ final class SquadStrengthTests: XCTestCase {
         XCTAssertEqual(against([d(0.70)], [1]).text, "Squad strength 70% of best", "no floating point loss at a whole percent")
         XCTAssertEqual(against([d(0.5, 0.998)], [1]).afterText, "99% after upgrades")
         XCTAssertNil(against([d(0.504, 0.509)], [1]).afterText, "the same whole percent after rounding down shows no after words")
-        XCTAssertEqual(against([d(1.0)], [1]).text, "Squad strength 100% · Matches the best squad")
+        XCTAssertEqual(against([d(1.0)], [1]).text, "Squad strength 100%")
     }
 
     /// H17: owned figures below the reference (not the reference fed back in): the value is the owned sum over the reference sum.
