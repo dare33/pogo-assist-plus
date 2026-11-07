@@ -122,7 +122,8 @@ public struct SquadStore: Codable, Equatable {
         public init(squad: Saved, endsOn: String) { self.squad = squad; self.endsOn = endsOn }
     }
 
-    public var version: Int = 1
+    /// 2 from pass 2-6 (stored Available and Best edits, the history). A version-1 file decodes with those empty; nothing old is renamed.
+    public var version: Int = 2
     /// Raid and Max squads by `eventKey`.
     public var raids: [String: EventSquad] = [:]
     public var max: [String: EventSquad] = [:]
@@ -136,10 +137,20 @@ public struct SquadStore: Codable, Equatable {
     public var modes: [String: SquadMode] = [:]
     /// Raids only (pass 2-5, rule 33): Balanced | Max damage, the roles the Available and Best suggestions are made of. Current squads keep their own roles.
     public var raidStyle: RaidStyle = .balanced
+    /// Pass 2-6, rule 27: the player's edits of the Available and Best suggestions, kept per squad and tab (Raids also per style). Keyed by `editKey`; an entry exists only while the
+    /// squad differs from its suggestion (`resetEdit` removes it and the screen draws the suggestion again).
+    public var edits: [String: Saved] = [:]
+    /// Pass 2-6, rule 27: the earlier Current squads of each squad (`SquadRef.key`), newest first, at most `historyLimit`.
+    public var history: [String: [HistoryEntry]] = [:]
+    /// The last day of each raid or Max event that holds edits or history, by `SquadRef.key`, so `pruned` can drop them with the event (an edit exists without a Current squad, so
+    /// `raids`/`max` cannot say when it ends).
+    public var eventEnds: [String: String] = [:]
+
+    public static let historyLimit = 10
 
     public init() {}
 
-    private enum CodingKeys: String, CodingKey { case version, raids, max, gym, rocket, pvp, modes, raidStyle }
+    private enum CodingKeys: String, CodingKey { case version, raids, max, gym, rocket, pvp, modes, raidStyle, edits, history, eventEnds }
 
     /// Tolerant: a key missing from an older file reads as empty, so adding a section later does not lose the saved squads.
     public init(from decoder: Decoder) throws {
@@ -152,6 +163,11 @@ public struct SquadStore: Codable, Equatable {
         pvp = try c.decodeIfPresent([String: Saved].self, forKey: .pvp) ?? [:]
         modes = try c.decodeIfPresent([String: SquadMode].self, forKey: .modes) ?? [:]
         raidStyle = try c.decodeIfPresent(RaidStyle.self, forKey: .raidStyle) ?? .balanced
+        edits = try c.decodeIfPresent([String: Saved].self, forKey: .edits) ?? [:]
+        history = try c.decodeIfPresent([String: [HistoryEntry]].self, forKey: .history) ?? [:]
+        eventEnds = try c.decodeIfPresent([String: String].self, forKey: .eventEnds) ?? [:]
+        // A version-1 file reads as it always did; what this build writes from now on is version 2.
+        if version < 2 { version = 2 }
     }
 
     // MARK: keys
@@ -208,6 +224,27 @@ public struct SquadStore: Codable, Equatable {
         var s = self
         s.raids = keep(raids)
         s.max = keep(max)
+        // Edits and history of a raid or Max event go with it. The day is the rotation row's current one, else the one stored when the first edit or history entry was made.
+        var rotationEnds = [String: String]()
+        for row in rotation { for screen in [SquadScreen.raids, .max] { rotationEnds[SquadRef.event(row: row, screen: screen).key] = row.to } }
+        let known = Array(Set(eventEnds.keys).union(rotationEnds.keys))
+        func owner(_ key: String) -> String? {
+            guard key.hasPrefix(SquadScreen.raids.rawValue + "|") || key.hasPrefix(SquadScreen.max.rawValue + "|") else { return nil }
+            return known.filter { key == $0 || key.hasPrefix($0 + "|") }.max { $0.count < $1.count }
+        }
+        func isEvent(_ key: String) -> Bool { key.hasPrefix(SquadScreen.raids.rawValue + "|") || key.hasPrefix(SquadScreen.max.rawValue + "|") }
+        func alive(_ key: String) -> Bool {
+            guard isEvent(key) else { return true }
+            guard let o = owner(key), let end = rotationEnds[o] ?? eventEnds[o] else { return false }
+            return end >= today
+        }
+        s.edits = edits.filter { alive($0.key) }
+        s.history = history.filter { alive($0.key) }
+        var ends = [String: String]()
+        for key in Array(s.edits.keys) + Array(s.history.keys) {
+            if let o = owner(key), let end = rotationEnds[o] ?? eventEnds[o] { ends[o] = end }
+        }
+        s.eventEnds = ends
         return s
     }
 
@@ -238,6 +275,8 @@ public struct SquadStore: Codable, Equatable {
         out.gym = clean(gym)
         out.rocket = rocket.mapValues(clean)
         out.pvp = pvp.mapValues(clean)
+        // A kept edit follows the box as Current does (rule 27.6); a history entry does not (the screen draws a Pokémon that left the box as gone).
+        out.edits = edits.mapValues(clean)
         return out
     }
 

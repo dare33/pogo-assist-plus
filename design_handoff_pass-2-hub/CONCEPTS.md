@@ -338,6 +338,15 @@ Stated so each can be checked against the code.
    that reads as a copy ticks only the row the player picked. A Max row's rotation line reads the Max battles only. A copy picked under one mode that the other mode's list does not
    hold still shows in that mode's picker, ticked, with its own status.
 
+   **Pass 2-6, engine (slice 1; the screens' behaviour is written with slice 3).** The engine now **stores the edits of Available and Best** (`SquadStore.edits`), per account, per
+   squad and per tab, and on Raids per style, so they survive leaving the screen and the app (Greg, D59 to D70: kept edits instead of drafts); `resetEdit` drops one and the screen draws
+   the suggestion again. A raid or Max squad's edits go with its event, and a re-scan follows the box for an edit as it does for Current (a pick whose copy left is emptied). It also
+   stores the **history** (`SquadStore.history`): per squad, the earlier Current squads, newest first, at most ten, each with its date, slots, the tab it was set from, whether it was
+   edited and the strength figure the screen passed in when it was recorded. A row is made when a Current is replaced, restored, unset or deleted, never for an edit on Current, and not
+   again for a squad equal to the newest row. History slots are kept as they were (the screen draws a Pokémon that left the box as gone); a restored Current is reconciled as any
+   Current. **"Set" is "has a Current"**: the stored `isSet` mark stays in the file for old builds, and an older squad with the mark alone becomes a Current. The file is version 2; a
+   version-1 file reads with no edits and no history.
+
 28. **Available upgrades** (phone feedback item 10; S1: "provides alternative options for each slot when clicked on"): tapping a slot
    under Available lists the alternatives from the box, the player's own Pokémon with those at Full
    strength first and, under the heading "Available upgrades:", those whose build still needs work (the mark and cost stay

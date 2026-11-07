@@ -38,7 +38,9 @@ final class SquadCurrentTests: XCTestCase {
         XCTAssertNotNil(store.current(.rocket(leader: "Arlo")))
         for r in ref { store.deleteCurrent(r) }
         for r in ref { XCTAssertNil(store.current(r), r.key) }
-        XCTAssertEqual(store, { var s = SquadStore(); s.raids = [:]; return s }(), "nothing is left behind")
+        // Pass 2-6: deleting moves the Current to the history (rule 27.7), so the history and the event days it recorded are all that is left.
+        store.history = [:]; store.eventEnds = [:]
+        XCTAssertEqual(store, { var s = SquadStore(); s.raids = [:]; return s }(), "nothing else is left behind")
     }
 
     func testDeletingCurrentLeavesTheTabAndStyleChoicesAlone() {
