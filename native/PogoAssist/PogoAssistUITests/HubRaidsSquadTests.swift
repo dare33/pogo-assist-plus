@@ -419,14 +419,16 @@ final class HubRaidsSquadTests: SquadUITestCase {
         openTile(app, "raids")
         palkia(app)
         assertStripPinsTheSquad(app, "raids", open: 2, chip: 4, slots: 6, shotName: "raids-strip-scrolled")
-        // All six chips are hittable while the picker is scrolled (slice 3, D5): the strip no longer scrolls sideways.
-        openPicker(app, "raids", slot: 2)
-        for _ in 0..<3 { app.swipeUp() }
-        // (H18: the framework's hit test can say no for a chip drawn on screen under the strip's inset, so a chip is in reach when its frame is inside the screen and the strip, and a tap on it works.)
-        let strip = el(app, "squad-strip")
+        // All six chips take a tap while the picker is scrolled (slice 3, D5; H12): each tap opens that chip's slot, highlights its chip and no other. A frame inside the strip is not
+        // enough, so every chip is tapped, by coordinate because the framework's hit test can say no for a chip drawn on screen under the strip's inset (H18).
         for n in 1...6 {
             let c = app.buttons["squad-strip-chip-\(n)"]
-            XCTAssertTrue(c.isHittable || (c.frame.midX > 0 && c.frame.midX < app.frame.width && strip.frame.contains(c.frame.insetBy(dx: 1, dy: 1))), "chip \(n) is in reach with the picker scrolled: \(c.frame)")
+            XCTAssertTrue(c.exists, "slot \(n) has a chip")
+            c.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            let title = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Slot \(n) ·")).firstMatch
+            XCTAssertTrue(title.waitForExistence(timeout: 5), "tapping chip \(n) opens slot \(n)'s picker")
+            XCTAssertTrue(waitSelected(app.buttons["squad-strip-chip-\(n)"]), "and highlights chip \(n)")
+            for other in 1...6 where other != n { XCTAssertFalse(app.buttons["squad-strip-chip-\(other)"].isSelected, "chip \(other) is not the open slot when chip \(n) was tapped") }
         }
         closePicker(app)
         app.terminate()

@@ -157,6 +157,11 @@ class SquadUITestCase: XCTestCase {
             sleep(2)
             prepare(app)
             sleep(1)
+            // The tab the name says: the remembered one (or a Current that opens first) is not assumed.
+            let tabName = screen.hasSuffix("-best") ? "best" : "available"
+            selectTab(app, tabName)
+            scrollToTop(app)
+            assertTabSelected(app, tabName)
             shot("\(screen)-\(scheme)-\(size)")
             // The open picker's rows, scrolled up under the status bar (at the largest text size the picker is far down the page).
             if app.buttons["squad-picker-done"].exists { scrollPickerIntoView(app) } else { app.swipeUp() }
@@ -185,9 +190,10 @@ class SquadUITestCase: XCTestCase {
         return name
     }
 
-    /// Changes the squad once: a fresh row in slot 2, else (nothing fresh in the box) a swap with another slot's Pokémon; under Best when Available has nothing to offer.
-    func changeTheSquad(_ app: XCUIApplication, _ screen: String) {
-        for best in [false, true] {
+    /// Changes the squad once: a fresh row in slot 2, else (nothing fresh in the box) a swap with another slot's Pokémon; under Best when Available has nothing to offer (unless
+    /// `availableOnly`, which fails instead: a screenshot of Available must not be taken from the Best tab, H13).
+    func changeTheSquad(_ app: XCUIApplication, _ screen: String, availableOnly: Bool = false) {
+        for best in availableOnly ? [false] : [false, true] {
             if best { selectBest(app) }
             for n in [2, 1, 3] {
                 guard slot(app, screen, n).exists else { continue }
@@ -207,11 +213,25 @@ class SquadUITestCase: XCTestCase {
     /// Scrolls back to the top and chooses a tab (`current`, `available` or `best`).
     func selectTab(_ app: XCUIApplication, _ name: String) {
         let t = tab(app, name)
+        _ = t.waitForExistence(timeout: 60)
         var n = 0
         while !(t.exists && t.isHittable) && n < 8 { app.swipeDown(); n += 1 }
         XCTAssertTrue(t.exists, "the \(name) tab exists")
         if !t.isSelected { t.tap() }
         XCTAssertTrue(waitSelected(t), "the \(name) tab is selected")
+        // Raids Best is ranked in the background: the squad is there once the placeholder line has gone.
+        if name == "best" { XCTAssertTrue(waitGone(el(app, "squad-pending"), timeout: 60), "the Best squad is ready") }
+    }
+
+    /// Scrolls to the top of the page, the header in view (a swipe down at the top does nothing).
+    func scrollToTop(_ app: XCUIApplication) {
+        _ = tab(app, "available").waitForExistence(timeout: 60)
+        for _ in 0..<8 { app.swipeDown() }
+    }
+
+    /// A screenshot is only named for what it shows: the tab it is taken on must be the one the name says (H13).
+    func assertTabSelected(_ app: XCUIApplication, _ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(waitSelected(tab(app, name)), "the \(name) tab is selected for this shot", file: file, line: line)
     }
 
     func waitSelected(_ e: XCUIElement, timeout: TimeInterval = 5) -> Bool {
@@ -308,14 +328,21 @@ class SquadUITestCase: XCTestCase {
             openTile(app, tile ?? screen)
             prepare(app)
             XCTAssertTrue(slot(app, screen, 1).waitForExistence(timeout: 60))
-            // Edits are kept across launches: start each look from the suggestion, then make one edit.
+            // Edits are kept across launches (and so is the tab): start each look from Available with the suggestion, then make one edit there.
+            selectAvailable(app)
             let leftOver = app.buttons["squad-reset-draft"]
             if reveal(app, leftOver).exists { leftOver.tap(); XCTAssertTrue(waitGone(leftOver)) }
-            changeTheSquad(app, screen)
+            changeTheSquad(app, screen, availableOnly: true)
             XCTAssertTrue(reveal(app, app.buttons["squad-reset-draft"]).exists, "an edited tab has its Reset to suggestion link")
-            scrollToTabs(app)
+            // The default-size shot is the top of the page (the header in it); the second shows the tabs, the pill, the chips, the bar and the Reset link at the top of the screen.
+            scrollToTop(app)
+            assertTabSelected(app, "available")
             sleep(1)
-            shot("\(screen)-\(scheme)-\(size)")
+            if size == "default" { shot("\(screen)-\(scheme)-\(size)") }
+            scrollToTabs(app)
+            assertTabSelected(app, "available")
+            sleep(1)
+            shot(size == "default" ? "\(screen)-\(scheme)-\(size)-tabs" : "\(screen)-\(scheme)-\(size)")
             app.terminate()
         }
     }

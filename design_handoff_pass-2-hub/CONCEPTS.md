@@ -90,7 +90,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Same copy as <row>**: a Best row whose only copy is the one a higher row already shows; it still lists, with that note.
 - **Available upgrades:** the heading in an Available picker over the player's own Pokémon whose build still needs work;
   the ones at Full strength come first, above it (rule 28; phone feedback item 10).
-- **Status chip** (pass 2-6, D66, rule 35): the small pill with a sign and one word that says a Pokémon's status on a slot card or a picker row: **✓ Ready**, **↑ 206k** (or **↑ Upgrade**, **↑ No build**),
+- **Status chip** (pass 2-6, D68, rule 35): the small pill with a sign and one word that says a Pokémon's status on a slot card or a picker row: **✓ Ready**, **↑ 206k** (or **↑ Upgrade**, **↑ No build**),
   **◎ Get now** (with an **Easy / Medium / Hard** meter), **◌ Not now** (with the month) and **⇄ Slot 5**. VoiceOver reads the words, not the chips.
 - **Slot status**: the colour of a slot card's background: **ready** (green), **needs work** (amber), **to get** (red:
   under Best, not in the box) or **empty** (red). A card also
@@ -226,12 +226,12 @@ Stated so each can be checked against the code.
    **Best for a raid ranks every species by the damage estimate against the boss (top 12 per role), the table's tier shown where it lists the Pokémon** (pass 2-6; Greg, D65:
    "why are the options so limited ... is this really all there is available for us?", "agree c2 for raids", "Agreed top 12", and, for those who want damage first, "if the user wants damage
    focus they can toggle to damage"). Every released species (and its Mega or Primal forms) is judged at full build against this boss (level 50, 15/15/15, its best moves: the figure a Pokémon the
-   box lacks gets, rule 31); a Shadow-eligible species that is not a Mega is a second row as a Shadow; the role is `raidRole` (Mega or Primal: Mega; Shadow, or base Attack ≥ 1.3 × Defence: Heavy
+   box lacks gets, rule 31); a Shadow-eligible species that is not a Mega is a second row as a Shadow **when that Shadow exists**: the Raids table lists it under some type section, or the box holds a Shadow copy of the species (no Shadow row otherwise); the role is `raidRole` (Mega or Primal: Mega; Shadow, or base Attack ≥ 1.3 × Defence: Heavy
    hitter; else Bulky hitter). Each role keeps its 12 highest figures (ties: the table's tier, S before A before B before none, then the game master's order), listed Mega, Heavy hitter, Bulky
    hitter, each in damage order, so the suggested squad fills as before (the Mega slot takes Mega rows only). The tier chip shows only where the Raids table lists that Pokémon (that Shadow or
    not) under one of the boss's bring types; otherwise there is no chip. Availability: in the box; a boss now or coming (the rotation line); else the table's obtain text where it lists the
    Pokémon; else "Not available now" with no reason. Max, Gym, Rocket and PvP Best are unchanged (Max: logged for later, D65).
-   **One Mega** (pass 2-6, D68; Greg: "E1: the bold line only, in a smaller box", both tabs, the Mega chip stays tappable): in a slot's picker on Raids, under Available and under Best, choosing the **Mega** role chip
+   **One Mega** (pass 2-6, D67; Greg: "E1", "bold line only and reduce the size of the box to suit", both tabs, the Mega chip stays tappable; the panel's summary of E1 is "the bold line only, in a smaller box"): in a slot's picker on Raids, under Available and under Best, choosing the **Mega** role chip
    on a slot that is not the squad's Mega slot while another slot holds the squad's Mega shows only "You can only have 1 Mega slot" (`squad-picker-one-mega`, a box no taller than its line) in place of the rows and
    of the empty text. The slot's role is not changed by that tap (every other chip changes it at once, as before); another chip brings the rows back. The Mega slot's own picker, and the Mega chip when no slot holds a Mega,
    list the Mega candidates as before; All is unchanged. An empty Mega slot's card keeps its line "You can only have 1 Mega slot".
@@ -446,13 +446,13 @@ Stated so each can be checked against the code.
     style's own Available and Best edits (pass 2-6, D61: "edits kept per style"; switching back shows them again) and leaves Current untouched (one per squad, whatever the style). On Raids the style switch sits on the tabs' row (rule 27.1), with no caption. Max battles, Gym, Rocket and PvP have no style. The squad's (i) explains the two styles:
     "Balanced: a Mega, three heavy hitters and two bulky hitters that stay in longer." "Max damage: a Mega and five heavy hitters; faster, with more relobbies."
 
-34. **Pinned squad strip** (pass 2-5; Greg, phone run 5: "when scrolling down on the team/squad selector screens the squad currenlty chosen should remain visible as i scroll down currently it hides and i can only see th elist of pokmeon"; his choice: "Compact strip"; pass 2-6, D67, two rows of three). While a slot's picker is open, a compact strip stays pinned at the top of the screen's scroll area (`squad-strip`) as the player scrolls the
+34. **Pinned squad strip** (pass 2-5; Greg, phone run 5: "when scrolling down on the team/squad selector screens the squad currenlty chosen should remain visible as i scroll down currently it hides and i can only see th elist of pokmeon"; his choice: "Compact strip"; pass 2-6, D66, two rows of three). While a slot's picker is open, a compact strip stays pinned at the top of the screen's scroll area (`squad-strip`) as the player scrolls the
     Pokémon list: one chip per slot (identifier `squad-strip-chip-N`) showing the slot number, the Pokémon's name or "Empty" and the role colour, the slot being edited highlighted by an accent ring; tapping a chip opens that slot's picker. It is hidden when no picker is open.
     **Two rows of three** on the six-slot squads (Raids, Gym) and one row of three on the three-slot squads (Max, Rocket, PvP), each chip a third of the width, all in view with no sideways scrolling. A chip shows the name **without a bracketed form**
     ("Zamazenta (Crowned Shield)" is "Zamazenta", "Gardevoir (Shadow)" is "Gardevoir"; "Mega Charizard X" stays), cut with … if it still does not fit; VoiceOver reads the full name. A chip for a Pokémon **not in the box** (a Best pick) has a hollow number and a dashed edge in the role colour, and VoiceOver adds "not in your box"; "Empty" stays grey with the word.
     At accessibility text sizes the rows stay, a chip's name wraps to two lines and the strip grows; the list is inset below it, never pushed off screen. Each chip is one VoiceOver button ("Slot 2, Moltres, Heavy hitter, editing"). On all five squad screens.
 
-35. **Status chips** (pass 2-6; Greg, D66: "F1 symbol chips with one word, no legend"; the (i) explains the signs). Each status a Pokémon has on a squad screen is said once, as a small capsule (10.5 pt bold) with a sign and one word,
+35. **Status chips** (pass 2-6; Greg, D68: "f1", "legend not required going f1"; the panel's summary of that option is "F1 symbol chips with one word, no legend"; the (i) explains the signs). Each status a Pokémon has on a squad screen is said once, as a small capsule (10.5 pt bold) with a sign and one word,
     in a wrapping row under the name on a picker row and after the name on a slot card; colour is never the only sign:
     - **✓ Ready** (green): at Full strength, nothing left to do.
     - **↑ 206k** (orange): a power up, an evolution or a Mega Evolution still to do, with the build's cost as the arrow badge shows it (`HubModel.costShort`, with the dust or candy icon); **↑ Upgrade** when the work has no cost to name;
@@ -491,5 +491,5 @@ Greg's read-back answers (D54, D55); item 6 he kept (D56).
 11. **"Raids now" (where tag) vs "Now" (segment)**: same meaning (on now). No clash.
 12. **"Gaps" (Collection) vs "gap: …" (old Rocket slot text)**: the Rocket slot no longer says "gap:" except for a slot
    with no counter in the box; same meaning. No clash.
-13. **"Gardevoir (Shadow)" vs the tables' "Shadow Gardevoir"** (pass 2-6, D65, D69): every Shadow row or slot on a squad screen (slots, picker rows, strip chips, Best rows of Raids, Max, Gym, Rocket and PvP) is named as the box names a Shadow, the Pokémon's name and "(Shadow)"; the tables'
+13. **"Gardevoir (Shadow)" vs the tables' "Shadow Gardevoir"** (pass 2-6, D69): every Shadow row or slot on a squad screen (slots, picker rows, strip chips, Best rows of Raids, Max, Gym, Rocket and PvP) is named as the box names a Shadow, the Pokémon's name and "(Shadow)"; the tables'
    own "Shadow Gardevoir" is not shown there (`SquadWords.boxName` rewrites a leading "Shadow " at draw time). A Mega or Primal is written in front, as the game writes it, and the game master does not: it says "Gardevoir (Mega)", "Charizard (Mega X)", "Groudon (Primal)", and `SquadNames.display` turns them into "Mega Gardevoir", "Mega Charizard X", "Primal Groudon" on every squad screen (Raids Best rows, slot cards, picker rows, strip chips, history discs and the names the store remembers). Same meaning. No clash.

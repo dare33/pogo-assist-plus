@@ -89,6 +89,30 @@ final class SquadPiecesTests: XCTestCase {
         XCTAssertTrue(chips[1].spoken.hasSuffix("editing") && !chips[1].spoken.contains("not in your box"), chips[1].spoken)
     }
 
+    /// H7: an empty slot's strip chip is grey, never the role or the screen's palette.
+    func testAnEmptySlotsStripChipIsGrey() {
+        let empty = SlotCardModel(id: 4, role: "Bulky hitter", palette: .teal, emptyOutline: .clear, disc: "+", name: nil, status: .empty, spoken: "", identifier: "s")
+        let filled = SlotCardModel(id: 5, role: "Bulky hitter", palette: .teal, emptyOutline: .clear, disc: "+", name: "Blissey", status: .ready, spoken: "", identifier: "s")
+        let chips = [empty, filled].map { SquadStripChip(card: $0, selected: 0) }
+        XCTAssertTrue(chips[0].empty); XCTAssertFalse(chips[1].empty)
+        XCTAssertEqual(chips[0].name, "Empty")
+    }
+
+    /// H5: each status once on a picker row, as the panel: an upgrade keeps the cost at the head and its chip reads "↑ Upgrade"; a Ready row has the chip and no tick at the head.
+    func testAPickerRowShowsEachStatusOnce() {
+        let cost = MyPokemon.Cost(value: "206k", currency: .dust)
+        let up = PickerRowModel(id: "u", name: "Xerneas", ticked: false, mark: .upgrade(cost: cost, label: "Power up"), chips: [.upgrade(cost)], spoken: "")
+        XCTAssertEqual(up.headMark, up.mark, "the cost badge stays at the head")
+        XCTAssertEqual(up.pickerChips.map(\.text), ["↑ Upgrade"], "and the chip does not repeat the figure")
+        let ready = PickerRowModel(id: "r", name: "Staraptor", ticked: false, mark: .fullStrength, chips: [.ready], spoken: "")
+        XCTAssertEqual(ready.headMark, SquadMark.none, "no tick where the chip says Ready")
+        XCTAssertEqual(ready.pickerChips.map(\.text), ["✓ Ready"])
+        let noChip = PickerRowModel(id: "n", name: "Gym row", ticked: false, mark: .fullStrength, spoken: "")
+        XCTAssertEqual(noChip.headMark, .fullStrength, "a row with no Ready chip keeps its tick")
+        let noBuild = PickerRowModel(id: "b", name: "Copy", ticked: false, mark: .upgrade(cost: nil, label: "x"), chips: [.noBuild], spoken: "")
+        XCTAssertEqual(noBuild.pickerChips.map(\.text), ["↑ No build"])
+    }
+
     func testTheStrengthLineIsOneLabelWithTheFiguresBold() {
         let s = SquadStrength(kind: .damage, now: 0.41, after: 0.87, scored: 6, total: 6)
         let runs = SquadStrengthLine.runs(s)

@@ -554,6 +554,9 @@ final class SquadKeeperTests: XCTestCase {
         let row = HistoryRowModel(index: 0, when: "Today 10:16", discs: discs, percent: "41%")
         XCTAssertEqual(row.spoken, "Today 10:16, Gardevoir, Xerneas, Zacian not in your box, Granbull (Shadow), empty slot, 41% of best")
         XCTAssertEqual(discs[0].letter, "G"); XCTAssertEqual(discs[3].letter, "G", "the letter of the box name"); XCTAssertNil(discs[4].letter)
+        // H14: a departed Pokémon nothing remembers the name of is a hollow disc with "?", not a grey empty one.
+        let unknown = HistoryDisc(name: nil, palette: p, present: false)
+        XCTAssertEqual(unknown.letter, "?"); XCTAssertEqual(unknown.spoken, "a Pokémon not in your box")
         XCTAssertTrue(HistoryRowModel(index: 1, when: "x", discs: [], percent: "—").spoken.hasSuffix("no figure"))
         XCTAssertTrue(HistoryRowModel(index: 1, when: "x", discs: [], percent: "100%").spoken.hasSuffix(", 100%"))
         let rows = HistoryRowModel.rows([HistoryEntry(date: t0, slots: [SquadSlot(role: "X", pick: "a")], source: .best, edited: false, strength: nil)], now: t0) { _ in HistoryDisc(name: "A", palette: p) }

@@ -289,7 +289,7 @@ struct SquadStatusLine: View {
     }
 }
 
-/// The squad's strength bar (CONCEPTS rule 32), under the status line: "Squad strength 78% of best" (the squad's slot figures over the Best squad's; "Matches the best squad" at or over it) and "92% after upgrades" over one bar drawn as a picker row's bar is (solid = now, faint
+/// The squad's strength bar (CONCEPTS rule 32), under the status line: "Squad strength 78% of best" (the squad's slot figures over the Best squad's; "Squad strength 100%" at or over it) and "92% after upgrades" over one bar drawn as a picker row's bar is (solid = now, faint
 /// = after the suggested upgrades), and "5 of 6 slots scored" when a slot has no figure. VoiceOver reads the words as one element; the bar is hidden from it. `strength` is nil
 /// while it is being worked out (off the main thread): the row keeps its height with an empty track, so nothing below it moves. Pass 2-6: one label, "Squad strength 41% of best ·
 /// 87% after upgrades", in one tone with the two figures bold, the after part only when the bar draws its faint part; at accessibility text sizes it wraps.
@@ -467,6 +467,15 @@ struct PickerRowModel: Identifiable {
 }
 
 extension PickerRowModel {
+    /// The mark at the head of a picker row (H5): not the full-strength tick when the "✓ Ready" chip says it.
+    var headMark: SquadMark { mark == .fullStrength && chips.contains(.ready) ? .none : mark }
+
+    /// The chips a picker row draws (H5): an upgrade chip reads "↑ Upgrade" because the head carries the cost; "↑ No build" and the rest are as they are.
+    var pickerChips: [StatusChipModel] {
+        guard case .upgrade = mark else { return chips }
+        return chips.map { $0.kind == .upgrade && $0 != .noBuild ? .upgrade(nil) : $0 }
+    }
+
     /// The CP and IV line and the strength bar of a row (phone run 2, P1), with what VoiceOver adds for them ("CP 3412, IVs 15, 14, 15, estimated damage 62 percent of the best,
     /// 85 percent after upgrade"). The row's spoken label keeps "in this slot" last. `copy` is nil for a Pokémon the box lacks (no CP line); `ivs: false` leaves the IVs out
     /// (PvP has its own graded IV line); `speaksStrength: false` leaves the bar's words out where the row already says the figure (PvP's score).
@@ -660,11 +669,13 @@ struct SquadPicker<Info: View>: View {
     private func rowView(_ row: PickerRowModel) -> some View {
         // At the accessibility sizes the mark goes under the name: beside it, it squeezes the name until a long one breaks inside a word ("Xurkitr / ee").
         let name = Text(SquadWords.boxName(row.name)).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+        // Each status once (H5, the panel's rows): an upgrade keeps the cost badge at the head and its chip reads "↑ Upgrade"; a Ready row has the "✓ Ready" chip and no tick at the head.
+        let mark = row.headMark
         let head = Group {
             if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 2) { name; SquadMarkView(mark: row.mark, showsCost: true) }
+                VStack(alignment: .leading, spacing: 2) { name; SquadMarkView(mark: mark, showsCost: true) }
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 6) { name; SquadMarkView(mark: row.mark, showsCost: true) }
+                HStack(alignment: .firstTextBaseline, spacing: 6) { name; SquadMarkView(mark: mark, showsCost: true) }
             }
         }
         // The tier sits at the end of the strength bar when the row has one, else beside the types as before.
@@ -688,7 +699,7 @@ struct SquadPicker<Info: View>: View {
         // its row has a tier chip, a CP line or Gym's and PvP's figures (those sit beside the head line only).
         let top = VStack(alignment: .leading, spacing: 4) {
             head
-            StatusChips(chips: row.chips)
+            StatusChips(chips: row.pickerChips)
             line
         }
         let tail = VStack(alignment: .leading, spacing: 4) {
@@ -1031,15 +1042,15 @@ struct DeleteCurrentButton: View {
 
 // MARK: Earlier current squads (pass 2-6, rule 27.10)
 
-/// One slot of a history row: an 18 pt disc in the slot's role colours with the Pokémon's first letter; a dashed hollow disc in muted ink for a Pokémon no longer in the box; a grey disc
-/// with no letter for an empty slot.
+/// One slot of a history row: an 18 pt disc in the slot's role colours with the Pokémon's first letter; a dashed hollow disc in muted ink for a Pokémon no longer in the box (with "?" when
+/// nothing remembers its name); a grey disc with no letter for an empty slot.
 struct HistoryDisc {
     var name: String?
     var palette: SquadPalette
     /// The copy is still in the box (a species pick counts as present).
     var present = true
 
-    var letter: String? { name.map { String(SquadWords.boxName($0).prefix(1)) } }
+    var letter: String? { name.map { String(SquadWords.boxName($0).prefix(1)) } ?? (present ? nil : "?") }
     /// For VoiceOver: "Gardevoir", "Zacian not in your box", "empty slot".
     var spoken: String {
         guard let name else { return present ? "empty slot" : "a Pokémon not in your box" }
@@ -1127,7 +1138,7 @@ struct SquadHistoryList: View {
                 HStack(spacing: 8) {
                     date.frame(minWidth: 54, alignment: .leading).fixedSize(horizontal: false, vertical: true)
                     discs
-                    percent.frame(width: 32, alignment: .trailing)
+                    percent.lineLimit(1).fixedSize(horizontal: true, vertical: false).frame(minWidth: 32, alignment: .trailing)
                     Spacer(minLength: 0)
                     pill
                 }
@@ -1159,7 +1170,7 @@ private struct HistoryDiscView: View {
     var body: some View {
         let d = min(size, 40)
         ZStack {
-            if disc.name == nil {
+            if disc.name == nil && disc.present {
                 Circle().fill(Theme.off)
             } else if disc.present {
                 Circle().fill(disc.palette.ink)
@@ -1186,6 +1197,8 @@ struct SquadStripChip: Equatable, Identifiable {
     var editing: Bool
     /// The slot holds a Pokémon the box lacks (a Best species pick): a hollow number and a dashed edge.
     var notInBox = false
+    /// The slot is empty: the chip is grey, never the role or screen palette (H7).
+    var empty = false
     var spoken: String
 
     /// Only a bracketed form is dropped, off a name as `SquadWords.boxName` gives it: "Zamazenta (Crowned Shield)" is "Zamazenta", "Gardevoir (Shadow)" is "Gardevoir"; "Mega Charizard X" and
@@ -1201,7 +1214,7 @@ extension SquadStripChip {
         let full = c.name.map(SquadWords.boxName) ?? "Empty"
         let editing = c.id == selected
         let missing = c.name != nil && c.notInBox
-        self.init(id: c.id, name: c.name == nil ? "Empty" : Self.shortName(full), palette: SquadPaletteValue(role: c.role), editing: editing, notInBox: missing,
+        self.init(id: c.id, name: c.name == nil ? "Empty" : Self.shortName(full), palette: SquadPaletteValue(role: c.role), editing: editing, notInBox: missing, empty: c.name == nil,
                   spoken: (["Slot \(c.id + 1)", full, c.role].compactMap { $0 } + (missing ? ["not in your box"] : []) + (editing ? ["editing"] : [])).joined(separator: ", "))
     }
 }
@@ -1267,8 +1280,9 @@ struct SquadStripView: View {
     }
 
     private func chip(_ c: SquadStripChip) -> some View {
-        let p = c.palette.palette
-        let ink = model.ink ?? p.ink, tint = model.tint ?? p.tint
+        // An empty slot's chip is grey, as an Empty slot card is, whatever the role or the screen's own palette (H7).
+        let p = c.empty ? SquadPalette.grey : c.palette.palette
+        let ink = c.empty ? p.ink : (model.ink ?? p.ink), tint = c.empty ? p.tint : (model.tint ?? p.tint)
         let d = min(disc, 44)
         return Button { model.open(c.id) } label: {
             HStack(spacing: 6) {
