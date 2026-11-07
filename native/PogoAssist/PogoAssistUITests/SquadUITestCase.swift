@@ -262,7 +262,7 @@ class SquadUITestCase: XCTestCase {
         XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Squad set' AND selected == true"), object: pill(app))], timeout: timeout) == .completed
     }
 
-    /// The toast: one accessibility element whose label is the message (a toast with an action carries Undo as a custom action and its button is not an element of its own).
+    /// The toast: one accessibility element whose label is the message (a toast with an action carries Undo as a custom action; its button is a descendant of the element).
     func toast(_ app: XCUIApplication) -> XCUIElement { app.descendants(matching: .any).matching(identifier: "toast").firstMatch }
 
     /// The toast's words, once it is up (nil if it never shows).
@@ -271,15 +271,14 @@ class SquadUITestCase: XCTestCase {
         return t.waitForExistence(timeout: timeout) ? t.label : nil
     }
 
-    /// Taps the Undo of the toast. The toast is one accessibility element (the button inside it is not an element of its own: VoiceOver has the custom action), so the button is not reachable
-    /// by identifier or label; it is tapped by a fixed offset from the toast's trailing edge instead: the button is 44 pt wide inside 16 pt of padding, so its middle is 16 + 22 pt in (J8).
-    /// (A descendant button is tried first, in case the toast ever exposes it.)
+    /// Taps the Undo of the toast by its button: XCUITest reaches it as a descendant button labelled "Undo" inside the toast's element (measured in the pass 2-6 fold, round 2: all five taps in
+    /// the six squad classes found it that way). If a toast ever stops exposing it, the fallback taps a fixed offset from the toast's trailing edge: the button is 44 pt wide inside 16 pt of
+    /// padding, so its middle is 16 + 22 pt in (J8).
     func tapToastUndo(_ app: XCUIApplication) {
         let t = toast(app)
         XCTAssertTrue(t.waitForExistence(timeout: 5), "the toast offers Undo")
         let button = t.descendants(matching: .button).matching(identifier: "Undo").firstMatch
-        if button.exists && button.isHittable { NSLog("tapToastUndo: by button"); button.tap(); return }
-        NSLog("tapToastUndo: by offset")
+        if button.exists && button.isHittable { button.tap(); return }
         t.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: t.frame.width - 16 - 22, dy: 0)).tap()
     }
 
