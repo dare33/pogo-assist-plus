@@ -117,7 +117,7 @@ struct ScanDoneView: View {
         .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardReview() }
             Button("Cancel", role: .cancel) {}
-        } message: { Text("Nothing will be added to the box.") }
+        }
     }
 
     private func openButton(_ words: ScanDoneWords) -> some View {

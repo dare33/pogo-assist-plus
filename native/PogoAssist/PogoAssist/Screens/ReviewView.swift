@@ -49,7 +49,7 @@ struct ReviewView: View {
         // The same question as the result screen's Discard.
         .confirmationDialog("Discard this scan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardReview() }
-        } message: { Text("Nothing will be added to the box.") }
+        }
     }
 }
 
