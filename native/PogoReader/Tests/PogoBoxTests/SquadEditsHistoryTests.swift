@@ -119,10 +119,12 @@ final class SquadEditsHistoryTests: XCTestCase {
         XCTAssertTrue(store.history.isEmpty, "the same squad is not a replacement")
         store.replaceCurrent(with: squad(["b"]), .gym, source: .best, edited: true, strength: 60, date: at(3))
         XCTAssertEqual(store.history["gym"]?.map { $0.slots.first?.pick }, ["a"])
+        // The old Current is recorded from its OWN stored source, edited and figure (what the screen passed when it was set), never from the call that replaces it.
         XCTAssertEqual(store.history["gym"]?.first?.source, .best)
-        XCTAssertEqual(store.history["gym"]?.first?.edited, true)
-        XCTAssertEqual(store.history["gym"]?.first?.strength, 60)
+        XCTAssertEqual(store.history["gym"]?.first?.edited, false)
+        XCTAssertEqual(store.history["gym"]?.first?.strength, 10)
         XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "b")
+        XCTAssertEqual(store.current(.gym)?.source, .best); XCTAssertEqual(store.current(.gym)?.edited, true); XCTAssertEqual(store.current(.gym)?.strength, 60)
     }
 
     func testRestoreMakesTheEntryCurrentAndTheOldCurrentTheNewest() {
@@ -137,9 +139,47 @@ final class SquadEditsHistoryTests: XCTestCase {
         XCTAssertEqual(store.current(.gym)?.isSet, true)
         XCTAssertEqual(store.history["gym"]?.map { $0.slots.first?.pick }, ["c", "b"], "the entry left the list and the old Current is on top")
         XCTAssertEqual(store.history["gym"]?.first?.strength, 77)
-        XCTAssertEqual(store.history["gym"]?.first?.source, .current)
+        XCTAssertEqual(store.history["gym"]?.first?.source, .available, "the old Current goes back as it was set")
+        XCTAssertEqual(store.current(.gym)?.source, .available, "the restored entry is the Current with its own source")
+        XCTAssertEqual(store.current(.gym)?.strength, 1)
         XCTAssertNil(store.restoreFromHistory(.gym, index: 9, strength: nil, date: at(5)), "out of range changes nothing")
         XCTAssertEqual(store.history["gym"]?.count, 2)
+    }
+
+    func testUndoReplacePutsEntryZeroBackWithoutPushingTheSquadThatWasJustSet() {
+        var store = SquadStore()
+        store.replaceCurrent(with: squad(["a"]), .gym, source: .best, edited: true, strength: 33, date: at(1))
+        store.replaceCurrent(with: squad(["b"]), .gym, source: .available, edited: false, strength: 44, date: at(2))
+        XCTAssertEqual(store.history["gym"]?.count, 1)
+        XCTAssertTrue(store.undoReplace(.gym))
+        XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a", "the replaced squad is the Current again")
+        XCTAssertEqual(store.current(.gym)?.isSet, true)
+        XCTAssertEqual(store.current(.gym)?.source, .best); XCTAssertEqual(store.current(.gym)?.edited, true); XCTAssertEqual(store.current(.gym)?.strength, 33)
+        XCTAssertEqual(store.history["gym"]?.count, 0, "b was dropped, not pushed")
+        XCTAssertFalse(store.undoReplace(.gym), "no entry, nothing to undo")
+        XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a")
+        // An unset's Undo is the same call.
+        store.unsetCurrent(.gym, strength: 50, date: at(3))
+        XCTAssertNil(store.current(.gym))
+        XCTAssertTrue(store.undoReplace(.gym))
+        XCTAssertEqual(store.current(.gym)?.slots.first?.pick, "a")
+        XCTAssertEqual(store.current(.gym)?.strength, 50, "the figure the unset recorded comes back with it")
+        XCTAssertEqual(store.history["gym"]?.count, 0)
+    }
+
+    func testSourceEditedAndStrengthAreStoredWithTheCurrentAndAnOldFileReadsAsNone() throws {
+        var store = SquadStore()
+        store.replaceCurrent(with: squad(["a"]), .gym, source: .best, edited: true, strength: 12, date: at(1))
+        let back = try JSONDecoder().decode(SquadStore.self, from: JSONEncoder().encode(store))
+        XCTAssertEqual(back, store)
+        XCTAssertEqual(back.current(.gym)?.source, .best)
+        let old = try JSONDecoder().decode(SquadStore.self, from: Data(#"{"version":2,"gym":{"slots":[{"role":"X","pick":"k"}],"isSet":true,"changed":true}}"#.utf8))
+        XCTAssertNil(old.current(.gym)?.source); XCTAssertNil(old.current(.gym)?.edited)
+        var o = old
+        o.replaceCurrent(with: squad(["z"]), .gym, source: .available, edited: false, strength: nil, date: at(2))
+        XCTAssertEqual(o.history["gym"]?.first?.source, .current, "an old file's Current reads as set from Current")
+        XCTAssertEqual(o.history["gym"]?.first?.edited, false)
+        XCTAssertNil(o.history["gym"]?.first?.strength)
     }
 
     func testRestoreWithNoCurrentJustSetsIt() {
@@ -170,6 +210,27 @@ final class SquadEditsHistoryTests: XCTestCase {
         store.deleteCurrent(ref)
         XCTAssertFalse(store.isSet(ref))
         XCTAssertEqual(store.history[ref.key]?.first?.slots.first?.pick, "z", "deleteCurrent does what unsetCurrent does")
+    }
+
+    func testNamesOfCopiesAreRememberedWhileTheyAreInTheBoxAndKeptAfterTheyLeave() throws {
+        var store = SquadStore()
+        store.replaceCurrent(with: squad(["a", "b"]), .gym, source: .available, edited: false, strength: nil, date: at(1))
+        store.remember(names: ["a": "Zacian", "b": "Granbull", "z": "Unrelated"])
+        XCTAssertEqual(store.pickNames, ["a": "Zacian", "b": "Granbull"], "only copies a squad names")
+        store.replaceCurrent(with: squad(["c", "b"]), .gym, source: .available, edited: false, strength: nil, date: at(2))
+        store.remember(names: ["c": "Xerneas", "b": "Granbull"])   // a has left the box; the history entry still names it
+        XCTAssertEqual(store.pickNames["a"], "Zacian")
+        XCTAssertEqual(store.pickNames["c"], "Xerneas")
+        let back = try JSONDecoder().decode(SquadStore.self, from: JSONEncoder().encode(store))
+        XCTAssertEqual(back.pickNames, store.pickNames)
+        store.history["gym"] = []
+        store.remember(names: [:])
+        XCTAssertNil(store.pickNames["a"], "no squad names it any more")
+    }
+
+    func testThePercentIsTheLabelsWholePercent() {
+        XCTAssertEqual(SquadStrength(kind: .damage, now: 0.419, after: nil, scored: 6, total: 6).percent, 41)
+        XCTAssertNil(SquadStrength(kind: .damage, now: nil, after: nil, scored: 0, total: 6).percent)
     }
 
     // MARK: file version 2

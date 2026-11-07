@@ -388,15 +388,15 @@ struct EventPickerBuilder {
                     // Only the raid Mega slot judges a Mega or Primal entry as one; every other slot judges the plain Pokémon.
                     let megaSlot = screen == .raids && role == PogoRules.RaidRole.mega.rawValue
                     let lacking = copy == nil ? HubSquads.lacking(of: best, area: screen == .raids ? "raids" : "max", megaSlot: megaSlot, gigantamax: HubRaidsModel.isGigantamaxName(best.name), ctx: ctx) : nil
-                    return PickerRowModel(best: best, ticked: r.ticked, role: word).adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false, species: lacking)))
+                    return PickerRowModel(best: best, ticked: r.ticked, role: word, today: ctx.today).adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false, species: lacking)))
                 }
                 let mark = SquadMark.of(build, screen: screen, ctx: ctx)
-                let shared = o.best?.statusLine
                 let spoken = [o.name, word, shown.tier.isEmpty ? nil : "tier \(shown.tier)", SquadWords.typeList(o.types), mark.spoken, o.best?.spokenStatus, r.ticked ? "in this slot" : nil]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
                 let copy = ctx.entry(build.entryId)
                 let strength = scale?.strength(.init(copy: copy, build: build, built: mark == .fullStrength, megaSlot: judgesAsMega(build: build, role: role, mode: mode, option: o)))
-                return PickerRowModel(id: r.entryId, name: o.name, ticked: r.ticked, mark: mark, role: word, tier: shown.tier, types: o.types.map { PickerType(type: $0) }, note: shared, spoken: spoken)
+                return PickerRowModel(id: r.entryId, name: o.name, ticked: r.ticked, mark: mark, role: word, tier: shown.tier, types: o.types.map { PickerType(type: $0) }, note: o.best?.sharedLine,
+                                      chips: StatusChipModel.chips(best: o.best, mark: mark, today: ctx.today), spoken: spoken)
                     .adding(copy: copy, strength: strength)
             }
         }
@@ -446,26 +446,26 @@ struct EventPickerBuilder {
         guard let o = (f.species.flatMap { byId[squadSpeciesPrefix + $0] } ?? byId[id]) else {
             // A pick the list no longer offers (its build is gone from the advice, or it was chosen under the other mode): the slot still names it.
             if let key = f.species {
-                let name = ctx.gm.byId[key]?.name ?? ctx.gm.byId[key.replacingOccurrences(of: "_shadow", with: "")]?.name ?? "Pokémon"
+                let name = ctx.speciesName(key)
                 let unlisted = HubSquads.BestStatus.unlisted.text
-                return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, lines: [unlisted], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
+                return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, types: ctx.gm.byId[key]?.types ?? [], chips: [.notNow(when: nil)], notInBox: true, status: .toGet,
                                      spoken: [head, name, unlisted.replacingOccurrences(of: " · ", with: ", "), HubSquads.SlotStatus.toGet.spoken].joined(separator: ", "), identifier: identifier)
             }
             let name = ctx.entry(id)?.row.title ?? "Pokémon"
-            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, types: ctx.entryTypes(id), status: .needsWork,
+            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: name, types: ctx.entryTypes(id), chips: [.noBuild], status: .needsWork,
                                  spoken: [head, name, HubSquads.SlotStatus.needsWork.spoken].joined(separator: ", "), identifier: identifier)
         }
         let shown = view(o, role: f.role, mode: mode)
         // A slot filled from another role says which role the Pokémon is listed for (S1), whether or not the box has it.
         let other = f.fallback && !f.chosen ? SquadWords.otherRoleLine([roleWord(o, role: f.role, mode: mode)]) : nil
         guard let build = shown.build, o.best?.hasBuild != false else {
-            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", best: o.best!, extra: other.map { [$0] } ?? [], spokenExtra: other.map { [$0] } ?? [], head: head, identifier: identifier)
+            return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", best: o.best!, extra: other.map { [$0] } ?? [], spokenExtra: other.map { [$0] } ?? [], head: head, today: ctx.today, identifier: identifier)
         }
         let mark = SquadMark.of(build, screen: screen, ctx: ctx)
         let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: shown.tier)
-        let shared = o.best?.statusLine
         let spoken = [head, o.name, other, SquadWords.typeList(o.types), mark.spoken, o.best?.spokenStatus, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: o.name, lines: [other, shared].compactMap { $0 }, types: o.types, mark: mark, status: status, spoken: spoken, identifier: identifier)
+        return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: o.name, lines: [other, o.best?.sharedLine].compactMap { $0 }, types: o.types, mark: mark,
+                             chips: StatusChipModel.chips(best: o.best, mark: mark, today: ctx.today), status: status, spoken: spoken, identifier: identifier)
     }
 
     /// Every slot's picker rows for the default squad under `mode` (what a test reads): the rows of each slot as the picker would list them.
@@ -477,9 +477,9 @@ struct EventPickerBuilder {
     }
 }
 
-/// "Your squad – Palkia": the title with its "i", the advice line, the tabs (Current | Available | Best, and the Raids style), the slots (Raids: Mega then Heavy and Bulky hitters
-/// by the style; Max: Tank, Healer, Attacker), under them Save to Current and Reset (an edited Available or Best) or Delete current squad (Current), "Set this squad" / "✓ Squad set"
-/// with Undo, and the picker of the tapped slot. Current is kept per account (`SquadKeeper`) and dropped when the event ends; Available and Best edits are drafts (`SquadWorkspace`).
+/// "Your squad – Palkia": the title with its "i", the advice line, the tabs (Available | Best, Current once set, and on Raids the style beside them), the status and the pill, the
+/// slots, under them Reset to suggestion (an edited Available or Best) or Delete current squad and the earlier current squads (Current), and the picker of the tapped slot. Current and
+/// the edits of Available and Best are kept per account (`SquadKeeper`) and dropped when the event ends.
 struct EventSquadView: View {
     let screen: SquadScreen
     let row: HubData.RotationRow
@@ -493,7 +493,9 @@ struct EventSquadView: View {
     @State private var rowsCache = PickerRowsCache<EventPickerBuilder.Content>()
     @State private var strength: (key: String, value: SquadStrength)?
     @State private var boxGeneration = 0
-    @State private var replacingForSet = false
+    /// The slot whose picker was asked for the Mega chip while another slot holds the squad's Mega: it shows the one-Mega message and keeps its role.
+    @State private var megaMessageSlot: Int?
+    @Environment(\.showActionToast) private var showActionToast
 
     private func builder(kept: Bool) -> EventPickerBuilder { EventPickerBuilder(screen: screen, row: row, ctx: ctx, kept: kept) }
     private var prefix: String { screen == .raids ? "hub-raids" : "hub-max" }
@@ -507,14 +509,15 @@ struct EventSquadView: View {
         let mode = base.mode
         let builder = builder(kept: base.kept)
         let (options, filled) = builder.resolve(slots: base.squad.slots, mode: mode)
-        // Edited means the squad as drawn differs from the suggestion as drawn (rule 27.3); only worked out while a draft exists.
-        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { builder.resolve(slots: defaults, mode: mode).filled }))
+        // Edited means the squad as drawn differs from the suggestion as drawn (rule 27.3); only worked out while an edit exists. The suggestion is drawn by the rules of its mode, not as kept.
+        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { self.builder(kept: false).resolve(slots: defaults, mode: mode).filled }))
         let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { builder.card($0.offset, $0.element, byId: byId, count: filled.count, mode: mode) }
         let team = HubSquads.teamStatus(cards.map(\.status))
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
         let strengthKey = "strength|\(screen.rawValue)|\(row.from)|\(row.title)|\(surface.tab.rawValue)|\(style.rawValue)|\(surface.isBestSuggestion)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = surface.squad.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
+        let percent = strength?.key == strengthKey ? strength?.value.percent : nil
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 4) {
                 Text(title).font(.figtree(16, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
@@ -527,31 +530,22 @@ struct EventSquadView: View {
                     .padding(.top, -4).accessibilityIdentifier("\(prefix)-advice")
             }
             if infoOpen { squadInfo.frame(maxWidth: .infinity, alignment: .leading) }
-            SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: ref, keeper: keeper) }), hasCurrent: surface.hasCurrent, noun: "squads")
-            if screen == .raids {
-                RaidStyleRow(style: Binding(get: { style }, set: { new in
-                    keeper.update { $0.raidStyle = new }
-                    // The Available and Best drafts were edits of the other style's suggestion; Current is untouched.
-                    workspace.update { $0.resetAll(keyPrefix: "raids|") }
-                }))
-            }
-            if let team { SquadStatusLine(status: team) }
+            SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: ref, keeper: keeper) }), hasCurrent: surface.hasCurrent,
+                         style: screen == .raids ? Binding(get: { style }, set: { new in keeper.update { $0.raidStyle = new } }) : nil)
+            SquadStatusRow(team: team, pill: surface.tab == .current ? nil : SetSquadPill(
+                isSet: surface.isCurrent(filled: filled),
+                onSet: { setSquad(surface, filled: filled, percent: percent) }, onUnset: { unsetSquad(surface, percent: percent) }))
             SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: screen == .raids ? .raids : .max)
             SlotGrid(slots: cards, selected: selected) { i in withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i } }
             if surface.tab == .current {
-                DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
-            } else {
-                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, replaces: surface.replaces(filled: filled),
-                              onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
+                DeleteCurrentButton { workspace.unsetCurrent(surface, keeper: keeper, strength: percent) }
+                SquadHistoryList(rows: keeper.store.historyRows(ref, ctx: ctx) { SquadPalette.of($0.role) }) { index in
+                    let replaced = workspace.restore(surface, keeper: keeper, index: index, strength: percent)
+                    if replaced { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+                }
+            } else if surface.differs {
+                SquadResetLink { workspace.reset(surface, keeper: keeper) }
             }
-            SetSquadFooter(isSet: isSet(surface, ref: ref), hint: surface.tab == .current ? nil : "Saves this squad as your current squad and marks it set, asking first only if your current squad is a different one",
-                           onSet: {
-                               if surface.tab == .current { workspace.edit(surface, keeper: keeper) { $0.markSet(shown: filled) } }
-                               else if surface.replaces(filled: filled) { replacingForSet = true }
-                               else { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: true) }
-                           },
-                           onUndo: { keeper.update { store in if var q = store.current(ref) { q.isSet = false; store.setCurrent(q, ref) } } })
-                .replaceCurrentDialog(isPresented: $replacingForSet) { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: true) }
             if let i = selected, filled.indices.contains(i) {
                 picker(i, filled: filled, options: options, byId: byId, surface: surface, builder: builder)
             }
@@ -569,48 +563,81 @@ struct EventSquadView: View {
         // A slot of a changed squad that refilled (its copy left the box, or a swap emptied it) is kept as shown, so it does not change again.
         .task(id: adoptKey) { if !adoptKey.isEmpty, !Task.isCancelled { workspace.adopt(surface, keeper: keeper, filled: filled) } }
         .tracksBox(ctx, generation: $boxGeneration)
+        // The one-Mega message belongs to the tap that asked for it: another slot or another tab does not inherit it.
+        .onChange(of: selected) { _, _ in megaMessageSlot = nil }
+        .onChange(of: workspace.state) { _, _ in megaMessageSlot = nil }
     }
 
-    /// "✓ Squad set": on Current, its own mark; on Available or Best, only while the squad just saved (and set) to Current is what is shown.
-    private func isSet(_ surface: SquadSurface, ref: SquadRef) -> Bool {
-        surface.tab == .current ? (surface.current?.isSet ?? false) : (surface.justSaved && (keeper.store.current(ref)?.isSet ?? false))
+    // MARK: Set this squad
+
+    /// "Set this squad": the squad as drawn becomes the Current with no question; replacing a different one offers Undo.
+    private func setSquad(_ surface: SquadSurface, filled: [FilledSlot], percent: Int?) {
+        let replaced = workspace.setCurrent(surface, keeper: keeper, filled: filled, strength: percent)
+        if replaced { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+        else { AccessibilityNotification.Announcement("Squad set").post() }
     }
 
-    // MARK: slots
+    /// "✓ Squad set" tapped: the Current moves to the history.
+    private func unsetSquad(_ surface: SquadSurface, percent: Int?) {
+        workspace.unsetCurrent(surface, keeper: keeper, strength: percent)
+        showActionToast("Squad unset", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) })
+    }
 
     // MARK: picker
+
+    /// Rule 10: the Mega chip, chosen on a slot that is not the squad's Mega while another slot holds one, shows only "You can only have 1 Mega slot". Available: another slot in the Mega
+    /// role holds a Pokémon judged as a Mega; Best: another slot holds a Mega row.
+    private func anotherSlotHoldsTheMega(_ i: Int, filled: [FilledSlot], byId: [String: EventOption], mode: SquadMode, options: [EventOption]) -> Bool {
+        guard screen == .raids, filled[i].role != PogoRules.RaidRole.mega.rawValue else { return false }
+        if mode == .best { return !HubSquads.megaExcluded(by: filled, editing: i, rows: options.compactMap(\.best)).isEmpty }
+        return filled.indices.contains { j in
+            guard j != i, filled[j].role == PogoRules.RaidRole.mega.rawValue, let id = filled[j].pickId else { return false }
+            return optionOf(filled[j], id, byId)?.mega != nil
+        }
+    }
+
+    private func optionOf(_ slot: FilledSlot, _ id: String, _ byId: [String: EventOption]) -> EventOption? { slot.species.flatMap { byId[squadSpeciesPrefix + $0] } ?? byId[id] }
 
     private func picker(_ i: Int, filled: [FilledSlot], options: [EventOption], byId: [String: EventOption], surface: SquadSurface, builder: EventPickerBuilder) -> some View {
         let role = filled[i].role
         let mode = surface.mode
+        let mega = PogoRules.RaidRole.mega.rawValue
+        let blocked = megaMessageSlot == i && anotherSlotHoldsTheMega(i, filled: filled, byId: byId, mode: mode, options: options)
         // The rows are built once and kept until the box, the advice or what the slot sees changes (P1: no work on every redraw).
         let key = "\(screen.rawValue)|\(row.from)|\(row.title)|\(surface.tab.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, options: options, byId: byId, mode: mode) }
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: screen == .raids ? .raids : .max, roles: chips, role: role,
-            onRole: { new in workspace.edit(surface, keeper: keeper) { $0.changeRole(at: i, to: new, fits: { HubSquads.fitsThrough($0, role: new, in: options, rows: options.compactMap(\.best)) }, shown: filled) } },
+            onRole: { new in
+                // Every chip changes the slot's role at once, as before; the Mega chip while another slot holds the squad's Mega shows the message and changes nothing.
+                if new == mega && anotherSlotHoldsTheMega(i, filled: filled, byId: byId, mode: mode, options: options) { megaMessageSlot = i; return }
+                megaMessageSlot = nil
+                workspace.edit(surface, keeper: keeper) { $0.changeRole(at: i, to: new, fits: { HubSquads.fitsThrough($0, role: new, in: options, rows: options.compactMap(\.best)) }, shown: filled) }
+            },
             rows: content.rows, emptyText: SquadWords.emptyPicker(mode: mode, boxHasOptions: content.boxHasOptions, none: mode == .available ? "Nothing in your box for this slot." : "Nothing listed for this role."),
+            oneMegaMessage: blocked, chipShown: blocked ? mega : nil,
             onChoose: { id in
+                megaMessageSlot = nil
                 // Under Available there are no Best rows on screen, but a species pick stored under Best may resolve to this copy: read the Best rows to clear it.
                 let rows = screen == .raids ? HubSquads.bestRaidRows(row: row, ctx: ctx) : HubSquads.bestMaxRows(row: row, ctx: ctx)
                 workspace.edit(surface, keeper: keeper) { $0.choose(id, at: i, alsoClearing: HubSquads.equivalents(of: id, rows: rows), shown: filled) }
             },
-            onDone: { withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
+            onDone: { megaMessageSlot = nil; withAnimation(.easeOut(duration: 0.15)) { selected = nil } },
             info: { pickerInfo(mode) })
     }
 
     @ViewBuilder private func pickerInfo(_ mode: SquadMode) -> some View {
         if mode == .best {
             SquadExplainer(items: [
-                ("Ranked from our tables:", screen == .raids
-                 ? "every Pokémon our raid tables list under the boss's weak types, S then A then B, the strongest weak type first. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."
+                (screen == .raids ? "Ranked by damage:" : "Ranked from our tables:", screen == .raids
+                 ? "every Pokémon in the game is judged against this boss at level 50 with 15/15/15 and its best moves, and the top 12 of each role are listed, strongest first. A tier chip shows where our raid tables rate it for the boss's weak types. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."
                  : "every Pokémon our Max tables list for the role, S then A then B, ones that hit the boss first. Each says whether you have it, can get it now, or cannot, with the date when the schedule has one."),
-                ("Roles:", screen == .raids ? "Mega if it mega evolves; Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise." : "from our Max table: Tank, Healer, or Attacker."),
+                ("Roles:", screen == .raids ? "Mega if it mega evolves; Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise. A squad holds one Mega: while another slot has it, the Mega chip says so." : "from our Max table: Tank, Healer, or Attacker."),
             ], identifier: "squad-picker-explainer")
         } else if screen == .raids {
             SquadExplainer(items: [
                 ("Best for this boss first:", "the tier our raid tables give it against the boss's weak types, then built before to build, then how many of those types it covers."),
-                ("Roles:", "Mega is for a Pokémon that can Mega Evolve (the Mega slot lists only those); Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise. After the slot's own role comes \"Other roles:\", everything else in your box."),
+                ("Roles:", "Mega is for a Pokémon that can Mega Evolve (the Mega slot lists only those); Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise. A squad holds one Mega: while another slot has it, the Mega chip says so. After the slot's own role comes \"Other roles:\", everything else in your box."),
             ], identifier: "squad-picker-explainer")
         } else {
             SquadExplainer(items: [
@@ -620,19 +647,20 @@ struct EventSquadView: View {
         }
     }
 
+    /// The title's (i): the three tabs, how the squad is suggested (and, on Raids, the style), then one line per status chip sign.
     @ViewBuilder private var squadInfo: some View {
         if screen == .raids {
-            SquadExplainer(items: [
+            SquadExplainer(items: SquadInfo.tabs(noun: "squads") + [SquadInfo.setting,
                 ("Suggested for raids:", "1 Mega, which boosts everyone's damage (one per lobby), then Heavy hitters, Shadows and glass cannons that do the most damage but faint sooner, and Bulky hitters that stay in longer. The style decides how many of each."),
                 (RaidStyle.balanced.title + ":", RaidStyle.balanced.explanation),
                 (RaidStyle.maxDamage.title + ":", RaidStyle.maxDamage.explanation),
                 ("", "Under Available the Mega slot takes a Pokémon that can Mega Evolve, judged on its Mega build; every other slot judges a Pokémon as it is, without Mega Evolving. A slot with no Pokémon of its role left takes the strongest one you have left and says its role. Change any slot's role in its picker; All lets you put in any Pokémon."),
-            ], identifier: "squad-explainer")
+            ] + SquadInfo.signs, identifier: "squad-explainer")
         } else {
-            SquadExplainer(items: [
+            SquadExplainer(items: SquadInfo.tabs(noun: "squads") + [SquadInfo.setting,
                 ("Suggested for Max battles:", "1 Tank to take the hits, 1 Healer to keep the squad up, 1 Attacker that hits the boss."),
                 ("", "Under Available a slot with no Pokémon of its role left takes the strongest one you have left and says its role. Change any slot's role in its picker; All lets you put in any Pokémon."),
-            ], identifier: "squad-explainer")
+            ] + SquadInfo.signs, identifier: "squad-explainer")
         }
     }
 }

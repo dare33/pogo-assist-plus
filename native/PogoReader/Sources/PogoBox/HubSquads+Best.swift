@@ -320,7 +320,10 @@ extension HubSquads {
     private static func rankedRaidPicks(row: HubData.RotationRow, bring: [String], listed: [String: [TierTable.Entry]], ctx: HubContext) -> [RaidPick] {
         let tables = listed.keys.sorted().map { k in k + "=" + listed[k]!.map { "\($0.speciesId):\($0.tier):\($0.section):\($0.moves ?? "-")" }.joined(separator: ",") }.joined(separator: ";")
         let bosses = row.bosses.map { "\($0.speciesId):\($0.types.joined(separator: "+"))" }.joined(separator: ",")
-        let cacheKey = "\(gmChecksum(ctx.gm))|\(bosses)|\(bring.joined(separator: ","))|\(tables)"
+        // A Shadow row exists only for a Shadow that exists (D65 follow-up): the table lists it under some type section, or the box holds a Shadow copy of the species. The box's part
+        // is in the key, since it changes which Shadows are ranked.
+        let boxShadows = Set(ctx.entries.filter { HubRaidsModel.isShadow($0) }.map { $0.row.speciesId.replacingOccurrences(of: "_shadow", with: "") })
+        let cacheKey = "\(gmChecksum(ctx.gm))|\(bosses)|\(bring.joined(separator: ","))|\(tables)|\(boxShadows.sorted().joined(separator: ","))"
         rankCache.lock.lock()
         if let have = rankCache.values[cacheKey] { rankCache.lock.unlock(); return have }
         rankCache.lock.unlock()
@@ -333,7 +336,8 @@ extension HubSquads {
         var scored = [(pick: RaidPick, damage: Double, order: Int, tier: Int)](), seen = Set<String>()
         for (order, s) in ctx.gm.ordered.enumerated() where DamageEstimate.eligible(s, megas: true) && seen.insert(s.id).inserted {
             let mega = s.tags.contains("mega")
-            for shadow in (s.tags.contains("shadoweligible") && !mega) ? [false, true] : [false] {
+            let shadowExists = listed[s.id + "_shadow"] != nil || boxShadows.contains(s.id)
+            for shadow in (s.tags.contains("shadoweligible") && !mega && shadowExists) ? [false, true] : [false] {
                 let key = shadow ? s.id + "_shadow" : s.id
                 let role = PogoRules.raidRole(targetId: s.id, viaMega: false, shadow: shadow, gm: ctx.gm)
                 let speciesId = (listed[key] ?? []).first?.speciesId ?? key

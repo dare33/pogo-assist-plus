@@ -39,7 +39,7 @@ final class HubRocketSquadTests: SquadUITestCase {
         shot("rocket-picker")
         closePicker(app)
 
-        // A different leader has its own squad, and Giovanni's draft is still there on return (a draft lasts until the player leaves the screen).
+        // A different leader has its own squad, and Giovanni's kept edit is still there on return.
         app.buttons["hub-change-leader"].tap()
         app.buttons["Sierra"].tap()
         XCTAssertTrue(app.staticTexts["YOUR SQUAD FOR SIERRA"].waitForExistence(timeout: 5))
@@ -49,7 +49,9 @@ final class HubRocketSquadTests: SquadUITestCase {
         back(app, toTile: "rocket")
         app.buttons["hub-tile-rocket"].tap()
         XCTAssertTrue(slot(app, "rocket", 3).waitForExistence(timeout: 30))
-        XCTAssertFalse(slot(app, "rocket", 3).label.contains(chosen), "but not after leaving the screen: \(slot(app, "rocket", 3).label)")
+        XCTAssertTrue(slot(app, "rocket", 3).label.contains(chosen), "and after leaving the screen too: an edit is kept as it is made: \(slot(app, "rocket", 3).label)")
+        // The pill is on this screen too: it makes the squad the Current and nothing else.
+        XCTAssertEqual(pill(app).label, "Set this squad")
 
         // Grunts: a row each; a typed grunt lists the box's counters and the types that beat it, a typeless one says any strong attacker.
         let normal = reveal(app, app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Normal does not mean weak'")).firstMatch, swipes: 12)
@@ -139,10 +141,10 @@ final class HubRocketSquadTests: SquadUITestCase {
         populate(app)
         openTile(app, "rocket")
         XCTAssertTrue(slot(app, "rocket", 1).waitForExistence(timeout: 60))
-        assertStripPinsTheSquad(app, "rocket", open: 1, chip: 3, shotName: "rocket-strip-scrolled")
+        assertStripPinsTheSquad(app, "rocket", open: 1, chip: 3, slots: 3, shotName: "rocket-strip-scrolled")
     }
 
-    /// The squad on Current after one saved edit, with its strength bar and links: light, dark, default text and AX5.
+    /// The squad on Available after one edit, with its pill, chips, strength bar and Reset link: light, dark, default text and AX5.
     func testRocketSquadStrengthShots() throws {
         let setup = launch(reset: true)
         populate(setup)

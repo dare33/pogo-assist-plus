@@ -36,18 +36,16 @@ final class HubMaxSquadTests: SquadUITestCase {
         XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
         closePicker(app)
 
-        // The role chips of a slot: Tank | Healer | Attacker | All. A role change relabels the slot (a draft on Available until the squad is saved).
+        // The role chips of a slot: Tank | Healer | Attacker | All. A role change relabels the slot (kept as an edit of Available, which Set this squad makes the Current).
         openPicker(app, "max", slot: 3)
         for r in ["Tank", "Healer", "Attacker", "All"] { XCTAssertTrue(app.buttons["squad-role-\(r)"].exists, "chip \(r)") }
         app.buttons["squad-role-Tank"].tap()
         XCTAssertTrue(slot(app, "max", 3).label.hasPrefix("Slot 3 of 3, Tank"), slot(app, "max", 3).label)
         closePicker(app)
-        // Set this squad on Available saves the shown squad, role change included, to Current and sets the mark there.
-        let set = app.buttons["squad-set"]
-        reveal(app, set).tap()
-        XCTAssertTrue(el(app, "squad-set-state").waitForExistence(timeout: 5), "✓ Squad set")
-        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "the squad is saved: the Current tab appears")
-        XCTAssertTrue(el(app, "hub-max-row-0").label.contains("squad set"), el(app, "hub-max-row-0").label)
+        // Set this squad on Available makes the shown squad, role change included, the Current. Nothing was there, so no toast.
+        setThisSquad(app)
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "the squad is set: the Current tab appears")
+        XCTAssertTrue(el(app, "hub-max-row-0").label.contains("squad set"), "the row is tinted exactly when the squad has a Current: \(el(app, "hub-max-row-0").label)")
 
         back(app, toTile: "max")
         app.buttons["hub-tile-max"].tap()
@@ -57,8 +55,15 @@ final class HubMaxSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "max", 3).waitForExistence(timeout: 10))
         XCTAssertTrue(tab(app, "current").isSelected, "a squad with a Current opens on it")
         XCTAssertTrue(slot(app, "max", 3).label.hasPrefix("Slot 3 of 3, Tank"), "the role was saved to Current: \(slot(app, "max", 3).label)")
-        app.buttons["squad-undo"].tap()
-        XCTAssertTrue(app.buttons["squad-set"].waitForExistence(timeout: 5))
+        XCTAssertFalse(pill(app).exists, "the Current tab has no pill")
+        // Delete current squad moves it to the history, and the row stops saying squad set.
+        deleteCurrent(app, confirm: true)
+        XCTAssertTrue(waitGone(tab(app, "current")))
+        XCTAssertTrue(pill(app).waitForExistence(timeout: 5) && pill(app).label == "Set this squad")
+        back(app, toTile: "max")
+        app.buttons["hub-tile-max"].tap()
+        XCTAssertTrue(el(app, "hub-max-row-0").waitForExistence(timeout: 30))
+        XCTAssertFalse(el(app, "hub-max-row-0").label.contains("squad set"), "no Current, so the row is not set: \(el(app, "hub-max-row-0").label)")
     }
 
     func testMaxSuggestionsFollowAvailableAndBest() throws {
@@ -97,8 +102,8 @@ final class HubMaxSquadTests: SquadUITestCase {
         lapras.tap()
         XCTAssertTrue(slot(app, "max", 1).label.contains("Lapras"), slot(app, "max", 1).label)
         closePicker(app)
-        // The picks are a draft of Best: save them, and the exact copy and roles survive leaving the screen on Current.
-        saveToCurrent(app)
+        // The picks are kept as edits of Best: set them, and the exact copy and roles survive leaving the screen on Current.
+        setThisSquad(app)
         back(app, toTile: "max")
         app.buttons["hub-tile-max"].tap()
         el(app, "hub-max-row-0").tap()
@@ -106,8 +111,10 @@ final class HubMaxSquadTests: SquadUITestCase {
         XCTAssertTrue(tab(app, "current").isSelected)
         XCTAssertTrue(slot(app, "max", 1).label.contains("Lapras") && slot(app, "max", 1).label.hasPrefix("Slot 1 of 3, All"), "the exact copy chosen survives leaving the screen: \(slot(app, "max", 1).label)")
         XCTAssertTrue(slot(app, "max", 2).label.hasPrefix("Slot 2 of 3, Attacker"), slot(app, "max", 2).label)
-        // Best starts from the suggestion again.
+        // Best still holds the kept edit (Set made it the Current, the edit stays); resetting it shows the suggestion again.
         selectBest(app)
+        XCTAssertTrue(slot(app, "max", 1).label.contains("Lapras"), "the edit of Best is kept: \(slot(app, "max", 1).label)")
+        reveal(app, app.buttons["squad-reset-draft"]).tap()
         XCTAssertTrue(slot(app, "max", 1).label.hasPrefix("Slot 1 of 3, Tank, Blissey"), slot(app, "max", 1).label)
         back(app, toTile: "max")
         app.buttons["hub-tile-max"].tap()
@@ -167,7 +174,7 @@ final class HubMaxSquadTests: SquadUITestCase {
         let original = slot(app, "max", 1).label + "|" + slot(app, "max", 2).label + "|" + slot(app, "max", 3).label
         XCTAssertFalse(app.buttons["squad-reset-draft"].exists, "an unchanged squad has no Reset")
         changeTheSquad(app, "max")
-        XCTAssertTrue(reveal(app, app.buttons["squad-reset-draft"]).waitForExistence(timeout: 5), "a changed squad has Reset")
+        XCTAssertTrue(reveal(app, app.buttons["squad-reset-draft"]).waitForExistence(timeout: 5), "a changed squad has Reset to suggestion")
         app.buttons["squad-reset-draft"].tap()
         XCTAssertTrue(waitGone(app.buttons["squad-reset-draft"]), "Reset clears the control")
         // Reset shows the suggestion again; the change may have been made under Best, so look at the squad under Available, where it was read.
@@ -184,10 +191,10 @@ final class HubMaxSquadTests: SquadUITestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 30))
         row.tap()
         XCTAssertTrue(slot(app, "max", 1).waitForExistence(timeout: 60))
-        assertStripPinsTheSquad(app, "max", open: 1, chip: 3, shotName: "max-strip-scrolled")
+        assertStripPinsTheSquad(app, "max", open: 1, chip: 3, slots: 3, shotName: "max-strip-scrolled")
     }
 
-    /// The squad on Current after one saved edit, with its strength bar and links: light, dark, default text and AX5.
+    /// The squad on Available after one edit, with its pill, chips, strength bar and Reset link: light, dark, default text and AX5.
     func testMaxSquadStrengthShots() throws {
         let setup = launch(reset: true)
         populate(setup)

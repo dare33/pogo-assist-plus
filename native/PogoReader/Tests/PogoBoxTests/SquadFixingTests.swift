@@ -175,14 +175,6 @@ final class SquadFixingTests: XCTestCase {
         XCTAssertEqual(kept.slots[0].species, "medicham")
     }
 
-    func testSquadSetIsAChangeAndKeepsTheSquad() {
-        var saved = SquadStore.Saved(slots: [SquadSlot(role: "X"), SquadSlot(role: "X")])
-        saved.markSet(shown: shown(saved))
-        XCTAssertTrue(saved.isSet && saved.changed && saved.hasCurrent)
-        XCTAssertEqual(saved.slots.map(\.pick), ["a", "b"])
-        XCTAssertEqual(shown(saved, ranked: ["z", "a", "b"]).map(\.entryId), ["a", "b"])
-    }
-
     func testASuggestionListedForAnotherRoleKeepsSayingSoAfterItIsKept() {
         var saved = SquadStore.Saved(slots: [SquadSlot(role: "Tank"), SquadSlot(role: "Healer")])
         let filled = HubSquads.fill(slots: saved.slots, pool: { _, role in role == "Tank" ? .init(preferred: ["a"]) : .init(preferred: [], fallback: ["b"]) })

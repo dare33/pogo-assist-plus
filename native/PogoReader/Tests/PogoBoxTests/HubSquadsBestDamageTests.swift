@@ -127,6 +127,21 @@ final class HubSquadsBestDamageTests: XCTestCase {
         XCTAssertEqual(gs.status.text, "Not available now · not on the schedule", "listed by the table, so the table's reason")
     }
 
+    /// A Shadow row exists only for a Shadow that exists: the table lists it under some type section, or the box holds a Shadow copy. Shadow Kyogre and Shadow Groudon (tagged shadow
+    /// eligible in the game master, not real Shadows) drop out of a list that neither has them.
+    func testAShadowRowIsListedOnlyForAShadowThatExists() throws {
+        let fire = P23.row("2026-10-20", "2026-10-30", bosses: [P23.boss("charizard", types: ["fire"])])
+        let empty = P23.table([P23.tierEntry("raids", "Water", "A", "swampert")])
+        let none = HubSquads.bestRaidRows(row: fire, ctx: P23.ctx(builds: [], entries: [P23.entry("e1", "swampert")], table: empty, rotation: [fire]))
+        XCTAssertTrue(none.filter { $0.key.hasSuffix("_shadow") }.allSatisfy { !["kyogre_shadow", "groudon_shadow"].contains($0.key) }, "no Shadow Kyogre or Groudon: \(none.map(\.key))")
+        XCTAssertFalse(none.contains { $0.key == "kyogre_shadow" })
+        // A table that lists Shadow Kyogre under any section (here Fire, not a bring type) gives it a row; so does a Shadow copy in the box.
+        let listed = P23.table([P23.tierEntry("raids", "Fire", "S", "kyogre_shadow", shadow: true)])
+        XCTAssertTrue(HubSquads.bestRaidRows(row: fire, ctx: P23.ctx(builds: [], entries: [], table: listed, rotation: [fire])).contains { $0.key == "kyogre_shadow" })
+        let owned = HubSquads.bestRaidRows(row: fire, ctx: P23.ctx(builds: [], entries: [P23.entry("k1", "kyogre", shadow: 1)], table: empty, rotation: [fire]))
+        XCTAssertTrue(owned.contains { $0.key == "kyogre_shadow" }, "the box holds a Shadow Kyogre: \(owned.map(\.key))")
+    }
+
     func testAStatusFollowsTheBoxAndTheRotation() throws {
         let (row, ctx) = try sableye()
         let rows = HubSquads.bestRaidRows(row: row, ctx: ctx)

@@ -108,7 +108,10 @@ final class PickerRowModelsTests: XCTestCase {
         let (options, filled) = b.resolve(slots: slots, mode: .best)
         let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let rows = b.content(slot: 0, filled: filled, options: options, byId: byId, mode: .best).rows
-        let megaRows = rows.filter { $0.name.hasPrefix("Mega ") && $0.cpIv != nil }
+        // (Slice 1 ranks by species from the game master, which names a Mega "Rayquaza (Mega)", a Primal "Groudon (Primal)"; the tables' "Mega Rayquaza" form is gone from Raids Best rows.)
+        func isMega(_ name: String) -> Bool { name.hasPrefix("Mega ") || name.hasSuffix("(Mega)") || name.hasSuffix("(Mega X)") || name.hasSuffix("(Mega Y)") }
+        func isMegaOrPrimal(_ name: String) -> Bool { isMega(name) || name.hasPrefix("Primal ") || name.hasSuffix("(Primal)") }
+        let megaRows = rows.filter { isMega($0.name) && $0.cpIv != nil }
         let m = try XCTUnwrap(megaRows.first, "the real box has an owned Mega row under Best")
         let o = try XCTUnwrap(options.first(where: { $0.id == m.id }))
         let build = try XCTUnwrap(o.build)
@@ -116,7 +119,7 @@ final class PickerRowModelsTests: XCTestCase {
         let plain = scale.strength(.init(copy: c.entry(build.entryId), build: build, built: m.mark == .fullStrength, megaSlot: false))
         XCTAssertEqual(m.strength, plain, "a Mega row in an All slot is judged on the plain form")
         // A Mega or Primal entry the box lacks is judged as the plain Pokémon outside the Mega slot too, and as the Mega form in it.
-        let lackingForms = rows.filter { ($0.name.hasPrefix("Mega ") || $0.name.hasPrefix("Primal ")) && $0.cpIv == nil }
+        let lackingForms = rows.filter { isMegaOrPrimal($0.name) && $0.cpIv == nil }
         XCTAssertFalse(lackingForms.isEmpty, "Best lists a Mega or Primal entry the box lacks")
         for r in lackingForms {
             let best = try XCTUnwrap(options.compactMap(\.best).first { $0.entryId == r.id }, r.name)
@@ -129,7 +132,7 @@ final class PickerRowModelsTests: XCTestCase {
         let (megaOptions, megaFilled) = b.resolve(slots: [SquadSlot(role: PogoRules.RaidRole.mega.rawValue)], mode: .best)
         let megaById = Dictionary(megaOptions.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let inMegaSlot = b.content(slot: 0, filled: megaFilled, options: megaOptions, byId: megaById, mode: .best).rows
-            .filter { ($0.name.hasPrefix("Mega ") || $0.name.hasPrefix("Primal ")) && $0.cpIv == nil }
+            .filter { isMegaOrPrimal($0.name) && $0.cpIv == nil }
         XCTAssertFalse(inMegaSlot.isEmpty, "the Mega slot lists a Mega or Primal entry the box lacks")
         var differs = false
         for r in inMegaSlot {
@@ -542,7 +545,7 @@ final class PickerRowModelsTests: XCTestCase {
         // The squad drawn from the table with every slot at the reference figure matches it exactly.
         let atReference = SquadStrength.against(figures: reference.map { Strength(kind: .damage, now: $0, after: nil) }, reference: reference)
         XCTAssertTrue(atReference.matchesBest)
-        XCTAssertEqual(atReference.text, "Squad strength 100% · Matches the best squad")
+        XCTAssertEqual(atReference.text, "Squad strength 100%")
         for mode in [SquadMode.available, .best] {
             let (options, filled) = b.resolve(slots: HubSquads.defaultRaidSlots(), mode: mode)
             let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })

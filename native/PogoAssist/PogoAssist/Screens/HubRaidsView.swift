@@ -87,8 +87,8 @@ struct HubTimeline: View {
         if closers, let advice { gapClosers(rows: shown.map(\.row), advice: advice, hub: hub, gm: gm) }
     }
 
-    /// The card says "squad set" for a Current squad the player marked.
-    private func isSet(_ s: EventSummary) -> Bool { squads && keeper.store.current(.event(row: s.entry.row, screen: squadScreen))?.isSet == true }
+    /// The card says "squad set" exactly when the squad has a Current (pass 2-6: set and has a Current are one thing).
+    private func isSet(_ s: EventSummary) -> Bool { squads && keeper.store.isSet(.event(row: s.entry.row, screen: squadScreen)) }
 
     // MARK: Raids › Now
 

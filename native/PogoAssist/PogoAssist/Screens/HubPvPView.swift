@@ -111,7 +111,7 @@ struct PvPPickerBuilder {
             // Best: a Pokémon the box lacks.
             let key = String(id.dropFirst(squadSpeciesPrefix.count))
             if let r = best.first(where: { $0.entryId == id }) { return Member(name: r.name, types: r.types, mark: .none, candidate: nil, option: nil, tier: r.tier, notOwned: r) }
-            let name = ctx.gm.byId[key]?.name ?? "Pokémon"
+            let name = ctx.speciesName(key)
             let r = HubSquads.BestRow(key: key, name: name, speciesId: key, tier: "", roles: [], types: types(key), availability: "")
             return Member(name: name, types: r.types, mark: .none, candidate: nil, option: nil, notOwned: r)
         }
@@ -160,12 +160,12 @@ struct PvPPickerBuilder {
         func model(_ l: HubSquads.PickerRow) -> PickerRowModel? {
             if let r = best.first(where: { $0.entryId == l.entryId }), !r.hasBuild {
                 // A copy no league rating serves shows its CP and IVs; with or without a copy the bar is PvPoke's score for the species in this league, else "score not known".
-                return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · ")).adding(copy: r.inBox ? (r.copy ?? r.ownedEntryId.flatMap(ctx.entry)) : nil, strength: leagueScore(r.speciesId))
+                return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · "), today: ctx.today).adding(copy: r.inBox ? (r.copy ?? r.ownedEntryId.flatMap(ctx.entry)) : nil, strength: leagueScore(r.speciesId))
             }
-            if let pc = byId[l.entryId] { return row(pc, ticked: l.ticked, status: best.first { $0.ownedEntryId == l.entryId }?.statusLine) }
+            if let pc = byId[l.entryId] { return row(pc, ticked: l.ticked, bestRow: best.first { $0.ownedEntryId == l.entryId }) }
             guard let m = member(l.entryId, byId: byId, best: best) else { return PickerRowModel.keptPick(id: l.entryId, ticked: l.ticked, screen: .pvp, ctx: ctx)?.adding(copy: ctx.entry(l.entryId), strength: leagueScore(ctx.entry(l.entryId)?.row.speciesId ?? "")) }
             if let r = m.notOwned {
-                return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · ")).adding(copy: r.inBox ? (r.copy ?? r.ownedEntryId.flatMap(ctx.entry)) : nil, strength: leagueScore(r.speciesId))
+                return PickerRowModel(best: r, ticked: l.ticked, role: r.roles.isEmpty ? nil : r.roles.joined(separator: " · "), today: ctx.today).adding(copy: r.inBox ? (r.copy ?? r.ownedEntryId.flatMap(ctx.entry)) : nil, strength: leagueScore(r.speciesId))
             }
             return fallbackRow(l.entryId, m, ticked: l.ticked)
         }
@@ -214,6 +214,7 @@ struct PvPPickerBuilder {
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         let model = PickerRowModel(
             id: id, name: m.name, ticked: ticked, mark: m.mark, role: roles.isEmpty ? nil : roles, tier: tier, types: m.types.map { PickerType(type: $0) },
+            chips: StatusChipModel.chips(best: nil, mark: m.mark, today: ctx.today),
             noteView: AnyView(HStack(spacing: 4) {
                 if !m.copyTitle.isEmpty, m.option?.isSelf == false { Text("From \(m.copyTitle) ·").font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted) }
                 GradedNumber(iv, grade, size: 12, plain: .regular, relativeTo: .caption).foregroundStyle(grade == .plain ? Theme.muted : Theme.greenInk)
@@ -226,7 +227,8 @@ struct PvPPickerBuilder {
         return model.adding(copy: ctx.entry(id), strength: score.map(Strength.score) ?? .scoreNotKnown, speaksStrength: false)
     }
 
-    func row(_ pc: HubSquads.PvpCandidate, ticked: Bool, status: String? = nil) -> PickerRowModel {
+    func row(_ pc: HubSquads.PvpCandidate, ticked: Bool, bestRow: HubSquads.BestRow? = nil) -> PickerRowModel {
+        let status = bestRow?.statusLine
         let c = pc.candidate
         let tier = HubSquads.pvpTier(speciesId: c.speciesId, league: league, score: c.score)
         let types = ctx.gm.byId[c.speciesId]?.types ?? []
@@ -238,8 +240,9 @@ struct PvPPickerBuilder {
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         let model = PickerRowModel(
             id: c.entryId, name: c.displayName, ticked: ticked, mark: mark, role: roles.isEmpty ? nil : roles, tier: tier, types: types.map { PickerType(type: $0) },
+            chips: StatusChipModel.chips(best: bestRow, mark: mark, today: ctx.today),
             noteView: AnyView(VStack(alignment: .leading, spacing: 2) {
-                if let status { Text(status).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
+                if let shared = bestRow?.sharedLine { Text(shared).font(.figtree(12, .regular, relativeTo: .caption)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true) }
                 Self.ivLine(c, grade: rankGrade)
             }),
             figure: AnyView(VStack(alignment: .trailing, spacing: 0) {
@@ -276,6 +279,7 @@ struct PvPSquadView: View {
     @State private var selected: Int?
     @State private var showAll = false
     @State private var squadInfo = false
+    @Environment(\.showActionToast) private var showActionToast
 
     /// The other candidates listed before "All N" is tapped.
     private let preview = 5
@@ -288,8 +292,9 @@ struct PvPSquadView: View {
         let pogoAssist = rankingRaw == Ranking.pogoAssist.rawValue
         let builder = builder(kept: base.kept)
         let (candidates, best, filled, byId) = builder.resolve(mode: mode, slots: base.squad.slots)
-        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { builder.resolve(mode: mode, slots: HubSquads.defaultPvpSlots()).filled }))
-        SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: ref, keeper: keeper) }), hasCurrent: surface.hasCurrent, noun: "squads")
+        // The suggestion is drawn by the rules of its mode, not as kept.
+        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { self.builder(kept: false).resolve(mode: mode, slots: HubSquads.defaultPvpSlots()).filled }))
+        SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: ref, keeper: keeper) }), hasCurrent: surface.hasCurrent)
         if candidates.isEmpty && mode == .available {
             // The squad still shows, with its empty slots.
             Text("No \(LeaguePanel.name(league)) candidate in your box scores \(Int(HubTeams.candidateFloor)) or more.")
@@ -324,6 +329,8 @@ struct PvPSquadView: View {
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
         let strengthKey = "strength|\(league)|\(pogoAssist)|\(surface.tab.rawValue)|\(surface.isBestSuggestion)|" + FilledSlot.cacheKey(filled) + "|" + (mode == .best ? best.map(\.entryId) : candidates.map(\.entryId)).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = surface.squad.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
+        let percent = strength?.key == strengthKey ? strength?.value.percent : nil
+        let ref = SquadRef.pvp(league: league)
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -334,21 +341,25 @@ struct PvPSquadView: View {
                     InfoButton(isOpen: $squadInfo, label: "About the suggested squad", identifier: "squad-info")
                 }
                 if squadInfo {
-                    SquadExplainer(items: [
+                    SquadExplainer(items: SquadInfo.tabs(noun: "squads") + [SquadInfo.setting,
                         ("Lead", "opens the battle; Safe swap comes in when the lead's matchup is bad; Closer finishes once shields are gone."),
                         ("", "Each slot takes the best-scoring candidate our league table lists for that role. Coverage counts the types the squad hits for more than normal damage; it is shown, not used to pick. Change any slot's role in its picker; All lets you put in any Pokémon."),
-                    ], identifier: "squad-explainer")
+                    ] + SquadInfo.signs, identifier: "squad-explainer")
                 }
-                if let team = HubSquads.teamStatus(cards.map(\.status)) { SquadStatusLine(status: team) }
+                SquadStatusRow(team: HubSquads.teamStatus(cards.map(\.status)), pill: surface.tab == .current ? nil : SetSquadPill(
+                    isSet: surface.isCurrent(filled: filled),
+                    onSet: { setSquad(surface, filled: filled, percent: percent) }, onUnset: { unsetSquad(surface, percent: percent) }))
                 SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: .pvp)
                 SlotGrid(slots: cards, selected: selected) { i in
                     withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
                 }
                 if surface.tab == .current {
-                    DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
-                } else {
-                    SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, replaces: surface.replaces(filled: filled),
-                                  onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
+                    DeleteCurrentButton { workspace.unsetCurrent(surface, keeper: keeper, strength: percent) }
+                    SquadHistoryList(rows: keeper.store.historyRows(ref, ctx: ctx) { SquadPalette.of($0.role) }) { index in
+                        if workspace.restore(surface, keeper: keeper, index: index, strength: percent) { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+                    }
+                } else if surface.differs {
+                    SquadResetLink { workspace.reset(surface, keeper: keeper) }
                 }
             }
             .padding(14)
@@ -376,6 +387,19 @@ struct PvPSquadView: View {
         }
     }
 
+    /// "Set this squad": the squad as drawn becomes the Current with no question; replacing a different one offers Undo.
+    private func setSquad(_ surface: SquadSurface, filled: [FilledSlot], percent: Int?) {
+        let replaced = workspace.setCurrent(surface, keeper: keeper, filled: filled, strength: percent)
+        if replaced { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+        else { AccessibilityNotification.Announcement("Squad set").post() }
+    }
+
+    /// "✓ Squad set" tapped: the Current moves to the history.
+    private func unsetSquad(_ surface: SquadSurface, percent: Int?) {
+        workspace.unsetCurrent(surface, keeper: keeper, strength: percent)
+        showActionToast("Squad unset", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) })
+    }
+
     /// The weakness line over the members the squad shows (the set the coverage uses). When every member is a candidate the engine's note, with its swap suggestion,
     /// is used; a kept pick that is not a candidate cannot be swapped by it, so the line is then the shared weaknesses alone.
     private func weakness(_ named: [Member], rest: [HubTeams.Candidate]) -> String {
@@ -391,14 +415,14 @@ struct PvPSquadView: View {
         guard let m else {
             return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: nil, lines: ["No candidate"], status: .empty, spoken: head + ", " + HubSquads.SlotStatus.empty.spoken, identifier: id)
         }
-        if let r = m.notOwned { return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", best: r, head: head, identifier: id) }
+        if let r = m.notOwned { return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", best: r, head: head, today: ctx.today, identifier: id) }
         // Rule 29: the league tier shown everywhere (the table's, else the 88-score band), the same under Available and Best.
         let status = HubSquads.slotStatus(inBox: true, fullStrength: m.mark == .fullStrength, tier: m.tier)
         // A slot filled from another role says which role the Pokémon is listed for (S1); under Best the row's one status shows.
         let other = f.fallback && !f.chosen && m.candidate != nil ? SquadWords.otherRoleLine(m.roles) : nil
-        let shared = m.bestRow?.statusLine
         let spoken = [head, m.name, other, SquadWords.typeList(m.types), m.mark.spoken, m.bestRow?.spokenStatus, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: m.name, lines: [other, shared].compactMap { $0 }, types: m.types, mark: m.mark, status: status, spoken: spoken, identifier: id)
+        return SlotCardModel(id: i, role: f.role, palette: palette, emptyOutline: palette.tint, disc: "+", name: m.name, lines: [other, m.bestRow?.sharedLine].compactMap { $0 }, types: m.types, mark: m.mark,
+                             chips: StatusChipModel.chips(best: m.bestRow, mark: m.mark, today: ctx.today), status: status, spoken: spoken, identifier: id)
     }
 
     // MARK: picker

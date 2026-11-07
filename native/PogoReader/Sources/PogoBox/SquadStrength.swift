@@ -72,7 +72,10 @@ public struct SquadStrength: Equatable {
     }
 
     /// The whole percent shown: rounded DOWN, so 100% reads only when the squad matches or beats the reference.
-    static func floorPercent(_ x: Double) -> Int { Int((min(1, max(0, x)) * 100 + 1e-9).rounded(.down)) }
+    public static func floorPercent(_ x: Double) -> Int { Int((min(1, max(0, x)) * 100 + 1e-9).rounded(.down)) }
+
+    /// The whole percent the label shows (what a history row records); nil when no slot counts.
+    public var percent: Int? { now.map(Self.floorPercent) }
 
     /// The bar's figures, in the picker row bar's own type, so the one drawing serves both. Nothing to draw when no slot counts.
     public var strength: Strength { Strength(kind: kind == .score ? .damage : kind, now: now, after: after.map { max($0, now ?? 0) }) }

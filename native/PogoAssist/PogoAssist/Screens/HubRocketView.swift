@@ -210,16 +210,17 @@ struct RocketPickerBuilder {
                 return PickerRowModel(best: best, ticked: r.ticked, types: e.flags, extraSpoken: {
                     let hitting = e.flags.filter { !$0.grey }.map(\.type)
                     return hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot"
-                }()).adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false, species: lacking)))
+                }(), today: ctx.today).adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: nil, built: false, species: lacking)))
             }
             let mark = SquadMark.of(e.build!, screen: .rocket, ctx: ctx)
             let types = e.flags
             let hitting = types.filter { !$0.grey }.map(\.type)
             let spoken = [e.name, e.line, hitting.isEmpty ? nil : "\(SquadWords.typeList(hitting)) hits this slot", mark.spoken, e.best?.spokenStatus, r.ticked ? "in this slot" : nil]
                 .compactMap { $0 }.joined(separator: ", ")
-            let note = [e.line, e.best?.statusLine].compactMap { $0 }.joined(separator: " · ")
+            let note = [e.line, e.best?.sharedLine].compactMap { $0 }.joined(separator: " · ")
             let copy = ctx.entry(e.build!.entryId)
-            return PickerRowModel(id: r.entryId, name: e.name, ticked: r.ticked, mark: mark, tier: e.tier, types: types, note: note.isEmpty ? nil : note, spoken: spoken)
+            return PickerRowModel(id: r.entryId, name: e.name, ticked: r.ticked, mark: mark, tier: e.tier, types: types, note: note.isEmpty ? nil : note,
+                                  chips: StatusChipModel.chips(best: e.best, mark: mark, today: ctx.today), spoken: spoken)
                 .adding(copy: copy, strength: scale?.strength(.init(copy: copy, build: e.build, built: mark == .fullStrength)))
         }
         if mode == .available { rows = PickerRowModel.availableUpgradesLast(rows) }
@@ -283,7 +284,9 @@ private struct RocketSquadView: View {
     @ObservedObject var workspace: SquadWorkspace
     let onLeader: (String) -> Void
     @State private var selected: Int?
+    @State private var infoOpen = false
     @Environment(\.accent) private var accent
+    @Environment(\.showActionToast) private var showActionToast
 
     typealias Entry = RocketPickerBuilder.Entry
     typealias SlotLists = RocketPickerBuilder.SlotLists
@@ -309,7 +312,8 @@ private struct RocketSquadView: View {
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
         let strengthKey = "strength|\(leader.name)|\(surface.tab.rawValue)|\(surface.isBestSuggestion)|" + FilledSlot.cacheKey(filled) + "|" + lists.map { ($0.rows + $0.next).map(\.id).joined(separator: ",") }.joined(separator: ";") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = saved.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
-        SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: ref, keeper: keeper) }), hasCurrent: surface.hasCurrent, noun: "counters")
+        let percent = strength?.key == strengthKey ? strength?.value.percent : nil
+        SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: ref, keeper: keeper) }), hasCurrent: surface.hasCurrent)
         HubHeaderLine("YOUR SQUAD FOR \(leader.name.uppercased())") {
             Menu {
                 ForEach(leaders, id: \.name) { l in
@@ -323,17 +327,30 @@ private struct RocketSquadView: View {
             .accessibilityIdentifier("hub-change-leader")
         }
         VStack(alignment: .leading, spacing: 10) {
-            Text("Slot by slot").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            if let team = HubSquads.teamStatus(cards.map(\.status)) { SquadStatusLine(status: team) }
+            HStack(spacing: 4) {
+                Text("Slot by slot").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 4)
+                InfoButton(isOpen: $infoOpen, label: "About the suggested squad", identifier: "squad-info")
+            }
+            if infoOpen {
+                SquadExplainer(items: SquadInfo.tabs(noun: "counters") + [SquadInfo.setting,
+                    ("Suggested against a leader:", "for each of the leader's three slots, the Pokémon of yours (or, under Best, in the game) that hits the most of the Pokémon the leader may bring there. Change any slot in its picker.")] + SquadInfo.signs, identifier: "squad-explainer")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            SquadStatusRow(team: HubSquads.teamStatus(cards.map(\.status)), pill: surface.tab == .current ? nil : SetSquadPill(
+                isSet: surface.isCurrent(filled: filled),
+                onSet: { setSquad(surface, filled: filled, percent: percent) }, onUnset: { unsetSquad(surface, percent: percent) }))
             SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: .rocket)
             SlotGrid(slots: cards, selected: selected) { i in
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
             }
             if surface.tab == .current {
-                DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
-            } else {
-                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, replaces: surface.replaces(filled: filled),
-                              onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
+                DeleteCurrentButton { workspace.unsetCurrent(surface, keeper: keeper, strength: percent) }
+                SquadHistoryList(rows: keeper.store.historyRows(ref, ctx: ctx) { _ in SquadPalette(ink: ContentType.rocket.ink(accent), tint: ContentType.rocket.tint(accent)) }) { index in
+                    if workspace.restore(surface, keeper: keeper, index: index, strength: percent) { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+                }
+            } else if surface.differs {
+                SquadResetLink { workspace.reset(surface, keeper: keeper) }
             }
         }
         .padding(14)
@@ -355,6 +372,19 @@ private struct RocketSquadView: View {
         }
         .tracksBox(ctx, generation: $boxGeneration)
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, lists: lists, surface: surface, builder: builder) }
+    }
+
+    /// "Set this squad": the squad as drawn becomes the Current with no question; replacing a different one offers Undo.
+    private func setSquad(_ surface: SquadSurface, filled: [FilledSlot], percent: Int?) {
+        let replaced = workspace.setCurrent(surface, keeper: keeper, filled: filled, strength: percent)
+        if replaced { showActionToast("Current squad replaced", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) }) }
+        else { AccessibilityNotification.Announcement("Squad set").post() }
+    }
+
+    /// "✓ Squad set" tapped: the Current moves to the history.
+    private func unsetSquad(_ surface: SquadSurface, percent: Int?) {
+        workspace.unsetCurrent(surface, keeper: keeper, strength: percent)
+        showActionToast("Squad unset", ToastAction(label: "Undo") { workspace.undo(surface, keeper: keeper) })
     }
 
     private func options(_ i: Int) -> String { leader.slots[i].map { HubTeams.plain($0.name) }.joined(separator: " / ") }
@@ -385,25 +415,24 @@ private struct RocketSquadView: View {
         }
         guard let e else {
             if let key = f.species {
-                let name = ctx.gm.byId[key]?.name ?? ctx.gm.byId[key.replacingOccurrences(of: "_shadow", with: "")]?.name ?? "Pokémon"
-                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [HubSquads.BestStatus.unlisted.text, vs], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
+                let name = ctx.speciesName(key)
+                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [vs], types: ctx.gm.byId[key]?.types ?? [], chips: [.notNow(when: nil)], notInBox: true, status: .toGet,
                                      spoken: [head, name, HubSquads.BestStatus.unlisted.text.replacingOccurrences(of: " · ", with: ", "), HubSquads.SlotStatus.toGet.spoken, "against \(options(i))"].joined(separator: ", "), identifier: id)
             }
             let name = f.entryId.flatMap { ctx.entry($0)?.row.title } ?? "Pokémon"
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [vs], types: f.entryId.map(ctx.entryTypes) ?? [], status: .needsWork,
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [vs], types: f.entryId.map(ctx.entryTypes) ?? [], chips: [.noBuild], status: .needsWork,
                                  spoken: "\(head), \(name), \(HubSquads.SlotStatus.needsWork.spoken), against \(options(i))", identifier: id)
         }
         guard let build = e.build, e.best?.hasBuild != false else {
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), best: e.best!, extra: (e.line.map { [$0] } ?? []) + [vs], spokenExtra: [e.line, "against \(options(i))"].compactMap { $0 }, head: head, identifier: id)
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), best: e.best!, extra: (e.line.map { [$0] } ?? []) + [vs], spokenExtra: [e.line, "against \(options(i))"].compactMap { $0 }, head: head, today: ctx.today, identifier: id)
         }
         let mark = SquadMark.of(build, screen: .rocket, ctx: ctx)
         // Rule 29: the Rocket table's tier (a Pokémon the table does not list needs work), not the build's tier from another area.
         let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: HubSquads.rocketTableTier(build, ctx: ctx))
-        let shared = e.best?.statusLine
-        let lines = (e.line.map { [$0] } ?? []) + (shared.map { [$0] } ?? []) + [vs]
+        let lines = (e.line.map { [$0] } ?? []) + (e.best?.sharedLine.map { [$0] } ?? []) + [vs]
         let types = e.best?.types ?? HubTeams.types(of: build, gm: ctx.gm)
         let spoken = [head, e.name, SquadWords.typeList(types), e.line, e.best?.spokenStatus, "against \(options(i))", mark.spoken, status.spoken].compactMap { $0 }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: e.name, lines: lines, types: types, mark: mark, status: status, spoken: spoken, identifier: id)
+        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: e.name, lines: lines, types: types, mark: mark, chips: StatusChipModel.chips(best: e.best, mark: mark, today: ctx.today), status: status, spoken: spoken, identifier: id)
     }
 
     // MARK: picker

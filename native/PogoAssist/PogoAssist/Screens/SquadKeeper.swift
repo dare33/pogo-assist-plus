@@ -12,6 +12,8 @@ final class SquadKeeper: ObservableObject {
     @Published private(set) var store = SquadStore()
     /// The account the store belongs to (nil before the first attach).
     private(set) var account: String?
+    /// The box's names by entry id (`squadPickNames`), so a write remembers the names of the copies a squad holds while they are still in the box (`SquadStore.remember`).
+    private var boxNames: [String: String] = [:]
 
     /// The defaults key of an account's squads. `AppModel.moveAccountKeys` moves it with a rename.
     nonisolated static let keyPrefix = "squads."
@@ -20,11 +22,14 @@ final class SquadKeeper: ObservableObject {
 
     /// Reads the account's store and applies the keeping rules (`SquadStore.refreshed`) for today's date, the rotation and the box's ids. `boxIds` is nil while the
     /// box is not loaded yet: the picks are then left alone. A loaded box with no copies is an empty set, and every pick is dropped (the last copy was deleted).
-    func attach(account: String?, today: String, rotation: [HubData.RotationRow], boxIds: Set<String>?) {
+    func attach(account: String?, today: String, rotation: [HubData.RotationRow], boxIds: Set<String>?, names: [String: String]? = nil) {
         let changedAccount = account != self.account
         self.account = account
-        guard let account else { store = SquadStore(); return }
+        guard let account else { store = SquadStore(); boxNames = [:]; return }
         var s = changedAccount || store == SquadStore() ? Self.load(account) : store
+        if let names, boxIds != nil { boxNames = names }
+        // Names are remembered before the rules run: a copy that left the box is emptied from the squads, but a history row still names it.
+        if boxIds != nil { s.remember(names: boxNames) }
         if let boxIds { s = s.refreshed(today: today, rotation: rotation, boxIds: boxIds) }
         if s != store { store = s }
         if boxIds != nil { Self.save(s, for: account) }
@@ -34,6 +39,7 @@ final class SquadKeeper: ObservableObject {
     func update(_ change: (inout SquadStore) -> Void) {
         var s = store
         change(&s)
+        if !boxNames.isEmpty { s.remember(names: boxNames) }
         guard s != store else { return }
         store = s
         if let account { Self.save(s, for: account) }
@@ -58,12 +64,21 @@ extension AppModel {
     }
 }
 
+/// The name a squad screen gives each copy of the box, by entry id: its build's target (as a slot card names it), else the box title. A history row keeps naming a copy after it leaves.
+func squadPickNames(entries: [BoxEntry], builds: [BoxAdvice.Build]) -> [String: String] {
+    var out = [String: String]()
+    for e in entries { out[e.id] = e.row.title }
+    var named = Set<String>()
+    for b in builds where out[b.entryId] != nil && named.insert(b.entryId).inserted { out[b.entryId] = b.targetName }
+    return out
+}
+
 /// Loads the keeper's squads when a squad screen appears and applies the keeping rules again when the account, the box or the advice changes (a re-scan saved, a
 /// switch of account). The box is waited for: until it is loaded the box ids the rules need are not known.
 struct SquadAttach: ViewModifier {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var keeper: SquadKeeper
-    /// The screen's drafts, which follow the same account and box (nil on a screen with none).
+    /// The screen's tab choices, which follow the same account (nil on a screen with none).
     var workspace: SquadWorkspace? = nil
 
     func body(content: Content) -> some View {
@@ -78,7 +93,8 @@ struct SquadAttach: ViewModifier {
     private func attach() {
         let loaded = model.boxLoaded && model.boxProblem == nil
         let boxIds: Set<String>? = loaded ? Set(model.entries.map(\.id)) : nil
-        keeper.attach(account: model.account, today: HubModel.today(), rotation: (try? HubData.bundled())?.rotation ?? [], boxIds: boxIds)
+        keeper.attach(account: model.account, today: HubModel.today(), rotation: (try? HubData.bundled())?.rotation ?? [], boxIds: boxIds,
+                      names: loaded ? squadPickNames(entries: model.entries, builds: model.hubAdvice?.builds ?? []) : nil)
         workspace?.attach(account: model.account, boxIds: boxIds)
     }
 }
@@ -88,27 +104,24 @@ extension View {
     func keepsSquads(_ keeper: SquadKeeper, _ workspace: SquadWorkspace? = nil) -> some View { modifier(SquadAttach(keeper: keeper, workspace: workspace)) }
 }
 
-// MARK: Current, Available and Best (pass 2-5, rule 27)
+// MARK: Available, Best and Current (pass 2-6, rule 27)
 
-/// What one squad screen holds while the player is on it and drops when they leave: the tab each squad is on and the drafts (edits of Available and Best), never stored
-/// (`SquadDrafts`). Each squad screen owns one (`@StateObject`) next to its keeper.
+/// What one squad screen holds while the player is on it and drops when they leave: the tab each squad is on. The player's edits of Available and Best are kept in the store
+/// (`SquadStore.edits`), per account, squad, tab and (on Raids) style. Each squad screen owns one (`@StateObject`) next to its keeper.
 @MainActor
 final class SquadWorkspace: ObservableObject {
-    @Published private(set) var state = SquadDrafts()
+    @Published private(set) var state = SquadTabChoices()
     /// The box the screen last attached to (nil while it is not loaded): what a refill may be adopted from.
     private var boxIds: Set<String>?
 
-    /// The screen is showing `account`'s squads over a box of `boxIds` (nil while the box is not loaded): another account's drafts are dropped (H1), and a draft pick whose copy left
-    /// the box is emptied, as the store's are (H2; the screen then keeps the refill in the draft).
+    /// The screen is showing `account`'s squads over a box of `boxIds` (nil while the box is not loaded): another account's tab choices are dropped (H1). The kept edits follow the box in
+    /// the store (`SquadKeeper.attach`); the screen keeps a slot's refill in the edit (`adopt`).
     func attach(account: String?, boxIds: Set<String>?) {
         self.boxIds = boxIds
-        update { d in
-            d.switchAccount(account)
-            if let boxIds { d = d.reconciled(boxIds: boxIds) }
-        }
+        update { $0.switchAccount(account) }
     }
 
-    func update(_ change: (inout SquadDrafts) -> Void) {
+    func update(_ change: (inout SquadTabChoices) -> Void) {
         var s = state
         change(&s)
         if s != state { state = s }
@@ -118,7 +131,8 @@ final class SquadWorkspace: ObservableObject {
     func surface(_ ref: SquadRef, store: SquadStore, defaults: [SquadSlot]) -> SquadSurface {
         let current = store.current(ref)
         let tab = state.tab(ref.key, hasCurrent: current != nil, mode: store.mode(for: ref.screen))
-        return SquadSurface(ref: ref, account: state.account, tab: tab, current: current, draft: tab == .current ? nil : state.draft(ref.key, tab), defaults: defaults, justSaved: tab != .current && state.justSaved(ref.key, tab, current: current))
+        let style = store.raidStyle
+        return SquadSurface(ref: ref, account: state.account, tab: tab, current: current, edit: tab == .current ? nil : store.edit(ref, tab, style: style), style: style, defaults: defaults)
     }
 
     /// The player chose a tab. Available and Best are remembered for the screen (the tab a squad with no Current opens on), as before.
@@ -127,21 +141,23 @@ final class SquadWorkspace: ObservableObject {
         if tab != .current { keeper.update { $0.setMode(tab.mode, for: ref.screen) } }
     }
 
-    /// A change to the squad on the tab it is on: Current is stored at once, a draft is held here. It never changes the tab.
+    /// A change to the squad on the tab it is on, stored at once: the Current, or the kept edit of Available or Best. It never changes the tab.
     func edit(_ s: SquadSurface, keeper: SquadKeeper, _ change: (inout SquadStore.Saved) -> Void) {
-        // Like every write: only a surface drawn for the account the keeper and the drafts are on now.
+        // Like every write: only a surface drawn for the account the keeper and the tab choices are on now.
         guard s.account == keeper.account, s.account == state.account else { return }
         if s.tab == .current {
             keeper.update { store in
                 var q = store.current(s.ref) ?? SquadStore.Saved(slots: s.defaults)
                 change(&q)
+                // Edited since it was set: the figure it was set with no longer describes it.
+                q.edited = true; q.strength = nil
                 store.setCurrent(q, s.ref)
             }
         } else {
-            update { d in
-                var q = d.draft(s.key, s.tab) ?? SquadStore.Saved(slots: s.defaults)
+            keeper.update { store in
+                var q = store.edit(s.ref, s.tab, style: s.style) ?? SquadStore.Saved(slots: s.defaults)
                 change(&q)
-                d.setDraft(q, s.key, s.tab)
+                store.setEdit(q, s.ref, s.tab, style: s.style)
             }
         }
     }
@@ -158,28 +174,54 @@ final class SquadWorkspace: ObservableObject {
         edit(s, keeper: keeper) { $0.adoptRefills(inBox) }
     }
 
-    /// Save to Current (and, from "Set this squad", the mark): the squad as shown on Available or Best becomes the squad's Current. The player stays on the tab.
-    func saveToCurrent(_ s: SquadSurface, keeper: SquadKeeper, filled: [FilledSlot], setMark: Bool) {
-        // A draft is never written into another account's store: the surface was drawn for the account the keeper and the drafts are on now.
+    /// "Reset to suggestion": the tab's kept edit is dropped at once.
+    func reset(_ s: SquadSurface, keeper: SquadKeeper) {
         guard s.account == keeper.account, s.account == state.account else { return }
+        keeper.update { $0.resetEdit(s.ref, s.tab, style: s.style) }
+    }
+
+    /// "Set this squad": the squad as shown on Available or Best becomes the squad's Current, with no question. The player stays on the tab. Returns whether a different Current was
+    /// replaced (the screen then offers Undo); that Current is in the history.
+    @discardableResult
+    func setCurrent(_ s: SquadSurface, keeper: SquadKeeper, filled: [FilledSlot], strength: Int?, date: Date = Date()) -> Bool {
+        // The squad is never written into another account's store: the surface was drawn for the account the keeper and the tab choices are on now.
+        guard s.account == keeper.account, s.account == state.account else { return false }
         var shown = s.squad
         shown.fixing(filled)
-        shown.isSet = false
-        var current = shown
-        current.isSet = setMark
-        keeper.update { $0.setCurrent(current, s.ref) }
-        update { $0.didSave(shown, s.key, s.tab) }
-        // Said on every save, including "Set this squad" from an unedited tab (H11).
-        AccessibilityNotification.Announcement("Saved to Current").post()
+        let old = keeper.store.current(s.ref)
+        let replaced = old.map { $0.slots != shown.slots } ?? false
+        keeper.update { $0.replaceCurrent(with: shown, s.ref, source: s.tab, edited: s.edited, strength: strength, date: date) }
+        update { $0.select(s.tab, for: s.key) }
+        return replaced
     }
 
-    func reset(_ s: SquadSurface) { update { $0.reset(s.key, s.tab) } }
-
-    /// Delete current squad: the squad shows Available (or the remembered tab) again; the drafts are left as they are.
-    func deleteCurrent(_ s: SquadSurface, keeper: SquadKeeper) {
-        keeper.update { $0.deleteCurrent(s.ref) }
-        update { $0.clearTab(for: s.key); $0.clearSaved(s.key) }
+    /// "✓ Squad set" tapped, or Delete current squad: the Current moves to the history and the squad shows Available (or the remembered tab) again.
+    func unsetCurrent(_ s: SquadSurface, keeper: SquadKeeper, strength: Int?, date: Date = Date()) {
+        guard s.account == keeper.account, s.account == state.account else { return }
+        keeper.update { $0.unsetCurrent(s.ref, strength: strength, date: date) }
+        if s.tab == .current { update { $0.clearTab(for: s.key) } }
     }
+
+    /// "Set squad" on a history row. Returns whether a different Current was replaced.
+    @discardableResult
+    func restore(_ s: SquadSurface, keeper: SquadKeeper, index: Int, strength: Int?, date: Date = Date()) -> Bool {
+        guard s.account == keeper.account, s.account == state.account else { return false }
+        let old = keeper.store.current(s.ref), entry = keeper.store.history[s.ref.key]?[safe: index]
+        let replaced = old != nil && entry != nil && old!.slots != entry!.slots
+        keeper.update { _ = $0.restoreFromHistory(s.ref, index: index, strength: strength, date: date) }
+        return replaced
+    }
+
+    /// Undo of a replace or an unset (the toast's action): history entry 0 is the Current again and the squad that replaced it is dropped.
+    func undo(_ s: SquadSurface, keeper: SquadKeeper) {
+        guard s.account == keeper.account, s.account == state.account else { return }
+        keeper.update { _ = $0.undoReplace(s.ref) }
+        // The squad came back on the Current tab or not at all; the tab choice stays what the player made.
+    }
+}
+
+private extension Array {
+    subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
 }
 
 /// One squad on its tab: what is drawn (`squad`), where an edit goes, and what the controls under the slots show.
@@ -190,37 +232,38 @@ struct SquadSurface {
     let tab: SquadTab
     /// The stored Current squad; nil when the player has kept nothing.
     let current: SquadStore.Saved?
-    /// The edited Available or Best squad; nil while it is unedited.
-    let draft: SquadStore.Saved?
+    /// The kept edit of the Available or Best squad; nil while it is unedited.
+    let edit: SquadStore.Saved?
+    /// The Raids style the edit is kept under (the other screens ignore it).
+    let style: RaidStyle
     /// The suggestion's slots: the roles an unedited Available or Best squad is made of.
     let defaults: [SquadSlot]
-    /// The draft was just saved to Current and the stored Current is still that squad.
-    let justSaved: Bool
-    /// The squad as drawn differs from the suggestion as drawn (rule 27.3, H6): set by `with(edited:)` once the screen has drawn both.
+    /// The squad as drawn differs from the suggestion as drawn (rule 27.3): set by `with(edited:)` once the screen has drawn both.
     private(set) var edited = false
 
     func with(edited: Bool) -> SquadSurface { var s = self; s.edited = edited; return s }
 
-    /// Whether an Available or Best draft, drawn as `filled`, differs from the suggestion `suggested` draws. Nothing is worked out while there is no draft.
+    /// Whether an Available or Best edit, drawn as `filled`, differs from the suggestion `suggested` draws. Nothing is worked out while there is no edit.
     func isEdited(filled: [FilledSlot], suggested: () -> [FilledSlot]) -> Bool {
-        tab != .current && draft != nil && !HubSquads.sameSquad(filled, suggested())
+        tab != .current && edit != nil && !HubSquads.sameSquad(filled, suggested())
     }
 
-    /// Saving the squad drawn as `filled` would replace a Current that is a different squad (the set mark is not part of it): only then is the question asked (H12).
-    func replaces(filled: [FilledSlot]) -> Bool {
+    /// The tab's squad as drawn is the Current as drawn: every slot holds the same Pokémon (copy or species) in the same role. The pill reads "✓ Squad set" exactly then.
+    func isCurrent(filled: [FilledSlot]) -> Bool {
         guard let current else { return false }
         var shown = squad
         shown.fixing(filled)
-        return !shown.sameSquad(as: current)
+        func key(_ s: SquadStore.Saved) -> [String] { s.slots.map { "\($0.role)|\($0.pick ?? "")|\($0.species ?? "")" } }
+        return key(shown) == key(current)
     }
 
     var key: String { ref.key }
     var hasCurrent: Bool { current != nil }
-    /// The squad to draw: the stored Current, the draft, or the unedited suggestion.
-    var squad: SquadStore.Saved { tab == .current ? (current ?? SquadStore.Saved(slots: defaults)) : (draft ?? SquadStore.Saved(slots: defaults)) }
+    /// The squad to draw: the stored Current, the kept edit, or the unedited suggestion.
+    var squad: SquadStore.Saved { tab == .current ? (current ?? SquadStore.Saved(slots: defaults)) : (edit ?? SquadStore.Saved(slots: defaults)) }
     var mode: SquadMode { tab.mode }
-    /// Current is drawn as kept: no mode placement rule hides a kept pick.
-    var kept: Bool { tab == .current }
+    /// Current, and an edit of Available or Best, are drawn as kept: no mode placement rule hides a kept pick (rule 27.4).
+    var kept: Bool { tab == .current || edit != nil }
     var differs: Bool { edited }
     /// The unedited Best tab, which is the squad strength's reference and reads 100%.
     var isBestSuggestion: Bool { tab == .best && !edited }
