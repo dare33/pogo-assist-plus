@@ -358,6 +358,21 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertEqual(history(), ["b", "a"])
     }
 
+    /// H9: the pill compares the squad as drawn with the Current as drawn. After a re-scan empties one of the Current's picks, the Current draws what the slot refills with, so an Available
+    /// squad drawn the same still reads Squad set (the raw stored slots differ).
+    func testThePillComparesTheSquadAsDrawnWithTheCurrentAsDrawn() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: nil, date: t0)
+        keeper.update { $0.gym.slots[0].pick = nil }                      // the re-scan emptied a pick; nothing has adopted the refill yet
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertNil(keeper.store.current(.gym)?.slots[0].pick)
+        XCTAssertTrue(isCurrent(s), "drawn the same, so the pill reads Squad set")
+        XCTAssertNotEqual(s.current?.slots, SquadStore.Saved(slots: defaults).slots)
+    }
+
     /// H8: a squad brought back from the history or by Undo is reconciled with the box: a copy that was transferred is emptied, so its slot refills.
     func testRestoringARowHoldingATransferredCopyEmptiesItsSlot() {
         let keeper = SquadKeeper(), ws = makeWS()

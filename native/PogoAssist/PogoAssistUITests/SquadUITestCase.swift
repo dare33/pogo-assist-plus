@@ -204,6 +204,13 @@ class SquadUITestCase: XCTestCase {
                 closePicker(app)
             }
         }
+        // Available has no other Pokémon to offer (a league with one candidate): a slot's role is the edit, the All chip being a role the suggestion does not use.
+        if availableOnly, slot(app, screen, 1).exists {
+            openPicker(app, screen, slot: 1)
+            let all = app.buttons["squad-role-All"]
+            if all.exists { all.tap(); closePicker(app); return }
+            closePicker(app)
+        }
         XCTFail("no slot offered a row to change the squad with")
     }
 

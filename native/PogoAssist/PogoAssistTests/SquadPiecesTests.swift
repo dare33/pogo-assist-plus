@@ -113,6 +113,30 @@ final class SquadPiecesTests: XCTestCase {
         XCTAssertEqual(noBuild.pickerChips.map(\.text), ["↑ No build"])
     }
 
+    /// H10: a toast with an action goes when the screen that showed it disappears; another screen's toast stays.
+    @MainActor
+    func testAToastWithAnActionGoesWithItsScreen() {
+        final class Owner {}
+        let mine = Owner(), other = Owner()
+        let presenter = ToastPresenter()
+        var undone = 0
+        presenter.show("Current squad replaced", action: ToastAction(label: "Undo", perform: { undone += 1 }, owner: ObjectIdentifier(mine)))
+        presenter.dismiss(owner: ObjectIdentifier(other))
+        XCTAssertEqual(presenter.message, "Current squad replaced", "another screen's disappearing leaves it")
+        presenter.dismiss(owner: ObjectIdentifier(mine))
+        XCTAssertNil(presenter.message); XCTAssertNil(presenter.action, "its own screen's takes it away, Undo and all")
+        presenter.perform()
+        XCTAssertEqual(undone, 0, "and its Undo can no longer run")
+    }
+
+    /// H11: the title's (i) says where the earlier squads are shown and promises no way back after a Delete.
+    func testTheTitleInfoDoesNotPromiseAWayBackAfterDelete() {
+        let current = SquadInfo.tabs(noun: "squads").first { $0.term == "Current" }?.text ?? ""
+        XCTAssertTrue(current.contains("earlier current squads are listed under it"), current)
+        XCTAssertFalse(current.contains("Delete current squad"), current)
+        XCTAssertFalse(current.contains("brings it back"), current)
+    }
+
     func testTheStrengthLineIsOneLabelWithTheFiguresBold() {
         let s = SquadStrength(kind: .damage, now: 0.41, after: 0.87, scored: 6, total: 6)
         let runs = SquadStrengthLine.runs(s)
