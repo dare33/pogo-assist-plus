@@ -410,6 +410,7 @@ class SquadUITestCase: XCTestCase {
         let perRow = ax5 ? 2 : 3, expectedBands = (slots + perRow - 1) / perRow
         XCTAssertEqual(bands.count, expectedBands, "the strip is \(expectedBands) row(s) of \(perRow): \(bands)")
         XCTAssertEqual(chips[0].frame.width.rounded(), chips[1].frame.width.rounded(), accuracy: 2, "the first two chips are the same width (\(ax5 ? "a half" : "a third") of the strip)")
+        if ax5 && slots % 2 == 1 { XCTAssertEqual(chips[slots - 1].frame.width, chips[0].frame.width, accuracy: 2, "the lone chip of the short last row keeps the width of the others (D75): \(chips[slots - 1].frame) against \(chips[0].frame)") }
         let target = chips[chip - 1], editing = chips[open - 1]
         XCTAssertTrue(editing.isSelected, "the slot being edited is highlighted: \(editing.label)")
         XCTAssertTrue(editing.label.hasSuffix("editing"), editing.label)

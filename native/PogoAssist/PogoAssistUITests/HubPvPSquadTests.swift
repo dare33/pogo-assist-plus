@@ -73,6 +73,13 @@ final class HubPvPSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "pvp", 1).label.hasPrefix("Slot 1 of 3, Lead"), "Reset to suggestion: \(slot(app, "pvp", 1).label)")
         setThisSquad(app)
         XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5))
+        // Round 3 review (K5c): on Current with an earlier current squad, an open picker is above Delete current squad and the history. Change slot 1's role, set again (the first is the history), then Current.
+        openPicker(app, "pvp", slot: 1)
+        app.buttons["squad-role-All"].tap()
+        closePicker(app)
+        setThisSquad(app)
+        selectTab(app, "current")
+        assertPickerAboveHistory(app, "pvp")
 
         // OTHER CANDIDATES opens a Pokémon's page; the season line closes the screen.
         let others = app.buttons.matching(identifier: "hub-pvp-candidate").firstMatch

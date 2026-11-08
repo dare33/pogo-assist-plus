@@ -225,6 +225,31 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertEqual(SquadKeeper.load(account).current(ref)?.slots[1].pick, "b", "written")
     }
 
+    /// D74 and the manager's call on Set this squad: choosing a tab and setting a squad each write the squad's stored tab on their own, and Delete current squad / Squad set unset clears it
+    /// when the player is on Current. Read back through a second keeper, so it is what a relaunch sees.
+    func testSelectAndSetCurrentEachWriteTheStoredTabAndUnsetFromCurrentClearsIt() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        XCTAssertNil(keeper.store.storedTab(.gym))
+        ws.select(.best, ref: .gym, keeper: keeper)
+        XCTAssertEqual(keeper.store.storedTab(.gym), .best, "select stores the tab")
+        XCTAssertEqual(SquadKeeper.load(account).storedTab(.gym), .best, "and writes it at once")
+        // setCurrent on its own, on another squad nothing was selected on: the surface is drawn on Available.
+        let rocket = SquadRef.rocket(leader: "Arlo"), rocketDefaults = HubSquads.defaultRocketSlots()
+        var s = ws.surface(rocket, store: keeper.store, defaults: rocketDefaults)
+        XCTAssertEqual(s.tab, .available)
+        XCTAssertNil(keeper.store.storedTab(rocket))
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 50, date: t0)
+        XCTAssertEqual(keeper.store.storedTab(rocket), .available, "setCurrent stores the tab the squad was set from")
+        // unsetCurrent from the Current tab clears it.
+        ws.select(.current, ref: rocket, keeper: keeper)
+        XCTAssertEqual(keeper.store.storedTab(rocket), .current)
+        s = ws.surface(rocket, store: keeper.store, defaults: rocketDefaults)
+        ws.unsetCurrent(s, keeper: keeper, date: t0.addingTimeInterval(5))
+        XCTAssertNil(keeper.store.storedTab(rocket), "unset from Current clears the stored tab")
+        XCTAssertEqual(keeper.store.storedTab(.gym), .best, "and leaves another squad's alone")
+    }
+
     func testTappingSquadSetUnsetsAndUndoRestoresIt() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])

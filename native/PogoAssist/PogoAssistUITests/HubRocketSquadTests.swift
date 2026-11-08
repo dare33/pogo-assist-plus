@@ -52,6 +52,16 @@ final class HubRocketSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "rocket", 3).label.contains(chosen), "and after leaving the screen too: an edit is kept as it is made: \(slot(app, "rocket", 3).label)")
         // The pill is on this screen too: it makes the squad the Current and nothing else.
         XCTAssertEqual(pill(app).label, "Set this squad")
+        // Round 3 review (K5c): on Current with an earlier current squad, an open picker is above Delete current squad and the history. Set, change slot 2, set again (the first is the history), then Current.
+        setThisSquad(app)
+        openPicker(app, "rocket", slot: 2)
+        let again = pickerRows(app).matching(NSPredicate(format: "selected == false")).firstMatch
+        XCTAssertTrue(again.waitForExistence(timeout: 5), "slot 2 lists another counter")
+        again.tap()
+        closePicker(app)
+        setThisSquad(app)
+        selectTab(app, "current")
+        assertPickerAboveHistory(app, "rocket")
 
         // Grunts: a row each; a typed grunt lists the box's counters and the types that beat it, a typeless one says any strong attacker.
         let normal = reveal(app, app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Normal does not mean weak'")).firstMatch, swipes: 12)

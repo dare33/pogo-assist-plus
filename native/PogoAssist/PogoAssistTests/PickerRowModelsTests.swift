@@ -248,13 +248,25 @@ final class PickerRowModelsTests: XCTestCase {
     /// Balanced the same rows are listed (the same set) and nothing is reordered by figure.
     func testMaxDamagePickerGroupsRunStrongestFirstAndBalancedKeepsItsOrder() throws {
         let c = ctx()
-        var checkedGroups = 0
+        var checkedGroups = 0, balancedGroupsOutOfOrder = 0
         for row in Self.hub.rotation where row.kind == .fiveStar && !row.bosses.isEmpty {
             var b = EventPickerBuilder(screen: .raids, row: row, ctx: c)
             let balanced = b.allSlotRows(mode: .available)
             b.style = .maxDamage
             let maxDamage = b.allSlotRows(mode: .available)
             XCTAssertEqual(maxDamage.count, balanced.count)
+            // The same rows in both styles, slot by slot; only their order differs.
+            for (bal, mx) in zip(balanced, maxDamage) {
+                XCTAssertEqual(Set(bal.map(\.id)), Set(mx.map(\.id)), "\(row.title): Balanced and Max damage list the same rows")
+                var group = [PickerRowModel]()
+                for r in bal + [PickerRowModel(id: "", name: "", ticked: false, sectionHeading: "end", spoken: "")] {
+                    if r.sectionHeading != nil || r.id.isEmpty {
+                        if group.count > 1 && group.map(\.id) != PickerRowModel.orderedByStrength(group).map(\.id) { balancedGroupsOutOfOrder += 1 }
+                        group = []
+                    }
+                    if !r.id.isEmpty { group.append(r) }
+                }
+            }
             for rows in maxDamage {
                 var group = [PickerRowModel]()
                 for r in rows + [PickerRowModel(id: "", name: "", ticked: false, sectionHeading: "end", spoken: "")] {
@@ -269,6 +281,7 @@ final class PickerRowModelsTests: XCTestCase {
             }
         }
         XCTAssertGreaterThan(checkedGroups, 0)
+        XCTAssertGreaterThan(balancedGroupsOutOfOrder, 0, "some Balanced group is not already strongest first, so a Balanced sort would fail the Max damage check above")
     }
 
     /// Ruling 9: a Mega entry is judged as a Mega only in the raid Mega slot. Under Best a Mega row listed under another role's slot (the All chip) is the plain Pokémon.
