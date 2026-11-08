@@ -579,3 +579,6 @@ Changed: CONCEPTS rule 27.1.
 **D75. The strip at accessibility text sizes is three rows of two.** Flagged on the pass 2-6 page (chip names breaking mid-word at AX5);
 the manager's recommendation of rows of two at the accessibility sizes: "agreed on the others". Default text sizes keep rows of three.
 Changed: CONCEPTS rule 34.
+
+**D76. A free Mega Evolution's chip reads "↑ Free".** Flagged on the pass 2-6 page (the Rayquaza card read "↑ Upgrade" while the builds list said "Mega evolve · Free"); the manager offered "↑ Free" or keeping "↑ Upgrade". Greg: "↑ Free". "↑ Upgrade" stays for a cost the app does not know.
+Changed: CONCEPTS rule 35.

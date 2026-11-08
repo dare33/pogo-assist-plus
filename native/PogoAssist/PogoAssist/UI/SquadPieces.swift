@@ -36,7 +36,8 @@ struct SquadPalette {
 enum SquadMark: Equatable {
     case none
     case fullStrength
-    case upgrade(cost: MyPokemon.Cost?, label: String)
+    /// `free`: a Mega Evolution that costs nothing (`HubSquads.isFreeMegaEvolution`), which its chip names "↑ Free" rather than "↑ Upgrade" (D76).
+    case upgrade(cost: MyPokemon.Cost?, label: String, free: Bool = false)
 
     /// Rules 1 and 2 for a build on a screen.
     static func of(_ b: BoxAdvice.Build, screen: SquadScreen, ctx: HubContext) -> SquadMark {
@@ -44,7 +45,7 @@ enum SquadMark: Equatable {
         let c = HubSquads.cost(of: b)
         let cost = c.value.map { MyPokemon.Cost(value: $0, currency: c.currency == .dust ? .dust : .candy) }
         // Only the Dynamax mark is left (Max): there is no upgrade work to name.
-        return .upgrade(cost: cost, label: HubSquads.upgradeLabel(b) ?? dynamaxMarkOnly)
+        return .upgrade(cost: cost, label: HubSquads.upgradeLabel(b) ?? dynamaxMarkOnly, free: HubSquads.isFreeMegaEvolution(b))
     }
 
     /// The label when only the Dynamax mark is left: nothing to pay for, but not "Free" either (a copy that is not Dynamax cannot be made one).
@@ -67,7 +68,7 @@ enum SquadMark: Equatable {
         switch self {
         case .none: return nil
         case .fullStrength: return "Full strength"
-        case .upgrade(let cost, let label): return cost.map { "\(label), \($0.words)" } ?? label
+        case .upgrade(let cost, let label, let free): return cost.map { "\(label), \($0.words)" } ?? (free ? "\(label), free" : label)
         }
     }
 }
@@ -80,7 +81,7 @@ struct SquadMarkView: View {
         switch mark {
         case .none: EmptyView()
         case .fullStrength: FullStrengthBadge()
-        case .upgrade(let cost, let label): UpgradeMark(cost: showsCost ? cost : nil, label: label)
+        case .upgrade(let cost, let label, _): UpgradeMark(cost: showsCost ? cost : nil, label: label)
         }
     }
 }
@@ -117,9 +118,9 @@ struct StatusChipModel: Equatable, Hashable {
     static let ready = StatusChipModel(kind: .ready, text: "✓ Ready")
     static let noBuild = StatusChipModel(kind: .upgrade, text: "↑ No build")
     static let getNow = StatusChipModel(kind: .getNow, text: "◎ Get now")
-    /// "↑ 206k" with the cost, "↑ Upgrade" when the work has none to name (Mega Evolve alone, the Dynamax mark).
-    static func upgrade(_ cost: MyPokemon.Cost?) -> StatusChipModel {
-        cost.map { StatusChipModel(kind: .upgrade, text: "↑ " + $0.value, currency: $0.currency) } ?? StatusChipModel(kind: .upgrade, text: "↑ Upgrade")
+    /// "↑ 206k" with the cost, "↑ Free" for a Mega Evolution that costs nothing (D76), "↑ Upgrade" when the work has no cost to name (the Dynamax mark, a cost the app does not know).
+    static func upgrade(_ cost: MyPokemon.Cost?, free: Bool = false) -> StatusChipModel {
+        cost.map { StatusChipModel(kind: .upgrade, text: "↑ " + $0.value, currency: $0.currency) } ?? StatusChipModel(kind: .upgrade, text: free ? "↑ Free" : "↑ Upgrade")
     }
     static func meter(_ d: HubSquads.ObtainDifficulty) -> StatusChipModel { StatusChipModel(kind: .getNow, text: d.meter + " " + d.word) }
     static func notNow(when: String?) -> StatusChipModel { StatusChipModel(kind: .notNow, text: when.map { "◌ Not now · " + $0 } ?? "◌ Not now") }
@@ -133,7 +134,7 @@ struct StatusChipModel: Equatable, Hashable {
             switch mark {
             case .none: return []
             case .fullStrength: return [.ready]
-            case .upgrade(let cost, _): return [.upgrade(cost)]
+            case .upgrade(let cost, _, let free): return [.upgrade(cost, free: free)]
             }
         }
         guard let r else { return ofMark() }
@@ -481,10 +482,10 @@ extension PickerRowModel {
     /// The mark at the head of a picker row (H5): not the full-strength tick when the "✓ Ready" chip says it.
     var headMark: SquadMark { mark == .fullStrength && chips.contains(.ready) ? .none : mark }
 
-    /// The chips a picker row draws (H5): an upgrade chip reads "↑ Upgrade" because the head carries the cost; "↑ No build" and the rest are as they are.
+    /// The chips a picker row draws (H5): an upgrade chip reads "↑ Upgrade" because the head carries the cost ("↑ Free" for a free Mega Evolution, which has none); "↑ No build" and the rest are as they are.
     var pickerChips: [StatusChipModel] {
-        guard case .upgrade = mark else { return chips }
-        return chips.map { $0.kind == .upgrade && $0 != .noBuild ? .upgrade(nil) : $0 }
+        guard case .upgrade(_, _, let free) = mark else { return chips }
+        return chips.map { $0.kind == .upgrade && $0 != .noBuild ? .upgrade(nil, free: free) : $0 }
     }
 
     /// The CP and IV line and the strength bar of a row (phone run 2, P1), with what VoiceOver adds for them ("CP 3412, IVs 15, 14, 15, estimated damage 62 percent of the best,
@@ -1354,7 +1355,7 @@ enum SquadInfo {
 
     static let signs: [(term: String, text: String)] = [
         ("✓ Ready:", "nothing left to do."),
-        ("↑ with a cost:", "a power up, evolution or Mega Evolution still to do."),
+        ("↑ with a cost:", "a power up, evolution or Mega Evolution still to do. Free means a Mega Evolution that costs nothing."),
         ("◎ Get now:", "a boss on now, or easy to obtain (the bars show how hard)."),
         ("◌ Not now:", "not obtainable now; a month shows when it is next on."),
         ("⇄ Slot N:", "this Pokémon is in another slot; choosing it swaps the two."),

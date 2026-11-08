@@ -90,7 +90,7 @@ Each label or word the screens use for a rating, ranking, activity or state, in 
 - **Same copy as <row>**: a Best row whose only copy is the one a higher row already shows; it still lists, with that note.
 - **Available upgrades:** the heading in an Available picker over the player's own Pokémon whose build still needs work;
   the ones at Full strength come first, above it (rule 28; phone feedback item 10).
-- **Status chip** (pass 2-6, D68, rule 35): the small pill with a sign and one word that says a Pokémon's status on a slot card or a picker row: **✓ Ready**, **↑ 206k** (or **↑ Upgrade**, **↑ No build**),
+- **Status chip** (pass 2-6, D68, rule 35): the small pill with a sign and one word that says a Pokémon's status on a slot card or a picker row: **✓ Ready**, **↑ 206k** (or **↑ Free**, **↑ Upgrade**, **↑ No build**),
   **◎ Get now** (with an **Easy / Medium / Hard** meter), **◌ Not now** (with the month) and **⇄ Slot 5**. VoiceOver reads the words, not the chips.
 - **Slot status**: the colour of a slot card's background: **ready** (green), **needs work** (amber), **to get** (red:
   under Best, not in the box) or **empty** (red). A card also
@@ -456,7 +456,7 @@ Stated so each can be checked against the code.
 35. **Status chips** (pass 2-6; Greg, D68: "f1"; legend "not required going f1"; the panel's summary of that option is "F1 symbol chips with one word, no legend"; the (i) explains the signs). Each status a Pokémon has on a squad screen is said once, as a small capsule (10.5 pt bold) with a sign and one word,
     in a wrapping row under the name on a picker row and after the name on a slot card; colour is never the only sign:
     - **✓ Ready** (green): at Full strength, nothing left to do.
-    - **↑ 206k** (orange): a power up, an evolution or a Mega Evolution still to do, with the build's cost as the arrow badge shows it (`HubModel.costShort`, with the dust or candy icon); **↑ Upgrade** when the work has no cost to name;
+    - **↑ 206k** (orange): a power up, an evolution or a Mega Evolution still to do, with the build's cost as the arrow badge shows it (`HubModel.costShort`, with the dust or candy icon); **↑ Free** for a Mega Evolution that costs nothing (D76: the builds list says "Mega evolve · Free"; the spoken label says "free"); **↑ Upgrade** when the work has no cost to name (the Dynamax mark, a cost the app does not know);
       **↑ No build** for "In your box · needs upgrade · no build for this".
     - **◎ Get now** (Great League blue), with a second chip, the meter **▮▯▯ Easy / ▮▮▯ Medium / ▮▮▮ Hard**, when the research's obtain text names a difficulty (not for a boss on the schedule).
     - **◌ Not now** (grey), with the month when the schedule gives a date ("◌ Not now · Dec"; the day and month when it is within a month: "◌ Not now · 9 Nov").

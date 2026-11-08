@@ -117,6 +117,31 @@ final class SquadPiecesTests: XCTestCase {
         XCTAssertEqual(noBuild.pickerChips.map(\.text), ["↑ No build"])
     }
 
+    /// D76: a Mega Evolution that costs nothing (the builds list says "Mega evolve · Free") has the chip "↑ Free"; a known cost keeps its figure; a step with no cost to name keeps "↑ Upgrade".
+    func testAFreeMegaEvolutionIsChippedFreeAndAnUnknownCostStaysUpgrade() {
+        var mega = Self.sampleBuild
+        mega.steps = [.init(kind: "megaEvolve")]; mega.dust = 0; mega.candy = 0
+        XCTAssertEqual(HubModel.costShort(mega), "Free", "the builds list calls it Free")
+        XCTAssertTrue(HubSquads.isFreeMegaEvolution(mega))
+        var paid = mega; paid.dust = 206_000
+        XCTAssertFalse(HubSquads.isFreeMegaEvolution(paid), "a cost makes it not free")
+        var power = mega; power.steps = [.init(kind: "powerUp")]
+        XCTAssertFalse(HubSquads.isFreeMegaEvolution(power), "free, but not a Mega Evolution: the cost is not a Mega step's, so it stays Upgrade")
+
+        let today = "2026-11-07"
+        func chip(_ b: BoxAdvice.Build, cost: MyPokemon.Cost? = nil) -> [String] {
+            StatusChipModel.chips(best: nil, mark: .upgrade(cost: cost, label: "x", free: HubSquads.isFreeMegaEvolution(b)), today: today).map(\.text)
+        }
+        XCTAssertEqual(chip(mega), ["↑ Free"])
+        XCTAssertEqual(chip(power), ["↑ Upgrade"])
+        XCTAssertEqual(chip(paid, cost: MyPokemon.Cost(value: "206k", currency: .dust)), ["↑ 206k"], "a known cost shows its figure")
+        // The picker row keeps the chip (its head carries no cost to repeat) and the spoken label says free.
+        let row = PickerRowModel(id: "m", name: "Mega Rayquaza", ticked: false, mark: .upgrade(cost: nil, label: "Upgrade available: mega evolve", free: true), chips: [.upgrade(nil, free: true)], spoken: "")
+        XCTAssertEqual(row.pickerChips.map(\.text), ["↑ Free"])
+        XCTAssertEqual(row.mark.spoken, "Upgrade available: mega evolve, free")
+        XCTAssertEqual(SquadMark.upgrade(cost: nil, label: "x").spoken, "x", "an unknown cost says nothing about price")
+    }
+
     /// H10, J6: a toast goes when the screen that showed it disappears, a plain message as well as one with an Undo; another screen's toast stays; "Undone" belongs to the screen of the
     /// action it undid.
     @MainActor
