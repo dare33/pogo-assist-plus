@@ -40,7 +40,8 @@ struct HubTypeScreen<Content: View>: View {
                 .padding(.horizontal, Theme.Space.screen)
                 .padding(.bottom, 16)
             }
-            // The cards' frame is measured against the scroll view's own top edge, which the strip's inset below does not move, so the threshold is the same with the strip shown or not.
+            // The named space moves with the strip's safe-area inset, so with the strip shown the cards' frame is measured from the strip's bottom edge, not the scroll view's top. That moves the
+            // return threshold away from the cards (about the strip's height plus `squadCardsReturn`, the extra 12 pt), which is why the flag cannot oscillate at the edge.
             .coordinateSpace(name: squadScrollSpace)
             .onPreferenceChange(SquadCardsFrameKey.self) { frame in
                 guard let frame else { cardsScrolledOff = false; return }

@@ -719,7 +719,7 @@ struct EventSquadView: View {
         } else if screen == .raids {
             SquadExplainer(items: [
                 ("Best for this boss first:", "the tier our raid tables give it against the boss's weak types, then built before to build, then how many of those types it covers."
-                 + (keeper.store.raidStyle == .maxDamage ? " Under Max damage, each list runs by the damage bar instead: the longest bar first, counting the part an upgrade adds." : "")),
+                 + (keeper.store.raidStyle == .maxDamage ? " Under Max damage, each list runs by the damage bar instead, strongest first, counting the part an upgrade adds; Full strength rows still come before Available upgrades." : "")),
                 ("Roles:", "Mega is for a Pokémon that can Mega Evolve (the Mega slot lists only those); Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise. A squad holds one Mega: while another slot has it, the Mega chip says so. After the slot's own role comes \"Other roles:\", everything else in your box."),
             ], identifier: "squad-picker-explainer")
         } else {

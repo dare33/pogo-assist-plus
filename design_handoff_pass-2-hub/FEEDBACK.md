@@ -255,4 +255,6 @@ while the slot cards are still in view).
 
 Manager's proposals (picker above the history on Current; the strip once the cards have scrolled off; Max damage ordering the picker by
 the row's strength figure; the chosen tab remembered across relaunches; the strip as three rows of two at accessibility sizes). Greg:
-"agreed on the others". "↑ Upgrade" on a free Mega Evolution and the "Rayquaza" / "Mega Rayquaza" naming stay as they are (logged).
+"agreed on the others". The "Rayquaza" / "Mega Rayquaza" naming stays as it is (logged).
+
+Greg, 8 Nov, on the free Mega Evolution chip, asked to choose between '↑ Free' and keeping '↑ Upgrade': "↑ Free". Built as D76 (R6). The Rayquaza / Mega Rayquaza naming stays as it is unless he says "name the Mega slot".
