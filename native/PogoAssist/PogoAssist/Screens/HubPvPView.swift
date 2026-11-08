@@ -303,6 +303,7 @@ struct PvPSquadView: View {
         }
         squad(filled: filled, candidates: candidates, byId: byId, best: best, surface: surface, pogoAssist: pogoAssist, builder: builder)
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, candidates: candidates, byId: byId, best: best, surface: surface, pogoAssist: pogoAssist, builder: builder) }
+        if surface.tab == .current, selected.map(filled.indices.contains) ?? false { currentFooter(surface) }
         others(candidates: candidates, filled: filled)
     }
 
@@ -356,10 +357,8 @@ struct PvPSquadView: View {
                     withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
                 }
                 if surface.tab == .current {
-                    DeleteCurrentButton { deleteSquad(surface) }
-                    SquadHistoryList(rows: keeper.store.historyRows(ref, ctx: ctx) { SquadPalette.of($0.role) }) { index in
-                        if workspace.restore(surface, keeper: keeper, index: index) { toast("Current squad replaced", surface) }
-                    }
+                    // D71: with a picker open the Delete link and the history come after it, not between the cards and the picker.
+                    if !(selected.map(filled.indices.contains) ?? false) { currentFooter(surface) }
                 } else if surface.differs {
                     SquadResetLink { workspace.reset(surface, keeper: keeper) }
                 }
@@ -391,6 +390,14 @@ struct PvPSquadView: View {
             if !note.isEmpty {
                 Text(note).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted).padding(.horizontal, 4).accessibilityIdentifier("hub-pvp-weakness")
             }
+        }
+    }
+
+    /// Current's Delete link and earlier current squads (rule 27.10). With a picker open they come after it (D71).
+    @ViewBuilder private func currentFooter(_ surface: SquadSurface) -> some View {
+        DeleteCurrentButton { deleteSquad(surface) }
+        SquadHistoryList(rows: keeper.store.historyRows(surface.ref, ctx: ctx) { SquadPalette.of($0.role) }) { index in
+            if workspace.restore(surface, keeper: keeper, index: index) { toast("Current squad replaced", surface) }
         }
     }
 

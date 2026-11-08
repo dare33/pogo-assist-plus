@@ -147,6 +147,7 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(row.exists)
         XCTAssertTrue(row.label.contains("Blissey") && row.label.contains("Today"), "date and Pokémon: \(row.label)")
         shot("gym-current-history")
+        assertPickerAboveHistory(app, "gym")
         setHistorySquad(app, 1)
         XCTAssertEqual(toastText(app), "Current squad replaced", "Set squad asks nothing")
         XCTAssertTrue(slot(app, "gym", 3).label.contains("empty") && slot(app, "gym", 2).label.contains("Blissey"), "the old squad is the Current again")

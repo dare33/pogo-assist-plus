@@ -365,6 +365,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(row.label.contains("Today"), row.label)
         let rowBefore = row.label
         shot("raids-current-history")
+        assertPickerAboveHistory(app, "raids")
         // Set squad brings it back; Undo puts the other back again.
         setHistorySquad(app, 1)
         XCTAssertEqual(toastText(app), "Current squad replaced")

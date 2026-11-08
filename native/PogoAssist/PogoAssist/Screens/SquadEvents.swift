@@ -587,16 +587,17 @@ struct EventSquadView: View {
                 SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: screen == .raids ? .raids : .max)
                 SlotGrid(slots: cards, selected: selected) { i in withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i } }
             }
+            // D71: on Current the open picker comes straight after the slot cards, before Delete current squad and the history; Available and Best keep cards, Reset to suggestion, picker.
+            let openPicker = selected.flatMap { filled.indices.contains($0) ? $0 : nil }.map { picker($0, filled: filled, options: options, byId: byId, surface: surface, builder: builder) }
             if surface.tab == .current {
+                openPicker
                 DeleteCurrentButton { deleteSquad(surface) }
                 SquadHistoryList(rows: keeper.store.historyRows(ref, ctx: ctx) { SquadPalette.of($0.role) }) { index in
                     if workspace.restore(surface, keeper: keeper, index: index) { toast("Current squad replaced", surface) }
                 }
-            } else if surface.differs {
-                SquadResetLink { workspace.reset(surface, keeper: keeper) }
-            }
-            if let i = selected, filled.indices.contains(i) {
-                picker(i, filled: filled, options: options, byId: byId, surface: surface, builder: builder)
+            } else {
+                if surface.differs { SquadResetLink { workspace.reset(surface, keeper: keeper) } }
+                openPicker
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

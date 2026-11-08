@@ -347,10 +347,8 @@ private struct RocketSquadView: View {
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
             }
             if surface.tab == .current {
-                DeleteCurrentButton { deleteSquad(surface) }
-                SquadHistoryList(rows: keeper.store.historyRows(ref, ctx: ctx) { _ in SquadPalette(ink: ContentType.rocket.ink(accent), tint: ContentType.rocket.tint(accent)) }) { index in
-                    if workspace.restore(surface, keeper: keeper, index: index) { toast("Current squad replaced", surface) }
-                }
+                // D71: with a picker open the Delete link and the history come after it, not between the cards and the picker.
+                if !(selected.map(filled.indices.contains) ?? false) { currentFooter(surface) }
             } else if surface.differs {
                 SquadResetLink { workspace.reset(surface, keeper: keeper) }
             }
@@ -379,6 +377,15 @@ private struct RocketSquadView: View {
         .task(id: staleKey) { if !staleKey.isEmpty, !Task.isCancelled { workspace.dropUneditedEdit(surface, keeper: keeper) } }
         .tracksBox(ctx, generation: $boxGeneration)
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, lists: lists, surface: surface, builder: builder) }
+        if surface.tab == .current, selected.map(filled.indices.contains) ?? false { currentFooter(surface) }
+    }
+
+    /// Current's Delete link and earlier current squads (rule 27.10). With a picker open they come after it (D71).
+    @ViewBuilder private func currentFooter(_ surface: SquadSurface) -> some View {
+        DeleteCurrentButton { deleteSquad(surface) }
+        SquadHistoryList(rows: keeper.store.historyRows(surface.ref, ctx: ctx) { _ in SquadPalette(ink: ContentType.rocket.ink(accent), tint: ContentType.rocket.tint(accent)) }) { index in
+            if workspace.restore(surface, keeper: keeper, index: index) { toast("Current squad replaced", surface) }
+        }
     }
 
     /// "Set this squad": the squad as drawn becomes the Current with no question; replacing a different one offers Undo.

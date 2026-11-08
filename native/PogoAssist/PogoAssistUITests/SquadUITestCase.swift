@@ -358,6 +358,21 @@ class SquadUITestCase: XCTestCase {
         }
     }
 
+    /// D71, rule 27.10: on Current, with at least one earlier current squad, an open picker comes straight after the slot cards: its first row is above Delete current squad and above the
+    /// history. The page is left where it is when the picker opens, so the frames are read together.
+    func assertPickerAboveHistory(_ app: XCUIApplication, _ screen: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(tab(app, "current").isSelected, "on the Current tab", file: file, line: line)
+        XCTAssertTrue(reveal(app, historyRow(app, 1)).exists, "there is an earlier current squad", file: file, line: line)
+        openPicker(app, screen, slot: 1)
+        let first = pickerRows(app).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "the picker lists rows", file: file, line: line)
+        let delete = el(app, "squad-delete-current"), history = historyRow(app, 1)
+        XCTAssertTrue(delete.exists && history.exists, "Delete current squad and the history are still on Current", file: file, line: line)
+        XCTAssertLessThan(first.frame.minY, delete.frame.minY, "the picker is above Delete current squad", file: file, line: line)
+        XCTAssertLessThan(first.frame.minY, history.frame.minY, "and above the history", file: file, line: line)
+        closePicker(app)
+    }
+
     // MARK: the pinned squad strip (rule 34)
 
     /// With a slot's picker open and the page scrolled well down the Pokémon list, the strip of the squad's slots stays at the top, every chip in view (two rows of three on a six-slot
