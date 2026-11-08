@@ -269,6 +269,8 @@ struct EventPickerBuilder {
     /// Whether a Raids builder with no rows may rank the boss itself (about 0.2 s cold). True for tests and background callers; the builder the view makes sets it false, so a view body can
     /// never reach the ranking (J1): with no rows it lists none.
     var rowsOnTheSpot = true
+    /// Raids only (rule 33, D73): under Max damage an Available picker lists each group by the strength figure of its rows. The screen gives the store's style.
+    var style: RaidStyle = .balanced
     /// What ranks a Raids boss on the spot (replaceable, so a test can count the calls).
     var rank: @Sendable (HubData.RotationRow, HubContext) -> [HubSquads.BestRow] = { HubSquads.bestRaidRows(row: $0, ctx: $1) }
 
@@ -413,7 +415,15 @@ struct EventPickerBuilder {
                     .adding(copy: copy, strength: strength)
             }
         }
-        let shownRows = mode == .available ? PickerRowModel.availableGroups(own: rows(ownIds), other: rows(groups.other)) : rows(ownIds)
+        var ownRows = rows(ownIds), otherRows = rows(groups.other)
+        // D73: Raids, Available, Max damage: each group (the slot's own role, then "Other roles:", the Mega slot's list) by the strength figure, strongest first. The slot's own Pokémon,
+        // added at the head when this list does not hold it, stays there. Rule 28's split (Full strength, then "Available upgrades:") is applied after, so each part is ordered.
+        if screen == .raids, mode == .available, style == .maxDamage {
+            let added = ownIds.count > groups.own.count ? ownIds.first : nil
+            ownRows = ownRows.filter { $0.id == added } + PickerRowModel.orderedByStrength(ownRows.filter { $0.id != added })
+            otherRows = PickerRowModel.orderedByStrength(otherRows)
+        }
+        let shownRows = mode == .available ? PickerRowModel.availableGroups(own: ownRows, other: otherRows) : ownRows
         return Content(rows: PickerRowModel.marking(shownRows, moves: held.moves) { held.swap[$0] ?? copyOf($0).flatMap { held.swap[$0] } }, boxHasOptions: boxHasOptions)
     }
 
@@ -516,6 +526,7 @@ struct EventSquadView: View {
     private func builder(kept: Bool, rows: [HubSquads.BestRow]?) -> EventPickerBuilder {
         var b = EventPickerBuilder(screen: screen, row: row, ctx: ctx, kept: kept, raidRows: rows)
         b.rowsOnTheSpot = false
+        b.style = keeper.store.raidStyle
         return b
     }
 
@@ -666,7 +677,7 @@ struct EventSquadView: View {
         let mega = PogoRules.RaidRole.mega.rawValue
         let blocked = megaMessageSlot == i && anotherSlotHoldsTheMega(i, filled: filled, byId: byId, mode: mode, options: options)
         // The rows are built once and kept until the box, the advice or what the slot sees changes (P1: no work on every redraw).
-        let key = "\(screen.rawValue)|\(row.from)|\(row.title)|\(surface.tab.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
+        let key = "\(screen.rawValue)|\(row.from)|\(row.title)|\(surface.tab.rawValue)|\(surface.style.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, options: options, byId: byId, mode: mode) }
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: screen == .raids ? .raids : .max, roles: chips, role: role,
@@ -706,7 +717,8 @@ struct EventSquadView: View {
             ], identifier: "squad-picker-explainer")
         } else if screen == .raids {
             SquadExplainer(items: [
-                ("Best for this boss first:", "the tier our raid tables give it against the boss's weak types, then built before to build, then how many of those types it covers."),
+                ("Best for this boss first:", "the tier our raid tables give it against the boss's weak types, then built before to build, then how many of those types it covers."
+                 + (keeper.store.raidStyle == .maxDamage ? " Under Max damage, each list runs by the damage bar instead: the longest bar first, counting the part an upgrade adds." : "")),
                 ("Roles:", "Mega is for a Pokémon that can Mega Evolve (the Mega slot lists only those); Heavy hitter if it is a Shadow or its Attack is at least 1.3 times its Defence; Bulky hitter otherwise. A squad holds one Mega: while another slot has it, the Mega chip says so. After the slot's own role comes \"Other roles:\", everything else in your box."),
             ], identifier: "squad-picker-explainer")
         } else {

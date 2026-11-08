@@ -227,6 +227,50 @@ final class PickerRowModelsTests: XCTestCase {
         XCTAssertEqual(back.pickName(for: b.entryId, area: "gym"), SquadWords.boxName("Gym Target"))
     }
 
+    // MARK: D73, Raids Max damage orders the picker by strength
+
+    private func figureRow(_ id: String, now: Double?, after: Double?) -> PickerRowModel {
+        var r = PickerRowModel(id: id, name: id, ticked: false, spoken: id)
+        r.strength = Strength(kind: .damage, now: now, after: after)
+        return r
+    }
+
+    func testOrderedByStrengthTakesTheFigureAfterTheUpgradeThenTheFigureNowThenTheGivenOrder() {
+        // 40, 70 reached by an upgrade from 50, 70 as it is: the two 70s tie, the higher figure now first.
+        let rows = [figureRow("low", now: 0.40, after: nil), figureRow("upgraded", now: 0.50, after: 0.70), figureRow("built", now: 0.70, after: nil)]
+        XCTAssertEqual(PickerRowModel.orderedByStrength(rows).map(\.id), ["built", "upgraded", "low"])
+        // Exact ties keep the order given; a row with no figure goes last.
+        let tied = [figureRow("a", now: 0.5, after: nil), figureRow("none", now: nil, after: nil), figureRow("b", now: 0.5, after: nil)]
+        XCTAssertEqual(PickerRowModel.orderedByStrength(tied).map(\.id), ["a", "b", "none"])
+    }
+
+    /// Under Max damage every group of an Available Raids picker (the Full strength rows, "Available upgrades:", "Other roles:", the Mega slot's list) runs strongest first; under
+    /// Balanced the same rows are listed (the same set) and nothing is reordered by figure.
+    func testMaxDamagePickerGroupsRunStrongestFirstAndBalancedKeepsItsOrder() throws {
+        let c = ctx()
+        var checkedGroups = 0
+        for row in Self.hub.rotation where row.kind == .fiveStar && !row.bosses.isEmpty {
+            var b = EventPickerBuilder(screen: .raids, row: row, ctx: c)
+            let balanced = b.allSlotRows(mode: .available)
+            b.style = .maxDamage
+            let maxDamage = b.allSlotRows(mode: .available)
+            XCTAssertEqual(maxDamage.count, balanced.count)
+            for rows in maxDamage {
+                var group = [PickerRowModel]()
+                for r in rows + [PickerRowModel(id: "", name: "", ticked: false, sectionHeading: "end", spoken: "")] {
+                    if r.sectionHeading != nil || r.id.isEmpty {
+                        let f = group.map { ($0.strength?.after ?? $0.strength?.now) ?? -1 }
+                        XCTAssertEqual(f, f.sorted(by: >), "\(row.title): a group runs strongest first")
+                        if group.count > 1 { checkedGroups += 1 }
+                        group = []
+                    }
+                    if !r.id.isEmpty { group.append(r) }
+                }
+            }
+        }
+        XCTAssertGreaterThan(checkedGroups, 0)
+    }
+
     /// Ruling 9: a Mega entry is judged as a Mega only in the raid Mega slot. Under Best a Mega row listed under another role's slot (the All chip) is the plain Pokémon.
     func testAMegaIsJudgedAsMegaOnlyInTheMegaSlot() throws {
         let c = ctx()

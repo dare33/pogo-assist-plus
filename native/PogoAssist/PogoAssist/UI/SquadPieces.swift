@@ -510,6 +510,21 @@ extension PickerRowModel {
     static let upgradesHeading = "Available upgrades:"
     static let otherRolesHeading = "Other roles:"
 
+    /// D73: the rows by the strength figure the bar shows, strongest first: the figure after the upgrade (the figure now when there is none), ties by the figure now, then the order given.
+    /// A row with no figure goes last.
+    static func orderedByStrength(_ rows: [PickerRowModel]) -> [PickerRowModel] {
+        func figures(_ r: PickerRowModel) -> (after: Double, now: Double) {
+            let now = r.strength?.now, after = r.strength?.after ?? now
+            return (after ?? -1, now ?? -1)
+        }
+        return rows.enumerated().sorted { a, b in
+            let x = figures(a.element), y = figures(b.element)
+            if x.after != y.after { return x.after > y.after }
+            if x.now != y.now { return x.now > y.now }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+
     /// An Available picker (S1): the slot's own role's options first, at Full strength first then under "Available upgrades:", then every other unused Pokémon under
     /// "Other roles:", each showing its role, in the order the squad is filled in.
     static func availableGroups(own: [PickerRowModel], other: [PickerRowModel]) -> [PickerRowModel] {
