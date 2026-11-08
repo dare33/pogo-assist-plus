@@ -433,7 +433,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         shot("raids-set-best")
     }
 
-    /// Rule 34: the pinned strip, two rows of three on this six-slot squad, at the default text size and at AX5 (the rows stay, a chip's name wraps and the strip grows).
+    /// Rule 34: the pinned strip, two rows of three on this six-slot squad, at the default text size and at AX5 (rows of two, a chip's name wraps and the strip grows).
     func testRaidsPinnedStripFollowsTheList() throws {
         let setup = launch(reset: true)
         populate(setup)
@@ -470,7 +470,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(reveal(big, big.buttons["squad-style-max-damage"]).exists)
         XCTAssertTrue(big.buttons["squad-style-max-damage"].label == "Max damage" && big.buttons["squad-tab-available"].exists)
         shot("raids-tabs-style-ax5")
-        assertStripPinsTheSquad(big, "raids", open: 2, chip: 3, slots: 6, shotName: "raids-strip-scrolled-ax5")
+        assertStripPinsTheSquad(big, "raids", open: 2, chip: 3, slots: 6, ax5: true, shotName: "raids-strip-scrolled-ax5")
         big.terminate()
     }
 

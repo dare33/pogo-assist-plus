@@ -195,6 +195,21 @@ final class HubMaxSquadTests: SquadUITestCase {
         row.tap()
         XCTAssertTrue(slot(app, "max", 1).waitForExistence(timeout: 60))
         assertStripPinsTheSquad(app, "max", open: 1, chip: 3, slots: 3, shotName: "max-strip-scrolled")
+        // D75: at AX5 three slots are a row of two and a row of one (the short row's spacer must not stretch the strip over the screen).
+        app.terminate()
+        let big = launch(ax5: true)
+        openTile(big, "max")
+        let bigRow = el(big, "hub-max-row-0")
+        XCTAssertTrue(bigRow.waitForExistence(timeout: 30))
+        bigRow.tap()
+        XCTAssertTrue(slot(big, "max", 1).waitForExistence(timeout: 60))
+        assertStripPinsTheSquad(big, "max", open: 1, chip: 3, slots: 3, ax5: true)
+        let strip = el(big, "squad-strip")
+        openPicker(big, "max", slot: 1)
+        for _ in 0..<4 { big.swipeUp() }
+        XCTAssertTrue(strip.waitForExistence(timeout: 5))
+        XCTAssertLessThan(strip.frame.height, big.frame.height * 0.5, "the strip is a few rows tall, not the screen: \(strip.frame)")
+        closePicker(big)
     }
 
     /// The squad on Available after one edit, with its pill, chips, strength bar and Reset link: light, dark, default text and AX5.

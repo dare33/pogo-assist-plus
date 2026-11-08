@@ -1276,7 +1276,8 @@ extension View {
 }
 
 /// The strip itself: the squad's chips in rows of three, each chip a third of the width, so a six-slot squad is two rows and a three-slot squad one, with no sideways scrolling. At the
-/// accessibility sizes the rows stay, a chip's name wraps to two lines and the strip grows (the list below is inset by its height).
+/// accessibility sizes the rows hold two chips (a six-slot squad is three rows, a three-slot squad a row of two and a row of one), a chip's name wraps to two lines and the strip grows (the list
+/// below is inset by its height).
 struct SquadStripView: View {
     let model: SquadStripModel
     @Environment(\.accent) private var accent
@@ -1284,16 +1285,19 @@ struct SquadStripView: View {
     /// The slot-number disc grows with the text, so the digit is never clipped at the accessibility sizes.
     @ScaledMetric(relativeTo: .footnote) private var disc: CGFloat = 20
 
-    private static let perRow = 3
+    /// Rows of three; at the accessibility text sizes rows of two (D75), so a name has room to wrap on whole words.
+    private var perRow: Int { typeSize.isAccessibilitySize ? 2 : 3 }
 
     var body: some View {
-        let rows = stride(from: 0, to: model.chips.count, by: Self.perRow).map { Array(model.chips[$0..<min($0 + Self.perRow, model.chips.count)]) }
+        let perRow = perRow
+        let rows = stride(from: 0, to: model.chips.count, by: perRow).map { Array(model.chips[$0..<min($0 + perRow, model.chips.count)]) }
         VStack(spacing: 6) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 8) {
                     ForEach(row) { chip($0) }
-                    // A short last row keeps its chips a third of the width.
-                    ForEach(0..<(Self.perRow - row.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, minHeight: 1) }
+                    // A short last row keeps its chips the width of the rows above it (a third, or a half at the accessibility sizes).
+                    // (A Color is greedy in both directions: without the fixed height one spacer made the strip as tall as the screen.)
+                    ForEach(0..<(perRow - row.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, minHeight: 1, maxHeight: 1) }
                 }
             }
         }

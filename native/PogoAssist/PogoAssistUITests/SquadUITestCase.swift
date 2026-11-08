@@ -388,8 +388,8 @@ class SquadUITestCase: XCTestCase {
     }
 
     /// With a slot's picker open and the page scrolled well down the Pokémon list, the strip of the squad's slots stays at the top, every chip in view (two rows of three on a six-slot
-    /// squad, one row of three otherwise: no sideways scrolling); tapping another slot's chip opens that slot's picker; Done hides the strip.
-    func assertStripPinsTheSquad(_ app: XCUIApplication, _ screen: String, open: Int = 1, chip: Int = 3, slots: Int = 6, shotName: String? = nil) {
+    /// squad, one row of three otherwise, rows of two at AX5: no sideways scrolling); tapping another slot's chip opens that slot's picker; Done hides the strip.
+    func assertStripPinsTheSquad(_ app: XCUIApplication, _ screen: String, open: Int = 1, chip: Int = 3, slots: Int = 6, ax5: Bool = false, shotName: String? = nil) {
         XCTAssertFalse(el(app, "squad-strip").exists, "no strip while no picker is open")
         openPicker(app, screen, slot: open)
         let strip = el(app, "squad-strip")
@@ -406,8 +406,10 @@ class SquadUITestCase: XCTestCase {
         }
         var bands = [CGFloat]()
         for y in chips.map({ $0.frame.minY }).sorted() { if let last = bands.last, y - last < 10 { continue }; bands.append(y) }
-        XCTAssertEqual(bands.count, (slots + 2) / 3, "the strip is \((slots + 2) / 3) row(s) of three: \(bands)")
-        XCTAssertEqual(chips[0].frame.width.rounded(), chips[1].frame.width.rounded(), accuracy: 2, "each chip is a third of the width")
+        // D75: rows of three at the default size, rows of two at the accessibility sizes (a short last row keeps its chips' width).
+        let perRow = ax5 ? 2 : 3, expectedBands = (slots + perRow - 1) / perRow
+        XCTAssertEqual(bands.count, expectedBands, "the strip is \(expectedBands) row(s) of \(perRow): \(bands)")
+        XCTAssertEqual(chips[0].frame.width.rounded(), chips[1].frame.width.rounded(), accuracy: 2, "the first two chips are the same width (\(ax5 ? "a half" : "a third") of the strip)")
         let target = chips[chip - 1], editing = chips[open - 1]
         XCTAssertTrue(editing.isSelected, "the slot being edited is highlighted: \(editing.label)")
         XCTAssertTrue(editing.label.hasSuffix("editing"), editing.label)
