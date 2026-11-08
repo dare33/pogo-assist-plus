@@ -550,3 +550,32 @@ tabs and style sit on each squad and Rocket's grunt list follows the remembered 
 <role>").
 
 **Confirmation.** Greg, 7 Nov 2026: "Confirmed, write READBACK".
+
+## After phone run 7, 8 Nov 2026 (in chat; FEEDBACK.md, "Phone run 7")
+
+**D71. The picker on Current sits above the history.** Greg: "on current, the pokemon slector when clicking on a swap should appear
+ABOVE history segment, not below." On the Current tab an open picker comes straight after the slot cards, before Delete current squad and
+Earlier current squads; Available and Best are unchanged (cards, Reset to suggestion, picker).
+Changed: CONCEPTS rule 27.10 (the history's place).
+
+**D72. The strip appears once the slot cards have scrolled off.** Greg: "the pill up top with all the pokemon currently selected in squad,
+shouldnt start showing until the page has scrolled past the actual squads section being shown - does this make sense?" Manager: yes;
+"agreed". While a picker is open the strip is pinned only while the slot cards are above the top of the scroll area, and goes again
+when they come back into view.
+Changed: CONCEPTS rule 34.
+
+**D73. Under Max damage the picker is ordered by damage.** Greg: "when i've toggled suggestsions for max damage, i think the poekmon
+selector (for the squads/activity) should rank pokemon by max damage, what do you think?" Manager: agree; each picker group (the slot's
+own role, then Other roles) ordered by the strength figure the row's bar shows against the boss, after the upgrade the build names, ties
+by the figure now, then today's order; Balanced keeps the tier order. "agreed".
+Changed: CONCEPTS rule 11 (the picker's order on Raids), rule 33.
+
+**D74. The tab a squad was last on is remembered across relaunches.** Greg (phone run 7, check 2.4): after a kill and relaunch "my chnage
+was no longer there"; the boss had reopened on Current under rule 27.1 and the edit was under Available ("you are right. green now").
+Manager's recommendation to remember the chosen tab per squad, per account, surviving a relaunch: "agreed". A squad never opened before
+still opens on Current when it has one, else on the remembered Available or Best.
+Changed: CONCEPTS rule 27.1.
+
+**D75. The strip at accessibility text sizes is three rows of two.** Flagged on the pass 2-6 page (chip names breaking mid-word at AX5);
+the manager's recommendation of rows of two at the accessibility sizes: "agreed on the others". Default text sizes keep rows of three.
+Changed: CONCEPTS rule 34.

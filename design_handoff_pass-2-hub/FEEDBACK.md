@@ -233,3 +233,26 @@ Greg's words, with his three screenshots kept outside the repo (manager's scratc
 Manager's answer to 5a (for the design panel): Best for a raid lists only the hand-written Raids table (`data/source/01-general-pve-by-type.md`) under the boss's bring types. Mega Sableye's only weakness is Fairy, and that table's Fairy section has nine Pokémon (Mega Gardevoir; Xerneas; Crowned Sword Zacian and Mega Diancie; Shadow Gardevoir, Tapu Koko, Togekiss, Granbull, Primarina), so that is all Best can choose from. It is the table, not the game: other Fairy attackers exist, and against a boss with one weakness strong neutral attackers can out-damage weak super-effective ones. Two ways to widen it are for Greg: add rows to the table, or rank Best from the game master's own damage estimate (the one the picker bars already use).
 
 How Greg wants the next work run (his words): "For the next lot of works i want to do it slightly differently. First output should be a design panel in session that I can give comments on directly to tweak some design elements that we've added new. Once I confirm changes on that we then build".
+
+## Phone run 7, 8 Nov 2026 (build 253d91b, test/greg-build)
+
+Greg's words, his screenshot kept outside the repo (manager's scratchpad, `phone-run-7/4.png`: the Raids screen with the strip pinned
+while the slot cards are still in view).
+
+1. Set, Undo, set again (one history entry): "green. one note - on current, the pokemon slector when clicking on a swap should appear
+   ABOVE history segment, not below."
+2. Edits kept: "1, 2, 3, 5 green. 4 - killing the app from swticher, my chnage was no longer there tested 2x, both times not there."
+   Manager: the edit was kept; the boss reopened on Current (rule 27.1, a squad with a Current opens on it) and the Available edit was
+   under the Available tab. Greg, after checking: "you are right. green now."
+3. Delete current squad: "green". 4. A history row with a transferred Pokémon: "not testing this for now".
+5. Raids, Max damage: "1 green. 2 i didnt see the "working out best squad...." it just loaded immeidately. 3.- green 4 - green".
+   Manager: expected; the timeline and the squad screen pre-rank the boss in the background (H4, J5), so the rows are cached before Best
+   is tapped.
+6. Extra 1: "the pill up top with all the pokemon currently selected in squad, shouldnt start showing until the page has scrolled past the
+   actual squads section being shown - does this make sense?"
+7. Extra 2: "when i've toggled suggestsions for max damage, i think the poekmon selector (for the squads/activity) should rank pokemon by
+   max damage, what do you think?"
+
+Manager's proposals (picker above the history on Current; the strip once the cards have scrolled off; Max damage ordering the picker by
+the row's strength figure; the chosen tab remembered across relaunches; the strip as three rows of two at accessibility sizes). Greg:
+"agreed on the others". "↑ Upgrade" on a free Mega Evolution and the "Rayquaza" / "Mega Rayquaza" naming stay as they are (logged).
