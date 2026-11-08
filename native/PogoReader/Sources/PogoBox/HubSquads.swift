@@ -90,10 +90,12 @@ public enum HubSquads {
 
     public enum Currency: String, Equatable { case dust, candy, free }
 
-    /// Whether the build's work includes a Mega Evolution and costs no dust and no candy: the builds list says "Mega evolve · Free" for it (`HubModel.costShort`), and a squad's status chip
-    /// reads "↑ Free" (D76). Read from the same cost as `cost(of:)`, so the two never differ.
+    /// Whether the build's only work left is a Mega Evolution that costs no dust and no candy: the builds list says "Mega evolve · Free" for it (`HubModel.costShort`), and a squad's status chip
+    /// reads "↑ Free" (D76). Exactly one step and it is `megaEvolve`: `src/advise.js` adds no dust or candy for an Elite TM, a Community Day move, a form change or a Dynamax copy, so with any of
+    /// them still to do the zero cost is one the app does not know and the chip stays "↑ Upgrade". Read from the same cost as `cost(of:)`, so the two never differ.
     public static func isFreeMegaEvolution(_ b: BoxAdvice.Build) -> Bool {
-        (b.steps ?? []).contains { $0.kind == "megaEvolve" } && cost(of: b).currency == .free
+        let steps = b.steps ?? []
+        return steps.count == 1 && steps[0].kind == "megaEvolve" && cost(of: b).currency == .free
     }
 
     /// "19k" + dust, "100" + candy, nothing + free: `HubModel.costShort` split for the icon beside the arrow.

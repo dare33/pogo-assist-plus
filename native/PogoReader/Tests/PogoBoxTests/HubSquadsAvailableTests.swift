@@ -90,6 +90,23 @@ final class HubSquadsAvailableTests: XCTestCase {
         XCTAssertFalse(HubModel.needsSomething(onlyMega.build))
     }
 
+    /// D76 (round 3 review): "↑ Free" only when the Mega Evolution is the only step left. Elite TMs, Community Day moves, form changes and a Dynamax copy add no dust or candy, so a zero cost
+    /// beside one of them is a cost the app does not know.
+    func testAMegaEvolutionIsFreeOnlyWhenItIsTheOnlyStepLeft() {
+        func free(_ kinds: String..., dust: Int = 0) -> Bool {
+            HubSquads.isFreeMegaEvolution(P23.build("ab", "abomasnow", areas: ["Raids"], built: false, powerUp: false, viaMega: true, dust: dust, steps: kinds.map { $0 == "powerUp" ? .init(kind: $0, toLevel: 40, areas: ["raids"]) : .init(kind: $0) }))
+        }
+        XCTAssertTrue(free("megaEvolve"))
+        XCTAssertFalse(free("megaEvolve", dust: 206_000), "a cost makes it not free")
+        XCTAssertFalse(free("megaEvolve", "cdMove"))
+        XCTAssertFalse(free("megaEvolve", "eliteTM"))
+        XCTAssertFalse(free("formChange", "megaEvolve"))
+        XCTAssertFalse(free("megaEvolve", "needsDynamaxCopy"))
+        XCTAssertFalse(free("megaEvolve", "powerUp", dust: 206_000))
+        XCTAssertFalse(free("powerUp"), "free, but not a Mega Evolution")
+        XCTAssertFalse(free(), "no steps")
+    }
+
     // MARK: the Mega slot
 
     func testMegaCandidatesAreCopiesThatCanMegaEvolveNowOrReachAMega() {

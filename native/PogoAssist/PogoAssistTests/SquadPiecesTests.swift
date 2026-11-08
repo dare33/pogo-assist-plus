@@ -134,6 +134,15 @@ final class SquadPiecesTests: XCTestCase {
         }
         XCTAssertEqual(chip(mega), ["↑ Free"])
         XCTAssertEqual(chip(power), ["↑ Upgrade"])
+        // Round 3 review: a Mega Evolution with another step still to do is a cost the app does not know, so it reads Upgrade (and says nothing of price aloud).
+        for other in ["cdMove", "eliteTM", "needsDynamaxCopy"] {
+            var more = mega; more.steps = [.init(kind: "megaEvolve"), .init(kind: other)]
+            XCTAssertEqual(chip(more), ["↑ Upgrade"], "Mega Evolve + \(other)")
+        }
+        var formed = mega; formed.steps = [.init(kind: "formChange"), .init(kind: "megaEvolve")]
+        XCTAssertEqual(chip(formed), ["↑ Upgrade"], "form change + Mega Evolve")
+        XCTAssertEqual(SquadMark.upgrade(cost: nil, label: "x", free: HubSquads.isFreeMegaEvolution(mega)).spoken, "x, free")
+        XCTAssertEqual(SquadMark.upgrade(cost: nil, label: "x", free: HubSquads.isFreeMegaEvolution(formed)).spoken, "x")
         XCTAssertEqual(chip(paid, cost: MyPokemon.Cost(value: "206k", currency: .dust)), ["↑ 206k"], "a known cost shows its figure")
         // The picker row keeps the chip (its head carries no cost to repeat) and the spoken label says free.
         let row = PickerRowModel(id: "m", name: "Mega Rayquaza", ticked: false, mark: .upgrade(cost: nil, label: "Upgrade available: mega evolve", free: true), chips: [.upgrade(nil, free: true)], spoken: "")

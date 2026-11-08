@@ -678,7 +678,7 @@ struct EventSquadView: View {
         let mega = PogoRules.RaidRole.mega.rawValue
         let blocked = megaMessageSlot == i && anotherSlotHoldsTheMega(i, filled: filled, byId: byId, mode: mode, options: options)
         // The rows are built once and kept until the box, the advice or what the slot sees changes (P1: no work on every redraw).
-        let key = "\(screen.rawValue)|\(row.from)|\(row.title)|\(surface.tab.rawValue)|\(surface.style.rawValue)|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
+        let key = "\(screen.rawValue)|\(row.from)|\(row.title)|\(surface.tab.rawValue)|\(screen == .raids ? surface.style.rawValue : "")|\(i)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",")
         let content = rowsCache.get(ctx: ctx, key: key) { builder.content(slot: i, filled: filled, options: options, byId: byId, mode: mode) }
         return SquadPicker(
             title: "Slot \(i + 1) · \(role)", type: screen == .raids ? .raids : .max, roles: chips, role: role,
