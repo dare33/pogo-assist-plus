@@ -422,7 +422,18 @@ struct SlotGrid: View {
                 }
             }
         }
+        // D72: where the cards are in the screen's scroll area, so the pinned strip shows only once they have scrolled off the top (`HubTypeScreen`).
+        .background { GeometryReader { Color.clear.preference(key: SquadCardsFrameKey.self, value: $0.frame(in: .named(squadScrollSpace))) } }
     }
+}
+
+/// The name of the coordinate space `HubTypeScreen` gives its scroll view; the slot cards report their frame in it.
+let squadScrollSpace = "squad-scroll"
+
+/// The frame of the squad's slot cards in the scroll view's space (nil on a screen without them).
+struct SquadCardsFrameKey: PreferenceKey {
+    static var defaultValue: CGRect? { nil }
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) { if let n = nextValue() { value = n } }
 }
 
 // MARK: picker

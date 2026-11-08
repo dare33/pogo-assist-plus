@@ -249,8 +249,9 @@ final class HubGymSquadTests: SquadUITestCase {
         openPicker(app, "gym", slot: 2)
         let notOwned = pickerRows(app).matching(NSPredicate(format: "label CONTAINS 'Not available now' OR label CONTAINS 'Can get now'")).firstMatch
         XCTAssertTrue(notOwned.waitForExistence(timeout: 5), "a row keeps its status words")
-        // The strip says which slots the box lacks.
+        // The strip says which slots the box lacks (it is pinned once the slot cards have scrolled off, D72).
         let strip = el(app, "squad-strip")
+        for _ in 0..<4 { app.swipeUp() }
         XCTAssertTrue(strip.waitForExistence(timeout: 5))
         XCTAssertTrue((1...6).contains { app.buttons["squad-strip-chip-\($0)"].label.contains("not in your box") }, "a Pokémon the box lacks reads not in your box on its strip chip")
         shot("gym-best-strip-not-owned")
@@ -263,6 +264,8 @@ final class HubGymSquadTests: SquadUITestCase {
         populate(app)
         openTile(app, "gym")
         XCTAssertTrue(slot(app, "gym", 1).waitForExistence(timeout: 60))
+        // The sample box has one scored defender, so Available's list is too short to scroll the cards off; Best lists the table's rows, a list long enough to (D72).
+        selectBest(app)
         assertStripPinsTheSquad(app, "gym", open: 1, chip: 4, slots: 6, shotName: "gym-strip-scrolled")
     }
 

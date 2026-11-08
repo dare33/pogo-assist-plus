@@ -375,15 +375,29 @@ class SquadUITestCase: XCTestCase {
 
     // MARK: the pinned squad strip (rule 34)
 
+    /// D72: with a picker open the strip is absent while the slot cards are in view, pinned once they have scrolled off, and gone again when they are back in view.
+    func assertStripFollowsTheCards(_ app: XCUIApplication, _ screen: String, open: Int = 1) {
+        openPicker(app, screen, slot: open)
+        let strip = el(app, "squad-strip")
+        XCTAssertFalse(strip.exists, "no strip while the slot cards are in view")
+        for _ in 0..<4 { app.swipeUp() }
+        XCTAssertTrue(strip.waitForExistence(timeout: 5), "the strip is pinned once the slot cards have scrolled off")
+        for _ in 0..<8 { app.swipeDown() }
+        XCTAssertTrue(waitGone(strip), "and goes again when the slot cards come back into view")
+        closePicker(app)
+    }
+
     /// With a slot's picker open and the page scrolled well down the Pokémon list, the strip of the squad's slots stays at the top, every chip in view (two rows of three on a six-slot
     /// squad, one row of three otherwise: no sideways scrolling); tapping another slot's chip opens that slot's picker; Done hides the strip.
     func assertStripPinsTheSquad(_ app: XCUIApplication, _ screen: String, open: Int = 1, chip: Int = 3, slots: Int = 6, shotName: String? = nil) {
         XCTAssertFalse(el(app, "squad-strip").exists, "no strip while no picker is open")
         openPicker(app, screen, slot: open)
         let strip = el(app, "squad-strip")
-        XCTAssertTrue(strip.waitForExistence(timeout: 5), "an open picker pins the squad strip")
+        // D72: the slot cards are in view (the slot was just tapped), so the strip would repeat them: it is not pinned yet.
+        XCTAssertFalse(strip.exists, "no strip while the slot cards are in view")
         for _ in 0..<4 { app.swipeUp() }
-        XCTAssertTrue(strip.exists && strip.isHittable, "the strip is still on screen after scrolling down the list")
+        XCTAssertTrue(strip.waitForExistence(timeout: 5), "the strip is pinned once the slot cards have scrolled off")
+        XCTAssertTrue(strip.exists && strip.isHittable, "the strip is on screen after scrolling down the list")
         // Every chip is in view at once, and none of them is hidden by scrolling: rows of three.
         let chips = (1...slots).map { app.buttons["squad-strip-chip-\($0)"] }
         for (i, c) in chips.enumerated() {

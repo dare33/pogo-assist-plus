@@ -78,8 +78,9 @@ final class Pass26ShotsTests: SquadUITestCase {
             spec.prepare(self, strip)
             XCTAssertTrue(slot(strip, id, 1).waitForExistence(timeout: 60))
             openPicker(strip, id, slot: 2)
-            XCTAssertTrue(el(strip, "squad-strip").waitForExistence(timeout: 5))
+            XCTAssertFalse(el(strip, "squad-strip").exists, "no strip while the slot cards are in view (D72)")
             for _ in 0..<4 { strip.swipeUp() }
+            XCTAssertTrue(el(strip, "squad-strip").waitForExistence(timeout: 5), "the strip is pinned once the cards have scrolled off")
             sleep(1)
             shot("\(id)-strip-scrolled-\(scheme)")
             strip.terminate()

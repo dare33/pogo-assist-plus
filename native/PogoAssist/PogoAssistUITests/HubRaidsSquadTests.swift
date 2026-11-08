@@ -447,6 +447,7 @@ final class HubRaidsSquadTests: SquadUITestCase {
         openTile(app, "raids")
         palkia(app)
         assertStripPinsTheSquad(app, "raids", open: 2, chip: 4, slots: 6, shotName: "raids-strip-scrolled")
+        assertStripFollowsTheCards(app, "raids", open: 2)
         // All six chips take a tap while the picker is scrolled (slice 3, D5; H12): each tap opens that chip's slot, highlights its chip and no other. A frame inside the strip is not
         // enough, so every chip is tapped, by coordinate because the framework's hit test can say no for a chip drawn on screen under the strip's inset (H18).
         openPicker(app, "raids", slot: 2)
