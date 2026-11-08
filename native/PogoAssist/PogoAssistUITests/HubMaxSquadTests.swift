@@ -47,6 +47,7 @@ final class HubMaxSquadTests: SquadUITestCase {
         XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "the squad is set: the Current tab appears")
         XCTAssertTrue(el(app, "hub-max-row-0").label.contains("squad set"), "the row is tinted exactly when the squad has a Current: \(el(app, "hub-max-row-0").label)")
 
+        selectTab(app, "current")
         back(app, toTile: "max")
         app.buttons["hub-tile-max"].tap()
         XCTAssertTrue(el(app, "hub-max-row-0").waitForExistence(timeout: 30))
@@ -104,6 +105,7 @@ final class HubMaxSquadTests: SquadUITestCase {
         closePicker(app)
         // The picks are kept as edits of Best: set them, and the exact copy and roles survive leaving the screen on Current.
         setThisSquad(app)
+        selectTab(app, "current")   // the squad reopens on the tab it was last on (D74)
         back(app, toTile: "max")
         app.buttons["hub-tile-max"].tap()
         el(app, "hub-max-row-0").tap()
@@ -120,7 +122,8 @@ final class HubMaxSquadTests: SquadUITestCase {
         app.buttons["hub-tile-max"].tap()
         el(app, "hub-max-row-0").tap()
         XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 30))
-        // Deleting Current shows the remembered tab: Best.
+        // The squad reopens on Best, the tab it was last on (D74). Deleting Current shows the remembered tab: Best.
+        selectTab(app, "current")
         deleteCurrent(app, confirm: true)
         XCTAssertTrue(waitGone(tab(app, "current")))
         XCTAssertTrue(tab(app, "best").isSelected, "Best is remembered for the Max screen")

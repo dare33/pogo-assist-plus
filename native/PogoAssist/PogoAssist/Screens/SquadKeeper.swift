@@ -220,15 +220,19 @@ final class SquadWorkspace: ObservableObject {
     /// The squad as the screen draws and edits it right now.
     func surface(_ ref: SquadRef, store: SquadStore, defaults: [SquadSlot]) -> SquadSurface {
         let current = store.current(ref)
-        let tab = state.tab(ref.key, hasCurrent: current != nil, mode: store.mode(for: ref.screen))
+        let tab = state.tab(ref.key, hasCurrent: current != nil, mode: store.mode(for: ref.screen), stored: store.storedTab(ref))
         let style = store.raidStyle
         return SquadSurface(ref: ref, account: state.account, tab: tab, current: current, edit: tab == .current ? nil : store.edit(ref, tab, style: style), style: style, defaults: defaults)
     }
 
-    /// The player chose a tab. Available and Best are remembered for the screen (the tab a squad with no Current opens on), as before.
+    /// The player chose a tab. It is kept for the squad in the store (D74: a relaunch opens the squad on it), and Available and Best are also remembered for the screen (the tab a squad with
+    /// no Current opens on), as before.
     func select(_ tab: SquadTab, ref: SquadRef, keeper: SquadKeeper) {
         update { $0.select(tab, for: ref.key) }
-        if tab != .current { keeper.update { $0.setMode(tab.mode, for: ref.screen) } }
+        keeper.update { store in
+            store.setTab(tab, ref)
+            if tab != .current { store.setMode(tab.mode, for: ref.screen) }
+        }
     }
 
     /// A change the player made to the squad on the tab it is on, stored at once: the Current, or the kept edit of Available or Best. It never changes the tab. On Current it marks the
@@ -304,7 +308,10 @@ final class SquadWorkspace: ObservableObject {
         shown.fixing(filled)
         let old = keeper.store.current(s.ref)
         let replaced = old.map { $0.slots != shown.slots } ?? false
-        keeper.update { $0.replaceCurrent(with: shown, s.ref, source: s.tab, edited: s.edited, strength: strength, date: date) }
+        keeper.update { store in
+            store.replaceCurrent(with: shown, s.ref, source: s.tab, edited: s.edited, strength: strength, date: date)
+            store.setTab(s.tab, s.ref)
+        }
         update { $0.select(s.tab, for: s.key) }
         return replaced
     }
@@ -312,7 +319,10 @@ final class SquadWorkspace: ObservableObject {
     /// "✓ Squad set" tapped, or Delete current squad: the Current moves to the history, with the figure it holds, and the squad shows Available (or the remembered tab) again.
     func unsetCurrent(_ s: SquadSurface, keeper: SquadKeeper, date: Date = Date()) {
         guard s.account == keeper.account, s.account == state.account else { return }
-        keeper.update { $0.unsetCurrent(s.ref, date: date) }
+        keeper.update { store in
+            store.unsetCurrent(s.ref, date: date)
+            if s.tab == .current { store.clearTab(s.ref) }
+        }
         if s.tab == .current { update { $0.clearTab(for: s.key) } }
     }
 

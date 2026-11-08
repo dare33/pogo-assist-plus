@@ -144,6 +144,9 @@ public struct SquadStore: Codable, Equatable {
     /// Pass 2-6, rule 27: the player's edits of the Available and Best suggestions, kept per squad and tab (Raids also per style). Keyed by `editKey`; an entry exists only while the
     /// squad differs from its suggestion (`resetEdit` removes it and the screen draws the suggestion again).
     public var edits: [String: Saved] = [:]
+    /// Pass 2-6, rule 27.1 (D74): the tab each squad was last on, by `SquadRef.key`, so a relaunch opens it where the player left it. A squad with no entry opens on Current when it has one, else on
+    /// the remembered Available or Best. Dropped with the event, as `edits` are.
+    public var tabs: [String: SquadTab] = [:]
     /// Pass 2-6, rule 27: the earlier Current squads of each squad (`SquadRef.key`), newest first, at most `historyLimit`.
     public var history: [String: [HistoryEntry]] = [:]
     /// The last day of each raid or Max event that holds edits or history, by `SquadRef.key`, so `pruned` can drop them with the event (an edit exists without a Current squad, so
@@ -162,7 +165,7 @@ public struct SquadStore: Codable, Equatable {
 
     public init() {}
 
-    private enum CodingKeys: String, CodingKey { case version, raids, max, gym, rocket, pvp, modes, raidStyle, edits, history, eventEnds, pickNames }
+    private enum CodingKeys: String, CodingKey { case version, raids, max, gym, rocket, pvp, modes, raidStyle, edits, tabs, history, eventEnds, pickNames }
 
     /// Tolerant: a key missing from an older file reads as empty, so adding a section later does not lose the saved squads.
     public init(from decoder: Decoder) throws {
@@ -176,6 +179,7 @@ public struct SquadStore: Codable, Equatable {
         modes = try c.decodeIfPresent([String: SquadMode].self, forKey: .modes) ?? [:]
         raidStyle = try c.decodeIfPresent(RaidStyle.self, forKey: .raidStyle) ?? .balanced
         edits = try c.decodeIfPresent([String: Saved].self, forKey: .edits) ?? [:]
+        tabs = try c.decodeIfPresent([String: SquadTab].self, forKey: .tabs) ?? [:]
         history = try c.decodeIfPresent([String: [HistoryEntry]].self, forKey: .history) ?? [:]
         eventEnds = try c.decodeIfPresent([String: String].self, forKey: .eventEnds) ?? [:]
         pickNames = try c.decodeIfPresent([String: String].self, forKey: .pickNames) ?? [:]
@@ -252,10 +256,11 @@ public struct SquadStore: Codable, Equatable {
             return end >= today
         }
         s.edits = edits.filter { alive($0.key) }
+        s.tabs = tabs.filter { alive($0.key) }
         s.history = history.filter { alive($0.key) }
         s.undoRecords = undoRecords.filter { alive($0.key) }
         var ends = [String: String]()
-        for key in Array(s.edits.keys) + Array(s.history.keys) {
+        for key in Array(s.edits.keys) + Array(s.tabs.keys) + Array(s.history.keys) {
             if let o = owner(key), let end = rotationEnds[o] ?? eventEnds[o] { ends[o] = end }
         }
         s.eventEnds = ends

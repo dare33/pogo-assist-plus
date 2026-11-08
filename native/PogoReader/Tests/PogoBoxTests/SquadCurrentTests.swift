@@ -123,6 +123,49 @@ final class SquadCurrentTests: XCTestCase {
         XCTAssertEqual(d.tab("a", hasCurrent: false, mode: .available), .available)
     }
 
+    // MARK: the tab a squad was last on survives a relaunch (D74)
+
+    func testTheStoredTabRoundTripsAndAnOldFileWithoutItDecodes() throws {
+        var store = SquadStore()
+        store.setTab(.available, .gym)
+        store.setTab(.best, .pvp(league: "gl"))
+        let again = try JSONDecoder().decode(SquadStore.self, from: JSONEncoder().encode(store))
+        XCTAssertEqual(again, store)
+        XCTAssertEqual(again.storedTab(.gym), .available)
+        XCTAssertEqual(again.storedTab(.pvp(league: "gl")), .best)
+        XCTAssertNil(again.storedTab(.rocket(leader: "Arlo")))
+        let old = try JSONDecoder().decode(SquadStore.self, from: Data(#"{"version":2,"modes":{"raids":"best"}}"#.utf8))
+        XCTAssertEqual(old.tabs, [:], "a version-2 file written before the tabs were kept")
+        XCTAssertEqual(old.version, 2)
+        var cleared = store
+        cleared.clearTab(.gym)
+        XCTAssertNil(cleared.storedTab(.gym))
+    }
+
+    func testAStoredTabGoesWithItsEvent() {
+        var store = SquadStore()
+        func r(_ from: String, _ to: String, _ title: String) -> HubData.RotationRow { HubData.RotationRow(from: from, to: to, kind: .fiveStar, title: title, bosses: [], note: "", source: "", tba: nil) }
+        let ended = r("2026-10-01", "2026-10-10", "Palkia"), later = r("2026-10-20", "2026-12-01", "Dialga")
+        store.setTab(.available, .event(row: ended, screen: .raids))
+        store.setTab(.best, .event(row: later, screen: .max))
+        store.setTab(.available, .gym)
+        let pruned = store.pruned(today: "2026-11-01", rotation: [])
+        XCTAssertNil(pruned.storedTab(.event(row: ended, screen: .raids)), "the event ended")
+        XCTAssertEqual(pruned.storedTab(.event(row: later, screen: .max)), .best)
+        XCTAssertEqual(pruned.storedTab(.gym), .available, "a squad that is not an event's stays")
+    }
+
+    func testTheStoredTabIsReadAfterTheChoiceAndBeforeTheDefault() {
+        var d = SquadTabChoices()
+        XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .best, stored: .available), .available, "stored Available with a Current present")
+        XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .best, stored: .current), .current)
+        XCTAssertEqual(d.tab("k", hasCurrent: false, mode: .best, stored: .current), .best, "stored Current with no Current: the mode's tab")
+        XCTAssertEqual(d.tab("k", hasCurrent: false, mode: .available, stored: .best), .best)
+        XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .best, stored: nil), .current, "never chosen: Current")
+        d.select(.best, for: "k")
+        XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .available, stored: .available), .best, "a fresh choice wins over the stored one")
+    }
+
     // MARK: old files, migrated for good (H4)
 
     func testAnOldFilesCurrentSurvivesTheCopyLeavingTheBox() throws {

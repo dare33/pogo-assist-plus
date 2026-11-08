@@ -222,6 +222,7 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(again, "gym", 2).label.contains("Blissey"), "leaving the app kept the edit: \(slot(again, "gym", 2).label)")
         // Set: the squad survives, and the screen opens on Current.
         setThisSquad(again)
+        selectTab(again, "current")
         back(again, toTile: "gym")
         again.buttons["hub-tile-gym"].tap()
         XCTAssertTrue(tab(again, "current").waitForExistence(timeout: 30))

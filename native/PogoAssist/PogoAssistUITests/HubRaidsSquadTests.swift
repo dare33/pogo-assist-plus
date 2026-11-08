@@ -58,11 +58,12 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(tab(app, "available").isSelected, "and the player stays on the tab they are on")
         XCTAssertTrue(el(app, "hub-raid-row-0").label.contains("squad set"), "the card says so exactly when the squad has a Current: \(el(app, "hub-raid-row-0").label)")
         shot("raids-set-pill")
-        // Leave and come back: the screen opens on Current, with the role; the Current tab has no pill.
+        // Leave and come back: the screen opens on the tab the squad was last on (D74), here Current, with the role; the Current tab has no pill.
+        selectTab(app, "current")
         back(app, toTile: "raids")
         app.buttons["hub-tile-raids"].tap()
         XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 30))
-        XCTAssertTrue(tab(app, "current").isSelected, "a squad with a Current opens on it")
+        XCTAssertTrue(tab(app, "current").isSelected, "the squad opens on the tab it was last on: Current")
         XCTAssertTrue(slot(app, "raids", 2).label.hasPrefix("Slot 2 of 6, Bulky hitter"), "the role is in the Current: \(slot(app, "raids", 2).label)")
         XCTAssertFalse(pill(app).exists, "the Current tab has no pill")
         // Tapping Squad set (on Available) unsets: the Current segment goes, the pill reads Set this squad, a toast offers Undo.
@@ -385,6 +386,32 @@ final class HubRaidsSquadTests: SquadUITestCase {
         XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
         XCTAssertTrue(tab(app, "current").isSelected, "a squad with a Current opens on it")
         XCTAssertEqual((1...6).map { slot(app, "raids", $0).label }, edited, "the edit was saved straight away")
+    }
+
+    /// D74, rule 27.1: the tab a squad was last on survives a relaunch. A boss with a Current, left on Available, reopens on Available after the app is killed (the edit made there is in
+    /// sight), not on Current.
+    func testRaidsTheTabASquadWasLastOnSurvivesARelaunch() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "raids")
+        let card = el(app, "hub-raid-row-1")
+        XCTAssertTrue(card.waitForExistence(timeout: 60))
+        card.tap()
+        XCTAssertTrue(slot(app, "raids", 1).waitForExistence(timeout: 30))
+        changeTheSquad(app, "raids", availableOnly: true)
+        setThisSquad(app)
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5), "the boss has a Current")
+        selectTab(app, "current")
+        selectTab(app, "available")
+        app.terminate()
+        let again = launch()
+        openTile(again, "raids")
+        let boss = el(again, "hub-raid-row-1")
+        XCTAssertTrue(boss.waitForExistence(timeout: 60))
+        boss.tap()
+        XCTAssertTrue(slot(again, "raids", 1).waitForExistence(timeout: 30))
+        XCTAssertTrue(tab(again, "current").exists, "the boss still has its Current")
+        XCTAssertTrue(waitSelected(tab(again, "available")), "and reopens on Available, where the player left it")
     }
 
     /// Rule 27 and 32: "Set this squad" on the unedited Best tab makes it the Current and leaves the tab unedited: no Reset, "Squad strength 100%", and the pill reads Squad set.

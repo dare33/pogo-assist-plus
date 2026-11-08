@@ -78,6 +78,14 @@ extension SquadStore {
     /// The tab holds a kept edit that differs from its suggestion: the squad shows "Reset to suggestion".
     public func differs(_ ref: SquadRef, _ tab: SquadTab, style: RaidStyle) -> Bool { edit(ref, tab, style: style)?.changed == true }
 
+    // MARK: the tab a squad was last on (D74)
+
+    /// The tab the player last chose for the squad, nil when they never have (or it was cleared).
+    public func storedTab(_ ref: SquadRef) -> SquadTab? { tabs[ref.key] }
+    public mutating func setTab(_ tab: SquadTab, _ ref: SquadRef) { tabs[ref.key] = tab; noteEnd(ref) }
+    /// Back to the squad's default tab (Delete current squad).
+    public mutating func clearTab(_ ref: SquadRef) { tabs[ref.key] = nil }
+
     /// Remembers an event's last day for `pruned`.
     private mutating func noteEnd(_ ref: SquadRef) {
         if case let .event(row, _) = ref { eventEnds[ref.key] = row.to }
@@ -203,8 +211,8 @@ extension SquadStore {
     public mutating func deleteCurrent(_ ref: SquadRef) { unsetCurrent(ref, date: Date()) }
 }
 
-/// What a squad screen holds while the player is on it and drops when they leave: the tab each squad is on. Never stored (the kept edits are `SquadStore.edits`; pass 2-6 removed the
-/// in-memory drafts). Keyed by `SquadRef.key`. Pure, so the rules can be tested.
+/// What a squad screen holds while the player is on it and drops when they leave: the tab each squad is on. The choice is also kept in the store (`SquadStore.tabs`, D74), which the
+/// screen passes as `stored`; the kept edits are `SquadStore.edits`. Keyed by `SquadRef.key`. Pure, so the rules can be tested.
 public struct SquadTabChoices: Equatable {
     /// The account the choices belong to (nil before the screen has attached to one).
     public private(set) var account: String?
@@ -218,9 +226,11 @@ public struct SquadTabChoices: Equatable {
         account = new
     }
 
-    /// The tab a squad shows: the one the player chose on this screen, else Current when the squad has one, else the remembered Available/Best choice.
-    public func tab(_ key: String, hasCurrent: Bool, mode: SquadMode) -> SquadTab {
+    /// The tab a squad shows: the one the player chose on this screen, else the one the store kept from an earlier visit (`stored`, D74), else Current when the squad has one, else the
+    /// remembered Available/Best choice. A chosen or stored Current is ignored while the squad has none.
+    public func tab(_ key: String, hasCurrent: Bool, mode: SquadMode, stored: SquadTab? = nil) -> SquadTab {
         if let c = chosen[key], c != .current || hasCurrent { return c }
+        if let c = stored, c != .current || hasCurrent { return c }
         return hasCurrent ? .current : SquadTab(mode)
     }
 
