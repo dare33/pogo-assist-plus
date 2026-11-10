@@ -45,9 +45,13 @@ final class HubSquadsBestTests: XCTestCase {
 
     // MARK: Best, raids
 
+    // Pass 2-6 (D65): `bestRaidRows` ranks every species by damage, so the hand-made tables below no longer decide which rows there are. The tests that pin the mechanics of a small table
+    // (rank order, ownership, status, squads) read `tableRaidRows`, the table-only list kept for them and as the fallback; `HubSquadsBestDamageTests` pins the new list, and
+    // `kyogreCtx`'s tests below read the new list restricted to the table's own rows.
+
     func testBestRaidRowsListTheTableOwnedOrNotInRankOrder() {
         let ctx = P23.ctx(builds: raidBuilds(), table: raidTable(), rotation: rotation)
-        let rows = HubSquads.bestRaidRows(row: fireBoss, ctx: ctx)
+        let rows = HubSquads.tableRaidRows(row: fireBoss, ctx: ctx)
         // S first: Water entries (the strongest bring type) in table order, then Ground. A: Swampert is listed too, though its only copy is the one Mega Swampert shows
         // (every table row is listed, rule 6); Excadrill, Garchomp (Ground). B: Kingler. Rhyperior is listed under Rock and Ground: once, at its best place. Charizard
         // (Fire) is not a bring type.
@@ -66,7 +70,7 @@ final class HubSquadsBestTests: XCTestCase {
 
     func testBestRaidRowsGiveAMegaSlotARealMegaEvenWhenTheBoxHasNone() {
         let ctx = P23.ctx(builds: [], table: raidTable(), rotation: [])
-        let rows = HubSquads.bestRaidRows(row: fireBoss, ctx: ctx)
+        let rows = HubSquads.tableRaidRows(row: fireBoss, ctx: ctx)
         XCTAssertTrue(rows.allSatisfy { !$0.inBox })
         let squad = HubSquads.bestSquad(slots: HubSquads.defaultRaidSlots(), rows: rows)
         XCTAssertEqual(squad.map(\.role), ["Mega", "Heavy hitter", "Heavy hitter", "Heavy hitter", "Bulky hitter", "Bulky hitter"])
@@ -76,7 +80,7 @@ final class HubSquadsBestTests: XCTestCase {
 
     func testBestSquadMayHoldANotOwnedPickAndShowsTheCopyOnceTheBoxHasIt() {
         let ctx = P23.ctx(builds: raidBuilds(), table: raidTable(), rotation: [])
-        let rows = HubSquads.bestRaidRows(row: fireBoss, ctx: ctx)
+        let rows = HubSquads.tableRaidRows(row: fireBoss, ctx: ctx)
         var slots = HubSquads.defaultRaidSlots()
         slots[1] = SquadSlot(role: "Heavy hitter", species: "garchomp")
         var squad = HubSquads.bestSquad(slots: slots, rows: rows)
@@ -86,7 +90,7 @@ final class HubSquadsBestTests: XCTestCase {
         XCTAssertEqual(squad[1].pickId, "species:garchomp")
         // The box now has a Garchomp: the same stored pick reads as that copy.
         let later = P23.ctx(builds: raidBuilds() + [P23.build("e9", "garchomp", areas: ["Raids"])], table: raidTable())
-        squad = HubSquads.bestSquad(slots: slots, rows: HubSquads.bestRaidRows(row: fireBoss, ctx: later))
+        squad = HubSquads.bestSquad(slots: slots, rows: HubSquads.tableRaidRows(row: fireBoss, ctx: later))
         XCTAssertEqual(squad[1].entryId, "e9")
         XCTAssertEqual(squad[1].species, "garchomp", "the slot remembers the species the player chose")
         XCTAssertEqual(slots[1].species, "garchomp", "the stored pick is the player's choice of the species and is not rewritten")
@@ -189,6 +193,12 @@ final class HubSquadsBestTests: XCTestCase {
         return P23.ctx(builds: [P23.build("k1", "kyogre", areas: ["Raids"], powerUp: false, viaMega: true)], entries: [P23.entry("k1", "kyogre")], table: table, rotation: rotation)
     }
 
+    /// The rows of the new list that the context's Raids table also lists: the two rows of one copy, without the rest of the damage ranking.
+    private func tableRows(_ rows: [HubSquads.BestRow], _ ctx: HubContext) -> [HubSquads.BestRow] {
+        let keys = Set(ctx.table.entries.filter { $0.area == "raids" }.map(HubSquads.bestKey))
+        return rows.filter { keys.contains($0.key) }
+    }
+
     private func slotsUsing(_ squad: [FilledSlot], rows: [HubSquads.BestRow]) -> [String] {
         let copyOf = HubSquads.copyResolver(rows: rows)
         return squad.compactMap { $0.pickId.flatMap(copyOf) }
@@ -196,7 +206,7 @@ final class HubSquadsBestTests: XCTestCase {
 
     func testASuggestedRaidSquadNeverUsesOneCopyTwice() {
         let ctx = kyogreCtx()
-        let rows = HubSquads.bestRaidRows(row: fireBoss, ctx: ctx)
+        let rows = tableRows(HubSquads.bestRaidRows(row: fireBoss, ctx: ctx), ctx)
         XCTAssertEqual(rows.map(\.key), ["kyogre_primal", "kyogre"])
         XCTAssertEqual(rows.map(\.entryId), ["k1", "species:kyogre"], "the second row shows the same copy under a species id")
         let squad = HubSquads.bestSquad(slots: HubSquads.defaultRaidSlots(), rows: rows)
@@ -212,7 +222,7 @@ final class HubSquadsBestTests: XCTestCase {
 
     func testThePickerDoesNotOfferARowWhoseCopyIsInAnotherSlot() {
         let ctx = kyogreCtx()
-        let rows = HubSquads.bestRaidRows(row: fireBoss, ctx: ctx)
+        let rows = tableRows(HubSquads.bestRaidRows(row: fireBoss, ctx: ctx), ctx)
         let squad = HubSquads.bestSquad(slots: HubSquads.defaultRaidSlots(), rows: rows)
         let copyOf = HubSquads.copyResolver(rows: rows)
         let excluded = HubSquads.excluded(by: squad, editing: 4, onlyChosen: false, copyOf: copyOf)
@@ -275,11 +285,11 @@ final class HubSquadsBestTests: XCTestCase {
         let shadowCopy = P23.entry("s1", "garchomp", shadow: 1)
         // Raids: a Shadow target (garchomp_shadow) also fills the plain Garchomp row.
         let raids = P23.ctx(builds: [P23.build("s1", "garchomp_shadow", areas: ["Raids"])], entries: [shadowCopy], table: P23.table([P23.tierEntry("raids", "Ground", "A", "garchomp")]), rotation: [])
-        XCTAssertEqual(HubSquads.bestRaidRows(row: fireBoss, ctx: raids).map(\.ownedEntryId), ["s1"])
+        XCTAssertEqual(HubSquads.tableRaidRows(row: fireBoss, ctx: raids).map(\.ownedEntryId), ["s1"])
         XCTAssertEqual(HubRaidsModel.raidEntries(targetId: "garchomp_shadow", viaMega: false, table: raids.table, shadow: true).map(\.speciesId), ["garchomp"])
         // A copy with no build still serves the plain row in Raids.
         let bare = P23.ctx(entries: [shadowCopy], table: P23.table([P23.tierEntry("raids", "Ground", "A", "garchomp")]), rotation: [])
-        XCTAssertEqual(HubSquads.bestRaidRows(row: fireBoss, ctx: bare).map(\.ownedEntryId), ["s1"])
+        XCTAssertEqual(HubSquads.tableRaidRows(row: fireBoss, ctx: bare).map(\.ownedEntryId), ["s1"])
         // Gym and Max: no.
         let gymTable = P23.table([P23.tierEntry("gym", "Tiers", "S", "garchomp")])
         let gym = P23.ctx(builds: [P23.build("s1", "garchomp", areas: ["Gym"])], entries: [shadowCopy], table: gymTable, rotation: [])
@@ -311,7 +321,7 @@ final class HubSquadsBestTests: XCTestCase {
         // A Purified `_shadow` copy fills the plain row only: a Shadow row of the table is not its row.
         let table = P23.table([P23.tierEntry("raids", "Ground", "S", "garchomp_shadow", shadow: true, name: "Shadow Garchomp"), P23.tierEntry("raids", "Ground", "A", "garchomp")])
         func rows(_ mark: Int?) -> [HubSquads.BestRow] {
-            HubSquads.bestRaidRows(row: fireBoss, ctx: P23.ctx(builds: [build], entries: [copy("a", mark: mark)], table: table, rotation: []))
+            HubSquads.tableRaidRows(row: fireBoss, ctx: P23.ctx(builds: [build], entries: [copy("a", mark: mark)], table: table, rotation: []))
         }
         XCTAssertEqual(rows(2).map(\.key), ["garchomp_shadow", "garchomp"])
         XCTAssertEqual(rows(2).map(\.inBox), [false, true], "Purified: not the Shadow row")

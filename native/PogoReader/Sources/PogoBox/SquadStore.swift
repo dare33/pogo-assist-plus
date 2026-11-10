@@ -3,27 +3,34 @@ import Foundation
 /// Design pass 2, rule 27 (D58): what the squad screens keep, per account, on the phone. This is the model and its rules only; where the value is
 /// written (one file per account next to the account's box, say) is the app's job. One `SquadStore` is one account's.
 ///
-/// What a stored `Saved` is, from pass 2-5: the squad's CURRENT squad (`SquadStore.current`). The suggestions (Available, Best) are never stored; an edit of one is a draft held
-/// by the screen (`SquadDrafts`) until the player saves it to Current. Everything below describes a Current squad.
+/// What a stored `Saved` is, from pass 2-5: the squad's CURRENT squad (`SquadStore.current`). The suggestions (Available, Best) are never stored; the player's edit of one is kept (`SquadStore.edits`) until reset, and "Set this squad"
+/// makes the squad as drawn the Current. Everything below describes a Current squad.
 ///
 /// What is kept is the player's own choices: each slot's role and the Pokémon they picked (a copy, or under Best a species the box may not have: `SquadSlot.species`,
 /// which a copy leaving the box does not touch). A squad with nothing kept has no Current and shows the suggestions, refilled whenever drawn.
-/// Every change (a Pokémon chosen for a slot, a slot's role changed, "Squad set") first keeps the squad exactly as shown (`Saved.fixing`), so an edit acts on what the player
+/// Every change (a Pokémon chosen for a slot, a slot's role changed) first keeps the squad exactly as shown (`Saved.fixing`), so an edit acts on what the player
 /// sees; a slot that refills in a changed squad is kept too (`adoptRefills`), so no slot changes on its own afterwards. A Current squad is drawn as kept: no mode placement rule hides a kept pick. A slot with no kept Pokémon (its copy left the box, or a swap emptied it) takes the next best unused one for its
-/// role, that slot only (`reconciled`, `HubSquads.fill`). "Delete current squad" (`SquadStore.deleteCurrent`) forgets it all. Copies are keyed by the box entry id,
+/// role, that slot only (`reconciled`, `HubSquads.fill`). "Delete current squad" (`SquadStore.deleteCurrent`) takes the Current away and puts it in the squad's history. Copies are keyed by the box entry id,
 /// which the app keeps through power-ups, evolutions, hand corrections and re-scans (`BoxEntry.id`), so a re-scan keeps every pick whose Pokémon is still in the box.
 public struct SquadStore: Codable, Equatable {
     /// One squad as the player left it.
     public struct Saved: Codable, Equatable {
         public var slots: [SquadSlot]
-        /// "Set this squad / Squad set" (raids and Max): the player's own mark that the squad is ready. Kept as it is when a pick leaves the box.
+        /// Set by `replaceCurrent` and `restoreFromHistory`. "Set" and "has a Current" are one thing (`SquadStore.isSet`); the flag stays so an older file's mark still counts (`hasCurrent`). Kept as it is when a pick leaves the box.
         public var isSet: Bool
         /// True once the player has changed the squad (rule 27): `fixing` has kept the shown squad. A file saved before this existed reads false, so a squad saved with some
         /// picks counts as changed only from its next change.
         public var changed: Bool
-        public init(slots: [SquadSlot], isSet: Bool = false, changed: Bool = false) { self.slots = slots; self.isSet = isSet; self.changed = changed }
+        /// Pass 2-6: how a Current came to be, written when it is made (`replaceCurrent`, `restoreFromHistory`) and read when it goes to the history, so the screen never has to carry
+        /// the old Current's values: the tab it was set from, whether it differed from that tab's suggestion, and the bar's whole percent at that time. nil in an older file.
+        public var source: SquadTab?
+        public var edited: Bool?
+        public var strength: Int?
+        public init(slots: [SquadSlot], isSet: Bool = false, changed: Bool = false, source: SquadTab? = nil, edited: Bool? = nil, strength: Int? = nil) {
+            self.slots = slots; self.isSet = isSet; self.changed = changed; self.source = source; self.edited = edited; self.strength = strength
+        }
 
-        private enum CodingKeys: String, CodingKey { case slots, isSet, changed }
+        private enum CodingKeys: String, CodingKey { case slots, isSet, changed, source, edited, strength }
 
         /// Tolerant: a file saved before `changed` existed has no such key.
         public init(from decoder: Decoder) throws {
@@ -31,6 +38,9 @@ public struct SquadStore: Codable, Equatable {
             slots = try c.decode([SquadSlot].self, forKey: .slots)
             isSet = try c.decode(Bool.self, forKey: .isSet)
             changed = try c.decodeIfPresent(Bool.self, forKey: .changed) ?? false
+            source = try c.decodeIfPresent(SquadTab.self, forKey: .source)
+            edited = try c.decodeIfPresent(Bool.self, forKey: .edited)
+            strength = try c.decodeIfPresent(Int.self, forKey: .strength)
         }
 
         /// Whether this is a Current squad (pass 2-5, rule 27): the player has changed it, or an older file holds picks of theirs or its "Squad set" mark. A squad with nothing
@@ -66,12 +76,6 @@ public struct SquadStore: Codable, Equatable {
                 if let key = shown[i].species { slots[i].species = key } else { slots[i].pick = shown[i].entryId }
                 slots[i].fallback = shown[i].fallback && !shown[i].chosen ? true : nil
             }
-        }
-
-        /// "Set this squad": a change like any other, so the squad is kept as shown first (the mark itself is `isSet`).
-        public mutating func markSet(shown: [FilledSlot]) {
-            fixing(shown)
-            isSet = true
         }
 
         /// Puts the Pokémon of `pickId` form (`pick`, `species`) into a slot.
@@ -122,7 +126,8 @@ public struct SquadStore: Codable, Equatable {
         public init(squad: Saved, endsOn: String) { self.squad = squad; self.endsOn = endsOn }
     }
 
-    public var version: Int = 1
+    /// 2 from pass 2-6 (stored Available and Best edits, the history). A version-1 file decodes with those empty; nothing old is renamed.
+    public var version: Int = 2
     /// Raid and Max squads by `eventKey`.
     public var raids: [String: EventSquad] = [:]
     public var max: [String: EventSquad] = [:]
@@ -136,10 +141,31 @@ public struct SquadStore: Codable, Equatable {
     public var modes: [String: SquadMode] = [:]
     /// Raids only (pass 2-5, rule 33): Balanced | Max damage, the roles the Available and Best suggestions are made of. Current squads keep their own roles.
     public var raidStyle: RaidStyle = .balanced
+    /// Pass 2-6, rule 27: the player's edits of the Available and Best suggestions, kept per squad and tab (Raids also per style). Keyed by `editKey`; an entry exists only while the
+    /// squad differs from its suggestion (`resetEdit` removes it and the screen draws the suggestion again).
+    public var edits: [String: Saved] = [:]
+    /// Pass 2-6, rule 27.1 (D74): the tab each squad was last on, by `SquadRef.key`, so a relaunch opens it where the player left it. A squad with no entry opens on Current when it has one, else on
+    /// the remembered Available or Best. Dropped with the event, as `edits` are.
+    public var tabs: [String: SquadTab] = [:]
+    /// Pass 2-6, rule 27: the earlier Current squads of each squad (`SquadRef.key`), newest first, at most `historyLimit`.
+    public var history: [String: [HistoryEntry]] = [:]
+    /// The last day of each raid or Max event that holds edits or history, by `SquadRef.key`, so `pruned` can drop them with the event (an edit exists without a Current squad, so
+    /// `raids`/`max` cannot say when it ends).
+    public var eventEnds: [String: String] = [:]
+
+    /// The names of the copies the Current squads, edits and history hold, remembered while the copy is in the box (`remember`), so a history row can still name a Pokémon that has left it
+    /// ("Zacian, not in your box"). Keyed by screen and copy, `"<screen>|<entry id>"`, since a copy has a different build target on each screen; a file written before that has bare entry
+    /// ids, which `pickName(for:area:)` still reads. Holds only copies some squad still names.
+    public var pickNames: [String: String] = [:]
+
+    /// Pass 2-6, H1: what Undo reverses, per squad (`SquadRef.key`): the last Set this squad, Set squad or Delete. In memory only; never written (not a coding key).
+    public var undoRecords: [String: UndoRecord] = [:]
+
+    public static let historyLimit = 10
 
     public init() {}
 
-    private enum CodingKeys: String, CodingKey { case version, raids, max, gym, rocket, pvp, modes, raidStyle }
+    private enum CodingKeys: String, CodingKey { case version, raids, max, gym, rocket, pvp, modes, raidStyle, edits, tabs, history, eventEnds, pickNames }
 
     /// Tolerant: a key missing from an older file reads as empty, so adding a section later does not lose the saved squads.
     public init(from decoder: Decoder) throws {
@@ -152,6 +178,13 @@ public struct SquadStore: Codable, Equatable {
         pvp = try c.decodeIfPresent([String: Saved].self, forKey: .pvp) ?? [:]
         modes = try c.decodeIfPresent([String: SquadMode].self, forKey: .modes) ?? [:]
         raidStyle = try c.decodeIfPresent(RaidStyle.self, forKey: .raidStyle) ?? .balanced
+        edits = try c.decodeIfPresent([String: Saved].self, forKey: .edits) ?? [:]
+        tabs = try c.decodeIfPresent([String: SquadTab].self, forKey: .tabs) ?? [:]
+        history = try c.decodeIfPresent([String: [HistoryEntry]].self, forKey: .history) ?? [:]
+        eventEnds = try c.decodeIfPresent([String: String].self, forKey: .eventEnds) ?? [:]
+        pickNames = try c.decodeIfPresent([String: String].self, forKey: .pickNames) ?? [:]
+        // A version-1 file reads as it always did; what this build writes from now on is version 2.
+        if version < 2 { version = 2 }
     }
 
     // MARK: keys
@@ -208,6 +241,29 @@ public struct SquadStore: Codable, Equatable {
         var s = self
         s.raids = keep(raids)
         s.max = keep(max)
+        // Edits and history of a raid or Max event go with it. The day is the rotation row's current one, else the one stored when the first edit or history entry was made.
+        var rotationEnds = [String: String]()
+        for row in rotation { for screen in [SquadScreen.raids, .max] { rotationEnds[SquadRef.event(row: row, screen: screen).key] = row.to } }
+        let known = Array(Set(eventEnds.keys).union(rotationEnds.keys))
+        func owner(_ key: String) -> String? {
+            guard key.hasPrefix(SquadScreen.raids.rawValue + "|") || key.hasPrefix(SquadScreen.max.rawValue + "|") else { return nil }
+            return known.filter { key == $0 || key.hasPrefix($0 + "|") }.max { $0.count < $1.count }
+        }
+        func isEvent(_ key: String) -> Bool { key.hasPrefix(SquadScreen.raids.rawValue + "|") || key.hasPrefix(SquadScreen.max.rawValue + "|") }
+        func alive(_ key: String) -> Bool {
+            guard isEvent(key) else { return true }
+            guard let o = owner(key), let end = rotationEnds[o] ?? eventEnds[o] else { return false }
+            return end >= today
+        }
+        s.edits = edits.filter { alive($0.key) }
+        s.tabs = tabs.filter { alive($0.key) }
+        s.history = history.filter { alive($0.key) }
+        s.undoRecords = undoRecords.filter { alive($0.key) }
+        var ends = [String: String]()
+        for key in Array(s.edits.keys) + Array(s.tabs.keys) + Array(s.history.keys) {
+            if let o = owner(key), let end = rotationEnds[o] ?? eventEnds[o] { ends[o] = end }
+        }
+        s.eventEnds = ends
         return s
     }
 
@@ -238,7 +294,48 @@ public struct SquadStore: Codable, Equatable {
         out.gym = clean(gym)
         out.rocket = rocket.mapValues(clean)
         out.pvp = pvp.mapValues(clean)
+        // A kept edit follows the box as Current does (rule 27.6); a history entry does not (the screen draws a Pokémon that left the box as gone).
+        out.edits = edits.mapValues(clean)
         return out
+    }
+
+    /// Every copy id the squads of one screen name: a Current, a kept edit, a history entry or an undo record. `area` is the screen key (`SquadScreen.rawValue`); nil takes every screen.
+    private func namedIds(area: String?) -> Set<String> {
+        var ids = Set<String>()
+        func add(_ s: Saved) { for slot in s.slots { if let p = slot.pick { ids.insert(p) } } }
+        func addEntries(_ list: [HistoryEntry]) { for e in list { for slot in e.slots { if let p = slot.pick { ids.insert(p) } } } }
+        // Edits, history and undo records are keyed by `SquadRef.key`, which starts with the screen key ("raids|...", "gym").
+        func inArea(_ key: String) -> Bool { area.map { key == $0 || key.hasPrefix($0 + "|") } ?? true }
+        func wants(_ screen: SquadScreen) -> Bool { area == nil || area == screen.rawValue }
+        if wants(.raids) { for e in raids.values { add(e.squad) } }
+        if wants(.max) { for e in max.values { add(e.squad) } }
+        if wants(.gym) { add(gym) }
+        if wants(.rocket) { for s in rocket.values { add(s) } }
+        if wants(.pvp) { for s in pvp.values { add(s) } }
+        for (k, s) in edits where inArea(k) { add(s) }
+        for (k, l) in history where inArea(k) { addEntries(l) }
+        for (k, r) in undoRecords where inArea(k) { if let c = r.current { add(c) }; addEntries(r.history ?? []) }
+        return ids
+    }
+
+    /// The key a remembered name is kept under: the copy's name is per screen (a different build target on each), so one screen never overwrites another's.
+    private static func nameKey(_ id: String, area: String) -> String { "\(area)|\(id)" }
+
+    /// The name remembered for a copy on a screen: the screen's own, else the bare id of a file written before names were per screen.
+    public func pickName(for id: String, area: String) -> String? { pickNames[Self.nameKey(id, area: area)] ?? pickNames[id] }
+
+    /// Keeps the name of every copy a squad of `area` names that `names` (the box's names as that screen gives them, by entry id) has; a name already kept stays until the copy is named
+    /// again, and one no squad of the area names any more goes. Other screens' names are not touched. A bare-id name from an older file is read as a fallback and moves to the area's
+    /// key; it goes once every screen that names the copy has its own. The app runs it on every write and every attach, while the copy is still in the box.
+    public mutating func remember(names: [String: String], area: String) {
+        var out = pickNames.filter { !$0.key.hasPrefix(area + "|") }
+        for id in namedIds(area: area) { if let n = names[id] ?? pickName(for: id, area: area) { out[Self.nameKey(id, area: area)] = n } }
+        // A bare-id name stays only while a screen that names the copy has no name of its own for it.
+        let named = Dictionary(uniqueKeysWithValues: SquadScreen.allCases.map { ($0.rawValue, namedIds(area: $0.rawValue)) })
+        for k in Array(out.keys) where !SquadScreen.allCases.contains(where: { k.hasPrefix($0.rawValue + "|") }) {
+            if !named.contains(where: { $0.value.contains(k) && out[Self.nameKey(k, area: $0.key)] == nil }) { out[k] = nil }
+        }
+        pickNames = out
     }
 
     /// Both rules, as the app applies them when it opens a screen or finishes a scan.

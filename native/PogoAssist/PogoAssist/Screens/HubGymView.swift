@@ -18,7 +18,7 @@ struct HubGymView: View {
                 HubAdviceGate { _ in EmptyView() }
             }
         }
-        .keepsSquads(keeper, workspace)
+        .keepsSquads(keeper, workspace, screen: .gym)
     }
 }
 
@@ -83,9 +83,9 @@ struct GymPickerBuilder {
             }
             guard let r = o.row, o.best?.hasBuild != false else {
                 let best = o.best!, copy = best.inBox ? (best.copy ?? best.ownedEntryId.flatMap(ctx.entry)) : nil
-                return PickerRowModel(best: best, ticked: l.ticked).adding(copy: copy, strength: bar(copy, nil, species: best.speciesId))
+                return PickerRowModel(best: best, ticked: l.ticked, today: ctx.today).adding(copy: copy, strength: bar(copy, nil, species: best.speciesId))
             }
-            let shared = o.best?.statusLine
+            let shared = o.best?.sharedLine
             let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
             let stats = GymFigures.stats(r, ctx: ctx)
             let level = r.level.map { "at level \(GymFigures.levelText($0))" }
@@ -97,6 +97,7 @@ struct GymPickerBuilder {
             return PickerRowModel(
                 id: l.entryId, name: o.name, ticked: l.ticked, mark: mark, tier: o.tier, types: o.types.map { PickerType(type: $0) },
                 note: [stats == nil ? GymFigures.bulkLine(r) : nil, shared].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ").nilIfEmpty,
+                chips: StatusChipModel.chips(best: o.best, mark: mark, today: ctx.today),
                 stats: stats.map { AnyView(GymStatsColumn(def: $0.def, hp: $0.hp)) },
                 figure: stats == nil ? nil : AnyView(GymBulkFigure(text: GymFigures.bulkShort(r.bulk))),
                 spoken: spoken.joined(separator: ", ")).adding(copy: ctx.entry(r.build.entryId), strength: bar(ctx.entry(r.build.entryId), r))
@@ -139,7 +140,9 @@ struct GymSquadView: View {
     @ObservedObject var keeper: SquadKeeper
     @ObservedObject var workspace: SquadWorkspace
     @State private var selected: Int?
+    @State private var infoOpen = false
     @Environment(\.accent) private var accent
+    @Environment(\.showOwnedToast) private var showOwnedToast
 
     private func builder(kept: Bool) -> GymPickerBuilder { GymPickerBuilder(ctx: ctx, kept: kept) }
     @State private var rowsCache = PickerRowsCache<GymPickerBuilder.Content>()
@@ -151,25 +154,40 @@ struct GymSquadView: View {
         let mode = base.mode
         let builder = builder(kept: base.kept)
         let (options, _, filled) = builder.resolve(mode: mode, saved: base.squad)
-        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { builder.resolve(mode: mode, saved: SquadStore.Saved(slots: HubSquads.defaultGymSlots())).filled }))
+        // The suggestion is drawn by the rules of its mode, not as kept.
+        let surface = base.with(edited: base.isEdited(filled: filled, suggested: { self.builder(kept: false).resolve(mode: mode, saved: SquadStore.Saved(slots: HubSquads.defaultGymSlots())).filled }))
         let byId = Dictionary(options.flatMap { o in [(o.id, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let cards = filled.enumerated().map { card($0.offset, $0.element, byId: byId) }
         // Worked out off the main thread (`.task` below), once for the squad as drawn; the bar fills in when it is ready.
         let strengthKey = "strength|\(surface.tab.rawValue)|\(surface.isBestSuggestion)|" + FilledSlot.cacheKey(filled) + "|" + options.map(\.id).joined(separator: ",") + "|\(ctx.today)|\(boxGeneration)"
         let adoptKey = surface.squad.needsAdopting(filled) ? FilledSlot.cacheKey(filled) : ""
-        SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: .gym, keeper: keeper) }), hasCurrent: surface.hasCurrent, noun: "defenders")
+        // An edit stored but drawn as the suggestion is not an edit (rule 27.2): it is dropped, so the tab follows the box again.
+        let staleKey = surface.editIsStale ? FilledSlot.cacheKey(filled) : ""
+        let percent = strength?.key == strengthKey ? strength?.value.percent : nil
+        SquadTabsRow(tab: Binding(get: { surface.tab }, set: { workspace.select($0, ref: .gym, keeper: keeper) }), hasCurrent: surface.hasCurrent)
         VStack(alignment: .leading, spacing: 10) {
-            Text("Top defenders").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-            if let team = HubSquads.teamStatus(cards.map(\.status)) { SquadStatusLine(status: team) }
+            HStack(spacing: 4) {
+                Text("Top defenders").font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 4)
+                InfoButton(isOpen: $infoOpen, label: "About the suggested squad", identifier: "squad-info")
+            }
+            if infoOpen {
+                SquadExplainer(items: SquadInfo.tabs(noun: "defenders") + [SquadInfo.setting,
+                    ("Suggested for the Gym:", "the six defenders our gym table rates highest, by the bulk each copy of yours has (Defence × HP). Change any slot in its picker.")] + SquadInfo.signs, identifier: "squad-explainer")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            SquadStatusRow(team: HubSquads.teamStatus(cards.map(\.status)), pill: surface.tab == .current ? nil : SetSquadPill(
+                isSet: surface.isCurrent(filled: filled, currentFilled: { self.builder(kept: true).resolve(mode: .available, saved: surface.current ?? SquadStore.Saved(slots: HubSquads.defaultGymSlots())).filled }),
+                onSet: { setSquad(surface, filled: filled, percent: percent) }, onUnset: { unsetSquad(surface) }))
             SquadStrengthLine(strength: strength?.key == strengthKey ? strength?.value : nil, type: .gym)
             SlotGrid(slots: cards, selected: selected) { i in
                 withAnimation(.easeOut(duration: 0.15)) { selected = selected == i ? nil : i }
             }
             if surface.tab == .current {
-                DeleteCurrentButton { workspace.deleteCurrent(surface, keeper: keeper) }
-            } else {
-                SquadDraftBar(differs: surface.differs, justSaved: surface.justSaved, replaces: surface.replaces(filled: filled),
-                              onSave: { workspace.saveToCurrent(surface, keeper: keeper, filled: filled, setMark: false) }, onReset: { workspace.reset(surface) })
+                // D71: with a picker open the Delete link and the history come after it, not between the cards and the picker.
+                if !(selected.map(filled.indices.contains) ?? false) { currentFooter(surface) }
+            } else if surface.differs {
+                SquadResetLink { workspace.reset(surface, keeper: keeper) }
             }
         }
         .padding(14)
@@ -183,14 +201,52 @@ struct GymSquadView: View {
             let value = await Task.detached(priority: .userInitiated) {
                 bestUnedited ? SquadStrength.bestSquad(reference: b.reference(), kind: .bulk) : b.squadStrength(filled: filled, options: options, byId: byId, mode: mode)
             }.value
-            if !Task.isCancelled { strength = (strengthKey, value) }
+            if !Task.isCancelled {
+                strength = (strengthKey, value)
+                // The Current's figure is written back to the stored Current, so a history row later records it (H6).
+                workspace.record(surface, keeper: keeper, strength: value.percent, for: surface.squad.slots)
+            }
         }
         // A slot of a changed squad that refilled is kept as shown, so it does not change again.
         .task(id: adoptKey) { if !adoptKey.isEmpty, !Task.isCancelled { workspace.adopt(surface, keeper: keeper, filled: filled) } }
+        .task(id: staleKey) { if !staleKey.isEmpty, !Task.isCancelled { workspace.dropUneditedEdit(surface, keeper: keeper) } }
         .tracksBox(ctx, generation: $boxGeneration)
         if let i = selected, filled.indices.contains(i) { picker(i, filled: filled, options: options, byId: byId, surface: surface, builder: builder) }
+        if surface.tab == .current, selected.map(filled.indices.contains) ?? false { currentFooter(surface) }
         builds
         HubGapList(gaps: HubModel.gaps(ctx.advice.gaps, for: .gym), type: .gym)
+    }
+
+    /// Current's Delete link and earlier current squads (rule 27.10). With a picker open they come after it (D71).
+    @ViewBuilder private func currentFooter(_ surface: SquadSurface) -> some View {
+        DeleteCurrentButton { deleteSquad(surface) }
+        SquadHistoryList(rows: keeper.store.historyRows(surface.ref, ctx: ctx) { _ in SquadPalette(ink: ContentType.gym.ink(accent), tint: ContentType.gym.tint(accent)) }) { index in
+            if workspace.restore(surface, keeper: keeper, index: index) { toast("Current squad replaced", surface) }
+        }
+    }
+
+    /// "Set this squad": the squad as drawn becomes the Current with no question; replacing a different one offers Undo.
+    private func setSquad(_ surface: SquadSurface, filled: [FilledSlot], percent: Int?) {
+        let replaced = workspace.setCurrent(surface, keeper: keeper, filled: filled, strength: percent)
+        if replaced { toast("Current squad replaced", surface) }
+        else { AccessibilityNotification.Announcement("Squad set").post() }
+    }
+
+    /// "✓ Squad set" tapped: the Current moves to the history.
+    private func unsetSquad(_ surface: SquadSurface) {
+        workspace.unsetCurrent(surface, keeper: keeper)
+        toast("Squad unset", surface)
+    }
+
+    /// "Delete current squad" confirmed: the Current moves to the history, and the toast offers Undo.
+    private func deleteSquad(_ surface: SquadSurface) {
+        workspace.unsetCurrent(surface, keeper: keeper)
+        toast("Current squad deleted", surface)
+    }
+
+    /// A toast for the change just made: with Undo while the store holds a record of it, else the message alone; either goes with the screen (J6).
+    private func toast(_ text: String, _ surface: SquadSurface) {
+        showOwnedToast(text, ObjectIdentifier(keeper), workspace.undoAction(surface, keeper: keeper))
     }
 
     // MARK: slots
@@ -204,25 +260,24 @@ struct GymSquadView: View {
         }
         guard let o = (f.species.flatMap { byId[squadSpeciesPrefix + $0] } ?? byId[pick]) else {
             if let key = f.species {
-                let name = ctx.gm.byId[key]?.name ?? "Pokémon"
-                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, lines: [HubSquads.BestStatus.unlisted.text], types: ctx.gm.byId[key]?.types ?? [], status: .toGet,
+                let name = ctx.speciesName(key)
+                return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, types: ctx.gm.byId[key]?.types ?? [], chips: [.notNow(when: nil)], notInBox: true, status: .toGet,
                                      spoken: [head, name, HubSquads.BestStatus.unlisted.text.replacingOccurrences(of: " · ", with: ", "), HubSquads.SlotStatus.toGet.spoken].joined(separator: ", "), identifier: id)
             }
             let name = ctx.entry(pick)?.row.title ?? "Pokémon"
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, types: ctx.entryTypes(pick), status: .needsWork,
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: name, types: ctx.entryTypes(pick), chips: [.noBuild], status: .needsWork,
                                  spoken: [head, name, HubSquads.SlotStatus.needsWork.spoken].joined(separator: ", "), identifier: id)
         }
         guard let r = o.row, o.best?.hasBuild != false else {
-            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), best: o.best!, head: head, identifier: id)
+            return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), best: o.best!, head: head, today: ctx.today, identifier: id)
         }
         let mark = SquadMark.of(r.build, screen: .gym, ctx: ctx)
         // Rule 29: the Gym table's tier, not the build's own (a Pokémon the table does not list needs work).
         let status = HubSquads.slotStatus(inBox: true, fullStrength: mark == .fullStrength, tier: HubSquads.gymTableTier(r.build, ctx: ctx))
         let line = GymFigures.bulkLine(r)
-        let shared = o.best?.statusLine
-        let lines = (line.isEmpty ? [] : [line]) + (shared.map { [$0] } ?? [])
+        let lines = (line.isEmpty ? [] : [line]) + (o.best?.sharedLine.map { [$0] } ?? [])
         let spoken = [head, o.name, SquadWords.typeList(o.types), line, mark.spoken, o.best?.spokenStatus, status.spoken].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: o.name, lines: lines, types: o.types, mark: mark, status: status, spoken: spoken, identifier: id)
+        return SlotCardModel(id: i, role: nil, palette: palette, emptyOutline: Theme.line, disc: String(i + 1), name: o.name, lines: lines, types: o.types, mark: mark, chips: StatusChipModel.chips(best: o.best, mark: mark, today: ctx.today), status: status, spoken: spoken, identifier: id)
     }
 
     // MARK: picker

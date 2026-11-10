@@ -157,6 +157,11 @@ class SquadUITestCase: XCTestCase {
             sleep(2)
             prepare(app)
             sleep(1)
+            // The tab the name says: the remembered one (or a Current that opens first) is not assumed.
+            let tabName = screen.hasSuffix("-best") ? "best" : "available"
+            selectTab(app, tabName)
+            scrollToTop(app)
+            assertTabSelected(app, tabName)
             shot("\(screen)-\(scheme)-\(size)")
             // The open picker's rows, scrolled up under the status bar (at the largest text size the picker is far down the page).
             if app.buttons["squad-picker-done"].exists { scrollPickerIntoView(app) } else { app.swipeUp() }
@@ -185,9 +190,10 @@ class SquadUITestCase: XCTestCase {
         return name
     }
 
-    /// Changes the squad once: a fresh row in slot 2, else (nothing fresh in the box) a swap with another slot's Pokémon; under Best when Available has nothing to offer.
-    func changeTheSquad(_ app: XCUIApplication, _ screen: String) {
-        for best in [false, true] {
+    /// Changes the squad once: a fresh row in slot 2, else (nothing fresh in the box) a swap with another slot's Pokémon; under Best when Available has nothing to offer (unless
+    /// `availableOnly`, which fails instead: a screenshot of Available must not be taken from the Best tab, H13).
+    func changeTheSquad(_ app: XCUIApplication, _ screen: String, availableOnly: Bool = false) {
+        for best in availableOnly ? [false] : [false, true] {
             if best { selectBest(app) }
             for n in [2, 1, 3] {
                 guard slot(app, screen, n).exists else { continue }
@@ -198,6 +204,13 @@ class SquadUITestCase: XCTestCase {
                 closePicker(app)
             }
         }
+        // Available has no other Pokémon to offer (a league with one candidate): a slot's role is the edit, the All chip being a role the suggestion does not use.
+        if availableOnly, slot(app, screen, 1).exists {
+            openPicker(app, screen, slot: 1)
+            let all = app.buttons["squad-role-All"]
+            if all.exists { all.tap(); closePicker(app); return }
+            closePicker(app)
+        }
         XCTFail("no slot offered a row to change the squad with")
     }
 
@@ -207,23 +220,76 @@ class SquadUITestCase: XCTestCase {
     /// Scrolls back to the top and chooses a tab (`current`, `available` or `best`).
     func selectTab(_ app: XCUIApplication, _ name: String) {
         let t = tab(app, name)
+        _ = t.waitForExistence(timeout: 60)
         var n = 0
         while !(t.exists && t.isHittable) && n < 8 { app.swipeDown(); n += 1 }
         XCTAssertTrue(t.exists, "the \(name) tab exists")
         if !t.isSelected { t.tap() }
         XCTAssertTrue(waitSelected(t), "the \(name) tab is selected")
+        // Raids Best is ranked in the background: the squad is there once the placeholder line has gone.
+        if name == "best" { XCTAssertTrue(waitGone(el(app, "squad-pending"), timeout: 60), "the Best squad is ready") }
+    }
+
+    /// Scrolls to the top of the page, the header in view (a swipe down at the top does nothing).
+    func scrollToTop(_ app: XCUIApplication) {
+        _ = tab(app, "available").waitForExistence(timeout: 60)
+        for _ in 0..<8 { app.swipeDown() }
+    }
+
+    /// A screenshot is only named for what it shows: the tab it is taken on must be the one the name says (H13).
+    func assertTabSelected(_ app: XCUIApplication, _ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(waitSelected(tab(app, name)), "the \(name) tab is selected for this shot", file: file, line: line)
     }
 
     func waitSelected(_ e: XCUIElement, timeout: TimeInterval = 5) -> Bool {
         XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: e)], timeout: timeout) == .completed
     }
 
-    /// Taps Save to Current on Available or Best. `replacing` is nil when the squad has no Current (no question is asked); otherwise the question "Replace your current squad?"
-    /// is answered with Replace (true) or Cancel (false).
-    func saveToCurrent(_ app: XCUIApplication, replacing: Bool? = nil) {
-        reveal(app, app.buttons["squad-save-current"]).tap()
-        guard let replacing else { return }
-        answer(app, asked: "squad-save-current", confirm: replacing)
+    /// The pill under the switches: "Set this squad" or, once the tab's squad is the Current, "Squad set" (selected). On Available and Best only.
+    func pill(_ app: XCUIApplication) -> XCUIElement { app.buttons["squad-set"] }
+
+    /// Scrolls back to the top, checks the pill reads "Set this squad" and taps it. No question is ever asked (CONCEPTS rule 27.8).
+    func setThisSquad(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        var n = 0
+        while !(pill(app).exists && pill(app).isHittable) && n < 8 { app.swipeDown(); n += 1 }
+        XCTAssertTrue(pill(app).waitForExistence(timeout: 5), "the pill is on the tab", file: file, line: line)
+        XCTAssertEqual(pill(app).label, "Set this squad", file: file, line: line)
+        pill(app).tap()
+        XCTAssertTrue(waitSquadSet(app), "the pill reads Squad set", file: file, line: line)
+    }
+
+    func waitSquadSet(_ app: XCUIApplication, timeout: TimeInterval = 5) -> Bool {
+        XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Squad set' AND selected == true"), object: pill(app))], timeout: timeout) == .completed
+    }
+
+    /// The toast: one accessibility element whose label is the message (a toast with an action carries Undo as a custom action; its button is a descendant of the element).
+    func toast(_ app: XCUIApplication) -> XCUIElement { app.descendants(matching: .any).matching(identifier: "toast").firstMatch }
+
+    /// The toast's words, once it is up (nil if it never shows).
+    func toastText(_ app: XCUIApplication, timeout: TimeInterval = 5) -> String? {
+        let t = toast(app)
+        return t.waitForExistence(timeout: timeout) ? t.label : nil
+    }
+
+    /// Taps the Undo of the toast by its button: XCUITest reaches it as a descendant button labelled "Undo" inside the toast's element (measured in the pass 2-6 fold, round 2: all five taps in
+    /// the six squad classes found it that way). If a toast ever stops exposing it, the fallback taps a fixed offset from the toast's trailing edge: the button is 44 pt wide inside 16 pt of
+    /// padding, so its middle is 16 + 22 pt in (J8).
+    func tapToastUndo(_ app: XCUIApplication) {
+        let t = toast(app)
+        XCTAssertTrue(t.waitForExistence(timeout: 5), "the toast offers Undo")
+        let button = t.descendants(matching: .button).matching(identifier: "Undo").firstMatch
+        if button.exists && button.isHittable { button.tap(); return }
+        t.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: t.frame.width - 16 - 22, dy: 0)).tap()
+    }
+
+    /// The row of the Earlier current squads list, n from 1 (the newest).
+    func historyRow(_ app: XCUIApplication, _ n: Int) -> XCUIElement { el(app, "squad-history-row-\(n)") }
+
+    /// "Set squad" on a history row. The row is one VoiceOver element, so its pill is not an element of its own: it sits at the row's trailing end.
+    func setHistorySquad(_ app: XCUIApplication, _ n: Int) {
+        let row = reveal(app, historyRow(app, n))
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "history row \(n) exists")
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
     }
 
     /// Answers a confirmation dialog whose buttons are `<asked>-confirm` and `<asked>-cancel`.
@@ -243,6 +309,17 @@ class SquadUITestCase: XCTestCase {
         answer(app, asked: "squad-delete-current", confirm: confirm)
     }
 
+    /// Scrolls until the tabs are near the top of the screen, so the tabs, the status and the pill, the strength line, the slots and the link under them show together.
+    func scrollToTabs(_ app: XCUIApplication) {
+        let tabs = el(app, "squad-mode")
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)), to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        var n = 0
+        while n < 40 && !(tabs.exists && tabs.isHittable && tabs.frame.minY < 230 && tabs.frame.minY > 60) {
+            if tabs.exists && tabs.frame.minY < 60 { to.press(forDuration: 0.05, thenDragTo: from) } else { from.press(forDuration: 0.05, thenDragTo: to) }
+            n += 1
+        }
+    }
+
     /// Scrolls until the squad strength line is near the top, so the bar, the slots and the button under them show.
     func scrollToStrength(_ app: XCUIApplication) {
         let line = el(app, "squad-strength")
@@ -254,56 +331,99 @@ class SquadUITestCase: XCTestCase {
         }
     }
 
-    /// The screenshots of a squad on Current after one saved edit, so the tabs, the strength bar and the links show: light and dark at the default text size and at AX5
-    /// (the box is kept from the first launch), named <screen>-<light|dark>-<default|ax5>.
+    /// The screenshots of a squad on Available after one edit, so the tabs, the pill, the chips, the strength bar and the Reset link show: light and dark at the default text size and at
+    /// AX5 (the box is kept from the first launch), named <screen>-<light|dark>-<default|ax5>.
     func strengthShots(_ screen: String, tile: String? = nil, prepare: (XCUIApplication) -> Void = { _ in }) {
         for (scheme, size) in [("light", "default"), ("dark", "default"), ("light", "ax5"), ("dark", "ax5")] {
             let app = launch(dark: scheme == "dark", ax5: size == "ax5")
             openTile(app, tile ?? screen)
             prepare(app)
             XCTAssertTrue(slot(app, screen, 1).waitForExistence(timeout: 60))
-            if !tab(app, "current").exists {
-                changeTheSquad(app, screen)
-                saveToCurrent(app)
-                XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 10), "saving adds the Current tab")
-            }
-            selectTab(app, "current")
-            XCTAssertTrue(reveal(app, app.buttons["squad-delete-current"]).exists, "Current has its Delete current squad link")
-            scrollToStrength(app)
+            // Edits are kept across launches (and so is the tab): start each look from Available with the suggestion, then make one edit there.
+            selectAvailable(app)
+            let leftOver = app.buttons["squad-reset-draft"]
+            if reveal(app, leftOver).exists { leftOver.tap(); XCTAssertTrue(waitGone(leftOver)) }
+            changeTheSquad(app, screen, availableOnly: true)
+            XCTAssertTrue(reveal(app, app.buttons["squad-reset-draft"]).exists, "an edited tab has its Reset to suggestion link")
+            // The default-size shot is the top of the page (the header in it); the second shows the tabs, the pill, the chips, the bar and the Reset link at the top of the screen.
+            scrollToTop(app)
+            assertTabSelected(app, "available")
             sleep(1)
-            shot("\(screen)-\(scheme)-\(size)")
+            if size == "default" { shot("\(screen)-\(scheme)-\(size)") }
+            scrollToTabs(app)
+            assertTabSelected(app, "available")
+            sleep(1)
+            shot(size == "default" ? "\(screen)-\(scheme)-\(size)-tabs" : "\(screen)-\(scheme)-\(size)")
             app.terminate()
         }
     }
 
+    /// D71, rule 27.10: on Current, with at least one earlier current squad, an open picker comes straight after the slot cards: its first row is above Delete current squad and above the
+    /// history. The page is left where it is when the picker opens, so the frames are read together.
+    func assertPickerAboveHistory(_ app: XCUIApplication, _ screen: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(tab(app, "current").isSelected, "on the Current tab", file: file, line: line)
+        XCTAssertTrue(reveal(app, historyRow(app, 1)).exists, "there is an earlier current squad", file: file, line: line)
+        openPicker(app, screen, slot: 1)
+        let first = pickerRows(app).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "the picker lists rows", file: file, line: line)
+        let delete = el(app, "squad-delete-current"), history = historyRow(app, 1)
+        XCTAssertTrue(delete.exists && history.exists, "Delete current squad and the history are still on Current", file: file, line: line)
+        XCTAssertLessThan(first.frame.minY, delete.frame.minY, "the picker is above Delete current squad", file: file, line: line)
+        XCTAssertLessThan(first.frame.minY, history.frame.minY, "and above the history", file: file, line: line)
+        closePicker(app)
+    }
+
     // MARK: the pinned squad strip (rule 34)
 
-    /// With a slot's picker open and the page scrolled well down the Pokémon list, the strip of the squad's slots stays at the top; tapping another slot's chip opens that slot's
-    /// picker; Done hides the strip. `titlePrefix` is the start of the opened picker's title ("Slot 3 ·").
-    func assertStripPinsTheSquad(_ app: XCUIApplication, _ screen: String, open: Int = 1, chip: Int = 3, shotName: String? = nil) {
+    /// D72: with a picker open the strip is absent while the slot cards are in view, pinned once they have scrolled off, and gone again when they are back in view.
+    func assertStripFollowsTheCards(_ app: XCUIApplication, _ screen: String, open: Int = 1) {
+        openPicker(app, screen, slot: open)
+        let strip = el(app, "squad-strip")
+        XCTAssertFalse(strip.exists, "no strip while the slot cards are in view")
+        for _ in 0..<4 { app.swipeUp() }
+        XCTAssertTrue(strip.waitForExistence(timeout: 5), "the strip is pinned once the slot cards have scrolled off")
+        for _ in 0..<8 { app.swipeDown() }
+        XCTAssertTrue(waitGone(strip), "and goes again when the slot cards come back into view")
+        closePicker(app)
+    }
+
+    /// With a slot's picker open and the page scrolled well down the Pokémon list, the strip of the squad's slots stays at the top, every chip in view (two rows of three on a six-slot
+    /// squad, one row of three otherwise, rows of two at AX5: no sideways scrolling); tapping another slot's chip opens that slot's picker; Done hides the strip.
+    func assertStripPinsTheSquad(_ app: XCUIApplication, _ screen: String, open: Int = 1, chip: Int = 3, slots: Int = 6, ax5: Bool = false, shotName: String? = nil) {
         XCTAssertFalse(el(app, "squad-strip").exists, "no strip while no picker is open")
         openPicker(app, screen, slot: open)
         let strip = el(app, "squad-strip")
-        XCTAssertTrue(strip.waitForExistence(timeout: 5), "an open picker pins the squad strip")
+        // D72: the slot cards are in view (the slot was just tapped), so the strip would repeat them: it is not pinned yet.
+        XCTAssertFalse(strip.exists, "no strip while the slot cards are in view")
         for _ in 0..<4 { app.swipeUp() }
-        XCTAssertTrue(strip.exists && strip.isHittable, "the strip is still on screen after scrolling down the list")
-        let target = app.buttons["squad-strip-chip-\(chip)"], editing = app.buttons["squad-strip-chip-\(open)"]
-        XCTAssertTrue(target.exists && editing.exists, "every slot has a chip")
-        // At the accessibility sizes only a chip or two fits: the strip scrolls sideways to the one wanted.
-        var n = 0
-        while !(target.isHittable && editing.exists) && n < 10 { let drag = editing.isHittable ? editing : strip; if chip > open { drag.swipeLeft() } else { drag.swipeRight() }; n += 1 }
-        // (H18: a chip can report itself not hittable although it is on screen and a tap on it works: the screen's own scroll view's frame starts at the strip's top, under the strip
-        // that the safe-area inset draws over it, and the test framework's hit test sees that frame. The check is the chip's frame inside the strip, then a coordinate tap.)
-        XCTAssertTrue(target.isHittable || (target.frame.midX > 0 && target.frame.midX < app.frame.width && target.frame.intersects(strip.frame)), "the chip for slot \(chip) can be reached: \(target.frame)")
+        XCTAssertTrue(strip.waitForExistence(timeout: 5), "the strip is pinned once the slot cards have scrolled off")
+        XCTAssertTrue(strip.exists && strip.isHittable, "the strip is on screen after scrolling down the list")
+        // Every chip is in view at once, and none of them is hidden by scrolling: rows of three.
+        let chips = (1...slots).map { app.buttons["squad-strip-chip-\($0)"] }
+        for (i, c) in chips.enumerated() {
+            XCTAssertTrue(c.exists, "slot \(i + 1) has a chip")
+            XCTAssertTrue(c.isHittable || (c.frame.midX > 0 && c.frame.midX < app.frame.width && c.frame.intersects(strip.frame)), "the chip for slot \(i + 1) is in view: \(c.frame)")
+        }
+        var bands = [CGFloat]()
+        for y in chips.map({ $0.frame.minY }).sorted() { if let last = bands.last, y - last < 10 { continue }; bands.append(y) }
+        // D75: rows of three at the default size, rows of two at the accessibility sizes (a short last row keeps its chips' width).
+        let perRow = ax5 ? 2 : 3, expectedBands = (slots + perRow - 1) / perRow
+        XCTAssertEqual(bands.count, expectedBands, "the strip is \(expectedBands) row(s) of \(perRow): \(bands)")
+        XCTAssertEqual(chips[0].frame.width.rounded(), chips[1].frame.width.rounded(), accuracy: 2, "the first two chips are the same width (\(ax5 ? "a half" : "a third") of the strip)")
+        if ax5 && slots % 2 == 1 { XCTAssertEqual(chips[slots - 1].frame.width, chips[0].frame.width, accuracy: 2, "the lone chip of the short last row keeps the width of the others (D75): \(chips[slots - 1].frame) against \(chips[0].frame)") }
+        let target = chips[chip - 1], editing = chips[open - 1]
         XCTAssertTrue(editing.isSelected, "the slot being edited is highlighted: \(editing.label)")
         XCTAssertTrue(editing.label.hasSuffix("editing"), editing.label)
         XCTAssertTrue(target.label.hasPrefix("Slot \(chip)"), target.label)
+        // (H18: a chip can report itself not hittable although it is on screen and a tap on it works: the screen's own scroll view's frame starts at the strip's top, under the strip
+        // that the safe-area inset draws over it, and the test framework's hit test sees that frame. The check above is the chip's frame inside the strip, then a coordinate tap.)
         if let shotName { shot(shotName) }
         target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let title = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Slot \(chip) ·")).firstMatch
         XCTAssertTrue(title.waitForExistence(timeout: 5), "tapping a chip opens that slot's picker")
         XCTAssertTrue(waitSelected(app.buttons["squad-strip-chip-\(chip)"]), "and highlights it")
         XCTAssertTrue(app.buttons["squad-strip-chip-\(chip)"].label.hasSuffix("editing"))
+        // The picker's Done button, scrolled up under the taller strip, is dragged below it (closePicker does that), so it is never covered (H10).
         closePicker(app)
         XCTAssertTrue(waitGone(el(app, "squad-strip")), "Done hides the strip")
     }

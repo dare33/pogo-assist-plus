@@ -63,6 +63,7 @@
 		57B6AF68B04AAA54682244C9 /* PokemonPageScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD831CBF024D1289A1E33174 /* PokemonPageScreenshotTests.swift */; };
 		590D6523FF4E5A4A47A05349 /* ReviewToCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6C431800FF0BBA252331DB /* ReviewToCheck.swift */; };
 		5A7CFEDBCAD05B096C12CA05 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D8C0F2FAF8BC68A793A1DB /* ReaderSettings.swift */; };
+		6222CCE97D685905BB293A0F /* SquadPiecesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB775DF36283A04C73502953 /* SquadPiecesTests.swift */; };
 		6450A172571F22EBC9C8FBB3 /* PickerRowModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22AEC20035CF6716A0888CA1 /* PickerRowModelsTests.swift */; };
 		676B795352FD800C5AC8AD78 /* PogoReader in Frameworks */ = {isa = PBXBuildFile; productRef = 16E6951D5A5A38B33745BA2B /* PogoReader */; };
 		685D6AF151E3CD5458FC6093 /* DesignPieces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675959CE1C1C65926303D638 /* DesignPieces.swift */; };
@@ -72,6 +73,7 @@
 		6C36CD15ECE70F69B86AD66A /* SharedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD3B9B348BAD6411BC1C01A /* SharedState.swift */; };
 		6DB5DFC73A34D88596B2949B /* SampleScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2174CAD06ADF7ECC068B88FD /* SampleScan.swift */; };
 		71920C55B1C3C1FD70C0D7BA /* SpeciesSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 861BB4BA14FC6825A136C171 /* SpeciesSectionView.swift */; };
+		7387127046D0761CCDD8FEA7 /* Pass26ShotsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F78ADF1E93C9B3807064412E /* Pass26ShotsTests.swift */; };
 		74BF30A02B0889A549F4B28B /* PokemonDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5DCADB6094BE4B97E76F13 /* PokemonDetailsCard.swift */; };
 		767B78A46C867ABB726341EE /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */; };
 		76F25EFCEF98BDD626FAB8B1 /* HubRocketSquadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44739F157261B7A55B07D01D /* HubRocketSquadTests.swift */; };
@@ -324,6 +326,7 @@
 		C3125EA9837C6BDA1514128F /* HubRaidsMaxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubRaidsMaxTests.swift; sourceTree = "<group>"; };
 		C317D4A35524B2870E2635E8 /* GameOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameOpener.swift; sourceTree = "<group>"; };
 		C6F031A6C112AFF16F56C17A /* PogoReader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PogoReader; path = ../PogoReader; sourceTree = SOURCE_ROOT; };
+		CB775DF36283A04C73502953 /* SquadPiecesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SquadPiecesTests.swift; sourceTree = "<group>"; };
 		CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoBroadcast.entitlements; sourceTree = "<group>"; };
 		D20D8DCC5FFAD794083C4F13 /* PokemonSummaryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonSummaryTab.swift; sourceTree = "<group>"; };
 		D76F4EFCC26E0B2FC6ADEC25 /* SquadKeeperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SquadKeeperTests.swift; sourceTree = "<group>"; };
@@ -343,6 +346,7 @@
 		F387A3B2C09806D90C1232DB /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F391C1A79CF135A501834207 /* PogoAssist.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PogoAssist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F588B630BAB0C78B337D8139 /* AppearanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceView.swift; sourceTree = "<group>"; };
+		F78ADF1E93C9B3807064412E /* Pass26ShotsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pass26ShotsTests.swift; sourceTree = "<group>"; };
 		F7E142247214BEF767388106 /* ScanSetupPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSetupPrompts.swift; sourceTree = "<group>"; };
 		F83DD8DD5AEC769BBE964440 /* ScanDone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDone.swift; sourceTree = "<group>"; };
 		F9F2231F540A06638AC4E71B /* ScanDoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDoneTests.swift; sourceTree = "<group>"; };
@@ -458,6 +462,7 @@
 				637BDE6B4B08C13F8920523F /* HubTeamsTests.swift */,
 				12671B8F5C741B95055AAC34 /* ListScreensTests.swift */,
 				BF1DB9FF783040B246467AE4 /* MyPokemonScreenTests.swift */,
+				F78ADF1E93C9B3807064412E /* Pass26ShotsTests.swift */,
 				6D79BE976D5C07667124C94F /* PickerFramesTests.swift */,
 				BD831CBF024D1289A1E33174 /* PokemonPageScreenshotTests.swift */,
 				6F20F569E3D7E307605186A3 /* PokemonPageSpeedTests.swift */,
@@ -495,6 +500,7 @@
 				22AEC20035CF6716A0888CA1 /* PickerRowModelsTests.swift */,
 				92C1CAF14271C5019066D125 /* PvPPlacementTests.swift */,
 				D76F4EFCC26E0B2FC6ADEC25 /* SquadKeeperTests.swift */,
+				CB775DF36283A04C73502953 /* SquadPiecesTests.swift */,
 			);
 			path = PogoAssistTests;
 			sourceTree = "<group>";
@@ -842,6 +848,7 @@
 				6450A172571F22EBC9C8FBB3 /* PickerRowModelsTests.swift in Sources */,
 				407469E8DD128DD568177761 /* PvPPlacementTests.swift in Sources */,
 				6C038EA5EB1AC98EBA13BB21 /* SquadKeeperTests.swift in Sources */,
+				6222CCE97D685905BB293A0F /* SquadPiecesTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -862,6 +869,7 @@
 				4366EAAD252170736E53F6D5 /* HubTeamsTests.swift in Sources */,
 				3338BE2EDE776D94D1047679 /* ListScreensTests.swift in Sources */,
 				4BE32EC2DFE72F4876196E9F /* MyPokemonScreenTests.swift in Sources */,
+				7387127046D0761CCDD8FEA7 /* Pass26ShotsTests.swift in Sources */,
 				D74CF64ACCF5C9E4B857BE3F /* PickerFramesTests.swift in Sources */,
 				57B6AF68B04AAA54682244C9 /* PokemonPageScreenshotTests.swift in Sources */,
 				F52D76A606AB486DE0550A9C /* PokemonPageSpeedTests.swift in Sources */,

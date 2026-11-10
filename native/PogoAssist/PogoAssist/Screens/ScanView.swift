@@ -154,7 +154,7 @@ struct ScanView: View {
         .navigationDestination(item: $setupPage) { page in SetupChecklistView(jumpToNext: page == .nextStep) }
         .confirmationDialog("Discard the waiting scan?", isPresented: $confirmDiscardWaiting, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardWaitingScan() }
-        } message: { Text("It is thrown away without being added to the box.") }
+        }
         .sheet(isPresented: $showSetupSheet, onDismiss: { if startAfterSheet { startAfterSheet = false; startScan() } }) {
             SetupSheet(openSetup: { showSetupSheet = false; setupPage = .nextStep },
                        scanAnyway: { startAfterSheet = true; showSetupSheet = false })

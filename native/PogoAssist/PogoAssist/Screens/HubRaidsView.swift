@@ -63,7 +63,26 @@ struct HubTimeline: View {
                 Text("The Hub's schedule could not be read.").font(.figtree(14, .medium, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
             }
         }
-        .keepsSquads(keeper, workspace)
+        .keepsSquads(keeper, workspace, screen: squadScreen)
+        // Every boss on the timeline that has a squad is ranked in the background, one after another, so the switch to Best is instant whichever card is open (H4, J5). Again after
+        // a change of style, day or box.
+        .task(id: prefetchKey) {
+            let rows = prefetchRows()
+            guard !rows.isEmpty, let ctx = model.squadContext() else { return }
+            keeper.prefetchRaidRows(rows, style: keeper.store.raidStyle, ctx: ctx)
+        }
+    }
+
+    /// The bosses the timeline shows that have a squad (Raids only; the Max ranking is a table).
+    private func prefetchRows() -> [HubData.RotationRow] {
+        guard screen == .raids, squads, let hub = try? HubData.bundled() else { return [] }
+        let line = HubRaidsModel.timeline(rows: hub.rotation, screen: screen, today: HubModel.today())
+        let segment = choice ?? (line.now.isEmpty ? .comingUp : .now)
+        return (segment == .now ? line.now : line.comingUp).map(\.row).filter { !$0.bosses.isEmpty }
+    }
+
+    private var prefetchKey: String {
+        "\(prefetchRows().map { SquadStore.eventKey($0) }.joined(separator: ","))|\(keeper.store.raidStyle.rawValue)|\(HubModel.today())|\(keeper.boxGeneration)|\(model.hubAdvice != nil)"
     }
 
     @ViewBuilder private func content(hub: HubData, gm: GameMaster) -> some View {
@@ -87,8 +106,8 @@ struct HubTimeline: View {
         if closers, let advice { gapClosers(rows: shown.map(\.row), advice: advice, hub: hub, gm: gm) }
     }
 
-    /// The card says "squad set" for a Current squad the player marked.
-    private func isSet(_ s: EventSummary) -> Bool { squads && keeper.store.current(.event(row: s.entry.row, screen: squadScreen))?.isSet == true }
+    /// The card says "squad set" exactly when the squad has a Current (pass 2-6: set and has a Current are one thing).
+    private func isSet(_ s: EventSummary) -> Bool { squads && keeper.store.isSet(.event(row: s.entry.row, screen: squadScreen)) }
 
     // MARK: Raids › Now
 
