@@ -258,3 +258,25 @@ the row's strength figure; the chosen tab remembered across relaunches; the stri
 "agreed on the others". The "Rayquaza" / "Mega Rayquaza" naming stays as it is (logged).
 
 Greg, 8 Nov, on the free Mega Evolution chip, asked to choose between '↑ Free' and keeping '↑ Upgrade': "↑ Free". Built as D76 (R6). The Rayquaza / Mega Rayquaza naming stays as it is unless he says "name the Mega slot".
+
+## Phone run 8, 16 Nov 2026 (build 0c166cb, test/greg-build)
+
+The checks the manager listed:
+
+1. The picker opens above the history on Current (Raids, Max, Gym, Rocket, PvP).
+2. The strip shows only once the slot cards have scrolled off and goes when they return; rows of two at the largest text size.
+3. Raids under Max damage, Available: each picker group strongest first, Full strength before Available upgrades (flagged as a
+   manager call); Balanced keeps its order.
+4. The tab survives a relaunch; Set this squad from Available reopens on Available with ✓ Squad set (flagged as a manager call).
+5. Rayquaza's card reads "↑ Free"; "↑ Free" only when Mega Evolution is the only step left (flagged as a manager call).
+6. Optional, carried over from run 7: a history row with a transferred Pokémon shows a hollow disc.
+7. Run 7's greens again: Set, Undo, set again leaves one history entry; Delete current squad asks with the bold line only.
+
+Greg: "all green except 6 which is sitll unchecked. happy with everything".
+
+Manager: nothing to change. The three manager calls stand (D77). Check 6 has now gone untested on the phone in runs 7 and 8; it
+rests on the tests. The Rayquaza / Mega Rayquaza naming stays as it is.
+
+Note: Greg's first build that day came from the main checkout's project (26 Oct code, the Next screen in place of Pogo Hub),
+because the manager had given the project's path without its folder. Greg: "pogo hub is gone and 'next' is back instead". The
+manager opened the test build's project and the run above was done on 0c166cb.
