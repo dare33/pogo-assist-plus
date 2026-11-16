@@ -1,6 +1,9 @@
 import SwiftUI
 import PogoBox
 
+/// The squad cards must come back this far into view before the pinned strip goes again, so it does not flicker at the boundary (D72).
+private let squadCardsReturn: CGFloat = 12
+
 /// The chrome every Hub type screen shares (design handoff section 5): the tab bar hidden, a back circle, the title with an optional
 /// sub line, a count chip, and a content column the caller fills. The Collection screens use it, and so do the squad screens.
 struct HubTypeScreen<Content: View>: View {
@@ -19,6 +22,8 @@ struct HubTypeScreen<Content: View>: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     /// A squad screen's pinned strip of slots, while one of its pickers is open (`View.squadStrip`).
     @State private var strip: SquadStripModel?
+    /// D72: the slot cards have scrolled off the top of the scroll area. The strip is pinned only then (while a picker is open): over the cards themselves it would repeat what they show.
+    @State private var cardsScrolledOff = false
 
     var body: some View {
         // At accessibility text sizes the header is tall (the title and sub line wrap under the back circle), so it scrolls with the page rather than
@@ -35,8 +40,16 @@ struct HubTypeScreen<Content: View>: View {
                 .padding(.horizontal, Theme.Space.screen)
                 .padding(.bottom, 16)
             }
-            // Pinned over the top of the scroll area, so the squad stays in view as the Pokémon list scrolls; the list is inset below it, never pushed off screen.
-            .safeAreaInset(edge: .top, spacing: 0) { if let strip { SquadStripView(model: strip) } }
+            // The named space moves with the strip's safe-area inset, so with the strip shown the cards' frame is measured from the strip's bottom edge, not the scroll view's top. That moves the
+            // return threshold away from the cards (about the strip's height plus `squadCardsReturn`, the extra 12 pt), which is why the flag cannot oscillate at the edge.
+            .coordinateSpace(name: squadScrollSpace)
+            .onPreferenceChange(SquadCardsFrameKey.self) { frame in
+                guard let frame else { cardsScrolledOff = false; return }
+                if !cardsScrolledOff, frame.maxY <= 0 { cardsScrolledOff = true }
+                else if cardsScrolledOff, frame.maxY > squadCardsReturn { cardsScrolledOff = false }
+            }
+            // Pinned over the top of the scroll area once the cards have scrolled off, so the squad stays in view as the Pokémon list scrolls; the list is inset below it, never pushed off screen.
+            .safeAreaInset(edge: .top, spacing: 0) { if let strip, cardsScrolledOff { SquadStripView(model: strip) } }
             .onPreferenceChange(SquadStripKey.self) { strip = $0 }
         }
         .background(Theme.bg.ignoresSafeArea())

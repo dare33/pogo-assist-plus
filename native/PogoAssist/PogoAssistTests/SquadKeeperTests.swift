@@ -119,14 +119,21 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertNil(UserDefaults.standard.data(forKey: SquadKeeper.key(account)), "the old name keeps nothing")
     }
 
-    // MARK: Current | Available | Best (pass 2-5, rule 27): the workspace routes an edit to Current or to a draft
+    // MARK: Available | Best | Current (pass 2-6, rule 27): the workspace routes an edit to Current or to the store's kept edit
 
     /// A squad of three slots filled the way a screen fills it, for the workspace tests.
     private func shown(_ saved: SquadStore.Saved, _ ranked: [String] = ["a", "b", "c", "d"]) -> [FilledSlot] {
         HubSquads.fill(slots: saved.slots, pool: { _, _ in .init(preferred: ranked) })
     }
 
-    func testAnEditOnAvailableOrBestIsADraftNeverStoredAndNeverSwitchesTheTab() {
+    private let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+
+    /// The pill's test as the screens make it: the tab's squad as drawn against the stored Current as drawn.
+    private func isCurrent(_ s: SquadSurface) -> Bool {
+        s.isCurrent(filled: shown(s.squad), currentFilled: { self.shown(s.current ?? SquadStore.Saved(slots: s.defaults)) })
+    }
+
+    func testAnEditOnAvailableOrBestIsKeptInTheStoreAndNeverSwitchesTheTab() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])
         let defaults = HubSquads.defaultRocketSlots(), ref = SquadRef.rocket(leader: "Arlo")
@@ -137,98 +144,330 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertEqual(s.tab, .available, "editing never switches tabs")
         XCTAssertTrue(s.isEdited(filled: shown(s.squad), suggested: { self.shown(SquadStore.Saved(slots: defaults)) }), "the squad as drawn differs from the suggestion")
         XCTAssertEqual(s.squad.slots[0].pick, "d")
-        XCTAssertNil(keeper.store.current(ref), "nothing is stored")
-        XCTAssertNil(SquadKeeper.load(account).current(ref), "and nothing is written")
-        // Switching tabs keeps the draft; the other tab starts from the suggestion.
+        XCTAssertTrue(s.kept, "an edit is drawn as kept, like Current (rule 27.4)")
+        XCTAssertNil(keeper.store.current(ref), "an edit is not a Current")
+        XCTAssertEqual(keeper.store.edit(ref, .available, style: .balanced)?.slots[0].pick, "d", "it is stored")
+        XCTAssertEqual(SquadKeeper.load(account).edit(ref, .available, style: .balanced)?.slots[0].pick, "d", "and written at once")
+        // Switching tabs keeps it; the other tab starts from the suggestion.
         ws.select(.best, ref: ref, keeper: keeper)
         s = ws.surface(ref, store: keeper.store, defaults: defaults)
         XCTAssertEqual(s.tab, .best)
-        XCTAssertFalse(s.differs, "Best starts from the suggestion")
+        XCTAssertFalse(s.differs)
         XCTAssertTrue(s.isBestSuggestion)
+        XCTAssertFalse(s.kept)
         ws.select(.available, ref: ref, keeper: keeper)
-        XCTAssertEqual(ws.surface(ref, store: keeper.store, defaults: defaults).squad.slots[0].pick, "d", "the Available draft is still there")
+        XCTAssertEqual(ws.surface(ref, store: keeper.store, defaults: defaults).squad.slots[0].pick, "d", "the Available edit is still there")
         XCTAssertEqual(keeper.store.mode(for: .rocket), .available, "Available and Best are remembered per screen")
-        // Reset drops the draft at once.
-        ws.reset(ws.surface(ref, store: keeper.store, defaults: defaults))
-        XCTAssertNil(ws.surface(ref, store: keeper.store, defaults: defaults).draft)
+        // Reset to suggestion drops it at once.
+        ws.reset(ws.surface(ref, store: keeper.store, defaults: defaults), keeper: keeper)
+        XCTAssertNil(ws.surface(ref, store: keeper.store, defaults: defaults).edit)
+        XCTAssertNil(SquadKeeper.load(account).edit(ref, .available, style: .balanced))
     }
 
-    func testAnotherScreenInstanceStartsFromTheSuggestionAgain() {
-        // Leaving the screen drops its workspace: a new one holds no draft.
-        let keeper = SquadKeeper()
+    func testAnEditSurvivesLeavingTheScreenAndTheApp() {
+        let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c"])
-        let first = makeWS()
-        let s = first.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots())
-        first.edit(s, keeper: keeper) { $0.choose("c", at: 0, shown: self.shown($0)) }
-        XCTAssertNotNil(first.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots()).draft)
-        let later = makeWS()
-        XCTAssertNil(later.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots()).draft)
+        let s = ws.surface(.gym, store: keeper.store, defaults: HubSquads.defaultGymSlots())
+        ws.edit(s, keeper: keeper) { $0.choose("c", at: 0, shown: self.shown($0)) }
+        // A new screen: a new keeper (read from the phone's defaults) and a new workspace.
+        let later = SquadKeeper(), ws2 = makeWS()
+        attach(later, account, ids: ["a", "b", "c"])
+        XCTAssertEqual(ws2.surface(.gym, store: later.store, defaults: HubSquads.defaultGymSlots()).squad.slots[0].pick, "c")
     }
 
-    func testSaveToCurrentStoresTheDraftKeepsTheTabAndReplacesAnExistingCurrent() {
+    func testRaidsKeepsEachStylesEditsAndASwitchLeavesCurrentAlone() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let r = row("2026-10-20", "2026-10-27"), ref = SquadRef.event(row: r, screen: .raids)
+        let balanced = HubSquads.defaultRaidSlots(style: .balanced), maxDamage = HubSquads.defaultRaidSlots(style: .maxDamage)
+        var s = ws.surface(ref, store: keeper.store, defaults: balanced)
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        keeper.update { $0.raidStyle = .maxDamage }
+        s = ws.surface(ref, store: keeper.store, defaults: maxDamage)
+        XCTAssertNil(s.edit, "the other style starts from its own suggestion")
+        ws.edit(s, keeper: keeper) { $0.choose("c", at: 1, shown: self.shown($0)) }
+        keeper.update { $0.raidStyle = .balanced }
+        XCTAssertEqual(ws.surface(ref, store: keeper.store, defaults: balanced).squad.slots[0].pick, "d", "switching back shows the Balanced edit again")
+        XCTAssertEqual(keeper.store.edits.count, 2)
+    }
+
+    func testSetThisSquadReplacesWithNoQuestionKeepsTheTabAndUndoPutsTheOldOneBack() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])
         let defaults = HubSquads.defaultRocketSlots(), ref = SquadRef.rocket(leader: "Arlo")
         var s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        XCTAssertFalse(isCurrent(s), "no Current: the pill reads Set this squad")
+        // The first set: nothing is replaced, the player stays on Available and the Current segment appears.
+        XCTAssertFalse(ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 41, date: t0))
+        s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        XCTAssertEqual(s.tab, .available, "the player stays on the tab")
+        XCTAssertTrue(s.hasCurrent)
+        XCTAssertTrue(keeper.store.isSet(ref))
+        XCTAssertTrue(isCurrent(s), "the pill reads Squad set")
+        XCTAssertEqual(keeper.store.current(ref)?.strength, 41)
+        XCTAssertEqual(keeper.store.current(ref)?.source, .available)
+        // An edit makes it a different squad: the pill reads Set this squad again; setting replaces, with the old one in the history.
         ws.edit(s, keeper: keeper) { $0.choose("d", at: 1, shown: self.shown($0)) }
         s = ws.surface(ref, store: keeper.store, defaults: defaults)
-        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: false)
+        XCTAssertFalse(isCurrent(s))
+        XCTAssertTrue(ws.setCurrent(s.with(edited: true), keeper: keeper, filled: shown(s.squad), strength: 55, date: t0.addingTimeInterval(60)), "a different Current was replaced")
+        XCTAssertEqual(keeper.store.current(ref)?.slots[1].pick, "d")
+        XCTAssertEqual(keeper.store.current(ref)?.edited, true)
+        XCTAssertEqual(keeper.store.history[ref.key]?.count, 1)
+        XCTAssertEqual(keeper.store.history[ref.key]?.first?.strength, 41, "the old Current keeps the figure it had")
+        XCTAssertEqual(keeper.store.history[ref.key]?.first?.slots[1].pick, "b")
         s = ws.surface(ref, store: keeper.store, defaults: defaults)
-        XCTAssertEqual(s.tab, .available, "the player stays on the tab they are on")
-        XCTAssertTrue(s.hasCurrent, "and the Current tab appears")
-        XCTAssertTrue(s.justSaved, "the squad says Saved to Current")
-        XCTAssertEqual(keeper.store.current(ref)?.slots.map(\.pick), ["a", "d", "c"].map { Optional($0) }, "the draft as shown, every slot kept")
-        XCTAssertEqual(SquadKeeper.load(account).current(ref)?.slots[1].pick, "d", "written at once")
-        // A further edit of the draft is not saved; saving again replaces Current.
-        ws.edit(s, keeper: keeper) { $0.choose("b", at: 2, shown: self.shown($0, ["a", "d", "c", "b"])) }
-        s = ws.surface(ref, store: keeper.store, defaults: defaults)
-        XCTAssertFalse(s.justSaved)
-        XCTAssertEqual(keeper.store.current(ref)?.slots[2].pick, "c", "Current is unchanged until saved")
-        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad, ["a", "d", "c", "b"]), setMark: false)
-        XCTAssertEqual(keeper.store.current(ref)?.slots[2].pick, "b")
+        XCTAssertTrue(isCurrent(s))
+        // Undo: the replaced squad is the Current again and the one just set is dropped.
+        ws.undo(s, keeper: keeper)
+        XCTAssertEqual(keeper.store.current(ref)?.slots[1].pick, "b")
+        XCTAssertEqual(keeper.store.history[ref.key] ?? [], [], "the pushed row is gone")
+        XCTAssertEqual(SquadKeeper.load(account).current(ref)?.slots[1].pick, "b", "written")
     }
 
-    func testAnEditOnCurrentIsStoredAtOnceAndLeavesTheDraftsAlone() {
+    /// D74 and the manager's call on Set this squad: choosing a tab and setting a squad each write the squad's stored tab on their own, and Delete current squad / Squad set unset clears it
+    /// when the player is on Current. Read back through a second keeper, so it is what a relaunch sees.
+    func testSelectAndSetCurrentEachWriteTheStoredTabAndUnsetFromCurrentClearsIt() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        XCTAssertNil(keeper.store.storedTab(.gym))
+        ws.select(.best, ref: .gym, keeper: keeper)
+        XCTAssertEqual(keeper.store.storedTab(.gym), .best, "select stores the tab")
+        XCTAssertEqual(SquadKeeper.load(account).storedTab(.gym), .best, "and writes it at once")
+        // setCurrent on its own, on another squad nothing was selected on: the surface is drawn on Available.
+        let rocket = SquadRef.rocket(leader: "Arlo"), rocketDefaults = HubSquads.defaultRocketSlots()
+        var s = ws.surface(rocket, store: keeper.store, defaults: rocketDefaults)
+        XCTAssertEqual(s.tab, .available)
+        XCTAssertNil(keeper.store.storedTab(rocket))
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 50, date: t0)
+        XCTAssertEqual(keeper.store.storedTab(rocket), .available, "setCurrent stores the tab the squad was set from")
+        // unsetCurrent from the Current tab clears it.
+        ws.select(.current, ref: rocket, keeper: keeper)
+        XCTAssertEqual(keeper.store.storedTab(rocket), .current)
+        s = ws.surface(rocket, store: keeper.store, defaults: rocketDefaults)
+        ws.unsetCurrent(s, keeper: keeper, date: t0.addingTimeInterval(5))
+        XCTAssertNil(keeper.store.storedTab(rocket), "unset from Current clears the stored tab")
+        XCTAssertEqual(keeper.store.storedTab(.gym), .best, "and leaves another squad's alone")
+    }
+
+    func testTappingSquadSetUnsetsAndUndoRestoresIt() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        ws.select(.best, ref: .gym, keeper: keeper)
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 77, date: t0)
+        ws.select(.current, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertEqual(s.tab, .current)
+        ws.unsetCurrent(s, keeper: keeper, date: t0.addingTimeInterval(5))
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertNil(keeper.store.current(.gym))
+        XCTAssertFalse(s.hasCurrent)
+        XCTAssertEqual(s.tab, .best, "the screen shows the remembered tab again")
+        XCTAssertEqual(keeper.store.history["gym"]?.first?.strength, 77, "the entry keeps the figure the stored Current holds")
+        ws.undo(s, keeper: keeper)
+        XCTAssertNotNil(keeper.store.current(.gym), "Undo of an unset puts it back")
+        XCTAssertEqual(keeper.store.history["gym"] ?? [], [])
+    }
+
+    func testSetSquadFromTheHistoryReplacesWithNoQuestionAndTheReplacedOneGoesToTheTop() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 10, date: t0)                                   // a b c ...
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 20, date: t0.addingTimeInterval(60))            // d ... ; history: a ...
+        ws.select(.current, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertTrue(ws.restore(s, keeper: keeper, index: 0, date: t0.addingTimeInterval(120)), "a different Current was replaced")
+        XCTAssertEqual(keeper.store.current(.gym)?.slots[0].pick, "a")
+        XCTAssertEqual(keeper.store.history["gym"]?.first?.slots[0].pick, "d", "the replaced squad is at the top")
+        XCTAssertEqual(keeper.store.history["gym"]?.first?.strength, 20, "the replaced squad is recorded with the figure it holds")
+        XCTAssertTrue(ws.undo(s, keeper: keeper))
+        XCTAssertEqual(keeper.store.current(.gym)?.slots[0].pick, "d", "Undo puts the replaced Current back")
+        XCTAssertEqual(keeper.store.history["gym"]?.first?.slots[0].pick, "a", "and the entry is back at its place (H1)")
+        XCTAssertFalse(ws.undo(s, keeper: keeper), "the record is cleared")
+    }
+
+    func testAnEditOnCurrentIsStoredAtOnceAndLeavesTheEditsAlone() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])
         let defaults = HubSquads.defaultPvpSlots(), ref = SquadRef.pvp(league: "gl")
         var s = ws.surface(ref, store: keeper.store, defaults: defaults)
         ws.edit(s, keeper: keeper) { $0.choose("c", at: 0, shown: self.shown($0)) }
-        ws.saveToCurrent(ws.surface(ref, store: keeper.store, defaults: defaults), keeper: keeper, filled: shown(ws.surface(ref, store: keeper.store, defaults: defaults).squad), setMark: false)
+        s = ws.surface(ref, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 30, date: t0)
         ws.select(.current, ref: ref, keeper: keeper)
         s = ws.surface(ref, store: keeper.store, defaults: defaults)
         XCTAssertEqual(s.tab, .current)
         XCTAssertTrue(s.kept)
         ws.edit(s, keeper: keeper) { $0.choose("d", at: 2, shown: self.shown($0, ["c", "a", "b", "d"])) }
         XCTAssertEqual(keeper.store.current(ref)?.slots[2].pick, "d", "Current saves straight away")
+        XCTAssertNil(keeper.store.current(ref)?.strength, "and the figure it was set with no longer describes it")
         XCTAssertEqual(SquadKeeper.load(account).current(ref)?.slots[2].pick, "d")
         XCTAssertEqual(ws.surface(ref, store: keeper.store, defaults: defaults).tab, .current, "and stays on Current")
         XCTAssertEqual(keeper.store.mode(for: .pvp), .available, "choosing Current does not change the remembered Available | Best")
+        XCTAssertEqual(keeper.store.edit(ref, .available, style: .balanced)?.slots[0].pick, "c", "the Available edit is untouched")
+        XCTAssertTrue(keeper.store.history.isEmpty, "edits on Current make no history row")
     }
 
-    func testDeleteCurrentSquadRemovesItAndShowsTheRememberedTab() {
+    /// H6: a player's edit on Current clears the figure and the strength task writes the new one back (edited stays); an automatic refill does neither.
+    func testTheStrengthTaskWritesTheCurrentsFigureBackAndARefillIsNotAnEdit() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])
         let defaults = HubSquads.defaultGymSlots()
-        ws.select(.best, ref: .gym, keeper: keeper)
         var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
-        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: true)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 30, date: t0)
         ws.select(.current, ref: .gym, keeper: keeper)
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertEqual(s.current?.isSet, true, "Set this squad on Best saved it and set the mark")
-        ws.deleteCurrent(s, keeper: keeper)
+        // An automatic refill: a slot with no kept Pokémon takes what the screen shows, and the Current keeps its figure and is not marked edited.
+        keeper.update { $0.gym.slots[0].pick = nil }
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertNil(keeper.store.current(.gym))
-        XCTAssertEqual(s.tab, .best, "back to the remembered tab")
-        XCTAssertTrue(s.draft != nil, "Available and Best are not changed")
+        ws.adopt(s, keeper: keeper, filled: shown(s.squad))
+        XCTAssertEqual(keeper.store.current(.gym)?.slots[0].pick, "a")
+        XCTAssertEqual(keeper.store.current(.gym)?.strength, 30, "a refill does not clear the figure")
+        XCTAssertNotEqual(keeper.store.current(.gym)?.edited, true, "and is not the player's edit")
+        // The player's edit clears the figure; the task then writes it back, edited stays true.
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 1, shown: self.shown($0)) }
+        XCTAssertNil(keeper.store.current(.gym)?.strength)
+        XCTAssertEqual(keeper.store.current(.gym)?.edited, true)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.record(s, keeper: keeper, strength: 64, for: s.squad.slots)
+        XCTAssertEqual(keeper.store.current(.gym)?.strength, 64)
+        XCTAssertEqual(keeper.store.current(.gym)?.edited, true)
+        // Replacing it now records that figure, not "—".
+        ws.select(.available, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.record(s, keeper: keeper, strength: 99, for: s.squad.slots)
+        XCTAssertEqual(keeper.store.current(.gym)?.strength, 64, "only the Current tab writes the Current's figure")
+        ws.edit(s, keeper: keeper) { $0.choose("c", at: 0, shown: self.shown($0)) }
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 70, date: t0.addingTimeInterval(60))
+        XCTAssertEqual(keeper.store.history["gym"]?.first?.strength, 64)
+        // Delete records the same way.
+        ws.unsetCurrent(ws.surface(.gym, store: keeper.store, defaults: defaults), keeper: keeper, date: t0.addingTimeInterval(120))
+        XCTAssertEqual(keeper.store.history["gym"]?.first?.strength, 70)
+    }
+
+    /// J3: an edit of the Current that leaves its slots as they were (choosing the Pokémon already in the slot) is no edit: the figure and `edited` are untouched, so the next Set or Delete
+    /// still records the figure.
+    func testAnEditThatChangesNothingKeepsTheCurrentsFigure() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 55, date: t0)
+        ws.select(.current, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        let before = keeper.store.current(.gym)
+        let pick = before?.slots[0].pick
+        XCTAssertNotNil(pick)
+        ws.edit(s, keeper: keeper) { $0.choose(pick!, at: 0, shown: self.shown($0)) }
+        XCTAssertEqual(keeper.store.current(.gym), before, "the same Pokémon in the same slot writes nothing")
+        XCTAssertEqual(keeper.store.current(.gym)?.strength, 55)
+        XCTAssertNotEqual(keeper.store.current(.gym)?.edited, true)
+        // A real change still clears it.
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        XCTAssertNil(keeper.store.current(.gym)?.strength)
+        XCTAssertEqual(keeper.store.current(.gym)?.edited, true)
+    }
+
+    /// J11: a late figure is written only to the Current it was computed for. After a history Set squad put another squad there, it is dropped.
+    func testALateFigureIsNotWrittenToARestoredSquad() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: nil, date: t0)
+        ws.select(.current, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        let computedFor = s.squad.slots
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        let after = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertNotEqual(after.squad.slots, computedFor)
+        ws.record(s, keeper: keeper, strength: 77, for: computedFor)
+        XCTAssertNil(keeper.store.current(.gym)?.strength, "a figure for slots the Current no longer holds is dropped")
+        ws.record(after, keeper: keeper, strength: 66, for: after.squad.slots)
+        XCTAssertEqual(keeper.store.current(.gym)?.strength, 66)
+    }
+
+    /// H1: through the workspace, Undo reverses the last change exactly and a change that left nothing to undo gives a toast with no Undo.
+    func testUndoThroughTheWorkspaceReversesTheLastChangeAndNoRecordMeansNoUndoAction() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        func surface() -> SquadSurface { ws.surface(.gym, store: keeper.store, defaults: defaults) }
+        func set(_ pick: String, _ n: Int) {
+            let s = surface()
+            ws.edit(s, keeper: keeper) { $0.choose(pick, at: 0, shown: self.shown($0)) }
+            let e = surface()
+            ws.setCurrent(e, keeper: keeper, filled: shown(e.squad), strength: n, date: t0.addingTimeInterval(Double(n)))
+            ws.reset(surface(), keeper: keeper)
+        }
+        set("a", 1); set("b", 2); set("c", 3)           // Current c; history [b, a]
+        func history() -> [String?] { (keeper.store.history["gym"] ?? []).map { $0.slots[0].pick } }
+        XCTAssertEqual(history(), ["b", "a"])
+        XCTAssertNotNil(ws.undoAction(surface(), keeper: keeper))
+        ws.select(.current, ref: .gym, keeper: keeper)
+        XCTAssertTrue(ws.restore(surface(), keeper: keeper, index: 1, date: t0.addingTimeInterval(10)))
+        XCTAssertEqual(keeper.store.current(.gym)?.slots[0].pick, "a")
+        XCTAssertEqual(history(), ["c", "b"])
+        let action = ws.undoAction(surface(), keeper: keeper)
+        XCTAssertNotNil(action)
+        XCTAssertEqual(action?.perform(), true, "Undo reports that it undid something")
+        XCTAssertEqual(keeper.store.current(.gym)?.slots[0].pick, "c")
+        XCTAssertEqual(history(), ["b", "a"], "Undo gives back Current C and history [B, A]")
+        XCTAssertNil(ws.undoAction(surface(), keeper: keeper), "the record is cleared: the toast carries no Undo")
+        XCTAssertFalse(ws.undo(surface(), keeper: keeper))
+        XCTAssertEqual(history(), ["b", "a"])
+    }
+
+    /// H9: the pill compares the squad as drawn with the Current as drawn. After a re-scan empties one of the Current's picks, the Current draws what the slot refills with, so an Available
+    /// squad drawn the same still reads Squad set (the raw stored slots differ).
+    func testThePillComparesTheSquadAsDrawnWithTheCurrentAsDrawn() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: nil, date: t0)
+        keeper.update { $0.gym.slots[0].pick = nil }                      // the re-scan emptied a pick; nothing has adopted the refill yet
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertNil(keeper.store.current(.gym)?.slots[0].pick)
+        XCTAssertTrue(isCurrent(s), "drawn the same, so the pill reads Squad set")
+        XCTAssertNotEqual(s.current?.slots, SquadStore.Saved(slots: defaults).slots)
+    }
+
+    /// H8: a squad brought back from the history or by Undo is reconciled with the box: a copy that was transferred is emptied, so its slot refills.
+    func testRestoringARowHoldingATransferredCopyEmptiesItsSlot() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        attach(keeper, account, ids: ["a", "b", "c", "d"])
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 1, date: t0)                       // a b c ...
+        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 2, date: t0.addingTimeInterval(1)) // d ...; history [a ...]
+        // The copy "a" is transferred while the screen is open: the box no longer holds it. The history keeps naming it.
+        attach(keeper, account, ids: ["b", "c", "d"])
+        XCTAssertEqual(keeper.store.history["gym"]?.first?.slots[0].pick, "a")
+        ws.select(.current, ref: .gym, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertTrue(ws.restore(s, keeper: keeper, index: 0, date: t0.addingTimeInterval(2)))
+        XCTAssertNil(keeper.store.current(.gym)?.slots[0].pick, "the transferred copy is dropped, so the slot refills by the rules")
+        XCTAssertEqual(keeper.store.history["gym"]?.first?.slots[0].pick, "d")
+        // Undo reconciles too: D came back from the history; transfer it, then undo the restore.
+        attach(keeper, account, ids: ["b", "c"])
+        XCTAssertTrue(ws.undo(ws.surface(.gym, store: keeper.store, defaults: defaults), keeper: keeper))
+        XCTAssertNil(keeper.store.current(.gym)?.slots[0].pick, "an undone squad never names a copy that left")
     }
 
     // MARK: fold round 1
 
-    /// H1: another account starts with no drafts, and a surface drawn for one account cannot save into another's store.
-    func testAnotherAccountShowsNoDraftAndASurfaceFromTheFirstCannotSaveIntoIt() {
+    /// H1: another account starts with no edit, and a surface drawn for one account cannot set into another's store.
+    func testAnotherAccountShowsNoEditAndASurfaceFromTheFirstCannotSetIntoIt() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c"])
         ws.attach(account: account, boxIds: ["a", "b", "c"])
@@ -236,18 +475,18 @@ final class SquadKeeperTests: XCTestCase {
         var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         ws.edit(s, keeper: keeper) { $0.choose("c", at: 0, shown: self.shown($0)) }
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertNotNil(s.draft)
+        XCTAssertNotNil(s.edit)
         attach(keeper, other, ids: ["a", "b", "c"])
         ws.attach(account: other, boxIds: ["a", "b", "c"])
-        XCTAssertNil(ws.surface(.gym, store: keeper.store, defaults: defaults).draft, "the new account's screen starts as on first open")
-        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: false)
-        XCTAssertNil(keeper.store.current(.gym), "the first account's draft was not written into the second account's store")
+        XCTAssertNil(ws.surface(.gym, store: keeper.store, defaults: defaults).edit, "the new account's screen starts as on first open")
+        XCTAssertFalse(ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: nil))
+        XCTAssertNil(keeper.store.current(.gym), "the first account's squad was not written into the second account's store")
         XCTAssertNil(SquadKeeper.load(other).current(.gym))
     }
 
-    /// H2 and J3: a draft follows the box: a pick whose copy left is emptied, that slot alone refills with a copy that is in the attached box, and the exact adopted id is kept;
-    /// an id that is not in the box is refused (J1).
-    func testADraftPickWhoseCopyLeftTheBoxIsEmptiedAndTheRefillIsKept() {
+    /// H2 and J3: an edit follows the box: a pick whose copy left is emptied (by the store's refresh), that slot alone refills with a copy that is in the attached box, and the exact
+    /// adopted id is kept; an id that is not in the box is refused (J1).
+    func testAnEditPickWhoseCopyLeftTheBoxIsEmptiedAndTheRefillIsKept() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])
         ws.attach(account: account, boxIds: ["a", "b", "c", "d"])
@@ -255,6 +494,7 @@ final class SquadKeeperTests: XCTestCase {
         var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
         let before = ws.surface(.gym, store: keeper.store, defaults: defaults).squad.slots.map(\.pick)
+        attach(keeper, account, ids: ["a", "b", "c", "e"])
         ws.attach(account: account, boxIds: ["a", "b", "c", "e"])
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         XCTAssertNil(s.squad.slots[0].pick, "no ghost id")
@@ -268,11 +508,11 @@ final class SquadKeeperTests: XCTestCase {
         let filled = shown(s.squad, ["a", "b", "c", "e"])
         XCTAssertTrue(s.squad.needsAdopting(filled))
         ws.adopt(s, keeper: keeper, filled: filled)
-        XCTAssertEqual(ws.surface(.gym, store: keeper.store, defaults: defaults).squad.slots[0].pick, "e", "and the refill is kept in the draft")
+        XCTAssertEqual(ws.surface(.gym, store: keeper.store, defaults: defaults).squad.slots[0].pick, "e", "and the refill is kept in the edit")
     }
 
-    /// J1: every write is guarded by the account: an edit or an adopt captured under one account and run after attaching another writes nothing, to Current or to a draft.
-    func testAnEditOrAdoptCapturedUnderAnotherAccountWritesNothing() {
+    /// J1: every write is guarded by the account: an edit, a set, a reset or an adopt captured under one account and run after attaching another writes nothing.
+    func testAnEditSetOrAdoptCapturedUnderAnotherAccountWritesNothing() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])
         ws.attach(account: account, boxIds: ["a", "b", "c", "d"])
@@ -280,20 +520,24 @@ final class SquadKeeperTests: XCTestCase {
         var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: false)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: nil)
         ws.select(.current, ref: .gym, keeper: keeper)
-        let draftSurface = ws.surface(.gym, store: keeper.store, defaults: defaults)    // on Current, drawn for account A
+        let currentSurface = ws.surface(.gym, store: keeper.store, defaults: defaults)    // on Current, drawn for account A
         ws.select(.available, ref: .gym, keeper: keeper)
         let availableSurface = ws.surface(.gym, store: keeper.store, defaults: defaults)
         attach(keeper, other, ids: ["a", "b", "c", "d"])
         ws.attach(account: other, boxIds: ["a", "b", "c", "d"])
         let storeB = keeper.store
-        ws.edit(draftSurface, keeper: keeper) { $0.choose("c", at: 1, shown: self.shown($0)) }
+        ws.edit(currentSurface, keeper: keeper) { $0.choose("c", at: 1, shown: self.shown($0)) }
         ws.edit(availableSurface, keeper: keeper) { $0.choose("c", at: 1, shown: self.shown($0)) }
+        ws.reset(availableSurface, keeper: keeper)
+        ws.unsetCurrent(currentSurface, keeper: keeper)
+        ws.undo(currentSurface, keeper: keeper)
+        XCTAssertFalse(ws.restore(currentSurface, keeper: keeper, index: 0))
         var empty = availableSurface.squad; empty.slots[0].pick = nil
         ws.adopt(availableSurface, keeper: keeper, filled: shown(empty, ["x"]))
         XCTAssertEqual(keeper.store, storeB, "the second account's store is untouched")
-        XCTAssertNil(ws.surface(.gym, store: keeper.store, defaults: defaults).draft, "and so are its drafts")
+        XCTAssertNil(ws.surface(.gym, store: keeper.store, defaults: defaults).edit, "and so are its edits")
         XCTAssertNil(SquadKeeper.load(other).current(.gym))
     }
 
@@ -312,64 +556,27 @@ final class SquadKeeperTests: XCTestCase {
         XCTAssertNotNil(again.store.current(.gym), "a later box change refills instead of dropping Current")
     }
 
-    /// H5 and H17: after Delete, Save shows again for the draft and "Saved to Current" does not; replacing Current from another tab also ends it.
-    func testDeleteCurrentEndsSavedToCurrentAndSaveShowsAgain() {
-        let keeper = SquadKeeper(), ws = makeWS()
-        attach(keeper, account, ids: ["a", "b", "c", "d"])
-        ws.attach(account: account, boxIds: ["a", "b", "c", "d"])
-        let defaults = HubSquads.defaultGymSlots()
-        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
-        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: false)
-        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertTrue(s.justSaved)
-        ws.select(.best, ref: .gym, keeper: keeper)
-        var best = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.edit(best, keeper: keeper) { $0.choose("c", at: 1, shown: self.shown($0)) }
-        best = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.saveToCurrent(best, keeper: keeper, filled: shown(best.squad), setMark: false)
-        ws.select(.available, ref: .gym, keeper: keeper)
-        XCTAssertFalse(ws.surface(.gym, store: keeper.store, defaults: defaults).justSaved, "Current was replaced from another tab")
-        ws.deleteCurrent(ws.surface(.gym, store: keeper.store, defaults: defaults), keeper: keeper)
-        ws.select(.best, ref: .gym, keeper: keeper)
-        let after = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertFalse(after.justSaved, "after Delete the squad does not say Saved to Current")
-        XCTAssertNotNil(after.draft, "and the draft is still there to be saved again")
-    }
-
-    /// H12: the replace question is for a Current that is a different squad; the set mark is not part of the squad.
-    func testReplacingIsAskedOnlyWhenTheShownSquadDiffersFromCurrent() {
-        let keeper = SquadKeeper(), ws = makeWS()
-        attach(keeper, account, ids: ["a", "b", "c", "d"])
-        ws.attach(account: account, boxIds: ["a", "b", "c", "d"])
-        let defaults = HubSquads.defaultGymSlots()
-        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertFalse(s.replaces(filled: shown(s.squad)), "no Current: nothing to replace")
-        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: false)
-        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertFalse(s.replaces(filled: shown(s.squad)), "the unedited suggestion is the Current already")
-        keeper.update { var c = $0.current(.gym)!; c.isSet = true; $0.setCurrent(c, .gym) }
-        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertFalse(s.replaces(filled: shown(s.squad)), "the set mark is ignored")
-        ws.edit(s, keeper: keeper) { $0.choose("d", at: 0, shown: self.shown($0)) }
-        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertTrue(s.replaces(filled: shown(s.squad)), "a different squad would be replaced")
-    }
-
-    /// H6 and H17: a draft that is drawn the same as the suggestion is not edited, however it got there; "Set this squad" on an unedited tab leaves it unedited.
-    func testADraftDrawnLikeTheSuggestionIsNotEdited() {
+    /// H6 and H17: an edit that is drawn the same as the suggestion is not edited, however it got there; "Set this squad" on an unedited Best tab leaves it unedited and the pill reads set.
+    func testAnEditDrawnLikeTheSuggestionIsNotEdited() {
         let keeper = SquadKeeper(), ws = makeWS()
         attach(keeper, account, ids: ["a", "b", "c", "d"])
         ws.attach(account: account, boxIds: ["a", "b", "c", "d"])
         let defaults = HubSquads.defaultGymSlots()
         var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         let suggestion = { self.shown(SquadStore.Saved(slots: defaults)) }
-        // Re-choosing the ticked Pokemon: a draft exists (the store's keeping flag is set) but the squad is drawn as the suggestion.
+        // Re-choosing the ticked Pokemon: the squad is drawn as the suggestion, so it is not an edit (H2): the stored edit is dropped.
         ws.edit(s, keeper: keeper) { $0.choose("a", at: 0, shown: self.shown($0)) }
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        XCTAssertNotNil(s.draft)
+        XCTAssertNotNil(s.edit, "stored by the tap")
         XCTAssertFalse(s.isEdited(filled: shown(s.squad), suggested: suggestion))
+        let stale = s.with(edited: false)
+        XCTAssertTrue(stale.editIsStale)
+        ws.dropUneditedEdit(stale, keeper: keeper)
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        XCTAssertNil(s.edit, "an edit drawn like the suggestion is not an edit")
+        XCTAssertFalse(keeper.store.differs(.gym, .available, style: .balanced))
+        ws.edit(s, keeper: keeper) { $0.choose("a", at: 0, shown: self.shown($0)) }
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         // A role flipped and flipped back.
         ws.edit(s, keeper: keeper) { $0.changeRole(at: 1, to: "Other", fits: { _ in true }, shown: self.shown($0)) }
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
@@ -377,16 +584,64 @@ final class SquadKeeperTests: XCTestCase {
         ws.edit(s, keeper: keeper) { $0.changeRole(at: 1, to: HubSquads.gymSlotRole, fits: { _ in true }, shown: self.shown($0)) }
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         XCTAssertFalse(s.isEdited(filled: shown(s.squad), suggested: suggestion))
-        // "Set this squad" on an unedited Best tab saves it and leaves it unedited, so it still reads as the best squad.
-        ws.reset(s)
+        ws.reset(s, keeper: keeper)
         ws.select(.best, ref: .gym, keeper: keeper)
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
-        ws.saveToCurrent(s, keeper: keeper, filled: shown(s.squad), setMark: true)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: 100)
         s = ws.surface(.gym, store: keeper.store, defaults: defaults)
         let edited = s.with(edited: s.isEdited(filled: shown(s.squad), suggested: suggestion))
         XCTAssertFalse(edited.differs)
         XCTAssertTrue(edited.isBestSuggestion)
-        XCTAssertTrue(edited.justSaved, "it still says Saved to Current")
+        XCTAssertTrue(isCurrent(edited), "the pill reads Squad set")
         XCTAssertEqual(keeper.store.current(.gym)?.isSet, true)
+        XCTAssertEqual(keeper.store.current(.gym)?.source, .best)
+        XCTAssertEqual(keeper.store.current(.gym)?.edited, false)
+    }
+
+    /// Names are remembered while a copy is in the box, so a history row can name one that left (CONCEPTS rule 27.10).
+    func testTheKeeperRemembersTheNamesOfCopiesASquadHoldsAndKeepsThemAfterTheCopyLeaves() {
+        let keeper = SquadKeeper(), ws = makeWS()
+        keeper.attach(account: account, today: "2026-10-26", rotation: [], boxIds: ["a", "b", "c"], names: ["a": "Alpha", "b": "Beta", "c": "Gamma"], screen: .gym)
+        let defaults = HubSquads.defaultGymSlots()
+        var s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.setCurrent(s, keeper: keeper, filled: shown(s.squad), strength: nil, date: t0)
+        XCTAssertEqual(keeper.store.pickName(for: "a", area: "gym"), "Alpha")
+        s = ws.surface(.gym, store: keeper.store, defaults: defaults)
+        ws.unsetCurrent(s, keeper: keeper, date: t0.addingTimeInterval(1))
+        // A re-scan: copy a is gone from the box.
+        keeper.attach(account: account, today: "2026-10-26", rotation: [], boxIds: ["b", "c"], names: ["b": "Beta", "c": "Gamma"], screen: .gym)
+        XCTAssertEqual(keeper.store.pickName(for: "a", area: "gym"), "Alpha", "the history entry still names it")
+        XCTAssertEqual(SquadKeeper.load(account).pickName(for: "a", area: "gym"), "Alpha")
+    }
+
+    // MARK: the history rows
+
+    func testTheHistoryDateReadsTodayYesterdayOrTheDay() {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Australia/Sydney")!
+        let locale = Locale(identifier: "en_AU")
+        let now = cal.date(from: DateComponents(year: 2026, month: 11, day: 7, hour: 12, minute: 0))!
+        func at(_ d: Int, _ h: Int, _ m: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: 11, day: d, hour: h, minute: m))! }
+        let today = HistoryRowModel.when(at(7, 10, 16), now: now, calendar: cal, locale: locale)
+        let yesterday = HistoryRowModel.when(at(6, 18, 40), now: now, calendar: cal, locale: locale)
+        let older = HistoryRowModel.when(at(5, 9, 12), now: now, calendar: cal, locale: locale)
+        XCTAssertTrue(today.hasPrefix("Today ") && today.contains("10:16"), today)
+        XCTAssertTrue(yesterday.hasPrefix("Yesterday ") && yesterday.contains("6:40"), yesterday)
+        XCTAssertTrue(older.hasPrefix("5 Nov ") && older.contains("9:12"), older)
+    }
+
+    func testAHistoryRowSpeaksTheDateEachPokemonAndTheFigureAndMarksWhatLeftTheBox() {
+        let p = SquadPalette.grey
+        let discs = [HistoryDisc(name: "Gardevoir", palette: p), HistoryDisc(name: "Xerneas", palette: p), HistoryDisc(name: "Zacian", palette: p, present: false),
+                     HistoryDisc(name: "Shadow Granbull", palette: p), HistoryDisc(name: nil, palette: p)]
+        let row = HistoryRowModel(index: 0, when: "Today 10:16", discs: discs, percent: "41%")
+        XCTAssertEqual(row.spoken, "Today 10:16, Gardevoir, Xerneas, Zacian not in your box, Granbull (Shadow), empty slot, 41% of best")
+        XCTAssertEqual(discs[0].letter, "G"); XCTAssertEqual(discs[3].letter, "G", "the letter of the box name"); XCTAssertNil(discs[4].letter)
+        // H14: a departed Pokémon nothing remembers the name of is a hollow disc with "?", not a grey empty one.
+        let unknown = HistoryDisc(name: nil, palette: p, present: false)
+        XCTAssertEqual(unknown.letter, "?"); XCTAssertEqual(unknown.spoken, "a Pokémon not in your box")
+        XCTAssertTrue(HistoryRowModel(index: 1, when: "x", discs: [], percent: "—").spoken.hasSuffix("no figure"))
+        XCTAssertTrue(HistoryRowModel(index: 1, when: "x", discs: [], percent: "100%").spoken.hasSuffix(", 100%"))
+        let rows = HistoryRowModel.rows([HistoryEntry(date: t0, slots: [SquadSlot(role: "X", pick: "a")], source: .best, edited: false, strength: nil)], now: t0) { _ in HistoryDisc(name: "A", palette: p) }
+        XCTAssertEqual(rows.first?.percent, "—", "a figure that was not worked out reads —")
     }
 }

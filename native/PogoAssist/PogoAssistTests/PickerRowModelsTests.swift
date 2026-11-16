@@ -91,6 +91,199 @@ final class PickerRowModelsTests: XCTestCase {
         XCTAssertLessThan(perSlot, 40, "one game master hash per picker, not one per row")
     }
 
+    /// H4: Raids Best rows are worked out in a background task and cached; the view only looks them up. The ranking never runs on the main thread, a read is not a computation, and a box
+    /// change drops what was ranked.
+    @MainActor
+    func testRaidsBestRowsAreRankedOffTheMainThreadAndOnlyReadFromTheCache() async throws {
+        final class Probe: @unchecked Sendable {
+            private let lock = NSLock()
+            private var onMain = 0, total = 0
+            func hit() { lock.lock(); total += 1; if Thread.isMainThread { onMain += 1 }; lock.unlock() }
+            var counts: (onMain: Int, total: Int) { lock.lock(); defer { lock.unlock() }; return (onMain, total) }
+        }
+        let c = ctx()
+        let row = try XCTUnwrap(Self.hub.rotation.first { $0.kind == .fiveStar && $0.bosses.contains { $0.speciesId == "palkia" } })
+        let keeper = SquadKeeper(), probe = Probe()
+        keeper.computeRaidRows = { r, context in probe.hit(); return HubSquads.bestRaidRows(row: r, ctx: context) }
+        let key = keeper.raidRowsKey(row, style: .balanced, today: c.today)
+        XCTAssertNil(keeper.cachedRaidRows(key), "nothing is ranked until asked")
+        XCTAssertEqual(probe.counts.total, 0, "a read is a lookup")
+        keeper.prefetchRaidRows([row], style: .balanced, ctx: c)
+        var waited = 0
+        while keeper.cachedRaidRows(key) == nil && waited < 600 { try await Task.sleep(nanoseconds: 100_000_000); waited += 1 }
+        let rows = try XCTUnwrap(keeper.cachedRaidRows(key), "the ranking arrives")
+        XCTAssertFalse(rows.isEmpty)
+        XCTAssertEqual(probe.counts.onMain, 0, "the ranking was never entered on the main thread")
+        XCTAssertEqual(probe.counts.total, 1)
+        for _ in 0..<5 { _ = keeper.cachedRaidRows(key) }
+        keeper.prefetchRaidRows([row], style: .balanced, ctx: c)
+        XCTAssertEqual(probe.counts.total, 1, "reading the cache, and asking again, rank nothing more")
+        // The screen's builder reads the rows it is given and does not rank (given none it would list the whole ranking).
+        let given = EventPickerBuilder(screen: .raids, row: row, ctx: c, raidRows: [])
+        XCTAssertTrue(given.resolve(slots: HubSquads.defaultRaidSlots(), mode: .best).options.isEmpty, "the injected rows are the Best list")
+        XCTAssertFalse(EventPickerBuilder(screen: .raids, row: row, ctx: c, raidRows: rows).resolve(slots: HubSquads.defaultRaidSlots(), mode: .best).options.isEmpty)
+        // A change to the box or its advice drops what was ranked.
+        keeper.boxChanged()
+        XCTAssertNil(keeper.cachedRaidRows(keeper.raidRowsKey(row, style: .balanced, today: c.today)))
+        XCTAssertNil(keeper.cachedRaidRows(key))
+    }
+
+    /// J1: the Raids Best rows are needed (and the squad waits for the cache) whenever the body resolves a squad that holds a species pick, the Current included, never otherwise under Available.
+    func testTheBodyNeedsTheRaidRowsForAnySquadItResolvesWithASpeciesPick() {
+        let plain = [SquadSlot(role: "Mega", pick: "a"), SquadSlot(role: "Heavy hitter")]
+        let species = [SquadSlot(role: "Mega"), SquadSlot(role: "Heavy hitter", species: "palkia")]
+        XCTAssertTrue(EventSquadView.needsRaidRows(mode: .available, shown: plain, current: species), "the pill draws the Current, which holds a species pick")
+        XCTAssertFalse(EventSquadView.needsRaidRows(mode: .available, shown: plain, current: plain), "no species picks under Available: nothing to wait for")
+        XCTAssertFalse(EventSquadView.needsRaidRows(mode: .available, shown: plain, current: nil))
+        XCTAssertTrue(EventSquadView.needsRaidRows(mode: .available, shown: species, current: nil), "the shown tab's own species pick")
+        XCTAssertTrue(EventSquadView.needsRaidRows(mode: .best, shown: plain, current: nil), "Best always")
+    }
+
+    /// J1: the builder the view makes never ranks. With no rows it lists none and the ranking is not entered; the default (tests, background callers) still ranks on the spot.
+    func testABuilderThatMayNotRankOnTheSpotListsNoRowsAndDoesNotRank() throws {
+        let c = ctx()
+        let row = try XCTUnwrap(Self.hub.rotation.first { $0.kind == .fiveStar && $0.bosses.contains { $0.speciesId == "palkia" } })
+        final class Counter: @unchecked Sendable { private let lock = NSLock(); private var n = 0; func hit() { lock.lock(); n += 1; lock.unlock() }; var count: Int { lock.lock(); defer { lock.unlock() }; return n } }
+        let counter = Counter()
+        var b = EventPickerBuilder(screen: .raids, row: row, ctx: c)
+        b.rank = { r, context in counter.hit(); return HubSquads.bestRaidRows(row: r, ctx: context) }
+        b.rowsOnTheSpot = false
+        XCTAssertTrue(b.bestRows().isEmpty)
+        XCTAssertTrue(b.resolve(slots: HubSquads.defaultRaidSlots(), mode: .best).options.isEmpty)
+        XCTAssertEqual(b.reference(style: .balanced).compactMap { $0 }.count, 0, "and the strength reference works nothing out")
+        XCTAssertEqual(counter.count, 0, "the ranking was never called")
+        b.rowsOnTheSpot = true
+        XCTAssertFalse(b.bestRows().isEmpty, "a builder that may rank still does")
+        XCTAssertEqual(counter.count, 1)
+        // Max has a table, not a ranking: the flag does not touch it.
+        var max = EventPickerBuilder(screen: .max, row: row, ctx: c)
+        max.rowsOnTheSpot = false
+        XCTAssertEqual(max.bestRows().count, EventPickerBuilder(screen: .max, row: row, ctx: c).bestRows().count)
+    }
+
+    /// J2: a tap that waits for the Best rows can tell the box moved: the keeper's generation changes with the box, and the ranking finished for the old box is not stored.
+    @MainActor
+    func testABoxChangeDuringARankingMovesTheGenerationAndTheOldResultIsNotStored() async throws {
+        let row = try XCTUnwrap(Self.hub.rotation.first { !$0.bosses.isEmpty })
+        let c = ctx(today: row.from)
+        let keeper = SquadKeeper()
+        let before = keeper.boxGeneration
+        let key = keeper.raidRowsKey(row, style: .balanced, today: c.today)
+        keeper.computeRaidRows = { _, _ in
+            // The box changes while the ranking is being worked out (the main actor is free: the caller is suspended).
+            DispatchQueue.main.sync { MainActor.assumeIsolated { keeper.boxChanged() } }
+            return []
+        }
+        _ = await keeper.raidRowsNow(row, style: .balanced, ctx: c)
+        XCTAssertNotEqual(keeper.boxGeneration, before, "the caller sees that the box moved")
+        XCTAssertNil(keeper.cachedRaidRows(key), "the result for the old box is not stored")
+        XCTAssertNil(keeper.cachedRaidRows(keeper.raidRowsKey(row, style: .balanced, today: c.today)))
+    }
+
+    /// H3: the name a store remembers, and a history disc shows, is the build of the screen's own area, so a disc's letter matches the slot card.
+    func testARememberedNameTakesTheBuildOfTheScreensOwnArea() throws {
+        let c = ctx()
+        let b = try XCTUnwrap(c.advice.builds.first { $0.areas.contains("Raids") })
+        var gym = b; gym.targetName = "Gym Target"; gym.areas = ["Gym"]
+        var raids = b; raids.targetName = "Raids Target"; raids.areas = ["Raids"]
+        let builds = [gym, raids]
+        XCTAssertEqual(squadPickNames(entries: c.entries, builds: builds, screen: .raids)[b.entryId], "Raids Target")
+        XCTAssertEqual(squadPickNames(entries: c.entries, builds: builds, screen: .gym)[b.entryId], "Gym Target")
+        XCTAssertEqual(squadPickName(b.entryId, entries: c.entries, builds: builds, screen: .raids), "Raids Target")
+        let title = try XCTUnwrap(c.entry(b.entryId)).row.title
+        XCTAssertEqual(squadPickNames(entries: c.entries, builds: [gym], screen: .max)[b.entryId], SquadWords.boxName(title), "no build of the area: the box title")
+        XCTAssertNil(squadPickName("not-in-the-box", entries: c.entries, builds: builds, screen: .raids))
+    }
+
+    /// J4: a copy's remembered name is per screen. Attaching Raids and then Gym keeps both names, and each screen reads its own (a departed copy's history disc included).
+    @MainActor
+    func testARememberedNameIsKeptPerScreen() throws {
+        let c = ctx()
+        let row = try XCTUnwrap(Self.hub.rotation.first { $0.kind == .fiveStar })
+        let b = try XCTUnwrap(c.advice.builds.first { $0.areas.contains("Raids") })
+        var gym = b; gym.targetName = "Gym Target"; gym.areas = ["Gym"]
+        var raids = b; raids.targetName = "Raids Target"; raids.areas = ["Raids"]
+        let builds = [gym, raids]
+        let account = "Picker Row Test Names"
+        defer { UserDefaults.standard.removeObject(forKey: SquadKeeper.key(account)) }
+        let ids = Set(c.entries.map(\.id))
+        let keeper = SquadKeeper()
+        func attach(_ screen: SquadScreen) {
+            keeper.attach(account: account, today: row.from, rotation: [row], boxIds: ids, names: squadPickNames(entries: c.entries, builds: builds, screen: screen), screen: screen)
+        }
+        attach(.raids)
+        keeper.update { s in
+            var r = s.eventSquad(row, screen: .raids); r.choose(b.entryId, at: 0); r.isSet = true; s.saveEventSquad(r, row: row, screen: .raids)
+            s.gym.choose(b.entryId, at: 0)
+        }
+        attach(.raids)
+        attach(.gym)
+        XCTAssertEqual(keeper.store.pickName(for: b.entryId, area: "raids"), SquadWords.boxName("Raids Target"), "opening Gym did not replace the Raids name")
+        XCTAssertEqual(keeper.store.pickName(for: b.entryId, area: "gym"), SquadWords.boxName("Gym Target"))
+        // The copy leaves the box: each screen's history disc names it as that screen did.
+        XCTAssertEqual(keeper.store.pickNames.count, 2)
+        let back = SquadKeeper.load(account)
+        XCTAssertEqual(back.pickName(for: b.entryId, area: "raids"), SquadWords.boxName("Raids Target"))
+        XCTAssertEqual(back.pickName(for: b.entryId, area: "gym"), SquadWords.boxName("Gym Target"))
+    }
+
+    // MARK: D73, Raids Max damage orders the picker by strength
+
+    private func figureRow(_ id: String, now: Double?, after: Double?) -> PickerRowModel {
+        var r = PickerRowModel(id: id, name: id, ticked: false, spoken: id)
+        r.strength = Strength(kind: .damage, now: now, after: after)
+        return r
+    }
+
+    func testOrderedByStrengthTakesTheFigureAfterTheUpgradeThenTheFigureNowThenTheGivenOrder() {
+        // 40, 70 reached by an upgrade from 50, 70 as it is: the two 70s tie, the higher figure now first.
+        let rows = [figureRow("low", now: 0.40, after: nil), figureRow("upgraded", now: 0.50, after: 0.70), figureRow("built", now: 0.70, after: nil)]
+        XCTAssertEqual(PickerRowModel.orderedByStrength(rows).map(\.id), ["built", "upgraded", "low"])
+        // Exact ties keep the order given; a row with no figure goes last.
+        let tied = [figureRow("a", now: 0.5, after: nil), figureRow("none", now: nil, after: nil), figureRow("b", now: 0.5, after: nil)]
+        XCTAssertEqual(PickerRowModel.orderedByStrength(tied).map(\.id), ["a", "b", "none"])
+    }
+
+    /// Under Max damage every group of an Available Raids picker (the Full strength rows, "Available upgrades:", "Other roles:", the Mega slot's list) runs strongest first; under
+    /// Balanced the same rows are listed (the same set) and nothing is reordered by figure.
+    func testMaxDamagePickerGroupsRunStrongestFirstAndBalancedKeepsItsOrder() throws {
+        let c = ctx()
+        var checkedGroups = 0, balancedGroupsOutOfOrder = 0
+        for row in Self.hub.rotation where row.kind == .fiveStar && !row.bosses.isEmpty {
+            var b = EventPickerBuilder(screen: .raids, row: row, ctx: c)
+            let balanced = b.allSlotRows(mode: .available)
+            b.style = .maxDamage
+            let maxDamage = b.allSlotRows(mode: .available)
+            XCTAssertEqual(maxDamage.count, balanced.count)
+            // The same rows in both styles, slot by slot; only their order differs.
+            for (bal, mx) in zip(balanced, maxDamage) {
+                XCTAssertEqual(Set(bal.map(\.id)), Set(mx.map(\.id)), "\(row.title): Balanced and Max damage list the same rows")
+                var group = [PickerRowModel]()
+                for r in bal + [PickerRowModel(id: "", name: "", ticked: false, sectionHeading: "end", spoken: "")] {
+                    if r.sectionHeading != nil || r.id.isEmpty {
+                        if group.count > 1 && group.map(\.id) != PickerRowModel.orderedByStrength(group).map(\.id) { balancedGroupsOutOfOrder += 1 }
+                        group = []
+                    }
+                    if !r.id.isEmpty { group.append(r) }
+                }
+            }
+            for rows in maxDamage {
+                var group = [PickerRowModel]()
+                for r in rows + [PickerRowModel(id: "", name: "", ticked: false, sectionHeading: "end", spoken: "")] {
+                    if r.sectionHeading != nil || r.id.isEmpty {
+                        let f = group.map { ($0.strength?.after ?? $0.strength?.now) ?? -1 }
+                        XCTAssertEqual(f, f.sorted(by: >), "\(row.title): a group runs strongest first")
+                        if group.count > 1 { checkedGroups += 1 }
+                        group = []
+                    }
+                    if !r.id.isEmpty { group.append(r) }
+                }
+            }
+        }
+        XCTAssertGreaterThan(checkedGroups, 0)
+        XCTAssertGreaterThan(balancedGroupsOutOfOrder, 0, "some Balanced group is not already strongest first, so a Balanced sort would fail the Max damage check above")
+    }
+
     /// Ruling 9: a Mega entry is judged as a Mega only in the raid Mega slot. Under Best a Mega row listed under another role's slot (the All chip) is the plain Pokémon.
     func testAMegaIsJudgedAsMegaOnlyInTheMegaSlot() throws {
         let c = ctx()
@@ -108,7 +301,10 @@ final class PickerRowModelsTests: XCTestCase {
         let (options, filled) = b.resolve(slots: slots, mode: .best)
         let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let rows = b.content(slot: 0, filled: filled, options: options, byId: byId, mode: .best).rows
-        let megaRows = rows.filter { $0.name.hasPrefix("Mega ") && $0.cpIv != nil }
+        // (Slice 1 ranks by species from the game master, which names a Mega "Rayquaza (Mega)", a Primal "Groudon (Primal)"; the rows write them in front, "Mega Rayquaza" (H3).)
+        func isMega(_ name: String) -> Bool { name.hasPrefix("Mega ") || name.hasSuffix("(Mega)") || name.hasSuffix("(Mega X)") || name.hasSuffix("(Mega Y)") }
+        func isMegaOrPrimal(_ name: String) -> Bool { isMega(name) || name.hasPrefix("Primal ") || name.hasSuffix("(Primal)") }
+        let megaRows = rows.filter { isMega($0.name) && $0.cpIv != nil }
         let m = try XCTUnwrap(megaRows.first, "the real box has an owned Mega row under Best")
         let o = try XCTUnwrap(options.first(where: { $0.id == m.id }))
         let build = try XCTUnwrap(o.build)
@@ -116,7 +312,7 @@ final class PickerRowModelsTests: XCTestCase {
         let plain = scale.strength(.init(copy: c.entry(build.entryId), build: build, built: m.mark == .fullStrength, megaSlot: false))
         XCTAssertEqual(m.strength, plain, "a Mega row in an All slot is judged on the plain form")
         // A Mega or Primal entry the box lacks is judged as the plain Pokémon outside the Mega slot too, and as the Mega form in it.
-        let lackingForms = rows.filter { ($0.name.hasPrefix("Mega ") || $0.name.hasPrefix("Primal ")) && $0.cpIv == nil }
+        let lackingForms = rows.filter { isMegaOrPrimal($0.name) && $0.cpIv == nil }
         XCTAssertFalse(lackingForms.isEmpty, "Best lists a Mega or Primal entry the box lacks")
         for r in lackingForms {
             let best = try XCTUnwrap(options.compactMap(\.best).first { $0.entryId == r.id }, r.name)
@@ -129,7 +325,7 @@ final class PickerRowModelsTests: XCTestCase {
         let (megaOptions, megaFilled) = b.resolve(slots: [SquadSlot(role: PogoRules.RaidRole.mega.rawValue)], mode: .best)
         let megaById = Dictionary(megaOptions.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })
         let inMegaSlot = b.content(slot: 0, filled: megaFilled, options: megaOptions, byId: megaById, mode: .best).rows
-            .filter { ($0.name.hasPrefix("Mega ") || $0.name.hasPrefix("Primal ")) && $0.cpIv == nil }
+            .filter { isMegaOrPrimal($0.name) && $0.cpIv == nil }
         XCTAssertFalse(inMegaSlot.isEmpty, "the Mega slot lists a Mega or Primal entry the box lacks")
         var differs = false
         for r in inMegaSlot {
@@ -542,7 +738,7 @@ final class PickerRowModelsTests: XCTestCase {
         // The squad drawn from the table with every slot at the reference figure matches it exactly.
         let atReference = SquadStrength.against(figures: reference.map { Strength(kind: .damage, now: $0, after: nil) }, reference: reference)
         XCTAssertTrue(atReference.matchesBest)
-        XCTAssertEqual(atReference.text, "Squad strength 100% · Matches the best squad")
+        XCTAssertEqual(atReference.text, "Squad strength 100%")
         for mode in [SquadMode.available, .best] {
             let (options, filled) = b.resolve(slots: HubSquads.defaultRaidSlots(), mode: mode)
             let byId = Dictionary(options.flatMap { o in [(o.entryId, o)] + (o.best.map { [(squadSpeciesPrefix + $0.key, o)] } ?? []) }, uniquingKeysWith: { a, _ in a })

@@ -233,3 +233,50 @@ Greg's words, with his three screenshots kept outside the repo (manager's scratc
 Manager's answer to 5a (for the design panel): Best for a raid lists only the hand-written Raids table (`data/source/01-general-pve-by-type.md`) under the boss's bring types. Mega Sableye's only weakness is Fairy, and that table's Fairy section has nine Pokémon (Mega Gardevoir; Xerneas; Crowned Sword Zacian and Mega Diancie; Shadow Gardevoir, Tapu Koko, Togekiss, Granbull, Primarina), so that is all Best can choose from. It is the table, not the game: other Fairy attackers exist, and against a boss with one weakness strong neutral attackers can out-damage weak super-effective ones. Two ways to widen it are for Greg: add rows to the table, or rank Best from the game master's own damage estimate (the one the picker bars already use).
 
 How Greg wants the next work run (his words): "For the next lot of works i want to do it slightly differently. First output should be a design panel in session that I can give comments on directly to tweak some design elements that we've added new. Once I confirm changes on that we then build".
+
+## Phone run 7, 8 Nov 2026 (build 253d91b, test/greg-build)
+
+Greg's words, his screenshot kept outside the repo (manager's scratchpad, `phone-run-7/4.png`: the Raids screen with the strip pinned
+while the slot cards are still in view).
+
+1. Set, Undo, set again (one history entry): "green. one note - on current, the pokemon slector when clicking on a swap should appear
+   ABOVE history segment, not below."
+2. Edits kept: "1, 2, 3, 5 green. 4 - killing the app from swticher, my chnage was no longer there tested 2x, both times not there."
+   Manager: the edit was kept; the boss reopened on Current (rule 27.1, a squad with a Current opens on it) and the Available edit was
+   under the Available tab. Greg, after checking: "you are right. green now."
+3. Delete current squad: "green". 4. A history row with a transferred Pokémon: "not testing this for now".
+5. Raids, Max damage: "1 green. 2 i didnt see the "working out best squad...." it just loaded immeidately. 3.- green 4 - green".
+   Manager: expected; the timeline and the squad screen pre-rank the boss in the background (H4, J5), so the rows are cached before Best
+   is tapped.
+6. Extra 1: "the pill up top with all the pokemon currently selected in squad, shouldnt start showing until the page has scrolled past the
+   actual squads section being shown - does this make sense?"
+7. Extra 2: "when i've toggled suggestsions for max damage, i think the poekmon selector (for the squads/activity) should rank pokemon by
+   max damage, what do you think?"
+
+Manager's proposals (picker above the history on Current; the strip once the cards have scrolled off; Max damage ordering the picker by
+the row's strength figure; the chosen tab remembered across relaunches; the strip as three rows of two at accessibility sizes). Greg:
+"agreed on the others". The "Rayquaza" / "Mega Rayquaza" naming stays as it is (logged).
+
+Greg, 8 Nov, on the free Mega Evolution chip, asked to choose between '↑ Free' and keeping '↑ Upgrade': "↑ Free". Built as D76 (R6). The Rayquaza / Mega Rayquaza naming stays as it is unless he says "name the Mega slot".
+
+## Phone run 8, 16 Nov 2026 (build 0c166cb, test/greg-build)
+
+The checks the manager listed:
+
+1. The picker opens above the history on Current (Raids, Max, Gym, Rocket, PvP).
+2. The strip shows only once the slot cards have scrolled off and goes when they return; rows of two at the largest text size.
+3. Raids under Max damage, Available: each picker group strongest first, Full strength before Available upgrades (flagged as a
+   manager call); Balanced keeps its order.
+4. The tab survives a relaunch; Set this squad from Available reopens on Available with ✓ Squad set (flagged as a manager call).
+5. Rayquaza's card reads "↑ Free"; "↑ Free" only when Mega Evolution is the only step left (flagged as a manager call).
+6. Optional, carried over from run 7: a history row with a transferred Pokémon shows a hollow disc.
+7. Run 7's greens again: Set, Undo, set again leaves one history entry; Delete current squad asks with the bold line only.
+
+Greg: "all green except 6 which is sitll unchecked. happy with everything".
+
+Manager: nothing to change. The three manager calls stand (D77). Check 6 has now gone untested on the phone in runs 7 and 8; it
+rests on the tests. The Rayquaza / Mega Rayquaza naming stays as it is.
+
+Note: Greg's first build that day came from the main checkout's project (26 Oct code, the Next screen in place of Pogo Hub),
+because the manager had given the project's path without its folder. Greg: "pogo hub is gone and 'next' is back instead". The
+manager opened the test build's project and the run above was done on 0c166cb.

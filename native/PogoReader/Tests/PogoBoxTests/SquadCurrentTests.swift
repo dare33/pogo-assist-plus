@@ -1,7 +1,7 @@
 import XCTest
 @testable import PogoBox
 
-/// Pass 2-5, rule 27: Current is the stored squad; Available and Best are drafts held by the screen; old files keep decoding; the Raids style.
+/// Pass 2-5, rule 27: Current is the stored squad; the tab a squad shows; old files keep decoding; the Raids style. (The kept edits and the history are SquadEditsHistoryTests.)
 final class SquadCurrentTests: XCTestCase {
     private func row(_ title: String = "Palkia") -> HubData.RotationRow {
         HubData.RotationRow(from: "2026-11-01", to: "2026-11-30", kind: .fiveStar, title: title, bosses: [], note: "", source: "", tba: nil)
@@ -38,7 +38,9 @@ final class SquadCurrentTests: XCTestCase {
         XCTAssertNotNil(store.current(.rocket(leader: "Arlo")))
         for r in ref { store.deleteCurrent(r) }
         for r in ref { XCTAssertNil(store.current(r), r.key) }
-        XCTAssertEqual(store, { var s = SquadStore(); s.raids = [:]; return s }(), "nothing is left behind")
+        // Pass 2-6: deleting moves the Current to the history (rule 27.7), so the history and the event days it recorded are all that is left.
+        store.history = [:]; store.eventEnds = [:]; store.undoRecords = [:]   // (the last Delete's undo record is memory only)
+        XCTAssertEqual(store, { var s = SquadStore(); s.raids = [:]; return s }(), "nothing else is left behind")
     }
 
     func testDeletingCurrentLeavesTheTabAndStyleChoicesAlone() {
@@ -89,17 +91,17 @@ final class SquadCurrentTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(SquadStore.self, from: JSONEncoder().encode(store)).raidStyle, .maxDamage)
     }
 
-    // MARK: drafts
+    // MARK: tab choice
 
     func testASquadOpensOnCurrentWhenItHasOneElseOnTheRememberedChoice() {
-        let d = SquadDrafts()
+        let d = SquadTabChoices()
         XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .best), .current)
         XCTAssertEqual(d.tab("k", hasCurrent: false, mode: .best), .best)
         XCTAssertEqual(d.tab("k", hasCurrent: false, mode: .available), .available)
     }
 
     func testAChosenTabStaysUntilCurrentGoesAway() {
-        var d = SquadDrafts()
+        var d = SquadTabChoices()
         d.select(.available, for: "k")
         XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .best), .available, "the choice holds when Current appears")
         d.select(.current, for: "k")
@@ -109,96 +111,59 @@ final class SquadCurrentTests: XCTestCase {
         XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .available), .current)
     }
 
-    func testADraftIsKeptPerTabAndPerSquadAndDiffersOnceEdited() {
-        var d = SquadDrafts()
-        XCTAssertNil(d.draft("a", .available))
-        XCTAssertFalse(d.differs("a", .available))
-        let edited = picked()
-        d.setDraft(edited, "a", .available)
-        XCTAssertTrue(d.differs("a", .available))
-        XCTAssertFalse(d.differs("a", .best), "each tab has its own draft")
-        XCTAssertFalse(d.differs("b", .available), "and each squad")
-        XCTAssertEqual(d.draft("a", .available), edited)
+    /// H1: another account's tab choices are dropped.
+    func testAnotherAccountStartsWithNoTabChoice() {
+        var d = SquadTabChoices()
+        d.switchAccount("A")
         d.select(.best, for: "a")
-        XCTAssertEqual(d.draft("a", .available), edited, "switching tabs keeps the draft")
-        d.setDraft(SquadStore.Saved(slots: [SquadSlot(role: "X")]), "c", .best)
-        XCTAssertFalse(d.differs("c", .best), "an unedited draft does not differ")
-    }
-
-    func testResetDropsTheDraftAtOnce() {
-        var d = SquadDrafts()
-        d.setDraft(picked(), "a", .available)
-        d.setDraft(picked(), "a", .best)
-        d.reset("a", .available)
-        XCTAssertNil(d.draft("a", .available))
-        XCTAssertTrue(d.differs("a", .best))
-        d.resetAll("a")
-        XCTAssertNil(d.draft("a", .best))
-    }
-
-    func testSavingKeepsTheTabAndSaysSavedWhileTheStoredCurrentIsThatSquad() {
-        var d = SquadDrafts()
-        let s = picked()
-        d.setDraft(s, "a", .best)
-        XCTAssertFalse(d.justSaved("a", .best, current: s))
-        d.didSave(s, "a", .best)
-        var store = SquadStore(); store.setCurrent(s, .gym)
-        let current = store.current(.gym)
-        XCTAssertEqual(d.tab("a", hasCurrent: true, mode: .available), .best, "the player stays where they are")
-        XCTAssertTrue(d.justSaved("a", .best, current: current))
-        var withMark = s; withMark.isSet = true
-        XCTAssertTrue(d.justSaved("a", .best, current: withMark), "the set mark is not part of the squad")
-        var more = s
-        more.choose("c2", at: 1)
-        d.setDraft(more, "a", .best)
-        XCTAssertFalse(d.justSaved("a", .best, current: current), "a further edit is not saved")
-        d.reset("a", .best)
-        XCTAssertFalse(d.justSaved("a", .best, current: current))
-    }
-
-    /// H5: Delete, a replacement from another tab and an edit of Current all end "Saved to Current", and Save shows again for that draft.
-    func testSavedToCurrentEndsWhenTheStoredCurrentStopsBeingThatSquad() {
-        var d = SquadDrafts()
-        let s = picked()
-        d.didSave(s, "a", .available)
-        XCTAssertFalse(d.justSaved("a", .available, current: nil), "Current was deleted")
-        d.clearSaved("a")
-        XCTAssertFalse(d.justSaved("a", .available, current: s), "clearSaved forgets the save (Delete current squad)")
-        d.didSave(s, "a", .available)
-        var other = s; other.choose("z", at: 1)
-        XCTAssertFalse(d.justSaved("a", .available, current: other), "another squad replaced Current")
-        var edited = s; edited.changeRole(at: 0, to: "Y", fits: { _ in true })
-        XCTAssertFalse(d.justSaved("a", .available, current: edited), "Current was edited")
-        XCTAssertTrue(d.justSaved("a", .available, current: s))
-    }
-
-    /// H1: another account's drafts, tabs and notes are dropped.
-    func testAnotherAccountStartsWithNothing() {
-        var d = SquadDrafts()
         d.switchAccount("A")
-        d.setDraft(picked(), "a", .available); d.select(.best, for: "a"); d.didSave(picked(), "b", .best)
-        d.switchAccount("A")
-        XCTAssertNotNil(d.draft("a", .available), "the same account keeps its drafts")
+        XCTAssertEqual(d.tab("a", hasCurrent: false, mode: .available), .best, "the same account keeps its choice")
         d.switchAccount("B")
         XCTAssertEqual(d.account, "B")
-        XCTAssertNil(d.draft("a", .available)); XCTAssertNil(d.draft("b", .best))
         XCTAssertEqual(d.tab("a", hasCurrent: false, mode: .available), .available)
-        XCTAssertFalse(d.justSaved("b", .best, current: picked()))
     }
 
-    /// H2: a draft pick whose copy left the box is emptied; species picks, other slots and roles stay.
-    func testADraftFollowsTheBoxLikeTheStore() {
-        var d = SquadDrafts()
-        var s = SquadStore.Saved(slots: [SquadSlot(role: "X", pick: "gone"), SquadSlot(role: "Y", pick: "here"), SquadSlot(role: "Z", species: "medicham"), SquadSlot(role: "W", pick: "gone2", fallback: true)], changed: true)
-        s.changed = true
-        d.setDraft(s, "k", .best)
-        let r = d.reconciled(boxIds: ["here"])
-        let slots = r.draft("k", .best)!.slots
-        XCTAssertEqual(slots.map(\.pick), [nil, "here", nil, nil])
-        XCTAssertEqual(slots[2].species, "medicham")
-        XCTAssertEqual(slots.map(\.role), ["X", "Y", "Z", "W"])
-        XCTAssertNil(slots[3].fallback)
-        XCTAssertEqual(r.draft("k", .best)?.changed, true, "still an edited draft")
+    // MARK: the tab a squad was last on survives a relaunch (D74)
+
+    func testTheStoredTabRoundTripsAndAnOldFileWithoutItDecodes() throws {
+        var store = SquadStore()
+        store.setTab(.available, .gym)
+        store.setTab(.best, .pvp(league: "gl"))
+        let again = try JSONDecoder().decode(SquadStore.self, from: JSONEncoder().encode(store))
+        XCTAssertEqual(again, store)
+        XCTAssertEqual(again.storedTab(.gym), .available)
+        XCTAssertEqual(again.storedTab(.pvp(league: "gl")), .best)
+        XCTAssertNil(again.storedTab(.rocket(leader: "Arlo")))
+        let old = try JSONDecoder().decode(SquadStore.self, from: Data(#"{"version":2,"modes":{"raids":"best"}}"#.utf8))
+        XCTAssertEqual(old.tabs, [:], "a version-2 file written before the tabs were kept")
+        XCTAssertEqual(old.version, 2)
+        var cleared = store
+        cleared.clearTab(.gym)
+        XCTAssertNil(cleared.storedTab(.gym))
+    }
+
+    func testAStoredTabGoesWithItsEvent() {
+        var store = SquadStore()
+        func r(_ from: String, _ to: String, _ title: String) -> HubData.RotationRow { HubData.RotationRow(from: from, to: to, kind: .fiveStar, title: title, bosses: [], note: "", source: "", tba: nil) }
+        let ended = r("2026-10-01", "2026-10-10", "Palkia"), later = r("2026-10-20", "2026-12-01", "Dialga")
+        store.setTab(.available, .event(row: ended, screen: .raids))
+        store.setTab(.best, .event(row: later, screen: .max))
+        store.setTab(.available, .gym)
+        let pruned = store.pruned(today: "2026-11-01", rotation: [])
+        XCTAssertNil(pruned.storedTab(.event(row: ended, screen: .raids)), "the event ended")
+        XCTAssertEqual(pruned.storedTab(.event(row: later, screen: .max)), .best)
+        XCTAssertEqual(pruned.storedTab(.gym), .available, "a squad that is not an event's stays")
+    }
+
+    func testTheStoredTabIsReadAfterTheChoiceAndBeforeTheDefault() {
+        var d = SquadTabChoices()
+        XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .best, stored: .available), .available, "stored Available with a Current present")
+        XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .best, stored: .current), .current)
+        XCTAssertEqual(d.tab("k", hasCurrent: false, mode: .best, stored: .current), .best, "stored Current with no Current: the mode's tab")
+        XCTAssertEqual(d.tab("k", hasCurrent: false, mode: .available, stored: .best), .best)
+        XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .best, stored: nil), .current, "never chosen: Current")
+        d.select(.best, for: "k")
+        XCTAssertEqual(d.tab("k", hasCurrent: true, mode: .available, stored: .available), .best, "a fresh choice wins over the stored one")
     }
 
     // MARK: old files, migrated for good (H4)
@@ -233,18 +198,6 @@ final class SquadCurrentTests: XCTestCase {
         XCTAssertTrue(HubSquads.sameSquad(drawn(["A", "B"], ["x", "y"]), drawn(["A", "B"], ["x", "y"])))
         XCTAssertFalse(HubSquads.sameSquad(drawn(["A", "B"], ["x", "y"]), drawn(["A", "B"], ["y", "x"])))
         XCTAssertFalse(HubSquads.sameSquad(drawn(["A", "B"], ["x", "y"]), drawn(["A", "C"], ["x", "y"])), "a role differs")
-    }
-
-    func testAChangeOfRaidStyleDropsEveryRaidDraftAndNothingElse() {
-        var d = SquadDrafts()
-        let raid = SquadRef.event(row: row(), screen: .raids).key, max = SquadRef.event(row: row(), screen: .max).key
-        for k in [raid, max, SquadRef.gym.key] { d.setDraft(picked(), k, .available); d.setDraft(picked(), k, .best) }
-        d.didSave(picked(), raid, .best)
-        d.resetAll(keyPrefix: "raids|")
-        XCTAssertNil(d.draft(raid, .available)); XCTAssertNil(d.draft(raid, .best))
-        XCTAssertFalse(d.justSaved(raid, .best, current: picked()))
-        XCTAssertNotNil(d.draft(max, .available), "Max has no style")
-        XCTAssertNotNil(d.draft(SquadRef.gym.key, .best))
     }
 
     func testTheRefOfASquadNamesItsScreen() {

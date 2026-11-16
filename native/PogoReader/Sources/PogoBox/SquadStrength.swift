@@ -31,7 +31,7 @@ public struct SquadStrength: Equatable {
     /// Slots that counted (a figure, or empty with a reference figure); `total` is all of them.
     public var scored: Int
     public var total: Int
-    /// The squad reached the reference (before the cap): "Matches the best squad".
+    /// The squad reached the reference (before the cap): it reads 100%.
     public var matchesBest = false
     /// The unedited Best tab: the reference itself, 100% by definition.
     public var isBestSquad = false
@@ -72,7 +72,10 @@ public struct SquadStrength: Equatable {
     }
 
     /// The whole percent shown: rounded DOWN, so 100% reads only when the squad matches or beats the reference.
-    static func floorPercent(_ x: Double) -> Int { Int((min(1, max(0, x)) * 100 + 1e-9).rounded(.down)) }
+    public static func floorPercent(_ x: Double) -> Int { Int((min(1, max(0, x)) * 100 + 1e-9).rounded(.down)) }
+
+    /// The whole percent the label shows (what a history row records); nil when no slot counts.
+    public var percent: Int? { now.map(Self.floorPercent) }
 
     /// The bar's figures, in the picker row bar's own type, so the one drawing serves both. Nothing to draw when no slot counts.
     public var strength: Strength { Strength(kind: kind == .score ? .damage : kind, now: now, after: after.map { max($0, now ?? 0) }) }
@@ -80,13 +83,12 @@ public struct SquadStrength: Equatable {
     /// A faint part is drawn: the bar's own test (`Strength.hasFaint`), so the "after upgrades" words show exactly when the bar shows the part.
     public var hasAfter: Bool { strength.hasFaint }
 
-    /// "Squad strength 78% of best"; "Squad strength 100% · Matches the best squad" at or over the reference; "Squad strength 100% · the best squad" for the unedited Best tab.
+    /// "Squad strength 78% of best"; "Squad strength 100%" at or over the reference and for the unedited Best tab (pass 2-6, Greg: no "the best squad", no "Matches the best squad").
     /// "Squad strength not read" when no slot counts.
     public var text: String {
         guard let n = now else { return "Squad strength not read" }
         let pct = Self.floorPercent(n)
-        if isBestSquad { return "Squad strength \(pct)% · the best squad" }
-        if matchesBest { return "Squad strength \(pct)% · Matches the best squad" }
+        if isBestSquad || matchesBest { return "Squad strength \(pct)%" }
         return "Squad strength \(pct)% of best"
     }
     /// "92% after upgrades"; nil when the upgrades add nothing (and always nil for a Score, which is already of the built option).
@@ -99,7 +101,7 @@ public struct SquadStrength: Equatable {
 
     /// What VoiceOver reads: the visible words, joined.
     public var spoken: String {
-        [text.replacingOccurrences(of: " · ", with: ", ").replacingOccurrences(of: "%", with: " percent"), afterText?.replacingOccurrences(of: "%", with: " percent"), scoredText]
+        [text.replacingOccurrences(of: "%", with: " percent"), afterText?.replacingOccurrences(of: "%", with: " percent"), scoredText]
             .compactMap { $0 }.joined(separator: ", ")
     }
 }

@@ -1,0 +1,437 @@
+<title>Pass 2-6 design panel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: decided list, then the revised mockups (A, B, D, E, F) with what is still open under each; later list last.
+   Page tokens follow the pass 2-5 screenshots page; the phone tokens (--p-*) are the app's own Theme.swift pairs. The phone frame is 393 px wide, the iPhone 17's points one to one. */
+:root {
+  --bg: #f3f4f8; --surface: #ffffff; --fg: #1d2233; --muted: #5d6478; --line: #dde0ea; --accent: #2f5fe0; --warm: #b8560f; --rec: #1c7a3e; --recbg: #e6f6ec; --done: #5d6478; --donebg: #eceef4;
+  --display: "Figtree", system-ui, sans-serif; --body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --p-bg: #F3F5F9; --p-surface: #FFFFFF; --p-surface2: #F3F5F9; --p-ink: #15192B; --p-muted: #6A7085; --p-faint: #8A90A3; --p-line: #E6E9F0; --p-off: #E3E7EF;
+  --p-acc: #D6336C; --p-acc-ink: #B0235A; --p-acc-tint: #FCE7EF; --p-acc-on: #FFFFFF;
+  --p-mega-ink: #B02A5B; --p-mega-tint: #FDE8EF; --p-heavy-ink: #5B3FD6; --p-heavy-tint: #EFEBFF; --p-bulky-ink: #087680; --p-bulky-tint: #E0F5F6;
+  --p-amber: #FFF1DC; --p-red: #FDE9EB; --p-green: #E3F5EA; --p-mutedtint: #555B70; --p-orange-ink: #B34D00; --p-orange: #FF8A1F; --p-greenink: #1C7A3E; --p-redink: #D92D3A; --p-blue: #1F5FD1; --p-bluetint: rgba(59,130,246,.12);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12141c; --surface: #1b1e29; --fg: #e8eaf2; --muted: #a2a8bb; --line: #2e3242; --accent: #86a6ff; --warm: #f0a060; --rec: #6fd796; --recbg: rgba(80,200,120,.14); --done: #a2a8bb; --donebg: #262a38; color-scheme: dark;
+  --p-bg: #0E1118; --p-surface: #181C26; --p-surface2: #20242F; --p-ink: #EEF1F8; --p-muted: #9097AB; --p-faint: #6D7489; --p-line: #262B38; --p-off: #232836;
+  --p-acc: #F06595; --p-acc-ink: #F7A1C1; --p-acc-tint: rgba(240,101,149,.18); --p-acc-on: #0E1118;
+  --p-mega-ink: #FF9EC0; --p-mega-tint: rgba(240,101,149,.18); --p-heavy-ink: #BFAEFF; --p-heavy-tint: rgba(156,131,255,.2); --p-bulky-ink: #6FDDE4; --p-bulky-tint: rgba(46,196,207,.18);
+  --p-amber: rgba(255,170,60,.2); --p-red: rgba(255,107,118,.13); --p-green: rgba(80,200,120,.16); --p-mutedtint: #B4BACB; --p-orange-ink: #FFB273; --p-orange: #FF9A3C; --p-greenink: #6FD796; --p-redink: #FF6B76; --p-blue: #8FB0FF; --p-bluetint: rgba(111,163,255,.16);
+} }
+:root[data-theme="dark"] {
+  --bg: #12141c; --surface: #1b1e29; --fg: #e8eaf2; --muted: #a2a8bb; --line: #2e3242; --accent: #86a6ff; --warm: #f0a060; --rec: #6fd796; --recbg: rgba(80,200,120,.14); --done: #a2a8bb; --donebg: #262a38; color-scheme: dark;
+  --p-bg: #0E1118; --p-surface: #181C26; --p-surface2: #20242F; --p-ink: #EEF1F8; --p-muted: #9097AB; --p-faint: #6D7489; --p-line: #262B38; --p-off: #232836;
+  --p-acc: #F06595; --p-acc-ink: #F7A1C1; --p-acc-tint: rgba(240,101,149,.18); --p-acc-on: #0E1118;
+  --p-mega-ink: #FF9EC0; --p-mega-tint: rgba(240,101,149,.18); --p-heavy-ink: #BFAEFF; --p-heavy-tint: rgba(156,131,255,.2); --p-bulky-ink: #6FDDE4; --p-bulky-tint: rgba(46,196,207,.18);
+  --p-amber: rgba(255,170,60,.2); --p-red: rgba(255,107,118,.13); --p-green: rgba(80,200,120,.16); --p-mutedtint: #B4BACB; --p-orange-ink: #FFB273; --p-orange: #FF9A3C; --p-greenink: #6FD796; --p-redink: #FF6B76; --p-blue: #8FB0FF; --p-bluetint: rgba(111,163,255,.16);
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 28px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3, h4 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: 1.9rem; font-weight: 700; }
+h2 { font-size: 1.4rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+.meta { color: var(--muted); margin: 6px 0 0; max-width: 70ch; }
+.label { font-family: var(--display); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--warm); font-weight: 600; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin: 22px 0 8px; }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.note h2 { font-size: 1rem; margin-bottom: 6px; }
+.note ul, .qs ul { margin: 0; padding-left: 1.1em; display: grid; gap: 5px; }
+section.ask { margin-top: 44px; display: grid; gap: 14px; }
+.ask > p { margin: 0; max-width: 72ch; }
+blockquote { margin: 0; padding: 8px 14px; border-left: 3px solid var(--warm); color: var(--muted); max-width: 72ch; font-style: italic; }
+.figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(421px, 1fr)); gap: 18px; align-items: start; }
+@media (max-width: 460px) { .figs { grid-template-columns: 1fr; } }
+figure { margin: 0; display: grid; gap: 8px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; overflow-x: auto; }
+figcaption { font-size: .9rem; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; align-items: baseline; }
+figcaption b { color: var(--fg); font-family: var(--display); flex: 1 1 auto; }
+.cbtn { font: 600 .78rem var(--display); color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; flex: none; }
+.cbtn:hover { border-color: var(--accent); }
+.qs { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.qs h3 { margin-bottom: 8px; }
+.qs li { max-width: 80ch; }
+.rec, .dn { display: inline-block; font: 600 .74rem var(--display); border-radius: 6px; padding: 1px 7px; margin-right: 4px; vertical-align: 1px; }
+.rec { color: var(--rec); background: var(--recbg); }
+.dn { color: var(--done); background: var(--donebg); }
+.qs li .q { font-weight: 700; }
+code { font-size: .9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tag { display: inline-block; font: 600 .72rem var(--display); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; color: var(--muted); margin-left: 6px; vertical-align: 2px; }
+.calls ol { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; max-width: 80ch; }
+.decided { columns: 2; column-gap: 24px; max-width: 110ch; }
+.decided li { break-inside: avoid; }
+@media (max-width: 760px) { .decided { columns: 1; } }
+.fine { font-size: .85rem; color: var(--muted); max-width: 72ch; margin: 0; }
+
+/* ---- the phone: 393 px = the iPhone 17's points ---- */
+.ph { width: 393px; max-width: 100%; margin: 0 auto; background: var(--p-bg); color: var(--p-ink); border: 1px solid var(--line); border-radius: 30px; padding: 14px 14px 10px; font-family: var(--display); font-size: 13px; line-height: 1.3; display: grid; gap: 9px; overflow: hidden; box-sizing: border-box; }
+@media (max-width: 460px) { .ph { zoom: .86; } }
+.ph.cut { position: relative; }
+.ph.cut::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 36px; background: linear-gradient(to bottom, transparent, var(--p-bg)); }
+.ph .nav { display: flex; align-items: center; gap: 10px; }
+.ph .nav .back { width: 30px; height: 30px; border-radius: 50%; background: var(--p-surface2); display: grid; place-items: center; font-weight: 800; }
+.ph .nav .t { font-weight: 800; font-size: 17px; }
+.ph .nav .s { color: var(--p-muted); font-size: 11px; }
+.ph .nav .pill { margin-left: auto; background: rgba(255,138,31,.16); color: var(--p-orange-ink); font-weight: 700; font-size: 12px; padding: 5px 10px; border-radius: 999px; }
+.ph .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ph .row.sb { justify-content: space-between; }
+.ph .row.end { justify-content: flex-end; }
+.ph .title { font-weight: 800; font-size: 15px; }
+.ph .advice { color: var(--p-muted); font-size: 11.5px; margin-top: -4px; }
+.ph .info { width: 26px; height: 26px; border-radius: 50%; background: var(--p-surface2); color: var(--p-muted); display: grid; place-items: center; font-style: italic; font-weight: 800; font-size: 12px; flex: none; }
+.ph .cap { font-size: 9px; font-weight: 800; letter-spacing: .06em; color: var(--p-faint); }
+.seg { display: inline-flex; background: var(--p-surface2); border-radius: 999px; padding: 3px; gap: 2px; flex: none; }
+.seg span { padding: 5px 7px; border-radius: 999px; font-weight: 600; font-size: 12px; white-space: nowrap; }
+.seg span.on { background: var(--p-acc-tint); color: var(--p-acc-ink); font-weight: 700; }
+.seg.plain span.on { background: var(--p-off); color: var(--p-ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.status { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12.5px; padding: 6px 11px; border-radius: 999px; }
+.status i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.status.red { background: var(--p-red); } .status.red i { background: var(--p-redink); }
+.status.amber { background: var(--p-amber); } .status.amber i { background: var(--p-orange); }
+.status.green { background: var(--p-green); } .status.green i { background: var(--p-greenink); }
+.btn { background: var(--p-acc); color: var(--p-acc-on); font-weight: 700; font-size: 12.5px; padding: 8px 14px; border-radius: 999px; white-space: nowrap; flex: none; }
+.btn.set { background: var(--p-acc-tint); color: var(--p-acc-ink); border: 1.5px solid var(--p-acc); padding: 6.5px 12.5px; }
+.btn.sm { font-size: 11.5px; padding: 6px 11px; }
+.lnk { color: var(--p-acc-ink); font-weight: 700; font-size: 12.5px; text-decoration: underline; white-space: nowrap; }
+.lnk.mut { color: var(--p-muted); }
+.str { padding: 0 4px; display: grid; gap: 5px; }
+.str .t { font-weight: 700; font-size: 12.5px; } .str .t small { color: var(--p-muted); font-weight: 500; margin-left: 6px; }
+.bar { height: 7px; border-radius: 4px; background: var(--p-off); position: relative; overflow: hidden; }
+.bar b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--p-orange); opacity: .75; border-radius: 4px; }
+.bar u { position: absolute; top: 0; bottom: 0; border: 1.5px dashed var(--p-orange); opacity: .6; border-radius: 4px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.card { border-radius: 14px; padding: 9px 8px 8px; display: grid; gap: 5px; min-width: 0; position: relative; align-content: start; }
+.card.work { background: var(--p-amber); } .card.get { background: var(--p-red); } .card.ready { background: var(--p-green); } .card.empty { background: var(--p-surface); border: 1.5px dashed var(--p-line); }
+.card.sel { outline: 2px solid var(--p-acc); outline-offset: -1px; }
+.card .role { font-size: 8.5px; font-weight: 800; letter-spacing: .05em; }
+.card .disc { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #15192B; }
+.card .nm { font-weight: 700; font-size: 12px; line-height: 1.15; }
+.card .ln { font-size: 10px; color: var(--p-mutedtint); line-height: 1.2; }
+.card .cost { font-size: 10.5px; font-weight: 700; color: var(--p-orange-ink); }
+.card .st { font-size: 10.5px; font-weight: 700; margin-top: 2px; }
+.card > .up { position: absolute; top: 7px; right: 7px; width: 16px; height: 16px; border-radius: 50%; background: rgba(255,138,31,.25); color: var(--p-orange-ink); font-size: 10px; display: grid; place-items: center; font-weight: 800; }
+.r-mega .role { color: var(--p-mega-ink); } .r-mega .disc { background: #F7A1C1; }
+.r-heavy .role { color: var(--p-heavy-ink); } .r-heavy .disc { background: #BFAEFF; }
+.r-bulky .role { color: var(--p-bulky-ink); } .r-bulky .disc { background: #6FDDE4; }
+.card.empty .nm { color: var(--p-muted); font-weight: 600; }
+.sy { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 10.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.sy.up { background: rgba(255,138,31,.18); color: var(--p-orange-ink); }
+.sy.ok { background: var(--p-green); color: var(--p-greenink); }
+.sy.get { background: var(--p-bluetint); color: var(--p-blue); }
+.sy.no { background: var(--p-off); color: var(--p-muted); }
+.sy.sw { background: var(--p-surface2); color: var(--p-muted); }
+.sy .m { font-family: monospace; letter-spacing: -1px; font-size: 9px; }
+.card .syrow { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+/* strip and picker */
+.strip { background: var(--p-bg); border-bottom: 1px solid var(--p-line); padding: 6px 0 8px; display: flex; gap: 6px; }
+.strip.wrap2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 999px; font-weight: 700; font-size: 12px; min-width: 0; max-width: 100%; white-space: nowrap; box-sizing: border-box; }
+.chip.ed { outline: 2.5px solid var(--p-acc); outline-offset: -2px; font-weight: 800; }
+.chip .n { width: 18px; height: 18px; border-radius: 50%; color: var(--p-bg); display: grid; place-items: center; font-size: 10px; flex: none; box-sizing: border-box; }
+.chip .nm { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.chip.c-mega { background: var(--p-mega-tint); } .chip.c-mega .n { background: var(--p-mega-ink); }
+.chip.c-heavy { background: var(--p-heavy-tint); } .chip.c-heavy .n { background: var(--p-heavy-ink); }
+.chip.c-bulky { background: var(--p-bulky-tint); } .chip.c-bulky .n { background: var(--p-bulky-ink); }
+.chip.un { outline: 1.5px dashed currentColor; outline-offset: -1.5px; }
+.chip.un .n { background: transparent; border: 2px solid; color: inherit; }
+.chip.c-heavy.un { color: var(--p-heavy-ink); } .chip.c-bulky.un { color: var(--p-bulky-ink); }
+.chip.un .nm { color: var(--p-ink); }
+.picker { border: 1.5px solid var(--p-acc); border-radius: 18px; padding: 10px 10px 6px; display: grid; gap: 8px; }
+.picker .ph-h { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; }
+.picker .ph-h .done { margin-left: auto; color: var(--p-acc-ink); font-weight: 700; }
+.roles { display: flex; gap: 6px; flex-wrap: wrap; }
+.roles span { padding: 5px 11px; border-radius: 999px; background: var(--p-surface2); font-weight: 600; font-size: 12px; }
+.roles span.on { outline: 1.5px solid var(--p-heavy-ink); color: var(--p-heavy-ink); }
+.roles span.on.bk { outline-color: var(--p-bulky-ink); color: var(--p-bulky-ink); }
+.roles span.on.mg { outline-color: var(--p-mega-ink); color: var(--p-mega-ink); }
+.prow { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--p-line); align-items: start; }
+.prow:last-child { border-bottom: 0; }
+.prow .o { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--p-line); margin-top: 2px; }
+.prow .o.tk { border-color: var(--p-acc); background: var(--p-acc); }
+.prow .h { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; flex-wrap: wrap; }
+.prow .cost { color: var(--p-orange-ink); font-size: 11px; font-weight: 700; }
+.prow .sub { font-size: 11px; color: var(--p-muted); } .prow .sub b { font-weight: 700; }
+.prow .sub.bk b { color: var(--p-bulky-ink); }
+.prow .bar { margin-top: 3px; height: 6px; }
+.prow .note { font-size: 10.5px; color: var(--p-muted); margin-top: 2px; }
+.prow .tier { font-size: 10px; font-weight: 700; background: var(--p-surface2); color: var(--p-muted); border-radius: 999px; padding: 1px 7px; }
+.prow .syrow { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 1px; }
+.msg { background: var(--p-surface2); border-radius: 12px; padding: 10px 12px; }
+.msg .m { font-weight: 800; font-size: 13px; }
+.toast { background: var(--p-ink); color: var(--p-bg); border-radius: 12px; padding: 9px 12px; font-weight: 700; font-size: 12.5px; display: flex; justify-content: space-between; gap: 8px; }
+.toast u { color: var(--p-acc); }
+.hist { display: grid; border-top: 1px solid var(--p-line); }
+.hist .hr { display: flex; align-items: center; gap: 8px; padding: 7px 2px; border-bottom: 1px solid var(--p-line); font-size: 12px; }
+.hist .hr .d { font-weight: 700; width: 88px; flex: none; line-height: 1.15; } .hist .hr .d small { display: block; color: var(--p-muted); font-weight: 500; font-size: 10.5px; }
+.hist .hr .pct { font-weight: 700; color: var(--p-muted); font-size: 11.5px; width: 32px; text-align: right; flex: none; }
+.hist .hr .sp { flex: 1; }
+.discs { display: flex; gap: 3px; flex: none; }
+.discs i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: 9.5px; color: #15192B; box-sizing: border-box; }
+.discs i.m { background: #F7A1C1; } .discs i.h { background: #BFAEFF; } .discs i.b { background: #6FDDE4; }
+.discs i.gone { background: transparent; border: 1.5px dashed var(--p-muted); color: var(--p-muted); }
+.flags ol { margin: 0; padding-left: 1.3em; display: grid; gap: 10px; max-width: 86ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="label">Pogo Assist+ · design pass 2-6 · round 4, final (7 Nov 2026)</div>
+    <h1>Phone run 6 asks A–E, plus readability</h1>
+    <p class="meta">Round 4 folds in your last nine comments and fixes the upgrade chips on the slot cards (a styling slip on the page, not a design change). Every question is now answered; this is the version I will write READBACK.md from. One comment anywhere, or a "confirmed" on the heading, closes the design.</p>
+  </header>
+
+  <div class="notes">
+    <div class="note">
+      <h2>How to answer</h2>
+      <ul>
+        <li>Tap <b>Comment</b> on any mockup, or use comment mode and click the element. "Send to Claude" reaches this session.</li>
+        <li>No questions are left. Comment on anything you want changed; otherwise say "confirmed" and I write READBACK.md.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h2>Decided (rounds 1 and 2)</h2>
+      <ul class="decided">
+        <li><b>A</b> Layout A1. Tabs Available | Best, Current appearing on the right; the accent marks whichever segment is chosen, all segments otherwise plain. No SQUAD or STYLE captions. One (i). One pill: "Set this squad" ↔ "✓ Squad set"; tapping the set pill unsets at once, toast with Undo. Max battles the same without the style switch. "the best squad" and its dot go: an unedited Best reads "Squad strength 100%".</li>
+        <li><b>B</b> Available and Best edits are kept as made, per account, squad, tab and Raids style; they survive leaving and follow re-scans as Current does. Reset to suggestion stays as a link. Set this squad replaces Current without a question (toast, Undo). No button on Current. "Set" and "has a Current" are one idea: unsetting moves the Current to the history. A history of earlier Current squads under Current, with a "Set squad" pill per row. Confirm dialogs keep the bold line only, everywhere in the app.</li>
+        <li><b>C</b> Raids Best ranked by the damage estimate, top 12 per role, tier chip where the table has it; Max logged for later.</li>
+        <li><b>D</b> Two rows of three on Raids and Gym; D2 chips (form dropped); unowned chips with a hollow number and dashed edge; Empty unchanged; large text as recommended.</li>
+        <li><b>E</b> E1: the bold line only, in a smaller box; both tabs; Mega chip stays tappable; All unchanged.</li>
+        <li><b>F</b> F1 symbol chips with one word, no legend, on the five squad screens' slot cards and picker rows; the role word dropped while a role chip is chosen.</li>
+        <li><b>Round 3</b> The accent marks the chosen segment on every switch in the app (A-8). History rows as H1: discs, the strength figure, a Set squad pill; one initial per disc (B-16); the last 10 per squad, a raid or Max squad's history going with its event (B-11); Set squad from the history asks nothing (B-12). The (i) explains the chip signs (F-7). Flags: the strength line reads "41% of best · 87% after upgrades" in one tone; the box's Shadow naming "Gardevoir (Shadow)" everywhere on the squad screens; the tier chip stays as it is.</li>
+        <li><b>Pass 2-5 calls</b> all four accepted.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== A ===================== -->
+  <section class="ask" id="a">
+    <h2>A · Compact squad header, final look</h2>
+    <blockquote>"keep that accent, just have it highlighting whichever segment best/avail/current the user has selected" · "remove this including the dot. the 100% speaks for itself"</blockquote>
+    <div class="figs">
+      <figure data-c="A no Current"><figcaption><b>No Current yet, Best chosen</b><span>accent on the chosen segment; "Squad strength 100%"</span></figcaption>
+        <div class="ph cut">
+          <div class="nav"><div class="back">‹</div><div><div class="t">Raids</div><div class="s">Bosses to 1 Dec</div></div><div class="pill">78 builds</div></div>
+          <div class="row sb"><div class="title">Your squad – Mega Sableye</div><div class="info">i</div></div>
+          <div class="advice">Mega evolve Gardevoir + Power up to level 35 (158k dust).</div>
+          <div class="row sb"><span class="seg"><span>Available</span><span class="on">Best</span></span><span class="seg"><span class="on">Balanced</span><span>Max damage</span></span></div>
+          <div class="row sb"><span class="status red"><i></i>Not ready: 2 to get</span><span class="btn">Set this squad</span></div>
+          <div class="str"><div class="t">Squad strength 100%</div><div class="bar"><b style="width:100%"></b></div></div>
+          <div class="grid" data-cards="best6sym"></div>
+        </div>
+      </figure>
+      <figure data-c="A with Current"><figcaption><b>Current exists, Available chosen and set</b><span>Current sits on the right; the set pill</span></figcaption>
+        <div class="ph cut">
+          <div class="nav"><div class="back">‹</div><div><div class="t">Raids</div><div class="s">Bosses to 1 Dec</div></div><div class="pill">78 builds</div></div>
+          <div class="row sb"><div class="title">Your squad – Mega Sableye</div><div class="info">i</div></div>
+          <div class="advice">Mega evolve Gardevoir + Power up to level 35 (158k dust).</div>
+          <div class="row sb"><span class="seg"><span class="on">Available</span><span>Best</span><span>Current</span></span><span class="seg"><span class="on">Balanced</span><span>Max damage</span></span></div>
+          <div class="row sb"><span class="status amber"><i></i>Nearly ready: 6 need work</span><span class="btn set">✓ Squad set</span></div>
+          <div class="str"><div class="t">Squad strength 41% of best<small>87% after upgrades</small></div><div class="bar"><b style="width:41%"></b><u style="left:41%;width:46%"></u></div></div>
+          <div class="grid" data-cards="avail6sym"></div>
+        </div>
+      </figure>
+      <figure data-c="A style plain"><figcaption><b>Not chosen: the style switch plain</b><span>for the record</span></figcaption>
+        <div class="ph cut">
+          <div class="row sb"><div class="title">Your squad – Mega Sableye</div><div class="info">i</div></div>
+          <div class="advice">Mega evolve Gardevoir + Power up to level 35 (158k dust).</div>
+          <div class="row sb"><span class="seg"><span class="on">Available</span><span>Best</span><span>Current</span></span><span class="seg plain"><span class="on">Balanced</span><span>Max damage</span></span></div>
+          <div class="row sb"><span class="status amber"><i></i>Nearly ready: 6 need work</span><span class="btn set">✓ Squad set</span></div>
+          <div class="str"><div class="t">Squad strength 41% of best<small>87% after upgrades</small></div><div class="bar"><b style="width:41%"></b><u style="left:41%;width:46%"></u></div></div>
+        </div>
+      </figure>
+    </div>
+    <p class="fine">A-8 decided: the accent on every switch, app-wide. The third frame (plain style switch) is kept only for the record.</p>
+  </section>
+
+  <!-- ===================== B ===================== -->
+  <section class="ask" id="b">
+    <h2>B · Current with the history, final look</h2>
+    <blockquote>"the extra text ('from best 100% of best etc) i dont need that. make current button a pill style button accented renamed to 'Set squad'. possible to include some way to indicate which pokemon were in that? or maybe a squad strength indicator too? its not very much space and i dont want to increase it too much" · "maybe a small indicator to show that it has a pokemon included the user no longer has"</blockquote>
+    <p>Each history row: when it was current, one small disc per slot in the role colour with the Pokémon's initial (a dashed hollow disc for one no longer in your box), the strength it had, and a Set squad pill. One line, 44 pt tall. Tapping a disc does nothing; VoiceOver reads the row as "Today 10:16, Gardevoir, Xerneas, Zacian not in your box, … 41% of best".</p>
+    <div class="figs">
+      <figure data-c="B history H1"><figcaption><b>H1 · Discs and the strength figure</b><span>decided; upgrade chips now drawn right</span></figcaption>
+        <div class="ph cut">
+          <div class="row sb"><span class="seg"><span>Available</span><span>Best</span><span class="on">Current</span></span><span class="seg"><span class="on">Balanced</span><span>Max damage</span></span></div>
+          <div class="row sb"><span class="status amber"><i></i>Nearly ready: 6 need work</span></div>
+          <div class="str"><div class="t">Squad strength 41% of best<small>87% after upgrades</small></div><div class="bar"><b style="width:41%"></b><u style="left:41%;width:46%"></u></div></div>
+          <div class="grid" data-cards="avail6sym"></div>
+          <div class="row sb"><span class="lnk">Delete current squad</span></div>
+          <div class="cap" style="padding-top:4px">EARLIER CURRENT SQUADS</div>
+          <div class="hist">
+            <div class="hr"><span class="d">Today<small>10:16</small></span><span class="discs"><i class="m">G</i><i class="h">X</i><i class="h">Z</i><i class="h">G</i><i class="b">T</i><i class="b">P</i></span><span class="pct">100%</span><span class="sp"></span><span class="btn set sm">Set squad</span></div>
+            <div class="hr"><span class="d">Yesterday<small>18:40</small></span><span class="discs"><i class="m">G</i><i class="h">X</i><i class="h gone">R</i><i class="h">G</i><i class="b">T</i><i class="b">Z</i></span><span class="pct">38%</span><span class="sp"></span><span class="btn set sm">Set squad</span></div>
+            <div class="hr"><span class="d">5 Nov<small>09:12</small></span><span class="discs"><i class="m">G</i><i class="h">X</i><i class="h">G</i><i class="h">G</i><i class="b">T</i><i class="b">M</i></span><span class="pct">35%</span><span class="sp"></span><span class="btn set sm">Set squad</span></div>
+          </div>
+        </div>
+      </figure>
+      <figure data-c="B history H2"><figcaption><b>Not chosen: H2, discs only</b><span>for the record</span></figcaption>
+        <div class="ph cut">
+          <div class="row sb"><span class="lnk">Delete current squad</span></div>
+          <div class="cap" style="padding-top:4px">EARLIER CURRENT SQUADS</div>
+          <div class="hist">
+            <div class="hr"><span class="d">Today<small>10:16</small></span><span class="discs"><i class="m">G</i><i class="h">X</i><i class="h">Z</i><i class="h">G</i><i class="b">T</i><i class="b">P</i></span><span class="sp"></span><span class="btn set sm">Set squad</span></div>
+            <div class="hr"><span class="d">Yesterday<small>18:40</small></span><span class="discs"><i class="m">G</i><i class="h">X</i><i class="h gone">R</i><i class="h">G</i><i class="b">T</i><i class="b">Z</i></span><span class="sp"></span><span class="btn set sm">Set squad</span></div>
+            <div class="hr"><span class="d">5 Nov<small>09:12</small></span><span class="discs"><i class="m">G</i><i class="h">X</i><i class="h">G</i><i class="h">G</i><i class="b">T</i><i class="b">M</i></span><span class="sp"></span><span class="btn set sm">Set squad</span></div>
+          </div>
+          <div class="toast"><span>Current squad replaced</span><u>Undo</u></div>
+        </div>
+      </figure>
+    </div>
+    <p class="fine">B-15, B-16, B-11 and B-12 decided: H1, one initial per disc, the last 10 per squad, Set squad asks nothing. H2 is kept only for the record.</p>
+  </section>
+
+  <!-- ===================== D + E ===================== -->
+  <section class="ask" id="de">
+    <h2>D and E · Final look</h2>
+    <div class="figs">
+      <figure data-c="D final"><figcaption><b>D · Two rows of three, Best squad with two unowned</b><span>decided</span></figcaption>
+        <div class="ph cut">
+          <div class="nav"><div class="back">‹</div><div><div class="t">Raids</div><div class="s">Bosses to 1 Dec</div></div><div class="pill">78 builds</div></div>
+          <div class="strip wrap2">
+            <span class="chip c-mega"><span class="n">1</span><span class="nm">Gardevoir</span></span><span class="chip c-heavy"><span class="n">2</span><span class="nm">Xerneas</span></span><span class="chip c-heavy un"><span class="n">3</span><span class="nm">Zacian</span></span>
+            <span class="chip c-heavy ed"><span class="n">4</span><span class="nm">Gardevoir</span></span><span class="chip c-bulky"><span class="n">5</span><span class="nm">Togekiss</span></span><span class="chip c-bulky un"><span class="n">6</span><span class="nm">Primarina</span></span>
+          </div>
+          <div class="picker"><div class="ph-h">Slot 4 · Heavy hitter <div class="info">i</div><span class="done">Done</span></div><div class="roles"><span>Mega</span><span class="on">Heavy hitter</span><span>Bulky hitter</span><span>All</span></div><div data-rows="d"></div></div>
+        </div>
+      </figure>
+      <figure data-c="E final"><figcaption><b>E · The Mega chip with a Mega elsewhere</b><span>bold line only, smaller box</span></figcaption>
+        <div class="ph cut">
+          <div class="strip wrap2">
+            <span class="chip c-mega"><span class="n">1</span><span class="nm">Gardevoir</span></span><span class="chip c-heavy"><span class="n">2</span><span class="nm">Xerneas</span></span><span class="chip c-heavy"><span class="n">3</span><span class="nm">Gardevoir</span></span>
+            <span class="chip c-heavy ed"><span class="n">4</span><span class="nm">Granbull</span></span><span class="chip c-bulky"><span class="n">5</span><span class="nm">Togekiss</span></span><span class="chip c-bulky"><span class="n">6</span><span class="nm">Zamazenta</span></span>
+          </div>
+          <div class="picker">
+            <div class="ph-h">Slot 4 · Heavy hitter <div class="info">i</div><span class="done">Done</span></div>
+            <div class="roles"><span class="on mg">Mega</span><span>Heavy hitter</span><span>Bulky hitter</span><span>All</span></div>
+            <div class="msg"><div class="m">You can only have 1 Mega slot</div></div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ===================== F ===================== -->
+  <section class="ask" id="f">
+    <h2>F · Status chips, final look (F1, no legend)</h2>
+    <p>Each status once, as a chip with a sign and one word: ✓ Ready, ↑ with the cost, ◎ Get now, ◌ Not now (with the month when known), the Easy / Medium / Hard meter, ⇄ Slot N for a swap. The role word on rows shows only under All. The slot cards lose their two status lines and bottom word; their colour stays.</p>
+    <div class="figs">
+      <figure data-c="F today"><figcaption><b>Today</b><span>for comparison</span></figcaption>
+        <div class="ph cut">
+          <div class="grid" data-cards="best6"></div>
+          <div class="picker">
+            <div class="ph-h">Slot 6 · Bulky hitter <div class="info">i</div><span class="done">Done</span></div>
+            <div class="roles"><span>Mega</span><span>Heavy hitter</span><span class="on bk">Bulky hitter</span><span>All</span></div>
+            <div data-rows="c2"></div>
+          </div>
+        </div>
+      </figure>
+      <figure data-c="F1 final"><figcaption><b>F1 · Chips with one word, no legend</b><span>decided</span></figcaption>
+        <div class="ph cut">
+          <div class="grid" data-cards="best6sym"></div>
+          <div class="picker">
+            <div class="ph-h">Slot 6 · Bulky hitter <div class="info">i</div><span class="done">Done</span></div>
+            <div class="roles"><span>Mega</span><span>Heavy hitter</span><span class="on bk">Bulky hitter</span><span>All</span></div>
+            <div data-rows="f1"></div>
+          </div>
+        </div>
+      </figure>
+    </div>
+    <p class="fine">F-7 decided: the squad's (i) gets a line per sign.</p>
+  </section>
+
+  <!-- ===================== flags ===================== -->
+  <section class="ask flags" id="flags">
+    <h2>Readability flags, decided</h2>
+    <ol>
+      <li><b>The strength line</b> reads "Squad strength 41% of best · 87% after upgrades" in one tone, figures bold. Cosmetic.</li>
+      <li><b>Shadow naming</b>: the box's form, "Gardevoir (Shadow)", everywhere on the squad screens. Cosmetic.</li>
+      <li><b>The tier chip</b> on picker rows stays as it is.</li>
+    </ol>
+  </section>
+
+  <section class="ask calls" id="later">
+    <h2>Logged for later</h2>
+    <ol>
+      <li>Max battles Best ranked by the damage estimate, as Raids under C2.</li>
+      <li>Status chips beyond the squad screens: Collection strips, the Pokémon page, the Raids and Max boss lists.</li>
+    </ol>
+    <p class="fine">Review sizes for the build: A (tap target moved, tabs reordered), B, C, D, E and F change behaviour or what is shown and take the full paired review; the accent on switches (A-8), the dialog wording (B-14) and flags 1 and 2 are cosmetic.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  const R = { mega: ['MEGA', 'r-mega'], heavy: ['HEAVY HITTER', 'r-heavy'], bulky: ['BULKY HITTER', 'r-bulky'] };
+  const ST = { work: '⚠ Needs work', get: '⬇ To get', ready: '✓ Ready', empty: '' };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const sy = s => `<span class="sy ${s.k}">${s.t}</span>`;
+  const card = c => {
+    const [role, cls] = R[c.role];
+    const name = c.name ? `<div class="nm">${esc(c.name)}</div>` : `<div class="nm">Empty</div>`;
+    if (c.sym) {
+      return `<div class="card ${c.status} ${cls}${c.sel ? ' sel' : ''}"><div class="role">${role}</div><div class="disc">${esc((c.name || '+')[0])}</div>${name}<div class="syrow">${c.sym.map(sy).join('')}</div></div>`;
+    }
+    const lines = (c.lines || []).map(l => `<div class="ln">${esc(l)}</div>`).join('');
+    const cost = c.cost ? `<div class="cost">${esc(c.cost)}</div>` : '';
+    return `<div class="card ${c.status} ${cls}${c.sel ? ' sel' : ''}"><div class="role">${role}</div>${c.up ? '<div class="up">↑</div>' : ''}<div class="disc">${esc((c.name || '+')[0])}</div>${name}${lines}${cost}<div class="st">${ST[c.status]}</div></div>`;
+  };
+  const best = [
+    { role: 'mega', name: 'Mega Gardevoir', lines: ['In your box · needs upgrade'], cost: '158k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 158k' }] },
+    { role: 'heavy', name: 'Xerneas', lines: ['In your box · needs upgrade'], cost: '206k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 206k' }] },
+    { role: 'heavy', name: 'Crowned Sword Zacian', lines: ['Not available now · not on the schedule'], status: 'get', s1: [{ k: 'no', t: '◌ Not now' }] },
+    { role: 'heavy', name: 'Gardevoir (Shadow)', lines: ['In your box · needs upgrade'], cost: '211k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 211k' }] },
+    { role: 'bulky', name: 'Togekiss', lines: ['In your box · needs upgrade'], cost: '137k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 137k' }] },
+    { role: 'bulky', name: 'Primarina', lines: ['Can get now · Easy'], status: 'get', s1: [{ k: 'get', t: '◎ Get now' }, { k: 'get', t: '<span class="m">▮▯▯</span> Easy' }] },
+  ];
+  const avail = [
+    { role: 'mega', name: 'Gardevoir', cost: '158k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 158k' }] },
+    { role: 'heavy', name: 'Xerneas', cost: '206k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 206k' }] },
+    { role: 'heavy', name: 'Gardevoir (Shadow)', cost: '211k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 211k' }] },
+    { role: 'heavy', name: 'Granbull', cost: '142k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 142k' }] },
+    { role: 'bulky', name: 'Togekiss', cost: '137k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 137k' }] },
+    { role: 'bulky', name: 'Zamazenta (Crowned Shield)', cost: '206k dust', status: 'work', up: 1, s1: [{ k: 'up', t: '↑ 206k' }] },
+  ];
+  const sets = {
+    best6: best, avail6: avail,
+    best6sym: best.map(c => ({ ...c, sym: c.s1 })), avail6sym: avail.map(c => ({ ...c, sym: c.s1 })),
+  };
+  document.querySelectorAll('[data-cards]').forEach(el => { el.innerHTML = sets[el.dataset.cards].map(card).join(''); });
+
+  const prow = r => `<div class="prow"><div class="o${r.tk ? ' tk' : ''}"></div><div>
+      <div class="h">${esc(r.name)}${r.cost ? `<span class="cost">↑ ${esc(r.cost)}</span>` : ''}${r.tier ? `<span class="tier">${r.tier}</span>` : ''}</div>
+      ${r.sym ? `<div class="syrow">${r.sym.map(sy).join('')}${r.tierSym ? `<span class="tier">${r.tierSym}</span>` : ''}</div>` : `<div class="sub bk"><b>Bulky hitter</b> ${esc(r.meta || '')}</div>`}
+      <div class="bar"><b style="width:${r.pct}%"></b>${r.after ? `<u style="left:${r.pct}%;width:${r.after - r.pct}%"></u>` : ''}</div>
+      ${r.note ? `<div class="note">${esc(r.note)}</div>` : ''}</div></div>`;
+  const c2 = [
+    { name: 'Primarina', tk: 1, meta: 'Can get now · Easy', pct: 38, tier: 'B', f1: [{ k: 'get', t: '◎ Get now' }, { k: 'get', t: '<span class="m">▮▯▯</span> Easy' }] },
+    { name: 'Zamazenta (Crowned Shield)', meta: 'In your box · needs upgrade', cost: '206k', pct: 20, after: 41, f1: [{ k: 'up', t: '↑ Upgrade' }] },
+    { name: 'Tapu Koko', meta: 'Not available now', pct: 36, tier: 'B', f1: [{ k: 'no', t: '◌ Not now' }] },
+    { name: 'Dialga (Origin)', meta: 'Not available now · back in Dec', pct: 34, f1: [{ k: 'no', t: '◌ Not now · Dec' }] },
+    { name: 'Togekiss', meta: 'In your box · needs upgrade', cost: '137k', pct: 22, after: 40, tier: 'B', note: 'In slot 5 · choosing it swaps the two', f1: [{ k: 'up', t: '↑ Upgrade' }, { k: 'sw', t: '⇄ Slot 5' }] },
+    { name: 'Metagross', meta: 'In your box · needs upgrade', cost: '96k', pct: 18, after: 33, f1: [{ k: 'up', t: '↑ Upgrade' }] },
+  ];
+  const rows = {
+    c2,
+    f1: c2.map(r => ({ ...r, sym: r.f1, tierSym: r.tier, tier: undefined, note: undefined })),
+    d: [
+      { name: 'Rayquaza', meta: 'CP 4,262 · 13/12/14', pct: 68, f1: [{ k: 'ok', t: '✓ Ready' }] },
+      { name: 'Gengar', meta: 'CP 2,665 · 13/15/14', pct: 50, f1: [{ k: 'ok', t: '✓ Ready' }] },
+      { name: 'Staraptor', meta: 'CP 2,819 · 15/15/14', pct: 50, f1: [{ k: 'ok', t: '✓ Ready' }] },
+    ].map(r => ({ ...r, sym: r.f1 })),
+  };
+  document.querySelectorAll('[data-rows]').forEach(el => { el.innerHTML = rows[el.dataset.rows].map(prow).join(''); });
+
+  const figs = [...document.querySelectorAll('figure')];
+  const addButtons = comments => figs.forEach(fig => {
+    const b = document.createElement('button'); b.className = 'cbtn'; b.type = 'button'; b.textContent = 'Comment';
+    b.setAttribute('aria-label', 'Comment on ' + (fig.dataset.c || 'this mockup'));
+    b.addEventListener('click', () => { comments.openComposer({ element: fig }).catch(() => { b.hidden = true; }); });
+    fig.querySelector('figcaption').appendChild(b);
+  });
+  (async () => {
+    try { const c = window.claude && window.claude.use ? await window.claude.use('comments') : null; if (c) addButtons(c); } catch (e) { /* no comments here */ }
+  })();
+})();
+</script>

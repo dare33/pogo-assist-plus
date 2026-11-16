@@ -66,7 +66,20 @@ final class HubPvPSquadTests: SquadUITestCase {
         app.buttons["hub-tile-pvp"].tap()
         app.buttons["hub-pvp-league-ul"].tap()
         XCTAssertTrue(slot(app, "pvp", 1).waitForExistence(timeout: 30))
-        XCTAssertTrue(slot(app, "pvp", 1).label.hasPrefix("Slot 1 of 3, Lead"), "the role change was a draft, dropped on leaving the screen: \(slot(app, "pvp", 1).label)")
+        XCTAssertTrue(slot(app, "pvp", 1).label.hasPrefix("Slot 1 of 3, All"), "the role change is a kept edit, still there after leaving the screen: \(slot(app, "pvp", 1).label)")
+        // The pill is on this screen too (it only makes the squad the Current), and so is Reset to suggestion.
+        XCTAssertEqual(pill(app).label, "Set this squad")
+        reveal(app, app.buttons["squad-reset-draft"]).tap()
+        XCTAssertTrue(slot(app, "pvp", 1).label.hasPrefix("Slot 1 of 3, Lead"), "Reset to suggestion: \(slot(app, "pvp", 1).label)")
+        setThisSquad(app)
+        XCTAssertTrue(tab(app, "current").waitForExistence(timeout: 5))
+        // Round 3 review (K5c): on Current with an earlier current squad, an open picker is above Delete current squad and the history. Change slot 1's role, set again (the first is the history), then Current.
+        openPicker(app, "pvp", slot: 1)
+        app.buttons["squad-role-All"].tap()
+        closePicker(app)
+        setThisSquad(app)
+        selectTab(app, "current")
+        assertPickerAboveHistory(app, "pvp")
 
         // OTHER CANDIDATES opens a Pokémon's page; the season line closes the screen.
         let others = app.buttons.matching(identifier: "hub-pvp-candidate").firstMatch
@@ -137,10 +150,10 @@ final class HubPvPSquadTests: SquadUITestCase {
         openTile(app, "pvp")
         if app.buttons["hub-pvp-league-ul"].waitForExistence(timeout: 30) { app.buttons["hub-pvp-league-ul"].tap() }
         XCTAssertTrue(slot(app, "pvp", 1).waitForExistence(timeout: 30))
-        assertStripPinsTheSquad(app, "pvp", open: 1, chip: 3, shotName: "pvp-strip-scrolled")
+        assertStripPinsTheSquad(app, "pvp", open: 1, chip: 3, slots: 3, shotName: "pvp-strip-scrolled")
     }
 
-    /// The squad on Current after one saved edit, with its strength bar and links: light, dark, default text and AX5.
+    /// The squad on Available after one edit, with its pill, chips, strength bar and Reset link: light, dark, default text and AX5.
     func testPvPSquadStrengthShots() throws {
         let setup = launch(reset: true)
         populate(setup)

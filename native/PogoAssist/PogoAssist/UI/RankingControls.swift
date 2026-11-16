@@ -46,6 +46,7 @@ struct SegmentedSwitch<Value: Hashable>: View {
     var singleLine = false
 
     private let hit: CGFloat = 44
+    @Environment(\.accent) private var accent
 
     var body: some View {
         let track = HStack(spacing: 0) { ForEach(segments) { segment($0) } }
@@ -97,10 +98,10 @@ struct SegmentedSwitch<Value: Hashable>: View {
                     .minimumScaleFactor(singleLine ? 1 : 0.5)
                     .fixedSize(horizontal: singleLine, vertical: true)
             }
-            .foregroundStyle(selected ? (s.selectedInk ?? Theme.ink) : Theme.ink)
+            .foregroundStyle(selected ? (s.selectedInk ?? accent.ink) : Theme.ink)
             .padding(.horizontal, metrics.horizontalPadding)
             .frame(maxWidth: metrics.fillsWidth ? .infinity : nil, minHeight: metrics.segmentMinHeight)
-            .background(selected ? Theme.surface : Color.clear, in: Capsule())
+            .background(selected ? accent.tint : Color.clear, in: Capsule())
             .padding(.vertical, extra / 2)
             .contentShape(Rectangle())
             .padding(.vertical, -extra / 2)
