@@ -298,35 +298,108 @@ final class BoxMergeTests: XCTestCase {
     // MARK: Dynamax flag
 
     func testDynamaxSurvivesARescanOnEveryPath() throws {
-        for flag in [true, false, nil] as [Bool?] {
-            var r = row(cp: 300); r.dynamax = flag
+        for flag in [true, nil] as [Bool?] {
+            var r = row(cp: 300); r.dynamax = flag; r.gigantamax = flag; r.lucky = flag; r.shadow = flag == true ? 2 : nil
+            r.details = flag == true ? CopyDetails(fastMove: "MUD_SHOT", megaLevel: .high) : nil
             let v = entry(r, id: "a")
             // Same: the scan reads the identical Pokémon.
             let same = try BoxMerge.apply(plan([row(cp: 300)], [v]), to: [v])
             XCTAssertEqual(same.first?.row.dynamax, flag, "same")
+            func marks(_ e: BoxEntry?, _ w: String) {
+                XCTAssertEqual(e?.row.gigantamax, flag, w); XCTAssertEqual(e?.row.lucky, flag, w); XCTAssertEqual(e?.row.details, r.details, w)
+                XCTAssertEqual(e?.row.shadow, r.shadow, w)
+            }
+            marks(same.first, "same")
             // Powered up (asked, answered "this one"): the values are replaced, the flag is not.
             let p = plan([row(cp: 450)], [v])
             XCTAssertEqual(p.unsure.first?.kind, .poweredUp)
             let up = try BoxMerge.apply(p, resolutions: accept(p), to: [v])
             XCTAssertEqual(up.first?.row.cp, 450); XCTAssertEqual(up.first?.row.dynamax, flag, "powered up")
+            marks(up.first, "powered up")
             XCTAssertEqual(BoxMerge.updated(v, with: row(cp: 450), date: date(11)).row.dynamax, flag, "updated")
+            marks(BoxMerge.updated(v, with: row(cp: 450), date: date(11)), "updated")
         }
     }
 
     func testDynamaxEditSetsAndClearsWithoutBeingACorrection() throws {
         let v = entry(row(), id: "a")
         XCTAssertNil(v.row.dynamax)
-        let yes = try BoxMerge.correct(v, with: BoxMerge.Edit(dynamax: .yes), gameMaster: gm)
+        let yes = try BoxMerge.correct(v, with: BoxMerge.Edit(dynamax: .on), gameMaster: gm)
         XCTAssertEqual(yes.row.dynamax, true); XCTAssertFalse(yes.isHandCorrected)
-        let no = try BoxMerge.correct(yes, with: BoxMerge.Edit(dynamax: .no), gameMaster: gm)
-        XCTAssertEqual(no.row.dynamax, false)
-        XCTAssertNil(try BoxMerge.correct(no, with: BoxMerge.Edit(dynamax: .notSet), gameMaster: gm).row.dynamax)
+        XCTAssertNil(try BoxMerge.correct(yes, with: BoxMerge.Edit(dynamax: .off), gameMaster: gm).row.dynamax)
         // nil leaves it alone; an edit of another field leaves it alone too.
         XCTAssertEqual(try BoxMerge.correct(yes, with: BoxMerge.Edit(cp: 310), gameMaster: gm).row.dynamax, true)
         XCTAssertEqual(try BoxMerge.correct(yes, with: BoxMerge.Edit(), gameMaster: gm), yes)
         // a value equal to the current one changes nothing
-        XCTAssertEqual(try BoxMerge.correct(yes, with: BoxMerge.Edit(dynamax: .yes), gameMaster: gm), yes)
-        XCTAssertEqual(BoxMerge.DynamaxEdit(nil), .notSet); XCTAssertEqual(BoxMerge.DynamaxEdit(true), .yes); XCTAssertEqual(BoxMerge.DynamaxEdit(false), .no)
+        XCTAssertEqual(try BoxMerge.correct(yes, with: BoxMerge.Edit(dynamax: .on), gameMaster: gm), yes)
+        XCTAssertEqual(BoxMerge.DynamaxEdit(nil), .off); XCTAssertEqual(BoxMerge.DynamaxEdit(true), .on); XCTAssertEqual(BoxMerge.DynamaxEdit(false), .off)
+    }
+
+    func testGigantamaxImpliesDynamaxAndDynamaxOffClearsIt() throws {
+        let v = entry(row(), id: "a")
+        let g = try BoxMerge.correct(v, with: BoxMerge.Edit(gigantamax: true), gameMaster: gm)
+        XCTAssertEqual(g.row.gigantamax, true); XCTAssertEqual(g.row.dynamax, true); XCTAssertFalse(g.isHandCorrected)
+        // Gigantamax off leaves Dynamax on; Dynamax off takes Gigantamax with it.
+        let gOff = try BoxMerge.correct(g, with: BoxMerge.Edit(gigantamax: false), gameMaster: gm)
+        XCTAssertNil(gOff.row.gigantamax); XCTAssertEqual(gOff.row.dynamax, true)
+        let dOff = try BoxMerge.correct(g, with: BoxMerge.Edit(dynamax: .off), gameMaster: gm)
+        XCTAssertNil(dOff.row.dynamax); XCTAssertNil(dOff.row.gigantamax)
+        // Both in one edit: on wins.
+        let both = try BoxMerge.correct(v, with: BoxMerge.Edit(dynamax: .off, gigantamax: true), gameMaster: gm)
+        XCTAssertEqual(both.row.gigantamax, true); XCTAssertEqual(both.row.dynamax, true)
+    }
+
+    func testShadowAndPurifiedAreOneMarkAndOffStoresZero() throws {
+        let v = entry(row(), id: "a")
+        XCTAssertNil(v.row.shadow)
+        let s = try BoxMerge.correct(v, with: BoxMerge.Edit(shadow: .shadow), gameMaster: gm)
+        XCTAssertEqual(s.row.shadow, 1)
+        let p = try BoxMerge.correct(s, with: BoxMerge.Edit(shadow: .purified), gameMaster: gm)
+        XCTAssertEqual(p.row.shadow, 2, "Purified on clears Shadow")
+        XCTAssertEqual(try BoxMerge.correct(p, with: BoxMerge.Edit(shadow: .shadow), gameMaster: gm).row.shadow, 1, "and back")
+        XCTAssertEqual(try BoxMerge.correct(p, with: BoxMerge.Edit(shadow: .neither), gameMaster: gm).row.shadow, 0, "off is 0, not unknown")
+        XCTAssertFalse(s.isHandCorrected)
+        XCTAssertEqual(BoxMerge.ShadowEdit(nil), .neither); XCTAssertEqual(BoxMerge.ShadowEdit(0), .neither)
+        XCTAssertEqual(BoxMerge.ShadowEdit(1), .shadow); XCTAssertEqual(BoxMerge.ShadowEdit(2), .purified)
+        // A saved mark (0, 1 or 2) is kept by a re-scan whatever the scanned row carries, as Dynamax is; a scanned value only fills an unknown one.
+        var clip = row(cp: 450); clip.shadow = 1
+        for saved in [0, 1, 2] {
+            var hand = s; hand.row.shadow = saved
+            XCTAssertEqual(BoxMerge.updated(hand, with: row(cp: 450), date: date(11)).row.shadow, saved)
+            XCTAssertEqual(BoxMerge.updated(hand, with: clip, date: date(11)).row.shadow, saved, "saved \(saved)")
+        }
+        var unknown = s; unknown.row.shadow = nil
+        XCTAssertEqual(BoxMerge.updated(unknown, with: clip, date: date(11)).row.shadow, 1)
+    }
+
+    func testLuckyAndDetailsEditsAreSavedWithoutBeingCorrections() throws {
+        let v = entry(row(), id: "a")
+        let l = try BoxMerge.correct(v, with: BoxMerge.Edit(lucky: true), gameMaster: gm)
+        XCTAssertEqual(l.row.lucky, true); XCTAssertFalse(l.isHandCorrected)
+        XCTAssertNil(try BoxMerge.correct(l, with: BoxMerge.Edit(lucky: false), gameMaster: gm).row.lucky)
+        let d = CopyDetails(fastMove: "MUD_SHOT", chargedMove: "EARTHQUAKE", maxAttack: 2, megaLevel: .base, bestBuddy: true)
+        let withDetails = try BoxMerge.correct(v, with: BoxMerge.Edit(details: d), gameMaster: gm)
+        XCTAssertEqual(withDetails.row.details, d); XCTAssertFalse(withDetails.isHandCorrected)
+        XCTAssertNil(try BoxMerge.correct(withDetails, with: BoxMerge.Edit(details: CopyDetails()), gameMaster: gm).row.details, "an empty one clears them")
+        XCTAssertEqual(try BoxMerge.correct(withDetails, with: BoxMerge.Edit(), gameMaster: gm), withDetails)
+    }
+
+    func testTheSecondChargedMoveIsNeverTheFirst() throws {
+        XCTAssertNil(CopyDetails(chargedMove: "A", chargedMove2: "A").normalised.chargedMove2)
+        XCTAssertEqual(CopyDetails(chargedMove: "A", chargedMove2: "B").normalised.chargedMove2, "B")
+        XCTAssertEqual(CopyDetails(chargedMove2: "B").normalised.chargedMove2, "B")
+        let v = entry(row(), id: "a")
+        let e = try BoxMerge.correct(v, with: BoxMerge.Edit(details: CopyDetails(chargedMove: "A", chargedMove2: "A")), gameMaster: gm)
+        XCTAssertEqual(e.row.details?.chargedMove, "A"); XCTAssertNil(e.row.details?.chargedMove2)
+    }
+
+    func testAGigantamaxRowWithoutDynamaxDecodesWithBoth() throws {
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(row())) as! [String: Any]
+        object["gigantamax"] = true
+        let r = try JSONDecoder().decode(ScanRow.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(r.gigantamax, true); XCTAssertEqual(r.dynamax, true)
+        object["dynamax"] = false
+        XCTAssertEqual(try JSONDecoder().decode(ScanRow.self, from: JSONSerialization.data(withJSONObject: object)).dynamax, true, "an old No beside Gigantamax reads as both too")
     }
 
     func testRowsDecodeWithAndWithoutTheDynamaxKey() throws {
@@ -336,8 +409,33 @@ final class BoxMergeTests: XCTestCase {
         // an unset flag is not written, so every stored box and reader output looks as it did before
         let plain = try JSONEncoder().encode(row())
         let object = try JSONSerialization.jsonObject(with: plain) as! [String: Any]
-        XCTAssertNil(object["dynamax"]); XCTAssertNotNil(object["cp"])
-        XCTAssertNil(try JSONDecoder().decode(ScanRow.self, from: plain).dynamax)
+        for k in ["dynamax", "gigantamax", "lucky", "details", "shadow"] { XCTAssertNil(object[k], k) }
+        XCTAssertNotNil(object["cp"])
+        let back = try JSONDecoder().decode(ScanRow.self, from: plain)
+        XCTAssertNil(back.dynamax); XCTAssertNil(back.gigantamax); XCTAssertNil(back.lucky); XCTAssertNil(back.details)
+        XCTAssertEqual(back, row())
+    }
+
+    func testAnOldStoredNoDecodesAsOff() throws {
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(row())) as! [String: Any]
+        object["dynamax"] = false
+        let old = try JSONDecoder().decode(ScanRow.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertNil(old.dynamax)
+        // and it is not written back
+        let again = try JSONSerialization.jsonObject(with: JSONEncoder().encode(old)) as! [String: Any]
+        XCTAssertNil(again["dynamax"])
+    }
+
+    func testEveryNewFieldRoundTrips() throws {
+        var r = row(); r.dynamax = true; r.gigantamax = true; r.lucky = true; r.shadow = 2
+        r.details = CopyDetails(fastMove: "MUD_SHOT", chargedMove: "EARTHQUAKE", chargedMove2: "STONE_EDGE", maxAttack: 3, maxGuard: 1, maxSpirit: 2, megaLevel: .max, bestBuddy: true, weatherBoosted: false)
+        let back = try JSONDecoder().decode(ScanRow.self, from: JSONEncoder().encode(r))
+        XCTAssertEqual(back, r)
+        // an unset detail is not written
+        let sparse = CopyDetails(megaLevel: .notYet)
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(sparse)) as! [String: String]
+        XCTAssertEqual(object, ["megaLevel": "notYet"])
+        XCTAssertEqual(CopyDetails.MegaLevel.allCases.map(\.rawValue), ["notYet", "base", "high", "max"])
     }
 
     // MARK: flags

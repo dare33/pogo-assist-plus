@@ -1,0 +1,79 @@
+import SwiftUI
+import PogoBox
+
+/// The kinds of Special scan, as one choice. Each kind is its own run and its own save. Lucky, Shiny and Background are listed after them, tagged "Coming soon" and not
+/// choosable until a scan is built for each (Greg, 31 Oct 2026).
+struct PassPicker: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.accent) private var accent
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Which search?").font(.secondary).foregroundStyle(Theme.muted)
+            // One column at the accessibility text sizes: "Gigantamax" and "Background" do not fit half a row there and would break mid-word.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 8) {
+                ForEach(ScanPass.allCases, id: \.self) { pass in
+                    let on = model.scanPass == pass
+                    Button { model.scanPass = pass } label: {
+                        Text(pass.title).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(on ? accent.onSolid : Theme.ink)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .background(on ? accent.solid : Theme.off, in: Capsule())
+                            .frame(minHeight: 44).contentShape(Capsule())
+                    }
+                    .buttonStyle(PressStyle())
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .accessibilityIdentifier("pass-kind-\(pass.rawValue)")
+                }
+                ForEach(ScanPass.comingSoon, id: \.self) { name in
+                    VStack(spacing: 0) {
+                        Text(name).font(.figtree(14, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.muted)
+                        Text("Coming soon").font(.figtree(11, .semibold, relativeTo: .caption2)).foregroundStyle(Theme.muted)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    // The panel's own surface with an outline: muted text measures 4.92:1 (light) and 5.84:1 (dark) on it; the old half-strength fill gave 4.43:1 in light.
+                    .background(Theme.surface, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.line, lineWidth: 1))
+                    .frame(minHeight: 44)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(name), coming soon")
+                    .accessibilityAddTraits(.isStaticText)
+                    .accessibilityIdentifier("pass-soon-\(name.lowercased())")
+                }
+            }
+        }
+    }
+}
+
+/// The search word and "Copy search": the player pastes it into the game's storage search themselves. Nothing here reaches the game.
+struct CopySearchRow: View {
+    let pass: ScanPass
+    @Environment(\.accent) private var accent
+    @Environment(\.showToast) private var showToast
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        // At the accessibility text sizes the search word and "Copy search" stack, so "Copy" does not break letter by letter beside the word.
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 10))
+        layout {
+            Image(systemName: "magnifyingglass").font(.figtree(16, .bold)).foregroundStyle(accent.ink).accessibilityHidden(true)
+            Text(pass.searchWord).font(.figtree(18, .heavy, relativeTo: .body)).foregroundStyle(Theme.ink)
+                .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("scan-search-word")
+            Button {
+                UIPasteboard.general.string = pass.searchWord
+                showToast("Copied")
+            } label: {
+                HStack(spacing: 6) { Image(systemName: "doc.on.doc"); Text("Copy search") }
+                    .font(.figtree(14, .heavy, relativeTo: .subheadline)).foregroundStyle(accent.ink)
+                    .padding(.horizontal, 14).frame(minHeight: 36).background(accent.tint, in: Capsule())
+                    .frame(minHeight: 44).contentShape(Capsule())
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityLabel("Copy search, \(pass.searchWord)")
+            .accessibilityIdentifier("scan-copy-search")
+        }
+        .padding(.leading, 14).padding(.trailing, 4).frame(minHeight: 48)
+        .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .contain)
+    }
+}

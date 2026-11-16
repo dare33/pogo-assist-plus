@@ -23,7 +23,11 @@ for (const p of box) {
   const ids = new Set([r.speciesId, ...evolutionsOf(gm, r.speciesId), ...formChangesOf(gm, r.speciesId)]);
   if (!p.shadow) for (const id of [...ids]) for (const m of megaIdsOf(gm, id)) ids.add(m);
   const hits = [];
-  for (const id of ids) for (const e of byId.get(id) || []) hits.push({ ...e, via: id === r.speciesId ? 'self' : id });
+  for (const id of ids) for (const e of byId.get(id) || []) {
+    // Same rule as src/advise.js: a Gigantamax Max entry needs a Gigantamax catch, which an export cannot show.
+    if (e.area === 'max' && /gigantamax|g-max/i.test(e.name)) continue;
+    hits.push({ ...e, via: id === r.speciesId ? 'self' : id });
+  }
   if (!hits.length) continue;
   const score = hits.reduce((s, h) => s + TIER_W[h.tier], 0);
   rows.push({ p, r, hits, score });

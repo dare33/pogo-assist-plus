@@ -1,7 +1,7 @@
 import Foundation
 
 /// The suggested teams of the Gym, Team Rocket and PvP screens, worked out from the advice report, the game master's types and the Hub's type
-/// chart. The teams are read-only suggestions (slot pickers and saved assignments are not built yet). Pure, so the fixture pins them (`HubTeamsModelTests`).
+/// chart: the Gym, Rocket and PvP lists and counters the squad screens read (`HubSquads` builds the squads, their picks and their pickers on them). Pure, so the fixture pins them (`HubTeamsModelTests`).
 public enum HubTeams {
     // MARK: shared
 
@@ -95,13 +95,13 @@ public enum HubTeams {
     /// How many of the slot's options one of the build's types hits for more than normal damage.
     static func hits(_ b: BoxAdvice.Build, options: [HubData.Boss], gm: GameMaster, hub: HubData) -> Int {
         let mine = types(of: b, gm: gm)
-        return options.filter { o in mine.contains { hub.effectiveness($0, against: o.types) > 1.0001 } }.count
+        return options.filter { o in hub.beats(mine, o.types) }.count
     }
 
     /// The options of a slot that the build's target beats, by name without the "Shadow " every Rocket Pokémon carries.
     public static func beaten(by b: BoxAdvice.Build, options: [HubData.Boss], gm: GameMaster, hub: HubData) -> [String] {
         let mine = types(of: b, gm: gm)
-        return options.filter { o in mine.contains { hub.effectiveness($0, against: o.types) > 1.0001 } }.map { plain($0.name) }
+        return options.filter { o in hub.beats(mine, o.types) }.map { plain($0.name) }
     }
 
     /// "beats all 3", "beats Machamp only", "beats Rhyperior and Machamp"; a slot with a single option reads "beats Persian".
@@ -150,7 +150,7 @@ public enum HubTeams {
                 return l.offset < r.offset
             }
         if let top = ranked.first { return isBuilt(top.build) ? .built(top.build) : .toBuild(top.build) }
-        let gap = gap(in: gaps, gm: gm) { mine in options.contains { o in mine.contains { hub.effectiveness($0, against: o.types) > 1.0001 } } }
+        let gap = gap(in: gaps, gm: gm) { mine in options.contains { o in hub.beats(mine, o.types) } }
         return gap.map(Counter.gap) ?? .none
     }
 
@@ -169,17 +169,22 @@ public enum HubTeams {
     /// that has such a type. Else none.
     public static func gruntCounter(type: String, builds: [BoxAdvice.Build], gaps: [BoxAdvice.Gap] = [], gm: GameMaster, hub: HubData) -> Counter {
         guard !type.isEmpty else { return .anyAttacker }
-        func beats(_ types: [String]) -> Bool { types.contains { hub.effectiveness($0, against: [type]) > 1.0001 } }
-        let fit = builds.enumerated().filter { isRocketCounterArea($0.element) && beats(types(of: $0.element, gm: gm)) }.sorted { l, r in
+        let fit = gruntFit(type: type, builds: builds, gm: gm, hub: hub)
+        if let b = fit.first(where: isBuilt) { return .built(b) }
+        if let b = fit.first { return .toBuild(b) }
+        return gap(in: gaps, gm: gm) { hub.beats($0, [type]) }.map(Counter.gap) ?? .none
+    }
+
+    /// The Rocket and Raids builds whose target hits a grunt of `type` for more than normal damage, in this order: Rocket area, tier, score, the advisor's
+    /// order. `gruntCounter` takes the first built one; the Hub's grunt strip (`HubSquads.gruntCounters`) lists them built first from the same order.
+    static func gruntFit(type: String, builds: [BoxAdvice.Build], gm: GameMaster, hub: HubData) -> [BoxAdvice.Build] {
+        builds.enumerated().filter { isRocketCounterArea($0.element) && hub.beats(types(of: $0.element, gm: gm), [type]) }.sorted { l, r in
             let (a, b) = (l.element, r.element)
             if a.areas.contains("Rocket") != b.areas.contains("Rocket") { return a.areas.contains("Rocket") }
             if tierRank(a) != tierRank(b) { return tierRank(a) < tierRank(b) }
             if a.score != b.score { return a.score > b.score }
             return l.offset < r.offset
         }.map(\.element)
-        if let b = fit.first(where: isBuilt) { return .built(b) }
-        if let b = fit.first { return .toBuild(b) }
-        return gap(in: gaps, gm: gm, beats: beats).map(Counter.gap) ?? .none
     }
 
     // MARK: PvP
@@ -221,7 +226,9 @@ public enum HubTeams {
 
     /// The candidates for a league (`gl`, `ul` or `ml`): per copy in the box its shown option (the Pogo Assist pick when `pogoAssist`), when it
     /// is not past the cap and scores `candidateFloor` or more. Best score first, then the better IV rank; one entry per species (the best copy).
-    public static func candidates(league: String, advice: BoxAdvice, pogoAssist: Bool = false) -> [Candidate] {
+    /// `allowed` is asked before the one-per-species step, so a species whose best copy is not allowed (Available: not the copy itself) still lists its next
+    /// best copy that is.
+    public static func candidates(league: String, advice: BoxAdvice, pogoAssist: Bool = false, allowed: (Candidate) -> Bool = { _ in true }) -> [Candidate] {
         var all = [Candidate]()
         for (id, ratings) in advice.leagues {
             guard let r = ratings[league] else { continue }
@@ -233,7 +240,8 @@ public enum HubTeams {
             // known recommended move still to learn does.
             let c = o.cost
             let done = o.isSelf && c != nil && c!.dust == 0 && c!.candy == 0 && c!.xl == 0 && (o.needs ?? []).isEmpty
-            all.append(Candidate(entryId: id, option: o, copyTitle: r.options.first(where: \.isSelf)?.name ?? "", score: s.score, ivRank: o.iv?.rank, ivPct: o.iv?.pct, built: done))
+            let candidate = Candidate(entryId: id, option: o, copyTitle: r.options.first(where: \.isSelf)?.name ?? "", score: s.score, ivRank: o.iv?.rank, ivPct: o.iv?.pct, built: done)
+            if allowed(candidate) { all.append(candidate) }
         }
         all.sort {
             if $0.score != $1.score { return $0.score > $1.score }
@@ -249,7 +257,7 @@ public enum HubTeams {
     /// The types a team hits for more than normal damage: a type is covered when one member's type is super-effective against it.
     static func covered(_ team: [Candidate], gm: GameMaster, hub: HubData) -> Set<String> {
         let mine = Set(team.flatMap { types(of: $0, gm: gm) })
-        return Set(HubData.typeOrder.filter { defender in mine.contains { hub.effectiveness($0, against: [defender]) > 1.0001 } })
+        return Set(HubData.typeOrder.filter { defender in hub.beats(Array(mine), [defender]) })
     }
 
     /// The top candidate, then each time the candidate that covers the most types not yet covered (ties: the better score, as the list is sorted).
@@ -283,7 +291,7 @@ public enum HubTeams {
     /// Z is what the swap newly covers.
     public static func weaknessNote(team: [Candidate], candidates: [Candidate] = [], gm: GameMaster, hub: HubData) -> String {
         guard team.count > 1 else { return "" }
-        let shared = HubData.typeOrder.filter { attacker in team.filter { hub.effectiveness(attacker, against: types(of: $0, gm: gm)) > 1.0001 }.count >= 2 }
+        let shared = HubData.typeOrder.filter { attacker in team.filter { hub.beats([attacker], types(of: $0, gm: gm)) }.count >= 2 }
         var note = shared.isEmpty ? "No shared weakness." : "Weak to \(list(shared))."
         if let swap = swapSuggestion(team: team, candidates: candidates, gm: gm, hub: hub) { note += " " + swap }
         return note

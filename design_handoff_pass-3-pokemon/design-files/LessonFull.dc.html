@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lesson: Full strength badge</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="lesson" style="height: 860px">
+<div class="lrow"><div class="lcol"><div class="lcap">TODAY</div></div><div class="lcol"><div class="lcap">WITH THE LESSON: FULL STRENGTH BADGE, NO "FREE"</div></div></div>
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="lrow">
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Species list row (your built Blissey)</div>
+<div class="panel-list"><div class="crow"><span class="smain"><span class="stitle">Blissey</span><span class="ssub">12/13/15 · 89%</span></span><span class="cpfig"><small>CP</small><b>3036</b></span></div></div>
+<div class="what">Advice</div>
+<div class="panel tint-acc" style="gap: 8px; padding: 14px 16px"><div class="adv-act" style="font-size: 18px">Already built (Max needs a Dynamax copy)</div><div class="tags"><span class="tag">Gym</span><span class="tag">Max</span><span class="tag">Tier S</span></div><div class="adv-line">Level 50: no dust or candy to spend</div></div>
+</div>
+</div>
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Species list row (your built Blissey)</div>
+<div class="panel-list"><div class="crow"><span class="smain"><span class="stitle">Blissey<span class="done" role="img" aria-label="Full strength" title="Full strength"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></span><span class="ssub">12/13/15 · 89%</span></span><span class="cpfig"><small>CP</small><b>3036</b></span></div></div>
+<div class="what">Advice</div>
+<div class="panel tint-acc" style="gap: 8px; padding: 14px 16px">
+<div style="display: flex; align-items: center; gap: 8px"><span class="adv-act" style="font-size: 18px">Blissey</span><span class="ti pt-normal" role="img" aria-label="Normal" title="Normal"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zm0 4.5a4.5 4.5 0 1 1 0 9a4.5 4.5 0 1 1 0-9z" fill="currentColor" fill-rule="evenodd"></path></svg></span><span style="flex: 1"></span><span class="done big" role="img" aria-label="Full strength" title="Full strength"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></div>
+<div class="tags"><span class="tag">Gym</span><span class="tag">Max</span><span class="tag">Tier S</span></div>
+<div class="adv-line" style="font-size: 14px; color: var(--muted)">Level 50 · Max needs a Dynamax copy</div>
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() { return { themes: [{ cls: 't-light' }, { cls: 't-dark' }] }; }
+}
+</script>
+</body>
+</html>

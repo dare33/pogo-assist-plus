@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lesson: upgrade icon and cost</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="lesson" style="height: 860px">
+<div class="lrow"><div class="lcol"><div class="lcap">TODAY</div></div><div class="lcol"><div class="lcap">WITH THE LESSON: UPGRADE ICON, COST AND CURRENCY</div></div></div>
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="lrow">
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Species list row (the copy to build)</div>
+<div class="panel-list"><div class="crow"><span class="smain"><span class="stitle">Eevee</span><span class="ssub">2/11/6 · 42%</span></span><span class="cpfig"><small>CP</small><b>782</b></span></div></div>
+<div class="what">Advice</div>
+<div class="panel tint-acc" style="gap: 8px; padding: 14px 16px"><div class="adv-act" style="font-size: 18px">Evolve to Glaceon + Power up to level 35 (Raids)</div><div class="tags"><span class="tag">Raids</span><span class="tag">Tier B</span></div><div class="adv-line">Level 30 to 35: 62k dust, 89 candy</div></div>
+<div class="what">Great League card, cost</div>
+<div class="costs" style="background: var(--surface2); border-radius: 16px; padding: 12px 16px; border: 0"><span>Target level: <b>50</b></span><span>Target CP: <b>1,031</b></span><span><b>400,000 dust</b></span><span><b>182 candy, 296 XL</b></span></div>
+</div>
+</div>
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Species list row (the copy to build)</div>
+<div class="panel-list"><div class="crow"><span class="smain"><span class="stitle">Eevee<span class="upcost" title="Upgrade available: evolve Eevee, 25 candy"><span class="up" role="img" aria-label="Upgrade available: evolve Eevee, 25 candy"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span><span class="cost">25</span><svg class="cicon candy" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="candy"><path d="M8.5 8.5a5 5 0 1 1 7 7a5 5 0 1 1-7-7zM2.5 3l5 1.5.5 3.5zM21.5 21l-5-1.5-.5-3.5z" fill="currentColor"></path></svg></span></span><span class="ssub">2/11/6 · 42%</span></span><span class="cpfig"><small>CP</small><b>782</b></span></div></div>
+<div class="what">Advice</div>
+<div class="panel tint-acc" style="gap: 8px; padding: 14px 16px">
+<div style="display: flex; align-items: center; gap: 8px"><span class="adv-act" style="font-size: 18px">Glaceon</span><span class="ti pt-ice" role="img" aria-label="Ice" title="Ice"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 2h2v7.3l6.3-3.6 1 1.7L14 11l6.3 3.6-1 1.7L13 12.7V22h-2v-9.3l-6.3 3.6-1-1.7L10 11 3.7 7.4l1-1.7L11 9.3z" fill="currentColor" fill-rule="evenodd"></path></svg></span><span style="flex: 1"></span><span class="upcost" title="Upgrade available: evolve Eevee, power up to level 35"><span class="up" role="img" aria-label="Upgrade available: evolve Eevee, power up to level 35"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span><span class="cost">62k</span><svg class="cicon dust" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="stardust"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill="currentColor"></path></svg><span class="cost" style="margin-left: 3px">89</span><svg class="cicon candy" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="candy"><path d="M8.5 8.5a5 5 0 1 1 7 7a5 5 0 1 1-7-7zM2.5 3l5 1.5.5 3.5zM21.5 21l-5-1.5-.5-3.5z" fill="currentColor"></path></svg></span></div>
+<div class="tags"><span class="tag">Raids</span><span class="tag">Tier B</span></div>
+<div class="adv-line" style="font-size: 14px; color: var(--muted)">Evolve, power up to level 35</div>
+</div>
+<div class="what">Great League card, cost</div>
+<div class="costs" style="background: var(--surface2); border-radius: 16px; padding: 12px 16px; border: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px"><span class="up" role="img" aria-label="Upgrade available" title="Upgrade available"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span><span class="upcost"><span class="cost">400k</span><svg class="cicon dust" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="stardust"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill="currentColor"></path></svg></span><span class="upcost"><span class="cost">182</span><svg class="cicon candy" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="candy"><path d="M8.5 8.5a5 5 0 1 1 7 7a5 5 0 1 1-7-7zM2.5 3l5 1.5.5 3.5zM21.5 21l-5-1.5-.5-3.5z" fill="currentColor"></path></svg></span><span class="upcost"><span class="cost">296</span><span class="cost" style="color: var(--muted)">XL</span></span><span style="font-size: 13px">to L50, CP 1,031</span></div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { themes: [{ cls: 't-light' }, { cls: 't-dark' }] };
+  }
+}
+</script>
+</body>
+</html>

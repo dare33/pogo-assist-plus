@@ -10,6 +10,8 @@ struct BoxIndex {
         var id: String
         /// Name with form in brackets, as the rows show it ("Zamazenta (Hero)").
         var title: String
+        /// The game master's species id (the row's types come from it).
+        var speciesId: String = ""
         /// The lowercase name the game's search takes ("staraptor"); the form is not part of it.
         var name: String
         /// Lowercase text a typed search is matched against: the title and the display name with its form ("Mega Charizard X", "Alolan Raichu"), so "mega" or "alola" find them.
@@ -28,6 +30,50 @@ struct BoxIndex {
         var hasMega = false
         /// A Shadow copy (the game's flag on the row); the engine's best-of is per resolved species, so a plain and a Shadow copy are told apart by it.
         var shadow = false
+        /// The special types the copy has, as the search words name them (`SearchWord`).
+        var words: Set<SearchWord> = []
+    }
+
+    /// The game's own words for the special types, which My Pokémon's search understands beside names and CPs. The sets (shadow, legendary, mythical, ultra beasts, mega,
+    /// Hundo, lucky) come from `HubCollection.Membership`, the same definition the Collection's Special sets count and list; the marks (purified, dynamax,
+    /// gigantamax, best buddy) are read off the copy's row.
+    enum SearchWord: Hashable {
+        case shadow, purified, lucky, dynamax, gigantamax, legendary, mythical, ultraBeast, mega, hundo, buddy
+
+        /// nil for Shiny and Background, which have no search word until a scan reads them.
+        init?(_ kind: HubCollection.SetKind) {
+            switch kind {
+            case .hundo: self = .hundo
+            case .legendary: self = .legendary
+            case .mythical: self = .mythical
+            case .ultraBeasts: self = .ultraBeast
+            case .megaCapable: self = .mega
+            case .lucky: self = .lucky
+            case .shadow: self = .shadow
+            case .dynamax: self = .dynamax
+            case .gigantamax: self = .gigantamax
+            case .shiny, .background: return nil
+            }
+        }
+
+        /// What a typed word means, whole and lower case; nil for a piece of a name.
+        static let spellings: [String: SearchWord] = [
+            "shadow": .shadow, "purified": .purified, "lucky": .lucky,
+            "dynamax": .dynamax, "max": .dynamax, "gigantamax": .gigantamax, "gmax": .gigantamax, "g-max": .gigantamax,
+            "legendary": .legendary, "mythical": .mythical,
+            "ultra beasts": .ultraBeast, "ultra beast": .ultraBeast, "ultra-beasts": .ultraBeast, "ultra-beast": .ultraBeast, "ultrabeasts": .ultraBeast, "ultrabeast": .ultraBeast,
+            "mega": .mega, "100%": .hundo, "hundo": .hundo, "buddy": .buddy, "best buddy": .buddy, "best buddies": .buddy,
+        ]
+
+        static func of(_ entry: BoxEntry, membership: HubCollection.Membership) -> Set<SearchWord> {
+            var out = Set(membership.kinds(of: entry).compactMap(SearchWord.init))
+            let r = entry.row
+            if r.shadow == 2 { out.insert(.purified) }   // the hand mark; `HubCollection.isShadow` leaves a Purified copy out of Shadow
+            if r.dynamax == true { out.insert(.dynamax) }
+            if r.gigantamax == true { out.insert(.gigantamax) }
+            if r.details?.bestBuddy == true { out.insert(.buddy) }
+            return out
+        }
     }
 
     struct Group {
@@ -60,8 +106,9 @@ struct BoxIndex {
 
     init() {}
 
-    init(entries: [BoxEntry]) {
+    init(entries: [BoxEntry], gm: GameMaster? = try? GameMaster.bundled()) {
         items.reserveCapacity(entries.count)
+        let membership = gm.map { HubCollection.Membership(entries: entries, gm: $0) }
         var byTitle = [String: [Int]]()
         var species = Set<String>()
         for e in entries {
@@ -71,8 +118,10 @@ struct BoxIndex {
             let key = title.lowercased() + "|" + r.display.lowercased() + (mega.map { "|" + $0.title.lowercased() + "|" + $0.display.lowercased() } ?? "")
             var item = Item(id: e.id, title: title, name: r.name.lowercased(), key: key, cp: r.cp, hp: r.hp, noLevelFits: GameSearch.noLevelFits(r.flags), ivs: r.ivs.map { "\($0.atk)/\($0.def)/\($0.hp)" }, ivSum: sum,
                             needsCheck: e.needsCheck, fixed: e.isHandCorrected)
+            item.speciesId = r.speciesId
             item.hasMega = mega != nil
             item.shadow = r.shadow == 1
+            if let membership { item.words = SearchWord.of(e, membership: membership) }
             if item.needsCheck { toCheckCount += 1 }
             if item.fixed { fixedCount += 1 }
             species.insert(r.dex.map { "dex\($0)" } ?? r.name.lowercased())
@@ -133,19 +182,79 @@ struct BoxIndex {
         case none
         case text(String)
         case cp(ClosedRange<Int>)
+        /// A search with at least one special-type word ("shadow", "pika shadow", "ultra beasts & shadow").
+        case words(Words)
+
+        /// The words of a typed search, split at spaces and "&": a special-type word (`SearchWord`) means the type, a CP word ("cp1500-2500", "cp1500-", "cp-2500",
+        /// "cp2819") is a CP filter, and any other word is a piece of a name. Every word must match. A special word that is not found as a type is also matched against names,
+        /// but only names that start with it ("mega" finds Meganium, not Yanmega; "shadow" does not find Marshadow); a piece of a name stays a substring as before.
+        struct Words: Hashable {
+            struct Token: Hashable {
+                var text: String
+                var word: SearchWord?
+                var cp: ClosedRange<Int>?
+            }
+            /// The whole search as typed, matched as one piece of a name first (as before the special words: "mega charizard x"); nil for one word or a search built from a word.
+            var whole: String?
+            var tokens: [Token]
+
+            /// nil when no word is a special-type word or a CP filter (the search is then plain `.text`).
+            init?(_ q: String) {
+                var raw = q.replacingOccurrences(of: "&", with: " ").split(whereSeparator: \.isWhitespace).map { String($0).trimmingCharacters(in: CharacterSet(charactersIn: ",.;")) }.filter { !$0.isEmpty }
+                var merged = [String]()
+                while !raw.isEmpty {
+                    let w = raw.removeFirst()
+                    if let next = raw.first, (w == "ultra" && (next == "beast" || next == "beasts")) || (w == "best" && (next == "buddy" || next == "buddies")) {
+                        merged.append(w + " " + next); raw.removeFirst()
+                    } else { merged.append(w) }
+                }
+                let tokens = merged.map { Token(text: $0, word: SearchWord.spellings[$0], cp: Query.cpRange($0)) }
+                guard tokens.contains(where: { $0.word != nil || $0.cp != nil }) else { return nil }
+                self.whole = tokens.count > 1 ? q : nil; self.tokens = tokens
+            }
+            init(word: SearchWord) { whole = nil; tokens = [Token(text: "", word: word)] }
+
+            func matches(_ it: Item) -> Bool {
+                if let whole, it.key.contains(whole) { return true }
+                return tokens.allSatisfy { t in
+                    if let r = t.cp { return it.cp > 0 && r.contains(it.cp) }
+                    if t.text.isEmpty { return t.word.map { it.words.contains($0) } ?? false }
+                    if let w = t.word { return it.words.contains(w) || Self.startsAName(it.key, t.text) }
+                    return it.key.contains(t.text)
+                }
+            }
+
+            /// `key` holds "|"-separated names; `text` starts one of them or a word after a space. Not a word in brackets: "(Shadow)" is a form label, and whether a copy is a
+            /// Shadow is the membership's call (a Purified copy of a `_shadow` species is not).
+            static func startsAName(_ key: String, _ text: String) -> Bool {
+                key.hasPrefix(text) || key.contains("|" + text) || key.contains(" " + text)
+            }
+        }
+
+        /// The copies that have the special type, nothing else asked: what a Special sets card opens.
+        static func keyword(_ word: SearchWord) -> Query { .words(Words(word: word)) }
 
         /// "staraptor", "2819" (an exact CP), "cp2819" or "cp1500-2500". Anything else is a piece of a name.
         init(_ raw: String) {
             let q = raw.trimmingCharacters(in: .whitespaces).lowercased()
             if q.isEmpty { self = .none; return }
             if let n = Int(q) { self = .cp(n...n); return }
-            if q.hasPrefix("cp") {
-                let rest = q.dropFirst(2).replacingOccurrences(of: "–", with: "-")
-                if let n = Int(rest) { self = .cp(n...n); return }
-                let parts = rest.split(separator: "-", omittingEmptySubsequences: false)
-                if parts.count == 2, let a = Int(parts[0]), let b = Int(parts[1]) { self = .cp(min(a, b)...max(a, b)); return }
+            if let r = Self.cpRange(q) { self = .cp(r); return }
+            self = Words(q).map(Query.words) ?? .text(q)
+        }
+        /// "cp2819", "cp1500-2500", "cp1500-" (1500 and up) or "cp-2500" (up to 2500); nil for anything else. A bare number is not one: among words it is a piece of a name.
+        static func cpRange(_ word: String) -> ClosedRange<Int>? {
+            guard word.hasPrefix("cp") else { return nil }
+            let rest = word.dropFirst(2).replacingOccurrences(of: "–", with: "-")
+            if !rest.hasPrefix("-"), let n = Int(rest) { return n...n }   // "cp-2500" is a limit, not a negative CP
+            let parts = rest.split(separator: "-", omittingEmptySubsequences: false)
+            guard parts.count == 2 else { return nil }
+            switch (Int(parts[0]), Int(parts[1])) {
+            case let (a?, b?): return min(a, b)...max(a, b)
+            case let (a?, nil) where parts[1].isEmpty: return a...Int.max
+            case let (nil, b?) where parts[0].isEmpty: return 0...b
+            default: return nil
             }
-            self = .text(q)
         }
         var isEmpty: Bool { self == .none }
     }
@@ -161,6 +270,7 @@ struct BoxIndex {
         case .none: return true
         case .text(let t): return it.key.contains(t)
         case .cp(let r): return it.cp > 0 && r.contains(it.cp)
+        case .words(let w): return w.matches(it)
         }
     }
 
@@ -182,6 +292,10 @@ struct BoxIndex {
         var id: String { title }
         var title: String
         var stats: Stats
+        /// The copies the row counts (positions in `items`, best IVs first): the build mark and the types read them.
+        var members: [Int] = []
+        /// The first copy's species id: the row's type icons.
+        var speciesId = ""
         /// With an activity chip: the best tag among the copies that pass it (Strong when any is, else OK).
         var lead: LeaguePanel.Worth?
     }
@@ -200,14 +314,14 @@ struct BoxIndex {
         var rows = [Row]()
         rows.reserveCapacity(groups.count)
         for g in groups {
-            if !filtered { rows.append(Row(title: g.title, stats: g.stats)); continue }
+            if !filtered { rows.append(Row(title: g.title, stats: g.stats, members: g.members, speciesId: g.members.first.map { items[$0].speciesId } ?? "")); continue }
             let m = g.members.filter { matches(items[$0], query, chip, scoring) }
             if m.isEmpty { continue }
             var lead: LeaguePanel.Worth?
             if case .activity(let a) = chip {
                 lead = m.contains { scoring.insight?.copies[items[$0].id]?.worth(a, pogoAssist: scoring.pogoAssist) == .strong } ? .strong : .ok
             }
-            rows.append(Row(title: g.title, stats: stats(of: m), lead: lead))
+            rows.append(Row(title: g.title, stats: stats(of: m), members: m, speciesId: items[m[0]].speciesId, lead: lead))
         }
         switch sort {
         case .name:

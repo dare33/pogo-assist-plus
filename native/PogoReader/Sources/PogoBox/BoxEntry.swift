@@ -64,6 +64,9 @@ public struct BoxEntry: Codable, Equatable, Identifiable {
     /// The Mega form's own values, when a scan has read this Pokémon Mega evolved (or a box held it as a second, Mega entry that was joined to this one). `row` stays the base form. One
     /// entry with a Mega form is one Pokémon everywhere: the box count, advice and the CSV use `row` once.
     public var megaForm: MegaForm?
+    /// The Shadow or Purified mark was set by a filtered pass, not by hand (a hand edit clears this). A Purified pass may move a pass-set Shadow to Purified without a conflict:
+    /// the player purified it. nil: not set by a pass.
+    public var shadowByPass: Bool?
 
     public init(id: String = UUID().uuidString, row: ScanRow, firstSeen: Date, lastSeen: Date, corrections: Corrections = Corrections(), megaWhenScanned: Bool? = nil, megaForm: MegaForm? = nil) {
         self.id = id; self.row = Self.stripped(row); self.firstSeen = firstSeen; self.lastSeen = lastSeen; self.corrections = corrections; self.megaWhenScanned = megaWhenScanned; self.megaForm = megaForm

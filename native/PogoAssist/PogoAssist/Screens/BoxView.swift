@@ -10,7 +10,7 @@ struct SpeciesRoute: Hashable {
     var chip: BoxIndex.Chip
 }
 
-/// The Box tab: the box grouped by species, A to Z, with search and filter chips (design handoff v2 section 1g and the prototype's Box).
+/// The Box tab (renamed My Pokémon in design pass 3, D9): the box grouped by species, A to Z, with search and filter chips (design handoff v2 section 1g and the prototype's Box).
 struct BoxView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.showToast) private var showToast
@@ -28,10 +28,14 @@ struct BoxView: View {
     @State private var sections: [BoxIndex.Section] = []
     /// The index key `sections` were computed for; they show only while it is the current account's and box version's.
     @State private var sectionsFor: String?
-    @State private var jumped: String?
     @State private var rankingInfo = false
-    @State private var headerContentHeight: CGFloat = 0
-    @State private var listAreaHeight: CGFloat = 0
+    /// The species opened in place (one at a time; another tap on its row closes it).
+    @State private var openTitle: String?
+    /// The advice's builds by the copy they are for, so a row's build mark does not walk the report.
+    @State private var buildsByEntry: [String: [BoxAdvice.Build]] = [:]
+    /// Not observed here: whether the list is moving changes the A-Z index (which observes it), not the rows.
+    @State private var scrollActivity = ScrollActivity()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(PrefKey.ranking) private var rankingRaw = Ranking.default.rawValue
     @FocusState private var searching: Bool
     #if DEBUG
@@ -86,6 +90,7 @@ struct BoxView: View {
         // Leaving for a species list or a Pokémon ends the typing, so coming back does not bring the keyboard up over the list (iOS 27 gives the field its focus back).
         .onDisappear { searching = false }
         .navigationDestination(for: String.self) { PokemonDetailView(id: $0) }
+        .navigationDestination(for: CopyRoute.self) { PokemonDetailView(id: $0.id, initialLeague: $0.league) }
         .navigationDestination(for: SpeciesRoute.self) { SpeciesListView(route: $0, store: store) }
         .confirmationDialog("Discard the waiting scan?", isPresented: $confirmDiscardWaiting, titleVisibility: .visible) {
             Button("Discard scan", role: .destructive) { model.discardWaitingScan() }
@@ -114,6 +119,7 @@ struct BoxView: View {
             if synthetic { return }
             await store.refreshInsight(key: insightKey, advice: readyAdvice, entries: model.entries)
         }
+        .task(id: insightKey) { buildsByEntry = readyAdvice.map { Dictionary(grouping: $0.builds, by: \.entryId) } ?? [:] }
         .task(id: SectionKey(query: query, chip: chip, sort: sort, version: store.version, insightVersion: store.insightVersion, pogoAssist: pogoAssist)) { await recompute() }
         .onChange(of: store.version) { _, _ in
             // A chip whose Pokémon are all gone (the last check cleared, say) would show an empty list with no way to know why.
@@ -129,17 +135,13 @@ struct BoxView: View {
     // MARK: header
 
     private var header: some View {
-        HStack(spacing: 4) {
-            if active { AccountPill() }
-            Spacer(minLength: 8)
+        TabHeader(title: "My Pokémon", showsAccount: active) {
             if !model.entries.isEmpty {
                 IconButton(systemImage: "square.and.arrow.up", kind: .floating, label: "Export") { choosingExport = true }
                     .exportChoice(isPresented: $choosingExport) { format in Task { await model.export(format) } }
             }
             if active { MoreButton() }
         }
-        .padding(.horizontal, Theme.Space.screen)
-        .frame(minHeight: 52)
     }
 
     // MARK: states
@@ -184,67 +186,59 @@ struct BoxView: View {
 
     private var showsIndex: Bool { sections.count >= 3 && query.isEmpty }
 
-    /// The count line, search, chips and sort line (with the ranking switch and its explainer) stay fixed while the species list scrolls under them (Greg, 25 Oct 2026).
-    /// The saved-scan panel is not part of that block; it stays at the top of the scrolling list. An open ranking explainer sits inside the fixed block and pushes the list down.
+    /// The search field stays under the header while the list scrolls (design pass 3, D7). The count line, chips, rescan panel and sort line scroll with the list
+    /// (they were fixed on lane A; the board does not show them fixed, so READBACK Q7 moves them into the scrolling list).
     private var list: some View {
         VStack(spacing: 0) {
-            frozenHeader
+            searchField
+                .padding(.horizontal, Theme.Space.listGutter)
+                .padding(.top, 2).padding(.bottom, 8)
             listScroll
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listAreaHeight = $0 }
     }
 
-    /// The fixed block is as tall as its content up to `headerShare` of the list's area; beyond that (an open ranking explainer at the largest text sizes would
-    /// otherwise fill the screen and cut itself off) it scrolls inside itself and the list keeps the rest. Below that share nothing scrolls.
-    private static let headerShare: CGFloat = 0.55
+    private static let scrollSpace = "my-pokemon-scroll"
+    private static let contentSpace = "my-pokemon-content"
 
-    private var frozenHeader: some View {
-        ScrollViewReader { headerProxy in
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.panelGap) {
-                countLine
-                searchField
-                chips
-                if chip == .toCheck { rescanButton }
-                sortLine
-            }
-            .padding(.horizontal, Theme.Space.screen)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerContentHeight = $0 }
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        // An opened explainer is brought into view inside the capped block.
-        .onChange(of: rankingInfo) { _, open in
-            // After the explainer's first layout, or the scroll runs to where its end was.
-            if open { Task { try? await Task.sleep(nanoseconds: 250_000_000); withAnimation { headerProxy.scrollTo("ranking-explainer", anchor: .bottom) } } }
-        }
-        .frame(height: headerContentHeight > 0 && listAreaHeight > 0 ? min(headerContentHeight, listAreaHeight * Self.headerShare) : nil)
-        .background(Theme.bg)
-        .zIndex(1)
-        }
+    /// Marks where the list's top part (chips, sort line with its "i", saved panel) ends, so the A-Z index reaches wider only below it.
+    private var chromeEnd: some View {
+        Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.contentSpace)).maxY } action: { scrollActivity.chromeMeasured(height: $0) }
     }
 
     private var listScroll: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Theme.Space.panelGap) {
-                    if let s = savedSummary { savedPanel(s) }
+                    countLine
+                    chips
+                    if chip == .toCheck { rescanButton }
+                    sortLine.background { if savedSummary == nil { chromeEnd } }
+                    if let s = savedSummary { savedPanel(s).background { chromeEnd } }
                     if sections.isEmpty {
                         // An activity chip waits for the advice: until then nothing can be Top or Good, which is not the same as no match. A failed advice says so.
                         let isActivity: Bool = { if case .activity = chip { return true } else { return false } }()
                         Text(isActivity && insight == nil ? (adviceState == .failed ? "Advice could not be worked out" : "Working out advice…") : "No Pokémon match.").paText(.secondary).foregroundStyle(Theme.muted).padding(.horizontal, 6).padding(.vertical, 20)
                     }
-                    ForEach(sections) { sectionView($0) }
+                    ForEach(sections) { s in
+                        sectionView(s)
+                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { scrollActivity.sectionMoved(s.id, top: $0) }   // which sections the lazy list has built, for the index's jump
+                            .onDisappear { scrollActivity.sectionGone(s.id) }
+                    }
                 }
-                .padding(.leading, Theme.Space.screen)
-                .padding(.trailing, Theme.Space.screen + (showsIndex ? 18 : 0))
+                .padding(.horizontal, Theme.Space.listGutter)
                 .padding(.top, 4)
                 .padding(.bottom, 12)
+                .coordinateSpace(name: Self.contentSpace)   // the list's content from its very top: where its top part ends is measured in this
+                .background {
+                    // Where the list's top is: the A-Z index shows while it moves.
+                    Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.scrollSpace)).minY } action: { scrollActivity.offsetChanged($0) }
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { scrollActivity.contentMoved(top: $0) }
+                        .background { ScrollViewFinder(activity: scrollActivity) }   // lets the index stop a coasting list before it jumps
+                }
             }
+            .coordinateSpace(name: Self.scrollSpace)
             .scrollDismissesKeyboard(.interactively)
-            .overlay(alignment: .trailing) { if showsIndex { jumpIndex(proxy) } }
+            .overlay(alignment: .trailing) { jumpIndex(proxy) }   // always there: its VoiceOver element does not depend on the letters showing
         }
     }
 
@@ -291,7 +285,7 @@ struct BoxView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").font(.figtree(16, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
-            TextField("", text: $query, prompt: Text("Name, CP, or cp1500-2500").foregroundStyle(Theme.faint))
+            TextField("", text: $query, prompt: Text("Name, CP, cp1500-2500, shadow…").foregroundStyle(Theme.faint))
                 .font(.figtree(16, .regular, relativeTo: .body))
                 .foregroundStyle(Theme.ink)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -427,59 +421,8 @@ struct BoxView: View {
     // MARK: sections
 
     private func sectionView(_ s: BoxIndex.Section) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text(s.heading).font(.figtree(15, .heavy, relativeTo: .subheadline)).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
-                Rectangle().fill(Theme.line).frame(height: 1)
-            }
-            .padding(.horizontal, 6)
-            VStack(spacing: 0) {
-                ForEach(Array(s.rows.enumerated()), id: \.element.id) { i, r in
-                    NavigationLink(value: SpeciesRoute(title: r.title, query: applied, chip: chip)) { speciesRow(r, last: i == s.rows.count - 1) }
-                        .buttonStyle(PressStyle())
-                        .simultaneousGesture(TapGesture().onEnded { searching = false })   // opening a species ends the typing
-                        .accessibilityIdentifier("species-row")
-                }
-            }
-            .background(Theme.surface, in: shape)
-            .clipShape(shape)
-            .panelShadow()
-        }
-        .id(s.id)
-    }
-
-    private func speciesRow(_ r: BoxIndex.Row, last: Bool) -> some View {
-        let activity: BoxInsight.Activity? = { if case .activity(let a) = chip { return a } else { return nil } }()
-        let check = r.stats.toCheck > 0 ? "\(r.stats.toCheck) to check" : nil
-        var label = "\(r.title), \(r.stats.count) Pokémon"
-        if let activity, let lead = r.lead { label += ", \(lead.label) for \(activity.title)" }
-        label += ". " + LeagueTiles.spoken(title: r.title, insight: insight, waiting: insightWaiting, pogoAssist: pogoAssist)
-        if let check { label += ". " + check }
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 1) {
-                    FlowLayout(spacing: 8) {
-                        Text(r.title).font(.figtree(16, .bold, relativeTo: .body)).foregroundStyle(Theme.ink)
-                        // With a chip chosen, the species' best copy's tag for it: the list reads as a ranking.
-                        if let activity, let lead = r.lead { WorthTag(activity: activity, worth: lead) }
-                    }
-                    if let check { Text(check).font(.figtree(12, .bold, relativeTo: .caption)).foregroundStyle(Theme.orangeInk) }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Text(r.stats.count.formatted()).font(.figtree(13, .heavy, relativeTo: .footnote)).monospacedDigit().foregroundStyle(Theme.ink)
-                    .padding(.horizontal, 6).frame(minWidth: 34, minHeight: 26)
-                    .background(Theme.surface2, in: Capsule())
-                Image(systemName: "chevron.right").font(.figtree(13, .bold)).foregroundStyle(Theme.faint).accessibilityHidden(true)
-            }
-            LeagueTiles(title: r.title, insight: insight, waiting: insightWaiting, pogoAssist: pogoAssist)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 12)
-        .frame(minHeight: 56)
-        .contentShape(Rectangle())
-        .overlay(alignment: .bottom) { if !last { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 16) } }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
+        SpeciesSectionView(section: s, index: index, query: applied, chip: chip, advice: readyAdvice, adviceState: adviceState, pogoAssist: pogoAssist,
+                           buildsByEntry: buildsByEntry, openTitle: $openTitle, onOpen: { searching = false })   // opening a species ends the typing
     }
 
     // MARK: A-Z index
@@ -487,34 +430,10 @@ struct BoxView: View {
     private func jumpIndex(_ proxy: ScrollViewProxy) -> some View {
         let labels: [String] = sort == .name ? ((65...90).map { String(UnicodeScalar($0)!) } + (sections.contains { $0.id == "#" } ? ["#"] : [])) : sections.map(\.short)
         let present = Dictionary(sections.map { ($0.short, $0.id) }, uniquingKeysWith: { a, _ in a })
-        func jump(to label: String) {
-            // A letter with nothing under it goes to the next letter that has something.
-            guard let at = labels.firstIndex(of: label), let hit = labels[at...].first(where: { present[$0] != nil }) ?? labels.last(where: { present[$0] != nil }), let id = present[hit] else { return }
-            if jumped != id { jumped = id; proxy.scrollTo(id, anchor: .top) }
-        }
-        let row: CGFloat = 14
-        return VStack(spacing: 0) {
-            ForEach(labels, id: \.self) { l in
-                let on = present[l] != nil && present[l] == jumped
-                Text(l).font(.figtree(10, .heavy, relativeTo: .caption2)).dynamicTypeSize(.large)
-                    .foregroundStyle(on ? accent.onSolid : (present[l] != nil ? accent.ink : Theme.faint.opacity(0.6)))
-                    .frame(width: 16, height: row)
-                    .background { if on { Capsule().fill(accent.solid) } }
-            }
-        }
-        .frame(width: 28)
-        .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 0).onChanged { v in
-            jump(to: labels[min(max(Int(v.location.y / row), 0), labels.count - 1)])
-        })
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Jump index")
-        .accessibilityValue(jumped.flatMap { id in sections.first { $0.id == id }?.heading } ?? "")
-        .accessibilityAdjustableAction { direction in
-            let ids = sections.map(\.id)
-            let at = jumped.flatMap { ids.firstIndex(of: $0) } ?? -1
-            let to = direction == .increment ? min(at + 1, ids.count - 1) : max(at - 1, 0)
-            if ids.indices.contains(to) { jumped = ids[to]; proxy.scrollTo(ids[to], anchor: .top) }
+        return AZIndex(activity: scrollActivity, labels: labels, present: present, sections: sections.map { ($0.id, $0.heading) }, lettersShown: showsIndex) { id in
+            scrollActivity.stopCoasting(log: AZIndex.alwaysShown)
+            proxy.scrollTo(id, anchor: .top)
+            scrollActivity.settle(on: id, order: sections.map(\.id)) { proxy.scrollTo($0, anchor: .top) }
         }
     }
 

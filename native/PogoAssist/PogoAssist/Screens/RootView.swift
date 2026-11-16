@@ -60,7 +60,7 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { !model.shareURLs.isEmpty }, set: { if !$0 { model.shareURLs = [] } })) {
             ShareSheet(urls: model.shareURLs).presentationDetents([.medium, .large])
         }
-        .alert("Pogo Assist+", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
+        .alert("Pogo Assist+", isPresented: Binding(get: { model.message != nil && model.alertHosts == 0 }, set: { if !$0 { model.message = nil } })) {
             Button("OK") { model.message = nil }
         } message: { Text(model.message ?? "") }
         .overlay { if let work = model.busy { BusyOverlay(text: work) } }
@@ -141,6 +141,8 @@ struct AccountMenu: View {
     var pill = false
     /// The Pogo Hub's header look: the name in the accent's ink, 22/700, with a chevron.
     var hub = false
+    /// The tab header's look (`TabHeader`): the name small, 15/700 in the accent's ink, with a chevron.
+    var tab = false
     /// Display only (no menu, no chevron): a finished scan waiting for review belongs to the account named, so the account cannot be switched under it.
     var locked = false
     @EnvironmentObject var model: AppModel
@@ -179,6 +181,12 @@ struct AccountMenu: View {
         } label: {
             if pill {
                 pillLabel(chevron: true)
+            } else if tab {
+                HStack(spacing: 4) {
+                    Text(model.account ?? "Account").font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(accent.ink).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.figtree(11, .heavy)).foregroundStyle(accent.ink)
+                }
+                .frame(minHeight: 44).contentShape(Rectangle())
             } else if hub {
                 HStack(spacing: 6) {
                     Text(model.account ?? "Account").font(.figtree(22, .bold, relativeTo: .title2)).foregroundStyle(accent.ink).lineLimit(1)
@@ -192,7 +200,7 @@ struct AccountMenu: View {
                 }
             }
         }
-        .accessibilityLabel(pill || hub ? "Account, \(model.account ?? "none")" : (model.account ?? "Account"))
+        .accessibilityLabel(pill || hub || tab ? "Account, \(model.account ?? "none")" : (model.account ?? "Account"))
         .alert("New account", isPresented: $asking) {
             TextField("Trainer name", text: $newName).accountNameField()
             Button("Create") { model.createAccount(newName) }

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lesson: type icons</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="lesson" style="height: 860px">
+<div class="lrow"><div class="lcol"><div class="lcap">TODAY</div></div><div class="lcol"><div class="lcap">WITH THE LESSON: TYPES AS COLOURED ICONS</div></div></div>
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="lrow">
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Box row</div>
+<div class="panel-list"><div class="srow"><span class="smain"><span class="stitle">Eevee</span><span class="ssub">{{eevee.sub}}</span></span><span class="ncap">{{eevee.count}}</span><span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span></div></div>
+<div class="what">Pokémon page heading</div>
+<div class="heading" style="padding: 0 4px"><div class="pname" style="font-size: 28px">Eevee</div><div class="cpline"><span class="cp">CP 782</span><span class="meta">Level 30 · HP 111</span></div></div>
+<div class="what">Great League options</div>
+<div class="olist"><sc-for list="{{opts}}" as="o" hint-placeholder-count="3"><div class="orow"><span class="oname"><b>{{o.name}}</b><span>{{o.sub}}</span></span><span class="ocell w64"><b>{{o.score}}</b><span>{{o.rank}}</span></span></div></sc-for></div>
+</div>
+</div>
+<div class="lcol">
+<div class="crop {{t.cls}}">
+<div class="what">Box row</div>
+<div class="panel-list"><div class="srow"><span class="smain"><span class="stitle">Eevee<span class="types"><sc-for list="{{eevee.types}}" as="y" hint-placeholder-count="1"><span class="ti sm {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></span><span class="ssub">{{eevee.sub}}</span></span><span class="ncap">{{eevee.count}}</span><span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span></div></div>
+<div class="what">Pokémon page heading</div>
+<div class="heading" style="padding: 0 4px"><div class="pname" style="font-size: 28px">Eevee<span class="types"><sc-for list="{{eevee.types}}" as="y" hint-placeholder-count="1"><span class="ti {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></div><div class="cpline"><span class="cp">CP 782</span><span class="meta">Level 30 · HP 111</span></div></div>
+<div class="what">Great League options</div>
+<div class="olist"><sc-for list="{{opts}}" as="o" hint-placeholder-count="3"><div class="orow"><span class="oname"><b>{{o.name}}<span class="types"><sc-for list="{{o.types}}" as="y" hint-placeholder-count="1"><span class="ti xs {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></b><span>{{o.sub}}</span></span><span class="ocell w64"><b>{{o.score}}</b><span>{{o.rank}}</span></span></div></sc-for></div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":860}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { d: null }; }
+  componentDidMount() { const go = () => window.Pogo.load().then((d) => this.setState({ d })).catch(() => {}); if (window.Pogo) go(); else setTimeout(go, 300); }
+  renderVals() {
+    const P = window.Pogo, d = this.state.d;
+    let eevee = { sub: '', count: '', types: [] }, opts = [];
+    if (d && P) {
+      const r = P.speciesRow(d, 'Eevee');
+      eevee = { sub: 'best ' + r.bestPct + '% · top ' + r.topCP, count: r.count, types: P.types(d.copies[r.members[0]].types) };
+      opts = d.copies.e209.leagues.gl.options.slice(0, 3).map((o) => ({ name: o.name, sub: o.sub, score: o.score, rank: o.rank, types: P.types(o.types) }));
+    }
+    return { themes: [{ cls: 't-light' }, { cls: 't-dark' }], eevee, opts };
+  }
+}
+</script>
+</body>
+</html>

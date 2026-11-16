@@ -21,6 +21,10 @@ public struct TierTable {
         public var flags: Flags
         /// The Max table's role ("Tank and healer"); nil elsewhere and for Max attackers.
         public var role: String?
+        /// How to get it, from the table's obtain column ("Medium. T5 raids"); nil when the table has none. The Best squads show it for a Pokémon the box lacks.
+        public var obtain: String? = nil
+        /// The table's move line ("Dragon Tail / Dynamax Cannon", "Fire Spin / Mystical Fire+"); nil when it names none. The picker's damage estimate reads it as the moves a build is for.
+        public var moves: String? = nil
     }
 
     public let entries: [Entry]

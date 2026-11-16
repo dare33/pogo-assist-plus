@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Box tab</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="pogo.css">
+<script src="pogo.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+</style>
+</helmet>
+<div class="board" style="width: 844px; height: 906px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="col">
+<div class="mode">{{t.label}}</div>
+<div class="phone {{t.cls}}">
+<div class="hdr" style="position: relative">
+<sc-if value="{{plain}}" hint-placeholder-val="{{true}}"><button class="acct" aria-label="Account, Account name"><span class="mono">AN</span>Account name<span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9l7 7 7-7"></path></svg></span></button><span class="spring"></span></sc-if>
+<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><button class="acct3" aria-label="Account, Account name">Account name<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9l7 7 7-7"></path></svg></button>
+<span class="hdr-title" role="heading" aria-level="1">My Pokémon</span>
+<span class="spring"></span></sc-if>
+<button class="hit" aria-label="Export"><span class="circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"></path></svg></span></button>
+<button class="hit" aria-label="More"><span class="circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg></span></button>
+</div>
+<div class="scroll">
+<div class="content idx">
+<div class="count">
+<div class="count-top"><span class="count-n">{{count}}</span><span class="count-sub">Pokémon · {{speciesCount}} species</span></div>
+<div class="count-when">Last scan [date]</div>
+</div>
+<div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5L21 21"></path></svg><span>Name, CP, or cp1500-2500</span></div>
+<div class="chips"><button class="fchip on">All</button></div>
+<div class="sortline"><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3.5 7.5L7 4l3.5 3.5M17 20V4M13.5 16.5L17 20l3.5-3.5"></path></svg>Name</span><span class="sep">·</span><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="14" height="14" rx="3"></rect><path d="M7 3h11a3 3 0 0 1 3 3v11"></path></svg>By species</span></div>
+<sc-if value="{{loading}}" hint-placeholder-val="{{false}}"><div class="count-when">Loading your box…</div></sc-if>
+<sc-for list="{{sections}}" as="s" hint-placeholder-count="3">
+<div class="sec">
+<div class="sec-head">{{s.heading}}<i></i></div>
+<div class="panel-list">
+<sc-for list="{{s.rows}}" as="r" hint-placeholder-count="4">
+<a class="srow" href="{{rowHref}}" aria-label="{{r.label}}">
+<span class="smain">
+<span class="stitle">{{r.title}}<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><span class="types"><sc-for list="{{r.types}}" as="y" hint-placeholder-count="1"><span class="ti sm {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></sc-if></span>
+<sc-if value="{{plain}}" hint-placeholder-val="{{true}}"><span class="ssub">{{r.sub}}</span></sc-if>
+<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}"><span class="ssub">{{r.pre}}<span class="{{r.pctCls}}">{{r.pctText}}</span>{{r.cpText}}</span></sc-if>
+</span>
+<sc-if value="{{lessons}}" hint-placeholder-val="{{false}}">
+<sc-if value="{{r.m.up}}" hint-placeholder-val="{{false}}"><span class="upcost" title="{{r.m.upTitle}}"><span class="up" role="img" aria-label="{{r.m.upTitle}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span><sc-if value="{{r.m.hasCost}}" hint-placeholder-val="{{true}}"><span class="cost">{{r.m.costValue}}</span><sc-if value="{{r.m.isDust}}" hint-placeholder-val="{{true}}"><svg class="cicon dust" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="stardust"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill="currentColor"></path></svg></sc-if><sc-if value="{{r.m.isCandy}}" hint-placeholder-val="{{false}}"><svg class="cicon candy" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="candy"><path d="M8.5 8.5a5 5 0 1 1 7 7a5 5 0 1 1-7-7zM2.5 3l5 1.5.5 3.5zM21.5 21l-5-1.5-.5-3.5z" fill="currentColor"></path></svg></sc-if></sc-if></span></sc-if>
+<sc-if value="{{r.m.done}}" hint-placeholder-val="{{false}}"><span class="done" role="img" aria-label="Full strength" title="Full strength"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></sc-if>
+</sc-if>
+<span class="ncap">{{r.count}}</span>
+<span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg></span>
+</a>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<div style="height: 140px"></div>
+</div>
+</div>
+<div class="jump" style="top: 250px" aria-label="Jump index">
+<sc-for list="{{letters}}" as="l" hint-placeholder-count="27"><span class="{{l.cls}}">{{l.l}}</span></sc-for>
+</div>
+<div class="tabbar">
+<div class="tabrow">
+<button class="pill on" aria-label="{{boxLabel}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"></rect><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"></rect><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"></rect><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"></rect></svg>{{boxLabel}}</button>
+<button class="scan" aria-label="Scan"><svg width="80" height="80" viewBox="0 0 48 48" aria-hidden="true"><path d="M37.85 21.56A14.0625 14.0625 0 1 1 26.44 10.15" fill="none" stroke="#FFFFFF" stroke-width="3.094" stroke-linecap="round"></path><polygon points="19.028,25.972 19.91,27.758 21.881,28.045 20.455,29.435 20.791,31.399 19.028,30.472 17.265,31.399 17.602,29.435 16.175,28.045 18.146,27.758" fill="#FFC23D"></polygon><polygon points="24.994,18.975 26.179,21.375 28.828,21.76 26.911,23.628 27.364,26.267 24.994,25.021 22.625,26.267 23.078,23.628 21.16,21.76 23.81,21.375" fill="#FFC23D"></polygon><polygon points="32.452,10.298 33.995,13.424 37.445,13.926 34.949,16.359 35.538,19.795 32.452,18.173 29.366,19.795 29.955,16.359 27.459,13.926 30.909,13.424" fill="#FFC23D"></polygon></svg></button>
+<button class="pill" aria-label="Pogo Hub"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>Pogo Hub</button>
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"lessons":{"editor":"boolean","default":false},"$preview":{"width":844,"height":906}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { d: null };
+  }
+  componentDidMount() {
+    const go = () => window.Pogo.load().then((d) => this.setState({ d })).catch(() => {});
+    if (window.Pogo) go(); else setTimeout(go, 300);
+  }
+  renderVals() {
+    const P = window.Pogo, d = this.state.d, lessons = !!this.props.lessons;
+    let sections = [], letters = [];
+    if (d && P) {
+      sections = d.sections.map((s) => ({
+        heading: s.heading,
+        rows: s.rows.map((r) => {
+          const first = d.copies[r.members[0]];
+          const sub = (r.bestPct != null ? 'best ' + r.bestPct + '%' : 'IVs not read') + (r.topCP ? ' · top ' + r.topCP : '');
+          return { title: r.title, count: P.fmt(r.count), sub, label: r.title + ', ' + r.count + ' Pokémon, ' + sub,
+            types: P.types(first.types), pctCls: P.pctGrade(r.bestPct), pre: r.bestPct != null ? 'best ' : '', pctText: r.bestPct != null ? r.bestPct + '%' : 'IVs not read',
+            cpText: r.topCP ? ' · top ' + r.topCP : '', m: P.speciesMark(d, r) };
+        }),
+      }));
+      const present = new Set(d.sections.map((s) => s.short));
+      letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(present.has('#') ? ['#'] : []).map((l) => ({ l, cls: present.has(l) ? '' : 'no' }));
+    }
+    return {
+      themes: [{ cls: 't-light', label: 'LIGHT' }, { cls: 't-dark', label: 'DARK' }],
+      count: d ? P.fmt(d.count) : '', speciesCount: d ? P.fmt(d.speciesCount) : '', loading: !d,
+      sections, letters, lessons, plain: !lessons,
+      rowHref: lessons ? 'SpeciesNew.dc.html' : 'Species.dc.html',
+      boxLabel: lessons ? 'My Pokémon' : 'Box',
+    };
+  }
+}
+</script>
+</body>
+</html>

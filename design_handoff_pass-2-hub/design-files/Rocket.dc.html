@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hub: Team Rocket</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}a:hover{color:inherit}
+.t-light{--bg:#F3F5F9;--surface:#FFFFFF;--surface2:#F3F5F9;--ink:#15192B;--muted:#6A7085;--faint:#8A90A3;--line:#E6E9F0;--off:#E3E7EF;--acc:#2F6BFF;--acc-ink:#1F4FD1;--green-ink:#1C7A3E;--green-tint:#E6F6EC;--orange-ink:#B34D00;--orange-tint:#FFF1E3;--rocket-ink:#2A3042;--rocket-tint:#E9EBF0;--shadow:0 1px 2px rgba(20,30,60,.06);--float:0 2px 6px rgba(20,30,60,.12)}
+.t-dark{--bg:#0E1118;--surface:#181C26;--surface2:#20242F;--ink:#EEF1F8;--muted:#9097AB;--faint:#6D7489;--line:#262B38;--off:#232836;--acc:#5B8CFF;--acc-ink:#8FB0FF;--green-ink:#6FD796;--green-tint:rgba(80,200,120,.16);--orange-ink:#FFB273;--orange-tint:rgba(255,150,60,.16);--rocket-ink:#B5BBCB;--rocket-tint:rgba(90,98,118,.3);--shadow:none;--float:none}
+.ty-rocket{--ty-ink:var(--rocket-ink);--ty-tint:var(--rocket-tint);--ty-solid:#2A3042}
+.board{display:flex;gap:40px;align-items:flex-start;font-family:'Figtree',system-ui,sans-serif;font-variant-numeric:tabular-nums;line-height:1.2}
+.col{display:flex;flex-direction:column;gap:12px;width:402px}
+.mode{font-weight:700;font-size:13px;letter-spacing:.04em;color:#6A7085;height:20px}
+.phone{width:402px;min-height:874px;background:var(--bg);color:var(--ink);border-radius:44px;overflow:hidden;position:relative;box-sizing:border-box;padding-top:54px;box-shadow:0 0 0 1px rgba(20,30,60,.14)}
+.circle{width:40px;height:40px;border-radius:50%;background:var(--surface);box-shadow:var(--float);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.thdr{display:flex;align-items:center;gap:8px;min-height:52px;padding:0 14px}
+.back-hit{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)}
+.ttl{display:flex;flex-direction:column;gap:1px}
+.ttitle{font-weight:800;font-size:20px;color:var(--ink)}
+.tsub{font-weight:500;font-size:13px;color:var(--muted)}
+.tcount{margin-left:auto;font-weight:800;font-size:12px;color:var(--ty-ink);background:var(--ty-tint);border-radius:999px;padding:6px 12px;white-space:nowrap}
+.content{display:flex;flex-direction:column;gap:12px;padding:0 14px 16px}
+.hline{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.htext{font-weight:700;font-size:13px;letter-spacing:.52px;color:var(--muted)}
+.hlink{display:flex;align-items:center;gap:4px;min-height:44px;font-weight:700;font-size:13px;color:var(--acc-ink);background:none;border:0;padding:0;font-family:inherit;cursor:pointer}
+.strip{display:flex;gap:10px;overflow-x:auto;margin:0 -14px;padding:0 14px;scrollbar-width:none}
+.lcard{flex:none;width:220px;min-height:112px;box-sizing:border-box;border-radius:22px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow);border:0;font-family:inherit;text-align:left;cursor:pointer}
+.lcard.on{background:var(--ty-ink);color:var(--surface)}
+.lkick{font-weight:800;font-size:11px;letter-spacing:.88px;opacity:.8}
+.lname{font-weight:800;font-size:17px}
+.lline{font-weight:600;font-size:13px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.spanel{background:var(--surface);border-radius:24px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:10px}
+.sp-title{font-weight:800;font-size:15px}
+.slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.slot{min-height:84px;box-sizing:border-box;padding:8px 10px;border-radius:16px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;border:0;font-family:inherit;text-align:left;cursor:pointer;color:var(--ink)}
+.slot.filled{background:var(--ty-tint)}
+.slot.empty{background:transparent;box-shadow:inset 0 0 0 2px var(--line)}
+.slot.sel{box-shadow:inset 0 0 0 2px var(--acc)}
+.sdisc{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px}
+.slot.filled .sdisc{background:var(--ty-ink);color:var(--surface)}
+.slot.empty .sdisc{background:var(--off);color:var(--muted)}
+.sname{font-weight:700;font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.slot.empty .sname{color:var(--muted)}
+.ssub{font-weight:400;font-size:11px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.st{font-weight:800;font-size:10px;padding:2px 7px;border-radius:8px}
+.st.built{color:var(--green-ink);background:var(--green-tint)}
+.st.tobuild{color:var(--orange-ink);background:var(--orange-tint)}
+.st.gap{color:var(--muted);background:var(--off)}
+.picker{background:var(--surface);border-radius:20px;box-shadow:inset 0 0 0 2px var(--acc);padding:12px;display:flex;flex-direction:column;gap:6px}
+.pk-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pk-title{font-weight:800;font-size:14px}
+.pk-why{font-weight:500;font-size:12px;color:var(--muted)}
+.pk-done{font-family:inherit;font-weight:700;font-size:14px;color:var(--acc-ink);background:none;border:0;padding:0;min-height:44px;cursor:pointer}
+.pk-row{display:flex;align-items:flex-start;gap:10px;padding:10px 2px;border:0;border-top:1px solid var(--line);background:transparent;width:100%;box-sizing:border-box;font-family:inherit;text-align:left;color:var(--ink);cursor:pointer}
+.tick{flex:none;width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--line);display:flex;align-items:center;justify-content:center;color:#FFFFFF;margin-top:1px}
+.tick.on{background:var(--acc);box-shadow:none}
+.pk-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.pk-top{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.pk-name{font-weight:700;font-size:15px}
+.pk-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-weight:600;font-size:12px}
+.pk-todo{font-weight:400;font-size:12px;color:var(--muted)}
+.tier{font-weight:800;font-size:11px;padding:2px 7px;border-radius:8px;background:var(--off);color:var(--muted)}
+.pt{font-weight:800;font-size:10px;letter-spacing:.4px;padding:3px 8px;border-radius:999px;color:#15192B;text-align:center}
+.pt-normal{background:#9FA19F}.pt-fire{background:#E62829;color:#FFFFFF}.pt-water{background:#2980EF}.pt-electric{background:#FAC000}.pt-grass{background:#3FA129}.pt-ice{background:#3DCEF3}.pt-fighting{background:#FF8000}.pt-poison{background:#9141CB;color:#FFFFFF}.pt-ground{background:#915121;color:#FFFFFF}.pt-flying{background:#81B9EF}.pt-psychic{background:#EF4179}.pt-bug{background:#91A119}.pt-rock{background:#AFA981}.pt-ghost{background:#704170;color:#FFFFFF}.pt-dragon{background:#5060E1;color:#FFFFFF}.pt-dark{background:#624D4E;color:#FFFFFF}.pt-steel{background:#60A1B8}.pt-fairy{background:#EF70EF}.pt-none{background:var(--off);color:var(--ink)}
+.glist{background:var(--surface);border-radius:24px;box-shadow:var(--shadow);overflow:hidden}
+.grow{display:flex;align-items:flex-start;gap:12px;padding:10px 16px;border-top:1px solid var(--line)}
+.grow.first{border-top:0}
+.gtype{flex:none;width:76px;display:flex;padding-top:2px}
+.gtype .pt{width:100%;box-sizing:border-box}
+.gmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.gquote{font-weight:500;font-style:italic;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gwho{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.gname{font-weight:700;font-size:14px}
+.gtodo{font-weight:400;font-size:12px;color:var(--muted)}
+.foot{font-weight:500;font-size:13px;color:var(--muted);padding:0 4px;line-height:1.35}
+.pk-tools{display:flex;align-items:center;gap:4px}
+.info-hit{width:44px;height:44px;margin:-8px -6px;display:flex;align-items:center;justify-content:center;background:none;border:0;padding:0;cursor:pointer}
+.info{width:26px;height:26px;border-radius:50%;background:var(--off);color:var(--muted);font:italic 800 13px Georgia,serif;display:flex;align-items:center;justify-content:center}
+.info.on{background:var(--acc)}
+.t-light .info.on{color:#000000}.t-dark .info.on{color:#0E1118}
+.t-light{--acc-tint:#EAF0FF}.t-dark{--acc-tint:rgba(91,140,255,.18)}
+.explain{background:var(--acc-tint);border-radius:16px;padding:12px 14px;font-weight:500;font-size:13px;line-height:1.35;display:flex;flex-direction:column;gap:8px;color:var(--ink)}
+.explain b{color:var(--acc-ink)}
+.pk-cap{font-weight:800;font-size:10px;letter-spacing:.6px;color:var(--faint)}
+.ti{flex:none;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#15192B}
+.ti.pt-fire,.ti.pt-poison,.ti.pt-ground,.ti.pt-ghost,.ti.pt-dragon,.ti.pt-dark{color:#FFFFFF}
+.ti.off{background:var(--off);color:var(--faint)}
+.slot{position:relative}
+.up{flex:none;width:18px;height:18px;border-radius:50%;background:var(--orange-tint);color:var(--orange-ink);display:inline-flex;align-items:center;justify-content:center}
+.slot-up{position:absolute;top:7px;right:7px}
+.upcost{display:inline-flex;align-items:center;gap:3px}
+.cost{font-weight:800;font-size:12px;color:var(--orange-ink)}
+.t-light .cicon.dust{color:#5B3FD6}.t-dark .cicon.dust{color:#BFAEFF}
+.cicon.candy{color:var(--muted)}
+.done{flex:none;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#FFFFFF}
+.t-light .done{background:#22A55A}.t-dark .done{background:#3DCB7A;color:#0E1118}
+.done.big{width:26px;height:26px}
+.ti.xs,.up.xs,.done.xs{width:16px;height:16px}
+.gstrip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-right:-16px;padding-right:16px}
+.gpick{flex:none;display:inline-flex;align-items:center;gap:4px;padding:3px 6px 3px 10px;border-radius:999px;background:var(--surface2);font-weight:700;font-size:13px;white-space:nowrap;color:var(--ink)}
+.gpick.best{background:var(--rocket-tint)}
+.gpn{margin-right:2px}
+.grow{flex-direction:column;align-items:stretch;gap:7px;padding:10px 16px}
+.ghead{display:flex;align-items:center;gap:8px;min-width:0}
+.ghead .gword{flex:none;font-weight:800;font-size:11px;letter-spacing:.5px;color:var(--ink)}
+.ghead .gquote{flex:1;min-width:0}
+.gweak{flex:none;display:flex;gap:2px}
+.gmain{width:100%}
+.gpick{padding:4px 6px 4px 10px;gap:5px}
+.ti.xxs{width:13px;height:13px}
+.pk-row{padding:8px 2px}
+.where{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.wtag{font-weight:800;font-size:10px;letter-spacing:.4px;padding:2px 7px;border-radius:8px;background:var(--surface);color:var(--ink)}
+.wtag.now{background:var(--acc-tint);color:var(--acc-ink)}
+.gtype{align-items:center;gap:6px}
+.gword{font-weight:800;font-size:10px;letter-spacing:.4px;color:var(--muted)}
+.mode-row{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.mode-cap{font-weight:800;font-size:10px;letter-spacing:.6px;color:var(--faint)}
+.seg{display:flex;padding:4px;background:var(--off);border-radius:999px}
+.seg button{font-family:inherit;font-weight:700;font-size:12px;min-height:26px;padding:0 9px;color:var(--ink);background:transparent;border:0;border-radius:999px;cursor:pointer}
+.seg button.on{background:var(--surface)}
+.att-toggle{align-self:flex-start;font-family:inherit;font-weight:700;font-size:13px;color:var(--acc-ink);background:none;border:0;padding:0;min-height:44px;cursor:pointer;text-align:left}
+.att{display:flex;flex-direction:column;background:var(--surface2);border-radius:14px;padding:6px 12px 4px}
+.att-head{display:flex;justify-content:space-between;align-items:center;min-height:32px}
+.att-hide{font-family:inherit;font-weight:700;font-size:12px;color:var(--acc-ink);background:none;border:0;padding:0;min-height:44px;margin:-6px 0;cursor:pointer}
+.att-row{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-top:1px solid var(--line)}
+.pk-empty{font-weight:500;font-size:13px;color:var(--muted);padding:6px 2px}
+</style>
+</helmet>
+<div class="board" style="width: 844px; height: 2500px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<div class="col">
+<div class="mode">{{t.label}}</div>
+<div class="phone ty-rocket {{t.cls}}">
+<div class="thdr">
+<a class="back-hit" href="Main.dc.html" aria-label="Back"><span class="circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></span></a>
+<div class="ttl"><div class="ttitle">Team Rocket</div><div class="tsub">{{sub}}</div></div>
+<div class="tcount">{{countText}}</div>
+</div>
+<div class="content">
+<div class="strip">
+<sc-for list="{{leaders}}" as="l" hint-placeholder-count="4">
+<button class="lcard {{l.cls}}" onClick="{{l.pick}}">
+<span class="lkick">{{l.kicker}}</span>
+<span class="lname">{{l.name}}</span>
+<span class="lline">{{l.line}}</span>
+</button>
+</sc-for>
+</div>
+<div class="mode-row">
+<span class="mode-cap">SUGGESTIONS</span>
+<div class="seg" role="group" aria-label="Suggestions">
+<button class="{{modeAvail}}" onClick="{{pickAvail}}">Available</button>
+<button class="{{modeBest}}" onClick="{{pickBest}}">Best</button>
+</div>
+<button class="info-hit" aria-label="About suggestions" onClick="{{toggleModeInfo}}"><span class="info {{modeInfoCls}}">i</span></button>
+</div>
+<sc-if value="{{modeInfo}}" hint-placeholder-val="{{false}}"><div class="explain"><div><b>Available</b> suggests counters from your Pokémon as they are now: nothing to evolve or mega evolve first.</div><div><b>Best</b> suggests the strongest counters your box can make, with the work each one needs.</div></div></sc-if>
+<div class="hline">
+<div class="htext">{{teamHeader}}</div>
+<button class="hlink" onClick="{{nextLeader}}">Change leader</button>
+</div>
+<div class="spanel">
+<div class="sp-title">Slot by slot</div>
+<div class="slots">
+<sc-for list="{{team}}" as="s" hint-placeholder-count="3">
+<button class="slot {{s.cls}}" onClick="{{s.tap}}">
+<sc-if value="{{s.up}}" hint-placeholder-val="{{false}}"><span class="up slot-up" role="img" aria-label="Upgrade available" title="Upgrade available"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span></sc-if>
+<sc-if value="{{s.done}}" hint-placeholder-val="{{false}}"><span class="done slot-up" role="img" aria-label="Full strength" title="Full strength"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></sc-if>
+<span class="sdisc">{{s.disc}}</span>
+<span class="sname">{{s.name}}</span>
+<span class="ssub">{{s.sub}}</span>
+<span class="ssub">{{s.vs}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{pickerOpen}}" hint-placeholder-val="{{true}}">
+<div class="picker">
+<div class="pk-head"><div class="pk-title">{{pkTitle}}</div><span class="pk-tools"><button class="info-hit" aria-label="How this list is ordered" onClick="{{togglePkInfo}}"><span class="info {{pkInfoCls}}">i</span></button><button class="pk-done" onClick="{{closePicker}}">Done</button></span></div>
+<sc-if value="{{pkInfo}}" hint-placeholder-val="{{false}}"><div class="explain"><div><b>Best first:</b> beats the most of the Pokémon the leader may bring in this slot (a type that hits them for more than normal damage), then built before to build, then Rocket counters before raid attackers, then tier and score.</div></div></sc-if>
+<div>
+<sc-if value="{{isFallback}}" hint-placeholder-val="{{false}}"><div class="pk-empty">Next best</div></sc-if>
+<sc-for list="{{cands}}" as="k" hint-placeholder-count="5">
+<button class="pk-row" onClick="{{k.choose}}">
+<span class="tick {{k.tick}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></span>
+<span class="pk-main">
+<span class="pk-top"><span class="pk-name">{{k.name}}</span><sc-if value="{{k.up}}" hint-placeholder-val="{{false}}"><span class="upcost" title="{{k.upTitle}}"><span class="up" role="img" aria-label="{{k.upTitle}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span><sc-if value="{{k.hasCost}}" hint-placeholder-val="{{true}}"><span class="cost">{{k.costValue}}</span><sc-if value="{{k.isDust}}" hint-placeholder-val="{{true}}"><svg class="cicon dust" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="stardust"><path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z" fill="currentColor"></path></svg></sc-if><sc-if value="{{k.isCandy}}" hint-placeholder-val="{{false}}"><svg class="cicon candy" width="12" height="12" viewBox="0 0 24 24" role="img" aria-label="candy"><path d="M8.5 8.5a5 5 0 1 1 7 7a5 5 0 1 1-7-7zM2.5 3l5 1.5.5 3.5zM21.5 21l-5-1.5-.5-3.5z" fill="currentColor"></path></svg></sc-if></sc-if></span></sc-if><sc-if value="{{k.done}}" hint-placeholder-val="{{false}}"><span class="done" role="img" aria-label="Full strength" title="Full strength"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></sc-if></span>
+<span class="pk-line">{{k.role}}<sc-for list="{{k.types}}" as="y" hint-placeholder-count="1"><span class="ti {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span>
+</span>
+</button>
+</sc-for>
+<sc-if value="{{noCands}}" hint-placeholder-val="{{false}}"><div class="pk-empty">{{noCandsText}}</div></sc-if>
+</div>
+<sc-if value="{{attCollapsed}}" hint-placeholder-val="{{false}}"><button class="att-toggle" onClick="{{toggleAtt}}">{{attToggle}}</button></sc-if>
+<sc-if value="{{attOpen}}" hint-placeholder-val="{{false}}">
+<div class="att">
+<div class="att-head"><span class="pk-cap">YOU COULD GET NOW</span><sc-if value="{{attCanHide}}" hint-placeholder-val="{{true}}"><button class="att-hide" onClick="{{toggleAtt}}">Hide</button></sc-if></div>
+<sc-for list="{{att}}" as="a" hint-placeholder-count="2">
+<div class="att-row">
+<span class="pk-top"><span class="pk-name">{{a.name}}</span><span class="tier {{a.tier}}">{{a.tier}}</span></span>
+<span class="pk-line"><sc-for list="{{a.types}}" as="y" hint-placeholder-count="1"><span class="ti {{y.cls}}" role="img" aria-label="{{y.name}}" title="{{y.name}}"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span>
+<span class="where" title="{{a.obtain}}"><sc-for list="{{a.where}}" as="w" hint-placeholder-count="2"><span class="wtag {{w.cls}}">{{w.label}}</span></sc-for></span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+<div class="htext">GRUNTS · WHAT THEY SAY, WHO YOU BRING</div>
+<div class="glist">
+<sc-for list="{{grunts}}" as="g" hint-placeholder-count="9">
+<div class="grow {{g.first}}">
+<div class="ghead">
+<sc-if value="{{g.hasIcon}}" hint-placeholder-val="{{true}}"><span class="ti {{g.typeCls}}" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="{{g.iconPath}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-if>
+<span class="gword">{{g.typeLabel}}</span>
+<span class="gquote">{{g.quote}}</span>
+<sc-if value="{{g.hasWeak}}" hint-placeholder-val="{{true}}"><span class="gweak" role="img" aria-label="{{g.weakTitle}}" title="{{g.weakTitle}}"><sc-for list="{{g.weak}}" as="y" hint-placeholder-count="2"><span class="ti xxs {{y.cls}}" aria-hidden="true"><svg width="8" height="8" viewBox="0 0 24 24" aria-hidden="true"><path d="{{y.path}}" fill="currentColor" fill-rule="evenodd"></path></svg></span></sc-for></span></sc-if>
+</div>
+<div class="gmain">
+<sc-if value="{{g.hasPicks}}" hint-placeholder-val="{{true}}">
+<div class="gstrip"><sc-for list="{{g.picks}}" as="p" hint-placeholder-count="3"><span class="gpick {{p.cls}}" title="{{p.title}}"><span class="gpn">{{p.name}}</span><sc-if value="{{p.up}}" hint-placeholder-val="{{false}}"><span class="up xs" role="img" aria-label="Upgrade available"><svg width="9" height="9" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-7 7h4.5v9h5v-9H19z" fill="currentColor"></path></svg></span></sc-if><sc-if value="{{p.done}}" hint-placeholder-val="{{false}}"><span class="done xs" role="img" aria-label="Full strength"><svg width="9" height="9" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></sc-if></span></sc-for></div>
+</sc-if>
+<sc-if value="{{g.noPicks}}" hint-placeholder-val="{{false}}"><div class="gwho"><span class="gname">{{g.value}}</span><sc-if value="{{g.hasState}}" hint-placeholder-val="{{false}}"><span class="st {{g.stCls}}">{{g.state}}</span></sc-if></div></sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+<div class="foot">Rocket lineups are not announced ahead. They change with each Takeover (every six to eight weeks) and are known a day or two after. Grunt types never change.</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":2500}}'>
+const BOX_DATA = '/_blob/4bf202d8e9a23e9eeccbf8ca55e638f8';
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function monthYear(since, short) {
+  const p = since.split('-');
+  const m = parseInt(p[1], 10);
+  if (p.length < 2 || !(m >= 1 && m <= 12)) return null;
+  return (short ? MONTHS[m - 1].slice(0, 3) : MONTHS[m - 1]) + ' ' + p[0];
+}
+const TYPE_PATHS = {
+  normal: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zm0 4.5a4.5 4.5 0 1 1 0 9a4.5 4.5 0 1 1 0-9z',
+  fire: 'M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-6c0 2 1 3 2 3c0-4-1-6 1-9z',
+  water: 'M12 2.5c3 4.5 6 8 6 11.5a6 6 0 0 1-12 0c0-3.5 3-7 6-11.5z',
+  electric: 'M13.5 2L5 13.5h6L9.5 22L19 9.5h-6.5L13.5 2z',
+  grass: 'M19 3C9 3 4.5 9 4.5 15.5c0 1.2.2 2.4.6 3.5L7 17.1C9.6 17.9 19 15 19 3z',
+  ice: 'M11 2h2v7.3l6.3-3.6 1 1.7L14 11l6.3 3.6-1 1.7L13 12.7V22h-2v-9.3l-6.3 3.6-1-1.7L10 11 3.7 7.4l1-1.7L11 9.3z',
+  fighting: 'M6 10a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v5a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5zM7.5 3.5h2.5v3.5H7.5zM11 2.5h2.5v4.5H11zM14.5 3.5H17v3.5h-2.5z',
+  poison: 'M4 14a5 5 0 1 0 10 0a5 5 0 1 0-10 0zM14 7a3 3 0 1 0 6 0a3 3 0 1 0-6 0zM15 17a2 2 0 1 0 4 0a2 2 0 1 0-4 0z',
+  ground: 'M2 19L9 7l4 6 2.5-3.5L22 19z',
+  flying: 'M3 14c4-1 7-4 9-10c1 4 1 7-1 9c3 0 6-1 9-3c-2 5-6 8-11 8c-2 0-4-1-6-4z',
+  psychic: 'M12 6C7 6 3.5 9.5 2 12c1.5 2.5 5 6 10 6s8.5-3.5 10-6c-1.5-2.5-5-6-10-6zm0 3a3 3 0 1 1 0 6a3 3 0 1 1 0-6z',
+  bug: 'M8 4.5l2.2 2.2h3.6L16 4.5l1.2 1.2-2 2.2A5 5 0 0 1 17 11.5v3.5a5 5 0 0 1-10 0v-3.5a5 5 0 0 1 1.8-3.6l-2-2.2z',
+  rock: 'M7 4h9l5 6-3 9H7l-4-8z',
+  ghost: 'M12 3a7 7 0 0 0-7 7v11l2.5-2 2.3 2 2.2-2 2.2 2 2.3-2 2.5 2V10a7 7 0 0 0-7-7zM9.5 9a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3zm5 0a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3z',
+  dragon: 'M4 20c0-8 4.5-14 15-16c-4 3-6 6-6 9c2-1 4.5-1 6.5 0c-4.5 1-7.5 3-8.5 7z',
+  dark: 'M15 3a9 9 0 1 0 6 15.5A7 7 0 0 1 15 3z',
+  steel: 'M12 2l8.7 5v10L12 22l-8.7-5V7zm0 6.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z',
+  fairy: 'M11 2c.8 5 2 7.2 7 8-5 .8-6.2 3-7 8-.8-5-2-7.2-7-8 5-.8 6.2-3 7-8zM18.5 14c.3 2 1 2.7 3 3-2 .3-2.7 1-3 3-.3-2-1-2.7-3-3 2-.3 2.7-1 3-3z',
+};
+// "beats Zekrom" next to "vs Zekrom" says it twice: a one-Pokémon slot shows no beats line, a slot of several shows "beats 2 of 3".
+function shortBeats(beats, options) {
+  const n = (options || '').split(' / ').length;
+  if (!beats || n === 1) return '';
+  if (beats.indexOf('beats all') === 0) return 'beats all ' + n;
+  if (beats === 'beats none') return 'beats none';
+  const k = beats.replace(/^beats /, '').replace(/ only$/, '').split(/, | and /).length;
+  return 'beats ' + k + ' of ' + n;
+}
+function costParts(c) {
+  if (!c || c === 'Free') return { hasCost: false, costValue: '', isDust: false, isCandy: false };
+  const m = c.split(' ');
+  return { hasCost: true, costValue: m[0], isDust: m[1] === 'dust', isCandy: m[1] === 'candy' };
+}
+function typeChips(types) {
+  return (types || []).map((t) => { const k = t.toLowerCase(); return { cls: 'pt-' + k, name: k.charAt(0).toUpperCase() + k.slice(1), label: k.toUpperCase(), path: TYPE_PATHS[k] || TYPE_PATHS.normal }; });
+}
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { d: null, leader: 0, picker: 1, assigned: {}, mode: 'available', info: null, attOpen: false };
+  }
+  componentDidMount() {
+    fetch(BOX_DATA).then((r) => r.json()).then((d) => this.setState({ d })).catch(() => {});
+  }
+  renderVals() {
+    const d = this.state.d;
+    const st = this.state;
+    const r = d ? d.rocket : { leaders: [], grunts: [] };
+    const sel = r.leaders[st.leader];
+    const pickerData = d ? d.rocketPicker[st.leader] : null;
+    const since = r.leaders[0] ? monthYear(r.leaders[0].since, true) : null;
+    const avail = st.mode === 'available';
+    const team = sel ? sel.team.map((c, i) => {
+      const selCls = st.picker === i ? ' sel' : '';
+      const tap = () => this.setState({ picker: i });
+      let a = st.assigned[st.leader + ':' + i];
+      if (!a && avail && pickerData) {
+        a = pickerData.slots[i].find((x) => x.asIs);
+        if (!a) return { cls: 'empty' + selCls, disc: String(i + 1), name: 'Empty', sub: 'No counter as it is', vs: 'vs ' + c.options, up: false, tap };
+      }
+      if (a) return { cls: 'filled' + selCls, disc: String(i + 1), name: a.name, sub: shortBeats(a.role, c.options), vs: 'vs ' + c.options, up: !a.built, done: a.built, tap };
+      const has = c.kind === 'built' || c.kind === 'toBuild';
+      return { cls: (has ? 'filled' : 'empty') + selCls, disc: String(i + 1), name: c.name, sub: has ? shortBeats(c.beats, c.options) : (c.gapText || 'No counter'), vs: 'vs ' + c.options, up: c.kind === 'toBuild', done: c.kind === 'built', tap };
+    }) : [];
+    const pkSlot = st.picker;
+    const pool = (pickerData && pkSlot != null ? pickerData.slots[pkSlot] : []).filter((x) => !avail || x.asIs);
+    const fallback = pool.length || !pickerData || pkSlot == null ? [] : (pickerData.fallback[pkSlot] || []).filter((x) => !avail || x.asIs).slice(0, 3);
+    const att = (pickerData && pkSlot != null ? pickerData.attainable[pkSlot] : []).map((a) => ({ name: a.name, tier: a.tier, why: a.why, types: typeChips(a.types), obtain: a.obtain || a.why,
+      where: (a.where && a.where.length ? a.where : ['Easy to get']).map((w) => ({ label: w.toUpperCase(), cls: w === 'Raids now' ? 'now' : '' })) }));
+    const cur = pkSlot != null ? st.assigned[st.leader + ':' + pkSlot] : null;
+    const curName = cur ? cur.entryId : null;
+    const defName = sel && pkSlot != null ? sel.team[pkSlot].name : null;
+    return {
+      themes: [{ cls: 't-light', label: 'LIGHT' }, { cls: 't-dark', label: 'DARK' }],
+      sub: since ? 'Lineups: Leek Duck, ' + since : '',
+      countText: d ? d.counts.rocket + (d.counts.rocket === 1 ? ' build' : ' builds') : '',
+      leaders: r.leaders.map((l, i) => ({ name: l.name, line: l.line, cls: i === st.leader ? 'on' : '',
+        kicker: 'LEADER · SINCE ' + ((monthYear(l.since, true) || l.since).toUpperCase()), pick: () => this.setState({ leader: i, picker: null }) })),
+      teamHeader: sel ? 'YOUR TEAM FOR ' + sel.name.toUpperCase() : '',
+      nextLeader: () => this.setState({ leader: (st.leader + 1) % Math.max(1, r.leaders.length), picker: null }),
+      team,
+      pickerOpen: !!sel && pkSlot != null,
+      pkTitle: sel && pkSlot != null ? 'Slot ' + (pkSlot + 1) + ' · vs ' + sel.team[pkSlot].options : '',
+      closePicker: () => this.setState({ picker: null }),
+      noCands: !!sel && pkSlot != null && pool.length === 0 && fallback.length === 0,
+      isFallback: fallback.length > 0,
+      noCandsText: att.length ? 'Nothing in your box beats this slot. You could get these now:' : 'Nothing in your box beats this slot.',
+      att, attCollapsed: !!sel && pkSlot != null && att.length > 0 && pool.length > 0 && !st.attOpen,
+      attOpen: !!sel && pkSlot != null && att.length > 0 && (pool.length === 0 || st.attOpen), attCanHide: pool.length > 0,
+      attToggle: 'Could get now (' + att.length + ') ›', toggleAtt: () => this.setState({ attOpen: !this.state.attOpen }),
+      modeAvail: avail ? 'on' : '', modeBest: avail ? '' : 'on',
+      pickAvail: () => this.setState({ mode: 'available' }), pickBest: () => this.setState({ mode: 'best' }),
+      modeInfo: st.info === 'mode', modeInfoCls: st.info === 'mode' ? 'on' : '',
+      toggleModeInfo: () => this.setState({ info: this.state.info === 'mode' ? null : 'mode' }),
+      pkInfo: st.info === 'picker', pkInfoCls: st.info === 'picker' ? 'on' : '',
+      togglePkInfo: () => this.setState({ info: this.state.info === 'picker' ? null : 'picker' }),
+      cands: (pool.length ? pool : fallback).filter((c) => {
+        if (!sel) return true;
+        for (let j = 0; j < sel.team.length; j++) {
+          if (j === pkSlot) continue;
+          const a = st.assigned[st.leader + ':' + j];
+          if (a && a.entryId === c.entryId) return false;
+        }
+        return true;
+      }).map((c, i) => ({ up: !c.built, done: c.built, ...costParts(c.cost), upTitle: 'Upgrade available' + (c.todo ? ': ' + c.todo : ''), name: c.name, state: c.state, stCls: c.built ? 'built' : 'tobuild', role: sel && pkSlot != null && c.role.indexOf('beats') === 0 ? shortBeats(c.role, sel.team[pkSlot].options) : c.role, types: typeChips(c.types).map((y) => {
+        const adv = (c.advTypes || []).indexOf(y.name) >= 0;
+        return { ...y, cls: y.cls + (adv ? '' : ' off'), name: y.name + (adv ? '' : ', no advantage here') };
+      }),
+        hasTodo: !c.built, todo: c.todo + (c.cost ? ' · ' + c.cost : ''),
+        tick: curName ? (curName === c.entryId ? 'on' : '') : (i === 0 && defName === c.name ? 'on' : ''),
+        choose: () => this.setState({ assigned: { ...this.state.assigned, [st.leader + ':' + pkSlot]: c } }) })),
+      grunts: r.grunts.map((g, i) => {
+        const word = g.type ? g.type.charAt(0).toUpperCase() + g.type.slice(1) : g.label;
+        const any = g.kind === 'any';
+        const state = g.kind === 'built' ? 'Built' : g.kind === 'toBuild' ? 'To build' : g.kind === 'gap' ? 'Not in your box' : '';
+        return { first: i === 0 ? 'first' : '', typeCls: g.type ? 'pt-' + g.type : 'pt-none', typeLabel: word.toUpperCase(),
+          hasIcon: !!g.type, iconPath: g.type ? typeChips([g.type])[0].path : '',
+          ...(() => {
+            const w = (d && d.gruntWeak[i]) || [];
+            return { weak: typeChips(w), hasWeak: w.length > 0, weakTitle: w.length ? 'Beaten by ' + w.join(', ') : '' };
+          })(),
+          ...(() => {
+            const picks = ((d && d.gruntPicks[i]) || []).filter((p) => !avail || p.asIs).map((p, j) => ({
+              name: p.name, types: typeChips(p.types), up: !p.built, done: p.built, cls: j === 0 ? 'best' : '',
+              title: p.built ? 'Full strength' : 'Upgrade available' + (p.todo ? ': ' + p.todo : '') + (p.cost ? ' · ' + p.cost : '') }));
+            return { picks, hasPicks: picks.length > 0, noPicks: picks.length === 0 };
+          })(), quote: '“' + g.quote + '”',
+          value: any ? 'Any strong attacker' : (g.kind === 'none' ? 'No counter' : g.name), hasState: g.kind === 'gap', state, up: g.kind === 'toBuild', upTitle: 'Upgrade available' + (g.todo ? ': ' + g.todo : ''),
+          stCls: g.kind === 'built' ? 'built' : g.kind === 'toBuild' ? 'tobuild' : 'gap',
+          hasTodo: g.kind === 'toBuild', todo: g.todo.charAt(0).toUpperCase() + g.todo.slice(1) };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-25T11:29:22Z"},
+  "title": "Pokémon screens — design pass 3",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 844, "h": 906, "title": "Today · 1 Box tab", "is_interactive": true},
+    "Species.dc.html": {"x": 924, "y": 0, "w": 844, "h": 906, "title": "Today · 2 Species list (Eevee)", "is_interactive": true},
+    "Pokemon.dc.html": {"x": 1848, "y": 0, "w": 844, "h": 2000, "title": "Today · 3 Pokémon page (Eevee, CP 782)", "is_interactive": true},
+    "PokemonLeague.dc.html": {"x": 2772, "y": 0, "w": 844, "h": 2000, "title": "Today · 4 League view (Great League open)", "is_interactive": true},
+    "FixValue.dc.html": {"x": 3696, "y": 0, "w": 844, "h": 906, "title": "Today · 5 Fix a value (sheet)"},
+    "LessonTypes.dc.html": {"x": 0, "y": 2420, "w": 844, "h": 860, "title": "Lesson 1 · Type icons"},
+    "LessonUpgrade.dc.html": {"x": 924, "y": 2420, "w": 844, "h": 860, "title": "Lesson 2 · Upgrade icon and cost"},
+    "LessonFull.dc.html": {"x": 1848, "y": 2420, "w": 844, "h": 860, "title": "Lesson 3 · Full strength badge"},
+    "LessonGrades.dc.html": {"x": 2772, "y": 2420, "w": 844, "h": 860, "title": "Lesson 4 · Good and top numbers"},
+    "LessonInfo.dc.html": {"x": 3696, "y": 2420, "w": 844, "h": 860, "title": "Lesson 5 · Rationale behind an i"},
+    "LessonWords.dc.html": {"x": 4620, "y": 2420, "w": 844, "h": 860, "title": "Lesson 6 · Fewer words"},
+    "BoxNew.dc.html": {"x": 0, "y": 3700, "w": 844, "h": 906, "title": "With the lessons · 1 Box tab", "is_interactive": true},
+    "SpeciesNew.dc.html": {"x": 924, "y": 3700, "w": 844, "h": 906, "title": "With the lessons · 2 Species list", "is_interactive": true},
+    "PokemonNew.dc.html": {"x": 1848, "y": 3700, "w": 844, "h": 2000, "title": "With the lessons · 3 Pokémon page", "is_interactive": true},
+    "PathMap.dc.html": {"x": 0, "y": 6120, "w": 1728, "h": 1180, "title": "Fewer screens · Today's path, level by level"},
+    "OptionA.dc.html": {"x": 1808, "y": 6120, "w": 1728, "h": 2000, "title": "Fewer screens · Option A: the Box opens in place", "is_interactive": true},
+    "OptionB.dc.html": {"x": 3616, "y": 6120, "w": 1728, "h": 2000, "title": "Fewer screens · Option B: one screen per species", "is_interactive": true}
+  },
+  "order": ["Main.dc.html", "Species.dc.html", "Pokemon.dc.html", "PokemonLeague.dc.html", "FixValue.dc.html", "LessonTypes.dc.html", "LessonUpgrade.dc.html", "LessonFull.dc.html", "LessonGrades.dc.html", "LessonInfo.dc.html", "LessonWords.dc.html", "BoxNew.dc.html", "SpeciesNew.dc.html", "PokemonNew.dc.html", "PathMap.dc.html", "OptionA.dc.html", "OptionB.dc.html"],
+  "notes": {
+    "row1": {"x": 0, "y": -300, "text": "Today: the Box tab, a species, a Pokémon, its league view and the fix sheet, on your box (2,125 Pokémon, export of 22 Oct)", "kind": "title1", "maxW": 4540},
+    "howto": {"x": 0, "y": 1000, "w": 420, "text": "Each board shows the screen in light (left) and dark (right), drawn from the app as it is on feat/pogo-hub (7dcf72f). The figures come from your box, worked out by the app's own code. Press Play on a board to scroll it and tap: species rows open the species board, copy rows open the Pokémon board, league cards open the league view.", "fill": "blue"},
+    "demo": {"x": 924, "y": 1000, "w": 420, "text": "Demo species: Eevee (65 copies). Demo Pokémon: the Eevee at CP 782, the one the advisor wants to build (Glaceon for raids, Vaporeon for Max). It is 54th of 65 in the species list, because the list is sorted by IVs and this copy's IVs are low.", "fill": "orange"},
+    "row2": {"x": 0, "y": 2120, "text": "Pass 2's lessons that fit these screens, one board each: today (left) and with the lesson (right)", "kind": "title1", "maxW": 5464},
+    "row3": {"x": 0, "y": 3400, "text": "Today's three screens with all six lessons applied (same path, same number of screens)", "kind": "title1", "maxW": 2692},
+    "row4": {"x": 0, "y": 5820, "text": "Fewer screens: today's path mapped, and two layouts that cut it from five levels to two", "kind": "title1", "maxW": 5344},
+    "lessoncalls": {"x": 5544, "y": 2420, "w": 420, "text": "My calls on the lessons, for you to confirm or change:\n1. Number grades use pass 2's PvP rule (top: score 92+ or IV rank 1-100; good: 90+ or 101-500). Today this page greens any score of 80+ and any IV rank up to 500, so fewer numbers light up. That changes what green means here.\n2. Lucky, Shadow and Dynamax marks are not in your export, so nothing is designed for them yet.\n3. Not carried over from pass 2: role colours, raid stars, where-to-get tags (these screens show no roles, raids or Pokémon you lack).", "fill": "orange"},
+    "newcalls": {"x": 2772, "y": 3700, "w": 420, "text": "My calls on these three screens:\n1. Box row mark: the upgrade arrow when any copy of the species has work left, with the dust those builds need in total (candy when no dust is due); the green tick when it has builds and all are done.\n2. IV % on Box and species rows: top at 100%, good at 93% (42 of 45) or more.\n3. Advice: the target's name and types as the heading, the work as one short line under it; the spare and keep/transfer notes as short tags, the full sentences behind the i.\n4. The Shadow note moves into the Leagues i; the Dynamax note behind its own i; the Delete note goes (VoiceOver keeps it).", "fill": "orange"},
+    "recommend": {"x": 5424, "y": 6120, "w": 420, "text": "My recommendation: Option B. It keeps one place per species, shows which copy has the build before you open anything (TO BUILD cards first), and lets you compare copies by swiping instead of going back and forth. Option A is lighter to build (the Box changes, the species list stays), but a species with 102 copies (Charmander) makes the Box row very tall when it opens.\nBoth: the league view stops being a level; the three leagues become tiles and the family list sits under the chosen tile.", "fill": "green"},
+    "optcalls": {"x": 5424, "y": 6720, "w": 420, "text": "Rules I made up for the options, to confirm:\n1. Option A (your D1): TOP PVP = the 2 copies whose best Great League or Ultra League card (under the cap) has the highest pick score, ties by IV rank; Master League left out (you confirmed). TOP IVS = the next 2 by IVs. Option B's strip still puts copies with a build first.\n2. A league tile shows the pick, its score and rank, this copy's IV % and rank, the worth tag and the cost mark. The tile's reasons (worth line, the stronger-species note, the cost in full) sit in one line under the tiles.\n3. Tapping a Box row in Option B picks the copy with a build, else the best-IV copy.", "fill": "orange"},
+    "flags": {"x": 5424, "y": 7240, "w": 420, "text": "Found in your data while drawing, not changed:\n1. Your Tinkatink at CP 167 is the #1 Tinkaton for Ultra League with a 99.0% copy, but its tag reads OK, \"A solid choice for Ultra League, though stronger options exist.\" The tag follows the advisor's builds, not the score, so the wording reads wrong here.\n2. Your Eevee at CP 68: Classic picks Vaporeon (score 73.5) for Great League, and Umbreon (90.2, IV #263) is listed below it. That is Classic's rule (the member these IVs suit best), but it may surprise.", "fill": "red"},
+    "scans": {"x": 3696, "y": 1000, "w": 420, "text": "Your export has no Lucky, Shadow, Purified, favourite or Dynamax marks and no moves, so the boards show none (the Dynamax switch reads Not set). Dates are left out of the data on purpose: first seen, last seen and the last scan read [date].", "fill": "gray"}
+  },
+  "designSystems": []
+}

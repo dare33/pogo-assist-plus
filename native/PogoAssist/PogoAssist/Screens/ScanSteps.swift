@@ -62,6 +62,8 @@ enum ScanSteps {
 struct ScanWalkthrough: View {
     let steps: [Int]
     let words: ScanWords
+    /// The filtered pass chosen, whose search the first page names.
+    let pass: ScanPass?
     /// Whether to say the game will be opened for the person (false once opening it has failed).
     let takesBack: Bool
     @Binding var hiddenRaw: String
@@ -75,14 +77,16 @@ struct ScanWalkthrough: View {
 
     private var title: String {
         switch step {
-        case 0: return "Open your first Pokémon's appraisal"
+        case 0: return pass.map { "Search your storage for \($0.searchWord)" } ?? "Open your first Pokémon's appraisal"
         case 1: return "Tap the button, then Start Broadcast"
         default: return words == .byHand ? "Page through your Pokémon by hand" : "Say \"\(words.spoken)\"."
         }
     }
     private var body_: String {
         switch step {
-        case 0: return "The scan reads from this screen and moves through your storage in the order it's sorted."
+        case 0:
+            if let pass { return "Copy the search word on the Scan screen and paste it into the storage search in Pokémon GO. Then open the appraisal of the first Pokémon it shows. Every Pokémon the scan reads is marked \(pass.title)." }
+            return "The scan reads from this screen and moves through your storage in the order it's sorted."
         // "We'll take you back to the game" is true only while opening the game works (`GameOpener`); otherwise the person is told to switch.
         case 1: return "Pick \"Pogo Broadcast\" if asked. " + (takesBack ? "We'll take you back to the game." : GameOpener.fallbackLine)
         default: return words == .byHand ? "You swipe from one Pokémon to the next yourself. Stop the broadcast from the red bar when the last Pokémon has been read." : "Then leave the phone alone until the scan is done!"

@@ -241,6 +241,8 @@ struct IconButton: View {
     let label: String
     /// The button's accessibility identifier, for a UI test.
     var identifier: String? = nil
+    /// The glyph's colour where the kind's own does not fit (the Pokémon page's orange search circle).
+    var inkOverride: Color? = nil
     var action: () -> Void
     @Environment(\.accent) private var accent
 
@@ -274,6 +276,7 @@ struct IconButton: View {
         }
     }
     private var ink: Color {
+        if let inkOverride { return inkOverride }
         switch kind {
         case .done: return Theme.greenInk
         case .add: return accent.ink
