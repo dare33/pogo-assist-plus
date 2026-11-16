@@ -138,4 +138,39 @@ final class HubMaxSquadTests: SquadUITestCase {
             if r.waitForExistence(timeout: 30) { r.tap() }
         }
     }
+
+    /// Rule 32 and rule 27: the squad strength line, a change, the Back to suggested squad button and what it restores.
+    func testMaxSquadStrengthChangeAndBack() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "max")
+        let row = el(app, "hub-max-row-0")
+        XCTAssertTrue(row.waitForExistence(timeout: 30))
+        row.tap()
+        XCTAssertTrue(slot(app, "max", 1).waitForExistence(timeout: 60))
+        let strength = el(app, "squad-strength")
+        XCTAssertTrue(reveal(app, strength).exists)
+        XCTAssertTrue(strength.label.hasPrefix("Squad strength"), strength.label)
+        let original = slot(app, "max", 1).label + "|" + slot(app, "max", 2).label + "|" + slot(app, "max", 3).label
+        XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
+        changeTheSquad(app, "max")
+        XCTAssertTrue(reveal(app, app.buttons["squad-back-to-suggested"]).waitForExistence(timeout: 5), "a changed squad has the Back button")
+        tapBackAndConfirm(app)
+        XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
+        // Back shows the suggestion again; the mode the change was made in stays, so look at the squad under Available, where it was read.
+        selectAvailable(app)
+        XCTAssertEqual(slot(app, "max", 1).label + "|" + slot(app, "max", 2).label + "|" + slot(app, "max", 3).label, original, "the suggestion is back")
+    }
+
+    /// The squad with its strength bar and, after one change, its Back button: light, dark, default text and AX5.
+    func testMaxSquadStrengthShots() throws {
+        let setup = launch(reset: true)
+        populate(setup)
+        setup.terminate()
+        strengthShots("max", prepare: { app in
+        let row = el(app, "hub-max-row-0")
+        XCTAssertTrue(row.waitForExistence(timeout: 30))
+        row.tap()
+        })
+    }
 }

@@ -31,10 +31,12 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertTrue(el(app, "squad-picker-explainer").waitForExistence(timeout: 5), "the order of the list is behind an i")
         closePicker(app)
 
-        // Slot 2: the one build is in slot 1, so nothing is listed. Available lists only the box: the empty text stands alone, with no "could get" list.
+        // Slot 2: the one build is in slot 1, which is listed, marked with its slot (choosing it swaps the two); nothing else is in the box for the slot.
+        // Available lists only the box: there is no "could get" list.
         openPicker(app, "gym", slot: 2)
-        XCTAssertEqual(rows.count, 0, "a Pokémon in another slot is not listed")
-        XCTAssertEqual(el(app, "squad-picker-empty").label, "Everything in your box for this slot is already in your squad.", "the box has a Gym build, in slot 1: the text says so")
+        XCTAssertEqual(rows.count, 1, "a Pokémon in another slot is listed, marked")
+        XCTAssertTrue(rows.firstMatch.label.hasSuffix("in slot 1, choosing it moves it here"), "slot 2 is empty, so choosing it moves it: " + rows.firstMatch.label)
+        XCTAssertFalse(rows.firstMatch.isSelected)
         XCTAssertFalse(el(app, "squad-couldget").exists || el(app, "squad-couldget-toggle").exists, "Available has no Could get now list")
         shot("gym-picker-empty")
         closePicker(app)
@@ -65,6 +67,36 @@ final class HubGymSquadTests: SquadUITestCase {
         XCTAssertEqual(again.buttons["squad-mode-best"].isSelected, true, "Best is remembered across a relaunch")
     }
 
+    /// Rule 27: choosing the Pokémon of another slot swaps the two, a changed squad shows Back to suggested squad, and Back restores the suggestion; rule 32: the strength line.
+    func testGymSwapAndBackToSuggestedSquad() throws {
+        let app = launch(reset: true)
+        populate(app)
+        openTile(app, "gym")
+        XCTAssertTrue(slot(app, "gym", 1).waitForExistence(timeout: 60))
+        XCTAssertTrue(slot(app, "gym", 1).label.contains("Blissey"))
+        let strength = el(app, "squad-strength")
+        XCTAssertTrue(strength.waitForExistence(timeout: 10))
+        XCTAssertTrue(strength.label.hasPrefix("Squad strength "), strength.label)
+        XCTAssertTrue(strength.label.contains("percent"), "the squad is one scored defender in six: \(strength.label)")
+        let before = strength.label
+        XCTAssertFalse(app.buttons["squad-back-to-suggested"].exists, "an unchanged squad has no Back button")
+        let slot1 = slot(app, "gym", 1).label
+
+        openPicker(app, "gym", slot: 2)
+        pickerRows(app).firstMatch.tap()
+        closePicker(app)
+        XCTAssertTrue(slot(app, "gym", 2).label.contains("Blissey"), "slot 2 took it: \(slot(app, "gym", 2).label)")
+        XCTAssertTrue(slot(app, "gym", 1).label.contains("empty"), "slot 1 held it, so it is now empty: \(slot(app, "gym", 1).label)")
+        let back = reveal(app, app.buttons["squad-back-to-suggested"])
+        XCTAssertTrue(back.waitForExistence(timeout: 5), "a changed squad has the Back button")
+        // It asks first (tapBackAndConfirm waits for the question); the dialog's Cancel is the system's own and has no element the test can reach in the simulator.
+        tapBackAndConfirm(app)
+        XCTAssertTrue(waitGone(app.buttons["squad-back-to-suggested"]), "Back clears the button")
+        XCTAssertEqual(slot(app, "gym", 1).label, slot1, "the suggestion is back")
+        XCTAssertTrue(slot(app, "gym", 2).label.contains("empty"))
+        XCTAssertEqual(el(app, "squad-strength").label, before)
+    }
+
     /// P1: a Gym picker row says the copy's CP and IVs and its bulk against the best in the game in its one label.
     func testGymPickerRowsShowCpIvsAndBulkBar() throws {
         let app = launch(reset: true)
@@ -90,5 +122,13 @@ final class HubGymSquadTests: SquadUITestCase {
             if s.waitForExistence(timeout: 30) { self.reveal(app, s).tap() }
         }
         bestSet("gym", slot: 1)
+    }
+
+    /// The squad with its strength bar and, after one change, its Back button: light, dark, default text and AX5.
+    func testGymSquadStrengthShots() throws {
+        let setup = launch(reset: true)
+        populate(setup)
+        setup.terminate()
+        strengthShots("gym")
     }
 }

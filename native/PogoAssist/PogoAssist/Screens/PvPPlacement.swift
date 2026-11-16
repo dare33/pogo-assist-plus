@@ -40,7 +40,7 @@ extension PvPPlacement {
             return HubSquads.fill(slots: one, pool: { _, _ in pool }, placeable: { _, _ in true })[0]
         }
         var out = slots.map { mint($0.role, nil) }
-        for (i, s) in slots.enumerated() { if let p = s.pickId, placeable(p, s.role), take(p) { out[i] = mint(s.role, p, chosen: true) } }
+        for (i, s) in slots.enumerated() { if let p = s.pickId, placeable(p, s.role), take(p) { out[i] = s.fallback == true ? mint(s.role, p, fallback: true) : mint(s.role, p, chosen: true) } }
         // Each role's own slots fill across the whole squad first; a slot still empty then takes the strongest other Pokémon left (S1), so a fallback never takes the
         // Pokémon a later slot of that role would have had.
         for (i, s) in slots.enumerated() where out[i].pickId == nil {
