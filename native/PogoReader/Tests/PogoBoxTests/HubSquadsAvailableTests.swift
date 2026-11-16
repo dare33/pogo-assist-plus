@@ -220,6 +220,27 @@ final class HubSquadsAvailableTests: XCTestCase {
         XCTAssertEqual(HubSquads.megaExcluded(by: one, editing: 0, rows: rows), [], "the Mega slot's own picker still offers the Mega rows")
     }
 
+    /// H8: Best fills a slot whose role has run out with the best unused row of another role (Max damage has five Heavy slots and the table lists one Heavy hitter); the Mega slot never falls back.
+    func testBestFallsBackToAnotherRolesRowWhenARoleRunsOut() {
+        let tbl = P23.table([P23.tierEntry("raids", "Ice", "S", "abomasnow_mega", mega: true), P23.tierEntry("raids", "Dragon", "A", "garchomp"), P23.tierEntry("raids", "Ice", "B", "lapras")])
+        let rows = HubSquads.bestRaidRows(row: giratina, ctx: P23.ctx(table: tbl))
+        XCTAssertEqual(rows.first { $0.speciesId == "garchomp" }?.roles, ["Heavy hitter"])
+        XCTAssertEqual(rows.first { $0.speciesId == "lapras" }?.roles, ["Bulky hitter"])
+        for style in RaidStyle.allCases {
+            let slots = HubSquads.defaultRaidSlots(style: style)
+            let without = HubSquads.bestSquad(slots: slots, rows: rows, oneMega: true)
+            let with = HubSquads.bestSquad(slots: slots, rows: rows, fallback: true, oneMega: true)
+            XCTAssertEqual(with.compactMap(\.pickId).count, 3, "\(style): the Mega, the Heavy hitter and the Bulky hitter fill three slots; nothing else is listed")
+            if style == .maxDamage {
+                XCTAssertTrue(with.contains { $0.fallback && $0.role == "Heavy hitter" }, "a Heavy hitter slot says it took another role's row")
+                XCTAssertEqual(without.compactMap(\.pickId).count, 2, "without the fallback the Bulky row is left unused while Heavy slots stand empty") }
+            XCTAssertNil(with.first.flatMap { $0.fallback ? $0 : nil }, "\(style): the Mega slot never falls back")
+        }
+        // A Mega slot with no Mega row stays empty even with the fallback.
+        let noMega = HubSquads.bestSquad(slots: [SquadSlot(role: "Mega")], rows: rows.filter { !$0.roles.contains("Mega") }, fallback: true, oneMega: true)
+        XCTAssertNil(noMega[0].pickId)
+    }
+
     func testTheObtainLineRangesCountOnlyIfTheyNeverReachHard() {
         func now(_ obtain: String) -> Bool {
             HubSquads.availabilityParts(of: P23.tierEntry("raids", "Water", "B", "snorlax", obtain: obtain), ctx: P23.ctx(rotation: [])).canGetNow

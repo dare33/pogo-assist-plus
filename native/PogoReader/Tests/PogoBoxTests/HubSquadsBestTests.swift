@@ -485,4 +485,30 @@ final class HubSquadsBestTests: XCTestCase {
         XCTAssertEqual(HubSquads.teamStatus([.toGet, .ready]), .init(level: .red, text: "Not ready: 1 to get"))
         XCTAssertNil(HubSquads.teamStatus([]))
     }
+
+    /// J2: "differs" compares the row drawn, not only the copy: on the Gym's Best, the Chansey row backed by the player's one Chansey copy is not the Blissey row that shows the same copy.
+    /// The cases that must stay unedited stay so: re-choosing the ticked row, a role flipped back, and a suggestion's own shared row read back through its species pick.
+    func testSameSquadComparesTheRowDrawnNotOnlyTheCopy() {
+        let copy = P23.entry("c1", "chansey")
+        let blissey = HubSquads.BestRow(key: "blissey", name: "Blissey", speciesId: "blissey", tier: "S", roles: ["Defender"], types: ["normal"], copy: copy, availability: "")
+        let chansey = HubSquads.BestRow(key: "chansey", name: "Chansey", speciesId: "chansey", tier: "S", roles: ["Defender"], types: ["normal"], copy: copy, availability: "")
+        var sharedChansey = chansey; sharedChansey.sharedWith = "Blissey"
+        let slot = [SquadSlot(role: "Defender")]
+        let rows = [blissey, sharedChansey]
+        let suggestion = HubSquads.bestSquad(slots: slot, rows: rows)
+        XCTAssertEqual(suggestion[0].entryId, "c1"); XCTAssertNil(suggestion[0].species)
+        // The player picks the Chansey row (a species pick of the same copy): it draws as the Chansey row, so it differs from the Blissey row.
+        let picksChansey = HubSquads.bestSquad(slots: [SquadSlot(role: "Defender", species: "chansey")], rows: rows)
+        XCTAssertEqual(picksChansey[0].pickId, suggestion[0].pickId, "the same copy: what the old test compared")
+        XCTAssertFalse(HubSquads.sameSquad(suggestion, picksChansey), "but not the same row")
+        // Re-choosing the ticked row (the copy) leaves it unedited.
+        XCTAssertTrue(HubSquads.sameSquad(suggestion, HubSquads.bestSquad(slots: [SquadSlot(role: "Defender", pick: "c1")], rows: rows)))
+        // A suggestion that itself draws the shared Chansey row, kept as a species pick, is the same squad.
+        let sharedFirst = HubSquads.bestSquad(slots: slot, rows: [sharedChansey])
+        XCTAssertEqual(sharedFirst[0].species, "chansey")
+        XCTAssertTrue(HubSquads.sameSquad(sharedFirst, HubSquads.bestSquad(slots: [SquadSlot(role: "Defender", species: "chansey")], rows: [sharedChansey])))
+        XCTAssertTrue(HubSquads.sameSquad(sharedFirst, HubSquads.bestSquad(slots: [SquadSlot(role: "Defender", species: "chansey")], rows: [chansey])), "read back as the copy it resolves to")
+        // A role flipped away and back, and a different role.
+        XCTAssertFalse(HubSquads.sameSquad(suggestion, HubSquads.bestSquad(slots: [SquadSlot(role: "Other", pick: "c1")], rows: rows)))
+    }
 }
