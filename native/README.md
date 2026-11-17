@@ -210,8 +210,8 @@ nothing about the real extension. Release keeps debug symbols (a dSYM), and the 
 (subsystem = the extension's bundle id) shows in Console.app with the device selected. To debug with
 breakpoints, edit the scheme's Run action to Debug for that session.
 
-`TARGETED_DEVICE_FAMILY` is 1,2 (the iPad mini is a test device). An App Store Connect / TestFlight upload
-needs an app icon first (an `AppIcon` asset in `PogoAssist/`); there is none yet.
+`TARGETED_DEVICE_FAMILY` is 1,2 (the iPad mini is a test device). The app has its `AppIcon` asset; four builds
+have gone to TestFlight (the latest is 1.0 build 4, 17 Nov 2026).
 
 If the app group is missing (signing / capabilities not set on both targets) the app shows a red line
 "App group not available"; the extension logs it too.
