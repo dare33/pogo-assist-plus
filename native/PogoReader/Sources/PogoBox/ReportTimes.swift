@@ -10,19 +10,28 @@ import Foundation
 ///   `ms` (milliseconds a read took) and `read` (a count) are durations and counts, not times.
 /// - result: `frames[].time` of every row and every review entry (the reading times a row was voted from). The frame label ("r12") is an index.
 ///   `Unmatched.frames` is a count.
+/// - refine changes (the report's `refineChanges`, one string each, `"<kind>: <detail>"`): ONLY the bars-split shape holds a frame time. `RefineBars` writes
+///   "... bars change A to B at 13056.7 s, then C to D at 13060.1 s, each held by two or more readings: ..." where each time is the midpoint of two frame times.
+///   Those "at <number> s" times, between "bars change " and ", each held by", are shifted and printed to one decimal as RefineBars prints them. Checked and
+///   left alone, because they hold no frame time: the timing split ("stayed 5.0 s, 3 periods of 1.20 s": a duration), the twin split ("at a swipe tick" /
+///   "where LiveGrouper has N rows": words), hidden CP, duplicate dropped, fragment absorbed / joined, CP outlier, forms from stats, IVs chosen by fit and
+///   CP recovered (rows, CPs, IVs and counts only). `Refine.reconcileTwins` writes "... at 13056.7 s" into `Refined.disagreements`, and `RefineBars` and
+///   `RefineTiming` write times into `notices`; neither list is in the report (the app reads `outcome.changes` only).
 /// - ScanPace, StoredPaging and the report's `scan` fields (`measuredPeriod`, `measuredRegularity`, `expectedPeriod`, `joinExtraSeconds`) are
 ///   differences or settings, not times, and stay. `scanDate` and the app/device fields are wall-clock or hardware facts and stay.
 ///
-/// The origin is the earliest of all of them, so the earliest frame in the scan is 0 and every difference is kept. A log that already starts at 0
-/// is returned byte for byte (idempotent).
+/// The origin is the earliest of the log's and the result's times, so the earliest frame in the scan is 0 and every difference is kept. Applying it
+/// again changes nothing. When the earliest time is exactly 0 the log text is returned as it came (each line as written, lines joined by "\n"; a
+/// blank line is dropped); otherwise each line is re-serialised (sorted keys, 17 significant digits, which decode to the same values).
 ///
 /// A replay line this cannot read as a JSON object (a half-written last line, damage) is left out of the upload and counted, because its text
-/// might hold a boot time that cannot be shifted. A line of a kind this does not know is shifted the same way as the known ones (`t` and `last`),
-/// so a future line kind cannot carry a boot time through by accident.
+/// might hold a boot time that cannot be shifted. A line of a kind this does not know has its numeric `t` and `last` shifted like the known ones;
+/// a time kept under any other key in a future line kind would NOT be shifted (a new time-carrying key must be added to `logTimeKeys`).
 public enum ReportTimes {
     public struct Rebased: Equatable {
         public var replayLog: String
         public var result: ScanResult
+        public var refineChanges: [String]
         /// Replay lines left out because they were not a JSON object.
         public var droppedLines: Int
         /// What was subtracted from every time (0 when the scan already started at 0, or holds no time at all).
@@ -32,10 +41,10 @@ public enum ReportTimes {
     /// The keys of a replay line that hold a frame time.
     static let logTimeKeys = ["t", "last"]
 
-    /// Written precision of the log's times (nine decimals); the subtraction is rounded back to it so no float noise is added.
+    /// The log writes nine decimals; the subtraction is rounded to that, so the result prints as a short number rather than a float-subtraction tail.
     private static func tidy(_ x: Double) -> Double { (x * 1e9).rounded() / 1e9 }
 
-    public static func rebase(replayLog: String, result: ScanResult) -> Rebased {
+    public static func rebase(replayLog: String, result: ScanResult, refineChanges: [String] = []) -> Rebased {
         var objects = [[String: Any]?]()
         var earliest = Double.infinity
         for text in replayLog.split(separator: "\n", omittingEmptySubsequences: true) {
@@ -64,7 +73,21 @@ public enum ReportTimes {
             for i in r.rows.indices { r.rows[i].frames = moved(r.rows[i].frames) }
             for i in r.review.indices { r.review[i].frames = moved(r.review[i].frames) }
         }
-        return Rebased(replayLog: out.isEmpty ? "" : out.joined(separator: "\n") + "\n", result: r, droppedLines: dropped, shift: shift)
+        let changes = shift == 0 ? refineChanges : refineChanges.map { barsChange($0, shift: shift) }
+        return Rebased(replayLog: out.isEmpty ? "" : out.joined(separator: "\n") + "\n", result: r, refineChanges: changes, droppedLines: dropped, shift: shift)
+    }
+
+    /// A bars-split change text with its cut times shifted; any other text is returned as it is. Only the span from "bars change " to ", each held by" is
+    /// touched, so a duration elsewhere in a text (or a Pokémon's name) is never shifted.
+    static func barsChange(_ text: String, shift: Double) -> String {
+        guard let start = text.range(of: "bars change "), let end = text.range(of: ", each held by", range: start.upperBound..<text.endIndex) else { return text }
+        var span = String(text[start.upperBound..<end.lowerBound])
+        let pattern = try! NSRegularExpression(pattern: " at (-?[0-9]+(?:\\.[0-9]+)?) s")
+        for m in pattern.matches(in: span, range: NSRange(span.startIndex..., in: span)).reversed() {
+            guard let whole = Range(m.range, in: span), let num = Range(m.range(at: 1), in: span), let t = Double(span[num]) else { continue }
+            span.replaceSubrange(whole, with: " at \(String(format: "%.1f", max(0, t - shift))) s")
+        }
+        return String(text[..<start.upperBound]) + span + String(text[end.lowerBound...])
     }
 
     private static func number(_ v: Any?) -> Double? {

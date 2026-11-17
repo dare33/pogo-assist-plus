@@ -4,6 +4,7 @@ import XCTest
 import PogoReader
 
 /// The report counts every time from the scan's first frame, whatever the stored log counts from (builds 1 to 4 stored device-start times).
+/// That the stored scan on disk is untouched holds by construction: `ReportTimes.rebase` and the builder take values and return new ones, and never see a file.
 final class ReportTimesTests: XCTestCase {
     private var sampleURL: URL {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -72,47 +73,119 @@ final class ReportTimesTests: XCTestCase {
         XCTAssertEqual(a.contentHash, b.contentHash)
     }
 
-    func testTheStoredInputIsNotChanged() throws {
+    private func tmpFile(_ text: String, _ name: String) throws -> (URL, () -> Void) {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-times-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let stored = dir.appendingPathComponent("replay.jsonl")
-        try FileManager.default.copyItem(at: sampleURL, to: stored)
-        let bytes = try Data(contentsOf: stored)
-        let log = try String(contentsOf: stored, encoding: .utf8), result = try sampleResult()
-        let resultCopy = result
-        let built = try ScanReportBuilder.build(input(log: log, result: result))
-        XCTAssertGreaterThan(built.jsonBytes, 0)
-        XCTAssertEqual(try Data(contentsOf: stored), bytes, "the stored log on disk is byte for byte what it was")
-        XCTAssertEqual(log, try String(contentsOf: sampleURL, encoding: .utf8))
-        XCTAssertEqual(result, resultCopy, "the input result is a value and is unchanged")
-        XCTAssertEqual(ReportTimes.rebase(replayLog: log, result: result).shift, try XCTUnwrap(try times(log).min()), "the shift really was applied to the copy")
+        let u = dir.appendingPathComponent(name)
+        try text.write(to: u, atomically: true, encoding: .utf8)
+        return (u, { try? FileManager.default.removeItem(at: dir) })
+    }
+    private func micro(_ x: Double) -> Double { (x * 1e6).rounded() }
+    /// The row with its frame times as whole microseconds after subtracting `shift`, so two rows can be compared in full.
+    private func normalised(_ r: ScanRow, shift: Double) -> ScanRow { var r = r; r.frames = r.frames.map { var f = $0; f.time = f.time.map { micro($0 - shift) }; return f }; return r }
+    private func normalised(_ e: ReviewEntry, shift: Double) -> ReviewEntry { var e = e; e.frames = e.frames.map { var f = $0; f.time = f.time.map { micro($0 - shift) }; return f }; return e }
+    /// "at 12.3 s" and "12.3 s" times blanked: notices are not reported, and only their numbers may differ.
+    private func blanked(_ s: String) -> String { s.replacingOccurrences(of: "[0-9]+\\.[0-9] s", with: "# s", options: .regularExpression) }
+
+    /// The pipeline's whole outcome on a log and on the same log rebased must agree: only the times differ, by the shift.
+    private func assertSameOutcome(_ fixture: String, hint: PagingHint?, expectPauses: Bool) throws {
+        let log = try String(contentsOf: Fixture.url(fixture), encoding: .utf8)
+        let rebased = ReportTimes.rebase(replayLog: log, result: ScanResult(rows: [], review: [], unmatched: []))
+        XCTAssertGreaterThan(rebased.shift, 1000, "premise: \(fixture) is boot-based")
+        let (second, clean) = try tmpFile(rebased.replayLog, "rebased.replay.jsonl"); defer { clean() }
+        let engine = sharedEngine
+        let a = try ScanPipeline.process(replay: Fixture.url(fixture), engine: engine, paging: hint), b = try ScanPipeline.process(replay: second, engine: engine, paging: hint)
+        let shift = rebased.shift
+        XCTAssertGreaterThan(a.scan.rows.count, 0)
+        XCTAssertEqual(a.scan.rows.map { normalised($0, shift: shift) }, b.scan.rows.map { normalised($0, shift: 0) }, "every field of every row")
+        XCTAssertEqual(a.scan.review.map { normalised($0, shift: shift) }, b.scan.review.map { normalised($0, shift: 0) }, "review entries")
+        XCTAssertEqual(a.scan.unmatched, b.scan.unmatched)
+        XCTAssertEqual(a.changes.map(\.kind), b.changes.map(\.kind)); XCTAssertEqual(a.changes.map(\.rowIndex), b.changes.map(\.rowIndex))
+        XCTAssertEqual(a.changes.map { ReportTimes.barsChange($0.detail, shift: shift) }, b.changes.map(\.detail), "refine changes, the bars time compared after shifting")
+        XCTAssertEqual(a.notices.map(blanked), b.notices.map(blanked))
+        XCTAssertEqual(a.readings, b.readings); XCTAssertEqual(a.ticks, b.ticks); XCTAssertEqual(a.drops, b.drops)
+        XCTAssertEqual(a.duration, b.duration, accuracy: 1e-6)
+        // pace is a median of differences: equal up to the float noise of subtracting the origin first (about 1e-9 s)
+        XCTAssertEqual(a.pace == nil, b.pace == nil)
+        if let p = a.pace, let q = b.pace {
+            XCTAssertEqual(p.medianPeriod, q.medianPeriod, accuracy: 1e-6); XCTAssertEqual(p.regularity, q.regularity, accuracy: 1e-6)
+            XCTAssertEqual(p.isRegular, q.isRegular); XCTAssertEqual(p.periodsObserved, q.periodsObserved); XCTAssertEqual(p.staysMeasured, q.staysMeasured)
+        }
+        XCTAssertEqual(a.pauses.count, b.pauses.count)
+        if expectPauses { XCTAssertFalse(a.pauses.isEmpty, "premise: the log has a pause") }
+        for (x, y) in zip(a.pauses, b.pauses) {
+            XCTAssertEqual(x.at - shift, y.at, accuracy: 1e-6); XCTAssertEqual(x.last - shift, y.last, accuracy: 1e-6)
+            XCTAssertEqual(x.read, y.read); XCTAssertEqual(x.closed, y.closed)
+            XCTAssertEqual(x.resumedAt.map { $0 - shift } == nil, y.resumedAt == nil)
+            if let r = x.resumedAt, let r2 = y.resumedAt { XCTAssertEqual(r - shift, r2, accuracy: 1e-6) }
+        }
     }
 
-    func testReplayingTheLogAndTheRebasedLogGivesTheSameRows() throws {
+    func testReplayingTheLogAndTheRebasedLogGivesTheSameResult() throws {
+        let hint = PagingHint(pagedByCommand: true, expectedPeriod: 1.2, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
+        // pause, resume and end lines, with and without the command's hint
+        try assertSameOutcome("run17-closed-stall.replay.jsonl", hint: nil, expectPauses: true)
+        try assertSameOutcome("run17-closed-stall.replay.jsonl", hint: hint, expectPauses: true)
+        // a bars split on the beat (its change text holds a time)
+        try assertSameOutcome("run23-fidough-twin.replay.jsonl", hint: hint, expectPauses: false)
+        try assertSameOutcome("run23-fidough-twin.replay.jsonl", hint: nil, expectPauses: false)
+        try assertSameOutcome("stall1-stunfisk-closed-tail.replay.jsonl", hint: hint, expectPauses: false)
+        // the bundled sample (readings, ticks and drops only), and the live grouper over it
         let log = try sampleLog()
         let rebased = ReportTimes.rebase(replayLog: log, result: ScanResult(rows: [], review: [], unmatched: []))
-        XCTAssertGreaterThan(rebased.shift, 400)
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-times-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let second = dir.appendingPathComponent("rebased.replay.jsonl")
-        try rebased.replayLog.write(to: second, atomically: true, encoding: .utf8)
-
-        func shape(_ r: ScanResult) -> [String] { r.rows.map { "\($0.index) \($0.speciesId) \($0.cp) \($0.hp ?? -1) \($0.solveStatus) \($0.flags.joined(separator: ",")) \($0.frames.count)" } }
-        let engine = CoreEngine()
-        for hint in [nil, PagingHint(pagedByCommand: true, expectedPeriod: 1.2, joinExtraSeconds: 0.8)] {
-            let a = try ScanPipeline.process(replay: sampleURL, engine: engine, paging: hint), b = try ScanPipeline.process(replay: second, engine: engine, paging: hint)
-            XCTAssertGreaterThan(a.scan.rows.count, 40)
-            XCTAssertEqual(shape(a.scan), shape(b.scan), "rows, hint \(String(describing: hint))")
-            XCTAssertEqual(a.scan.review.count, b.scan.review.count); XCTAssertEqual(a.scan.unmatched.count, b.scan.unmatched.count)
-            XCTAssertEqual(a.readings, b.readings); XCTAssertEqual(a.ticks, b.ticks); XCTAssertEqual(a.drops, b.drops)
-            XCTAssertEqual(a.duration, b.duration, accuracy: 1e-6)
-        }
-        // the live grouper too
+        let (second, clean) = try tmpFile(rebased.replayLog, "rebased.replay.jsonl"); defer { clean() }
+        let a = try ScanPipeline.process(replay: sampleURL, engine: sharedEngine), b = try ScanPipeline.process(replay: second, engine: sharedEngine)
+        XCTAssertEqual(a.scan.rows.map { normalised($0, shift: rebased.shift) }, b.scan.rows.map { normalised($0, shift: 0) })
         let live = ReplayLog.replay(ReplayLog.lines(in: sampleURL), species: nil), liveRebased = ReplayLog.replay(ReplayLog.lines(in: second), species: nil)
         XCTAssertGreaterThan(live.rows.count, 40)
         XCTAssertEqual(live.rows.map { "\($0.name ?? "") \($0.cp ?? -1)" }, liveRebased.rows.map { "\($0.name ?? "") \($0.cp ?? -1)" })
+    }
+
+    /// The whole uploaded document, as text, from a boot-based log whose scan has a bars split: no number at or above the log's origin may appear anywhere,
+    /// in a numeric field or inside a string (the bars-split text in `refineChanges` printed "at 119757.6 s" before this was rebased).
+    func testNoBootBasedNumberAppearsAnywhereInTheUploadedText() throws {
+        let hint = PagingHint(pagedByCommand: true, expectedPeriod: 1.2, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
+        let fixture = "run23-fidough-twin.replay.jsonl"
+        let log = try String(contentsOf: Fixture.url(fixture), encoding: .utf8)
+        let outcome = try ScanPipeline.process(replay: Fixture.url(fixture), engine: sharedEngine, paging: hint)
+        let changes = outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" }
+        let origin = try XCTUnwrap(try times(log).min())
+        XCTAssertGreaterThan(origin, 100_000, "premise: boot-based, far above any CP, HP or dust")
+        let bars = try XCTUnwrap(changes.first { $0.hasPrefix("barsSplit") }, "premise: the scan has a bars split")
+        XCTAssertTrue(bars.contains("at 1197"), "premise: the stored text holds a boot-based time: \(bars)")
+
+        let built = try ScanReportBuilder.build(ScanReportInput(replayLog: log, result: outcome.scan, kind: .full, scanDate: Date(timeIntervalSince1970: 1_790_000_000), pace: outcome.pace,
+                                                               refineChanges: changes, review: [], app: app, device: device))
+        let text = String(decoding: try Gzip.decompress(built.gzip), as: UTF8.self)
+        let numbers = try NSRegularExpression(pattern: "[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?").matches(in: text, range: NSRange(text.startIndex..., in: text))
+            .compactMap { m in Range(m.range, in: text).flatMap { Double(text[$0]) } }
+        XCTAssertGreaterThan(numbers.count, 1000, "the scan really was scanned")
+        XCTAssertEqual(numbers.filter { $0 >= origin }, [], "a boot-based number is in the uploaded document")
+        // the bars time is there, rebased: the same text with the cut time counted from the first frame
+        let doc = try ScanReportBuilder.decode(gzip: built.gzip)
+        let sent = try XCTUnwrap(doc.refineChanges.first { $0.hasPrefix("barsSplit") })
+        XCTAssertNotEqual(sent, bars)
+        let m = try XCTUnwrap(try NSRegularExpression(pattern: " at ([0-9]+\\.[0-9]) s").firstMatch(in: sent, range: NSRange(sent.startIndex..., in: sent)))
+        let first = try XCTUnwrap(Range(m.range(at: 1), in: sent).flatMap { Double(sent[$0]) })
+        XCTAssertLessThan(first, 100, "a cut time inside the scan, counted from its first frame")
+        XCTAssertEqual(doc.refineChanges.count, changes.count)
+    }
+
+    func testOnlyTheBarsSplitTextHasItsTimeShiftedAndASecondPassChangesNothing() {
+        let bars = "barsSplit: Fidough CP 768: bars change 15/4/10 to 15/11/12 at 119757.6 s, then 1/2/3 to 4/5/6 at 119760.1 s, each held by two or more readings: 2 Pokemon"
+        XCTAssertEqual(ReportTimes.barsChange(bars, shift: 119735.0), "barsSplit: Fidough CP 768: bars change 15/4/10 to 15/11/12 at 22.6 s, then 1/2/3 to 4/5/6 at 25.1 s, each held by two or more readings: 2 Pokemon")
+        let timing = "timingSplit: Fidough CP 768: stayed 14.0 s, 3 periods of 1.20 s plus a batch join"
+        XCTAssertEqual(ReportTimes.barsChange(timing, shift: 5), timing, "a duration is not a time")
+        let tail = "barsSplit: Fidough CP 768: bars change 1/2/3 to 4/5/6 at 10.0 s, each held by two or more readings: stayed at 99.0 s"
+        XCTAssertTrue(ReportTimes.barsChange(tail, shift: 4).hasSuffix("stayed at 99.0 s"), "only the span between the cuts is touched")
+        XCTAssertTrue(ReportTimes.barsChange(tail, shift: 4).contains("at 6.0 s,"))
+        let log = "{\"k\":\"t\",\"t\":100}\n"
+        let empty = ScanResult(rows: [], review: [], unmatched: [])
+        let once = ReportTimes.rebase(replayLog: log, result: empty, refineChanges: ["barsSplit: X CP 1: bars change 1/2/3 to 4/5/6 at 104.0 s, each held by two or more readings: 2 Pokemon", timing])
+        XCTAssertTrue(once.refineChanges[0].contains("at 4.0 s"))
+        XCTAssertEqual(once.refineChanges[1], timing)
+        let twice = ReportTimes.rebase(replayLog: once.replayLog, result: empty, refineChanges: once.refineChanges)
+        XCTAssertEqual(twice.refineChanges, once.refineChanges)
     }
 
     func testEndPauseAndOtherLineKindsAllShiftAndUnreadableLinesAreLeftOutAndSaid() throws {

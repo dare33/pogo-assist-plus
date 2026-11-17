@@ -279,9 +279,10 @@ JSON line per reading (time, CP and its text, name and its text, weak flag, HP a
 milliseconds the read took, plus the species ids the grouper uses), one per swipe tick (`{"k":"t","t":...}`), one per
 frame dropped because the reader was busy or skipped for memory (`{"k":"d","t":...}`), in the order the extension's own
 grouper received them (ticks drained right before the reading that followed). Every time in it (`t`, and `last` on the end and pause
-lines) counts in seconds from the scan's first frame, which is 0 (`ScanClock`); logs written by builds 1 to 4 count from device start
-instead, so "Make scans better" rebases a log before upload (`ReportTimes`: the earliest time in the scan becomes 0, the stored scan is
-untouched). The app's share button exports it with the
+lines) counts in seconds from the first frame the extension saw (`ScanClock`), so the earliest logged line of a new scan is at or a fraction of a
+second after 0. Logs written by builds 1 to 4 (and the bundled `sample-scan.replay.jsonl`, which is one of them) count from device start instead, so
+"Make scans better" rebases the log, the result's frame times and the bars-split change texts before upload (`ReportTimes`: the earliest time in the
+scan becomes 0; the stored scan is untouched). The app's share button exports it with the
 state file (and `deferred.json` when there is one); Clear deletes it.
 
 To replay it through the current grouper offline:
@@ -1088,13 +1089,13 @@ no background upload and no retry. One tap sends one file, `yyyy-mm/yyyymmddThhm
 (`scan-reports`, write-only for the app: it can add a file, never read, list or overwrite one). The file is a gzip of one JSON document with these
 keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone17,2, system version, screen size in points, language);
 `scan` (full or partial, scan date, Pokémon read, storage count if typed, how it was paged and the command's pace, the measured pace);
-`note` (what you typed, if anything); `replayLog` (the reading log as the extension wrote it: every reading's text, CP, name, HP and bars,
+`note` (what you typed, if anything); `replayLog` (the reading log with its times counted from the scan's first frame, re-serialised, and with any unreadable line left out: every reading's text, CP, name, HP and bars,
 the swipe ticks and dropped frames; it can include a Pokémon's nickname if one was on screen); `result` (the rows, the review list and the
 unmatched items); `refineChanges`; `review` (what you answered at review); `afterwards` (later hand corrections and removals of Pokémon
 that first came from that scan, as far as the box versions record them) and `notIncluded` (what the report could not include). It has no
 account-name field, no device identifier and no other scan's readings, but it carries Pokémon nicknames as read and whatever is typed in the note, so the
 account name appears only if it is one of those. The review lines can name saved Pokémon that were kept from Gone, and those came from other scans
-(species and values only, no readings), so it is not true that nothing from other scans is in it. A scan already sent and unchanged is not sent twice (the scan keeps when it was sent
+(species and values only, no readings), so it is not true that nothing from other scans is in it. A scan already sent and unchanged is not sent twice (except that a scan sent by builds 1 to 4 can be sent once more, because its rebased document hashes differently) (the scan keeps when it was sent
 and a hash of what was sent), at most 10 reports go out in 24 hours, and a report above 3.5 MB is refused with the option to share the files.
 A typical 313-Pokémon scan is about 640 KB of JSON and 80 KB compressed.
 

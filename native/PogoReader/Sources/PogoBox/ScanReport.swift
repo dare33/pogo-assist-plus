@@ -74,14 +74,14 @@ public enum ScanReportBuilder {
         let note = input.note?.trimmingCharacters(in: .whitespacesAndNewlines)
         var missing = input.notIncluded
         // Times count from the scan's first frame, so a log from an older build (times since the phone started) is not uploaded as it is.
-        let times = ReportTimes.rebase(replayLog: input.replayLog, result: input.result)
+        let times = ReportTimes.rebase(replayLog: input.replayLog, result: input.result, refineChanges: input.refineChanges)
         if times.droppedLines > 0 { missing.append("\(times.droppedLines) replay log line(s) that could not be read were left out.") }
         if input.refineChanges.isEmpty { missing.append("No list of refine changes (the scan was saved before they were kept, or none were made).") }
         return ScanReport(app: input.app, device: input.device,
                           scan: .init(kind: input.kind == .full ? "full" : "partial", scanDate: input.scanDate, rowsRead: input.result.rows.count, storageCount: input.storageCount,
                                       pagedByCommand: input.paging?.pagedByCommand, expectedPeriod: input.paging?.expectedPeriod, joinExtraSeconds: input.paging?.joinExtraSeconds,
                                       measuredPeriod: input.pace?.medianPeriod, measuredRegularity: input.pace?.regularity),
-                          note: (note?.isEmpty == false) ? note : nil, replayLog: times.replayLog, result: times.result, refineChanges: input.refineChanges,
+                          note: (note?.isEmpty == false) ? note : nil, replayLog: times.replayLog, result: times.result, refineChanges: times.refineChanges,
                           review: input.review, afterwards: input.afterwards, notIncluded: missing)
     }
 
