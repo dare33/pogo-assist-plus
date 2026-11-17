@@ -15,8 +15,8 @@ import Foundation
 ///   Those "at <number> s" times, between "bars change " and ", each held by", are shifted and printed to one decimal as RefineBars prints them. Checked and
 ///   left alone, because they hold no frame time: the timing split ("stayed 5.0 s, 3 periods of 1.20 s": a duration), the twin split ("at a swipe tick" /
 ///   "where LiveGrouper has N rows": words), hidden CP, duplicate dropped, fragment absorbed / joined, CP outlier, forms from stats, IVs chosen by fit and
-///   CP recovered (rows, CPs, IVs and counts only). `Refine.reconcileTwins` writes "... at 13056.7 s" into `Refined.disagreements`, and `RefineBars` and
-///   `RefineTiming` write times into `notices`; neither list is in the report (the app reads `outcome.changes` only).
+///   CP recovered (rows, CPs, IVs and counts only). `Refine.reconcileTwins` writes "... at 13056.7 s" into `Refined.disagreements`, and `RefineBars`
+///   writes a time into `notices` (`RefineTiming`'s notice holds a duration); neither list is in the report (the app reads `outcome.changes` only).
 /// - ScanPace, StoredPaging and the report's `scan` fields (`measuredPeriod`, `measuredRegularity`, `expectedPeriod`, `joinExtraSeconds`) are
 ///   differences or settings, not times, and stay. `scanDate` and the app/device fields are wall-clock or hardware facts and stay.
 ///
@@ -41,7 +41,8 @@ public enum ReportTimes {
     /// The keys of a replay line that hold a frame time.
     static let logTimeKeys = ["t", "last"]
 
-    /// The log writes nine decimals; the subtraction is rounded to that, so the result prints as a short number rather than a float-subtraction tail.
+    /// The subtraction is rounded to nine decimals, so two times that were equal before the shift are equal after it. It does not shorten the printed
+    /// number: JSONSerialization writes 17 significant digits, which decode to the same value.
     private static func tidy(_ x: Double) -> Double { (x * 1e9).rounded() / 1e9 }
 
     public static func rebase(replayLog: String, result: ScanResult, refineChanges: [String] = []) -> Rebased {
@@ -78,7 +79,8 @@ public enum ReportTimes {
     }
 
     /// A bars-split change text with its cut times shifted; any other text is returned as it is. Only the span from "bars change " to ", each held by" is
-    /// touched, so a duration elsewhere in a text (or a Pokémon's name) is never shifted.
+    /// touched, so a duration elsewhere in a text is never shifted. The detail starts with the species' display name, not a nickname; a name that itself held
+    /// "bars change " would only start the span earlier, and the real cut is still inside it.
     static func barsChange(_ text: String, shift: Double) -> String {
         guard let start = text.range(of: "bars change "), let end = text.range(of: ", each held by", range: start.upperBound..<text.endIndex) else { return text }
         var span = String(text[start.upperBound..<end.lowerBound])

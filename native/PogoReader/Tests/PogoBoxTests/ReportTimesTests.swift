@@ -123,13 +123,15 @@ final class ReportTimesTests: XCTestCase {
 
     func testReplayingTheLogAndTheRebasedLogGivesTheSameResult() throws {
         let hint = PagingHint(pagedByCommand: true, expectedPeriod: 1.2, joinExtraSeconds: VoiceCommandFile.joinExtraSeconds)
-        // pause, resume and end lines, with and without the command's hint
+        // pause and resume lines, with and without the command's hint
         try assertSameOutcome("run17-closed-stall.replay.jsonl", hint: nil, expectPauses: true)
         try assertSameOutcome("run17-closed-stall.replay.jsonl", hint: hint, expectPauses: true)
         // a bars split on the beat (its change text holds a time)
         try assertSameOutcome("run23-fidough-twin.replay.jsonl", hint: hint, expectPauses: false)
         try assertSameOutcome("run23-fidough-twin.replay.jsonl", hint: nil, expectPauses: false)
+        // an end line, with and without the hint
         try assertSameOutcome("stall1-stunfisk-closed-tail.replay.jsonl", hint: hint, expectPauses: false)
+        try assertSameOutcome("stall1-stunfisk-closed-tail.replay.jsonl", hint: nil, expectPauses: false)
         // the bundled sample (readings, ticks and drops only), and the live grouper over it
         let log = try sampleLog()
         let rebased = ReportTimes.rebase(replayLog: log, result: ScanResult(rows: [], review: [], unmatched: []))
