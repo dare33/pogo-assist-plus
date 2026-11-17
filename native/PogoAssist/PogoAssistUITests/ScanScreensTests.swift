@@ -357,7 +357,11 @@ final class ScanScreensTests: XCTestCase {
             app.navigationBars.buttons.element(boundBy: 0).tap()
             app.navigationBars.buttons.element(boundBy: 0).tap()
             app.buttons["Show the steps again"].tap()
-            app.buttons["Next"].tap(); app.buttons["Next"].tap()
+            // Each tap waits for its page: a tap while the guide is still arriving or turning is lost (seen on a slower Mac, 17 Nov 2026).
+            XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 5))
+            app.buttons["Next"].tap()
+            XCTAssertTrue(app.staticTexts["Step 2 of 3"].waitForExistence(timeout: 5))
+            app.buttons["Next"].tap()
             XCTAssertTrue(voiceLine(app, 2000).waitForExistence(timeout: 3))
             shot("scan-walk-3-voice-\(name)")
             app.buttons["OK, I've got it. Let's scan!"].tap()
