@@ -278,7 +278,10 @@ file says it stopped, `replayLogFailed` says a write failed and the log was swit
 JSON line per reading (time, CP and its text, name and its text, weak flag, HP and its text, bars, bar confidence, flags,
 milliseconds the read took, plus the species ids the grouper uses), one per swipe tick (`{"k":"t","t":...}`), one per
 frame dropped because the reader was busy or skipped for memory (`{"k":"d","t":...}`), in the order the extension's own
-grouper received them (ticks drained right before the reading that followed). The app's share button exports it with the
+grouper received them (ticks drained right before the reading that followed). Every time in it (`t`, and `last` on the end and pause
+lines) counts in seconds from the scan's first frame, which is 0 (`ScanClock`); logs written by builds 1 to 4 count from device start
+instead, so "Make scans better" rebases a log before upload (`ReportTimes`: the earliest time in the scan becomes 0, the stored scan is
+untouched). The app's share button exports it with the
 state file (and `deferred.json` when there is one); Clear deletes it.
 
 To replay it through the current grouper offline:
