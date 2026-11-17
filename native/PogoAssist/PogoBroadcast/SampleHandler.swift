@@ -45,7 +45,8 @@ class SampleHandler: RPBroadcastSampleHandler {
     private let lock = NSLock()
     // Guarded by `lock`: the callback's whole decision is made under it.
     private var busy = false
-    private var lastKept = -Double.infinity   // presentation time of the last frame accepted
+    private var clock = ScanClock()           // frame times count from the scan's first frame, not from device start (a time since boot must not reach a replay log)
+    private var lastKept = -Double.infinity   // scan-relative time of the last frame accepted
     private var seen = 0                      // frames offered at the 5 fps rate
     private var dropped = 0                   // of those, dropped because the previous one was still being handled
     private var ticks = [Double]()            // swipe times seen by the signature, drained by the reader
@@ -81,7 +82,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             if !SharedStore.containerAvailable {
                 log.error("app group container unavailable: no state can be shared; check Signing & Capabilities on both targets")
             }
-            lock.lock(); finished = false; ticks.removeAll(); droppedTimes.removeAll(); detector = SwipeDetector(); ticker = SwipeTicker(); lock.unlock()
+            lock.lock(); finished = false; ticks.removeAll(); droppedTimes.removeAll(); detector = SwipeDetector(); ticker = SwipeTicker(); clock.reset(); lastKept = -Double.infinity; lock.unlock()
             memory = MemoryProbe()
             finishedWork = false
             covered = CoveredCpDetector()
@@ -146,13 +147,14 @@ class SampleHandler: RPBroadcastSampleHandler {
         guard sampleBufferType == .video else { return }
         let stamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
         // A timestamp that is not a number (an invalid CMTime) drops the frame: nothing downstream may be stamped
-        // with a made-up time.
+        // with a made-up time (and it must not set the clock's origin, below).
         guard stamp.isFinite else { return }
         // The whole decision, under one lock. A frame that is not kept, or that arrives while busy, captures
         // nothing: only the counters change, and nothing is enqueued.
         lock.lock()
         if finished { lock.unlock(); return }
-        let pts = stamp
+        // Scan-relative from here on (the first finite stamp of the broadcast is 0), set under the lock so `broadcastStarted`'s reset cannot race it.
+        guard let pts = clock.time(for: stamp) else { lock.unlock(); return }
         guard pts - lastKept >= 1.0 / readsPerSecond - 0.005 else { lock.unlock(); return }
         lastKept = pts
         seen += 1
