@@ -134,8 +134,11 @@ final class ShareIVTripleTests: XCTestCase {
         let byId = Dictionary(uniqueKeysWithValues: pre.map { ($0.id, $0) })
         print("PRE12 rule off: \(counts(off)); rule on: \(counts(on))")
         for u in on.unsure { print("PRE12 remains \(u.kind) \(rows[u.scanned].name) CP \(rows[u.scanned].cp) HP \(rows[u.scanned].hp.map(String.init) ?? "-") IVs \(iv(rows[u.scanned].ivs)) vs \(u.candidates.map { "CP \(byId[$0]!.row.cp) HP \(byId[$0]!.row.hp.map(String.init) ?? "-") IVs \(iv(byId[$0]!.row.ivs))" })") }
-        XCTAssertEqual(off.unsure.count, 29, "the phone asked 29")
-        XCTAssertEqual(on.unsure.count, 19, "with the rule on")
+        // The phone asked 29. One of them is gone whichever way this rule is set, since `BoxMerge.barsContradict` (24 Nov 2026, no switch): a Psyduck CP 166 whose bars read
+        // 7/15/14 (no IVs solved) was offered a saved Psyduck CP 40 with 2/0/11.
+        XCTAssertEqual(off.unsure.count, 28, "the phone asked 29; the bars rule removes the Psyduck one")
+        XCTAssertEqual(on.unsure.count, 18, "with the rule on")
+        XCTAssertFalse(on.unsure.contains { rows[$0.scanned].name == "Psyduck" && rows[$0.scanned].cp == 166 })
         XCTAssertLessThan(on.unsure.count, off.unsure.count)
         // every question that is kept still has its candidate; the ones the owner answered "new" for impossible pairs are what goes
         XCTAssertTrue(on.unsure.allSatisfy { !$0.candidates.isEmpty })

@@ -394,7 +394,7 @@ public enum BoxMerge {
             // owner's rule is for a part read with no contradicting bars.
             if let read = originals[si].ivsRead ?? originals[si].ivs, let saw = v.row.ivs, !IVFit.near(IVFit.index(saw), read) { return nil }
             // nothing else may be a candidate for this row (a plausible or misread entry would make it a real question)
-            guard !leftoverPool.contains(where: { $0 != vi && (plausibleCandidate(r, saved[$0], gm, fits) || misreadSaved(r, saved[$0])) }) else { return nil }
+            guard !leftoverPool.contains(where: { $0 != vi && ((plausibleCandidate(r, saved[$0], gm, fits) && !barsContradict(originals[si], saved[$0])) || misreadSaved(r, saved[$0])) }) else { return nil }
             return vi
         }
         let fits = IVFit(enabled: shareIVs)   // CP and HP fits per species, shared by every leftover row
@@ -415,7 +415,8 @@ public enum BoxMerge {
                 vPool.removeAll { $0 == vi }
                 continue
             }
-            let plausible = leftoverPool.filter { plausibleCandidate(r, saved[$0], gm, fits) && !part.contains($0) }
+            // A saved entry whose IVs the bars read for this row clearly contradict is not offered (`barsContradict`): with no other candidate the row is New.
+            let plausible = leftoverPool.filter { plausibleCandidate(r, saved[$0], gm, fits) && !barsContradict(originals[si], saved[$0]) && !part.contains($0) }
             // M12: a saved entry that was misread (no IVs, no level fits) of this correctly read row, whatever the CP.
             let misread = leftoverPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
             var all = part + plausible + misread
@@ -790,6 +791,24 @@ public enum BoxMerge {
         case (nil, let y?): return !y.isEmpty
         case (let x?, let y?): return !x.isDisjoint(with: y)
         }
+    }
+
+    /// A row whose IVs are not a clean read (`cleanIVs`: none solved, a solver guess or correction, ambiguous) is matched as one with no IVs, which made any saved entry of
+    /// its species at a lower CP "maybe this one, powered up". But the bars WERE read, and IVs never change: when the saved entry's IVs are more than one notch from them on
+    /// some stat (the tolerance of every other IV check here), the entry is not a candidate. Greg's Darentas scan of 23 Nov 2026: a Meowth CP 445 whose bars read 15/11/15
+    /// (no level fits them, so no IVs) was asked about against a saved Meowth CP 121 with 6/6/3. Conservative on purpose: the saved IVs are compared with the bars as read
+    /// AND with what the solver made of them (its corrected value or its guess) AND, for a hand-corrected entry, with its IVs before the correction; near any of them, it
+    /// stays a candidate; so does an entry with the row's own CP and HP. A row with no bars read, a saved entry with no IVs, and a row with clean IVs (other rules decide) are never judged here. Nor is a row whose CP
+    /// cannot be trusted (`no-level-fits`, or none): for it the CP is what was misread, it is asked about by its HP against a ranked list (rule 7 and the same-HP head),
+    /// and the bars only order that list.
+    static func barsContradict(_ original: ScanRow, _ v: BoxEntry) -> Bool {
+        guard !cleanIVs(original), original.cp > 0, !hasNoLevelFits(original), let read = original.ivsRead else { return false }
+        let theirs = [v.row.ivs, v.corrections.ivs?.was].compactMap { $0 }
+        guard v.row.ivs != nil else { return false }
+        // The same CP and the same HP outweigh the bars: that is one Pokémon whose bars were misread (run12: a Weezing CP 883 / HP 85 read 8/10/3 against the saved 2/15/3).
+        if sameCP(original, v) && sameHP(original, v) { return false }
+        let ours = [read, original.ivs, original.ivsGuess].compactMap { $0 }
+        return !theirs.contains { t in ours.contains { IVFit.near(IVFit.index(t), $0) } }
     }
 
     private static func plausibleCandidate(_ s: ScanRow, _ v: BoxEntry, _ gm: GameMaster, _ fits: IVFit) -> Bool {
