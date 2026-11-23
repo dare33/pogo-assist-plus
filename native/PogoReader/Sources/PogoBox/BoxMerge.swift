@@ -394,7 +394,7 @@ public enum BoxMerge {
             // owner's rule is for a part read with no contradicting bars.
             if let read = originals[si].ivsRead ?? originals[si].ivs, let saw = v.row.ivs, !IVFit.near(IVFit.index(saw), read) { return nil }
             // nothing else may be a candidate for this row (a plausible or misread entry would make it a real question)
-            guard !leftoverPool.contains(where: { $0 != vi && ((plausibleCandidate(r, saved[$0], gm, fits) && !barsContradict(originals[si], saved[$0])) || misreadSaved(r, saved[$0])) }) else { return nil }
+            guard !leftoverPool.contains(where: { $0 != vi && (plausibleCandidate(r, saved[$0], gm, fits) || misreadSaved(r, saved[$0])) }) else { return nil }
             return vi
         }
         let fits = IVFit(enabled: shareIVs)   // CP and HP fits per species, shared by every leftover row
@@ -415,7 +415,7 @@ public enum BoxMerge {
                 vPool.removeAll { $0 == vi }
                 continue
             }
-            // A saved entry whose IVs the bars read for this row clearly contradict is not offered (`barsContradict`): with no other candidate the row is New.
+            // A saved entry whose IVs the bars read for this row grossly contradict is not offered (`barsContradict`): with no other candidate the row is New.
             let plausible = leftoverPool.filter { plausibleCandidate(r, saved[$0], gm, fits) && !barsContradict(originals[si], saved[$0]) && !part.contains($0) }
             // M12: a saved entry that was misread (no IVs, no level fits) of this correctly read row, whatever the CP.
             let misread = leftoverPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
@@ -793,22 +793,32 @@ public enum BoxMerge {
         }
     }
 
-    /// A row whose IVs are not a clean read (`cleanIVs`: none solved, a solver guess or correction, ambiguous) is matched as one with no IVs, which made any saved entry of
-    /// its species at a lower CP "maybe this one, powered up". But the bars WERE read, and IVs never change: when the saved entry's IVs are more than one notch from them on
-    /// some stat (the tolerance of every other IV check here), the entry is not a candidate. Greg's Darentas scan of 23 Nov 2026: a Meowth CP 445 whose bars read 15/11/15
-    /// (no level fits them, so no IVs) was asked about against a saved Meowth CP 121 with 6/6/3. Conservative on purpose: the saved IVs are compared with the bars as read
-    /// AND with what the solver made of them (its corrected value or its guess) AND, for a hand-corrected entry, with its IVs before the correction; near any of them, it
-    /// stays a candidate; so does an entry with the row's own CP and HP. A row with no bars read, a saved entry with no IVs, and a row with clean IVs (other rules decide) are never judged here. Nor is a row whose CP
-    /// cannot be trusted (`no-level-fits`, or none): for it the CP is what was misread, it is asked about by its HP against a ranked list (rule 7 and the same-HP head),
-    /// and the bars only order that list.
+    /// A row whose IVs are not a clean read (`cleanIVs`) is matched as one with no IVs, so a saved entry of its species at a lower CP whose IVs could give both readings
+    /// (`sharesAnIVTriple`) is offered as "maybe this one, powered up". The bars were read all the same, and a saved entry they GROSSLY contradict is not offered. Greg's
+    /// Darentas scan of 23 Nov 2026: a Meowth CP 445 whose bars read 15/11/15 on all three frames (38 IV sets fit its CP and HP, none near the bars, so no IVs) was asked
+    /// about against a saved Meowth CP 121 with 6/6/3.
+    ///
+    /// The bars of such a row are weak evidence: the solver has already found them inconsistent with the CP and HP. In the device runs to 23 Nov 2026 a first version of
+    /// this rule (one notch from the bars, the solver value and the guess) would have rejected the TRUE IVs of 8 of the 29 rows whose IVs a clean read elsewhere gives
+    /// (Weezing 8/10/3 for 2/15/3 on one frame, Ekans 9/11/13 for 14/11/13, Hatenna 11/9/6 for 11/11/3). A wrongly rejected entry makes a powered-up Pokémon New, a
+    /// duplicate nobody is asked about, so the rule only says no when ALL hold, and rejected none of the 29:
+    /// - at least two frames read the bars and every one of them read `ivsRead` (a single frame, or frames that disagree, prove nothing);
+    /// - at least two stats are more than a whole bar segment (5) from the saved entry's IVs, and from its IVs before a hand correction (the misreads seen are
+    ///   one stat, or two by up to 3, never two by more than 5 on agreeing frames);
+    /// - the saved IVs are not within a notch of what the solver made of the bars (its corrected value or its guess);
+    /// - the entry does not have the row's own CP with an HP that is equal, a point off or unread (rule 4 pairs or asks about most of those before this is reached).
+    /// Never judged: a row with clean IVs (other rules decide), a row with no bars read, a saved entry with no IVs, and a row whose CP cannot be trusted
+    /// (`no-level-fits`, or none: its CP is what was misread, and it is asked about by its HP against a ranked list, rule 7).
+    /// Accepted limit: a powered-up Pokémon whose bars were misread the same gross way on every frame becomes New. Purification (which does change IVs, by 2) moves no stat by more than 5.
     static func barsContradict(_ original: ScanRow, _ v: BoxEntry) -> Bool {
-        guard !cleanIVs(original), original.cp > 0, !hasNoLevelFits(original), let read = original.ivsRead else { return false }
-        let theirs = [v.row.ivs, v.corrections.ivs?.was].compactMap { $0 }
-        guard v.row.ivs != nil else { return false }
-        // The same CP and the same HP outweigh the bars: that is one Pokémon whose bars were misread (run12: a Weezing CP 883 / HP 85 read 8/10/3 against the saved 2/15/3).
-        if sameCP(original, v) && sameHP(original, v) { return false }
-        let ours = [read, original.ivs, original.ivsGuess].compactMap { $0 }
-        return !theirs.contains { t in ours.contains { IVFit.near(IVFit.index(t), $0) } }
+        guard !cleanIVs(original), original.cp > 0, !hasNoLevelFits(original), let read = original.ivsRead, let theirs = v.row.ivs else { return false }
+        let frames = original.frames.compactMap(\.ivs), text = "\(read.atk)/\(read.def)/\(read.hp)"
+        guard frames.count >= 2, frames.allSatisfy({ $0 == text }) else { return false }
+        if sameCP(original, v), original.hp == nil || v.row.hp == nil || nearHP(original, v) { return false }
+        func gross(_ a: IVs, _ b: IVs) -> Bool { [abs(a.atk - b.atk), abs(a.def - b.def), abs(a.hp - b.hp)].filter { $0 > 5 }.count >= 2 }
+        let all = [theirs, v.corrections.ivs?.was].compactMap { $0 }
+        if all.contains(where: { t in [original.ivs, original.ivsGuess].compactMap { $0 }.contains { IVFit.near(IVFit.index(t), $0) } }) { return false }
+        return all.allSatisfy { gross($0, read) }
     }
 
     private static func plausibleCandidate(_ s: ScanRow, _ v: BoxEntry, _ gm: GameMaster, _ fits: IVFit) -> Bool {
