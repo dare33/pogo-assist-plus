@@ -64,14 +64,6 @@ final class ShareTimesTests: XCTestCase {
         XCTAssertLessThan(try XCTUnwrap(Range(m.range(at: 1), in: sent).flatMap { Double(sent[$0]) }), 100)
         XCTAssertEqual(after.refineChanges?.count, before.refineChanges?.count)
 
-        // every other field is as stored: rows without their frame times, the dates, the review answers, the paging, the hash
-        func plain(_ x: BoxStore.StoredScan) -> BoxStore.StoredScan {
-            var y = x; y.refineChanges = nil
-            for i in y.rows.indices { y.rows[i].frames = y.rows[i].frames.map { var f = $0; f.time = nil; return f } }
-            for i in y.review.indices { y.review[i].frames = y.review[i].frames.map { var f = $0; f.time = nil; return f } }
-            return y
-        }
-        XCTAssertEqual(plain(after), plain(before))
         XCTAssertEqual(zip(frameTimes(after), frameTimes(before)).map { $0 - $1 + origin }.map { abs($0) }.max() ?? 0, 0, accuracy: 2e-9, "every difference is kept")
         // the stored files are not touched
         XCTAssertEqual(try Data(contentsOf: s.resultURL), s.result)
@@ -79,6 +71,88 @@ final class ShareTimesTests: XCTestCase {
         // the log keeps every line kind and its other fields
         XCTAssertEqual(try lines(logText).count, try lines(String(decoding: s.log, as: UTF8.self)).count)
         XCTAssertEqual(try lines(logText).map { $0["k"] as? String }, try lines(String(decoding: s.log, as: UTF8.self)).map { $0["k"] as? String })
+    }
+
+    /// The result is shifted as JSON: nothing but the frame times and the bars-split texts differs, in a file that holds what the model types would normalise away.
+    func testOnlyTheFrameTimesAndBarsTextsOfTheStoredJSONChange() throws {
+        let s = try stored(paging: hint)
+        defer { try? FileManager.default.removeItem(at: s.root) }
+        var tree = try XCTUnwrap(try JSONSerialization.jsonObject(with: s.result) as? [String: Any])
+        var rows = try XCTUnwrap(tree["rows"] as? [[String: Any]])
+        rows[0]["dynamax"] = false                       // the model's decoder would turn this into absent
+        rows[0]["gigantamax"] = true                     // and would infer dynamax from this
+        rows[0]["lucky"] = NSNull()                      // an explicit null optional
+        rows[0]["futureRowKey"] = ["a": 1]               // an unknown key
+        tree["rows"] = rows
+        tree["futureKey"] = "kept"
+        tree["reviewActions"] = ["Unsure (same) Fidough, CP 768: said it is new.", "3 saved Pokémon the scan did not see were kept in the box."]
+        tree["reportHash"] = "abc123"; tree["reportSentAt"] = "2026-11-01T01:02:03Z"; tree["sourceSignature"] = "1234-1795000000000"
+        let file = try JSONSerialization.data(withJSONObject: tree, options: [.sortedKeys])
+        XCTAssertNotNil(try? decoded(file), "premise: it still decodes")
+
+        let base = try XCTUnwrap(try JSONSerialization.jsonObject(with: file) as? [String: Any]), shared = ShareTimes.savedScan(result: file, replayLog: nil)
+        let out = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(shared.result)) as? [String: Any])
+        XCTAssertGreaterThan(shared.shift, 100_000)
+        func masked(_ t: [String: Any]) -> NSDictionary {
+            var m = t
+            for list in ["rows", "review"] {
+                m[list] = ((t[list] as? [[String: Any]]) ?? []).map { e in
+                    var e = e
+                    e["frames"] = ((e["frames"] as? [[String: Any]]) ?? []).map { var f = $0; f["time"] = nil; return f }
+                    return e
+                }
+            }
+            m["refineChanges"] = nil
+            return NSDictionary(dictionary: m)
+        }
+        let mo = masked(out), mt = masked(base)
+        XCTAssertEqual(mo, mt, "every other key and value is as stored")
+        // and on the file exactly as the store wrote it (its own number text), not only on one this test serialised
+        let stored = try XCTUnwrap(try JSONSerialization.jsonObject(with: s.result) as? [String: Any])
+        let fromStore = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(ShareTimes.savedScan(result: s.result, replayLog: nil).result)) as? [String: Any])
+        XCTAssertEqual(masked(fromStore), masked(stored), "the stored file's numbers come back as the same values")
+        let outRows = try XCTUnwrap(out["rows"] as? [[String: Any]])
+        XCTAssertEqual(outRows[0]["dynamax"] as? Bool, false); XCTAssertTrue(outRows[0]["lucky"] is NSNull); XCTAssertEqual(out["futureKey"] as? String, "kept")
+        XCTAssertEqual((base["refineChanges"] as? [String])?.count, (out["refineChanges"] as? [String])?.count)
+        XCTAssertNotEqual(base["refineChanges"] as? [String], out["refineChanges"] as? [String], "the bars text did change")
+        // a frame time that is a string, or a number that is not finite, is not shared
+        for bad: Any in ["119757.5", [1], true] {
+            var t = tree; var r = try XCTUnwrap(t["rows"] as? [[String: Any]]); var f = try XCTUnwrap(r[0]["frames"] as? [[String: Any]])
+            f[0]["time"] = bad; r[0]["frames"] = f; t["rows"] = r
+            let res = ShareTimes.savedScan(result: try JSONSerialization.data(withJSONObject: t), replayLog: nil)
+            XCTAssertNil(res.result, "\(bad)"); XCTAssertEqual(res.unreadable, [.result])
+        }
+    }
+
+    func testTheTextEditorChangesOnlyTheNamedValuesAndKeepsEveryOtherByte() throws {
+        let text = "{ \"a\" : [ {\"time\": 100.5, \"x\":0.01756636106177467, \"s\":\"caf\\u00e9 \\\"q\\\" \\/\"} , {\"time\":null} ],\n \"note\":\"at 100 s\", \"time\": 7,\"c\":[\"keep\",\"drop\"] }"
+        let edit = JSONTextEdit(numbers: ["a/[]/time"], transform: { $0 - 100 }, strings: ["c/[]"], rewrite: { $0 == "drop" ? "dropped" : $0 })
+        let out = String(decoding: try XCTUnwrap(edit.apply(to: Data(text.utf8))), as: UTF8.self)
+        XCTAssertEqual(out, text.replacingOccurrences(of: "100.5", with: "0.5").replacingOccurrences(of: "\"drop\"", with: "\"dropped\""))
+        XCTAssertNil(JSONTextEdit(numbers: ["a"]).apply(to: Data("{\"a\":\"5\"}".utf8)), "a string where a time should be")
+        XCTAssertNil(JSONTextEdit().apply(to: Data("{\"a\":".utf8)))
+    }
+
+    func testAReplayLineWhoseTimeIsNotANumberIsLeftOutAndCounted() throws {
+        let empty = ScanResult(rows: [], review: [], unmatched: [])
+        let bad = ["\"t\":\"1000\"", "\"t\":null", "\"t\":true", "\"t\":[1000]", "\"t\":{\"a\":1}", "\"t\":1000,\"last\":\"999\"", "\"t\":1000,\"last\":null"]
+        for fields in bad {
+            let log = "{\"k\":\"t\",\"t\":5000}\n{\"k\":\"e\",\(fields)}\n{\"k\":\"t\",\"t\":5001}\n"
+            let r = ReportTimes.rebase(replayLog: log, result: empty)
+            XCTAssertEqual(r.droppedLines, 1, fields); XCTAssertEqual(r.shift, 5000, fields)
+            XCTAssertEqual(try lines(r.replayLog).count, 2, fields)
+            XCTAssertFalse(r.replayLog.contains("1000"), fields)
+            // the upload report says so too
+            let doc = ScanReportBuilder.report(ScanReportInput(replayLog: log, result: empty, kind: .full, scanDate: Date(), app: .init(version: "1", build: "1"), device: .init(model: "m", os: "o", screenWidth: 1, screenHeight: 1, locale: "en")))
+            XCTAssertTrue(doc.notIncluded.contains { $0.contains("1 replay log line") }, fields)
+            XCTAssertFalse(doc.replayLog.contains("1000"), fields)
+            // and so does a share
+            let shared = try XCTUnwrap(ShareTimes.replayLog(Data(log.utf8)))
+            XCTAssertEqual(shared.droppedLines, 1, fields); XCTAssertFalse(shared.text.contains("1000"), fields)
+        }
+        // a line with no time at all is kept, as before
+        let none = ReportTimes.rebase(replayLog: "{\"k\":\"t\",\"t\":5000}\n{\"k\":\"x\"}\n", result: empty)
+        XCTAssertEqual(none.droppedLines, 0)
     }
 
     func testTheResultAndTheLogShareOneOrigin() throws {
@@ -176,19 +250,20 @@ final class ShareTimesTests: XCTestCase {
         return ((o["rows"] as? [[String: Any]]) ?? []).flatMap { r in ["firstTime", "lastTime"].compactMap { (r[$0] as? NSNumber)?.doubleValue } }
     }
 
-    func testTheStateAndSavedCropFilesShiftWithTheLogByOneOrigin() throws {
+    func testEachDiagnosticsFileCountsFromItsOwnFirstTime() throws {
         let log = try sampleLog()
         let logMin = try XCTUnwrap(try logTimes(log).min())
         XCTAssertGreaterThan(logMin, 400, "premise: the bundled log is boot-based")
-        // state rows inside the log's span, and a saved-crop row that starts EARLIER than the log: the origin is the earliest of all three
         let state = try stateJSON(rows: [row(1, first: logMin + 1.5, last: logMin + 3.1), row(2, first: nil, last: logMin + 9)])
         let deferred = try json(["rows": [row(1, first: logMin - 2.0, last: logMin + 4)], "frames": 12, "seconds": 3.5, "peakFootprintMB": 20.25])
         let r = ShareTimes.diagnostics(state: state, deferred: deferred, replayLog: Data(log.utf8))
-        XCTAssertEqual(r.unreadable, [])
-        XCTAssertEqual(r.shift, logMin - 2.0, accuracy: 1e-6)
-        XCTAssertEqual(try rowTimes(XCTUnwrap(r.deferred)), [0, 6.0].map { $0 }, accuracy: 2e-9)
-        XCTAssertEqual(try rowTimes(XCTUnwrap(r.state)), [3.5, 5.1, 11.0], accuracy: 2e-9)
-        XCTAssertEqual(try XCTUnwrap(try logTimes(XCTUnwrap(r.replayLog)).min()), 2.0, accuracy: 2e-9, "the log's own first line is 2 s after the saved-crop row's")
+        XCTAssertEqual(r.unreadable, []); XCTAssertEqual(r.notPrepared, [])
+        XCTAssertEqual(try XCTUnwrap(r.shifts[.state]), logMin + 1.5, accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(r.shifts[.deferred]), logMin - 2.0, accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(r.shifts[.replayLog]), logMin, accuracy: 1e-6)
+        XCTAssertEqual(try rowTimes(XCTUnwrap(r.state)), [0, 1.6, 7.5], accuracy: 2e-9)
+        XCTAssertEqual(try rowTimes(XCTUnwrap(r.deferred)), [0, 6.0], accuracy: 2e-9)
+        XCTAssertEqual(try XCTUnwrap(try logTimes(XCTUnwrap(r.replayLog)).min()), 0, accuracy: 2e-9)
         // every other field is as it was
         func rest(_ d: Data) throws -> [String: Any] {
             var o = try XCTUnwrap(try JSONSerialization.jsonObject(with: d) as? [String: Any])
@@ -200,22 +275,50 @@ final class ShareTimesTests: XCTestCase {
         let stateOut = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(r.state)) as? [String: Any])
         XCTAssertEqual(stateOut["scanId"] as? Int, 1_795_000_000); XCTAssertEqual(stateOut["started"] as? String, "2026-11-20T01:02:03Z")
         XCTAssertTrue((stateOut["rows"] as? [[String: Any]])?[1]["firstTime"] is NSNull, "a row with no time keeps none")
-        // no boot-based number is left in any of the three
-        let allTimes = try rowTimes(XCTUnwrap(r.state)) + rowTimes(XCTUnwrap(r.deferred)) + logTimes(XCTUnwrap(r.replayLog))
-        XCTAssertLessThan(try XCTUnwrap(allTimes.max()), 400, "no boot-based time is left in any of the three")
-
         // again: nothing changes
         let again = ShareTimes.diagnostics(state: r.state, deferred: r.deferred, replayLog: r.replayLog.map { Data($0.utf8) })
-        XCTAssertEqual(again.shift, 0)
+        XCTAssertEqual(again.shifts, [.state: 0, .deferred: 0, .replayLog: 0])
         XCTAssertEqual(again.state, r.state); XCTAssertEqual(again.deferred, r.deferred); XCTAssertEqual(again.replayLog, r.replayLog)
+    }
+
+    /// Files from different runs and builds beside each other, in every pairing: whichever is boot-timed leaves with no boot-based number, whatever the others count from.
+    func testMixedClocksInEveryPairingLeaveNoBootBasedNumberInAnyOutput() throws {
+        let boot = 119_735.0
+        let bootLog = "{\"k\":\"t\",\"t\":\(boot + 0.4)}\n{\"k\":\"t\",\"t\":\(boot + 9.8)}\n{\"k\":\"e\",\"t\":\(boot + 12),\"last\":\(boot + 11)}\n"
+        let bootState = try stateJSON(rows: [row(1, first: boot + 1, last: boot + 4)])
+        let bootDeferred = try json(["rows": [row(1, first: boot + 2, last: boot + 5)], "frames": 3, "seconds": 1.5, "peakFootprintMB": 2.0])
+        for (name, origin) in [("exactly zero", 0.0), ("small positive", 0.4), ("small positive, later", 3.25)] {
+            let zeroLog = "{\"k\":\"t\",\"t\":\(origin)}\n{\"k\":\"t\",\"t\":\(origin + 7)}\n"
+            let zeroState = try stateJSON(rows: [row(1, first: origin, last: origin + 3)])
+            let zeroDeferred = try json(["rows": [row(1, first: origin, last: origin + 2)], "frames": 3, "seconds": 1.5, "peakFootprintMB": 2.0])
+            let cases: [(String, Data?, Data?, String?)] = [
+                ("old deferred beside a current state and log", zeroState, bootDeferred, zeroLog),
+                ("old log beside a current state and deferred", zeroState, zeroDeferred, bootLog),
+                ("old state beside a current deferred and log", bootState, zeroDeferred, zeroLog),
+                ("old state and deferred beside a current log", bootState, bootDeferred, zeroLog),
+                ("old state and log beside a current deferred", bootState, zeroDeferred, bootLog),
+                ("old deferred and log beside a current state", zeroState, bootDeferred, bootLog),
+                ("all old", bootState, bootDeferred, bootLog),
+            ]
+            for (label, state, deferred, log) in cases {
+                let r = ShareTimes.diagnostics(state: state, deferred: deferred, replayLog: log.map { Data($0.utf8) })
+                XCTAssertEqual(r.unreadable, [], "\(name): \(label)")
+                let times = try rowTimes(XCTUnwrap(r.state)) + rowTimes(XCTUnwrap(r.deferred)) + logTimes(XCTUnwrap(r.replayLog))
+                XCTAssertLessThan(try XCTUnwrap(times.max()), 100, "\(name): \(label): a boot-based time is left")
+                XCTAssertEqual(try XCTUnwrap(times.min()), 0, accuracy: 1e-9, "\(name): \(label)")
+                // and no boot-based number in the text of any file
+                let text = String(decoding: try XCTUnwrap(r.state), as: UTF8.self) + String(decoding: try XCTUnwrap(r.deferred), as: UTF8.self) + (try XCTUnwrap(r.replayLog))
+                XCTAssertEqual(try numbers(in: text).filter { $0 >= boot && $0 != 1_795_000_000 }, [], "\(name): \(label)")
+            }
+        }
     }
 
     func testDiagnosticsFromZeroComeOutAsTheyCameAndMissingFilesStayMissing() throws {
         let state = try stateJSON(rows: [row(1, first: 0, last: 3.1)])
-        let log = "{\"k\":\"t\",\"t\":0.5}\n"
+        let log = "{\"k\":\"t\",\"t\":0}\n"
         let r = ShareTimes.diagnostics(state: state, deferred: nil, replayLog: Data(log.utf8))
-        XCTAssertEqual(r.shift, 0)
-        XCTAssertEqual(r.state, state); XCTAssertEqual(r.replayLog, log); XCTAssertNil(r.deferred)
+        XCTAssertEqual(r.shifts[.state], 0); XCTAssertEqual(r.shifts[.replayLog], 0)
+        XCTAssertEqual(r.state, state); XCTAssertEqual(r.replayLog, log); XCTAssertNil(r.deferred); XCTAssertNil(r.shifts[.deferred])
         let none = ShareTimes.diagnostics(state: nil, deferred: nil, replayLog: nil)
         XCTAssertNil(none.state); XCTAssertNil(none.replayLog); XCTAssertEqual(none.unreadable, [])
         // a state with no rows, and one from an older build with only some fields
@@ -230,13 +333,15 @@ final class ShareTimesTests: XCTestCase {
             let r = ShareTimes.diagnostics(state: state, deferred: good, replayLog: Data(log.utf8))
             XCTAssertNil(r.state, file: file, line: line); XCTAssertEqual(r.unreadable, [.state], file: file, line: line)
             XCTAssertNotNil(r.deferred, file: file, line: line); XCTAssertNotNil(r.replayLog, file: file, line: line)
-            XCTAssertEqual(try rowTimes(XCTUnwrap(r.deferred)), [0.5, 2.0], accuracy: 2e-9, file: file, line: line)
+            XCTAssertEqual(try rowTimes(XCTUnwrap(r.deferred)), [0, 1.5], accuracy: 2e-9, file: file, line: line)
         }
         try check(Data("{\"rows\": [".utf8))                                            // cut off
         try check(Data("[1,2,3]".utf8))                                                  // not an object
         try check(try json(["rows": "5000.5"]))                                          // rows is not a list
         try check(try json(["rows": [row(1, first: 1, last: 2), ["firstTime": "5000.5"]]])) // a time that is not a number
         try check(try json(["rows": [5000.5]]))
+        let badLog = ShareTimes.diagnostics(state: nil, deferred: nil, replayLog: Data([0xFF, 0xFE]))
+        XCTAssertNil(badLog.replayLog); XCTAssertEqual(badLog.unreadable, [.replayLog])
     }
 
     func testTheReviewsLogAloneStartsAtZero() throws {

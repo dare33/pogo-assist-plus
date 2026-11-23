@@ -24,8 +24,8 @@ import Foundation
 /// again changes nothing. `ShareTimes` uses the same rules for the files the person shares out of the app. When the earliest time is exactly 0 the log text is returned as it came (each line as written, lines joined by "\n"; a
 /// blank line is dropped); otherwise each line is re-serialised (sorted keys, 17 significant digits, which decode to the same values).
 ///
-/// A replay line this cannot read as a JSON object (a half-written last line, damage) is left out of the upload and counted, because its text
-/// might hold a boot time that cannot be shifted. A line of a kind this does not know has its numeric `t` and `last` shifted like the known ones;
+/// A replay line this cannot read as a JSON object (a half-written last line, damage), or whose `t` or `last` is present and is not a finite number (a string, null, a
+/// boolean, a list, an object), is left out of the upload and counted, because its text might hold a boot time that cannot be shifted. A line of a kind this does not know has its numeric `t` and `last` shifted like the known ones;
 /// a time kept under any other key in a future line kind would NOT be shifted (a new time-carrying key must be added to `logTimeKeys`).
 public enum ReportTimes {
     public struct Rebased: Equatable {
@@ -47,11 +47,18 @@ public enum ReportTimes {
 
     /// `extraTimes` are further frame times that belong to the same scan and are shared with it (the diagnostics' state and saved-crop rows, `ShareTimes`); they count towards
     /// the origin only. Empty for the report.
+    /// A line whose `t` or `last` is present must hold a finite number: no writer in the repo ever wrote null or anything else there (`ReplayLog` encodes non-optional
+    /// Doubles, and a non-finite one fails to encode), so a line with such a value is damaged, and its text might hold a time that cannot be shifted.
+    static func logTimesAreNumbers(_ o: [String: Any]) -> Bool {
+        for k in logTimeKeys { if let v = o[k], number(v) == nil { return false } }
+        return true
+    }
+
     public static func rebase(replayLog: String, result: ScanResult, refineChanges: [String] = [], extraTimes: [Double] = []) -> Rebased {
         var objects = [[String: Any]?]()
         var earliest = Double.infinity
         for text in replayLog.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard let o = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] else { objects.append(nil); continue }
+            guard let o = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any], logTimesAreNumbers(o) else { objects.append(nil); continue }
             for k in logTimeKeys { if let v = number(o[k]) { earliest = min(earliest, v) } }
             objects.append(o)
         }
