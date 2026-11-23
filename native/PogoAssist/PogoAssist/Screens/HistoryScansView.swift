@@ -48,7 +48,7 @@ struct HistoryScansView: View {
                 // A screenshot import has no replay log to read again, and nothing a report could carry.
                 if scan.source != ScreenshotImporter.source { Button { model.rereadScan(scan) } label: { Label("Read again with the latest rules", systemImage: "arrow.triangle.2.circlepath") } }
                 if model.reportsEnabled && scan.source != ScreenshotImporter.source { Button { model.reportTarget = .saved(scan.id) } label: { Label("Make scans better", systemImage: "paperplane") } }
-                Button { shareURLs = model.shareFiles(for: scan) } label: { Label("Share scan files", systemImage: "square.and.arrow.up") }
+                Button { Task { shareURLs = await model.shareFiles(for: scan) } } label: { Label("Share scan files", systemImage: "square.and.arrow.up") }
             } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("Scan actions")
         }

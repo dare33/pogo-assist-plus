@@ -26,7 +26,7 @@ struct MakeScansBetterSheet: View {
                 case .failed(let why):
                     Section {
                         Label(why, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                        Button("Share the files instead") { shareURLs = model.reportShareFiles(target) }
+                        Button("Share the files instead") { Task { shareURLs = await model.reportShareFiles(target) } }
                     }
                     Section("What went wrong? (optional)") { TextField("What went wrong? (optional)", text: $note, axis: .vertical).lineLimit(2...6) }
                 }

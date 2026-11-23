@@ -21,6 +21,9 @@ struct ContentView: View {
     @StateObject private var model = StateModel()
     @Environment(\.scenePhase) private var phase
     @Environment(\.dismiss) private var dismiss
+    /// The share button's copies (`ShareFiles.diagnostics`: times counted from the scan's first frame) and what to say when one was left out.
+    @State private var shareURLs: [URL] = []
+    @State private var shareNote: String?
 
     /// The extension's memory limit is about 50 MB; the peak turns red from here.
     private let peakWarnMB = 45.0
@@ -80,14 +83,18 @@ struct ContentView: View {
             .toolbar {
                 if showsDone { ToolbarItem(placement: .topBarLeading) { Button("Done") { dismiss() } } }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    if model.hasState, let url = SharedStore.stateURL {
-                        ShareLink(items: [url] + [SharedStore.deferredURL, SharedStore.replayURL].compactMap { $0 }.filter { FileManager.default.fileExists(atPath: $0.path) }) { Image(systemName: "square.and.arrow.up") }
+                    if model.hasState, SharedStore.stateURL != nil {
+                        Button { shareDiagnostics() } label: { Image(systemName: "square.and.arrow.up") }
                     }
                     // Not while a broadcast is live: Clear would delete the replay log the extension is still writing.
                     Button("Clear", role: .destructive) { model.clear() }.disabled(model.live)
                 }
             }
         }
+        .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = [] } })) { ShareSheet(urls: shareURLs).presentationDetents([.medium, .large]) }
+        .alert("Pogo Assist+", isPresented: Binding(get: { shareNote != nil && shareURLs.isEmpty }, set: { if !$0 { shareNote = nil } })) {
+            Button("OK") { shareNote = nil }
+        } message: { Text(shareNote ?? "") }
         .onAppear { model.reload(); model.startTimer(); model.readSavedCrops() }
         .onDisappear { model.stopTimer() }
         // Coming to the foreground: refresh, and read any crops a finished or dead broadcast left.
@@ -119,6 +126,16 @@ struct ContentView: View {
             } else if model.hasState {
                 Text("Broadcasting (\(s.mode))").font(.footnote).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// Reads and shifts the files off the main actor, then opens the share sheet with the copies. A file that could not be read is left out and said so.
+    private func shareDiagnostics() {
+        let tmp = FileManager.default.temporaryDirectory
+        Task {
+            let prepared = await Task.detached(priority: .userInitiated) { ShareFiles.diagnostics(into: tmp) }.value
+            shareNote = prepared.message
+            shareURLs = prepared.urls
         }
     }
 

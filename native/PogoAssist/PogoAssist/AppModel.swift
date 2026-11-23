@@ -323,13 +323,16 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The files to share instead when sending fails: the saved scan's result and log, or the unsaved scan's log.
-    func reportShareFiles(_ target: ReportTarget) -> [URL] {
+    /// The files to share instead when sending fails: the saved scan's result and log, or the unsaved scan's log, with their times counted from the scan's first frame.
+    func reportShareFiles(_ target: ReportTarget) async -> [URL] {
         switch target {
-        case .saved(let id): if let s = scans.first(where: { $0.id == id }) { return shareFiles(for: s) } else { return [] }
+        case .saved(let id): if let s = scans.first(where: { $0.id == id }) { return await shareFiles(for: s) } else { return [] }
         case .review:
             guard case .review(let r) = flow, let url = r.reread?.replayURL ?? r.log else { return [] }
-            return [url]
+            let tmp = FileManager.default.temporaryDirectory
+            let prepared = await Task.detached(priority: .userInitiated) { ShareFiles.reviewLog(url, into: tmp) }.value
+            if let m = prepared.message { message = m }
+            return prepared.urls
         }
     }
 
@@ -948,20 +951,16 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The saved scan's result file and its replay log, copied to the temporary folder under names that say what they are.
-    func shareFiles(for scan: BoxStore.Summary) -> [URL] {
-        guard let a = account, let f = try? library.store.files(account: a, id: scan.id) else { message = "That scan's files could not be found."; return [] }
-        let tmp = FileManager.default.temporaryDirectory
-        var out = [URL]()
-        let result = tmp.appendingPathComponent("\(scan.id).result.json")
-        try? FileManager.default.removeItem(at: result)
-        if (try? FileManager.default.copyItem(at: f.result, to: result)) != nil { out.append(result) }
-        if let r = f.replay {
-            let log = tmp.appendingPathComponent("\(scan.id).replay.jsonl")
-            try? FileManager.default.removeItem(at: log)
-            if (try? FileManager.default.copyItem(at: r, to: log)) != nil { out.append(log) }
-        }
-        return out
+    /// The saved scan's result file and its replay log, written to the temporary folder under names that say what they are, with their times counted from the scan's first
+    /// frame (`ShareFiles`, `ShareTimes`: older scans store times since the phone started, which must not leave it). Read and shifted off the main actor; a file that cannot be
+    /// read is left out and `message` says so.
+    func shareFiles(for scan: BoxStore.Summary) async -> [URL] {
+        guard let a = account else { message = "That scan's files could not be found."; return [] }
+        let store = library.store, id = scan.id, tmp = FileManager.default.temporaryDirectory
+        let prepared = await Task.detached(priority: .userInitiated) { ShareFiles.savedScan(store: store, account: a, id: id, into: tmp) }.value
+        guard let prepared else { message = "That scan's files could not be found."; return [] }
+        if let m = prepared.message { message = m }
+        return prepared.urls
     }
 
     private func afterCommit(_ snap: BoxSnapshot, editedId: String? = nil) {

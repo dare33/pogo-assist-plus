@@ -240,7 +240,7 @@ phone on an iOS 27 beta needs the matching Xcode beta).
    frames read and dropped, ms each, memory peak and lowest free, and the status line
    ("Broadcast finished" or "ended without a finish marker"). Tap share and send every file it
    offers: the state JSON and `replay.jsonl` (the per-reading log; a new live broadcast overwrites
-   it, so export after each run). Clear is disabled while a broadcast is live.
+   it, so export after each run). The shared copies count their times from the scan's first frame; the files in the app group are not changed. Clear is disabled while a broadcast is live.
 8. If it ended without a finish marker (iOS killed the extension, most likely for memory): tap
    Clear, set Reader to "Read live (fast)", repeat 5 to 7; if that dies too, "Save crops, read in
    app", repeat, then open the app and wait for it to read the saved crops.
@@ -282,7 +282,13 @@ grouper received them (ticks drained right before the reading that followed). Ev
 lines) counts in seconds from the first frame the extension saw (`ScanClock`), so the earliest logged line of a new scan is at or a fraction of a
 second after 0. Logs written by builds 1 to 4 (and the bundled `sample-scan.replay.jsonl`, which is one of them) count from device start instead, so
 "Make scans better" rebases the log, the result's frame times and the bars-split change texts before upload (`ReportTimes`: the earliest time in the
-scan becomes 0; the stored scan is untouched). The app's share button exports it with the
+scan becomes 0; the stored scan is untouched). Files shared out of the app get the same treatment, as copies in the temporary folder (`ShareTimes`, written by
+`ShareFiles`): "Share scan files" (Settings, History and scans) writes the saved scan's result and replay log with one origin, the earliest time of the two; the
+"Share the files instead" button of a failed report does the same, or for a scan not saved yet shares its replay log on its own; the Diagnostics share button writes
+the state file, `deferred.json` when there is one, and the replay log, with one origin across the three (the rows' `firstTime` and `lastTime` are the state's frame
+times). A file that cannot be read, or a saved scan written by a newer app, is left out and the app says so; a replay line that is not a JSON object is dropped and
+counted. A scan that already starts at 0 is shared as the stored bytes (the log as written), and sharing a shifted file again changes nothing. A new build's log can
+start a fraction of a second after 0 (its first reading, not its first frame), and that fraction is subtracted too. The app's share button exports it with the
 state file (and `deferred.json` when there is one); Clear deletes it.
 
 To replay it through the current grouper offline:
