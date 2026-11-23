@@ -77,6 +77,7 @@
 		74BF30A02B0889A549F4B28B /* PokemonDetailsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5DCADB6094BE4B97E76F13 /* PokemonDetailsCard.swift */; };
 		767B78A46C867ABB726341EE /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6DEECAE9AEEE1B12422CB7 /* ReviewView.swift */; };
 		76F25EFCEF98BDD626FAB8B1 /* HubRocketSquadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44739F157261B7A55B07D01D /* HubRocketSquadTests.swift */; };
+		796DF778EA29A167B2C71912 /* GameSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5643EEE3DE56512164B3FA /* GameSearchTests.swift */; };
 		7A140B20E9B69E826D7A837B /* HubPvPSquadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 272C46D0764D4B5A0E23F600 /* HubPvPSquadTests.swift */; };
 		7CE515CC3FBC4D451039C8A6 /* MakeScansBetterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C881F4F54D4A9282CDECA8E /* MakeScansBetterSheet.swift */; };
 		7F3047FDFA95DF9EFE86B474 /* PogoImport in Frameworks */ = {isa = PBXBuildFile; productRef = B41070E51767E3888426C3F8 /* PogoImport */; };
@@ -263,6 +264,7 @@
 		4D26C5C51C0099219A0C2BE6 /* SetupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupTests.swift; sourceTree = "<group>"; };
 		4D8E6A568314AEC10B511E50 /* LeaguesPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaguesPanel.swift; sourceTree = "<group>"; };
 		4EFD81133E4CAF48343F6366 /* ReviewSaving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewSaving.swift; sourceTree = "<group>"; };
+		4F5643EEE3DE56512164B3FA /* GameSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSearchTests.swift; sourceTree = "<group>"; };
 		50358F60A55A2170A97CC200 /* sample-scan.replay.jsonl */ = {isa = PBXFileReference; path = "sample-scan.replay.jsonl"; sourceTree = "<group>"; };
 		51C5D5C5A5E06415BB056093 /* GuideFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideFlow.swift; sourceTree = "<group>"; };
 		5545AE52CBFC623ED630F411 /* PogoBroadcast.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PogoBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -494,6 +496,7 @@
 				3D04F07048F190593A9DCBE6 /* BoxInsightStoreTests.swift */,
 				4C6F2C5844EF71AA80F0740A /* BoxSearchWordsTests.swift */,
 				FFC7060894571F96C95B0C0A /* BuildMarkWordsTests.swift */,
+				4F5643EEE3DE56512164B3FA /* GameSearchTests.swift */,
 				15FB3B6EA5DBF0AED88D53BD /* JumpThrottleTests.swift */,
 				2B63A4AC73C349DBA01D3BAF /* MarkEditorTests.swift */,
 				389C937EDB734855BA202EC4 /* PickerRowFiguresTests.swift */,
@@ -842,6 +845,7 @@
 				F2025255259D74D0143F1857 /* BoxInsightStoreTests.swift in Sources */,
 				C871098AEDB545CB4A56E047 /* BoxSearchWordsTests.swift in Sources */,
 				CF7E25FC86D3606DE6D103B6 /* BuildMarkWordsTests.swift in Sources */,
+				796DF778EA29A167B2C71912 /* GameSearchTests.swift in Sources */,
 				4FD39FFDFE728BA07015D0A7 /* JumpThrottleTests.swift in Sources */,
 				DC26D695B43A1397836CD3F1 /* MarkEditorTests.swift in Sources */,
 				0589202BA84657C16C4F3104 /* PickerRowFiguresTests.swift in Sources */,
