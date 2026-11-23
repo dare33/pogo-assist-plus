@@ -37,9 +37,9 @@ struct HistoryScansView: View {
         Task {
             let prepared = await model.shareFiles(for: scan)
             shareNote = prepared.message
-            // Another sheet or the review may have come up meanwhile (the controls that open one are disabled, but a scan can end by itself): the share sheet could not present, so
+            // Another sheet, the Restore question or the review may have come up meanwhile (the controls that open one are disabled, but a scan can end by itself): the share sheet could not present, so
             // its close would never clear the busy flag. The copies are dropped, and the person is told to tap again.
-            if model.reportTarget != nil || model.reviewCoverShown {
+            if model.reportTarget != nil || model.reviewCoverShown || restoring != nil {
                 if !prepared.urls.isEmpty { shareNote = "Another screen opened while the files were being prepared. Tap Share scan files again." }
                 shareBusy = false
                 return

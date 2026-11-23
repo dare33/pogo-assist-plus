@@ -431,12 +431,16 @@ final class ShareTimesTests: XCTestCase {
             results["line dropped"] = d.droppedLines == 1
             let saved = ShareTimes.savedScan(result: Data(("{\"schema\":1,\"x\":" + nested(5000) + "}").utf8), replayLog: nil)
             results["result refused"] = saved.result == nil && saved.unreadable == [.result]
+            var edit = JSONTextEdit(); edit.numbers = [[.key("t")]]; edit.strings = [[.key("s")]]
+            results["a list or an object where a time or a text should be"] = ["{\"t\":{}}", "{\"t\":[]}", "{\"t\":[1]}", "{\"t\":{\"x\":1}}", "{\"s\":[]}", "{\"s\":{\"x\":\"y\"}}"]
+                .allSatisfy { edit.apply(to: Data($0.utf8)) == nil }
             done.signal()
         }
         thread.stackSize = 512 * 1024
         thread.start()
         XCTAssertEqual(done.wait(timeout: .now() + 60), .success)
-        XCTAssertEqual(results, ["256 levels": true, "257 levels": true, "258 levels": false, "100000 levels": false, "state refused": true, "line dropped": true, "result refused": true])
+        XCTAssertEqual(results, ["256 levels": true, "257 levels": false, "258 levels": false, "100000 levels": false, "state refused": true, "line dropped": true, "result refused": true,
+                                 "a list or an object where a time or a text should be": true])
     }
 
     func testTheReviewsLogAloneStartsAtZero() throws {

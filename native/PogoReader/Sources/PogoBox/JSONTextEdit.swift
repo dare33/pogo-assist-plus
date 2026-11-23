@@ -4,8 +4,9 @@ import Foundation
 /// document into `JSONSerialization` objects and writing it out again can change a number it was not asked to touch (Foundation parses 17-digit text to a neighbouring
 /// Double for some values), and decoding into model types normalises fields. A path is an array of components, a key or an array element, never a joined string (a key
 /// may contain any character). The rewrite fails (nil) on text that is not well-formed JSON, that holds an object with the same key twice (after decoding escapes: the
-/// parsers keep the first of two and a reader may keep the last, so what was checked may not be what is read), or that nests deeper than `maxDepth` (the check must not
-/// overflow a small stack). With no paths it is therefore a check: `JSONTextEdit().apply(to:) != nil` says the document is safe to read.
+/// parsers keep the first of two and a reader may keep the last, so what was checked may not be what is read), or that nests deeper than `maxDepth` containers, one inside another, counting the outermost (the check must not
+/// overflow a small stack). With no paths it is therefore a check of exactly two things, repeated keys and depth: `JSONTextEdit().apply(to:) != nil` says the document has neither.
+/// It does NOT check every scalar or escape (`{"a":tru}` passes), so a caller must also parse the document with Foundation, as every caller here does.
 ///
 /// Bytes outside the replaced values are copied as they were. A replaced number is written in Swift's shortest form that reads back as the same Double (so "119757.60" may
 /// become "119757.6"); a replaced string is written by Foundation (its escapes may differ, "\/" may become "/"); a string whose rewritten text is equal keeps its bytes.
@@ -13,10 +14,10 @@ struct JSONTextEdit {
     enum Step: Hashable { case key(String), element }
     static let maxDepth = 256
 
-    /// Number paths: the value is replaced by `transform(value)`. A path whose value is null is left alone; any other type there makes the edit fail.
+    /// Number paths: the value is replaced by `transform(value)`. A path whose value is null is left alone; any other type there, an object or a list included, makes the edit fail.
     var numbers: Set<[Step]> = []
     var transform: (Double) -> Double = { $0 }
-    /// String paths: the value is replaced by `rewrite(string)`. Another type there makes the edit fail.
+    /// String paths: the value is replaced by `rewrite(string)`. Another type there, an object or a list included, makes the edit fail.
     var strings: Set<[Step]> = []
     var rewrite: (String) -> String = { $0 }
 
@@ -52,7 +53,7 @@ struct JSONTextEdit {
                     switch bytes[i] {
                     case UInt8(ascii: "{"), UInt8(ascii: "["):
                         let isObject = bytes[i] == UInt8(ascii: "{"), close = isObject ? UInt8(ascii: "}") : UInt8(ascii: "]")
-                        guard open.count <= JSONTextEdit.maxDepth else { return false }
+                        guard open.count < JSONTextEdit.maxDepth, !edit.numbers.contains(path), !edit.strings.contains(path) else { return false }
                         out.append(bytes[i]); i += 1
                         skipSpace()
                         if i < bytes.count, bytes[i] == close { out.append(bytes[i]); i += 1; wantValue = false; continue }
