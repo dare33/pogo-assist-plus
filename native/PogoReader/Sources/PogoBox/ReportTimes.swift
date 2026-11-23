@@ -21,7 +21,7 @@ import Foundation
 ///   differences or settings, not times, and stay. `scanDate` and the app/device fields are wall-clock or hardware facts and stay.
 ///
 /// The origin is the earliest of the log's and the result's times, so the earliest frame in the scan is 0 and every difference is kept. Applying it
-/// again changes nothing. When the earliest time is exactly 0 the log text is returned as it came (each line as written, lines joined by "\n"; a
+/// again changes nothing. `ShareTimes` uses the same rules for the files the person shares out of the app. When the earliest time is exactly 0 the log text is returned as it came (each line as written, lines joined by "\n"; a
 /// blank line is dropped); otherwise each line is re-serialised (sorted keys, 17 significant digits, which decode to the same values).
 ///
 /// A replay line this cannot read as a JSON object (a half-written last line, damage) is left out of the upload and counted, because its text
@@ -43,9 +43,11 @@ public enum ReportTimes {
 
     /// The subtraction is rounded to nine decimals, so two times that were equal before the shift are equal after it. It does not shorten the printed
     /// number: JSONSerialization writes 17 significant digits, which decode to the same value.
-    private static func tidy(_ x: Double) -> Double { (x * 1e9).rounded() / 1e9 }
+    static func tidy(_ x: Double) -> Double { (x * 1e9).rounded() / 1e9 }
 
-    public static func rebase(replayLog: String, result: ScanResult, refineChanges: [String] = []) -> Rebased {
+    /// `extraTimes` are further frame times that belong to the same scan and are shared with it (the diagnostics' state and saved-crop rows, `ShareTimes`); they count towards
+    /// the origin only. Empty for the report.
+    public static func rebase(replayLog: String, result: ScanResult, refineChanges: [String] = [], extraTimes: [Double] = []) -> Rebased {
         var objects = [[String: Any]?]()
         var earliest = Double.infinity
         for text in replayLog.split(separator: "\n", omittingEmptySubsequences: true) {
@@ -55,6 +57,7 @@ public enum ReportTimes {
         }
         for row in result.rows { for f in row.frames { if let t = f.time { earliest = min(earliest, t) } } }
         for entry in result.review { for f in entry.frames { if let t = f.time { earliest = min(earliest, t) } } }
+        for t in extraTimes where t.isFinite { earliest = min(earliest, t) }
         let shift = earliest.isFinite ? earliest : 0
 
         var out = [String]()
@@ -92,7 +95,7 @@ public enum ReportTimes {
         return String(text[..<start.upperBound]) + span + String(text[end.lowerBound...])
     }
 
-    private static func number(_ v: Any?) -> Double? {
+    static func number(_ v: Any?) -> Double? {
         guard let n = v as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID() else { return nil }
         return n.doubleValue.isFinite ? n.doubleValue : nil
     }
