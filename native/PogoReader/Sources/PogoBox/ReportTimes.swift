@@ -24,7 +24,7 @@ import Foundation
 /// again changes nothing. `ShareTimes` uses the same rules for the files the person shares out of the app. When the earliest time is exactly 0 the log text is returned as it came (each line as written, lines joined by "\n"; a
 /// blank line is dropped); otherwise each line is re-serialised (sorted keys, 17 significant digits, which decode to the same values).
 ///
-/// A replay line this cannot read as a JSON object (a half-written last line, damage), or whose `t` or `last` is present and is not a finite number (a string, null, a
+/// A replay line this cannot read as a JSON object (a half-written last line, damage), or that holds a repeated key (the parsers keep the first, a reader may keep the last) or nests deeper than 256, or whose `t` or `last` is present and is not a finite number (a string, null, a
 /// boolean, a list, an object), is left out of the upload and counted, because its text might hold a boot time that cannot be shifted. A line of a kind this does not know has its numeric `t` and `last` shifted like the known ones;
 /// a time kept under any other key in a future line kind would NOT be shifted (a new time-carrying key must be added to `logTimeKeys`).
 public enum ReportTimes {
@@ -32,7 +32,7 @@ public enum ReportTimes {
         public var replayLog: String
         public var result: ScanResult
         public var refineChanges: [String]
-        /// Replay lines left out because they were not a JSON object.
+        /// Replay lines left out because they were not a JSON object, held a repeated key, nested too deep, or had a `t` or `last` that was not a finite number.
         public var droppedLines: Int
         /// What was subtracted from every time (0 when the scan already started at 0, or holds no time at all).
         public var shift: Double
@@ -45,8 +45,6 @@ public enum ReportTimes {
     /// number: JSONSerialization writes 17 significant digits, which decode to the same value.
     static func tidy(_ x: Double) -> Double { (x * 1e9).rounded() / 1e9 }
 
-    /// `extraTimes` are further frame times that belong to the same scan and are shared with it (the diagnostics' state and saved-crop rows, `ShareTimes`); they count towards
-    /// the origin only. Empty for the report.
     /// A line whose `t` or `last` is present must hold a finite number: no writer in the repo ever wrote null or anything else there (`ReplayLog` encodes non-optional
     /// Doubles, and a non-finite one fails to encode), so a line with such a value is damaged, and its text might hold a time that cannot be shifted.
     static func logTimesAreNumbers(_ o: [String: Any]) -> Bool {
@@ -54,17 +52,16 @@ public enum ReportTimes {
         return true
     }
 
-    public static func rebase(replayLog: String, result: ScanResult, refineChanges: [String] = [], extraTimes: [Double] = []) -> Rebased {
+    public static func rebase(replayLog: String, result: ScanResult, refineChanges: [String] = []) -> Rebased {
         var objects = [[String: Any]?]()
         var earliest = Double.infinity
         for text in replayLog.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard let o = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any], logTimesAreNumbers(o) else { objects.append(nil); continue }
+            guard JSONTextEdit().apply(to: Data(text.utf8)) != nil, let o = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any], logTimesAreNumbers(o) else { objects.append(nil); continue }
             for k in logTimeKeys { if let v = number(o[k]) { earliest = min(earliest, v) } }
             objects.append(o)
         }
         for row in result.rows { for f in row.frames { if let t = f.time { earliest = min(earliest, t) } } }
         for entry in result.review { for f in entry.frames { if let t = f.time { earliest = min(earliest, t) } } }
-        for t in extraTimes where t.isFinite { earliest = min(earliest, t) }
         let shift = earliest.isFinite ? earliest : 0
 
         var out = [String]()

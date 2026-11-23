@@ -15,7 +15,8 @@ import PogoReader
 /// Which values carry a frame time, by file:
 /// - Saved scan result (`BoxStore.StoredScan`, `<id>.json`): `rows[].frames[].time` and `review[].frames[].time`; the bars-split text in each `refineChanges` string
 ///   (its "at 13056.7 s" cut times; `ReportTimes.barsChange`). The file's text is edited in place (`JSONTextEdit`): only those values are rewritten and every other
-///   byte stays as stored. It is not decoded and encoded again (which normalises fields), nor parsed and written out again (Foundation can turn a 17-digit number into
+///   byte stays as stored (a changed number is written in its shortest form, a `refineChanges` string whose text changes is written by Foundation, so an escape in it may
+///   differ; a string whose text does not change keeps its bytes). It is not decoded and encoded again (which normalises fields), nor parsed and written out again (Foundation can turn a 17-digit number into
 ///   its neighbouring Double). It must still decode as a `StoredScan` with a schema no newer than this build's
 ///   (a newer schema could hold a time this list does not know). Checked and left alone, as the `ReportTimes` header lists: `unmatched` (a frame label, a count, CPs
 ///   and positions), `paging` (a period and a join allowance, settings), `reviewActions` (what the person answered: names, CPs, counts; `ScanReportBuilder.reviewLines`
@@ -32,7 +33,7 @@ import PogoReader
 /// - Diagnostics saved-crop result (`DeferredResult`, `deferred.json`): `rows[].firstTime` and `rows[].lastTime` (the same `LiveRow`); `seconds` is how long the read
 ///   took, `frames` a count, `peakFootprintMB` a size.
 ///
-/// A file that cannot be read as the shape it should have (not JSON, not the stored scan's format, a schema number newer than this build's, a time that is not a
+/// A file that cannot be read as the shape it should have (not JSON, an object with a repeated key anywhere, nesting deeper than 256, not the stored scan's format, a schema number newer than this build's, a time that is not a
 /// number) is not shared at all: it comes back as `nil` and its name is in `unreadable`. One that was read but could not be written out again comes back as `nil`
 /// with its name in `notPrepared`. Neither is ever returned as it came. A new time-carrying key must be added to `rowTimeKeys` (state and saved crops), to
 /// `frameTimeKey` (the result) or to `ReportTimes` (the log) and to the list above.
@@ -69,7 +70,9 @@ public enum ShareTimes {
     /// A saved scan's result file and its replay log, as the files on disk (`BoxStore.files`). `replayLog` is nil when the scan has none.
     public static func savedScan(result: Data, replayLog: Data?) -> Saved {
         var unreadable = [Part](), notPrepared = [Part]()
-        var scan = decodeStored(result)
+        // The text check comes first: it is depth-capped, so nothing recursive in Foundation sees a pathological document, and it refuses a repeated key (a reader may
+        // keep the second value, which the checks below, reading the first, never saw), including when the shift is 0 and the bytes would go out as they came.
+        var scan = JSONTextEdit().apply(to: result) == nil ? nil : decodeStored(result)
         var tree = scan == nil ? nil : (try? JSONSerialization.jsonObject(with: result)) as? [String: Any]
         if let t = tree, !resultTimesAreNumbers(t) { tree = nil }
         if tree == nil { scan = nil; unreadable.append(.result) }
@@ -83,8 +86,8 @@ public enum ShareTimes {
         var out: Data?
         if let tree {
             if r.shift == 0 { out = result } else {
-                out = JSONTextEdit(numbers: ["rows/[]/frames/[]/time", "review/[]/frames/[]/time"], transform: { ReportTimes.tidy($0 - r.shift) },
-                                   strings: ["refineChanges/[]"], rewrite: { ReportTimes.barsChange($0, shift: r.shift) }).apply(to: result)
+                out = JSONTextEdit(numbers: [[.key("rows"), .element, .key("frames"), .element, .key("time")], [.key("review"), .element, .key("frames"), .element, .key("time")]], transform: { ReportTimes.tidy($0 - r.shift) },
+                                   strings: [[.key("refineChanges"), .element]], rewrite: { ReportTimes.barsChange($0, shift: r.shift) }).apply(to: result)
                 if out == nil { notPrepared.append(.result) }
             }
         }
@@ -103,11 +106,11 @@ public enum ShareTimes {
         var unreadable = [Part](), notPrepared = [Part](), shifts = [Part: Double]()
         func rows(_ data: Data?, _ part: Part) -> Data? {
             guard let data else { return nil }
-            guard let parsed = rowTimes(data) else { unreadable.append(part); return nil }
+            guard JSONTextEdit().apply(to: data) != nil, let parsed = rowTimes(data) else { unreadable.append(part); return nil }
             let shift = parsed.times.min() ?? 0
             shifts[part] = shift
             if shift == 0 { return data }
-            if let d = JSONTextEdit(numbers: rowTimeKeys.map { "rows/[]/\($0)" } .reduce(into: Set<String>()) { $0.insert($1) }, transform: { ReportTimes.tidy($0 - shift) }).apply(to: data) { return d }
+            if let d = JSONTextEdit(numbers: Set(rowTimeKeys.map { [JSONTextEdit.Step.key("rows"), .element, .key($0)] }), transform: { ReportTimes.tidy($0 - shift) }).apply(to: data) { return d }
             notPrepared.append(part); return nil
         }
         let s = rows(state, .state), d = rows(deferred, .deferred)

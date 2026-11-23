@@ -85,6 +85,9 @@ final class ShareTimesTests: XCTestCase {
         rows[0]["futureRowKey"] = ["a": 1]               // an unknown key
         tree["rows"] = rows
         tree["futureKey"] = "kept"
+        // strings with escapes: JSONSerialization writes "15\/15\/14" with an escaped slash, which a rewrite by Foundation would not keep
+        let bars = try XCTUnwrap((tree["refineChanges"] as? [String])?.first { $0.hasPrefix("barsSplit") })
+        tree["refineChanges"] = ["timingSplit: Fidough CP 768: IVs 15/15/14 stayed 14.0 s", bars, "twinSplit: caf\u{e9} \"q\" 15/15/14 at a swipe tick"]
         tree["reviewActions"] = ["Unsure (same) Fidough, CP 768: said it is new.", "3 saved Pokémon the scan did not see were kept in the box."]
         tree["reportHash"] = "abc123"; tree["reportSentAt"] = "2026-11-01T01:02:03Z"; tree["sourceSignature"] = "1234-1795000000000"
         let file = try JSONSerialization.data(withJSONObject: tree, options: [.sortedKeys])
@@ -102,7 +105,7 @@ final class ShareTimesTests: XCTestCase {
                     return e
                 }
             }
-            m["refineChanges"] = nil
+            m["refineChanges"] = ((t["refineChanges"] as? [String]) ?? []).filter { !$0.contains("bars change") }   // only the bars-split text is allowed to differ
             return NSDictionary(dictionary: m)
         }
         let mo = masked(out), mt = masked(base)
@@ -111,6 +114,17 @@ final class ShareTimesTests: XCTestCase {
         let stored = try XCTUnwrap(try JSONSerialization.jsonObject(with: s.result) as? [String: Any])
         let fromStore = try XCTUnwrap(try JSONSerialization.jsonObject(with: XCTUnwrap(ShareTimes.savedScan(result: s.result, replayLog: nil).result)) as? [String: Any])
         XCTAssertEqual(masked(fromStore), masked(stored), "the stored file's numbers come back as the same values")
+        // the strings that do not change keep their bytes; the bars-split one is rewritten
+        func rawChanges(_ d: Data) throws -> [String] {
+            let t = String(decoding: d, as: UTF8.self)
+            let start = try XCTUnwrap(t.range(of: "\"refineChanges\":["))
+            let rest = String(t[start.upperBound...])
+            let re = try NSRegularExpression(pattern: "\"(?:[^\"\\\\]|\\\\.)*\"")
+            return re.matches(in: rest, range: NSRange(rest.startIndex..., in: rest)).prefix(3).map { String(rest[Range($0.range, in: rest)!]) }
+        }
+        let rawBefore = try rawChanges(file), rawAfter = try rawChanges(XCTUnwrap(shared.result))
+        XCTAssertTrue(rawBefore[0].contains("\\/"), "premise: the stored text has an escaped slash: \(rawBefore[0])")
+        XCTAssertEqual(rawAfter[0], rawBefore[0]); XCTAssertEqual(rawAfter[2], rawBefore[2]); XCTAssertNotEqual(rawAfter[1], rawBefore[1])
         let outRows = try XCTUnwrap(out["rows"] as? [[String: Any]])
         XCTAssertEqual(outRows[0]["dynamax"] as? Bool, false); XCTAssertTrue(outRows[0]["lucky"] is NSNull); XCTAssertEqual(out["futureKey"] as? String, "kept")
         XCTAssertEqual((base["refineChanges"] as? [String])?.count, (out["refineChanges"] as? [String])?.count)
@@ -126,10 +140,10 @@ final class ShareTimesTests: XCTestCase {
 
     func testTheTextEditorChangesOnlyTheNamedValuesAndKeepsEveryOtherByte() throws {
         let text = "{ \"a\" : [ {\"time\": 100.5, \"x\":0.01756636106177467, \"s\":\"caf\\u00e9 \\\"q\\\" \\/\"} , {\"time\":null} ],\n \"note\":\"at 100 s\", \"time\": 7,\"c\":[\"keep\",\"drop\"] }"
-        let edit = JSONTextEdit(numbers: ["a/[]/time"], transform: { $0 - 100 }, strings: ["c/[]"], rewrite: { $0 == "drop" ? "dropped" : $0 })
+        let edit = JSONTextEdit(numbers: [[.key("a"), .element, .key("time")]], transform: { $0 - 100 }, strings: [[.key("c"), .element]], rewrite: { $0 == "drop" ? "dropped" : $0 })
         let out = String(decoding: try XCTUnwrap(edit.apply(to: Data(text.utf8))), as: UTF8.self)
         XCTAssertEqual(out, text.replacingOccurrences(of: "100.5", with: "0.5").replacingOccurrences(of: "\"drop\"", with: "\"dropped\""))
-        XCTAssertNil(JSONTextEdit(numbers: ["a"]).apply(to: Data("{\"a\":\"5\"}".utf8)), "a string where a time should be")
+        XCTAssertNil(JSONTextEdit(numbers: [[.key("a")]]).apply(to: Data("{\"a\":\"5\"}".utf8)), "a string where a time should be")
         XCTAssertNil(JSONTextEdit().apply(to: Data("{\"a\":".utf8)))
     }
 
@@ -342,6 +356,87 @@ final class ShareTimesTests: XCTestCase {
         try check(try json(["rows": [5000.5]]))
         let badLog = ShareTimes.diagnostics(state: nil, deferred: nil, replayLog: Data([0xFF, 0xFE]))
         XCTAssertNil(badLog.replayLog); XCTAssertEqual(badLog.unreadable, [.replayLog])
+    }
+
+    // MARK: - repeated keys, odd keys, depth
+
+    func testAFileWithARepeatedKeyAnywhereIsNotShared() throws {
+        let s = try stored()
+        defer { try? FileManager.default.removeItem(at: s.root) }
+        let text = String(decoding: s.result, as: UTF8.self)
+        func inject(_ marker: String, _ with: String, in t: String) throws -> Data {
+            let r = try XCTUnwrap(t.range(of: marker)); return Data(t.replacingCharacters(in: r, with: with).utf8)
+        }
+        // a frame time 0 and then a boot time: the parsers keep the first, so a check that read 0 would never see the second
+        let frame = try inject("\"time\":", "\"time\":0,\"time\":", in: text)
+        let r = ShareTimes.savedScan(result: frame, replayLog: nil)
+        XCTAssertNil(r.result); XCTAssertEqual(r.unreadable, [.result])
+        // also on the path that would send the original bytes (every time is 0 already)
+        let zeroFile = try XCTUnwrap(ShareTimes.savedScan(result: s.result, replayLog: nil).result)
+        XCTAssertEqual(ShareTimes.savedScan(result: zeroFile, replayLog: nil).shift, 0)
+        let zeroDup = ShareTimes.savedScan(result: try inject("\"time\":", "\"time\":0,\"time\":119000.5,\"x\":", in: String(decoding: zeroFile, as: UTF8.self)), replayLog: nil)
+        XCTAssertNil(zeroDup.result); XCTAssertEqual(zeroDup.unreadable, [.result])
+        // a repeated key elsewhere in the document, and one written with an escape
+        XCTAssertNil(ShareTimes.savedScan(result: try inject("\"kind\":", "\"kind\":\"full\",\"kind\":", in: text), replayLog: nil).result)
+        XCTAssertNil(ShareTimes.savedScan(result: try inject("\"time\":", "\"time\":0,\"tim\\u0065\":", in: text), replayLog: nil).result)
+
+        // state and saved-crop rows
+        for bad in ["{\"rows\":[{\"firstTime\":0,\"firstTime\":119735,\"lastTime\":2}]}",
+                    "{\"rows\":[{\"firstTime\":0,\"firstTime\":{\"a\":1},\"lastTime\":2}]}",
+                    "{\"rows\":[{\"firstTime\":5,\"lastTime\":2}],\"rows\":[]}",
+                    "{\"framesRead\":1,\"framesRead\":2}"] {
+            let d = ShareTimes.diagnostics(state: Data(bad.utf8), deferred: Data(bad.utf8), replayLog: nil)
+            XCTAssertNil(d.state, bad); XCTAssertNil(d.deferred, bad); XCTAssertEqual(d.unreadable, [.state, .deferred], bad)
+        }
+
+        // replay lines: dropped and counted, in the report and in a share, also when the file is already from 0
+        let empty = ScanResult(rows: [], review: [], unmatched: [])
+        for line in ["{\"k\":\"t\",\"t\":0,\"t\":119000.5}", "{\"k\":\"t\",\"t\":0,\"t\":\"119735\"}", "{\"k\":\"t\",\"t\":0,\"\\u0074\":119000.5}", "{\"k\":\"t\",\"t\":1,\"k\":\"d\"}"] {
+            let log = "{\"k\":\"t\",\"t\":0}\n\(line)\n{\"k\":\"t\",\"t\":2}\n"
+            let r = ReportTimes.rebase(replayLog: log, result: empty)
+            XCTAssertEqual(r.droppedLines, 1, line); XCTAssertEqual(r.shift, 0, line)
+            XCTAssertEqual(try lines(r.replayLog).count, 2, line); XCTAssertFalse(r.replayLog.contains("119"), line)
+            let doc = ScanReportBuilder.report(ScanReportInput(replayLog: log, result: empty, kind: .full, scanDate: Date(), app: .init(version: "1", build: "1"), device: .init(model: "m", os: "o", screenWidth: 1, screenHeight: 1, locale: "en")))
+            XCTAssertTrue(doc.notIncluded.contains { $0.contains("1 replay log line") }, line); XCTAssertFalse(doc.replayLog.contains("119"), line)
+            let shared = try XCTUnwrap(ShareTimes.replayLog(Data(log.utf8)))
+            XCTAssertEqual(shared.droppedLines, 1, line); XCTAssertFalse(shared.text.contains("119"), line)
+        }
+    }
+
+    func testAKeyThatLooksLikeAPathIsNotShifted() throws {
+        let state = Data("{\"rows/[]/firstTime\":7,\"rows\":[{\"firstTime\":5000,\"lastTime\":5002}],\"a\":{\"rows\":[{\"firstTime\":9000}]}}".utf8)
+        let r = ShareTimes.diagnostics(state: state, deferred: nil, replayLog: nil)
+        let out = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(r.state)) as? [String: Any])
+        XCTAssertEqual(out["rows/[]/firstTime"] as? Int, 7)
+        XCTAssertEqual(try rowTimes(XCTUnwrap(r.state)), [0, 2])
+        XCTAssertEqual(((out["a"] as? [String: Any])?["rows"] as? [[String: Any]])?.first?["firstTime"] as? Int, 9000, "the same key names at another depth are not the rows")
+        // the same through the editor with an element key that is literally "[]"
+        let edit = JSONTextEdit(numbers: [[.key("a"), .element]], transform: { $0 + 1 })
+        XCTAssertEqual(String(decoding: try XCTUnwrap(edit.apply(to: Data("{\"a\":[1],\"a/[]\":5,\"[]\":[7]}".utf8))), as: UTF8.self), "{\"a\":[2.0],\"a/[]\":5,\"[]\":[7]}")
+    }
+
+    /// Nesting is capped, and the check runs on a small stack (512 KB, as a task's) without overflowing it.
+    func testNestingDeeperThanTheCapIsRefusedOnASmallStack() throws {
+        func nested(_ n: Int) -> String { String(repeating: "[", count: n) + String(repeating: "]", count: n) }
+        var results = [String: Bool]()
+        let done = DispatchSemaphore(value: 0)
+        let thread = Thread {
+            results["256 levels"] = JSONTextEdit().apply(to: Data(nested(256).utf8)) != nil
+            results["257 levels"] = JSONTextEdit().apply(to: Data(nested(257).utf8)) != nil
+            results["258 levels"] = JSONTextEdit().apply(to: Data(nested(258).utf8)) != nil
+            results["100000 levels"] = JSONTextEdit().apply(to: Data(nested(100_000).utf8)) != nil
+            let deep = "{\"rows\":[{\"firstTime\":5,\"x\":" + nested(5000) + "}]}"
+            let d = ShareTimes.diagnostics(state: Data(deep.utf8), deferred: nil, replayLog: Data(("{\"k\":\"t\",\"t\":5}\n{\"k\":\"t\",\"t\":6,\"x\":" + nested(5000) + "}\n").utf8))
+            results["state refused"] = d.state == nil && d.unreadable == [.state]
+            results["line dropped"] = d.droppedLines == 1
+            let saved = ShareTimes.savedScan(result: Data(("{\"schema\":1,\"x\":" + nested(5000) + "}").utf8), replayLog: nil)
+            results["result refused"] = saved.result == nil && saved.unreadable == [.result]
+            done.signal()
+        }
+        thread.stackSize = 512 * 1024
+        thread.start()
+        XCTAssertEqual(done.wait(timeout: .now() + 60), .success)
+        XCTAssertEqual(results, ["256 levels": true, "257 levels": true, "258 levels": false, "100000 levels": false, "state refused": true, "line dropped": true, "result refused": true])
     }
 
     func testTheReviewsLogAloneStartsAtZero() throws {

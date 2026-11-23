@@ -37,6 +37,13 @@ struct HistoryScansView: View {
         Task {
             let prepared = await model.shareFiles(for: scan)
             shareNote = prepared.message
+            // Another sheet or the review may have come up meanwhile (the controls that open one are disabled, but a scan can end by itself): the share sheet could not present, so
+            // its close would never clear the busy flag. The copies are dropped, and the person is told to tap again.
+            if model.reportTarget != nil || model.reviewCoverShown {
+                if !prepared.urls.isEmpty { shareNote = "Another screen opened while the files were being prepared. Tap Share scan files again." }
+                shareBusy = false
+                return
+            }
             shareURLs = prepared.urls
             if prepared.urls.isEmpty { shareBusy = false }
         }
@@ -60,8 +67,8 @@ struct HistoryScansView: View {
             Spacer()
             Menu {
                 // A screenshot import has no replay log to read again, and nothing a report could carry.
-                if scan.source != ScreenshotImporter.source { Button { model.rereadScan(scan) } label: { Label("Read again with the latest rules", systemImage: "arrow.triangle.2.circlepath") } }
-                if model.reportsEnabled && scan.source != ScreenshotImporter.source { Button { model.reportTarget = .saved(scan.id) } label: { Label("Make scans better", systemImage: "paperplane") } }
+                if scan.source != ScreenshotImporter.source { Button { model.rereadScan(scan) } label: { Label("Read again with the latest rules", systemImage: "arrow.triangle.2.circlepath") }.disabled(shareBusy) }
+                if model.reportsEnabled && scan.source != ScreenshotImporter.source { Button { model.reportTarget = .saved(scan.id) } label: { Label("Make scans better", systemImage: "paperplane") }.disabled(shareBusy) }
                 Button { prepareShare(scan) } label: { Label("Share scan files", systemImage: "square.and.arrow.up") }.disabled(shareBusy)
             } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("Scan actions")
@@ -75,7 +82,7 @@ struct HistoryScansView: View {
             Text(Fmt.date(h.createdAt)).font(.figtree(13, .medium, relativeTo: .footnote)).foregroundStyle(Theme.muted)
         }
         .swipeActions {
-            if !isCurrent && !model.boxNeedsNewerApp { Button("Restore") { restoring = h }.tint(.blue) }
+            if !isCurrent && !model.boxNeedsNewerApp { Button("Restore") { restoring = h }.tint(.blue).disabled(shareBusy) }
         }
     }
 

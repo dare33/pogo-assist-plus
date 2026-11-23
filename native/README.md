@@ -283,13 +283,13 @@ lines) counts in seconds from the first frame the extension saw (`ScanClock`), s
 second after 0. Logs written by builds 1 to 4 (and the bundled `sample-scan.replay.jsonl`, which is one of them) count from device start instead, so
 "Make scans better" rebases the log, the result's frame times and the bars-split change texts before upload (`ReportTimes`: the earliest time in the
 scan becomes 0; the stored scan is untouched). Files shared out of the app get the same treatment, as copies in the temporary folder (`ShareTimes`, written by
-`ShareFiles`; only the time values are rewritten in the file's text, every other byte stays as stored): "Share scan files" (Settings, History and scans) writes the saved scan's
+`ShareFiles`; only the time values and the bars-split `refineChanges` strings are rewritten in the file's text and every other byte stays as stored: a shifted number is written in its shortest form, so `10.50` may come out `10.5` and a whole number as `2.0`, and a `refineChanges` string whose text changes is written afresh, so an escape in it may differ (`15\/15\/14` may come out `15/15/14`); the values are the same; a string whose text does not change keeps its bytes): "Share scan files" (Settings, History and scans) writes the saved scan's
 result and replay log on one origin, the earliest time across the two, so they agree with each other; the "Share the files instead" button of a failed report does the same,
 or for a scan not saved yet shares its replay log on its own; the Diagnostics share button writes the state file, `deferred.json` when there is one, and the replay log, and
 each of those three counts from its OWN earliest time (they can come from different runs and builds: `deferred.json` survives a new broadcast and a "Save crops" run does not
 clear the log), so their times cannot be compared with each other. In the state file and `deferred.json` the times are the rows' `firstTime` and `lastTime`. A file that cannot
 be read, a saved scan whose schema number is newer than this build's, or a file that could not be written out again is left out and the screen says so (an alert on that screen);
-a replay line that is not a JSON object, or whose `t` or `last` is not a number, is dropped and counted, in the report too. A file whose earliest time is exactly 0 is shared as
+a replay line that is not a JSON object, holds the same key twice, nests deeper than 256, or has a `t` or `last` that is not a number is dropped and counted, in the report too; a result, state or saved-crop file with a repeated key anywhere, or nesting deeper than 256, is left out. A file whose earliest time is exactly 0 is shared as
 the stored bytes (a log as written), and sharing a shifted file again changes nothing. A new build's log can start a fraction of a second after 0 (its first logged line, not
 its first frame), and that fraction is subtracted too. While a share is being prepared, or its sheet is open, the share button on that screen is disabled. Known limit: the
 replay log's lines are written out again (sorted keys, 17 significant digits) when it is shifted, as the report's are, and Foundation can turn such a number into the
