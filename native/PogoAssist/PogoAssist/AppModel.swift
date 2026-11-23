@@ -323,16 +323,17 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The files to share instead when sending fails: the saved scan's result and log, or the unsaved scan's log, with their times counted from the scan's first frame.
-    func reportShareFiles(_ target: ReportTarget) async -> [URL] {
+    /// The files to share instead when sending fails: the saved scan's result and log, or the unsaved scan's log, with their times counted from the file's earliest time. The notes say
+    /// what was left out; the report sheet shows them.
+    func reportShareFiles(_ target: ReportTarget) async -> ShareFiles.Prepared {
         switch target {
-        case .saved(let id): if let s = scans.first(where: { $0.id == id }) { return await shareFiles(for: s) } else { return [] }
+        case .saved(let id):
+            guard let s = scans.first(where: { $0.id == id }) else { return ShareFiles.Prepared(notes: [ShareFiles.scanNotFound]) }
+            return await shareFiles(for: s)
         case .review:
-            guard case .review(let r) = flow, let url = r.reread?.replayURL ?? r.log else { return [] }
+            guard case .review(let r) = flow, let url = r.reread?.replayURL ?? r.log else { return ShareFiles.Prepared(notes: ["This scan has no reading log to share."]) }
             let tmp = FileManager.default.temporaryDirectory
-            let prepared = await Task.detached(priority: .userInitiated) { ShareFiles.reviewLog(url, into: tmp) }.value
-            if let m = prepared.message { message = m }
-            return prepared.urls
+            return await Task.detached(priority: .userInitiated) { ShareFiles.reviewLog(url, into: tmp) }.value
         }
     }
 
@@ -951,16 +952,13 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The saved scan's result file and its replay log, written to the temporary folder under names that say what they are, with their times counted from the scan's first
-    /// frame (`ShareFiles`, `ShareTimes`: older scans store times since the phone started, which must not leave it). Read and shifted off the main actor; a file that cannot be
-    /// read is left out and `message` says so.
-    func shareFiles(for scan: BoxStore.Summary) async -> [URL] {
-        guard let a = account else { message = "That scan's files could not be found."; return [] }
+    /// The saved scan's result file and its replay log, written to the temporary folder under names that say what they are, with their times counted from the scan's earliest
+    /// time (`ShareFiles`, `ShareTimes`: older scans store times since the phone started, which must not leave it). Read and shifted off the main actor. A file that cannot be read
+    /// is left out; the notes say so and the calling screen shows them (the app's `message` alert sits under the sheets these screens are in).
+    func shareFiles(for scan: BoxStore.Summary) async -> ShareFiles.Prepared {
+        guard let a = account else { return ShareFiles.Prepared(notes: [ShareFiles.scanNotFound]) }
         let store = library.store, id = scan.id, tmp = FileManager.default.temporaryDirectory
-        let prepared = await Task.detached(priority: .userInitiated) { ShareFiles.savedScan(store: store, account: a, id: id, into: tmp) }.value
-        guard let prepared else { message = "That scan's files could not be found."; return [] }
-        if let m = prepared.message { message = m }
-        return prepared.urls
+        return await Task.detached(priority: .userInitiated) { ShareFiles.savedScan(store: store, account: a, id: id, into: tmp) }.value
     }
 
     private func afterCommit(_ snap: BoxSnapshot, editedId: String? = nil) {

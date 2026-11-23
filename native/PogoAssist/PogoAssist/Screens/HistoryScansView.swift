@@ -12,6 +12,9 @@ struct HistoryScansView: View {
     @State private var tab: Tab = .history
     @State private var chosen: [Tab: Choice] = [:]
     @State private var shareURLs: [URL] = []
+    /// A share is being prepared or its sheet is open: another tap is ignored (a new preparation replaces the copies the sheet is reading). Said by `shareNote` when a file was left out.
+    @State private var shareBusy = false
+    @State private var shareNote: String?
     @State private var restoring: BoxSnapshot.Header?
 
     private var historyMonths: [MonthKey] { MonthGroups.months(of: model.history, date: \.createdAt) }
@@ -27,6 +30,17 @@ struct HistoryScansView: View {
         return months.first.map { .month($0) } ?? .all
     }
     private var monthFilter: MonthKey? { if case .month(let m) = choice { return m } else { return nil } }
+
+    private func prepareShare(_ scan: BoxStore.Summary) {
+        guard !shareBusy else { return }
+        shareBusy = true; shareNote = nil
+        Task {
+            let prepared = await model.shareFiles(for: scan)
+            shareNote = prepared.message
+            shareURLs = prepared.urls
+            if prepared.urls.isEmpty { shareBusy = false }
+        }
+    }
 
     private func dropStalePicks() {
         for (t, c) in chosen { if case .month(let m) = c, !(t == .history ? historyMonths : scanMonths).contains(m) { chosen[t] = nil } }
@@ -48,7 +62,7 @@ struct HistoryScansView: View {
                 // A screenshot import has no replay log to read again, and nothing a report could carry.
                 if scan.source != ScreenshotImporter.source { Button { model.rereadScan(scan) } label: { Label("Read again with the latest rules", systemImage: "arrow.triangle.2.circlepath") } }
                 if model.reportsEnabled && scan.source != ScreenshotImporter.source { Button { model.reportTarget = .saved(scan.id) } label: { Label("Make scans better", systemImage: "paperplane") } }
-                Button { Task { shareURLs = await model.shareFiles(for: scan) } } label: { Label("Share scan files", systemImage: "square.and.arrow.up") }
+                Button { prepareShare(scan) } label: { Label("Share scan files", systemImage: "square.and.arrow.up") }.disabled(shareBusy)
             } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("Scan actions")
         }
@@ -109,9 +123,13 @@ struct HistoryScansView: View {
         .onChange(of: scanMonths) { _, _ in dropStalePicks() }
         // Presented from here: Settings is itself a sheet, and this screen is pushed inside it.
         .sheet(item: $model.reportTarget) { MakeScansBetterSheet(target: $0).environmentObject(model) }
-        .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = [] } })) {
+        .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = []; shareBusy = false } })) {
             ShareSheet(urls: shareURLs).presentationDetents([.medium, .large])
         }
+        // Straight away when no file could be shared, after the share sheet closes when some could.
+        .alert("Pogo Assist+", isPresented: Binding(get: { shareNote != nil && shareURLs.isEmpty }, set: { if !$0 { shareNote = nil } })) {
+            Button("OK") { shareNote = nil }
+        } message: { Text(shareNote ?? "") }
         .confirmationDialog("Restore version \(restoring?.seq ?? 0)?", isPresented: Binding(get: { restoring != nil }, set: { if !$0 { restoring = nil } }), titleVisibility: .visible) {
             Button("Restore this version") { if let r = restoring { Task { await model.restore(seq: r.seq) } } }
         } message: { Text("The box as it is now stays in the history.") }
