@@ -415,7 +415,7 @@ public enum BoxMerge {
                 vPool.removeAll { $0 == vi }
                 continue
             }
-            // A saved entry whose IVs the bars read for this row grossly contradict is not offered (`barsContradict`): with no other candidate the row is New.
+            // A saved entry whose IVs the bars read for this row grossly contradict is not a plausible candidate (`barsContradict`): with no candidate of any kind the row is New.
             let plausible = leftoverPool.filter { plausibleCandidate(r, saved[$0], gm, fits) && !barsContradict(originals[si], saved[$0]) && !part.contains($0) }
             // M12: a saved entry that was misread (no IVs, no level fits) of this correctly read row, whatever the CP.
             let misread = leftoverPool.filter { misreadSaved(r, saved[$0]) && !part.contains($0) && !plausible.contains($0) }
@@ -799,12 +799,14 @@ public enum BoxMerge {
     /// about against a saved Meowth CP 121 with 6/6/3.
     ///
     /// The bars of such a row are weak evidence: the solver has already found them inconsistent with the CP and HP. In the device runs to 23 Nov 2026 a first version of
-    /// this rule (one notch from the bars, the solver value and the guess) would have rejected the TRUE IVs of 8 of the 29 rows whose IVs a clean read elsewhere gives
-    /// (Weezing 8/10/3 for 2/15/3 on one frame, Ekans 9/11/13 for 14/11/13, Hatenna 11/9/6 for 11/11/3). A wrongly rejected entry makes a powered-up Pokémon New, a
-    /// duplicate nobody is asked about, so the rule only says no when ALL hold, and rejected none of the 29:
-    /// - at least two frames read the bars and every one of them read `ivsRead` (a single frame, or frames that disagree, prove nothing);
-    /// - at least two stats are more than a whole bar segment (5) from the saved entry's IVs, and from its IVs before a hand correction (the misreads seen are
-    ///   one stat, or two by up to 3, never two by more than 5 on agreeing frames);
+    /// this rule (one notch from the bars, the solver value and the guess) would have rejected the TRUE IVs of 8 different Pokémon among the unsolved rows whose IVs a
+    /// clean read of the same species, CP and HP elsewhere gives (Weezing 8/10/3 for 2/15/3, Ekans 9/11/13 for 14/11/13, Vaporeon 9/9/9 for 14/15/15). A wrongly
+    /// rejected entry makes a powered-up Pokémon New, a duplicate nobody is asked about, so the rule only says no when ALL hold:
+    /// - at least two frames read the bars and every one of them read `ivsRead`. This is what protected every known misread: none of those rows had frames that agree
+    ///   (one frame only, or a first frame that set `ivsRead` and later frames that read something else). Of the 18 rows whose frames do agree, the bars of the two
+    ///   with a known truth are exact, and the others fit a regional form of the species (the Meowth above fits an Alolan Meowth);
+    /// - at least two stats are more than a whole bar segment (5) from the saved entry's IVs, and from its IVs before a hand correction. A margin on top of the frame
+    ///   test, not one the device runs have tried: the largest known misread is 5/6/6 off (the Vaporeon, on one frame);
     /// - the saved IVs are not within a notch of what the solver made of the bars (its corrected value or its guess);
     /// - the entry does not have the row's own CP with an HP that is equal, a point off or unread (rule 4 pairs or asks about most of those before this is reached).
     /// Never judged: a row with clean IVs (other rules decide), a row with no bars read, a saved entry with no IVs, and a row whose CP cannot be trusted

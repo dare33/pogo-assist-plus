@@ -57,6 +57,12 @@ final class BarsContradictTests: XCTestCase {
         XCTAssertEqual(plan([meowth(read: bars, frames: [bars, nil, bars])], [entry(savedMeowth, "m")]).new, [0], "two frames that agree, one without bars")
     }
 
+    func testFramesThatAgreeWithEachOtherButNotWithTheRowsBarsProveNothing() {
+        // run15 Wattrel: five frames read 5/7/11, the row's bars are 5/8/11.
+        let other = iv(15, 11, 14)
+        XCTAssertEqual(plan([meowth(read: iv(15, 11, 15), frames: [other, other, other])], [entry(savedMeowth, "m")]).unsure.map(\.candidates), [["m"]])
+    }
+
     func testOnlyTwoStatsMoreThanABarSegmentOffIsAContradiction() {
         // against the saved 6/6/3
         for near in [iv(15, 6, 3), iv(6, 6, 15), iv(11, 11, 8), iv(12, 11, 3), iv(8, 9, 6)] {
@@ -115,6 +121,7 @@ final class BarsContradictTests: XCTestCase {
         XCTAssertFalse(BoxMerge.barsContradict(row("meowth", cp: 0, hp: 80, read: bars, flags: ambiguous), m), "no CP")
         XCTAssertFalse(BoxMerge.barsContradict(meowth(read: bars), entry(row("meowth", cp: 121, hp: 42, frames: []), "m")), "a saved entry with no IVs")
         XCTAssertFalse(BoxMerge.barsContradict(meowth(read: bars), entry(savedMeowth, "m", was: iv(15, 10, 9))), "its IVs before the hand correction are not two stats away")
+        XCTAssertFalse(BoxMerge.barsContradict(meowth(read: bars, guess: iv(14, 11, 9)), entry(savedMeowth, "m", was: iv(14, 10, 9))), "the solver's guess is within a notch of its IVs before the correction")
         let corrected = row("meowth", cp: 445, hp: 80, ivs: iv(6, 6, 3), read: bars, status: "corrected", flags: ["ivs-corrected-from-15/11/15"])
         XCTAssertFalse(BoxMerge.cleanIVs(corrected))
         XCTAssertFalse(BoxMerge.barsContradict(corrected, m), "the solver's corrected value is the saved one's IVs")
