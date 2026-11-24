@@ -8,6 +8,9 @@ struct MakeScansBetterSheet: View {
     let target: AppModel.ReportTarget
     @State private var note = ""
     @State private var shareURLs: [URL] = []
+    /// A share is being prepared or its sheet is open (a second tap would replace the copies the sheet is reading); `shareNote` says what was left out.
+    @State private var shareBusy = false
+    @State private var shareNote: String?
 
     var body: some View {
         NavigationStack {
@@ -26,7 +29,15 @@ struct MakeScansBetterSheet: View {
                 case .failed(let why):
                     Section {
                         Label(why, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                        Button("Share the files instead") { shareURLs = model.reportShareFiles(target) }
+                        Button("Share the files instead") {
+                            guard !shareBusy else { return }
+                            shareBusy = true; shareNote = nil
+                            Task {
+                                let prepared = await model.reportShareFiles(target)
+                                shareNote = prepared.message; shareURLs = prepared.urls
+                                if prepared.urls.isEmpty { shareBusy = false }
+                            }
+                        }.disabled(shareBusy)
                     }
                     Section("What went wrong? (optional)") { TextField("What went wrong? (optional)", text: $note, axis: .vertical).lineLimit(2...6) }
                 }
@@ -41,7 +52,11 @@ struct MakeScansBetterSheet: View {
                     }
                 }
             }
-            .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = [] } })) { ShareSheet(urls: shareURLs).presentationDetents([.medium, .large]) }
+            .sheet(isPresented: Binding(get: { !shareURLs.isEmpty }, set: { if !$0 { shareURLs = []; shareBusy = false } })) { ShareSheet(urls: shareURLs).presentationDetents([.medium, .large]) }
+            // Straight away when no file could be shared, after the share sheet closes when some could.
+            .alert("Pogo Assist+", isPresented: Binding(get: { shareNote != nil && shareURLs.isEmpty }, set: { if !$0 { shareNote = nil } })) {
+                Button("OK") { shareNote = nil }
+            } message: { Text(shareNote ?? "") }
         }
         .interactiveDismissDisabled(model.reportState == .sending)
     }

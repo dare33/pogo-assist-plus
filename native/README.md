@@ -240,7 +240,7 @@ phone on an iOS 27 beta needs the matching Xcode beta).
    frames read and dropped, ms each, memory peak and lowest free, and the status line
    ("Broadcast finished" or "ended without a finish marker"). Tap share and send every file it
    offers: the state JSON and `replay.jsonl` (the per-reading log; a new live broadcast overwrites
-   it, so export after each run). Clear is disabled while a broadcast is live.
+   it, so export after each run). The shared copies count each file's times from its own earliest time (for a new build's log, its first logged line); the files in the app group are not changed. Clear is disabled while a broadcast is live.
 8. If it ended without a finish marker (iOS killed the extension, most likely for memory): tap
    Clear, set Reader to "Read live (fast)", repeat 5 to 7; if that dies too, "Save crops, read in
    app", repeat, then open the app and wait for it to read the saved crops.
@@ -282,7 +282,19 @@ grouper received them (ticks drained right before the reading that followed). Ev
 lines) counts in seconds from the first frame the extension saw (`ScanClock`), so the earliest logged line of a new scan is at or a fraction of a
 second after 0. Logs written by builds 1 to 4 (and the bundled `sample-scan.replay.jsonl`, which is one of them) count from device start instead, so
 "Make scans better" rebases the log, the result's frame times and the bars-split change texts before upload (`ReportTimes`: the earliest time in the
-scan becomes 0; the stored scan is untouched). The app's share button exports it with the
+scan becomes 0; the stored scan is untouched). Files shared out of the app get the same treatment, as copies in the temporary folder (`ShareTimes`, written by
+`ShareFiles`; only the time values and the bars-split `refineChanges` strings are rewritten in the file's text and every other byte stays as stored: a shifted number is written in its shortest form, so `10.50` may come out `10.5` and a whole number as `2.0`, and a `refineChanges` string whose text changes is written afresh, so an escape in it may differ (`15\/15\/14` may come out `15/15/14`); the values are the same; a string whose text does not change keeps its bytes): "Share scan files" (Settings, History and scans) writes the saved scan's
+result and replay log on one origin, the earliest time across the two, so they agree with each other; the "Share the files instead" button of a failed report does the same,
+or for a scan not saved yet shares its replay log on its own; the Diagnostics share button writes the state file, `deferred.json` when there is one, and the replay log, and
+each of those three counts from its OWN earliest time (they can come from different runs and builds: `deferred.json` survives a new broadcast and a "Save crops" run does not
+clear the log), so their times cannot be compared with each other. In the state file and `deferred.json` the times are the rows' `firstTime` and `lastTime`. A file that cannot
+be read, a saved scan whose schema number is newer than this build's, or a file that could not be written out again is left out and the screen says so (an alert on that screen);
+a replay line that is not a JSON object, holds the same key twice, nests deeper than 256, or has a `t` or `last` that is not a number is dropped and counted, in the report too; a result, state or saved-crop file with a repeated key anywhere, or nesting deeper than 256, is left out. A file whose earliest time is exactly 0 is shared as
+the stored bytes (a log as written), and sharing a shifted file again changes nothing. A new build's log can start a fraction of a second after 0 (its first logged line, not
+its first frame), and that fraction is subtracted too. While a share is being prepared, or its sheet is open, the share button on that screen is disabled. Known limit: the
+replay log's lines are written out again (sorted keys, 17 significant digits) when it is shifted, as the report's are, and Foundation can turn such a number into the
+neighbouring Double (a one-unit change in the last place of a non-time value such as `ivConfidence`); the result and state files do not have this.
+The app's share button exports it with the
 state file (and `deferred.json` when there is one); Clear deletes it.
 
 To replay it through the current grouper offline:

@@ -21,18 +21,18 @@ import Foundation
 ///   differences or settings, not times, and stay. `scanDate` and the app/device fields are wall-clock or hardware facts and stay.
 ///
 /// The origin is the earliest of the log's and the result's times, so the earliest frame in the scan is 0 and every difference is kept. Applying it
-/// again changes nothing. When the earliest time is exactly 0 the log text is returned as it came (each line as written, lines joined by "\n"; a
+/// again changes nothing. `ShareTimes` uses the same rules for the files the person shares out of the app. When the earliest time is exactly 0 the log text is returned as it came (each line as written, lines joined by "\n"; a
 /// blank line is dropped); otherwise each line is re-serialised (sorted keys, 17 significant digits, which decode to the same values).
 ///
-/// A replay line this cannot read as a JSON object (a half-written last line, damage) is left out of the upload and counted, because its text
-/// might hold a boot time that cannot be shifted. A line of a kind this does not know has its numeric `t` and `last` shifted like the known ones;
+/// A replay line this cannot read as a JSON object (a half-written last line, damage), or that holds a repeated key (the parsers keep the first, a reader may keep the last) or nests deeper than 256, or whose `t` or `last` is present and is not a finite number (a string, null, a
+/// boolean, a list, an object), is left out of the upload and counted, because its text might hold a boot time that cannot be shifted. A line of a kind this does not know has its numeric `t` and `last` shifted like the known ones;
 /// a time kept under any other key in a future line kind would NOT be shifted (a new time-carrying key must be added to `logTimeKeys`).
 public enum ReportTimes {
     public struct Rebased: Equatable {
         public var replayLog: String
         public var result: ScanResult
         public var refineChanges: [String]
-        /// Replay lines left out because they were not a JSON object.
+        /// Replay lines left out because they were not a JSON object, held a repeated key, nested too deep, or had a `t` or `last` that was not a finite number.
         public var droppedLines: Int
         /// What was subtracted from every time (0 when the scan already started at 0, or holds no time at all).
         public var shift: Double
@@ -43,13 +43,20 @@ public enum ReportTimes {
 
     /// The subtraction is rounded to nine decimals, so two times that were equal before the shift are equal after it. It does not shorten the printed
     /// number: JSONSerialization writes 17 significant digits, which decode to the same value.
-    private static func tidy(_ x: Double) -> Double { (x * 1e9).rounded() / 1e9 }
+    static func tidy(_ x: Double) -> Double { (x * 1e9).rounded() / 1e9 }
+
+    /// A line whose `t` or `last` is present must hold a finite number: no writer in the repo ever wrote null or anything else there (`ReplayLog` encodes non-optional
+    /// Doubles, and a non-finite one fails to encode), so a line with such a value is damaged, and its text might hold a time that cannot be shifted.
+    static func logTimesAreNumbers(_ o: [String: Any]) -> Bool {
+        for k in logTimeKeys { if let v = o[k], number(v) == nil { return false } }
+        return true
+    }
 
     public static func rebase(replayLog: String, result: ScanResult, refineChanges: [String] = []) -> Rebased {
         var objects = [[String: Any]?]()
         var earliest = Double.infinity
         for text in replayLog.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard let o = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] else { objects.append(nil); continue }
+            guard JSONTextEdit().apply(to: Data(text.utf8)) != nil, let o = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any], logTimesAreNumbers(o) else { objects.append(nil); continue }
             for k in logTimeKeys { if let v = number(o[k]) { earliest = min(earliest, v) } }
             objects.append(o)
         }
@@ -92,7 +99,7 @@ public enum ReportTimes {
         return String(text[..<start.upperBound]) + span + String(text[end.lowerBound...])
     }
 
-    private static func number(_ v: Any?) -> Double? {
+    static func number(_ v: Any?) -> Double? {
         guard let n = v as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID() else { return nil }
         return n.doubleValue.isFinite ? n.doubleValue : nil
     }
