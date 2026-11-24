@@ -188,8 +188,8 @@ final class BoxScreensTests: XCTestCase {
     // MARK: Re-scan N
 
     /// The line under the buttons says what the copied search shows, and its numbers add up: the total is the to-check Pokémon it covers plus the others with the same name and CP
-    /// (or just the to-check ones when there are no others), and the covered plus the left-out ones are all N.
-    @discardableResult private func checkSearchLine(_ app: XCUIApplication, toCheck n: Int) -> String {
+    /// (or just the to-check ones when there are no others), and the covered plus the left-out ones are all N. The button's number is the line's total when the line has one.
+    @discardableResult private func checkSearchLine(_ app: XCUIApplication, toCheck n: Int, button: Int) -> String {
         let line = app.staticTexts["check-search-line"]
         XCTAssertTrue(line.waitForExistence(timeout: 5), "a line under the buttons says what the search shows")
         let text = line.label
@@ -201,17 +201,19 @@ final class BoxScreensTests: XCTestCase {
             XCTAssertEqual(nums.count, 3, text)
             XCTAssertEqual(nums[0], nums[1] + nums[2], text)
             XCTAssertGreaterThan(nums[2], 0, text)
+            XCTAssertEqual(nums[0], button, "the button says what the search shows: \(text)")
             covered = nums[1]
         } else {
             XCTAssertTrue(text.hasPrefix("The search finds the "), text)
             covered = nums[0]
+            XCTAssertEqual(covered, button, "the button says what the search shows: \(text)")
         }
         let left = sentences.dropFirst().flatMap { numbers($0) }.first ?? 0
         XCTAssertEqual(covered + left, n, "every Pokémon to check is in the search or left out of it: \(text)")
         return text
     }
 
-    /// A box saved with checks and the command set made: the Saved panel offers "Re-scan N", the To check chip offers it too, and it lands on the Scan screen
+    /// A box saved with checks and the command set made: the Saved panel offers "Re-scan N" (N is what the search shows in the game), the To check chip offers it too, and it lands on the Scan screen
     /// with Add and update and the smallest command covering what the search shows plus the margin (not N alone). The options say that size while the re-scan lasts; opening the
     /// options for editing, or leaving the screen, drops the suggestion and the remembered Add and update number (untouched by the re-scan) names the command again.
     func testRescanButtonLandsOnScanWithTheCommand() throws {
@@ -223,13 +225,18 @@ final class BoxScreensTests: XCTestCase {
         save.tap()
         let button = app.buttons["rescan-button"]
         XCTAssertTrue(button.waitForExistence(timeout: 20), "the Saved panel offers Re-scan when the box has checks")
-        let n = Int(button.label.replacingOccurrences(of: "Re-scan ", with: "")) ?? 0
-        XCTAssertGreaterThan(n, 0, button.label)
+        // The button's number is what the search shows in the game; the To check chip holds how many are to check.
+        let onButton = Int(button.label.replacingOccurrences(of: "Re-scan ", with: "")) ?? 0
+        XCTAssertGreaterThan(onButton, 0, button.label)
+        let chip = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 5))
+        let n = Int(chip.label.replacingOccurrences(of: "To check ", with: "")) ?? 0
+        XCTAssertGreaterThan(n, 0, chip.label)
         shot("rescan-01-saved-panel")
-        let savedLine = checkSearchLine(app, toCheck: n)
+        let savedLine = checkSearchLine(app, toCheck: n, button: onButton)
 
         // With the chip on, the one button sits under the chips.
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'To check'")).firstMatch.tap()
+        chip.tap()
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons.matching(identifier: "rescan-button").count, 1)
         // Beside it, one search for all of them: names, then their CPs or HPs.
@@ -237,8 +244,8 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(copy.exists, "Copy search sits beside Re-scan")
         XCTAssertTrue(copy.value as? String ?? "" != "", "the search is not empty: \(String(describing: copy.value))")
         XCTAssertTrue((copy.value as? String ?? "").contains("&"), "the search has names and terms")
-        XCTAssertEqual(button.label, "Re-scan \(n)")
-        XCTAssertEqual(checkSearchLine(app, toCheck: n), savedLine, "the same line under the buttons on the chip")
+        XCTAssertEqual(button.label, "Re-scan \(onButton)")
+        XCTAssertEqual(checkSearchLine(app, toCheck: n, button: onButton), savedLine, "the same line under the buttons on the chip")
         sleep(1)
         shot("rescan-02-to-check-chip")
 
@@ -246,6 +253,8 @@ final class BoxScreensTests: XCTestCase {
         // The command is sized from what the search shows (the to-check ones it covers plus the others it also matches), not from N alone.
         let shownNumbers = savedLine.split(whereSeparator: { !$0.isNumber && $0 != "," }).compactMap { Int($0.replacingOccurrences(of: ",", with: "")) }
         let shown = shownNumbers[0]   // "shows at least <total> ..." or "finds the <covered> ..."
+        XCTAssertEqual(shown, onButton, "the button, the line and the command size start from one number")
+        let rescanLine = (shown == n ? "Re-scan of \(n) to check" : "Re-scan of \(shown) (\(n) to check)") + ": paste the search into the game's storage, open the first one's appraisal, then start."
         let command = "Pogo scan \(sizes.first { $0 >= shown + max(2, shown / 10) }!)"
         button.tap()
         XCTAssertTrue(app.navigationBars["Scan Pokémon"].waitForExistence(timeout: 5))
@@ -254,13 +263,13 @@ final class BoxScreensTests: XCTestCase {
         XCTAssertTrue(app.buttons["Add and update"].isSelected, "the scan kind is Add and update")
         XCTAssertTrue(app.staticTexts["rescan-size"].exists, "the options say the re-scan's size, not a field holding another number")
         XCTAssertTrue(app.staticTexts["rescan-size"].label.hasPrefix("\(sizes.first { $0 >= shown + max(2, shown / 10) }!) for this re-scan"), app.staticTexts["rescan-size"].label)
-        XCTAssertEqual(app.staticTexts["rescan-line-editing"].label, "Re-scan of \(n) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
+        XCTAssertEqual(app.staticTexts["rescan-line-editing"].label, rescanLine)
         sleep(1)
         shot("rescan-03-scan-screen-options")
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Add and update"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["rescan-line"].exists)
-        XCTAssertEqual(app.staticTexts["rescan-line"].label, "Re-scan of \(n) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
+        XCTAssertEqual(app.staticTexts["rescan-line"].label, rescanLine)
         XCTAssertTrue(app.staticTexts["Back in the game, say \"\(command)\"."].exists, "the steps name \(command)")
         sleep(1)
         shot("rescan-03-scan-screen")
