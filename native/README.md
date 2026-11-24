@@ -849,6 +849,16 @@ with it on (the exact-arithmetic first version of the rule asked 13, by the revi
 stays because the real saved Meowth CP 65 / HP 29 is flagged `no-level-fits` and is not judged; the Combee ones share 15/15/15 with the saved Combee; the Zubat ones have no saved HP; the Psyduck 166
 stays (the saved Psyduck 40/24 with 2/0/11 and the scanned bars unread are within a notch). (An earlier version of this paragraph said "30 before, 6 after": that test box held an unflagged Meowth CP 65
 / HP 29, which cannot occur.) Run9 merged into the run8 box is unchanged (306 the same, 4 unsure), and so are run13, the two stalled scans, the Horsea scan and run14 merged into the phone's box.
+Bars that grossly contradict a saved entry (`BoxMerge.barsContradict`, 24 Nov 2026). A row whose IVs were not solved is matched as one with no IVs, so the test above ignores the bars it
+did read. Such a row is no longer offered a saved entry when ALL hold: at least two of its frames read the bars and every one read the same values; at least two stats are more than a whole
+bar segment (5) from the entry's IVs (and from its IVs before a hand correction); the entry's IVs are not within a notch of the solver's corrected value or guess; and the entry does not have
+the row's own CP with an HP that is equal, a point off or unread. Rows whose CP fits no level are not judged (rule 7 keeps its ranked list). The case: the Darentas scan of 23 Nov 2026 asked
+whether a Meowth CP 445 with bars 15/11/15 on three frames was the saved Meowth CP 121 with 6/6/3. The rule is this strict because the bars of an unsolved row are weak evidence: a first version
+(one notch from the bars, the solver value and the guess) would have rejected the TRUE IVs of 8 different Pokémon among the unsolved rows of the device runs whose IVs a clean read of the same
+species, CP and HP elsewhere gives (Weezing 8/10/3 for 2/15/3, Ekans 9/11/13 for 14/11/13, Vaporeon 9/9/9 for 14/15/15), and this one rejects none of them. What protects them is the frame
+test: no known misread had frames that agree, and of the 18 rows whose frames do agree the two with a known truth have exact bars and the rest fit a regional form of the species (the Meowth
+fits an Alolan Meowth; reading the form is the underlying miss). The 5-point margin has not been tried by the data. The run12 counts above are unchanged (the Psyduck 166 bars were read on one frame).
+Accepted limit: a powered-up Pokémon whose bars were misread the same gross way on every frame becomes New, with no question.
 A question about a single saved candidate with the same read IVs and a lower CP says "Same IVs as this saved one. It may be that Pokémon powered up, or a different one with the same IVs."
 Run12, the first long scan on the phone: 31 min 12 s, 4,694 readings, read time p50 0.26 s and p99 0.32 s, 1,480 of the 1,552 rows backed by three readings, ended by itself when the
 1500 command ran out (1,694 in storage), the end marker 9.7 s after the last Pokémon.

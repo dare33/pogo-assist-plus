@@ -58,6 +58,9 @@ enum GameSearch {
     /// - evolved and powered up: both CPs (the saved one and the one read now), and both names for an evolution;
     /// - a Mega pair: the CPs of the two saved entries;
     /// - a part read (or a row whose CP fits no level): the HP, because the CP is what is in doubt;
+    /// - "could be this saved one" (`ambiguous`: the same IVs at another CP, or bars that were not read): the saved candidates' CPs as well as the one read, so the
+    ///   game shows both when they are two Pokémon and only one when they are the same (Greg, 24 Nov 2026: a search for the read CP alone cannot answer the question).
+    ///   Not for a Mega on either side (the game shows a Mega CP only while it is Mega evolved), and not past `mostCandidates` (the search would list the species);
     /// - anything else: the CP read.
     static func part(for u: BoxMerge.Unsure, row r: ScanRow, saved: [String: BoxEntry]) -> Part {
         let candidates = u.candidates.compactMap { saved[$0] }
@@ -70,8 +73,18 @@ enum GameSearch {
             return Part(names: [name(base.row)], terms: candidates.flatMap { cp($0.row.cp) })
         case .evolved, .poweredUp:
             return Part(names: candidates.map { name($0.row) } + [name(r)], terms: candidates.flatMap { cp($0.row.cp) } + readTerms)
+        case .ambiguous where !candidates.isEmpty && candidates.count <= mostCandidates && !isMega(r) && !candidates.contains(where: { isMega($0.row) }):
+            // Each saved candidate by the rule for a saved Pokémon (its CP, or its HP when that CP fits no level), saved ones first as for a power-up.
+            let theirs = candidates.map { part(saved: $0) }
+            return Part(names: theirs.flatMap(\.names) + [name(r)], terms: theirs.flatMap(\.terms) + readTerms)
         default:
             return Part(names: [name(r)], terms: readTerms)
         }
     }
+
+    /// The most saved candidates one question's search names: past this the terms no longer pick out a few Pokémon.
+    static let mostCandidates = 6
+
+    /// A Mega (or Primal) form's row: its CP is not the one the game's storage shows.
+    static func isMega(_ r: ScanRow) -> Bool { ["_mega_x", "_mega_y", "_mega", "_primal"].contains { r.speciesId.hasSuffix($0) } }
 }
