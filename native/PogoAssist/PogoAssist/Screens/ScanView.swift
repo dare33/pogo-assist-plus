@@ -260,7 +260,9 @@ struct ScanView: View {
 
     @ViewBuilder private func rescanLine(_ id: String) -> some View {
         if let n = model.rescanCount {
-            Text("Re-scan of \(n.formatted()) to check: paste the search into the game's storage, open the first one's appraisal, then start.")
+            // The first number is the button's: what the search shows in the game. The to-check count follows when it differs.
+            let shown = model.rescanShown ?? n
+            Text((shown == n ? "Re-scan of \(n.formatted()) to check" : "Re-scan of \(shown.formatted()) (\(n.formatted()) to check)") + ": paste the search into the game's storage, open the first one's appraisal, then start.")
                 .font(.secondary).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier(id)
         }

@@ -199,7 +199,7 @@ final class AppModel: ObservableObject {
     /// "Re-scan N" was pressed in the Box: how many Pokémon are to be checked. Held only for the next scan and never saved. It goes when a scan starts, when the scan kind or the
     /// options change, when the account changes and when the Scan screen closes (see `startRescan`), so it cannot name a command for a later, unrelated scan.
     @Published var rescanCount: Int? { didSet { if rescanCount == nil { rescanShown = nil } } }
-    /// How many Pokémon the re-scan's game search shows (the ones to check it covers plus the others it also matches); the command is sized from this. Lives and dies with `rescanCount`.
+    /// How many Pokémon the re-scan's game search shows (the ones to check it covers plus the others it also matches); the button and the Scan screen's line say this number and the command is sized from it. Lives and dies with `rescanCount`.
     private(set) var rescanShown: Int?
     /// The command size a re-scan is sized for (nil: above the largest, or no re-scan).
     var rescanCommandSize: Int? { rescanShown.flatMap { VoiceCommandFile.rescanSize(shown: $0) } }

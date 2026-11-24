@@ -328,18 +328,20 @@ struct BoxView: View {
         .scrollClipDisabled()
     }
 
-    /// The to-check flow in the Box: one game search for every Pokémon to check (Greg, 6 Oct 2026), beside "Re-scan N", the Scan screen with Add and update chosen
+    /// The to-check flow in the Box: one game search for every Pokémon to check (Greg, 6 Oct 2026), beside "Re-scan N" (N is what the search shows in the game), the Scan screen with Add and update chosen
     /// (`AppModel.startRescan`). The search leaves out entries with no CP or HP to look for, as the Review's does.
     @ViewBuilder private var rescanButton: some View {
         if !model.live {
             let search = toCheckSearch
+            // The button says what the search shows in the game (Greg, 16 Nov 2026), the number the player compares with the game's own; the line under it says how many are to check.
+            let shown = search.text == nil ? index.toCheckCount : search.covered + search.extra
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 10) {
                     if let text = search.text {
                         PillButton("Copy search", systemImage: "doc.on.doc", style: .tint) { UIPasteboard.general.string = text; showToast("Copied") }
                             .accessibilityIdentifier("copy-check-search").accessibilityValue(text)
                     }
-                    PillButton("Re-scan \(index.toCheckCount.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount, shown: search.text == nil ? index.toCheckCount : search.covered + search.extra) }
+                    PillButton("Re-scan \(shown.formatted())", systemImage: "arrow.clockwise", style: .tint) { model.startRescan(count: index.toCheckCount, shown: shown) }
                         .accessibilityIdentifier("rescan-button")
                 }
                 if let line = Self.searchLine(search) {
