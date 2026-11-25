@@ -42,11 +42,18 @@ final class GuideScreensTests: XCTestCase {
     /// Scrolls the Appearance page until the control is inside it. On the iPad the page is in Settings' form sheet, shorter than the screen, so the lower
     /// controls start below the sheet's edge: the sheet clips them, but they still report themselves hittable, and a tap there lands on the backdrop. The sheet's
     /// scroll view is the last one in the tree (the Box's list is behind it) and its frame is the visible area.
+    ///
+    /// The top edge is the navigation bar's lower edge, not the scroll view's: the scroll view runs under the bar, and a control left there can still report
+    /// itself hittable while a tap on it lands on the bar. Coming back down is a short drag, because a full swipe would overshoot.
     private func reveal(_ app: XCUIApplication, _ e: XCUIElement) {
         let page = app.scrollViews.element(boundBy: app.scrollViews.count - 1)
-        for _ in 0..<8 where e.exists {
+        let bar = app.navigationBars.element(boundBy: app.navigationBars.count - 1)
+        for _ in 0..<12 where e.exists {
+            let top = max(page.frame.minY, bar.exists ? bar.frame.maxY : 0)
             if e.frame.maxY >= page.frame.maxY - 8 { page.swipeUp() }
-            else if e.frame.minY <= page.frame.minY + 8 { page.swipeDown() }
+            else if e.frame.minY <= top + 8 {
+                page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)))
+            }
             else { break }
         }
     }
@@ -218,16 +225,23 @@ final class GuideScreensTests: XCTestCase {
         XCTAssertTrue(restoreCard.label.contains("no earlier box"), "card text: \(restoreCard.label)")
         reveal(app, restoreCard)
         shot("si-\(tag)-restore-open")
+        reveal(app, restoreInfo)   // bringing the card into view can leave the "i" above it under the navigation bar
         restoreInfo.tap()
         XCTAssertTrue(restoreCard.waitForNonExistence(timeout: 3))
 
         // The row itself, not the "i", opens the menu.
         let mega = app.buttons["settings-mega"]
         for _ in 0..<6 where !mega.isHittable { app.swipeDown() }
+        reveal(app, mega)   // hittable is not enough: just under the navigation bar the row reports it and the tap lands on the bar
         mega.tap()
         XCTAssertTrue(app.buttons["Normal"].waitForExistence(timeout: 3) && app.buttons["Mega"].exists, "the menu's options appear")
         shot("si-\(tag)-mega-menu")
         app.buttons["Normal"].tap()   // re-selecting the current value dismisses the menu
+        // A tap sent as the menu finishes opening can go unanswered (seen once in 20 repeats on iOS 27.0); one more tap, and the log says so.
+        if !app.buttons["Normal"].waitForNonExistence(timeout: 2), app.buttons["Normal"].exists {
+            print("si-\(tag): the menu ignored the first tap on Normal; tapping again")
+            app.buttons["Normal"].tap()
+        }
         XCTAssertTrue(app.buttons["Normal"].waitForNonExistence(timeout: 3), "the menu closes")
         XCTAssertTrue(app.navigationBars["Settings"].exists)
         app.terminate()
