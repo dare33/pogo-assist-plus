@@ -216,14 +216,14 @@ public final class BoxLibrary {
     /// brought back by a scan that still carries its old name), a newer app's version, a newest version that cannot be read, and the box having changed.
     /// `commitFailure` is for tests: it runs just before the version is written and may throw.
     public func commitScan(_ result: ScanResult, entries: [BoxEntry], account: String, scanDate: Date, source: String, kind: BoxStore.Kind, note: String,
-                           expectedCurrentSeq: Int??, storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil, refineChanges: [String]? = nil,
+                           expectedCurrentSeq: Int??, storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil, frame: StoredFrame? = nil, refineChanges: [String]? = nil,
                            reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil, sourceSignature: String? = nil, pass: String? = nil,
                            commitFailure: (() throws -> Void)? = nil) throws -> (scan: BoxStore.Summary, snapshot: BoxSnapshot) {
         guard fm.fileExists(atPath: try store.accountDirectory(account, create: false).path) else { throw BoxStore.Failure.noSuchAccount(account) }
         try refuseOverNewer(account)
         let cur = try current(account: account)   // throws when the newest version is damaged: nothing is written on top of it
         if let expected = expectedCurrentSeq, expected != cur?.seq { throw Failure.boxChanged }
-        let scan = try store.save(result, account: account, scanDate: scanDate, source: source, kind: kind, storageCount: storageCount, replayLog: replayLog, paging: paging,
+        let scan = try store.save(result, account: account, scanDate: scanDate, source: source, kind: kind, storageCount: storageCount, replayLog: replayLog, paging: paging, frame: frame,
                                   refineChanges: refineChanges, reviewActions: reviewActions, reportSentAt: reportSentAt, reportHash: reportHash, sourceSignature: sourceSignature, pass: pass)
         do {
             try commitFailure?()

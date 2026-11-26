@@ -60,6 +60,8 @@ final class AppModel: ObservableObject {
         var mergeSeconds: Double
         /// How the scan was paged, kept with the saved scan.
         var paging: StoredPaging?
+        /// The pixel size of the frame the scan's first Pokémon was read from, and whether a later read frame had another size (`BroadcastState.frameWidth`), kept with the saved scan; nil when not recorded.
+        var frame: StoredFrame?
         /// Set when this is a saved scan being read again: the box is the one before that scan was saved.
         var reread: RereadPlan?
         /// Saved Pokémon the scan did not see that the person marked for removal. Nothing is marked at first: they are all kept (the owner's rule: nothing is
@@ -270,6 +272,8 @@ final class AppModel: ObservableObject {
     /// The button is shown only when the upload store is configured in this build.
     var reportsEnabled: Bool { ReportSupport.config != nil }
 
+    private static let frameNotRecorded = "The size of the scan's frames was not recorded for this scan."
+
     /// The report's input for a target, with the user's note. Reads files, so call it on the worker's queue or accept a short pause.
     private func reportInput(_ target: ReportTarget, note: String?) throws -> (input: ScanReportInput, previousHash: String?, previousSentAt: Date?) {
         let app = ReportSupport.appInfo, device = ReportSupport.deviceInfo
@@ -278,10 +282,14 @@ final class AppModel: ObservableObject {
             guard case .review(let r) = flow else { throw BoxStore.Failure.notFound(account: "", id: "review") }
             let url = r.reread?.replayURL ?? r.log
             let log = url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+            // A broadcast scan (a screenshot import has no frames to size; a scan read again is as its saved record says).
+            let fromBroadcast = r.importPrepared == nil && (r.reread?.scan.source ?? "broadcast") == "broadcast"
+            var notIn = ["The scan was not saved yet, so nothing is known about what happens after it."]
+            if r.frame == nil, fromBroadcast { notIn.append(Self.frameNotRecorded) }
             let changes = r.outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" }
-            let input = ScanReportInput(replayLog: log, result: r.outcome.scan, kind: r.kind, scanDate: r.plan.scanDate, storageCount: r.storageCount, paging: r.paging, pace: r.outcome.pace,
+            let input = ScanReportInput(replayLog: log, result: r.outcome.scan, kind: r.kind, scanDate: r.plan.scanDate, storageCount: r.storageCount, paging: r.paging, frame: r.frame, pace: r.outcome.pace,
                                         refineChanges: changes, review: ScanReportBuilder.reviewLines(plan: r.plan, resolutions: r.resolutions, keepGone: r.keepGone, base: r.base),
-                                        afterwards: [], notIncluded: ["The scan was not saved yet, so nothing is known about what happens after it."], note: note, app: app, device: device)
+                                        afterwards: [], notIncluded: notIn, note: note, app: app, device: device)
             return (input, r.reportHash, r.reportSentAt)
         case .saved(let id):
             guard let a = account else { throw BoxStore.Failure.badAccountName }
@@ -291,8 +299,9 @@ final class AppModel: ObservableObject {
             var missing = [String]()
             if files.replay == nil { missing.append("The replay log was not kept for this scan.") }
             if scan.reviewActions == nil { missing.append("What was answered at review was not kept for this scan.") }
+            if scan.frame == nil, scan.source == "broadcast" { missing.append(Self.frameNotRecorded) }
             let input = ScanReportInput(replayLog: log, result: ScanResult(rows: scan.rows, review: scan.review, unmatched: scan.unmatched), kind: scan.kind, scanDate: scan.scanDate, storageCount: scan.storageCount,
-                                        paging: scan.paging, pace: ScanPace.measure(rows: scan.rows), refineChanges: scan.refineChanges ?? [], review: scan.reviewActions ?? [],
+                                        paging: scan.paging, frame: scan.frame, pace: ScanPace.measure(rows: scan.rows), refineChanges: scan.refineChanges ?? [], review: scan.reviewActions ?? [],
                                         afterwards: (try? library.editsAfter(account: a, scanId: id)) ?? [],
                                         notIncluded: missing + ["Corrections made to Pokémon from earlier scans, and 'These values are right'."], note: note, app: app, device: device)
             return (input, scan.reportHash, scan.reportSentAt)
@@ -1340,6 +1349,7 @@ final class AppModel: ObservableObject {
                 let t = outcome.timings
                 NSLog("pogo timings: load %.2f finish %.2f refine %.2f merge %.2f s, %d rows", t.load, t.finish, t.refine, seconds, outcome.scan.rows.count)
                 var review = Review(account: a, kind: kind, outcome: outcome, plan: plan, base: base, storageCount: asked == .full ? typed : nil, signature: signature, mergeSeconds: seconds, paging: StoredPaging(paging), boxSeq: seq)
+                review.frame = state.flatMap { s in s.frameWidth.flatMap { w in s.frameHeight.map { StoredFrame(width: w, height: $0, changed: s.frameChanged) } } }
                 review.log = url; review.endedAtListEnd = ended; review.stoppedByPerson = byPerson; review.stoppedByTimeout = byTimeout; review.kindNote = note; review.advice = advice; review.stopSummary = stop
                 readingScan = false
                 _ = try? store.update { $0.attempts = 0 }
@@ -1486,7 +1496,7 @@ final class AppModel: ObservableObject {
                 let note = (r.plan.pass?.passName ?? (r.kind == .full ? "Full scan" : "Add and update")) + ", \(n) Pokémon"
                 // The scan record and the box version go in as one step: a version that cannot be written takes the record back out (BoxLibrary.commitScan).
                 return try lib.commitScan(r.outcome.scan, entries: entries, account: r.account, scanDate: r.plan.scanDate, source: "broadcast", kind: r.kind, note: note,
-                                          expectedCurrentSeq: .some(r.boxSeq), storageCount: r.storageCount, replayLog: log, paging: r.paging,
+                                          expectedCurrentSeq: .some(r.boxSeq), storageCount: r.storageCount, replayLog: log, paging: r.paging, frame: r.frame,
                                           refineChanges: r.outcome.changes.map { "\($0.kind.rawValue): \($0.detail)" },
                                           reviewActions: ScanReportBuilder.reviewLines(plan: r.plan, resolutions: r.resolutions, keepGone: r.keepGone, base: r.base),
                                           reportSentAt: r.reportSentAt, reportHash: r.reportHash, sourceSignature: r.signature, pass: r.plan.pass?.rawValue).snapshot
@@ -1566,7 +1576,7 @@ final class AppModel: ObservableObject {
                     return (plan, outcome, merge, Date().timeIntervalSince(t), try lib.current(account: a)?.seq)
                 }
                 flow = .review(Review(account: a, kind: plan.scan.kind, outcome: outcome, plan: merge, base: plan.baseEntries, storageCount: plan.scan.storageCount, signature: signature,
-                                      mergeSeconds: seconds, paging: plan.scan.paging, reread: plan, boxSeq: seq))
+                                      mergeSeconds: seconds, paging: plan.scan.paging, frame: plan.scan.frame, reread: plan, boxSeq: seq))
             } catch {
                 flow = .failed(message: Self.plain(error), signature: signature)
             }

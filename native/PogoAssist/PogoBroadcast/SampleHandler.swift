@@ -360,6 +360,15 @@ class SampleHandler: RPBroadcastSampleHandler {
         func pass() -> Bool { lock.lock(); defer { lock.unlock() }; if passed { return false }; passed = true; return true }
     }
 
+    /// On `queue`. The size of the frame a card was read from: the first such frame's size is kept for the report, and a later one of another size sets a flag. It goes out with the
+    /// state's next ordinary write (`state` is touched on `queue` only); integer reads and compares, no state write of its own. The first accepted frames are often this app or the
+    /// broadcast picker, so the size is taken only where a card is read: the live branch of `handle` (accurate and fast modes) and a saved crop in save-crops mode.
+    private func noteFrameSize(_ pixelBuffer: CVPixelBuffer) {
+        var size = FrameSize(width: state.frameWidth, height: state.frameHeight, changed: state.frameChanged)
+        size.note(width: CVPixelBufferGetWidth(pixelBuffer), height: CVPixelBufferGetHeight(pixelBuffer))
+        state.frameWidth = size.width; state.frameHeight = size.height; state.frameChanged = size.changed
+    }
+
     /// On `queue`. One accepted frame, in whichever mode.
     private func handle(_ pixelBuffer: CVPixelBuffer, time: Double) {
         guard let processor = processor else { return }
@@ -372,6 +381,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             drainTicks()          // after the frame is analysed, before it is judged: a swipe confirmed meanwhile counts
             var changed = false
             if saver.shouldSave(&analysis), let crops = crops, let archive = archive, archive.save(analysis, crops) {
+                noteFrameSize(pixelBuffer)   // a saved card frame is this mode's reading
                 state.savedFrames = archive.frameCount; state.savedFiles = archive.fileCount
                 state.savedMB = MemoryProbe.megabytes(archive.byteCount)
                 changed = true
@@ -393,6 +403,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             msTotal += Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
             drainTicks()          // right after Vision returns, immediately before the reading is added
             record(.reading(ReplayReading(reading, time: time, ms: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6)))
+            if reading.cp != nil || reading.name != nil { noteFrameSize(pixelBuffer) }   // a card was read from this frame
             state.framesRead += 1
             let changed = grouper.add(stalls.feed(reading))
             if changed { state.rows = grouper.rows }

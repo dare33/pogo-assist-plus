@@ -20,6 +20,20 @@ final class ShareFilesTests: XCTestCase {
     private let encoder: JSONEncoder = { let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; e.outputFormatting = [.sortedKeys]; return e }()
     private let decoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
 
+    func testTheFrameSizeRoundTripsAndAStateWithoutItDecodes() throws {
+        var state = BroadcastState()
+        XCTAssertNil(state.frameWidth); XCTAssertNil(state.frameChanged); XCTAssertNil(state.frameHeight, "a new scan's state starts without a size")
+        state.frameWidth = 1398; state.frameHeight = 2034
+        state.frameChanged = true
+        let back = try decoder.decode(BroadcastState.self, from: encoder.encode(state))
+        XCTAssertEqual(back.frameWidth, 1398); XCTAssertEqual(back.frameHeight, 2034)
+        XCTAssertEqual(back.frameChanged, true)
+        var tree = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(state)) as? [String: Any])
+        tree.removeValue(forKey: "frameWidth"); tree.removeValue(forKey: "frameHeight"); tree.removeValue(forKey: "frameChanged")
+        let older = try decoder.decode(BroadcastState.self, from: JSONSerialization.data(withJSONObject: tree))
+        XCTAssertNil(older.frameWidth); XCTAssertNil(older.frameHeight); XCTAssertNil(older.frameChanged)
+    }
+
     func testTheStateFileAndTheSavedCropResultKeepEveryFieldButTheFrameTimes() throws {
         var state = BroadcastState()
         state.rows = [try liveRow(1, 119_757.5, 119_760.1), try liveRow(2, nil, 119_800)]

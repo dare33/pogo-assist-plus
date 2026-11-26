@@ -17,8 +17,8 @@ import Foundation
 ///   "where LiveGrouper has N rows": words), hidden CP, duplicate dropped, fragment absorbed / joined, CP outlier, forms from stats, IVs chosen by fit and
 ///   CP recovered (rows, CPs, IVs and counts only). `Refine.reconcileTwins` writes "... at 13056.7 s" into `Refined.disagreements`, and `RefineBars`
 ///   writes a time into `notices` (`RefineTiming`'s notice holds a duration); neither list is in the report (the app reads `outcome.changes` only).
-/// - ScanPace, StoredPaging and the report's `scan` fields (`measuredPeriod`, `measuredRegularity`, `expectedPeriod`, `joinExtraSeconds`) are
-///   differences or settings, not times, and stay. `scanDate` and the app/device fields are wall-clock or hardware facts and stay.
+/// - ScanPace, StoredPaging and the report's `scan` fields (`measuredPeriod`, `measuredRegularity`, `expectedPeriod`, `joinExtraSeconds`, `frameWidth`, `frameHeight`, `frameChanged`) are
+///   differences, settings or pixel sizes, not times, and stay. `scanDate` and the app/device fields are wall-clock or hardware facts and stay.
 ///
 /// The origin is the earliest of the log's and the result's times, so the earliest frame in the scan is 0 and every difference is kept. Applying it
 /// again changes nothing. `ShareTimes` uses the same rules for the files the person shares out of the app. When the earliest time is exactly 0 the log text is returned as it came (each line as written, lines joined by "\n"; a

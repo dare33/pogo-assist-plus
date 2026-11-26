@@ -27,6 +27,51 @@ final class ScanReportTests: XCTestCase {
                         afterwards: ["Corrected by hand: Moltres: CP 99 to 1990."], notIncluded: ["Corrections made to Pokémon from earlier scans."], note: note, app: app, device: device)
     }
 
+    func testTheReportCarriesTheFrameSizeWhenGivenAndNilWhenNot() throws {
+        var given = try input(); given.frame = StoredFrame(width: 1398, height: 2034)
+        let with = try ScanReportBuilder.decode(gzip: try ScanReportBuilder.build(given).gzip)
+        XCTAssertEqual(with.scan.frameWidth, 1398); XCTAssertEqual(with.scan.frameHeight, 2034); XCTAssertEqual(with.schema, 1)
+        let without = try ScanReportBuilder.decode(gzip: try ScanReportBuilder.build(try input()).gzip)
+        XCTAssertNil(without.scan.frameWidth); XCTAssertNil(without.scan.frameHeight)
+        XCTAssertNil(without.scan.frameChanged); XCTAssertNil(with.scan.frameChanged)
+        var changed = given; changed.frame = StoredFrame(width: 1398, height: 2034, changed: true)
+        XCTAssertEqual(try ScanReportBuilder.decode(gzip: try ScanReportBuilder.build(changed).gzip).scan.frameChanged, true)
+        // the frame size is part of the report, so it is part of what the content hash covers
+        XCTAssertNotEqual(try ScanReportBuilder.build(given).contentHash, try ScanReportBuilder.build(try input()).contentHash)
+    }
+
+    func testAStoredScanKeepsTheFrameSizeAndOlderFilesStillLoad() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pogo-frame-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let lib = BoxLibrary(root: dir)
+        _ = try lib.store.accountDirectory("x", create: true)
+        let empty = ScanResult(rows: [], review: [], unmatched: [])
+        let date = Date(timeIntervalSince1970: 1_790_000_000)
+        let frame = StoredFrame(width: 2853, height: 2007)
+        let commit = try lib.commitScan(empty, entries: [], account: "x", scanDate: date, source: "broadcast", kind: .full, note: "n", expectedCurrentSeq: .some(nil),
+                                        replayLog: Data("{\"k\":\"t\",\"t\":1}\n".utf8), frame: frame)
+        XCTAssertEqual(try lib.store.load(account: "x", id: commit.scan.id).frame, frame)
+        // `changed` round-trips, and a stored frame without it (older data) decodes
+        XCTAssertEqual(try JSONDecoder().decode(StoredFrame.self, from: JSONEncoder().encode(StoredFrame(width: 1, height: 2, changed: true))).changed, true)
+        let noChanged = try JSONDecoder().decode(StoredFrame.self, from: Data("{\"width\":1398,\"height\":2034}".utf8))
+        XCTAssertEqual(noChanged, StoredFrame(width: 1398, height: 2034)); XCTAssertNil(noChanged.changed)
+        // a read-again commit rewrites the scan file (lastReread): the frame stays
+        let plan = try lib.prepareReread(account: "x", scanId: commit.scan.id)
+        XCTAssertEqual(plan.scan.frame, frame)
+        _ = try lib.commitReread(plan, entries: [], account: "x", now: date.addingTimeInterval(60))
+        let after = try lib.store.load(account: "x", id: commit.scan.id)
+        XCTAssertNotNil(after.lastReread); XCTAssertEqual(after.frame, frame)
+        // a file written before the field existed: remove the key from the JSON and load it
+        let file = dir.appendingPathComponent("x").appendingPathComponent("\(commit.scan.id).json")
+        var tree = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        XCTAssertNotNil(tree.removeValue(forKey: "frame"))
+        try JSONSerialization.data(withJSONObject: tree).write(to: file)
+        XCTAssertNil(try lib.store.load(account: "x", id: commit.scan.id).frame)
+        // a scan saved without one (a screenshot import, a replay) carries nil
+        let none = try lib.store.save(empty, account: "x", scanDate: date.addingTimeInterval(120), source: "screenshot import", kind: .partial)
+        XCTAssertNil(try lib.store.load(account: "x", id: none.id).frame)
+    }
+
     func testGzipRoundTripAndAKnownVector() throws {
         let text = Data(String(repeating: "pogo assist ", count: 500).utf8)
         let z = try Gzip.compress(text)
