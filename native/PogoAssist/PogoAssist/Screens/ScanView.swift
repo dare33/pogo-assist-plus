@@ -169,6 +169,7 @@ struct ScanView: View {
             if let steps = walkSteps {
                 ScanWalkthrough(steps: steps, words: words, pass: model.scanPass, takesBack: !model.game.failed, hiddenRaw: $hiddenRaw) { walkSteps = nil }
                     .environment(\.accent, accent)
+                    .reportsScreen(to: model)
             }
         }
         // The broadcast has started: the guide, if it was open, has done its job.

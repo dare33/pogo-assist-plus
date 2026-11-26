@@ -1,7 +1,18 @@
 import SwiftUI
 
+/// The screen as one value, so one `.onChange` sees a size and an idiom that changed together.
+struct ScreenValue: Equatable { var size: CGSize; var isPad: Bool }
+
 struct RootView: View {
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
+    let screenSize: CGSize
+    let isPad: Bool
+
+    init(screenSize: CGSize, isPad: Bool) {
+        self.screenSize = screenSize
+        self.isPad = isPad
+        _model = StateObject(wrappedValue: AppModel(screenSize: screenSize, isPad: isPad))
+    }
     @Environment(\.scenePhase) private var phase
 
     @State private var tab: AppTab = .box
@@ -71,6 +82,7 @@ struct RootView: View {
             if let variant = UserDefaults.standard.string(forKey: "uitest-seed-review") { model.seedReview(variant: variant) }
             #endif
         }
+        .onChange(of: ScreenValue(size: screenSize, isPad: isPad)) { _, v in model.screenChanged(size: v.size, isPad: v.isPad) }
         // A scan has ended: bring the person to its Done screen (the Scan screen), and back out of it when the review is over.
         // "Re-scan N" in the Box: open the Scan screen; closing it ends the suggestion.
         .onChange(of: model.rescanCount) { _, n in if n != nil { scanOpen = true } }
@@ -112,6 +124,7 @@ struct WelcomeView: View {
             }
             .contentColumn()
         }
+        .reportsScreen(to: model)
     }
     private func create() { model.createAccount(name) }
 }

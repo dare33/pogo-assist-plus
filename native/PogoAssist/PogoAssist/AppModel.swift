@@ -272,7 +272,7 @@ final class AppModel: ObservableObject {
 
     /// The report's input for a target, with the user's note. Reads files, so call it on the worker's queue or accept a short pause.
     private func reportInput(_ target: ReportTarget, note: String?) throws -> (input: ScanReportInput, previousHash: String?, previousSentAt: Date?) {
-        let app = ReportSupport.appInfo, device = ReportSupport.deviceInfo
+        let app = ReportSupport.appInfo, device = ReportSupport.deviceInfo(screenSize: screenSize)
         switch target {
         case .review:
             guard case .review(let r) = flow else { throw BoxStore.Failure.notFound(account: "", id: "review") }
@@ -451,8 +451,18 @@ final class AppModel: ObservableObject {
         return made ? nil : "The command set has not been made on this phone yet. Get the commands and import them, or Voice Control will not know \"Pogo scan 300\" and the others."
     }
 
-    /// Screen size in points, for the tap position check.
-    var screenSize: CGSize { UIScreen.main.bounds.size }
+    /// Screen size in points, for the tap position check. Given by the window (see `ScreenReader`), never read from shared device
+    /// state: on the foldable iPhone Duo `UIScreen.main` keeps reporting the outer screen after the phone is opened.
+    @Published private(set) var screenSize: CGSize
+    @Published private(set) var isPad: Bool
+
+    /// The window's screen moved (a fold or unfold, a move to another display). Only the two stored values change, so what derives from
+    /// the screen follows (`tapAvailable`, `setKind`, `commandSetMade`, the warnings, `screenLabel`). `pagedByHand` and `ReaderSettings`
+    /// are NOT recomputed: a fold in the middle of a scan must not touch scan settings.
+    func screenChanged(size: CGSize, isPad: Bool) {
+        if screenSize != size { screenSize = size }
+        if self.isPad != isPad { self.isPad = isPad }
+    }
     var offeredPaces: [VoiceCommandFile.Pace] { VoiceCommandFile.Pace.offered(tapAvailable: tapAvailable) }
     var tapAvailable: Bool { VoiceCommandFile.tapPoint(width: Double(screenSize.width), height: Double(screenSize.height)) != nil }
 
@@ -469,7 +479,7 @@ final class AppModel: ObservableObject {
     }
 
     /// "440x956 iPhone": the screen this command would be made for.
-    var screenLabel: String { VoiceCommandFile.screenLabel(width: Double(screenSize.width), height: Double(screenSize.height), isPad: UIDevice.current.userInterfaceIdiom == .pad) }
+    var screenLabel: String { VoiceCommandFile.screenLabel(width: Double(screenSize.width), height: Double(screenSize.height), isPad: isPad) }
 
     /// Every tap command made for this account is checked against the current screen, whatever pace is selected: on an unchecked
     /// screen the pace is forced to Swipe, but a tap command made earlier (Display Zoom turned on since, a restore onto another phone) is
@@ -555,7 +565,10 @@ final class AppModel: ObservableObject {
         } catch { message = "The commands could not be made: \(Self.plain(error))" }
     }
 
-    init() {
+    /// The screen is known before the model exists: `init` restores the paging, which reads the command set for this screen.
+    init(screenSize: CGSize, isPad: Bool) {
+        self.screenSize = screenSize
+        self.isPad = isPad
         let root = BoxExportFile.boxesRoot
         // No place for the boxes: the library points at a path nothing can be written to (never the temporary folder), and `loadBox` shows the problem.
         storageMissing = root == nil

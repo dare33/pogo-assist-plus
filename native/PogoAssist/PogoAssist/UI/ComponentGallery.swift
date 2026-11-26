@@ -5,7 +5,14 @@ import SwiftUI
 /// app is launched with `-ui-gallery`, and the whole file is compiled out of Release. Launch arguments
 /// `-appearance dark|light|auto`, `-accent berry` and `-helpLevel guide` set the preferences (AppStorage reads them).
 struct ComponentGallery: View {
-    @StateObject private var model = AppModel()
+    @StateObject private var model: AppModel
+    let screenSize: CGSize
+    let isPad: Bool
+    init(screenSize: CGSize, isPad: Bool) {
+        self.screenSize = screenSize
+        self.isPad = isPad
+        _model = StateObject(wrappedValue: AppModel(screenSize: screenSize, isPad: isPad))
+    }
     @State private var tab: AppTab = .box
     @State private var answered = false
     @AppStorage(PrefKey.accent) private var accentRaw = Accent.blue.rawValue
@@ -57,6 +64,7 @@ struct ComponentGallery: View {
         }
         .environmentObject(model)
         .themeRoot()
+        .onChange(of: ScreenValue(size: screenSize, isPad: isPad)) { _, v in model.screenChanged(size: v.size, isPad: v.isPad) }
     }
 
     private func heading(_ t: String) -> some View {

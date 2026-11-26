@@ -21,6 +21,8 @@ struct ReviewView: View {
             }
             .contentColumn()
         }
+        // The presenting view is out of the window while this cover is up, so the cover reports the screen itself.
+        .reportsScreen(to: model)
         // The cover is a new presentation: it needs the theme (accent, help level, toast host) of its own; the colour scheme follows the window.
         .themeRoot()
         .interactiveDismissDisabled()

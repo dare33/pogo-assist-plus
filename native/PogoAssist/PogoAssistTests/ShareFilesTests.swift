@@ -155,7 +155,7 @@ final class ShareFilesTests: XCTestCase {
     }
 
     @MainActor func testWithNoAccountTheShareSaysTheScanCannotBeFoundAndAReviewWithNoLogSaysSo() async throws {
-        let model = AppModel()
+        let model = AppModel(screenSize: CGSize(width: 440, height: 956), isPad: false)
         let before = model.account
         defer { model.account = before }
         model.account = nil
@@ -164,5 +164,105 @@ final class ShareFilesTests: XCTestCase {
         XCTAssertTrue(r.urls.isEmpty); XCTAssertEqual(r.message, ShareFiles.scanNotFound)
         let review = await model.reportShareFiles(.review)
         XCTAssertTrue(review.urls.isEmpty); XCTAssertNotNil(review.message)
+    }
+}
+
+/// The model takes the screen from the window rather than reading shared device state (the foldable iPhone Duo's `UIScreen.main` stays on
+/// the outer screen after it is opened). `AppModel.init` writes to defaults, so the class isolates itself:
+/// - `setUp` snapshots the app's whole `UserDefaults.standard` domain and the eight app-group `ReaderSettings` keys that `refreshReaderSettings`
+///   writes, then clears the stored paging choice and every stored command-set record, so each test starts from controlled state;
+/// - `tearDown` puts both back exactly (keys that did not exist are removed again).
+/// NOT restored: files the model touches (boxes, pending-scan folder, stray temporary copies) and the shared broadcast state. These tests
+/// do not change those on purpose, but an `AppModel` does read and tidy them as it starts.
+final class ScreenInjectionTests: XCTestCase {
+    private var savedDomain: [String: Any]?
+    private var savedGroup: [String: Any] = [:]
+    // The keys `ReaderSettings` writes (Shared/ReaderSettings.swift); the suite is private there, so the literals are repeated here.
+    private let groupKeys = ["storageCount", "eggCount", "scanIsFull", "scanAccount", "scanKind", "scanPass", "commandSizes", "autoEndPeriod"]
+    private var group: UserDefaults? { UserDefaults(suiteName: SharedStore.groupID) }
+    private let phone = CGSize(width: 440, height: 956)
+    private let duoOuter = CGSize(width: 466, height: 678)
+
+    override func setUp() {
+        super.setUp()
+        let standard = UserDefaults.standard
+        savedDomain = Bundle.main.bundleIdentifier.flatMap { standard.persistentDomain(forName: $0) }
+        for key in groupKeys { if let v = group?.object(forKey: key) { savedGroup[key] = v } }
+        // The literals are `Keys.hand` ("pagedByHand") and `Keys.set` ("voiceSet.") in AppModel.swift, which is private there.
+        for key in standard.dictionaryRepresentation().keys where key == "pagedByHand" || key.hasPrefix("voiceSet.") { standard.removeObject(forKey: key) }
+    }
+
+    override func tearDown() {
+        if let id = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: id)
+            if let savedDomain { UserDefaults.standard.setPersistentDomain(savedDomain, forName: id) }
+        }
+        for key in groupKeys {
+            if let v = savedGroup[key] { group?.set(v, forKey: key) } else { group?.removeObject(forKey: key) }
+        }
+        savedGroup = [:]
+        super.tearDown()
+    }
+
+    /// A stored TAP command set made for the 440x956 iPhone, for an account name of the test's own.
+    private func storeTapSetForPhone() throws {
+        let record = AppModel.SetRecord(kind: .tap, date: Date(), screen: "440x956 iPhone")
+        UserDefaults.standard.set(try JSONEncoder().encode(record), forKey: "voiceSet.screen-injection-test")
+    }
+
+    @MainActor func testAnIPhoneScreenAllowsTapsAndIsLabelled() {
+        let model = AppModel(screenSize: phone, isPad: false)
+        XCTAssertTrue(model.tapAvailable)
+        XCTAssertEqual(model.screenLabel, "440x956 iPhone")
+    }
+
+    @MainActor func testTheDuoOuterScreenHasNoTapPosition() {
+        let model = AppModel(screenSize: duoOuter, isPad: false)
+        XCTAssertFalse(model.tapAvailable)
+    }
+
+    @MainActor func testTheScreenGivenToInitDecidesThePagingDefaultInitRestores() throws {
+        try storeTapSetForPhone()
+        XCTAssertNil(UserDefaults.standard.object(forKey: "pagedByHand"), "no stored paging choice, so the default applies")
+        // The launch-order contract: `init` restores the paging from the command set for THIS screen, so the screen must be known before it runs.
+        let onPhone = AppModel(screenSize: phone, isPad: false)
+        XCTAssertEqual(onPhone.setKind, .tap)
+        XCTAssertTrue(onPhone.commandSetMade)
+        XCTAssertEqual(onPhone.pagedByHand, ScanKindAdvice.defaultsToHand(commandSetMade: true))
+        let onDuo = AppModel(screenSize: duoOuter, isPad: false)
+        XCTAssertEqual(onDuo.setKind, .swipe)
+        XCTAssertFalse(onDuo.commandSetMade)
+        XCTAssertEqual(onDuo.pagedByHand, ScanKindAdvice.defaultsToHand(commandSetMade: false))
+        XCTAssertNotEqual(onPhone.pagedByHand, onDuo.pagedByHand, "the two defaults differ, so this test can tell the screens apart")
+    }
+
+    @MainActor func testAScreenChangeUpdatesTheScreenAndNeverRestoresThePaging() throws {
+        try storeTapSetForPhone()
+        // Tap screen to swipe screen: the command set stops counting, and a wrong `restorePaging()` would turn hand paging on.
+        let model = AppModel(screenSize: phone, isPad: false)
+        XCTAssertFalse(model.pagedByHand)
+        model.screenChanged(size: duoOuter, isPad: false)
+        XCTAssertEqual(model.screenSize, duoOuter)
+        XCTAssertEqual(model.screenLabel, "466x678 iPhone")
+        XCTAssertFalse(model.commandSetMade)
+        XCTAssertFalse(model.pagedByHand, "a fold must not change how the scan is paged")
+        // The other way: a wrong `restorePaging()` would turn hand paging off.
+        let other = AppModel(screenSize: duoOuter, isPad: false)
+        XCTAssertTrue(other.pagedByHand)
+        other.screenChanged(size: phone, isPad: false)
+        XCTAssertTrue(other.commandSetMade)
+        XCTAssertTrue(other.pagedByHand)
+        // A choice flipped after init survives a change too.
+        other.pagedByHand = false
+        other.screenChanged(size: CGSize(width: 669, height: 951), isPad: false)
+        XCTAssertFalse(other.pagedByHand)
+        XCTAssertEqual(other.screenLabel, "669x951 iPhone")
+    }
+
+    @MainActor func testAnIPadIdiomIsLabelledIPad() {
+        let model = AppModel(screenSize: CGSize(width: 1032, height: 1376), isPad: true)
+        XCTAssertTrue(model.screenLabel.hasSuffix("iPad"), model.screenLabel)
+        model.screenChanged(size: CGSize(width: 1032, height: 1376), isPad: false)
+        XCTAssertTrue(model.screenLabel.hasSuffix("iPhone"), model.screenLabel)
     }
 }
