@@ -21,11 +21,10 @@ enum ReportSupport {
     }
 
     /// The kind of device, never which one: hardware model, system version, screen in points and language.
-    @MainActor static var deviceInfo: ScanReport.DeviceInfo {
+    @MainActor static func deviceInfo(screenSize b: CGSize) -> ScanReport.DeviceInfo {
         var system = utsname(); uname(&system)
         let machine = withUnsafePointer(to: &system.machine) { $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) } }
         let model = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? machine
-        let b = UIScreen.main.bounds
         return ScanReport.DeviceInfo(model: model, os: UIDevice.current.systemVersion, screenWidth: Double(b.width), screenHeight: Double(b.height), locale: Locale.current.identifier)
     }
 }

@@ -36,7 +36,7 @@ private struct SetupStepBody: View {
     @State private var pictureOpen = false
 
     private var info: SetupProgress.Info { SetupProgress.info[step - 1] }
-    private var deviceKind: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
+    private var deviceKind: String { model.isPad ? "iPad" : "iPhone" }
     private var sizesText: String { "\(VoiceCommandFile.setSizes.count) commands (\(VoiceCommandFile.setSizes.first!) to \(VoiceCommandFile.setSizes.last!) Pokémon)" }
 
     var body: some View {
