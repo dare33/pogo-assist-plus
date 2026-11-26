@@ -22,13 +22,13 @@ import PogoReader
 ///   and positions), `paging` (a period and a join allowance, settings), `reviewActions` (what the person answered: names, CPs, counts; `ScanReportBuilder.reviewLines`
 ///   and `BoxMerge`'s line builders print no time), `scanDate`, `savedAt`, `lastReread`, `reportSentAt` (wall-clock dates), `reportHash`, `sourceSignature` (the
 ///   replay file's size and its modification date in milliseconds since 1970, a wall-clock fact, not a frame time), `id`, `account`, `source`, `kind`, `pass`,
-///   `schema`, `storageCount`. The row fields `merged`, `clip`, `shadow`, `dynamax`, `gigantamax`, `lucky`, `details` hold no time. The scan's pace (`ScanPace`)
+///   `schema`, `storageCount`, `frame` (the pixel size of the frame the first Pokémon was read from and whether a later frame differed: integers and a flag). The row fields `merged`, `clip`, `shadow`, `dynamax`, `gigantamax`, `lucky`, `details` hold no time. The scan's pace (`ScanPace`)
 ///   is not stored; where the report derives it, it is a difference.
 /// - Replay log, every line: `t` and `last` (`ReportTimes.logTimeKeys`); `ms` and `read` are a duration and a count. A line that is not a JSON object, or whose `t`
 ///   or `last` is present and not a finite number, is left out and counted (`ReportTimes.rebase`).
 /// - Diagnostics state file (`BroadcastState`, `state.json`): `rows[].firstTime` and `rows[].lastTime` (the live grouper's first and last reading of each row).
 ///   Checked and left alone: `rows[].firstFrame`/`lastFrame` (frame labels, an index), `started`, `updated`, `pausedAt`, `cpCoveredSince` (wall-clock dates),
-///   `scanId` (the start date in whole seconds since 1970), `commandPeriod`, `pauseLimitSeconds`, `meanMsPerFrame` (periods, limits and durations), and the
+///   `scanId` (the start date in whole seconds since 1970), `frameWidth`, `frameHeight`, `frameChanged` (pixels and a flag), `commandPeriod`, `pauseLimitSeconds`, `meanMsPerFrame` (periods, limits and durations), and the
 ///   counts, memory figures, names and flags. Edited in place like the result.
 /// - Diagnostics saved-crop result (`DeferredResult`, `deferred.json`): `rows[].firstTime` and `rows[].lastTime` (the same `LiveRow`); `seconds` is how long the read
 ///   took, `frames` a count, `peakFootprintMB` a size.

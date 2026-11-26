@@ -36,6 +36,9 @@ struct BroadcastState: Codable, Equatable {
     var pausesAllowed = false        // the scan was started as a Full scan, the only kind that pauses
     var account: String?             // the account selected when the scan started: the scan is reviewed and saved under it whatever is selected later (nil: an older build)
     var kind: String?                // "full" or "partial": what the person chose when the scan started (nil: an older build)
+    var frameWidth: Int?             // pixels of the frame the scan's first Pokémon was read from (nil: none read yet, or an older build)
+    var frameHeight: Int?
+    var frameChanged: Bool?          // true once a later read frame had another size (nil until then)
     var pass: String?                // the filtered pass chosen ("shadow", "purified", "dynamax", "gigantamax"; always with kind "partial"); nil: an ordinary scan, or an older build
     /// Counts each pause and each end of a command scan; the notification's identifier carries it, so the extension's notification and the app's fallback are the same one.
     var eventSeq = 0
@@ -94,6 +97,9 @@ extension BroadcastState {
         account = try c.decodeIfPresent(String.self, forKey: .account)
         kind = try c.decodeIfPresent(String.self, forKey: .kind)
         pass = try c.decodeIfPresent(String.self, forKey: .pass)
+        frameWidth = try c.decodeIfPresent(Int.self, forKey: .frameWidth)
+        frameHeight = try c.decodeIfPresent(Int.self, forKey: .frameHeight)
+        frameChanged = try c.decodeIfPresent(Bool.self, forKey: .frameChanged)
         eventSeq = try c.decodeIfPresent(Int.self, forKey: .eventSeq) ?? 0
         scanId = try c.decodeIfPresent(Int.self, forKey: .scanId) ?? 0
         stoppedByPerson = try c.decodeIfPresent(Bool.self, forKey: .stoppedByPerson) ?? false

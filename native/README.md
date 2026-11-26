@@ -1110,7 +1110,7 @@ Screenshots chosen or shared for import are copied into the app group on the pho
 no background upload and no retry. One tap sends one file, `yyyy-mm/yyyymmddThhmmssZ-<random id>.json.gz`, to a private storage bucket
 (`scan-reports`, write-only for the app: it can add a file, never read, list or overwrite one). The file is a gzip of one JSON document with these
 keys: `schema`; `app` (version, build); `device` (hardware model such as iPhone17,2, system version, screen size in points, language);
-`scan` (full or partial, scan date, Pokémon read, storage count if typed, how it was paged and the command's pace, the measured pace);
+`scan` (full or partial, scan date, Pokémon read, storage count if typed, how it was paged and the command's pace, the measured pace, and the pixel size of the frame the scan's first Pokémon was read from, with whether a later frame had another size);
 `note` (what you typed, if anything); `replayLog` (the reading log with its times counted from the scan's first frame and with any unreadable line left out (the lines of an older scan are written out again with the shifted times; a scan that already starts at 0 goes as written): every reading's text, CP, name, HP and bars,
 the swipe ticks and dropped frames; it can include a Pokémon's nickname if one was on screen); `result` (the rows, the review list and the
 unmatched items); `refineChanges`; `review` (what you answered at review); `afterwards` (later hand corrections and removals of Pokémon
@@ -1118,7 +1118,7 @@ that first came from that scan, as far as the box versions record them) and `not
 account-name field, no device identifier and no other scan's readings, but it carries Pokémon nicknames as read and whatever is typed in the note, so the
 account name appears only if it is one of those. The review lines can name saved Pokémon that were kept from Gone, and those came from other scans
 (species and values only, no readings), so it is not true that nothing from other scans is in it. A scan already sent and unchanged is not sent twice (the scan keeps when it was sent
-and a hash of what was sent); the one exception is a scan sent by builds 1 to 4, which can be sent once more because its document with shifted times hashes differently. At most 10 reports go out in 24 hours, and a report above 3.5 MB is refused with the option to share the files.
+and a hash of the whole report except the note); any difference in the report makes the scan sendable once more, and the report holds the app's version and build, the "not included" lines and the frame size, so a scan sent by an older build can be sent again from a newer one (a scan stored by builds 1 to 4 also hashes differently now, because its times are shifted to count from the scan's first frame when the report is built). At most 10 reports go out in 24 hours, and a report above 3.5 MB is refused with the option to share the files.
 A typical 313-Pokémon scan is about 640 KB of JSON and 80 KB compressed.
 
 Setup (the repo is public, so neither value is committed): put `SCAN_REPORT_URL` and `SCAN_REPORT_KEY` in the git-ignored

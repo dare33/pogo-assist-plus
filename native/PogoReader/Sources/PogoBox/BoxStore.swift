@@ -17,6 +17,15 @@ public struct StoredPaging: Codable, Equatable {
     public init(pagedByCommand: Bool, expectedPeriod: Double? = nil, joinExtraSeconds: Double? = nil) { self.pagedByCommand = pagedByCommand; self.expectedPeriod = expectedPeriod; self.joinExtraSeconds = joinExtraSeconds }
 }
 
+/// The pixel size of the frame the scan's first Pokémon was read from, and whether a later read frame had another size (a foldable phone's two screens give different frames), kept with the scan.
+public struct StoredFrame: Codable, Equatable {
+    public var width: Int
+    public var height: Int
+    /// True when a later frame that was read had another size than this one; nil when none did, and for a scan saved before this was recorded.
+    public var changed: Bool?
+    public init(width: Int, height: Int, changed: Bool? = nil) { self.width = width; self.height = height; self.changed = changed }
+}
+
 public final class BoxStore {
     public enum Kind: String, Codable { case full, partial }
 
@@ -63,6 +72,8 @@ public final class BoxStore {
         public var storageCount: Int?
         /// How the scan was paged (a generated command at some pace, or by hand), kept so it can be read again the same way.
         public var paging: StoredPaging?
+        /// The pixel size of the frame the scan's first Pokémon was read from, and whether a later read frame had another size. Nil for a scan made by a build that did not record it, a screenshot import and a replay.
+        public var frame: StoredFrame?
         /// When the scan was last read again with newer rules (`BoxLibrary.commitReread`), if ever.
         public var lastReread: Date?
         /// What Refine changed, one line each (kept so a report can include it).
@@ -110,12 +121,12 @@ public final class BoxStore {
 
     @discardableResult
     public func save(_ result: ScanResult, account: String, scanDate: Date = Date(), source: String, kind: Kind = .full,
-                     storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil,
+                     storageCount: Int? = nil, replayLog: Data? = nil, paging: StoredPaging? = nil, frame: StoredFrame? = nil,
                      refineChanges: [String]? = nil, reviewActions: [String]? = nil, reportSentAt: Date? = nil, reportHash: String? = nil, sourceSignature: String? = nil, pass: String? = nil) throws -> Summary {
         let dir = try accountDirectory(account, create: true)
         let id = Self.makeID(scanDate)
         let scan = StoredScan(schema: Self.schemaVersion, id: id, account: account, scanDate: scanDate, savedAt: Date(), source: source, kind: kind,
-                              rows: result.rows, review: result.review, unmatched: result.unmatched, storageCount: storageCount, paging: paging, lastReread: nil, refineChanges: refineChanges, reviewActions: reviewActions,
+                              rows: result.rows, review: result.review, unmatched: result.unmatched, storageCount: storageCount, paging: paging, frame: frame, lastReread: nil, refineChanges: refineChanges, reviewActions: reviewActions,
                               reportSentAt: reportSentAt, reportHash: reportHash, sourceSignature: sourceSignature, pass: pass)
         // The replay log goes first: if the scan file is then written, the log it rebuilds from is already there.
         if let log = replayLog { try log.write(to: dir.appendingPathComponent("\(id).replay.jsonl"), options: .atomic) }

@@ -18,6 +18,10 @@ public struct ScanReport: Codable, Equatable {
         public var kind: String, scanDate: Date, rowsRead: Int, storageCount: Int?
         public var pagedByCommand: Bool?, expectedPeriod: Double?, joinExtraSeconds: Double?
         public var measuredPeriod: Double?, measuredRegularity: Double?
+        /// Pixels of the frame the scan's first Pokémon was read from; nil when it was not recorded for this scan (a screenshot import, a replay, or a broadcast scan that did not record it).
+        public var frameWidth: Int?, frameHeight: Int?
+        /// True when a later frame that was read had another size; nil when none did or when the size was not recorded.
+        public var frameChanged: Bool?
     }
 
     public var schema = 1
@@ -46,6 +50,7 @@ public struct ScanReportInput {
     public var scanDate: Date
     public var storageCount: Int?
     public var paging: StoredPaging?
+    public var frame: StoredFrame?
     public var pace: ScanPace?
     public var refineChanges: [String]
     public var review: [String]
@@ -55,9 +60,9 @@ public struct ScanReportInput {
     public var app: ScanReport.AppInfo
     public var device: ScanReport.DeviceInfo
 
-    public init(replayLog: String, result: ScanResult, kind: BoxStore.Kind, scanDate: Date, storageCount: Int? = nil, paging: StoredPaging? = nil, pace: ScanPace? = nil,
+    public init(replayLog: String, result: ScanResult, kind: BoxStore.Kind, scanDate: Date, storageCount: Int? = nil, paging: StoredPaging? = nil, frame: StoredFrame? = nil, pace: ScanPace? = nil,
                 refineChanges: [String] = [], review: [String] = [], afterwards: [String] = [], notIncluded: [String] = [], note: String? = nil, app: ScanReport.AppInfo, device: ScanReport.DeviceInfo) {
-        self.replayLog = replayLog; self.result = result; self.kind = kind; self.scanDate = scanDate; self.storageCount = storageCount; self.paging = paging; self.pace = pace
+        self.replayLog = replayLog; self.result = result; self.kind = kind; self.scanDate = scanDate; self.storageCount = storageCount; self.paging = paging; self.frame = frame; self.pace = pace
         self.refineChanges = refineChanges; self.review = review; self.afterwards = afterwards; self.notIncluded = notIncluded; self.note = note; self.app = app; self.device = device
     }
 }
@@ -80,7 +85,7 @@ public enum ScanReportBuilder {
         return ScanReport(app: input.app, device: input.device,
                           scan: .init(kind: input.kind == .full ? "full" : "partial", scanDate: input.scanDate, rowsRead: input.result.rows.count, storageCount: input.storageCount,
                                       pagedByCommand: input.paging?.pagedByCommand, expectedPeriod: input.paging?.expectedPeriod, joinExtraSeconds: input.paging?.joinExtraSeconds,
-                                      measuredPeriod: input.pace?.medianPeriod, measuredRegularity: input.pace?.regularity),
+                                      measuredPeriod: input.pace?.medianPeriod, measuredRegularity: input.pace?.regularity, frameWidth: input.frame?.width, frameHeight: input.frame?.height, frameChanged: input.frame?.changed),
                           note: (note?.isEmpty == false) ? note : nil, replayLog: times.replayLog, result: times.result, refineChanges: times.refineChanges,
                           review: input.review, afterwards: input.afterwards, notIncluded: missing)
     }
