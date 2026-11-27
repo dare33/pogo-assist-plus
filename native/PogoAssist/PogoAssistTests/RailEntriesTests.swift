@@ -17,10 +17,9 @@ import SwiftUI
         XCTAssertEqual(sequences(RailEntries.visible([entry(7, "pushed"), entry(3, "parent")])), [7])
     }
 
-    func testAScreensButtonsKeepTheOrderTheyWerePublishedIn() {
-        // Back first, then the screen's other buttons: all carry the screen's one sequence, so all stay, in order, and an older screen's entries go.
-        let shown = RailEntries.visible([entry(2, "old"), entry(5, "back"), entry(5, "search"), entry(5, "fix")])
-        XCTAssertEqual(sequences(shown), [5, 5, 5])
+    func testOlderScreensGoWhateverTheirNumber() {
+        // Each screen publishes one entry holding all its buttons, so exactly the newest screen's entry is left.
+        XCTAssertEqual(sequences(RailEntries.visible([entry(2, "root"), entry(9, "page"), entry(5, "list")])), [9])
     }
 
     func testSequencesOnlyGoUp() {

@@ -37,7 +37,7 @@ extension EnvironmentValues {
 // MARK: detecting the strip
 
 /// Reports whether the system's vertical bar is on the trailing edge. Read from the window scene's traits (as `ScreenReader` reads the idiom) when the window
-/// lays out, which it does again when the Duo is folded, opened or rotated. Never active below iOS 27.1, where the trait does not exist.
+/// lays out or its safe area changes, which happens again when the Duo is folded, opened or rotated. Never active below iOS 27.1, where the trait does not exist.
 struct RailReader: UIViewRepresentable {
     var report: (Bool) -> Void
 
@@ -45,12 +45,20 @@ struct RailReader: UIViewRepresentable {
         var report: (Bool) -> Void = { _ in }
         override func didMoveToWindow() { super.didMoveToWindow(); read() }
         override func layoutSubviews() { super.layoutSubviews(); read() }
+        override func safeAreaInsetsDidChange() { super.safeAreaInsetsDidChange(); read() }
         private func read() {
-            guard let scene = window?.windowScene else { return }
-            var active = false
-            if #available(iOS 27.1, *) { active = scene.traitCollection.verticalBarEdge == .trailing }
-            // Not inside the layout pass: the report changes SwiftUI state.
-            DispatchQueue.main.async { [report] in report(active) }
+            // Not inside the layout pass: the report changes SwiftUI state. Read then, too, so the values are the settled ones after a fold or a turn.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window = self.window, let scene = window.windowScene else { return }
+                var active = false
+                // The trait is the system's preferred edge whether or not the bar is showing (open and turned tall it still says trailing while the status
+                // icons run along the top), so the strip counts only when the window also keeps its safe area out of that edge.
+                if #available(iOS 27.1, *) {
+                    let inset = window.effectiveUserInterfaceLayoutDirection == .rightToLeft ? window.safeAreaInsets.left : window.safeAreaInsets.right
+                    active = scene.traitCollection.verticalBarEdge == .trailing && inset > 0
+                }
+                self.report(active)
+            }
         }
     }
 
@@ -77,7 +85,7 @@ enum RailEntries {
     @MainActor private static var counter = 0
     @MainActor static func nextSequence() -> Int { counter += 1; return counter }
 
-    /// The entries to draw: those of the most recently appeared screen, in the order they were published (tree order, so a screen's Back comes before its other buttons).
+    /// The entries to draw: the most recently appeared screen's (each screen publishes one entry, holding its buttons in order, Back first).
     /// Nothing published gives an empty rail.
     static func visible(_ entries: [RailEntry]) -> [RailEntry] {
         guard let latest = entries.map(\.sequence).max() else { return [] }
