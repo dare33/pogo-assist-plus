@@ -83,7 +83,8 @@ struct HubCollectionView: View {
             }
         }
         .sheet(item: $openSet) { open in
-            CollectionSetSheet(kind: open.kind, set: open.set).environmentObject(model).environment(\.accent, accent)
+            // A sheet is its own presentation: controls published in it never reach the root's rail, so its screens keep their buttons in their headers.
+            CollectionSetSheet(kind: open.kind, set: open.set).environmentObject(model).environment(\.accent, accent).environment(\.railActive, false)
         }
         .task(id: key) {
             guard let gm = try? GameMaster.bundled() else { data = nil; return }

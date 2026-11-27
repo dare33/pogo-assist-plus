@@ -184,7 +184,8 @@ struct TabHeader<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
     @Environment(\.dynamicTypeSize) private var typeSize
     /// The circle buttons keep their 40 pt circles: their glyphs stop growing at xxxLarge, or they spill out of them and over each other.
-    private var buttons: some View { HStack(spacing: 4) { trailing }.dynamicTypeSize(...DynamicTypeSize.xxxLarge) }
+    /// On the Duo (`RailControls`) they are drawn in the rail instead, and the header keeps the account name and the centred title.
+    private var buttons: some View { HStack(spacing: 4) { RailControls { trailing } }.dynamicTypeSize(...DynamicTypeSize.xxxLarge) }
 
     private var heading: some View {
         Text(title).font(.figtree(17, .heavy, relativeTo: .headline)).foregroundStyle(Theme.ink).lineLimit(1)
