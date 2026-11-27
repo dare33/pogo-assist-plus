@@ -148,10 +148,12 @@ struct HubCollectionView: View {
         let columns = WideLayout.collectionColumns(wide: wide, typeSize: typeSize)
         if columns > 1 {
             // Wide: the sets two to a row, each with its own strip. A row is as tall as its taller set; a short last row keeps the sets at the same width.
+            // Each set is clipped to its half: a strip does not clip its own scrolling cards (it bleeds to the screen edge when it has the whole row),
+            // so unclipped the left set's cards would run over the right set.
             VStack(alignment: .leading, spacing: 18) {
                 ForEach(Array(WideLayout.rows(d.sets, per: columns).enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .top, spacing: 18) {
-                        ForEach(row, id: \.name) { s in setStrip(s, d).frame(maxWidth: .infinity, alignment: .topLeading) }
+                        ForEach(row, id: \.name) { s in setStrip(s, d).frame(maxWidth: .infinity, alignment: .topLeading).clipped() }
                         ForEach(0..<(columns - row.count), id: \.self) { _ in Color.clear.frame(height: 0).frame(maxWidth: .infinity) }
                     }
                 }
