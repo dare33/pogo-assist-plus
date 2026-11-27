@@ -59,7 +59,7 @@ private struct SetupStepBody: View {
             }
             .padding(.horizontal, Theme.Space.screen).padding(.top, 8).padding(.bottom, 12)
         }
-        .sheet(isPresented: $pictureOpen) { pictureSheet }
+        .sheet(isPresented: $pictureOpen) { pictureSheet.environment(\.wideLayout, false) }
         .background(Theme.bg.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PillButton(confirmTitle, style: .filled, height: 56, action: confirm)

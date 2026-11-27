@@ -84,6 +84,7 @@
 		7F9A044F236E3B98AABF974A /* OpenSpeciesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF5D1287FA6845313B02116 /* OpenSpeciesView.swift */; };
 		8195313A1A5D36E07D5E0BA8 /* sample-partial-cp.replay.jsonl in Resources */ = {isa = PBXBuildFile; fileRef = 485A3230382F6255646EC242 /* sample-partial-cp.replay.jsonl */; };
 		83F1DE00D4867EC5AD27D44C /* PogoAssistApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CC0372BEB9929AC852A4C8 /* PogoAssistApp.swift */; };
+		8567F3AD9EE1A779057AB4E2 /* WideLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E314E6A348197D0B9A84535F /* WideLayoutTests.swift */; };
 		877CD9FE721D96DF464F3FD7 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6AA316B422945EDE86A699 /* Formatting.swift */; };
 		88B726BE30F7E106A63BC75E /* QuestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CD00BDF74969FB6452FC93 /* QuestionCard.swift */; };
 		8A85717ADE3ADD7C76920987 /* HubMaxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 084FB265AF36DD53B7DD982A /* HubMaxView.swift */; };
@@ -138,6 +139,7 @@
 		DB7F0F261F579F598E2F94B8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9A7F76950DF8ED2D50218072 /* PrivacyInfo.xcprivacy */; };
 		DC26D695B43A1397836CD3F1 /* MarkEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B63A4AC73C349DBA01D3BAF /* MarkEditorTests.swift */; };
 		DF232EF5A04B4ADA4B79527B /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6261F1BB3C75D905222CC61 /* Typography.swift */; };
+		E1581C16E7EDD4106308F9E2 /* WideLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70E84F98B62CCD522767D3F /* WideLayout.swift */; };
 		E6247625CABEEE77FEB55C70 /* Figtree-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 60BF710F03812439C395ED03 /* Figtree-Variable.ttf */; };
 		E66F2D5CA0E2E391A6AEAFB9 /* HubMaxSquadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25480D5F634F1F2F763FAB7D /* HubMaxSquadTests.swift */; };
 		E6E8C2AFFFD92A3D59CAD99F /* ScanDone.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83DD8DD5AEC769BBE964440 /* ScanDone.swift */; };
@@ -333,6 +335,7 @@
 		C3125EA9837C6BDA1514128F /* HubRaidsMaxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubRaidsMaxTests.swift; sourceTree = "<group>"; };
 		C317D4A35524B2870E2635E8 /* GameOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameOpener.swift; sourceTree = "<group>"; };
 		C6F031A6C112AFF16F56C17A /* PogoReader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PogoReader; path = ../PogoReader; sourceTree = SOURCE_ROOT; };
+		C70E84F98B62CCD522767D3F /* WideLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WideLayout.swift; sourceTree = "<group>"; };
 		CB775DF36283A04C73502953 /* SquadPiecesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SquadPiecesTests.swift; sourceTree = "<group>"; };
 		CEB4DD28206EADD997CC89FE /* PogoBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoBroadcast.entitlements; sourceTree = "<group>"; };
 		D20D8DCC5FFAD794083C4F13 /* PokemonSummaryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PokemonSummaryTab.swift; sourceTree = "<group>"; };
@@ -341,6 +344,7 @@
 		D7EAA375CD0561890BDC48B2 /* FlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTests.swift; sourceTree = "<group>"; };
 		DB43F62023962536F8B969FA /* PogoShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PogoShare.entitlements; sourceTree = "<group>"; };
 		E1E411F61A33B806AABD5BA8 /* ComponentGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentGallery.swift; sourceTree = "<group>"; };
+		E314E6A348197D0B9A84535F /* WideLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WideLayoutTests.swift; sourceTree = "<group>"; };
 		E6E90786B815976BA860864D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E91D65EAA60C40205AF7B65E /* ScanNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanNotifier.swift; sourceTree = "<group>"; };
 		EC4B281BB0B64267189CDB87 /* SetupProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupProgress.swift; sourceTree = "<group>"; };
@@ -512,6 +516,7 @@
 				AE06A1BFC9C0FDF56D372F67 /* ShareFilesTests.swift */,
 				D76F4EFCC26E0B2FC6ADEC25 /* SquadKeeperTests.swift */,
 				CB775DF36283A04C73502953 /* SquadPiecesTests.swift */,
+				E314E6A348197D0B9A84535F /* WideLayoutTests.swift */,
 			);
 			path = PogoAssistTests;
 			sourceTree = "<group>";
@@ -562,6 +567,7 @@
 				1FFAC0B18897FB5A85E55764 /* Theme.swift */,
 				EEE84346ABF38B9C9DFB8259 /* Toast.swift */,
 				B6261F1BB3C75D905222CC61 /* Typography.swift */,
+				C70E84F98B62CCD522767D3F /* WideLayout.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -864,6 +870,7 @@
 				C64802132E0277A0157C2100 /* ShareFilesTests.swift in Sources */,
 				6C038EA5EB1AC98EBA13BB21 /* SquadKeeperTests.swift in Sources */,
 				6222CCE97D685905BB293A0F /* SquadPiecesTests.swift in Sources */,
+				8567F3AD9EE1A779057AB4E2 /* WideLayoutTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -996,6 +1003,7 @@
 				408EA44B6D0FF7B3E6449FDA /* Theme.swift in Sources */,
 				C65013B44F62BBA96FF5B144 /* Toast.swift in Sources */,
 				DF232EF5A04B4ADA4B79527B /* Typography.swift in Sources */,
+				E1581C16E7EDD4106308F9E2 /* WideLayout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

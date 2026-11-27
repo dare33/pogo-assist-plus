@@ -20,6 +20,8 @@ struct RootView: View {
     @State private var barHidden = false
     /// The Duo's vertical strip exists (`RailReader`): navigation, Scan and the page controls are drawn in it, not along the bottom and in the headers.
     @State private var railActive = false
+    /// The tab content has `WideLayout.minWidth` or more (measured on the root container, which stops short of the Duo's strip).
+    @State private var wide = false
     /// A scan that has just ended opened the Scan screen's Done state; the Scan screen closes again when its review ends.
     @State private var doneRun = false
 
@@ -42,8 +44,10 @@ struct RootView: View {
                     .environment(\.railTabShown, tab == .next)
                     .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)
             }
-            .contentColumn()
+            .environment(\.wideLayout, wide)
+            .contentColumn(max: WideLayout.column(wide: wide))
         }
+        .onGeometryChange(for: Bool.self) { WideLayout.isWide($0.size.width) } action: { if wide != $0 { wide = $0 } }
         .environment(\.railActive, railActive)
         .background(RailReader { if railActive != $0 { railActive = $0 } })
         .onPreferenceChange(HidesTabBarKey.self) { barHidden = $0 }

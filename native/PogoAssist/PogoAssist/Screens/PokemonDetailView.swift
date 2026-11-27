@@ -77,7 +77,7 @@ struct PokemonDetailView: View {
                     .padding(.top, 6)
                     .padding(.bottom, 24)
                 }
-                .sheet(isPresented: $fixing) { FixValueView(entry: e).environmentObject(model) }
+                .sheet(isPresented: $fixing) { FixValueView(entry: e).environmentObject(model).environment(\.wideLayout, false) }
             } else {
                 Text("This Pokémon is no longer in the box.").paText(.secondary).foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
