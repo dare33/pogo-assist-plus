@@ -14,12 +14,15 @@ struct RootView: View {
         _model = StateObject(wrappedValue: AppModel(screenSize: screenSize, isPad: isPad))
     }
     @Environment(\.scenePhase) private var phase
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     @State private var tab: AppTab = .box
     @State private var scanOpen = false
     @State private var barHidden = false
     /// The Duo's vertical strip exists (`RailReader`): navigation, Scan and the page controls are drawn in it, not along the bottom and in the headers.
     @State private var railActive = false
+    /// The root container has `WideLayout.minWidth` or more. The tab stacks lay out wide only when the text size also allows it (`WideLayout.lays`).
+    @State private var wide = false
     /// A scan that has just ended opened the Scan screen's Done state; the Scan screen closes again when its review ends.
     @State private var doneRun = false
 
@@ -42,8 +45,10 @@ struct RootView: View {
                     .environment(\.railTabShown, tab == .next)
                     .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)
             }
-            .contentColumn()
+            .environment(\.wideLayout, WideLayout.lays(wide: wide, typeSize: typeSize))
+            .contentColumn(max: WideLayout.column(wide: WideLayout.lays(wide: wide, typeSize: typeSize)))
         }
+        .onGeometryChange(for: Bool.self) { WideLayout.isWide($0.size.width) } action: { if wide != $0 { wide = $0 } }
         .environment(\.railActive, railActive)
         .background(RailReader { if railActive != $0 { railActive = $0 } })
         .onPreferenceChange(HidesTabBarKey.self) { barHidden = $0 }

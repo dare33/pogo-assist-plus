@@ -97,7 +97,7 @@ struct BoxView: View {
         } message: { Text(model.waitingScan.map { $0.damaged ? "It is thrown away without being added to any box." : "The scan for \($0.account) is thrown away without being added to its box." } ?? "") }
         .sheet(isPresented: Binding(get: { model.exportURL != nil }, set: { if !$0 { model.exportURL = nil } })) {
             if let url = model.exportURL {
-                ShareSheet(url: url).presentationDetents([.medium, .large])
+                ShareSheet(url: url).presentationDetents([.medium, .large]).environment(\.wideLayout, false)
                     // The share sheet shortens the file name in its preview; this says it whole (and lets a UI test check the file's kind).
                     .overlay(alignment: .topLeading) { Color.clear.frame(width: 1, height: 1).accessibilityElement().accessibilityIdentifier("export-file").accessibilityLabel(url.lastPathComponent) }
             }

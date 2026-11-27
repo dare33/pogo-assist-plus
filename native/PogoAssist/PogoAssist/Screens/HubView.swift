@@ -8,6 +8,7 @@ struct HubView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.wideLayout) private var wide
     @State private var rankingInfo = false
     /// Owned and released species for the Collection tile's chip, worked out when the box changes (the rule is `HubCollection.overview`).
     @State private var species: (owned: Int, released: Int)?
@@ -154,7 +155,7 @@ struct HubView: View {
     }
 
     private var tiles: some View {
-        let per = typeSize >= .accessibility1 ? 1 : 2
+        let per = WideLayout.hubTilesPerRow(wide: wide, typeSize: typeSize)
         var builds: [BoxAdvice.Build]?
         if case .ready(let a) = model.advice { builds = a.builds }
         let types = ContentType.allCases
@@ -319,18 +320,30 @@ struct HubCard: View {
 }
 
 /// The cards side by side in a strip that scrolls sideways and bleeds to the screen edge; at accessibility text sizes they stack, full width.
+/// In a wide window, cards that all fit are shown in a row without scrolling.
 struct HubCardStrip<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.wideLayout) private var wide
 
     var body: some View {
         if typeSize.isAccessibilitySize {
             VStack(spacing: 10) { content }
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) { content }.fixedSize(horizontal: false, vertical: true)
+        } else if wide {
+            // Wide: cards that all fit at their normal size sit in a row, leading-aligned and not stretched; otherwise the scrolling strip below, as everywhere else.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { content }.fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+                scrolling
             }
-            .scrollClipDisabled()
+        } else {
+            scrolling
         }
+    }
+
+    private var scrolling: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) { content }.fixedSize(horizontal: false, vertical: true)
+        }
+        .scrollClipDisabled()
     }
 }

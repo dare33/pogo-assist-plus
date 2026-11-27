@@ -159,16 +159,19 @@ struct ScanView: View {
             SetupSheet(openSetup: { showSetupSheet = false; setupPage = .nextStep },
                        scanAnyway: { startAfterSheet = true; showSetupSheet = false })
                 .environment(\.accent, accent)
+                .environment(\.wideLayout, false)
         }
         .sheet(isPresented: $showAppraisal) {
             AppraisalSheet { showAppraisal = false }
                 .presentationDetents([.large]).presentationCornerRadius(Theme.Radius.sheet).presentationDragIndicator(.visible)
                 .environment(\.accent, accent)
+                .environment(\.wideLayout, false)
         }
         .fullScreenCover(isPresented: Binding(get: { walkSteps != nil }, set: { if !$0 { walkSteps = nil } })) {
             if let steps = walkSteps {
                 ScanWalkthrough(steps: steps, words: words, pass: model.scanPass, takesBack: !model.game.failed, hiddenRaw: $hiddenRaw) { walkSteps = nil }
                     .environment(\.accent, accent)
+                    .environment(\.wideLayout, false)
                     .reportsScreen(to: model)
             }
         }

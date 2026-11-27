@@ -49,6 +49,7 @@ struct HubCollectionView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.wideLayout) private var wide
     @State private var data: CollectionData?
     /// The Special sets card whose list is open.
     /// Kept whole (not looked up in `data` while the sheet is up): an edit made from the sheet rebuilds `data`, and the sheet must stay on screen meanwhile.
@@ -84,7 +85,7 @@ struct HubCollectionView: View {
         }
         .sheet(item: $openSet) { open in
             // A sheet is its own presentation: controls published in it never reach the root's rail, so its screens keep their buttons in their headers.
-            CollectionSetSheet(kind: open.kind, set: open.set).environmentObject(model).environment(\.accent, accent).environment(\.railActive, false)
+            CollectionSetSheet(kind: open.kind, set: open.set).environmentObject(model).environment(\.accent, accent).environment(\.railActive, false).environment(\.wideLayout, false)
         }
         .task(id: key) {
             guard let gm = try? GameMaster.bundled() else { data = nil; return }
@@ -144,12 +145,29 @@ struct HubCollectionView: View {
     /// then the cards, the set's best Pokémon for its activity first.
     @ViewBuilder private func specialSets(_ d: CollectionData) -> some View {
         HubHeaderLine("SPECIAL SETS")
-        VStack(alignment: .leading, spacing: 18) {
-            ForEach(d.sets, id: \.name) { s in
-                if let kind = HubCollection.SetKind(rawValue: s.name) {
-                    SpecialSetStrip(info: s, kind: kind, picks: d.strips[kind] ?? [], gm: d.gm) { openSet = OpenSet(kind: kind, set: s) }
+        let columns = WideLayout.collectionColumns(wide: wide, typeSize: typeSize)
+        if columns > 1 {
+            // Wide: the sets two to a row, each with its own strip. A row is as tall as its taller set; a short last row keeps the sets at the same width.
+            // Each set is clipped to its half: a strip does not clip its own scrolling cards (it bleeds to the screen edge when it has the whole row),
+            // so unclipped the left set's cards would run over the right set.
+            VStack(alignment: .leading, spacing: 18) {
+                ForEach(Array(WideLayout.rows(d.sets, per: columns).enumerated()), id: \.offset) { _, row in
+                    HStack(alignment: .top, spacing: 18) {
+                        ForEach(row, id: \.name) { s in setStrip(s, d).frame(maxWidth: .infinity, alignment: .topLeading).clipped() }
+                        ForEach(0..<(columns - row.count), id: \.self) { _ in Color.clear.frame(height: 0).frame(maxWidth: .infinity) }
+                    }
                 }
             }
+        } else {
+            VStack(alignment: .leading, spacing: 18) {
+                ForEach(d.sets, id: \.name) { s in setStrip(s, d) }
+            }
+        }
+    }
+
+    @ViewBuilder private func setStrip(_ s: HubCollection.SpecialSet, _ d: CollectionData) -> some View {
+        if let kind = HubCollection.SetKind(rawValue: s.name) {
+            SpecialSetStrip(info: s, kind: kind, picks: d.strips[kind] ?? [], gm: d.gm) { openSet = OpenSet(kind: kind, set: s) }
         }
     }
 

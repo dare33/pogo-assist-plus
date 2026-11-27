@@ -404,15 +404,16 @@ struct SlotCardView: View {
     }
 }
 
-/// The cards in rows of three (one to a row at the accessibility sizes), each row as tall as its tallest card.
+/// The cards in rows of three, six when the window is wide and the squad has more than three slots (one to a row at the accessibility sizes), each row as tall as its tallest card.
 struct SlotGrid: View {
     let slots: [SlotCardModel]
     let selected: Int?
     let onTap: (Int) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.wideLayout) private var wide
 
     var body: some View {
-        let per = typeSize.isAccessibilitySize ? 1 : 3
+        let per = WideLayout.slotsPerRow(wide: wide, typeSize: typeSize, count: slots.count)
         let rows = stride(from: 0, to: slots.count, by: per).map { Array(slots[$0..<min($0 + per, slots.count)]) }
         Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
