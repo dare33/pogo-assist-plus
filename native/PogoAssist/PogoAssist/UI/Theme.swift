@@ -22,7 +22,7 @@ enum Theme {
     /// window up to that wide they stay that shape in one centred column and the margins grow with the device, rather than
     /// stretching to 1000 pt or more. A compact-width window (an iPad split view, a phone) is narrower than this, so
     /// the column does nothing there and the layout is the phone's as it is. The two tab stacks lift the cap to
-    /// `WideLayout.columnMax` once they have 800 pt or more; Review, Welcome and the other presentations stay at this one.
+    /// `WideLayout.columnMax` once they have 800 pt or more and the text is below the accessibility sizes; Review, Welcome and the other presentations stay at this one.
     static let columnMax: CGFloat = 640
 
     static let bg = pair(0xF3F5F9, 0x0E1118)

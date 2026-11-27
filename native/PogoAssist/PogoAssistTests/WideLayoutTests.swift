@@ -47,6 +47,7 @@ final class WideLayoutTests: XCTestCase {
         XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .large, count: 3), 3)
         XCTAssertEqual(WideLayout.slotsPerRow(wide: false, typeSize: .large, count: 3), 3)
         XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .large, count: 4), 6)
+        XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .accessibility3, count: 3), 1)
     }
 
     func testCollectionColumns() {

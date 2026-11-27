@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// When the window is wide the tab screens use the width instead of the phone-shaped column. Keyed on the width the tab content
-/// has and nothing else (never the device, the idiom, the hinge or the orientation), so an iPad window and the opened Duo get the same layouts.
+/// has and the text size, nothing else (never the device, the idiom, the hinge or the orientation), so an iPad window and the opened Duo get the same layouts.
 /// The functions are pure so the thresholds and counts are unit-tested; every one returns today's value when `wide` is false.
 enum WideLayout {
     /// The width from which the tab screens count as wide: the opened Duo turned wide (about 867 pt without its strip) and an iPad 11-inch in portrait (834 pt) are; the Duo turned tall (669), an iPad split-view half and a phone are not.
@@ -43,7 +43,7 @@ enum WideLayout {
 private struct WideLayoutKey: EnvironmentKey { static let defaultValue = false }
 
 extension EnvironmentValues {
-    /// The tab content has the width to lay out wide (`WideLayout.isWide`). Set on the two tab stacks only; a sheet or cover presented from inside them resets it to false, so presentations keep their own layout.
+    /// The tab stacks lay out wide (`WideLayout.lays`: the window is wide and the text is below the accessibility sizes). Set on the two tab stacks only; a sheet or cover presented from inside them resets it to false, so presentations keep their own layout.
     var wideLayout: Bool {
         get { self[WideLayoutKey.self] }
         set { self[WideLayoutKey.self] = newValue }
