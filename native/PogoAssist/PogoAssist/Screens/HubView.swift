@@ -320,6 +320,7 @@ struct HubCard: View {
 }
 
 /// The cards side by side in a strip that scrolls sideways and bleeds to the screen edge; at accessibility text sizes they stack, full width.
+/// In a wide window, cards that all fit are shown in a row without scrolling.
 struct HubCardStrip<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.dynamicTypeSize) private var typeSize

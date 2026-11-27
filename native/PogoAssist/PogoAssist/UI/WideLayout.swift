@@ -11,6 +11,10 @@ enum WideLayout {
 
     static func isWide(_ width: CGFloat) -> Bool { width >= minWidth }
 
+    /// Whether the tab stacks lay out wide: the window is wide and the text is not at an accessibility size. At those sizes every screen keeps
+    /// the 640 pt column and its one-to-a-row layouts, as before, so `\.wideLayout` is false there.
+    static func lays(wide: Bool, typeSize: DynamicTypeSize) -> Bool { wide && !typeSize.isAccessibilitySize }
+
     static func column(wide: Bool) -> CGFloat { wide ? columnMax : Theme.columnMax }
 
     /// Hub tiles per row: three when wide, otherwise two; one at the accessibility text sizes either way.
@@ -18,9 +22,10 @@ enum WideLayout {
         wide && !typeSize.isAccessibilitySize ? 3 : (typeSize >= .accessibility1 ? 1 : 2)
     }
 
-    /// Squad slot cards per row: six when wide, otherwise three; one at the accessibility text sizes either way.
-    static func slotsPerRow(wide: Bool, typeSize: DynamicTypeSize) -> Int {
-        wide && !typeSize.isAccessibilitySize ? 6 : (typeSize.isAccessibilitySize ? 1 : 3)
+    /// Squad slot cards per row: otherwise three, and one at the accessibility text sizes. When wide, six for a squad of more than three slots
+    /// (Raids, Gym), so its slots are one row; a squad of three (Max, Rocket, PvP) stays three to a row and its cards fill the width.
+    static func slotsPerRow(wide: Bool, typeSize: DynamicTypeSize, count: Int) -> Int {
+        wide && !typeSize.isAccessibilitySize && count > 3 ? 6 : (typeSize.isAccessibilitySize ? 1 : 3)
     }
 
     /// Columns of special sets in the Collection: two when wide, otherwise one; one at the accessibility text sizes either way.

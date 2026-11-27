@@ -14,9 +14,19 @@ final class WideLayoutTests: XCTestCase {
     }
 
     func testColumnCapIsWideOnlyWhenWide() {
-        XCTAssertEqual(WideLayout.column(wide: false), Theme.columnMax)
-        XCTAssertEqual(WideLayout.column(wide: true), WideLayout.columnMax)
+        XCTAssertEqual(WideLayout.column(wide: false), 640)
+        XCTAssertEqual(WideLayout.column(wide: true), 1040)
         XCTAssertGreaterThan(WideLayout.columnMax, WideLayout.minWidth)
+    }
+
+    func testAccessibilitySizesNeverLayOutWide() {
+        XCTAssertTrue(WideLayout.lays(wide: true, typeSize: .large))
+        XCTAssertTrue(WideLayout.lays(wide: true, typeSize: .xxxLarge))
+        XCTAssertFalse(WideLayout.lays(wide: true, typeSize: .accessibility1))
+        XCTAssertFalse(WideLayout.lays(wide: true, typeSize: .accessibility5))
+        XCTAssertFalse(WideLayout.lays(wide: false, typeSize: .large))
+        // so the column stays 640 at those sizes however wide the window is
+        XCTAssertEqual(WideLayout.column(wide: WideLayout.lays(wide: true, typeSize: .accessibility1)), 640)
     }
 
     func testHubTilesPerRow() {
@@ -25,19 +35,25 @@ final class WideLayoutTests: XCTestCase {
         XCTAssertEqual(WideLayout.hubTilesPerRow(wide: true, typeSize: .xxxLarge), 3)
         XCTAssertEqual(WideLayout.hubTilesPerRow(wide: true, typeSize: .accessibility1), 1)
         XCTAssertEqual(WideLayout.hubTilesPerRow(wide: false, typeSize: .accessibility1), 1)
+        XCTAssertEqual(WideLayout.hubTilesPerRow(wide: false, typeSize: .xxxLarge), 2)
     }
 
     func testSlotsPerRow() {
-        XCTAssertEqual(WideLayout.slotsPerRow(wide: false, typeSize: .large), 3)
-        XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .large), 6)
-        XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .accessibility3), 1)
-        XCTAssertEqual(WideLayout.slotsPerRow(wide: false, typeSize: .accessibility3), 1)
+        XCTAssertEqual(WideLayout.slotsPerRow(wide: false, typeSize: .large, count: 6), 3)
+        XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .large, count: 6), 6)
+        XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .accessibility3, count: 6), 1)
+        XCTAssertEqual(WideLayout.slotsPerRow(wide: false, typeSize: .accessibility3, count: 6), 1)
+        // a squad of three (Max, Rocket, PvP) keeps three to a row, so its cards fill the row and no column is left blank
+        XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .large, count: 3), 3)
+        XCTAssertEqual(WideLayout.slotsPerRow(wide: false, typeSize: .large, count: 3), 3)
+        XCTAssertEqual(WideLayout.slotsPerRow(wide: true, typeSize: .large, count: 4), 6)
     }
 
     func testCollectionColumns() {
         XCTAssertEqual(WideLayout.collectionColumns(wide: false, typeSize: .large), 1)
         XCTAssertEqual(WideLayout.collectionColumns(wide: true, typeSize: .large), 2)
         XCTAssertEqual(WideLayout.collectionColumns(wide: true, typeSize: .accessibility2), 1)
+        XCTAssertEqual(WideLayout.collectionColumns(wide: false, typeSize: .accessibility2), 1)
     }
 
     func testRowsKeepOrderAndAllowAShortLastRow() {
