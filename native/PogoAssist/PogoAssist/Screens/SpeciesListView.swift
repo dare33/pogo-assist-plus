@@ -9,6 +9,7 @@ struct SpeciesListView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accent) private var accent
+    @Environment(\.railActive) private var railActive
     @Environment(\.showToast) private var showToast
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selecting = false
@@ -100,9 +101,11 @@ struct SpeciesListView: View {
                     .frame(maxWidth: .infinity)
                 HeaderTextButton(title: picked.count == count ? "None" : "All \(count.formatted())") { picked = picked.count == count ? [] : Set(ids) }
             } else {
-                IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
+                // On the Duo (`RailControls`) Back is drawn in the rail; the title and Select stay here, the title pulled back over the gap the Back circle's spacing would leave.
+                RailControls { IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() } }
                 Text(title).font(.figtree(15, .bold, relativeTo: .subheadline)).foregroundStyle(Theme.ink)
                     .lineLimit(2).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                    .padding(.leading, railActive ? -8 : 0)
                     .accessibilityAddTraits(.isHeader)
                 HeaderTextButton(title: "Select") { selecting = true }
             }

@@ -18,6 +18,8 @@ struct RootView: View {
     @State private var tab: AppTab = .box
     @State private var scanOpen = false
     @State private var barHidden = false
+    /// The Duo's vertical strip exists (`RailReader`): navigation, Scan and the page controls are drawn in it, not along the bottom and in the headers.
+    @State private var railActive = false
     /// A scan that has just ended opened the Scan screen's Done state; the Scan screen closes again when its review ends.
     @State private var doneRun = false
 
@@ -34,21 +36,29 @@ struct RootView: View {
             // The two stacks sit in one capped, centred column; the background above stays outside it so it fills the screen.
             ZStack {
                 NavigationStack { BoxView(active: tab == .box).navigationDestination(isPresented: scanBinding(for: .box)) { ScanView().hidesTabBar() } }
+                    .environment(\.railTabShown, tab == .box)
                     .opacity(tab == .box ? 1 : 0).allowsHitTesting(tab == .box).accessibilityHidden(tab != .box)
                 NavigationStack { HubView(active: tab == .next).navigationDestination(isPresented: scanBinding(for: .next)) { ScanView().hidesTabBar() } }
+                    .environment(\.railTabShown, tab == .next)
                     .opacity(tab == .next ? 1 : 0).allowsHitTesting(tab == .next).accessibilityHidden(tab != .next)
             }
             .contentColumn()
         }
+        .environment(\.railActive, railActive)
+        .background(RailReader { if railActive != $0 { railActive = $0 } })
         .onPreferenceChange(HidesTabBarKey.self) { barHidden = $0 }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !barHidden { Color.clear.frame(height: FloatingTabBar.clearance) }
+            if !barHidden { Color.clear.frame(height: Rail.clearance(active: railActive)) }
         }
         .overlay(alignment: .bottom) {
-            if !barHidden { FloatingTabBar(selection: $tab, scanDisabled: model.boxProblem != nil) { scanOpen = true }.contentColumn() }
+            if !barHidden && !railActive { FloatingTabBar(selection: $tab, scanDisabled: model.boxProblem != nil) { scanOpen = true }.contentColumn() }
         }
         .overlay(alignment: .bottom) {
-            if model.scanDonePending && !scanOpen { ScanDonePill { scanOpen = true }.padding(.bottom, FloatingTabBar.clearance).contentColumn() }
+            if model.scanDonePending && !scanOpen { ScanDonePill { scanOpen = true }.padding(.bottom, Rail.clearance(active: railActive)).contentColumn() }
+        }
+        // Before the theme and the model below (an overlay only sees what is applied outside it), so the controls drawn here get the accent and the `AppModel` the screens that built them would.
+        .overlayPreferenceValue(RailKey.self) { entries in
+            if railActive { RailView(entries: entries, tab: $tab, showsNavigation: !barHidden, scanDisabled: model.boxProblem != nil) { scanOpen = true } }
         }
         .themeRoot()
         .environmentObject(model)

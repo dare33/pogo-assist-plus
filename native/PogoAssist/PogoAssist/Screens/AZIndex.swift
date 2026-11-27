@@ -162,6 +162,8 @@ struct AZIndex: View {
     let scrollTo: (String) -> Void
     @Environment(\.accent) private var accent
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The tab bar's room at the bottom, none when the navigation is in the Duo's rail.
+    @Environment(\.tabBarClearance) private var tabBarClearance
     /// True while a finger is on the letters. A gesture state, so a drag the system cancels (a call, a gesture that takes over) puts it back too.
     @GestureState private var dragging = false
     /// The letter the finger is on now: a drag that comes back to a letter after the list was scrolled elsewhere jumps again.
@@ -204,7 +206,7 @@ struct AZIndex: View {
     var body: some View {
         GeometryReader { area in
             // The strip is centred in the list's area, moved up if it would reach the tab bar, and its rows shrink if it still does not fit.
-            let limit = area.size.height - FloatingTabBar.clearance - tabBarGap
+            let limit = area.size.height - tabBarClearance - tabBarGap
             let count = CGFloat(max(labels.count, 1))
             let row = max(1, min(preferredRow, (limit - topGap) / count))
             let top = max(topGap / 2, min((area.size.height - row * count) / 2, limit - row * count))

@@ -101,36 +101,50 @@ struct PokemonDetailView: View {
 
     // MARK: header
 
-    /// Back, the orange search circle (copies the game search) and the pencil (Fix a value, unchanged).
-    private var header: some View {
-        HStack {
-            IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
-            Spacer()
-            if let e = model.entry(id) {
-                // The search is always the normal form's: the game shows a Mega CP only while the Pokémon is Mega evolved, so a search on it would find nothing the rest of the time.
-                if let search = GameSearch.text([GameSearch.part(row: e.row)]) {
-                    Button {
-                        UIPasteboard.general.string = search
-                        showToast("Copied")
-                    } label: {
-                        IconButton(systemImage: "magnifyingglass", kind: .floating, label: "Copy search", inkOverride: Theme.orangeInk) {}.face
-                    }
-                    .buttonStyle(PressStyle())
-                    .accessibilityLabel("Copy search")
-                    .accessibilityValue(search)
-                    .accessibilityIdentifier("search-chip")
-                }
-                // "Fix a value" changes the normal values only, so it waits while the page shows the Mega form.
-                let onMega = megaShown(e) != nil
-                IconButton(systemImage: "pencil", kind: .floating, label: "Fix a value") { fixing = true }
-                    .disabled(onMega).opacity(onMega ? 0.4 : 1)
-                    .accessibilityHint(onMega ? "Fixing changes the normal values. Switch to Normal first." : "")
+    /// Back, the orange search circle (copies the game search) and the pencil (Fix a value, unchanged). On the Duo (`RailControls`) the three are drawn in the rail
+    /// and the header, which holds nothing else, is not drawn at all.
+    @ViewBuilder private var header: some View {
+        RailControls {
+            backButton
+            pageButtons
+        } inline: {
+            HStack {
+                backButton
+                Spacer()
+                pageButtons
             }
+            .padding(.horizontal, Theme.Space.screen)
+            .frame(minHeight: 52)
+            // The circles hold a glyph that would outgrow them at the accessibility sizes.
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
-        .padding(.horizontal, Theme.Space.screen)
-        .frame(minHeight: 52)
-        // The circles hold a glyph that would outgrow them at the accessibility sizes.
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    private var backButton: some View {
+        IconButton(systemImage: "chevron.left", kind: .floating, label: "Back") { dismiss() }
+    }
+
+    @ViewBuilder private var pageButtons: some View {
+        if let e = model.entry(id) {
+            // The search is always the normal form's: the game shows a Mega CP only while the Pokémon is Mega evolved, so a search on it would find nothing the rest of the time.
+            if let search = GameSearch.text([GameSearch.part(row: e.row)]) {
+                Button {
+                    UIPasteboard.general.string = search
+                    showToast("Copied")
+                } label: {
+                    IconButton(systemImage: "magnifyingglass", kind: .floating, label: "Copy search", inkOverride: Theme.orangeInk) {}.face
+                }
+                .buttonStyle(PressStyle())
+                .accessibilityLabel("Copy search")
+                .accessibilityValue(search)
+                .accessibilityIdentifier("search-chip")
+            }
+            // "Fix a value" changes the normal values only, so it waits while the page shows the Mega form.
+            let onMega = megaShown(e) != nil
+            IconButton(systemImage: "pencil", kind: .floating, label: "Fix a value") { fixing = true }
+                .disabled(onMega).opacity(onMega ? 0.4 : 1)
+                .accessibilityHint(onMega ? "Fixing changes the normal values. Switch to Normal first." : "")
+        }
     }
 
     /// Every mark and chip changes the page at once and is saved as a box version behind (`MarkEditor`); the advice is worked out again (AppModel.correct). Taps

@@ -18,6 +18,7 @@ struct HubTypeScreen<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accent) private var accent
+    @Environment(\.railActive) private var railActive
 
     @Environment(\.dynamicTypeSize) private var typeSize
     /// A squad screen's pinned strip of slots, while one of its pickers is open (`View.squadStrip`).
@@ -79,8 +80,9 @@ struct HubTypeScreen<Content: View>: View {
         }
     }
 
+    /// On the Duo (`RailControls`) Back is drawn in the rail, and the title moves back over the gap the circle's spacing would leave.
     private var back: some View {
-        IconButton(systemImage: "chevron.left", kind: .floating, label: "Back", identifier: "hub-back") { dismiss() }
+        RailControls { IconButton(systemImage: "chevron.left", kind: .floating, label: "Back", identifier: "hub-back") { dismiss() } }
     }
 
     @ViewBuilder private var header: some View {
@@ -94,7 +96,7 @@ struct HubTypeScreen<Content: View>: View {
         } else {
             HStack(spacing: 8) {
                 back
-                titles
+                titles.padding(.leading, railActive ? -8 : 0)
                 Spacer(minLength: 8)
                 chip
             }
